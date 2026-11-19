@@ -831,6 +831,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Zobrazení kola
 	Box View	Zobrazení čtverce
+	Show Out-of-Gamut Colors	Zobrazit barvy mimo gamut
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
@@ -4762,6 +4763,7 @@ font-technology	Variable	Variabilní
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
 	Type to search commands, tools, panels and effects	Pište pro hledání příkazů, nástrojů, panelů a efektů
+	Clear Recent Commands	Vymazat seznam nedávných příkazů
 	Dashed Line	Čárkovaná čára
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…
@@ -4881,9 +4883,13 @@ font-technology	Variable	Variabilní
 	Edit type set in fonts that aren't available?	Upravit text v písmech, která nejsou k dispozici?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	V odstavcích se zapnutou volbou Dělit slova dostane uvedené slovo dělicí spojovník jen u spojovníků, které v něm napíšete, nebo nikdy, pokud žádné nemá, bez ohledu na jazyk a velikost písmen.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	V desktopové verzi se zásuvné moduly .wasm z této složky načtou při spuštění a když OK nastaví novou složku, kromě nouzového režimu; modul, který žádá o oprávnění, se načte až po jejich udělení. Webová verze nenačte žádný.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Velké dá každému běhu zásuvného modulu filtru nebo příkazu nejméně 250 milionů instrukcí se stejným časovým limitem; Normální ponechá vlastní rozpočet modulu. Živé efekty, exportéry a importéry si ponechají svůj.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nový text dostane tento jazyk, dokud je jazyk v Nastavení dokumentu Angličtina: USA; text, který už v dokumentu je, si ponechá svůj jazyk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	V odstavcích se zapnutou volbou Dělit slova se uvedené slovo dělí jen u spojovníků, které v něm napíšete, nebo nikde, pokud žádné nemá, bez ohledu na jazyk a velikost písmen.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	V desktopové verzi se zásuvné moduly .wasm z této složky načtou při spuštění a po klepnutí na OK s novou složkou zde, kromě nouzového režimu; webová verze je nenačítá.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normální zachová vlastní limity každého zásuvného modulu; s volbou Velké může filtr nebo příkaz zásuvného modulu provést nejméně 250 milionů instrukcí navíc k těm pro svůj vstup. Časový limit zůstává stejný.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Kolik instrukcí smí použít každé spuštění filtru objektů ze zásuvného modulu; Velké povoluje víc než Normální při stejném limitu 60 sekund. Náročné filtry si ponechají vlastní rozpočet.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	První volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Druhá volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
@@ -4895,13 +4901,15 @@ font-technology	Variable	Variabilní
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Zobrazuje název každé skupiny nástrojů nad jejími nástroji v panelu nástrojů; při vypnutí skupiny následují jedna za druhou bez ničeho mezi nimi.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Dokumenty, které od teď otevřete nebo vytvoříte, se otevírají jako karty; při vypnutí se každý otevře v plovoucím okně. Už otevřené dokumenty zůstanou, kde jsou.
 	Makes the document tabs taller and their names larger.	Karty dokumentů budou vyšší a jejich názvy větší.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Od příštího spuštění kreslí záhlaví okna systém tam, kde by jinak VectorCraft kreslil své vlastní.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Od příštího spuštění kreslí VectorCraft záhlaví okna i tam, kde by ho kreslilo pracovní prostředí, pokud není zapnuté Systémové záhlaví okna.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Od příštího spuštění kreslí záhlaví okna systém tam, kde by jinak VectorCraft kreslil své vlastní; v Linuxu a systémech BSD má přednost proměnná VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Od příštího spuštění kreslí VectorCraft záhlaví okna i tam, kde by ho kreslilo pracovní prostředí, pokud není zapnuté Systémové záhlaví okna nebo ho nevolí proměnná VECTORCRAFT_TITLEBAR.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Zvětší nebo zmenší rozhraní; kresba na plátně si při stejném zvětšení zachová velikost.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Ukazatele nástrojů, které kreslí VectorCraft, se zvětšují a zmenšují s Měřítkem rozhraní; při vypnutí si zachovají velikost.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Jazyk rozhraní; Automaticky použije jazyk systému. Dialog přepne jazyk, jakmile nějaký zvolíte.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animované zvětšení funguje, jen když je toto zapnuto; při vypnutí je Animované zvětšení zašedlé a zvětšování není animované.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zvětšení kolečkem plynule dojede a Nástroj Lupa zvětšuje, když táhnete do strany nebo ho podržíte; při vypnutí Nástroj Lupa zvětší oblast, přes kterou táhnete.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Od příštího spuštění zobrazuje desktopová verze plátno přes tento druh grafického procesoru; kresba se v každém případě vykresluje na CPU. Automaticky dává ve Windows a macOS přednost integrovanému. Webová verze ho nepoužívá.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Od příštího spuštění okno zobrazuje každý snímek bez čekání na obnovení displeje, kde to grafický ovladač dovolí, nejvýše 240 snímků za sekundu.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od příštího spuštění kreslí desktopová verze tímto druhem grafického procesoru; Automaticky dává přednost tomu, který řídí displej. Webová verze ho nepoužívá.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od příštího spuštění okno zobrazuje snímky bez čekání na obnovení displeje, nejvýše 240 za sekundu; vypnuto, tempo určuje displej. Režim zobrazení nastavený při spuštění má přednost.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Nejvyšší počet kroků zpět, které si každý dokument ponechá; nižší číslo po klepnutí na OK odstraní nejstarší kroky. Kroky mohou zmizet i dříve, když zabírají příliš paměti.
@@ -4920,6 +4928,9 @@ font-technology	Variable	Variabilní
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Otevřít nedávné soubory a obrazovka Domů uvádějí nejvýše tolik nedávných souborů; 0 neuvádí žádný a VectorCraft si i tak pamatuje až 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Při otevření dokumentu si propojený obraz EPS, který ukazuje svůj uložený náhled, tento náhled ponechá a soubor EPS znovu nečte; změněné soubory se dál řídí volbou Aktualizovat propojení.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	V Náhledu obrazových bodů se obrazy kreslí vyhlazené; při vypnutí mají jejich obrazové body ostré hrany. Mimo Náhled obrazových bodů se obrazy vyhlazují vždy.
+	PDF Text	Text PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Text PDF, který otevřete nebo vložíte, se načte jako upravitelný text nebo jako obrysy, které vypadají stejně i na počítači bez jeho písem.
+	Linked pages show the file's own text.	Propojené stránky zobrazují vlastní text souboru.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Když se propojený soubor změní, Automaticky ho načte znovu, Při změně se zeptat se vás nejdřív zeptá a Ručně ho nechá být a zobrazí upozornění ve stavovém řádku.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	V desktopové verzi složka, ve které začínají Nový ze šablony… a Uložit jako šablonu…; nechte ji prázdnou pro VectorCraft Templates ve vaší složce dokumentů.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Upravit originál otevře propojený soubor ve výchozí aplikaci systému pro jeho typ; při vypnutí se propojený rastrový obraz otevře v PhotoCraftu, pokud je nainstalován.
@@ -5918,6 +5929,10 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tato vektorizace by vytvořila více než {max} kotevních bodů, víc, než dokument plynule zobrazí: zvyšte Šum, snižte Cesty nebo Barvy, nebo zvolte přednastavení s nižší věrností
 @msg	select an envelope	vyberte obálku
 @msg	select an image	vyberte obraz
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objekt {_1} je obraz změněný příkazem Perspektivní deformace nebo Volná deformace, se kterým tento příkaz nepracuje
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	obraz {_1} nelze takto deformovat: jeho rohy by netvořily konvexní tvar
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	obraz {_1} nelze takto deformovat: jeho rohy by překročily horizont deformace
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	obraz {_1} nelze takto deformovat: jeho rohy by byly příliš blízko sebe pro perspektivní zobrazení
 @msg	`background` must be edges, corners or colors	`background` musí být edges, corners nebo colors
 @msg	`match` must be distance or channels	`match` musí být distance nebo channels
 @msg	`{key}` must be from 0 to 100	`{key}` musí být od 0 do 100
@@ -10759,6 +10774,10 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Leaf Vine	Listová liána
+	Blossom Chain	Květinový řetěz
+	Pennant Garland	Girlanda praporků
+	Lantern String	Řetěz luceren
 	Orbit Lines	Orbitální čáry
 	Petal Garland	Okvětní girlanda
 	Lattice Braid	Mřížkový cop

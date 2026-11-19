@@ -124,7 +124,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii"], "object.setLiveShape")?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -235,6 +235,13 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // When every value given is the current one, the document and its undo history stay as they
     // are.
     let st = s.doc()?;
+    // `rectanglesOnly`: the live rectangles among the targets; the other objects stay as they are.
+    let ids: Vec<NodeId> = if p.get("rectanglesOnly").and_then(Value::as_bool) == Some(true) {
+        let rectangle = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if matches!(**l, LiveShape::Rectangle { .. }));
+        ids.into_iter().filter(rectangle).collect()
+    } else {
+        ids
+    };
     // The lines that Line Length or Line Angle changes, as they become. A line that would reach
     // past the document's coordinate limit is an error before anything changes.
     let mut lines = std::collections::BTreeMap::new();
@@ -278,16 +285,23 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Some(c) = LiveCorners::new(path, live.as_deref()) else { return true };
         let picked = corners_of(*id).unwrap_or_else(|| c.picked(st.selection.anchors.get(id)));
-        // Setting corners folds a scale left in a rectangle's transform into its size, which
-        // changes it.
-        live.as_deref().is_none_or(|l| l.folded() == *l)
+        // Setting a radius folds a scale left in a rectangle's transform into its size, which
+        // changes it. A kind the corners already have leaves the rectangle as it is.
+        (radius.is_none() || live.as_deref().is_none_or(|l| l.folded() == *l))
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
-                    && radius.is_none_or(|r| (c.drawn_radius(*k) - r.max(0.0)).abs() < 1e-9)
+                    // A radius stored in document units can be larger than it draws; a relative
+                    // one is a fraction, so it is compared as drawn.
+                    && radius.is_none_or(|r| {
+                        let now = if c.radii_relative() { c.drawn_radius(*k) } else { c.radius(*k) };
+                        (now - r.max(0.0)).abs() < 1e-9
+                    })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
     };
-    if ids.iter().all(has_values) {
+    // The objects every value given already matches stay as they are, beside others that change.
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !has_values(id)).collect();
+    if ids.is_empty() {
         return ok();
     }
     s.edit("Live Shape", |d, sel| {

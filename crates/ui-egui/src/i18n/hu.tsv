@@ -814,6 +814,7 @@ arrowhead	Target	Céltábla
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Körnézet
 	Box View	Négyzetnézet
+	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
@@ -3980,9 +3981,13 @@ mark-style	Japanese	Japán
 	Edit type set in fonts that aren't available?	Szerkeszti a nem elérhető betűtípusokkal szedett szöveget?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél kap elválasztójelet, vagy soha, ha nincs benne, nyelvétől és kis- vagy nagybetűitől függetlenül.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Az asztali változatban a mappa .wasm bővítményei indításkor töltődnek be, és amikor az OK új mappát állít be, kivéve csökkentett módban; az engedélyeket kérő bővítmény csak azok megadása után töltődik be. A webes változat egyet sem tölt be.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	A Nagy egy szűrő- vagy parancsbővítmény minden futásának legalább 250 millió utasítást ad, ugyanazzal az időkorláttal; a Normál megtartja a bővítmény saját keretét. Az élő effektusok, exportálók és importálók megtartják a sajátjukat.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Az új szöveg ezt a nyelvet kapja, amíg a Dokumentumbeállítás nyelve Angol: amerikai; a dokumentumban már meglévő szöveg megtartja a saját nyelvét.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél válik el, vagy sehol, ha nincs benne, nyelvétől és kis- vagy nagybetűitől függetlenül.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Az asztali változatban a mappa .wasm bővítményei indításkor töltődnek be, és amikor itt új mappával az OK gombra kattint, kivéve csökkentett módban; a webes változat nem tölti be őket.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	A Normál megtartja minden bővítmény saját korlátait; a Nagy beállítással egy bővítményszűrő vagy -parancs legalább 250 millió utasítást futtathat a bemenetéhez tartozókon felül. Az időkorlát nem változik.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hány utasítást használhat egy bővítmény objektumszűrőjének egy-egy futása; a Nagy többet enged, mint a Normál, ugyanazzal a 60 másodperces korláttal. A nehéz szűrők megtartják saját keretüket.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Az első munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	A második munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
@@ -3994,13 +3999,15 @@ mark-style	Japanese	Japán
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Az eszköztárban minden eszközcsoport nevét az eszközei fölött mutatja; kikapcsolva a csoportok egymás után következnek, semmi sincs köztük.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Mostantól a megnyitott vagy létrehozott dokumentumok lapfülön nyílnak meg; kikapcsolva mindegyik lebegő ablakban nyílik meg. A már megnyitott dokumentumok a helyükön maradnak.
 	Makes the document tabs taller and their names larger.	Magasabbá teszi a dokumentumok lapfüleit, a nevüket pedig nagyobbá.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	A következő indítástól a rendszer rajzolja az ablak címsorát ott, ahol a VectorCraft egyébként a sajátját rajzolná.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	A következő indítástól a VectorCraft rajzolja az ablak címsorát ott is, ahol az asztali környezet rajzolná, hacsak nincs bekapcsolva a Rendszer címsora.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	A következő indítástól a rendszer rajzolja az ablak címsorát ott, ahol a VectorCraft egyébként a sajátját rajzolná; Linuxon és a BSD-rendszereken a VECTORCRAFT_TITLEBAR változó élvez elsőbbséget.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	A következő indítástól a VectorCraft rajzolja az ablak címsorát ott is, ahol az asztali környezet rajzolná, hacsak nincs bekapcsolva a Rendszer címsora, vagy a VECTORCRAFT_TITLEBAR változó nem választja ki.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Nagyobbá vagy kisebbé teszi a felületet; a vásznon lévő grafika azonos nagyításnál megtartja a méretét.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	A VectorCraft által rajzolt eszközmutatók a Felület méretezésével együtt nőnek és kisebbednek; kikapcsolva megtartják a méretüket.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	A felület nyelve; az Automatikus a rendszer nyelvét használja. A párbeszédablak azonnal nyelvet vált, amint választ egyet.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Az Animált nagyítás csak akkor működik, ha ez be van kapcsolva; kikapcsolva az Animált nagyítás halvány, és a nagyítás nem animált.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	A görgős nagyítás simán úszik be, a Nagyító pedig akkor nagyít, amikor oldalra húz vagy lenyomva tartja; kikapcsolva a Nagyító arra a területre nagyít, amelyen áthúz.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	A következő indítástól az asztali változat ilyen típusú grafikus processzoron keresztül jeleníti meg a vásznat; a grafikát minden esetben a CPU rajzolja. Az Automatikus Windowson és macOS-en az integráltat részesíti előnyben. A webes változat nem használja.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	A következő indítástól az ablak minden képkockát a kijelző frissítésének kivárása nélkül jelenít meg, ahol a grafikus illesztőprogram engedi, legfeljebb másodpercenként 240 képkockát.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A következő indítástól az asztali változat ilyen típusú grafikus processzorral rajzol; az Automatikus a kijelzőt meghajtót részesíti előnyben. A webes változat nem használja.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A következő indítástól az ablak a képkockákat a kijelző frissítésére várás nélkül jeleníti meg, legfeljebb másodpercenként 240-et; kikapcsolva a kijelző diktálja az ütemet. Az indításkor megadott megjelenítési mód felülírja.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	A dokumentumonként megőrzött visszavonási lépések legnagyobb száma; kisebb szám az OK gombra kattintáskor törli a legrégebbi lépéseket. A lépések korábban is törlődhetnek, ha túl sok memóriát foglalnak.
@@ -4019,6 +4026,9 @@ mark-style	Japanese	Japán
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	A Legutóbbi fájlok megnyitása és a Kezdőképernyő legfeljebb ennyi legutóbbi fájlt sorol fel; 0 esetén egyet sem, és a VectorCraft ekkor is megjegyez legfeljebb 30-at.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Dokumentum megnyitásakor a mentett előnézetét mutató csatolt EPS-kép megtartja azt, ahelyett hogy újra beolvasná az EPS-fájlt; a módosult fájlokra továbbra is a Csatolások frissítése érvényes.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Pixeles előnézetben a képek simítva jelennek meg; kikapcsolva a képpontjaik éles szélűek. A Pixeles előnézeten kívül a képek mindig simítottak.
+	PDF Text	PDF-szöveg
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	A megnyitott vagy beágyazott PDF szövege szerkeszthető szövegként érkezik, vagy vázlatként, amely a betűkészletei nélküli számítógépen is ugyanúgy néz ki.
+	Linked pages show the file's own text.	A csatolt oldalak a fájl saját szövegét mutatják.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Ha egy csatolt fájl megváltozik, az Automatikusan újra beolvassa, a Kérdés módosításkor előbb rákérdez, a Kézzel pedig változatlanul hagyja, és megjegyzést mutat az állapotsoron.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Az asztali változatban a mappa, amelyből az Új sablonból… és a Mentés sablonként… indul; hagyja üresen a dokumentumok mappájában lévő VectorCraft Templates mappához.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Az Eredeti szerkesztése a csatolt fájlt a rendszer adott típushoz tartozó alapértelmezett alkalmazásában nyitja meg; kikapcsolva a csatolt raszterkép a PhotoCraftban nyílik meg, ha telepítve van.
@@ -4318,6 +4328,7 @@ mark-style	Japanese	Japán
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
 	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
+	Clear Recent Commands	Legutóbbi parancsok listájának törlése
 	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
@@ -6381,6 +6392,10 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ez a parancs nem működik Perspektivikus torzítással vagy Szabad torzítással módosított képen: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	a kép nem torzítható így, mert a sarkai nem alkotnának konvex alakzatot: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	a kép nem torzítható így, mert a sarkai átlépnék a torzítás horizontját: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	a kép nem torzítható így, mert a sarkai túl közel lennének egymáshoz a perspektivikus leképezéshez: {_1}
 @msg	`background` must be edges, corners or colors	a `background` értéke edges, corners vagy colors lehet
 @msg	`match` must be distance or channels	a `match` értéke distance vagy channels lehet
 @msg	`{key}` must be from 0 to 100	a `{key}` értéke 0 és 100 között lehet
@@ -10748,6 +10763,10 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Leaf Vine	Leveles inda
+	Blossom Chain	Virágfüzér
+	Pennant Garland	Zászlófüzér
+	Lantern String	Lámpásfüzér
 	Orbit Lines	Pályavonalak
 	Petal Garland	Sziromfüzér
 	Lattice Braid	Rácsfonat

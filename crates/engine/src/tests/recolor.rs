@@ -1590,6 +1590,26 @@ fn theme_picker_marquee_takes_the_area_and_picks_add_up() {
     assert_eq!(got, ["rgb 0 255 0", "rgb 255 255 0"]);
 }
 
+/// A distorted image is read where its pixels are drawn, between its corners.
+#[test]
+fn theme_picker_reads_a_distorted_image_where_it_is_drawn() {
+    let mut s = session();
+    let (id, b) = halves_image(&mut s, 64, 32, [255, 0, 0, 255], [0, 0, 255, 255]);
+    let (x, y0, y1) = (b.x1 + 20.0, b.y0, b.y1);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.distort", json!({"corners": [[x + 40.0, y0], [x + 60.0, y0], [x + 100.0, y1], [x, y1]]}));
+    // The lower left of the trapezoid, outside the rectangle the image was placed in: red.
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [x + 2.0, y1 - 4.0, x + 20.0, y1 - 1.0]}]})), ["rgb 255 0 0"]);
+    // Where the image was: nothing.
+    assert!(pick_theme(&mut s, json!({"picks": [{"rect": [b.x0 + 1.0, b.y0 + 1.0, b.x1 - 1.0, b.y1 - 1.0]}]})).is_empty());
+    // A marquee reaching past the horizon its sides meet at (a quarter of its height above its
+    // top) still reads every pixel it covers.
+    let h = y1 - y0;
+    let mut both = pick_theme(&mut s, json!({"picks": [{"rect": [x - 10.0, y0 - h, x + 110.0, y1 + 1.0]}]}));
+    both.sort();
+    assert_eq!(both, ["rgb 0 0 255", "rgb 255 0 0"]);
+}
+
 /// Pixels less than half opaque are left out, and so is an image whose pixels can't be read.
 #[test]
 fn theme_picker_leaves_out_clear_pixels_and_unreadable_images() {

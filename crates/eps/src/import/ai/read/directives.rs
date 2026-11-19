@@ -627,7 +627,7 @@ impl<'a> Reader<'a> {
             || sub.mesh.is_some()
             || sub.gradient_def.is_some();
         let head = sub.symbol.take().unwrap_or_default();
-        let registration = head.registration;
+        let (registration, dynamic) = (head.registration, head.dynamic);
         let measured = read.is_ok() && !open && sub.unsupported.is_empty() && sub.unknown.is_empty() && sub.frames.len() == 1;
         let Some(frame) = sub.frames.pop().filter(|_| measured) else { return };
         let mut kids = frame.children;
@@ -669,7 +669,7 @@ impl<'a> Reader<'a> {
             }
         }
         let named = self.unique_symbol_name(if name.is_empty() { "Symbol" } else { &name });
-        self.doc.symbols.push(Symbol { name: named.clone(), art: Arc::new(art), dynamic: false });
+        self.doc.symbols.push(Symbol { name: named.clone(), art: Arc::new(art), dynamic });
         if let Some(reg) = registration.and_then(symbol_registration) {
             self.doc.set_symbol_registration(&named, reg);
         }

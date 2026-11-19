@@ -359,7 +359,7 @@ fn the_panel_menu_turns_the_row_on_and_off() {
     // The menu in a context of its own, as the other panel menu tests draw it.
     let mut app = off();
     let ctx = egui::Context::default();
-    let raw = |events| egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(240.0, 200.0))), ..Default::default() };
+    let raw = |events| egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(240.0, 320.0))), ..Default::default() };
     let click_item = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(raw(vec![]), |ui| super::color_wheel::menu(app, ui));
         out.textures_delta.clear();
