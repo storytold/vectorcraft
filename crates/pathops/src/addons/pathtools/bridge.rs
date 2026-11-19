@@ -217,7 +217,9 @@ pub struct Bridged {
 pub enum ManyError {
     /// More than [`MAX_BRIDGED_CIRCLES`] circles.
     TooManyCircles,
-    /// More than [`MAX_BRIDGES`] pairs of circles within reach that the arcs can bridge.
+    /// More than [`MAX_BRIDGES`] pairs of circles to bridge: within reach, near enough for the
+    /// arcs and with a neck wide enough for the shape's precision. Also more than nine times as many
+    /// pairs within reach to check.
     TooManyBridges,
     /// No two circles are within reach of each other.
     NoneInReach,
@@ -324,6 +326,9 @@ fn bridgeable(circles: &[Circle], arc: ArcRadius, reach: f64) -> Result<Bridgeab
         }
         pairs.retain(|p| !thin(p));
     };
+    if pairs.len() > MAX_BRIDGES {
+        return Err(ManyError::TooManyBridges);
+    }
     Ok((pairs, too_far, roots, precision))
 }
 
@@ -377,16 +382,15 @@ fn pairs_within(circles: &[Circle], reach: f64, arc: ArcRadius) -> Result<Within
                 }
             }
         }
-        // Saturated cells can list a pair twice, so the count is checked again after `dedup`.
+        // A bound on the work before thin necks are dropped; [`bridgeable`] holds the pairs left
+        // to [`MAX_BRIDGES`].
         if pairs.len() > 9 * MAX_BRIDGES {
             return Err(ManyError::TooManyBridges);
         }
     }
+    // Saturated cells can list a pair twice.
     pairs.sort_unstable_by_key(|&(pair, _)| pair);
     pairs.dedup_by_key(|&mut (pair, _)| pair);
-    if pairs.len() > MAX_BRIDGES {
-        return Err(ManyError::TooManyBridges);
-    }
     Ok((pairs, too_far))
 }
 
@@ -791,6 +795,20 @@ mod tests {
         assert_eq!(bridge_many(&far, ArcRadius::Share(1.0), f64::NAN), Err(ManyError::Bad));
         assert_eq!(bridge_many(&far, ArcRadius::Share(1.0), -1.0), Err(ManyError::Bad));
         assert_eq!(bridge_many(&[circle(f64::INFINITY, 0.0, 1.0), far[0]], ArcRadius::Share(1.0), 1.0), Err(ManyError::Bad));
+    }
+
+    #[test]
+    fn the_bridge_limit_counts_the_necks_left_after_thin_ones_are_dropped() {
+        // Two columns of 65 nearly coincident circles: 8,385 pairs within reach that the arcs can
+        // bridge, but the 4,225 between the columns are thinner than the precision allows.
+        let column = |x: f64| (0..65).map(move |k| circle(x, 0.001 * k as f64, 10.0));
+        let circles: Vec<Circle> = column(0.0).chain(column(34.6409)).collect();
+        let (pairs, too_far) = pairs_within(&circles, 15.0, ArcRadius::Share(1.0)).unwrap();
+        assert_eq!((pairs.len(), too_far), (8385, None));
+        let (pairs, ..) = bridgeable(&circles, ArcRadius::Share(1.0), 15.0).unwrap();
+        assert_eq!(pairs.len(), 4160);
+        assert!(pairs.iter().all(|&((i, j), _)| (i < 65) == (j < 65)));
+        assert!(bridges_any(&circles, ArcRadius::Share(1.0), 15.0));
     }
 
     #[test]
