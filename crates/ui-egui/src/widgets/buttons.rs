@@ -230,3 +230,13 @@ fn menu_item_name_response(ui: &mut Ui, label: &str, enabled: bool, checked: boo
     let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
     ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
 }
+
+/// [`menu_item`] that shows `hint` under the pointer while the row is disabled, to say why it is
+/// gray.
+pub fn menu_item_hint(ui: &mut Ui, label: &str, enabled: bool, checked: bool, hint: &str) -> bool {
+    let label = tl!(label);
+    let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+        .on_disabled_hover_text(tl!(hint))
+        .clicked()
+}

@@ -651,6 +651,11 @@ pub struct UiState {
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
+    /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
+    /// so that the palette starts at its first row the next time it is drawn, even when it closed
+    /// and opened again before then. Not saved.
+    #[serde(skip)]
+    pub palette_toggled: bool,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
     /// the app always starts in Normal Screen Mode, with its menus and panels (#472: a saved
     /// Presentation Mode came back on restart with no way out).
@@ -762,6 +767,10 @@ pub struct UiState {
     /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
     #[serde(default)]
     pub recent_commands: Vec<String>,
+    /// How many times each command was picked in Help › Search Commands, which ranks the commands
+    /// picked most often first among results that match as well.
+    #[serde(default, deserialize_with = "crate::palette::deserialize_command_uses")]
+    pub command_uses: crate::palette::CommandUses,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -825,7 +834,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
+    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
+    /// out-of-gamut shading and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
@@ -1319,6 +1329,7 @@ impl Default for UiState {
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
+            palette_toggled: false,
             screen_mode: 0,
             tiled: false,
             tile_layout: crate::canvas::TileLayout::Grid,
@@ -1348,6 +1359,7 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             recent_commands: vec![],
+            command_uses: Default::default(),
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             original_editor: Default::default(),

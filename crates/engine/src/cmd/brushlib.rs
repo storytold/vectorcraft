@@ -177,6 +177,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "paint", name: "Paint", make: paint },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
+    BuiltinBrushLibrary { id: "decorative", name: "Decorative", make: decorative },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
@@ -186,6 +187,8 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "engraving", name: "Engraving", make: engraving },
     BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
     BuiltinBrushLibrary { id: "image-brush", name: "Image Brush", make: image_brush },
+    BuiltinBrushLibrary { id: "artistic", name: "Artistic Brushes", make: artistic },
+    BuiltinBrushLibrary { id: "vector-packs", name: "Vector Packs", make: vector_packs },
 ];
 
 /// Built-in library `id`, made once.
@@ -237,6 +240,42 @@ fn ring(c: Point, outer: f64, inner: f64) -> Node {
 
 fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
+}
+
+/// Artistic: four original vector compositions that stretch along a path and take its color.
+fn artistic() -> BrushLibrary {
+    let orbit = group(vec![
+        black(band(100.0, 1.4, 64, |x| 3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+        black(band(100.0, 1.4, 64, |x| -3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+    ]);
+    let mut petals = vec![black(band(100.0, 0.8, 4, |_| 0.0))];
+    for i in 0..6 {
+        let x = 9.0 + 16.0 * i as f64;
+        let side = if i % 2 == 0 { 1.0 } else { -1.0 };
+        petals.push(black(polygon(&[(x - 6.0, 0.0), (x - 2.0, 5.0 * side), (x + 5.0, 7.0 * side), (x + 2.0, 2.0 * side)])));
+    }
+    let mut lattice = vec![black(band(100.0, 0.9, 4, |_| 0.0))];
+    for i in 0..5 {
+        let x = 20.0 * i as f64;
+        lattice.push(black(polygon(&[(x, -4.0), (x + 1.0, -4.0), (x + 20.0, 4.0), (x + 19.0, 4.0)])));
+        lattice.push(black(polygon(&[(x, 4.0), (x + 1.0, 4.0), (x + 20.0, -4.0), (x + 19.0, -4.0)])));
+    }
+    let mut facets = Vec::new();
+    for i in 0..8 {
+        let x = 12.5 * i as f64;
+        let high = if i % 2 == 0 { 6.0 } else { 3.5 };
+        facets.push(black(polygon(&[(x, -high), (x + 11.0, -high / 2.0), (x + 12.5, 0.0), (x + 11.0, high / 2.0), (x, high)])));
+    }
+    built(
+        "Artistic Brushes",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Orbit Lines", orbit, Colorization::Tints),
+            art("Petal Garland", group(petals), Colorization::Tints),
+            art("Lattice Braid", group(lattice), Colorization::Tints),
+            art("Facet Sweep", group(facets), Colorization::Tints),
+        ],
+    )
 }
 
 /// Original fine-line art for an engraving-style brush library.
@@ -653,6 +692,47 @@ fn pattern_borders() -> BrushLibrary {
     built("Pattern Borders", Document::new(100.0, 100.0), brushes)
 }
 
+/// Decorative: repeating plant, flower and hanging ornaments drawn as original vector tiles.
+/// Every tile joins the next at x = 0 and 48 so open and closed paths stay continuous.
+fn decorative() -> BrushLibrary {
+    let stem = || black(shapes::rectangle(Rect::new(0.0, -0.65, 48.0, 0.65)));
+    let vine = group(vec![
+        stem(),
+        black(polygon(&[(8.0, -0.2), (12.0, -5.0), (24.0, -8.0), (20.0, -1.0)])),
+        black(polygon(&[(28.0, 0.2), (32.0, 5.0), (44.0, 8.0), (40.0, 1.0)])),
+    ]);
+    let mut blossoms = vec![stem()];
+    for x in [12.0, 36.0] {
+        for (dx, dy) in [(0.0, -4.0), (4.0, 0.0), (0.0, 4.0), (-4.0, 0.0)] {
+            blossoms.push(black(shapes::ellipse(Rect::new(x + dx - 2.5, dy - 2.5, x + dx + 2.5, dy + 2.5))));
+        }
+        blossoms.push(black(shapes::ellipse(Rect::new(x - 1.3, -1.3, x + 1.3, 1.3))));
+    }
+    let flowers = group(blossoms);
+    let pennants = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.2, 48.0, -4.2))),
+        black(polygon(&[(4.0, -4.2), (20.0, -4.2), (12.0, 10.0)])),
+        black(polygon(&[(28.0, -4.2), (44.0, -4.2), (36.0, 10.0)])),
+    ]);
+    let lanterns = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.0, 48.0, -4.0))),
+        black(shapes::rectangle(Rect::new(11.4, -4.0, 12.6, -1.0))),
+        black(shapes::ellipse(Rect::new(7.0, -1.0, 17.0, 9.0))),
+        black(shapes::rectangle(Rect::new(35.4, -4.0, 36.6, -1.0))),
+        black(shapes::ellipse(Rect::new(31.0, -1.0, 41.0, 9.0))),
+    ]);
+    built(
+        "Decorative",
+        Document::new(100.0, 100.0),
+        vec![
+            border("Leaf Vine", vine, None, PatternFit::Stretch),
+            border("Blossom Chain", flowers, None, PatternFit::Stretch),
+            border("Pennant Garland", pennants, None, PatternFit::Stretch),
+            border("Lantern String", lanterns, None, PatternFit::Stretch),
+        ],
+    )
+}
+
 fn scatter(name: &str, art: Node, s: Scatter) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Scatter(Scatter { art, ..s }) }
 }
@@ -785,6 +865,38 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Vector Packs: four original, editable vector marks that follow the stroke color.
+fn vector_packs() -> BrushLibrary {
+    let compass = group(vec![black(shapes::star(Point::ZERO, 10.0, 3.0, 8, 0.0)), black(shapes::ellipse(Rect::new(-1.5, -1.5, 1.5, 1.5)))]);
+    let sprig = group(vec![
+        black(polygon(&[(-0.7, 10.0), (0.7, 10.0), (0.7, -10.0), (-0.7, -10.0)])),
+        black(polygon(&[(0.0, 5.0), (5.0, 2.0), (7.0, -1.0), (3.0, 0.0)])),
+        black(polygon(&[(0.0, 0.0), (-5.0, -3.0), (-7.0, -6.0), (-3.0, -5.0)])),
+        black(polygon(&[(0.0, -5.0), (5.0, -8.0), (7.0, -10.0), (3.0, -9.0)])),
+    ]);
+    let diamond = group(vec![
+        black(polygon(&[(-9.0, 0.0), (-1.0, -9.0), (-1.0, -1.0)])),
+        black(polygon(&[(1.0, -9.0), (9.0, 0.0), (1.0, -1.0)])),
+        black(polygon(&[(9.0, 0.0), (1.0, 9.0), (1.0, 1.0)])),
+        black(polygon(&[(-1.0, 9.0), (-9.0, 0.0), (-1.0, 1.0)])),
+    ]);
+    let tide = group(vec![
+        black(band(20.0, 1.2, 32, |x| -3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+        black(band(20.0, 1.2, 32, |x| 3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+    ]);
+    let settings = Scatter { size: (90.0, 110.0), spacing: (130.0, 160.0), colorization: Colorization::Tints, ..Default::default() };
+    built(
+        "Vector Packs",
+        Document::new(100.0, 100.0),
+        vec![
+            scatter("Compass Rose", compass, settings.clone()),
+            scatter("Botanical Sprig", sprig, settings.clone()),
+            scatter("Facet Diamond", diamond, settings.clone()),
+            scatter("Tide Crest", tide, settings),
+        ],
+    )
 }
 
 /// Stipple: original dot-based scatter brushes for fine and broad shading along a path.
@@ -1076,10 +1188,14 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
         return Some(found);
     }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
-        return Some((builtin_info(b), builtin_library(key)?));
+        return Some((builtin_info(b), builtin_library(b.id)?));
     }
-    let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
-    library(s, &id)
+    if let Some(id) = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key)).map(|l| l.id) {
+        return library(s, &id);
+    }
+    // Keep the short built-in alias, but let a user or loaded library own its display name.
+    let b = key.eq_ignore_ascii_case("Artistic").then(|| BUILTIN.iter().find(|b| b.id == "artistic")).flatten()?;
+    Some((builtin_info(b), builtin_library(b.id)?))
 }
 
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<BrushLibrary>)> {

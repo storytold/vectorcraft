@@ -580,6 +580,26 @@ fn nature_symbol_library_names_are_in_complete_catalogs() {
     }
 }
 
+/// The errors of Perspective Distort and Free Distort on an image, and of the image commands that
+/// refuse a distorted image, are in every complete-message catalog.
+#[test]
+fn distorted_image_messages_are_in_complete_catalogs() {
+    let literals = message_literals();
+    for msg in [
+        "object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on",
+        "image {_1} cannot be distorted this way: its corners would not make a convex shape",
+        "image {_1} cannot be distorted this way: its corners would cross the warp's horizon",
+        "image {_1} cannot be distorted this way: its corners would be too close together for a perspective map",
+    ] {
+        assert!(literals.contains(msg), "{msg}");
+        let shown = msg.replace("{_1}", "7");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, &shown), shown, "{code}: {msg}");
+        }
+    }
+}
+
 /// View › Proof Setup › Customize's labels.
 #[test]
 fn proof_setup_dialog_labels_are_in_complete_catalogs() {
@@ -4093,6 +4113,22 @@ fn three_d_refusals_translate_with_their_values() {
         (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
         (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
         (refuse(vectorcraft_effects::three_d_wireframe_in(None, &rect).map(drop)), "has no 3D effect", vec![]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "wavy"}))),
+            "or custom with",
+            vec!["none", "classic", "custom", "bevelProfile"],
+        ),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom"}))),
+            "the bevel's points",
+            vec!["custom", "bevelProfile"],
+        ),
+        (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"bevelName": 3}))), "must be a string", vec!["bevelName"]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom", "bevelProfile": [[0, 0]]}))),
+            "each share between",
+            vec!["bevelProfile", "[x, y]", "[0, 0]", "[1, 1]"],
+        ),
     ];
     for (e, english, _) in &errors {
         assert!(e.starts_with("invalid parameters for `effect.apply`: ") && e.contains(english), "{e}");
@@ -6548,7 +6584,8 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{v}`", &["axis"]),
     ("balance must be between 0 and 100", &["balance"]),
     ("before must name a panel", &["before"]),
-    ("bevel must be none or one of {_1}", &["bevel", "none"]),
+    ("bevel custom needs {BEVEL_PROFILE}, the bevel's points", &["bevel", "custom"]),
+    ("bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}", &["bevel", "none", "custom"]),
     ("brightness must be dark|mediumDark|mediumLight|light", &["brightness", "dark", "mediumDark", "mediumLight", "light"]),
     ("clip must be true or false", &["clip"]),
     ("collapsed must be true or false", &["collapsed"]),
