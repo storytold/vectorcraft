@@ -31,7 +31,7 @@ pub use buttons::{
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{
-    button_width, flat_button_fit_width, icon_button_info, paint_icon_button_named, primary_button_width, secondary_button_width,
+    button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
 };
 #[cfg(test)]
 use chips::gradient_chip_colors;

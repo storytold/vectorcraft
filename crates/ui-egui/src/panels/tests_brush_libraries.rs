@@ -197,6 +197,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("calligraphic-nibs"),
             json!("pressure-sensitive"),
             json!("bristle-brushes"),
+            json!("paint"),
             json!("pattern-borders"),
             json!("ornamental"),
             json!("scatter-shapes"),
@@ -259,6 +260,17 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert_eq!(
         app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
         Some("Flex Ribbon")
+    );
+    let r = app.run("window.brushLibrary", json!({"library": "Paint"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("paint"), Some(4)));
+    let path = app.run("shape.line", json!({"x1": 10, "y1": 140, "x2": 180, "y2": 140})).unwrap()["id"].as_u64().unwrap();
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 4.0);
+    assert!(has(&app, "Flat Sweep") && !has(&app, "Dry Drag"));
+    assert_eq!(undo_len(&app), undo + 1);
+    assert_eq!(
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
+        Some("Flat Sweep")
     );
     let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));

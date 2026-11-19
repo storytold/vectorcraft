@@ -5639,6 +5639,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Filigree Arrow	નાજુક કોતરણીવાળું તીર
 	Petal Sweep	પાંખડીઓનો વળાંક
 	Twin Curl	બેવડો વળાંક
+	Paint	રંગકામ
+	Flat Sweep	સપાટ લસરકો
+	Dry Drag	સૂકો ઘસારો
+	Loaded Stroke	ઘાટો પીંછીનો ઘસારો
+	Fan Sweep	પંખા જેવો લસરકો
 @msg	`at` must be "start" or "end"	`at` "start" અથવા "end" હોવું જોઈએ
 @msg	give exactly one of `through` and `toward`	`through` અને `toward` માંથી બરાબર એક આપો
 @msg	no arc fits these points: two are the same or all three lie on one line	આ પૉઇન્ટ્સમાં કોઈ આર્ક બેસતો નથી: બે એકસરખા છે અથવા ત્રણેય એક જ રેખા પર છે
