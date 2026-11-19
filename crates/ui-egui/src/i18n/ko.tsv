@@ -2105,6 +2105,10 @@ antiAlias	Sharp	날카롭게
 	Add Color Tool	색상 추가 도구
 	Remove Color Tool	색상 제거 도구
 	Remove Color	색상 제거
+	Set As Base Color	기본 색상으로 설정
+	Select Shade	음영 선택
+	Add New Color	새 색상 추가
+	Set Current Color As Base Color	현재 색상을 기본 색상으로 설정
 	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
@@ -2976,6 +2980,10 @@ diagnostics	ui	UI
 	Preserve Alpha Transparency	알파 투명도 보존
 	Preserve Appearance and Overprints	모양 및 오버프린트 보존
 	Preserve CMYK Numbers	CMYK 수치 보존
+	Preserve RGB Numbers	RGB 수치 보존
+	Device to Simulate:	시뮬레이션할 장치:
+	Simulate Paper Color	용지 색상 시뮬레이션
+	Simulate Black Ink	검정 잉크 시뮬레이션
 	Preserve Editing Capabilities	편집 기능 보존
 	Preserve Lightness	명도 보존
 	Preserve Overprints and Spot Colors	오버프린트 및 별색 보존
@@ -5133,6 +5141,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label}의 결과가 비어 있습니다. 선이나 기타 열린 패스가 영역을 둘러싸지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
 @msg	already editing a pattern	이미 패턴을 편집 중입니다
 @msg	no pattern `{name}`	`{name}` 패턴이 없습니다
+@msg	art painted with `{name}` can't be its tile	`{name}` 패턴으로 칠한 아트웍은 그 타일이 될 수 없습니다
 @msg	not in pattern editing mode	패턴 편집 모드가 아닙니다
 @msg	finish editing the pattern first	먼저 패턴 편집을 마치세요
 @msg	pattern missing	패턴이 없습니다
@@ -7627,6 +7636,37 @@ anchor	Points:	포인트:
 @msg	`{id}` is not a colour adjustment	`{id}`은(는) 색상 조정이 아닙니다
 @msg	missing `effect`	`effect`이 없습니다
 @msg	`params` must be an object	`params`는 개체여야 합니다
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	삼각형 (윤곽)
+	Circle (open)	원 (윤곽)
+	Square (open)	사각 (윤곽)
+	Arrow (open)	화살표 (윤곽)
+	Barbed	미늘
+arrowhead	Feather	깃털
+arrowhead	Target	과녁
+	Half Arrow (left)	반쪽 화살표 (왼쪽)
+	Half Arrow (right)	반쪽 화살표 (오른쪽)
+	Double Bar	이중 막대
+	Dot on Bar	막대 위 점
+	Chevron	갈매기형
+	Plus	더하기
+	Hexagon (open)	육각형 (윤곽)
+	Tag	태그
+	Tag (open)	태그 (윤곽)
+	Half Circle	반원
+	Drop	물방울
+	Slash	슬래시
+	Double Slash	이중 슬래시
+	Diamond (open)	다이아몬드 (윤곽)
+	Reverse Triangle	역삼각형
+	Swallowtail	제비 꼬리
+	Bracket	대괄호
+	Fork	포크
+	Leaf	잎
+	Kite	연
+	Triangle to Bar	삼각형에서 막대
+	Oval	타원
+	Line Arrow	선 화살표
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	패스 정밀 도구
 	Anchor Eraser Brush	앵커 포인트 지우개 브러시
@@ -7917,6 +7957,7 @@ breakText	Glyphs	글리프
 	Remove Strokes	선 제거
 	Place Brush Art	브러시 아트 배치
 	Replace Brush Art	브러시 아트 바꾸기
+	Replace Pattern Art	패턴 아트 바꾸기
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
 	Apply to Strokes	선에 적용
 	Leave Strokes	선 유지
@@ -10343,6 +10384,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Engraving	판화
+	Fine Hatching	가는 해칭
+	Dense Hatching	촘촘한 해칭
+	Tapered Hatching	가늘어지는 해칭
+	Broken Hatching	끊긴 해칭
 	Image Brush	이미지 브러시
 	Soft Bloom	부드러운 꽃
 	Halftone Field	하프톤 필드

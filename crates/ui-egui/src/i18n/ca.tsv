@@ -456,6 +456,8 @@ antiAlias	Sharp	Nítid
 	Bar	Barra
 	Bar Graph Tool	Eina de gràfic de barres
 	Barbed	Amb pues
+arrowhead	Feather	Ploma
+arrowhead	Target	Diana
 	Bas Relief	Baix relleu
 	Bas Relief…	Baix relleu…
 	Base Along:	Base al llarg de:
@@ -2206,6 +2208,10 @@ digits	Malayalam	Malaiàlam
 	Add Color Tool	Eina Afegeix color
 	Remove Color Tool	Eina Elimina color
 	Remove Color	Elimina el color
+	Set As Base Color	Defineix com a color base
+	Select Shade	Selecciona el to
+	Add New Color	Afegeix un color nou
+	Set Current Color As Base Color	Defineix el color actual com a color base
 	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
@@ -2617,6 +2623,7 @@ digits	Malayalam	Malaiàlam
 	Limit:	Límit:
 	Limited	Limitat
 	Line	Línia
+	Line Arrow	Fletxa de línies
 	Line Art	Art lineal
 	Line Art and Text Resolution:	Resolució de l’art lineal i del text:
 	Line Breaks	Salts de línia
@@ -3576,6 +3583,10 @@ digits	Malayalam	Malaiàlam
 	Preserve Appearance	Conserva l’aparença
 	Preserve Appearance and Overprints	Conserva l’aparença i les sobrempressions
 	Preserve CMYK Numbers	Conserva els valors CMYK
+	Preserve RGB Numbers	Conserva els valors RGB
+	Device to Simulate:	Dispositiu que se simula:
+	Simulate Paper Color	Simula el color del paper
+	Simulate Black Ink	Simula la tinta negra
 	Preserve Editing Capabilities	Conserva les capacitats d’edició
 	Preserve editing capabilities	Conserva les capacitats d’edició
 	Preserve Lightness	Conserva la lluminositat
@@ -6848,6 +6859,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	no hi ha format natiu
 @msg	no pages	no hi ha pàgines
 @msg	no pattern `{name}`	no hi ha el motiu `{name}`
+@msg	art painted with `{name}` can't be its tile	un art pintat amb `{name}` no pot ser el seu mosaic
 @msg	no pattern swatch `{name}`	no hi ha la mostra de motiu `{name}`
 @msg	no perspective grid preset named `{name}`	no hi ha cap preajust de quadrícula de perspectiva anomenat `{name}`
 @msg	no plug-in {0} is installed	no hi ha instal·lat el complement {0}
@@ -8330,6 +8342,7 @@ breakText	Glyphs	Glifs
 	Remove Strokes	Elimina els traços
 	Place Brush Art	Col·loca l’art del pinzell
 	Replace Brush Art	Substitueix l’art del pinzell
+	Replace Pattern Art	Substitueix l’art del motiu
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
 	Apply to Strokes	Aplica als traços
 	Leave Strokes	Deixa els traços
@@ -8909,6 +8922,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Engraving	Gravat
+	Fine Hatching	Ratllat fi
+	Dense Hatching	Ratllat dens
+	Tapered Hatching	Ratllat afilat
+	Broken Hatching	Ratllat interromput
 	Image Brush	Pinzells d'imatge
 	Soft Bloom	Floració suau
 	Halftone Field	Camp de semitons
