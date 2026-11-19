@@ -19,8 +19,9 @@ pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
     task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
 }
 
-/// The actions the Contextual Task Bar offered when it was last drawn, before Bar Actions left any
-/// out: each one's name and its id in [`TASK_BAR_ACTIONS`] (none: Bar Actions cannot turn it off).
+/// The actions and chips the Contextual Task Bar offered when it was last drawn, before Bar Actions
+/// left any out: each one's name and its id in [`TASK_BAR_ACTIONS`] or [`TASK_BAR_CHIPS`] (none:
+/// Bar Actions cannot turn it off).
 #[cfg(test)]
 pub(crate) fn task_bar_offered(ctx: &egui::Context) -> Vec<(String, Option<&'static str>)> {
     ctx.data(|d| d.get_temp(task_bar_id().with("offered")).unwrap_or_default())
@@ -191,7 +192,8 @@ pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]). More Options › Bar Actions
 /// turns each action and chip the bar offers on or off ([`TASK_BAR_ACTIONS`], [`TASK_BAR_CHIPS`]);
-/// the bar leaves out the ones that are off, and Reset Bar Actions shows them all again.
+/// the bar leaves out the ones that are off, and Reset Bar Actions shows them all again. With every
+/// one of them off, the bar still shows its handle and More Options, where they turn back on.
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let t = Tokens::get(ui.ctx());
     let on_artboards = app.session.tool_id() == "artboard";
@@ -364,11 +366,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     // the ones that are off there are left out of the bar.
     let hidden = &app.ui.task_bar_hidden_actions;
     #[cfg(test)]
-    ui.ctx().data_mut(|d| {
-        let ids: Vec<(String, Option<&'static str>)> =
-            items.iter().map(|(label, _, cmd, params)| (label.to_string(), action_id(cmd, params))).collect();
-        d.insert_temp(task_bar_id().with("offered"), ids);
-    });
+    let mut probe: Vec<(String, Option<&'static str>)> =
+        items.iter().map(|(label, _, cmd, params)| (label.to_string(), action_id(cmd, params))).collect();
     let mut offered: Vec<(&str, &'static str)> = items.iter().filter_map(|(label, _, cmd, params)| Some((*label, action_id(cmd, params)?))).collect();
     items.retain(|(_, _, cmd, params)| action_id(cmd, params).is_none_or(|a| !hidden.contains(a)));
     let bounds = xf.rect.shrink(8.0);
@@ -392,6 +391,11 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     .filter_map(|(shown, chip)| shown.then_some(chip))
     .collect();
     offered.extend(chips.iter().map(|c| (c.label(shape.is_some()), c.id(shape.is_some()))));
+    #[cfg(test)]
+    {
+        probe.extend(chips.iter().map(|c| (c.label(shape.is_some()).to_string(), Some(c.id(shape.is_some())))));
+        ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("offered"), probe));
+    }
     let chips: Vec<Chip> = chips.into_iter().filter(|c| !hidden.contains(c.id(shape.is_some()))).collect();
     let offered: Vec<(&str, &str, bool)> = offered.into_iter().map(|(label, action)| (label, action, !hidden.contains(action))).collect();
     let any_hidden = !hidden.is_empty();
@@ -528,7 +532,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             ui.menu_button(format!("   {}", tl!("Bar Actions")), |ui| {
                                 ui.set_min_width(170.0);
                                 for (label, action, shown) in &offered {
-                                    if widgets::menu_item_name(ui, label.trim_end_matches([':', '…']), true, *shown) {
+                                    if widgets::menu_item_name(ui, bar_action_name(label), true, *shown) {
                                         run = Some(("window.taskBar.actions", json!({ "action": action })));
                                     }
                                 }
@@ -699,6 +703,12 @@ pub(crate) fn is_task_bar_action(id: &str) -> bool {
 fn action_id(cmd: &str, params: &serde_json::Value) -> Option<&'static str> {
     let tool = params.get("tool").and_then(serde_json::Value::as_str);
     TASK_BAR_ACTIONS.iter().find(|(_, c, t)| *c == cmd && *t == tool).map(|a| a.0)
+}
+
+/// The name More Options › Bar Actions lists for the bar's item `label`: without a field's colon
+/// (a full-width one too), the space some languages put before it, or a final ellipsis.
+pub(crate) fn bar_action_name(label: &str) -> &str {
+    label.trim_end().trim_end_matches([':', '：', '…']).trim_end()
 }
 
 /// Reads the Contextual Task Bar's actions and chips that are off, as kept in the preferences. Ids

@@ -8186,8 +8186,10 @@ every group as it is. The groups and their contents are VectorCraft's own.
 `duplicateArtboards`, `rearrangeArtboards` and `exportArtboards` (the Artboard tool's); the chips are `fill`, `stroke`,
 `recolor` (Recolor Artwork), `lock` and `shapeProperties` (a basic shape's Shape Properties, in Lock's place). The bar's
 More Options menu has Bar Actions, which lists the actions and chips the bar offers for the current selection or tool,
-each checked while it is on, and runs the command for the one clicked. An action or chip that is off stays out of the
-bar and out of More Options wherever the bar would offer it; turning one off changes only the bar. Every action starts
+each checked while it is on and named without a final colon or ellipsis, and runs the command for the one clicked. An
+action or chip that is off stays out of the bar and out of More Options wherever the bar would offer it; turning one off
+changes only the bar. With every action and chip it would offer off, the bar still shows its handle and More Options,
+where Bar Actions turns them on again. Every action starts
 on. The type font controls are not in Bar Actions and stay on the bar. Which actions are off is kept with the preferences
 and with the workspace; a workspace or preferences saved without them show every action, and an id the bar does not have
 is dropped when they are read. Another `action`, or none, fails with "`action` must be one of …", and a

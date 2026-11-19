@@ -1803,10 +1803,11 @@ fn an_action_turned_off_is_not_listed_in_more_options() {
     assert!(on_bar.iter().chain(&menu).any(|t| t == "Duplicate"), "Duplicate is still offered: {on_bar:?} {menu:?}");
 }
 
-/// Every action the bar offers, for every kind of selection and tool, has an id in Bar Actions,
-/// and with all of them turned off the bar shows none of them. That covers Connect and Join (both
-/// `join`), the actions matched by the tool they switch to (`editPath`, `drawPencil`,
-/// `smoothToolOptions`), the Smooth tool's Fidelity and the Artboard tool's actions.
+/// Every action and chip the bar offers, for every kind of selection and tool, has an id in Bar
+/// Actions, and with all of them turned off the bar shows none of them but still shows, with More
+/// Options. That covers Connect and Join (both `join`), the actions matched by the tool they switch
+/// to (`editPath`, `drawPencil`, `smoothToolOptions`), the Smooth tool's Fidelity, Dynamic Text,
+/// an Image Trace object's Expand, the Type tool's Fill and the Artboard tool's actions.
 #[test]
 fn every_action_the_bar_offers_can_be_turned_off() {
     let dir = crate::tests_folder::Folder::new("ui-taskbar-actions");
@@ -1878,7 +1879,16 @@ fn every_action_the_bar_offers_can_be_turned_off() {
                 let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
                 select(app, &[t]);
             }),
-            &["createOutlines", "convertToAreaType"],
+            &["createOutlines", "convertToAreaType", "dynamicText", "fill", "stroke", "lock"],
+        ),
+        (
+            "the Type tool with type selected",
+            Box::new(|app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+                select(app, &[t]);
+                app.run("tool.select", json!({"tool": "type"})).unwrap();
+            }),
+            &["fill"],
         ),
         (
             "area type",
@@ -1888,7 +1898,7 @@ fn every_action_the_bar_offers_can_be_turned_off() {
                 app.run("type.convertToAreaType", json!({})).unwrap();
                 select(app, &[t]);
             }),
-            &["createOutlines", "convertToPointType"],
+            &["createOutlines", "convertToPointType", "dynamicText"],
         ),
         (
             "type on a closed path",
@@ -1897,7 +1907,15 @@ fn every_action_the_bar_offers_can_be_turned_off() {
                 let t = id(app.run("text.createInPath", json!({"path": circle, "mode": "onPath", "text": "Round", "at": [90, 300]})).unwrap());
                 select(app, &[t]);
             }),
-            &["createOutlines", "typeOnPathOptions", "centerOnTop", "centerOnBottom"],
+            &["createOutlines", "typeOnPathOptions", "centerOnTop", "centerOnBottom", "dynamicText"],
+        ),
+        (
+            "an Image Trace object",
+            Box::new(|app| {
+                place_image(app, &dir);
+                app.run("imageTrace.make", json!({"params": {}})).unwrap();
+            }),
+            &["expand", "duplicate"],
         ),
         (
             "an image",
@@ -1967,9 +1985,32 @@ fn every_action_the_bar_offers_can_be_turned_off() {
         for action in &ids {
             show_action(&mut app, action, false);
         }
-        let (_, texts) = bar_texts(&mut app);
+        let (ctx, texts) = bar_texts(&mut app);
         for (label, _) in &offered {
             assert!(!has(&texts, label), "{case}: {label} is off: {texts:?}");
         }
+        // The bar still shows, with More Options, where Bar Actions turns them back on.
+        assert!(canvas::task_bar_rect(&ctx).is_some(), "{case}: the bar still shows");
+        let names: Vec<String> = buttons(&mut app).1.into_iter().map(|(n, _)| n).collect();
+        assert!(names.iter().any(|n| n == "More Options"), "{case}: {names:?}");
+        for (label, _) in &offered {
+            assert!(!names.iter().any(|n| n == label), "{case}: {label} is off: {names:?}");
+        }
     }
+}
+
+/// Bar Actions lists a field's name without its colon, as each language writes it, and an item
+/// that opens a dialog without its ellipsis.
+#[test]
+fn bar_actions_list_names_without_a_colon_or_an_ellipsis() {
+    let lang = |code| crate::i18n::Lang::from_code(code).unwrap();
+    for (code, label, name) in
+        [("en", "Fidelity:", "Fidelity"), ("en", "Tool Options…", "Tool Options"), ("fr", "Fidelity:", "Fidélité"), ("ja", "Fidelity:", "精度")]
+            .into_iter()
+            .chain([("zh-hans", "Fidelity:", "精确度"), ("zh-hant", "Fidelity:", "精確度"), ("zh-hans", "Tool Options…", "工具选项")])
+    {
+        let label = crate::i18n::tr(lang(code), label);
+        assert_eq!(canvas::bar_action_name(label), name, "{code}: {label:?}");
+    }
+    assert_eq!(canvas::bar_action_name("Duplicate"), "Duplicate");
 }

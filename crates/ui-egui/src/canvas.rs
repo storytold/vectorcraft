@@ -74,7 +74,7 @@ pub use selection_marks::SelectionMarks;
 use task_bar::task_bar;
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, is_task_bar_action, read_hidden_task_bar_actions};
 #[cfg(test)]
-pub(crate) use task_bar::{chip_paints, images_with_other_art, task_bar_offered};
+pub(crate) use task_bar::{bar_action_name, chip_paints, images_with_other_art, task_bar_offered};
 pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
