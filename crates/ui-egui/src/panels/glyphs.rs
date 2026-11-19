@@ -37,6 +37,8 @@ use crate::widgets::{self, menu_item};
 /// (Zoom Out reduces the preview, Zoom In increases it). The step sizes themselves are ours.
 const CELL_STEPS: [f32; 7] = [16.0, 22.0, 30.0, 42.0, 56.0, 72.0, 96.0];
 const CELL_DEFAULT: usize = 2;
+/// The least height of a grid's list that scrolls, when the panel leaves it less room.
+const MIN_LIST_H: f32 = 64.0;
 
 /// The grid step in [`crate::state::UiState::glyphs_preview`]. `0` means [`CELL_DEFAULT`]; a
 /// stored step is `index + 1`. A value past the steps (a hand-edited preferences file) is the
@@ -70,7 +72,9 @@ fn grid_cols(ui: &Ui, w: f32, cell: f32, count: usize, list_h: f32) -> usize {
     let cols = fit(w);
     // The height `ScrollArea::show_rows` gives the rows: the gaps between them, none after the last.
     let content_h = count.div_ceil(cols) as f32 * (row_height(ui, cell) + gap) - gap;
-    if list_h.min(ui.available_height()).ceil() < content_h { fit(w - ui.spacing().scroll.allocated_width()) } else { cols }
+    // The list is as tall as the room left, but at least as tall as `min_scrolled_height` makes it.
+    let view_h = list_h.min(ui.available_height().max(list_h.min(MIN_LIST_H)));
+    if view_h.ceil() < content_h { fit(w - ui.spacing().scroll.allocated_width()) } else { cols }
 }
 
 /// The height of a row of cells of side `cell`: a row laid out with `Ui::horizontal` is at least as
@@ -402,7 +406,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // only when the selection moves to another character, so it still scrolls freely meanwhile.
     let follow_id = egui::Id::unique("gl-follow");
     let (followed, shown): (Option<char>, std::ops::Range<usize>) = ui.ctx().data(|d| d.get_temp(follow_id)).unwrap_or_default();
-    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(64.0)).auto_shrink([false, false]);
+    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(MIN_LIST_H)).auto_shrink([false, false]);
     if selected != followed
         && let Some(c) = selected
         && let Ok(i) = chars.binary_search_by_key(&c, |x| x.0)
@@ -630,7 +634,7 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
     let area = egui::ScrollArea::vertical()
         .id_salt(("gl-alternates", id.0, byte))
         .max_height(list_h)
-        .min_scrolled_height(list_h.min(64.0))
+        .min_scrolled_height(list_h.min(MIN_LIST_H))
         .auto_shrink([false, false]);
     area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
         for r in range {
@@ -2625,6 +2629,12 @@ mod tests {
                 let beside = ((w - bar) / cell).floor() as usize;
                 assert_eq!(grid_cols(ui, w, cell, 24, list_h), beside, "{cell} pt cells in a list {list_h} pt tall");
             }
+            // With less room left than the list's least height, the list is that tall: two rows of
+            // twelve 22 pt cells fit in it, so they take the whole width.
+            let w = 12.0 * CELL_STEPS[1];
+            ui.allocate_ui(vec2(w, 48.0), |ui| {
+                assert_eq!(grid_cols(ui, w, CELL_STEPS[1], 24, 66.0), 12, "two rows in a 64 pt list with 48 pt of room");
+            });
         });
         out.textures_delta.clear();
     }
