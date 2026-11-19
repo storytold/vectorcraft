@@ -629,7 +629,8 @@ impl Tool for TypeTool {
         }
     }
     /// The calls [`Self::set_option`] takes: `commitTyping`, `endTyping`, `selectAll` and
-    /// `stopEditing` take any value, the others the shapes they read.
+    /// `stopEditing` take any value, the others the shapes they read (`missingFontEdit` a whole-number
+    /// `token` and a true or false `ok`).
     fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
         let index = |a: &str, b: &str| v.get(a).or_else(|| v.get(b)).and_then(Value::as_u64).is_some();
         let ok = match key {
@@ -638,11 +639,13 @@ impl Tool for TypeTool {
             "prevTool" | "previousTool" => return crate::option_check::string_or_null(key, v),
             "copy" => serde_json::from_value::<Vec<TextRun>>(v.clone()).is_ok(),
             "commitTyping" | "endTyping" | "selectAll" | "stopEditing" => true,
+            "missingFontEdit" => v.get("token").and_then(Value::as_u64).is_some() && v.get("ok").and_then(Value::as_bool).is_some(),
             _ => return Err(crate::option_check::unknown(key)),
         };
         let shape = match key {
             "textSelection" => "{editing, anchor, caret} with whole numbers",
             "select" => "{start, end} with whole numbers",
+            "missingFontEdit" => "{token, ok} with a whole number and true or false",
             _ => "a list of text runs",
         };
         if ok { Ok(()) } else { Err(format!("`{key}` must be {shape}")) }

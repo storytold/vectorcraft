@@ -878,7 +878,7 @@ fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool, changed: Optio
 /// absent; an error when it is not four finite numbers with a positive size, when the format isn't
 /// a raster one, or when it comes with an artboard choice (`rect` is the area, so those would
 /// contradict it). The image size limits are checked with the scale, as for an artboard.
-fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
+pub(super) fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
     let v = match p.get("rect") {
         None | Some(Value::Null) => return Ok(None),
         Some(v) => v,

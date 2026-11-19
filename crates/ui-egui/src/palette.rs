@@ -4028,7 +4028,7 @@ mod tests {
                 app.logic(ui.ctx());
                 if progress {
                     let id = egui::Id::unique("test-progress");
-                    crate::dialogs::modal::show_at(ui.ctx(), "Progress", id, egui::Vec2::ZERO, 12, |ui| ui.label("Working"));
+                    crate::dialogs::modal::show_at(ui.ctx(), "Progress", id, egui::Vec2::ZERO, 12, None, |ui| ui.label("Working"));
                 }
                 app.ui(ui);
                 if let Some(at) = above {
