@@ -473,9 +473,9 @@ enum Uses<'a> {
     Brush(&'a str),
 }
 
-/// Does `art` paint pattern `name`, itself or through the symbols, patterns, graph designs and
-/// brushes it uses? A graph's stored series and label paints count, since its marks and labels
-/// take them each time it is drawn again.
+/// Does `art` paint pattern `name`, itself or through the symbols (of its instances and of the
+/// inline graphics in its type), patterns, graph designs and brushes it uses? A graph's stored
+/// series and label paints count, since its marks and labels take them each time it is drawn again.
 fn paints_pattern(d: &Document, art: &[Arc<Node>], name: &str) -> bool {
     let brushes = vectorcraft_brush::library(d);
     // What was already looked into, and the art left to look at.
@@ -484,8 +484,11 @@ fn paints_pattern(d: &Document, art: &[Arc<Node>], name: &str) -> bool {
     while let Some(n) = left.pop() {
         let mut used = vec![];
         walk_with_masks(n, &mut |c| {
-            if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
-                used.push(Uses::Symbol(symbol.as_str()));
+            match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => used.push(Uses::Symbol(symbol.as_str())),
+                // The symbol of every inline graphic in type counts, overset or not.
+                NodeKind::Text(t) => used.extend(t.runs.iter().filter_map(|r| r.inline.as_ref()).map(|a| Uses::Symbol(a.symbol.as_str()))),
+                _ => {}
             }
             for it in &c.appearance.items {
                 if let vectorcraft_doc::AppearanceItem::Stroke(sk) = it

@@ -88,10 +88,36 @@ impl Drop {
     }
 }
 
-/// The drag held over `resp`, if the panel takes it (paints and art dragged off the canvas, not the
-/// Appearance panel's thumbnail).
+/// Whether the panel takes drag `d`: paints and art dragged off the canvas, not the Appearance
+/// panel's thumbnail.
+fn takes(d: &PanelDrag) -> bool {
+    matches!(d, PanelDrag::Paint { .. } | PanelDrag::Art(_))
+}
+
+/// The drag held over `resp`, if the panel takes it ([`takes`]).
 fn held(resp: &Response) -> Option<std::sync::Arc<PanelDrag>> {
-    resp.dnd_hover_payload::<PanelDrag>().filter(|d| matches!(**d, PanelDrag::Paint { .. } | PanelDrag::Art(_)))
+    resp.dnd_hover_payload::<PanelDrag>().filter(|d| takes(d))
+}
+
+/// The drag in progress, if the panel takes it ([`takes`]), wherever the pointer is.
+fn dragged(ui: &Ui) -> Option<std::sync::Arc<PanelDrag>> {
+    egui::DragAndDrop::payload::<PanelDrag>(ui.ctx()).filter(|d| takes(d))
+}
+
+/// Where the primary button came up this frame and the modifiers held then, when that was over
+/// `resp` with no other layer on top (the test [`egui::Context::rect_contains_pointer`] makes of the
+/// pointer). A drop lands there with those modifiers, even when the pointer moved on or a key was
+/// let go later in the same frame.
+fn released_over(ui: &Ui, resp: &Response) -> Option<(egui::Pos2, egui::Modifiers)> {
+    let up = ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } => Some((*pos, *modifiers)),
+            _ => None,
+        })
+    })?;
+    let ctx = ui.ctx();
+    let rect = ctx.layer_transform_to_global(resp.layer_id).map_or(resp.interact_rect, |t| t * resp.interact_rect);
+    (rect.is_positive() && rect.contains(up.0) && ctx.layer_id_at(up.0) == Some(resp.layer_id)).then_some(up)
 }
 
 /// The drag a tile or row of `e` starts, moving rows `names`. Colour groups have no paint of their
@@ -158,57 +184,76 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
 }
 
 /// A drag held over the tile or row `resp` of entry `e` shows where it would land (before or after
-/// it by the pointer's half, or into a folder); a release there sets the drop.
+/// it by the pointer's half, or into a folder), by where the pointer is and the keys held now. A
+/// release over it ([`released_over`]) sets the drop, by where the button came up and the keys held
+/// then.
 fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvents) {
-    let Some(d) = held(resp) else { return };
+    let up = released_over(ui, resp);
+    let hover = held(resp);
+    let Some(d) = hover.clone().or_else(|| up.and_then(|_| dragged(ui))) else { return };
+    let take = || egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some();
     // Art held with Alt over a pattern swatch would replace its tile art, and the swatch is
     // outlined; other art goes to the list (see [`zone_input`]).
     if let PanelDrag::Art(_) = &*d {
-        if crate::panels::alt_held(ui) && matches!(e, Entry::Swatch { paint: Paint::Pattern { .. }, .. }) {
+        if !matches!(e, Entry::Swatch { paint: Paint::Pattern { .. }, .. }) {
+            return;
+        }
+        if hover.is_some() && crate::panels::alt_held(ui) {
             ev.over = true;
             let t = Tokens::get(ui.ctx());
             ui.painter().rect_stroke(resp.rect.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-            if resp.dnd_release_payload::<PanelDrag>().is_some() {
-                ev.drop = Drop::of(&d, Some(e.name().to_string()), false, true);
-            }
+        }
+        if up.is_some_and(|(_, m)| m.alt) && take() {
+            ev.drop = Drop::of(&d, Some(e.name().to_string()), false, true);
         }
         return;
     }
     let PanelDrag::Paint { rows, .. } = &*d else { return };
     let name = e.name();
-    ev.over = true;
+    if hover.is_some() {
+        ev.over = true;
+    }
     // Swatches dropped on one of themselves stay where they are.
     if rows.as_ref().is_some_and(|r| r.names.iter().any(|n| n == name)) {
-        resp.dnd_release_payload::<PanelDrag>();
+        if up.is_some() {
+            take();
+        }
         return;
     }
-    let t = Tokens::get(ui.ctx());
     let r = resp.rect;
-    let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
-    let after = if list { at.y > r.center().y } else { at.x > r.center().x };
-    // A paint from elsewhere, or swatches over a folder, go into it; otherwise a bar marks the slot.
-    if rows.as_ref().is_none_or(|d| e.is_folder() && !d.groups) {
-        ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-    } else if list {
-        let y = if after { r.bottom() } else { r.top() };
-        ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
-    } else {
-        let x = if after { r.right() + 0.75 } else { r.left() - 0.75 };
-        ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
+    let side = |at: egui::Pos2| if list { at.y > r.center().y } else { at.x > r.center().x };
+    if hover.is_some() {
+        let t = Tokens::get(ui.ctx());
+        let after = side(ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center()));
+        // A paint from elsewhere, or swatches over a folder, go into it; otherwise a bar marks the slot.
+        if rows.as_ref().is_none_or(|d| e.is_folder() && !d.groups) {
+            ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
+        } else if list {
+            let y = if after { r.bottom() } else { r.top() };
+            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
+        } else {
+            let x = if after { r.right() + 0.75 } else { r.left() - 0.75 };
+            ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
+        }
     }
-    if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, Some(name.to_string()), after, crate::panels::alt_held(ui));
+    if let Some((at, m)) = up
+        && take()
+    {
+        ev.drop = Drop::of(&d, Some(name.to_string()), side(at), m.alt);
     }
 }
 
 /// Drops between and after the tiles (`zone`: the list's viewport) go to the end of the ungrouped
 /// swatches (colour groups to the end of the groups); the list is outlined while one is held there.
+/// A tile that took the release first leaves nothing to drop here.
 pub(super) fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
-    let Some(d) = held(zone) else { return };
-    if !ev.over {
+    if held(zone).is_some() && !ev.over {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
-    if zone.dnd_release_payload::<PanelDrag>().is_some() {
+    if released_over(ui, zone).is_some()
+        && let Some(d) = dragged(ui)
+        && egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()).is_some()
+    {
         ev.drop = Drop::of(&d, None, false, false);
     }
 }

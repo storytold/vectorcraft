@@ -869,6 +869,53 @@ fn art_alt_dropped_on_a_pattern_swatch_replaces_its_tile_art() {
     assert_eq!(tile_art(&app), Some(art), "Dots keeps its tile art");
 }
 
+/// A drop lands where the button came up, with the keys held then. Art released with Alt held
+/// over pattern swatch Dots replaces the tile art of Dots when Alt is let go, or the pointer moves
+/// on to pattern swatch Stripes, later in the same frame. Art released over Dots without Alt makes
+/// a new pattern when Alt is pressed later in that frame. A color released with Alt held over Red
+/// gives Red that color when Alt is let go later in the frame.
+#[test]
+fn a_drop_lands_where_the_button_came_up_with_the_keys_held_then() {
+    let mut app = app();
+    for (x, name) in [(0, "Dots"), (20, "Stripes")] {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.pattern.make", json!({"ids": [id], "name": name, "edit": false})).unwrap();
+    }
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let star_kind = app.session.doc().unwrap().doc.node(star).map(|n| n.kind.clone());
+    let tile_kind =
+        |app: &VectorcraftApp, name: &str| app.session.doc().unwrap().doc.pattern(name).and_then(|p| p.art.first().map(|n| n.kind.clone()));
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let ctx = context();
+    // In one frame: release over `on` with `up` held, then hold `then` and move over `to`.
+    let drop = |app: &mut VectorcraftApp, payload: PanelDrag, on: &str, up: Modifiers, then: Modifiers, to: &str, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let (at, next) = (tile_center(&ctx, on), tile_center(&ctx, to));
+        egui::DragAndDrop::set_payload(&ctx, payload);
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: up };
+        let events = vec![Event::PointerMoved(at), release, Event::ModifiersChanged(then), Event::PointerMoved(next)];
+        frame_with(app, &ctx, events, up, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let stripes = tile_kind(&app, "Stripes");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::NONE, "Dots", 0.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "Alt let go after the release: {}", app.ui.status);
+    assert_eq!(count(&mut app), Some(2), "no new pattern");
+    app.run("edit.undo", json!({})).unwrap();
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::ALT, "Stripes", 1.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "the pointer moved on to Stripes after the release");
+    assert_eq!(tile_kind(&app, "Stripes"), stripes, "Stripes keeps its tile art");
+    app.run("edit.undo", json!({})).unwrap();
+    let dots = tile_kind(&app, "Dots");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::NONE, Modifiers::ALT, "Dots", 2.0);
+    assert_eq!(count(&mut app), Some(3), "Alt pressed after a plain release makes a pattern");
+    assert_eq!(tile_kind(&app, "Dots"), dots, "Dots keeps its tile art");
+    let rgb = Color::from_hex("#2a6fb0").unwrap();
+    drop(&mut app, PanelDrag::paint(Paint::solid(rgb)), "Red", Modifiers::ALT, Modifiers::NONE, "Red", 3.0);
+    assert_eq!(app.session.doc().unwrap().doc.swatch("Red").map(|w| w.paint.color()), Some(Some(rgb)), "Alt let go after the release on Red");
+}
+
 #[test]
 fn a_proxy_dropped_on_the_panel_becomes_a_swatch() {
     let mut app = app();

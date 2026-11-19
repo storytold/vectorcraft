@@ -285,7 +285,8 @@ fn replace_art_that_matches_the_tile_art_records_nothing() {
 /// Replace Pattern Art is refused, changing nothing, for a missing name or pattern, with no art,
 /// while a pattern is edited, and for art painted with the pattern itself, directly, through
 /// another pattern, through a symbol, through the paints a graph stores, through a graph design a
-/// graph draws its columns with and through the art of a brush on a stroke.
+/// graph draws its columns with, through the art of a brush on a stroke and through the symbol of an
+/// inline graphic in type.
 #[test]
 fn replace_art_is_refused_without_changing_anything() {
     let mut s = session();
@@ -321,6 +322,9 @@ fn replace_art_is_refused_without_changing_anything() {
     s.execute("paint.setFill", &json!({"ids": [brushed.0], "none": true})).unwrap();
     s.execute("paint.setStroke", &json!({"ids": [brushed.0], "color": "#000000"})).unwrap();
     s.execute("brush.apply", &json!({"name": "Dotted brush", "ids": [brushed.0]})).unwrap();
+    // Type that shows symbol "Dotted" as an inline graphic.
+    let typed = id_of(&s.execute("text.create", &json!({"x": 20, "y": 420, "text": "Hi"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": typed.0, "at": 0, "symbol": "Dotted"})).unwrap();
     let plain = blue_rect(&mut s);
     let unchanged = |s: &Session, before: &vectorcraft_doc::Document, steps: usize, case: &str| {
         assert_eq!(doc(s), before, "{case}: the document stays");
@@ -337,6 +341,7 @@ fn replace_art_is_refused_without_changing_anything() {
         ("through a graph's paints", json!({"name": "Dots", "ids": [graph.0]}), "art painted with `Dots` can't be its tile".into()),
         ("through a graph design", json!({"name": "Dots", "ids": [designed.0]}), "art painted with `Dots` can't be its tile".into()),
         ("through a brush", json!({"name": "Dots", "ids": [brushed.0]}), "art painted with `Dots` can't be its tile".into()),
+        ("through an inline graphic", json!({"name": "Dots", "ids": [typed.0]}), "art painted with `Dots` can't be its tile".into()),
     ] {
         let err = s.execute("object.pattern.replaceArt", &p).unwrap_err();
         assert!(err.to_string().contains(&why), "{case}: {err}");
