@@ -7,6 +7,7 @@
 //! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -23,7 +24,7 @@ use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
-use super::{first_selected, pstate, set_pstate};
+use super::{first_node, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
 use crate::menus::Item;
@@ -108,8 +109,9 @@ fn preview(ui: &Ui, doc: &Document, def: &Value, key: u64, size: egui::Vec2) -> 
 /// What a stroke preview of brush definition `def`, `w` × `h` pt, renders: a copy of `resources`
 /// (a document whose patterns, symbols, swatches and images the brush art may use) without its art,
 /// and a stroke painted with the brush across it. The stroke goes from light to heavy pen pressure
-/// and back, from an upright pen to one lying flat and back, and once round every bearing and barrel
-/// rotation, so brushes that vary with the pen show how they vary.
+/// and back, from an upright pen to one lying flat and back, once round every bearing and barrel
+/// rotation, and from one end of an airbrush pen's finger wheel to the other and back, so brushes
+/// that vary with the pen show how they vary.
 fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Document> {
     let mut doc = resources.clone();
     let layer = doc.alloc_id();
@@ -123,6 +125,7 @@ fn preview_doc(resources: &Document, def: &Value, w: f64, h: f64) -> Option<Docu
     st.tilt = Some(PressureProfile::sample());
     st.bearing = Some(AngleProfile::sample());
     st.rotation = Some(AngleProfile::sample());
+    st.wheel = Some(PressureProfile::sample());
     // A gentle S-curve across the swatch (square tiles keep a quarter of it either side).
     let mut bp = vectorcraft_geom::BezPath::new();
     let margin = (h * 0.5).min(w * 0.25);
@@ -168,7 +171,7 @@ pub(crate) fn definition_chip(ui: &Ui, r: egui::Rect, st: Option<&DocState>, def
 }
 
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
-    first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
+    first_node(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
 
 /// What the panel's last click was made with: the document, its selected objects and the current
@@ -523,6 +526,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
+    // The selected brushed paths' own settings: the brush stays as it is.
+    if menu_item(ui, tl!("Options of Selected Object…"), brush_options::object_available(app), false)
+        && let Err(e) = app.run("ui.brushObjectOptions", json!({}))
+    {
+        app.status(e);
+    }
     ui.separator();
     // Selects the brushes no stroke paints with, for Delete Brush and Duplicate Brush.
     if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)
@@ -654,8 +663,8 @@ impl LibraryKind for BrushLibraries {
     }
     /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
     /// it is named.
-    fn label<'a>(id: &str, name: &'a str) -> &'a str {
-        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

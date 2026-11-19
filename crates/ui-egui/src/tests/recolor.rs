@@ -1585,3 +1585,247 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         assert_eq!(colors(h.state_mut()), 2, "Recolor Cancel restores the original artwork");
     }
 }
+
+/// Whether the dialog's button `name` is disabled.
+fn disabled(h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str) -> bool {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled()
+}
+
+/// Undo Changes and Redo Changes step back and forward through the dialog's own color edits, and
+/// the art previews each step; the document's undo history is unchanged until OK, which records
+/// one step. Both buttons start disabled, and a new edit after Undo Changes leaves nothing to redo.
+#[test]
+fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
+    let mut h = edit_harness(&["#ff0000", "#00ff00", "#0000ff"]);
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Assign").click();
+    h.run_steps(3);
+    assert!(disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"), "nothing to step to on opening");
+    let state = |h: &egui_kittest::Harness<'_, VectorcraftApp>| (field(h.state(), "rows"), fills(h.state()));
+    let start = state(&h);
+    h.get_by_label("Randomly change color order").click();
+    h.run_steps(3);
+    let first = state(&h);
+    assert_ne!(first, start, "the order changed and previews");
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    let second = state(&h);
+    assert_ne!(second, first);
+    assert!(!disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"));
+    for (button, want) in [("Undo Changes", &first), ("Undo Changes", &start), ("Redo Changes", &first), ("Redo Changes", &second)] {
+        h.get_by_role_and_label(egui::accesskit::Role::Button, button).click();
+        h.run_steps(3);
+        assert_eq!(&state(&h), want, "{button}");
+    }
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "the dialog's steps leave the document's history alone");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(state(&h), first);
+    assert!(!disabled(&h, "Redo Changes"));
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    assert!(disabled(&h, "Redo Changes"), "a new edit leaves nothing to redo");
+    let last = state(&h);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    let app = h.state_mut();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(fills(app), last.1, "OK keeps the edits");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "as one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fills(app), start.1);
+    // A new opening has nothing to undo.
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    h.run_steps(3);
+    assert!(disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"), "nothing to step to on a new opening");
+    h.get_by_label("Cancel").click();
+    h.run_steps(2);
+}
+
+/// A drag is one step from press to release: Undo Changes after dragging the Edit tab's Brightness
+/// slider across several frames gives the rows the drag started on, with nothing left to undo.
+#[test]
+fn a_drag_is_one_step_of_undo_changes() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    let rows = field(h.state(), "rows");
+    let slider = widget_of_size(&h, vec2(220.0, 22.0));
+    let v = new_hsb(h.state())[0][2];
+    let at = egui::pos2(slider.left() + 4.0 + v * (slider.width() - 8.0), slider.center().y);
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    for k in 1..=6 {
+        h.hover_at(egui::pos2(at.x + 12.0 * k as f32, at.y));
+        h.run_steps(1);
+    }
+    h.drop_at(egui::pos2(at.x + 72.0, at.y));
+    h.run_steps(2);
+    assert_ne!(field(h.state(), "rows"), rows, "the drag changed the colors");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), rows, "one Undo Changes goes back to before the drag");
+    assert!(disabled(&h, "Undo Changes"), "the drag was one step");
+    assert!(!disabled(&h, "Redo Changes"));
+}
+
+/// Reset is a step of its own: Undo Changes gives back the rows Reset discarded.
+#[test]
+fn undo_changes_reverses_reset() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#00ff00", "#0000ff"]);
+    let mut h = assign_harness(app, json!({}));
+    let start = field(h.state(), "rows");
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    let edited = field(h.state(), "rows");
+    assert_ne!(edited, start);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Reset the rows to the artwork's colors").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), start, "Reset reads the art's colors");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), edited, "Undo Changes gives back the rows before Reset");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Redo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), start, "Redo Changes resets them again");
+}
+
+/// `ui.recolorUndo` and `ui.recolorRedo` step the open dialog as its buttons do, also through a
+/// field set without a frame between, and a new count of Colors is one step that restores the count
+/// and the rows; outside the dialog they are an error, and a new opening has nothing to undo.
+#[test]
+fn the_recolor_undo_and_redo_commands_step_the_open_dialog() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    assert!(app.run("ui.recolorUndo", json!({})).is_err(), "no dialog open");
+    // A field set before the dialog's first frame is a step back to the fields it opened with.
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    set(&mut app, "colors", json!(2));
+    assert!(dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false), "Undo Changes can run before the first frame");
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": false, "canRedo": true}));
+    assert_eq!(field(&app, "colors"), Value::Null);
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 4, "the rows of the art as it opened");
+    dialogs::cancel(&mut app);
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert!(!dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false));
+    let start = field(&app, "rows");
+    assert_eq!(start.as_array().unwrap().len(), 4);
+    set(&mut app, "colors", json!(2));
+    dialog_frame(&mut app, &ctx);
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2);
+    let two = field(&app, "rows");
+    set(&mut app, "globalAdjust", json!({"saturation": -50}));
+    dialog_frame(&mut app, &ctx);
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": true, "canRedo": true}));
+    assert_eq!((field(&app, "globalAdjust"), field(&app, "rows")), (Value::Null, two.clone()));
+    app.run("ui.recolorUndo", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start.clone()), "the count and its rows, not reduced again");
+    assert!(!dialogs::recolor::can_step(&app, true));
+    assert_eq!(app.run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(false));
+    app.run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (json!(2), two));
+    // A field set without a frame between is a step before Undo Changes goes back.
+    set(&mut app, "method", json!("exact"));
+    assert_eq!(app.run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(true));
+    assert_eq!(field(&app, "method"), json!("scaleTints"));
+    dialogs::cancel(&mut app);
+    assert!(app.run("ui.recolorRedo", json!({})).is_err(), "Cancel closed the dialog");
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert!(!dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false), "a new opening");
+}
+
+/// An edit made while the pointer is held from the dialog's first frame is a step from the fields
+/// the dialog opened with, not where Undo Changes starts.
+#[test]
+fn an_edit_with_the_pointer_down_from_the_first_frame_is_a_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    let at = Pos2::new(2.0, 2.0);
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true)], 1.0, |app, ui| dialogs::show(app, ui.ctx()));
+    let start = field(&app, "rows");
+    assert_eq!(start.as_array().unwrap().len(), 4);
+    set(&mut app, "colors", json!(2));
+    frame(&mut app, &ctx, vec![], 2.0, |app, ui| dialogs::show(app, ui.ctx()));
+    frame(&mut app, &ctx, vec![button(false)], 3.0, |app, ui| dialogs::show(app, ui.ctx()));
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2);
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": false, "canRedo": true}));
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start));
+}
+
+/// Rows or weights set before the first frame, which the art's reduction then replaces or drops,
+/// are no step: Undo Changes is not available and changes nothing.
+#[test]
+fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
+    for (k, v) in [("rows", json!([{"to": "#123456"}])), ("weights", json!([25, 75]))] {
+        let mut app = app();
+        art(&mut app, &["#ff0000", "#0000ff"]);
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        set(&mut app, k, v);
+        assert!(!dialogs::recolor::can_step(&app, true), "{k}: Undo Changes is not available");
+        let r = app.run("ui.recolorUndo", json!({})).unwrap();
+        assert_eq!(r, json!({"changed": false, "canUndo": false, "canRedo": false}), "{k}");
+        assert!(!app.session.in_interaction(), "{k}: a step that changes nothing previews nothing");
+        assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
+    }
+}
+
+/// `ui.recolorUndo` and `ui.recolorRedo` preview the step they go to at once, without a frame
+/// between, as the buttons do.
+#[test]
+fn the_recolor_undo_and_redo_commands_preview_the_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    let start = fills(&app);
+    set(&mut app, "globalAdjust", json!({"saturation": -100}));
+    dialog_frame(&mut app, &ctx);
+    let adjusted = fills(&app);
+    assert_ne!(adjusted, start, "the adjustment previews");
+    app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(fills(&app), start, "Undo Changes previews the step before");
+    app.run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!(fills(&app), adjusted, "Redo Changes previews the step after");
+    dialogs::cancel(&mut app);
+}
+
+/// With the Color Groups list shown, the Color Picker opened from a row and closed with Cancel
+/// leaves Recolor Artwork the size it was and where it was, in every frame.
+#[test]
+fn the_color_picker_leaves_the_dialog_in_place() {
+    use egui::accesskit::Role;
+
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let mut h = assign_harness(app, json!({}));
+    assert_eq!(field(h.state(), "groupStorage"), json!(true), "the list is shown");
+    let window = egui::Id::unique(("dialog", "recolor"));
+    let rect = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.ctx.memory(|m| m.area_rect(window));
+    let before = rect(&h).expect("dialog drawn");
+    row_context_menu(&mut h, 1);
+    h.get_by_label("   Pick from Swatches").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+    assert_eq!(rect(&h), Some(before), "the dialog keeps its size while the picker is open");
+    h.get_by_role_and_label(Role::Button, "Cancel").click();
+    for step in 0..4 {
+        h.run_steps(1);
+        assert_eq!(rect(&h), Some(before), "frame {step} after Cancel");
+    }
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("recolor"));
+}

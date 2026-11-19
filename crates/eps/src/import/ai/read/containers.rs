@@ -16,6 +16,9 @@ impl<'a> Reader<'a> {
         if matches!(kind, Kind::Layer(_)) {
             self.ensure_space();
             self.check_symbols();
+            if self.defs_only {
+                (self.envelope_checks, self.dash_checks) = (0, 0);
+            }
         }
         let base = if matches!(kind, Kind::Obj(_)) { self.stack.len() } else { self.frames.last().map_or(0, |f| f.base) };
         self.frames.push(Frame {
@@ -120,11 +123,13 @@ impl<'a> Reader<'a> {
         }
         // A group holding only clipping paths (`q … u <path> W n U … Q`) doesn't clip on its own: `u`/`U` don't save
         // the graphics state as `q`/`Q` do, so its paths clip the clipping group around it, as the file's PDF part draws it.
+        // In a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) they are the compound
+        // path's subpaths, as its other grouped paths are: the compound clipping path, their union.
         if matches!(kind, Kind::Group)
             && unread.is_empty()
             && !clips.is_empty()
             && clips.len() == kids.len()
-            && matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. }))
+            && (matches!(self.frames.last(), Some(Frame { kind: Kind::Clip, .. })) || self.in_compound())
         {
             for kid in kids {
                 if let Some(parent) = self.frames.last_mut() {
@@ -134,6 +139,15 @@ impl<'a> Reader<'a> {
             }
             return Ok(());
         }
+        // A clipping group (`q` … `Q`) with no clipping path whose last object is type: that type is
+        // its clipping path, as Illustrator writes a clipping mask of type made from the text
+        // document (`/AI11Text`), which has no `W`. The slot is filled later ([`clip_by_type`]).
+        let type_clip = match kids.last() {
+            Some(last) if matches!(kind, Kind::Clip) && clips.is_empty() && !super::is_look_slot(last.name.as_deref()) => {
+                slot_of(last.name.as_deref()).map(|_| last.id)
+            }
+            _ => None,
+        };
         // A compound path of clipping paths clips its clipping group.
         let clipping = matches!(kind, Kind::Compound) && !clips.is_empty();
         self.group_ended = !matches!(kind, Kind::Compound);
@@ -179,6 +193,9 @@ impl<'a> Reader<'a> {
         if clipping && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
+        if let Some(slot) = type_clip {
+            self.type_clips.insert(node.id, slot);
+        }
         if compound_members {
             self.compound_groups.insert(node.id);
         }
@@ -195,6 +212,18 @@ impl<'a> Reader<'a> {
             self.add(p, opened_hidden || hidden)?;
         }
         Ok(())
+    }
+
+    /// Is the innermost open frame a compound path (`*u`), or a group in one with only groups between them?
+    fn in_compound(&self) -> bool {
+        for f in self.frames.iter().rev() {
+            match f.kind {
+                Kind::Group => {}
+                Kind::Compound => return true,
+                _ => return false,
+            }
+        }
+        false
     }
 
     /// The compound path of `kids`, painted and made transparent as its subpaths say.

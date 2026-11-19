@@ -6,22 +6,358 @@
 //! space: an RGB, CMYK or Lab color keeps its model, and a Gray color or a tint of a global swatch
 //! becomes a process color in the document's color mode. The HSB picked last stays while the
 //! objects, the proxy, the color and the color settings are unchanged, so a gray keeps its hue.
+//!
+//! The panel menu's Box View puts a box in the wheel's place: a color field with a vertical
+//! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
+//! Brightness, Red, Green or Blue). The field shows the other two components on the Color
+//! Picker's axes.
+//!
+//! Show Harmony puts a marker on the ring for each other color of the harmony rule picked under
+//! Harmony Rule (the Color Guide's rules whose colors each have a hue of their own), filled with
+//! that color. The markers follow the current color, and a click on one applies its color as a
+//! pick does.
+//!
+//! Panel menu › Show Color Vision Preview adds a row under the wheel or the box with the color as
+//! simulated for protanopia, deuteranopia and tritanopia, through the simulations View › Proof
+//! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
+//! simulation.
+//!
+//! The view, the channel, Show Harmony, Harmony Rule and Show Color Vision Preview are kept with
+//! the preferences (`ui.colorWheel`).
 
-use egui::{Ui, UiBuilder};
-use vectorcraft_color::cms::{self, Cms};
+use egui::{Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, vec2};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use vectorcraft_color::cms::{self, Cms, ProofSetup, ProofTarget};
+use vectorcraft_color::harmony::Harmony;
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
 
 use super::color::{Target, apply, wheel_target};
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
-use crate::widgets::{self, FieldAxis, Live};
+use crate::dialogs::color_picker::Channel;
+use crate::theme::Tokens;
+use crate::widgets::{self, FieldAxis, Live, SliderValue, menu_item};
 
 pub const ID: &str = "colorWheel";
 /// The widest the wheel is drawn.
 const MAX_WHEEL: f32 = 200.0;
+/// The width of the box's channel strip, its arrows included.
+const STRIP: f32 = 22.0;
+/// The space between the box's field and its channel strip.
+const STRIP_GAP: f32 = 6.0;
+
+/// What the panel shows right of the proxy: the wheel, or the box (a color field and a channel
+/// strip).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum View {
+    #[default]
+    Wheel,
+    Box,
+}
+
+impl View {
+    pub const ALL: [View; 2] = [View::Wheel, View::Box];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            View::Wheel => "wheel",
+            View::Box => "box",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|v| v.id() == s)
+    }
+}
+
+/// The panel's settings, kept with the preferences (`UiState::color_wheel`, `ui.colorWheel`).
+/// Each key reads on its own, and a value this build does not know reads as the key's default.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Settings {
+    #[serde(deserialize_with = "deserialize_view")]
+    pub view: View,
+    #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
+    pub channel: Channel,
+    /// Show Harmony: markers on the ring for the other colors of `harmony_rule`.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub harmony: bool,
+    /// The rule of Show Harmony, one of [`harmony_rules`].
+    #[serde(serialize_with = "serialize_rule", deserialize_with = "deserialize_rule")]
+    pub harmony_rule: Harmony,
+    /// Show Color Vision Preview: the row of simulated colors under the wheel or the box. A saved
+    /// `true` shows the row and any other value hides it.
+    #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
+    pub vision: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { view: View::default(), channel: Channel::default(), harmony: false, harmony_rule: Harmony::Complementary, vision: false }
+    }
+}
+
+/// The harmony rules the wheel shows: those whose colors each have a hue of their own, so that no
+/// two markers sit at the same place on the ring.
+pub fn harmony_rules() -> impl Iterator<Item = Harmony> {
+    Harmony::ALL.into_iter().filter(|h| h.hues_differ())
+}
+
+/// The wheel's harmony rule named by `s`, its id or its label.
+fn parse_rule(s: &str) -> Option<Harmony> {
+    Harmony::parse(s).filter(|h| h.hues_differ())
+}
+
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
+}
+
+fn serialize_rule<S: serde::Serializer>(h: &Harmony, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&h.id())
+}
+
+fn deserialize_rule<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Harmony, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(parse_rule).unwrap_or(Harmony::Complementary))
+}
+
+fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(View::parse).unwrap_or_default())
+}
+
+fn serialize_channel<S: serde::Serializer>(c: &Channel, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(c.id())
+}
+
+fn deserialize_channel<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Channel, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(Channel::parse).unwrap_or_default())
+}
+
+/// Serde reader for the saved settings ([`crate::UiState::color_wheel`]): a value that is not an
+/// object reads as the defaults, so it doesn't lose the rest of the preferences.
+pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Settings, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(serde_json::from_value(v).unwrap_or_default())
+}
+
+/// `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`: show the wheel or the box,
+/// pick the box's channel, show the colors of a harmony rule on the wheel, and show or hide the
+/// color vision row. Keys left out or null keep their values; params that are not an object,
+/// another key or a value off the list are an error and change nothing. → the settings.
+pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    const KEYS: [&str; 5] = ["view", "channel", "harmony", "harmonyRule", "vision"];
+    match p {
+        Value::Null => {}
+        Value::Object(o) => {
+            if let Some(key) = o.keys().find(|k| !KEYS.contains(&k.as_str())) {
+                return Err(format!("unknown parameter `{key}`; the command takes: {}", KEYS.join(", ")));
+            }
+        }
+        got => return Err(format!("the params must be an object, not {got}")),
+    }
+    let mut set = app.ui.color_wheel.clone();
+    match p.get("view") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.view = v.as_str().and_then(View::parse).ok_or("`view` must be wheel or box")?,
+    }
+    match p.get("channel") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
+    }
+    let key = "harmony";
+    match p.get(key) {
+        None | Some(Value::Null) => {}
+        Some(v) => set.harmony = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?,
+    }
+    let key = "harmonyRule";
+    match p.get(key) {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            set.harmony_rule = v.as_str().and_then(parse_rule).ok_or_else(|| {
+                let ids: Vec<String> = harmony_rules().map(Harmony::id).collect();
+                format!("`{key}` must be one of {}", ids.join(", "))
+            })?
+        }
+    }
+    if let Some(on) = crate::menus::opt_bool(p, "vision")? {
+        set.vision = on;
+    }
+    app.ui.color_wheel = set;
+    Ok(json!(app.ui.color_wheel))
+}
+
+/// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Harmony
+/// and Harmony Rule while the wheel shows; and Show Color Vision Preview.
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let set = app.ui.color_wheel.clone();
+    for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
+        if menu_item(ui, label, true, set.view == view) {
+            command(app, &json!({ "view": view.id() })).ok();
+        }
+    }
+    ui.add_enabled_ui(set.view == View::Box, |ui| {
+        ui.menu_button(format!("   {}", tl!("Box Channel")), |ui| {
+            for ch in Channel::ALL {
+                if menu_item(ui, ch.name(), true, ch == set.channel) {
+                    command(app, &json!({ "channel": ch.id() })).ok();
+                }
+            }
+        });
+    });
+    ui.separator();
+    if menu_item(ui, tl!("Show Harmony"), set.view == View::Wheel, set.harmony) {
+        command(app, &json!({ "harmony": !set.harmony })).ok();
+    }
+    ui.add_enabled_ui(set.view == View::Wheel, |ui| {
+        ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
+            for rule in harmony_rules() {
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
+                    command(app, &json!({ "harmonyRule": rule.id() })).ok();
+                }
+            }
+        });
+    });
+    if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
+        command(app, &json!({ "vision": !set.vision })).ok();
+    }
+}
+
+/// The display values of HSB `hsb` in `ch`'s space, from 0 to 1: hue, saturation and brightness,
+/// or red, green and blue.
+fn box_values(ch: Channel, hsb: [f32; 3]) -> [f32; 3] {
+    if ch.is_hsb() { [hsb[0] / 360.0, hsb[1], hsb[2]] } else { hsb_to_rgb(hsb) }
+}
+
+/// The strip's value and the field's point (x across, y down; 0 to 1 each) of HSB `hsb` in the box
+/// of channel `ch`.
+pub(crate) fn box_pos(ch: Channel, hsb: [f32; 3]) -> (f32, f32, f32) {
+    let v = box_values(ch, hsb);
+    let (z, x, y) = ch.axes();
+    (v[z], v[x], 1.0 - v[y])
+}
+
+/// The HSB at strip value `z` and field point (x, y) in the box of channel `ch`: the inverse of
+/// [`box_pos`]. A pick in an RGB channel that has no hue (a gray) keeps the hue of `was`.
+pub(crate) fn box_pick(ch: Channel, z: f32, x: f32, y: f32, was: [f32; 3]) -> [f32; 3] {
+    let (zi, xi, yi) = ch.axes();
+    let mut v = [0.0; 3];
+    v[zi] = z;
+    v[xi] = x;
+    v[yi] = 1.0 - y;
+    let v = v.map(|c| c.clamp(0.0, 1.0));
+    if ch.is_hsb() {
+        return [v[0] * 360.0, v[1], v[2]];
+    }
+    let hsb = rgb_to_hsb(v);
+    if hsb[1] <= 0.0 || hsb[2] <= 0.0 { [was[0], hsb[1], hsb[2]] } else { hsb }
+}
+
+/// The number the strip of channel `ch` reads to screen readers for HSB `hsb`, its suffix and its
+/// largest value: hue in degrees, saturation and brightness in percent, red, green and blue from 0
+/// to 255.
+fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
+    let (units, suffix) = match ch {
+        Channel::Hue => (360.0, "°"),
+        Channel::Saturation | Channel::Brightness => (100.0, "%"),
+        Channel::Red | Channel::Green | Channel::Blue => (255.0, ""),
+    };
+    let (z, _, _) = box_pos(ch, hsb);
+    (f64::from(z) * units, suffix, units)
+}
+
+/// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
+/// markers when `marked`. Returns the HSB a click, a drag, a key or a screen reader's action picks,
+/// and its phase.
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<([f32; 3], Live)> {
+    let (z, x, y) = box_pos(ch, hsb);
+    let mut pick = None;
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = STRIP_GAP;
+        let field = vec2((size - STRIP_GAP - STRIP).max(1.0), size);
+        let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
+        if let (Some((x, y)), phase) = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at) {
+            pick = Some((box_pick(ch, z, x, y, hsb), phase));
+        }
+        // The hue strip shows the whole spectrum; the others change only their own component.
+        let track = |z: f32| widgets::hsb32(if ch == Channel::Hue { [z * 360.0, 1.0, 1.0] } else { box_pick(ch, z, x, y, hsb) });
+        let (v, suffix, max) = strip_number(ch, hsb);
+        let shown = SliderValue::field(v, 0.0..=max, suffix, 0);
+        match widgets::channel_slider_stepped(ui, "color-wheel-strip", ch.name(), Some(shown), z, marked, vec2(STRIP, size), &track) {
+            (Some(z), phase, _) => pick = Some((box_pick(ch, z, x, y, hsb), phase)),
+            (None, _, Some(v)) => pick = Some((box_pick(ch, (v / max) as f32, x, y, hsb), Live::Released)),
+            _ => {}
+        }
+    });
+    pick
+}
+
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
 const MEMORY: &str = "color-wheel-hsb";
+/// The height of the color vision chips and the space between them.
+const VISION_CHIP: f32 = 16.0;
+const VISION_GAP: f32 = 3.0;
+
+/// The display sRGB of `c` as simulated for protanopia, deuteranopia and tritanopia, through
+/// `cms`'s Proof Setup simulations, and for achromatopsia: the gray with `c`'s CIE L*, through the
+/// same display transform.
+pub(crate) fn vision_colors(cms: &Cms, c: &Color) -> [[f32; 3]; 4] {
+    let srgb = cms.display_rgb(c);
+    let proof = |target| cms.proof_srgb(srgb, &ProofSetup { target, ..Default::default() });
+    let gray = cms.display_rgb(&Color::lab(cms.lab(c).l, 0.0, 0.0));
+    [proof(ProofTarget::Protanopia), proof(ProofTarget::Deuteranopia), proof(ProofTarget::Tritanopia), gray]
+}
+
+/// The names of the color vision chips, in the order of [`vision_colors`].
+fn vision_names() -> [String; 4] {
+    [tl!("Protanopia"), tl!("Deuteranopia"), tl!("Tritanopia"), tl!("Achromatopsia")].map(|s| s.to_string())
+}
+
+/// The 0 to 255 values of display sRGB `rgb`.
+pub(crate) fn bytes(rgb: [f32; 3]) -> [u8; 3] {
+    rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
+/// The hex text of 0 to 255 values, in the form of the Color panel's hex field (`E67828`).
+pub(crate) fn hex([r, g, b]: [u8; 3]) -> String {
+    format!("{r:02X}{g:02X}{b:02X}")
+}
+
+/// The Show Color Vision Preview row: four chips across the panel with `color` as each color
+/// vision deficiency shows it. Each chip takes the keyboard focus and reports its name and, with a
+/// solid color, its hex value as its value to screen readers; its tooltip shows both. A click or a
+/// key on a chip does nothing. With no solid color the chips are empty and keep their names in the tooltip and for screen
+/// readers.
+fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
+    let t = Tokens::get(ui.ctx());
+    let colors = color.map(|c| vision_colors(cms, c));
+    let width = ui.available_width();
+    let (row, _) = ui.allocate_exact_size(vec2(width, VISION_CHIP), Sense::hover());
+    let w = ((width - 3.0 * VISION_GAP) / 4.0).max(1.0);
+    let enabled = ui.is_enabled();
+    for (i, name) in vision_names().into_iter().enumerate() {
+        let cell = Rect::from_min_size(row.min + vec2(i as f32 * (w + VISION_GAP), 0.0), vec2(w, VISION_CHIP));
+        let resp = ui.interact(cell, ui.scope_id().with(("color-vision", i)), Sense::focusable_noninteractive());
+        let value = colors.map(|cs| {
+            let [r, g, b] = bytes(cs[i]);
+            ui.painter().rect_filled(cell, 0.0, egui::Color32::from_rgb(r, g, b));
+            hex([r, g, b])
+        });
+        let stroke = if resp.has_focus() { ui.visuals().selection.stroke } else { Stroke::new(1.0, t.border) };
+        ui.painter().rect_stroke(cell, 0.0, stroke, StrokeKind::Inside);
+        let tip = match &value {
+            Some(v) => format!("{name}\n{v}"),
+            None => name.clone(),
+        };
+        resp.widget_info(|| egui::WidgetInfo { current_text_value: value.clone(), ..egui::WidgetInfo::labeled(egui::Role::Image, enabled, &name) });
+        resp.on_hover_text(tip);
+    }
+}
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
 /// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
@@ -132,6 +468,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             super::proxy(app, ui, 40.0);
         });
         let size = ui.available_width().min(MAX_WHEEL);
+        if app.ui.color_wheel.view == View::Box {
+            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size);
+            return;
+        }
         let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, hsb[0], marked);
         let square = widgets::ring_square(ring.rect);
         let mut field_ui = ui.new_child(UiBuilder::new().id_salt("color-wheel-square").max_rect(square));
@@ -140,7 +480,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
         let name = tl!("Saturation and brightness");
         let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
-        if let Some((h, phase)) = ring.hue {
+        // Show Harmony: the rule's other colors for the current one, which follow it. While a press
+        // is held on a marker, the ring's drag under it picks nothing.
+        let set = &app.ui.color_wheel;
+        let mut held = false;
+        if set.harmony && marked {
+            let others: Vec<[f32; 3]> = set.harmony_rule.apply_hsb(hsb).into_iter().skip(1).collect();
+            let markers = widgets::ring_markers(ui, "color-wheel-harmony", ring.rect, &others, tl!("Harmony color"));
+            held = markers.held;
+            if let Some(i) = markers.picked
+                && let Some(&c) = others.get(i)
+            {
+                pick = Some((c, Live::Released));
+            }
+        }
+        if let Some((h, phase)) = ring.hue
+            && !held
+            && pick.is_none()
+        {
             pick = Some(([h, hsb[1], hsb[2]], phase));
         }
         // A press between the square and the ring picks the closest point of the square, which
@@ -155,6 +512,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
+    if app.ui.color_wheel.vision {
+        ui.add_space(4.0);
+        vision_row(ui, &cms, color.as_ref());
+    }
     let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);

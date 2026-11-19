@@ -185,6 +185,15 @@ pub struct ColorSettings {
     /// The color management policy for CMYK profiles. Settings saved without one take the default.
     #[serde(default)]
     pub cmyk_policy: Policy,
+    /// Profile Mismatches: Ask When Opening. Off by default, as in settings saved without it.
+    #[serde(default)]
+    pub ask_mismatch_open: bool,
+    /// Profile Mismatches: Ask When Pasting.
+    #[serde(default)]
+    pub ask_mismatch_paste: bool,
+    /// Missing Profiles: Ask When Opening.
+    #[serde(default)]
+    pub ask_missing_open: bool,
 }
 
 impl Default for ColorSettings {
@@ -196,6 +205,9 @@ impl Default for ColorSettings {
             bpc: true,
             rgb_policy: Policy::default(),
             cmyk_policy: Policy::default(),
+            ask_mismatch_open: false,
+            ask_mismatch_paste: false,
+            ask_missing_open: false,
         }
     }
 }
@@ -347,7 +359,9 @@ pub fn profiles_generation() -> u64 {
 /// Profile `name` as an ICC file to embed in an export: any RGB or CMYK profile of [`profiles`]
 /// (by its current or legacy name), or [`GRAY`]. Built-in profiles are written in code from the
 /// CMS: the RGB spaces from their primaries, the CMYK spaces as lookup tables sampled from their
-/// model (both directions, perceptual and relative colorimetric, Lab PCS); a profile the user
+/// model (both directions, perceptual and relative colorimetric, Lab PCS, with the model's paper
+/// as the media white point; the colorimetric Lab → CMYK table without black-point
+/// compensation, the perceptual and saturation ones with it); a profile the user
 /// loaded is the file it came from. Cached.
 pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
     static CACHE: Mutex<Vec<(String, Arc<[u8]>)>> = Mutex::new(Vec::new());
@@ -361,8 +375,17 @@ pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
     let bytes: Arc<[u8]> = if name == GRAY {
         icc::encode(&icc::gray_profile(name))?
     } else if BUILTIN_CMYK.contains(&name) {
-        let cms = Cms::new(&ColorSettings { cmyk: name.into(), ..ColorSettings::default() })?;
-        icc::encode(&icc::cmyk_profile(name, |c| cms.cmyk_to_lab(c), |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
+        // The perceptual and saturation tables map the shadows with black-point compensation; the
+        // colorimetric table is the inverse of the CMYK → Lab table, without it.
+        let mapped = Cms::new(&ColorSettings { cmyk: name.into(), bpc: true, ..ColorSettings::default() })?;
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), bpc: false, ..ColorSettings::default() })?;
+        let paper = match &cms.cmyk {
+            CmykSpace::Generic(g) => g.paper_xyz(),
+            CmykSpace::Device | CmykSpace::Icc(_) => lab::D50,
+        };
+        let to_lab = |c| cms.cmyk_to_lab(c);
+        let shadows = |l| mapped.lab_to_cmyk(l, Intent::RelativeColorimetric);
+        icc::encode(&icc::cmyk_profile(name, paper, to_lab, shadows, |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
     } else {
         icc::builtin_rgb_bytes(name)?
     }
@@ -578,10 +601,11 @@ impl Cms {
 
     /// An RGB or CMYK colour of this context's space as the colour of the same model in `dest`'s
     /// space that looks the same, converted with `intent` (Edit → Color Settings › Convert to
-    /// Working Space). RGB converts directly from profile to profile, and CMYK between two loaded
-    /// profiles through ProPhoto RGB ([`IccProfile::to_same_model_of`]), both with this context's
-    /// black-point compensation; CMYK goes through Lab when either space is built in. Grey and
-    /// Lab colours stay as they are.
+    /// Working Space). RGB converts directly from profile to profile, with this context's
+    /// black-point compensation. CMYK converts between two loaded profiles through ProPhoto RGB
+    /// ([`IccProfile::to_same_model_of`]), and through Lab when either space is built in: the Lab it
+    /// displays as ([`Self::cmyk_display_lab`]), or for Absolute Colorimetric its absolute Lab. Grey
+    /// and Lab colours stay as they are.
     pub fn convert_into(&self, dest: &Cms, c: &Color, intent: Intent) -> Color {
         match *c {
             Color::Rgb { r, g, b } => {
@@ -601,9 +625,16 @@ impl Cms {
                     (CmykSpace::Icc(s), CmykSpace::Icc(d)) => s.to_same_model_of(d, &inks, intent, self.settings.bpc),
                     _ => None,
                 };
+                // Absolute colorimetry starts from the inks' absolute Lab, paper color included and
+                // without black-point compensation; the other intents from the Lab they display as.
+                let source_lab = || match (&self.cmyk, intent) {
+                    (CmykSpace::Generic(g), Intent::AbsoluteColorimetric) => g.to_lab_abs(inks),
+                    (_, Intent::AbsoluteColorimetric) => lab::srgb_to_lab(self.cmyk_to_srgb(inks, true)),
+                    _ => self.cmyk_display_lab(inks),
+                };
                 let [c, m, y, k] = match direct.as_deref() {
                     Some(&[c, m, y, k]) => [c, m, y, k],
-                    _ => dest.lab_to_cmyk(self.cmyk_to_lab(inks), intent),
+                    _ => dest.lab_to_cmyk(source_lab(), intent),
                 };
                 Color::Cmyk { c, m, y, k }
             }

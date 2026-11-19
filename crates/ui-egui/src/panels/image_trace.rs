@@ -17,7 +17,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, pstate, set_pstate, swatches};
+use super::{first_node, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -150,28 +150,72 @@ pub(crate) fn is_trace(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
+/// What Trace acts on in the active document, and whether any selected object is an Image Trace
+/// object (wherever it is in the selection).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Target {
+    /// The active document's uid and the object Trace acts on.
+    object: Option<(u64, NodeId)>,
+    /// The object is an Image Trace object.
+    is_trace: bool,
+    /// The object is a plain image.
+    is_image: bool,
+    /// The object's stored trace settings.
+    stored: Option<Value>,
+    any_trace: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`find_target`] looked the target up in an active document on this thread.
+    static TARGET_LOOKUPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// The object Trace acts on: the first selected image or Image Trace object in paint order, as
-/// `imageTrace.make` takes it, else the first selected object.
-fn target_node(app: &VectorcraftApp) -> Option<Node> {
-    let st = app.session.active()?;
-    let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
-    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable).cloned()).or_else(|| first_selected(app))
+/// `imageTrace.make` takes it, else the first selected object. Only the selected images and Image
+/// Trace objects are put in paint order.
+fn find_target(app: &VectorcraftApp) -> Target {
+    let Some(st) = app.session.active() else { return Target::default() };
+    #[cfg(test)]
+    TARGET_LOOKUPS.with(|n| n.set(n.get() + 1));
+    let mut any_trace = false;
+    let traceable: Vec<NodeId> = st
+        .selection
+        .objects
+        .iter()
+        .copied()
+        .filter(|id| {
+            st.doc.node(*id).is_some_and(|n| {
+                let trace = is_trace(n);
+                any_trace |= trace;
+                trace || matches!(n.kind, NodeKind::Image(_))
+            })
+        })
+        .collect();
+    let node = st.doc.paint_order(traceable).into_iter().find_map(|id| st.doc.node(id)).or_else(|| first_node(app));
+    let Some(n) = node else { return Target { any_trace, ..Target::default() } };
+    Target {
+        object: Some((st.uid, n.id)),
+        is_trace: is_trace(n),
+        is_image: matches!(n.kind, NodeKind::Image(_)),
+        stored: n.extras().trace.as_deref().cloned(),
+        any_trace,
+    }
 }
 
-/// The active document and the object Trace acts on.
-fn target_key(app: &VectorcraftApp) -> Option<(u64, NodeId)> {
-    Some((app.session.active()?.uid, target_node(app)?.id))
-}
-
-/// What Trace acts on: an Image Trace object (with its stored settings), a plain image, or neither.
-fn target(app: &VectorcraftApp) -> (bool, bool, Option<Value>) {
-    let Some(n) = target_node(app) else { return (false, false, None) };
-    (is_trace(&n), matches!(n.kind, NodeKind::Image(_)), n.extras().trace.as_deref().cloned())
-}
-
-/// Whether any selected object is an Image Trace object, wherever it is in the selection.
-fn any_trace(app: &VectorcraftApp) -> bool {
-    app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)))
+/// [`find_target`], looked up once for each document and revision of it: the panel reads it on
+/// every frame.
+fn target(app: &VectorcraftApp, ctx: &egui::Context) -> Target {
+    let Some(st) = app.session.active() else { return Target::default() };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), Target)>>(ctx, "image-trace-target") {
+        Some((k, t)) if k == key => t,
+        _ => {
+            let t = find_target(app);
+            set_pstate(ctx, "image-trace-target", Some((key, t.clone())));
+            t
+        }
+    }
 }
 
 /// The one selected Image Trace object's preset ("Custom" once its settings were changed) and view.
@@ -197,7 +241,50 @@ fn view_label(v: TraceView) -> &'static str {
         TraceView::Outlines => tl!("Outlines"),
         TraceView::OutlinesWithSource => tl!("Outlines with Source Image"),
         TraceView::Source => tl!("Source Image"),
+        TraceView::Split => tl!("Split View"),
     }
+}
+
+/// The Split view's divider of the one selected Image Trace object, when it shows that view.
+fn selected_split(app: &VectorcraftApp) -> Option<f64> {
+    let st = app.session.active()?;
+    let [id] = st.selection.objects[..] else { return None };
+    st.doc.node(id).filter(|n| is_trace(n) && n.trace_view() == TraceView::Split).map(Node::trace_split)
+}
+
+/// The Divider row of the one selected Image Trace object in the Split view: how much of the
+/// source image's width, from its left edge, shows the image. A drag is one undo step, and the
+/// arrow keys move it a percent at a time. Nothing without such an object.
+pub(crate) fn split_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(split) = selected_split(app) else { return };
+    ui.horizontal(|ui| {
+        let label = widgets::dim_label(ui, tl!("Divider"));
+        // The canvas sets the divider to a ten-thousandth: a hundredth of a percent.
+        let mut pct = (split * 10_000.0).round() / 100.0;
+        // Clamping only edits keeps a divider between whole percents (a canvas drag, an agent's
+        // value) as it is while the panel shows: clamping always rounds it to the step each frame
+        // and reports a change.
+        let slider = egui::Slider::new(&mut pct, 0.0..=100.0).suffix("%").step_by(1.0).clamping(egui::SliderClamping::Edits);
+        let r = widgets::slider(ui, slider).labelled_by(label.id);
+        r.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), pct, tl!("Divider")));
+        if cfg!(test) {
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::unique("trace-split-slider-id"), r.id);
+                d.insert_temp(egui::Id::unique("trace-split-slider-rect"), r.rect);
+            });
+        }
+        let phase = if r.dragged() && !r.drag_stopped() {
+            widgets::Live::Dragging
+        } else if r.drag_stopped() || r.changed() {
+            widgets::Live::Released
+        } else {
+            widgets::Live::Idle
+        };
+        if phase != widgets::Live::Idle {
+            let split = (pct / 100.0).clamp(0.0, 1.0);
+            crate::panels::live_run(app, "Image Trace View", "imageTrace.setView", json!({ "view": TraceView::Split.id(), "split": split }), phase);
+        }
+    });
 }
 
 /// The View dropdown showing `current` → the view chosen.
@@ -385,7 +472,7 @@ fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
     match crate::trace_runs::start(app, "imageTrace.make", p, true) {
         // Traced off the UI thread: the result comes to [`traced`].
         Ok(r) if r["background"] == true => {}
-        Ok(r) => adopt(app, st, &r),
+        Ok(r) => adopt(app, ctx, st, &r),
         Err(e) => app.ui.status = e,
     }
 }
@@ -393,11 +480,12 @@ fn trace(app: &mut VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi) {
 /// The panel takes trace `r`'s counts and the traced object's stored settings at once: Undo before
 /// the next panel frame must still be recognized as a change, even when it returns to the previous
 /// settings.
-fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
+fn adopt(app: &VectorcraftApp, ctx: &egui::Context, st: &mut TraceUi, r: &Value) {
     st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
-    if let Some(stored) = target(app).2 {
+    let target = target(app, ctx);
+    if let Some(stored) = target.stored {
         st.synced = stored;
-        st.object = target_key(app);
+        st.object = target.object;
     }
 }
 
@@ -405,7 +493,7 @@ fn adopt(app: &VectorcraftApp, st: &mut TraceUi, r: &Value) {
 pub(crate) fn traced(app: &VectorcraftApp, r: &Value) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let mut st: TraceUi = pstate(&ctx, "image-trace");
-    adopt(app, &mut st, r);
+    adopt(app, &ctx, &mut st, r);
     set_pstate(&ctx, "image-trace", st);
 }
 
@@ -570,9 +658,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.preset = "Default".into();
         st.params = all.first().map(|p| p.1.clone()).unwrap_or_default();
     }
-    let (is_trace, is_image, stored) = target(app);
-    let any_trace = any_trace(app);
-    let object = target_key(app);
+    let Target { object, is_trace, is_image, stored, any_trace } = target(app, ui.ctx());
     // The saved preset changes since the last frame apply to the panel's settings before the selected object's
     // settings, which `sync_with_object` resolves against every change, are adopted.
     follow_preset_changes(app, &mut st, &all);
@@ -641,6 +727,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         hold_source(app, ui.ctx(), any_trace && r.is_pointer_button_down_on());
     });
+    split_row(app, ui);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Mode:"));
         let mode = st.params["mode"].as_str().unwrap_or("blackAndWhite").to_string();
@@ -862,7 +949,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let any_trace = any_trace(app);
+    let any_trace = target(app, ui.ctx()).any_trace;
     if menu_item(ui, tl!("Release"), any_trace, false) {
         app.run("imageTrace.release", json!({})).ok();
     }

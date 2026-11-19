@@ -126,7 +126,18 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
+pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    try_transform(app, cmd, params).ok();
+}
+
+/// [`run_transform`] that returns the command's result, for a field that shows its error.
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+    let params = with_pattern_switches(app, params);
+    app.run(cmd, params)
+}
+
+/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -137,7 +148,7 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params).ok();
+    params
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
@@ -323,12 +334,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            // Shear is relative: the field rests at 0° and a new value shears by it.
-            if let Some(a) = widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
+            // Shear is relative: the field rests at 0° and a new value from -359° to 359° shears
+            // by it. The field has no minimum, so `object.shear` checks every value: it refuses
+            // ±90°, ±270° and a value outside -359° to 359°, and the status bar shows its error.
+            if let Some(a) =
+                widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, f64::NEG_INFINITY, &SHEAR_PRESETS)
                 && a != 0.0
-                && a.abs() < 90.0
+                && let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}))
             {
-                run_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}));
+                app.status(e);
             }
         });
     });
@@ -416,10 +430,11 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
     app.session.active().map(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some()).map(|id| id.0).collect()).unwrap_or_default()
 }
 
-/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
-/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
-/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
-/// other live shapes.
+/// A live rectangle's, polygon's, ellipse's or line's properties (Transform and Properties panels,
+/// and for the first three the Contextual Task Bar), their widget ids under `id`. `headed` adds
+/// the Rectangle and Polygon Properties headings; an ellipse's and a line's heading always show.
+/// Returns false, drawing nothing, for other live shapes, and for a line unless every selected
+/// object is one.
 pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
     match live {
         LiveShape::Rectangle { .. } => {
@@ -438,24 +453,86 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
             widgets::subheader(ui, tl!("Ellipse Properties:"));
             pie_rows(app, ui, *pie, &format!("{id}-pie"));
         }
+        LiveShape::Line { .. } => return line_rows(app, ui, live, &format!("{id}-line")),
         _ => return false,
     }
     true
 }
 
+/// Whether every selected object is a live line (and one is selected).
+fn only_lines_selected(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let line = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Line { .. }));
+    !st.selection.objects.is_empty() && st.selection.objects.iter().all(|o| st.doc.node(*o).is_some_and(line))
+}
+
+/// A live line's Line Properties (Transform and Properties panels), under its heading: its length,
+/// end to end, and its angle (counterclockwise from 3 o'clock, from its first end to its second). A new length keeps each selected line's first end in place, and a
+/// new angle turns each one about its midpoint. Returns false, drawing nothing, unless every
+/// selected object is a live line.
+pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str) -> bool {
+    if !only_lines_selected(app) {
+        return false;
+    }
+    let (units, fw) = (app.session.general_unit(), super::field_width(ui));
+    widgets::subheader(ui, tl!("Line Properties:"));
+    // The `object.setLiveShape` params the edited fields set, all sent in one call.
+    let mut set = serde_json::Map::new();
+    egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        widgets::dim_label(ui, tl!("Line Length:"));
+        if let Some(l) = widgets::num_field_named(ui, (id, "length"), Some(tl!("Line Length:")), live.line_length(), units, fw) {
+            set.insert("lineLength".into(), json!(l));
+        }
+        ui.end_row();
+        widgets::dim_label(ui, tl!("Line Angle:"));
+        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Line Angle:")), live.line_angle().unwrap_or(0.0), "°", 1, fw) {
+            set.insert("lineAngle".into(), json!(a));
+        }
+        ui.end_row();
+    });
+    if !set.is_empty()
+        && let Err(e) = app.run("object.setLiveShape", serde_json::Value::Object(set))
+    {
+        app.status(e);
+    }
+    true
+}
+
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
-/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+/// whole ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other
+/// part of it (Transform and Properties panels). With the link on, a typed angle moves the other
+/// one by as much, so each selected ellipse keeps its span.
 pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, label);
-            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
-                app.run("object.setLiveShape", json!({ key: a })).ok();
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+                ui.horizontal(|ui| {
+                    widgets::dim_label(ui, label);
+                    if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                        let params = if app.ui.constrain_pie_angle { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) };
+                        app.run("object.setLiveShape", params).ok();
+                    }
+                });
             }
         });
-    }
+        pie_link(app, ui);
+    });
     if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
         app.run("object.setLiveShape", json!({"invertPie": true})).ok();
+    }
+}
+
+/// The Constrain Pie Angle link between Pie Start and End Angle: one toggle for the Transform and
+/// Properties panels, kept while the app runs and off at launch. It is drawn after the fields, so
+/// Tab reaches them first; with the keyboard on it, Space or Enter toggles it.
+fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    let on = app.ui.constrain_pie_angle;
+    let tip = tl!("Constrain Pie Angle");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
+        app.ui.constrain_pie_angle = !on;
     }
 }
 
@@ -515,7 +592,13 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
-    widgets::popover(&resp, resp.clicked(), |ui| {
+    popover(app, &resp);
+}
+
+/// The Transform panel in a popover under `resp`, which a click on it toggles: the Control bar's
+/// Transform [`link`], and its X:, Y:, W: and H: labels.
+pub fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
@@ -582,6 +665,22 @@ pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
     }
 }
 
+/// Show on Shape Creation (`showOnShapeCreation`): after a shape was drawn
+/// ([`vectorcraft_engine::Session::take_shape_drawn`]), the Transform panel shows as Window ›
+/// Transform shows it, unless it can be seen already. In Presentation Mode, or with the option off,
+/// the panels stay as they are. Called once per frame, after the canvas and the dialogs; a frame
+/// that shows the panel asks `ctx` for another, which draws it.
+pub fn show_on_shape_creation(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let drawn = app.session.take_shape_drawn();
+    if !drawn || !app.session.prefs.show_on_shape_creation || app.ui.screen_mode >= 3 || crate::panel_docking::visible(&app.ui, "transform") {
+        return;
+    }
+    match app.run("window.panel", json!({ "panel": "transform" })) {
+        Ok(_) => ctx.request_repaint(),
+        Err(e) => app.status(e),
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "xf-hide-options");
     let has = super::selection_len(app) > 0;
@@ -589,6 +688,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin = app.selection_box().map(|b| panel_reference(app, ui, &b).origin());
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "xf-hide-options", !hidden);
+    }
+    let on_creation = app.session.prefs.show_on_shape_creation;
+    if menu_item(ui, tl!("Show on Shape Creation"), true, on_creation) {
+        set_pref(app, "showOnShapeCreation", !on_creation);
     }
     ui.separator();
     if menu_item(ui, tl!("Flip Horizontal"), has, false) {

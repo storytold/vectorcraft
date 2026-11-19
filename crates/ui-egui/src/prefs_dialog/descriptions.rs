@@ -16,6 +16,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("disableAutoAddDelete", "Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment."),
     ("usePreciseCursors", "Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on."),
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
+    ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
@@ -39,7 +40,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("ctrlWheelScrollsSideways", "The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
     ("scrubNumericFields", "Dragging sideways on a numeric field's label changes the field's value."),
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
+    ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
+    ("holdShortcuts", "Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut."),
+    ("keyHoldDelay", "How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),
     ("newArtBasic", "New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance."),
@@ -56,11 +60,69 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useRegistrationPointForSymbol",
         "With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.",
     ),
+    ("showOnShapeCreation", "Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed."),
     ("fadeRegionOutsideArtboard", "Darkens the canvas outside the artboards while the Artboard tool is active."),
     (
         "artboardUpdateWhileDragging",
         "With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.",
     ),
+    // Type
+    (
+        "typeSizeIncrement",
+        "The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "trackingIncrement",
+        "The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "baselineShiftIncrement",
+        "The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.",
+    ),
+    (
+        "showEastAsianOptions",
+        "Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.",
+    ),
+    (
+        "showIndicOptions",
+        "Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.",
+    ),
+    ("typeSelectionByPathOnly", "The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box."),
+    ("fontNamesInEnglish", "Font menus list each font by its English name; off, a font that also has a name in its own language shows that name."),
+    (
+        "autoSizeAreaType",
+        "New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.",
+    ),
+    ("fontPreview", "Font lists and the Type › Font menu show a sample of each font beside its name."),
+    (
+        "fontSamplesOnWhite",
+        "Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.",
+    ),
+    ("fontPreviewSize", "How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is."),
+    ("recentFontsCount", "How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first."),
+    ("missingGlyphProtection", "When you change the font or font style of text, characters the new font has no glyph for keep the font they had."),
+    (
+        "highlightAlternateGlyphs",
+        "A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.",
+    ),
+    (
+        "showCharacterAlternates",
+        "With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.",
+    ),
+    (
+        "highlightSubstitutedFonts",
+        "A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.",
+    ),
+    ("placeholderText", "New type made with a Type tool starts with placeholder text, selected, so typing replaces it."),
+    ("typedLists", "Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list."),
+    ("fontsFolder", "Fonts in this folder show in the font menus and can be used without being installed."),
+    (
+        "overrideCharColor",
+        "Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.",
+    ),
+    ("alignGlyphBoundsPoint", "Align and Distribute measure point type by the ink of its glyphs instead of its em box."),
+    ("alignGlyphBoundsArea", "Align and Distribute measure area type by the ink of its glyphs instead of its frame."),
+    ("typeGlyphBounds", "The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box."),
     // Selection & Anchor Display
     ("selectionTolerance", "How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it."),
     (
@@ -160,6 +222,152 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
+    // Hyphenation
+    (
+        "hyphenationLanguage",
+        "New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.",
+    ),
+    (
+        "hyphenationExceptions",
+        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.",
+    ),
+    // Plug-ins & Scratch Disks
+    (
+        "pluginsFolder",
+        "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
+    ),
+    (
+        "pluginInstructionBudget",
+        "The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.",
+    ),
+    ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
+    ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
+    // User Interface
+    ("uiBrightness", "How light or dark the interface is."),
+    ("uiColorScheme", "The set of colors the interface is drawn in."),
+    ("uiAccent", "The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own."),
+    (
+        "canvasColor",
+        "The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.",
+    ),
+    (
+        "autoCollapseIconPanels",
+        "A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.",
+    ),
+    ("toolGroupLabels", "Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them."),
+    (
+        "openDocumentsAsTabs",
+        "From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.",
+    ),
+    ("largeTabs", "Makes the document tabs taller and their names larger."),
+    ("systemTitleBar", "From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own."),
+    (
+        "appTitleBar",
+        "From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.",
+    ),
+    ("uiScaling", "Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom."),
+    ("scaleCursorWithUi", "The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size."),
+    ("interfaceLanguage", "The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one."),
+    // Performance
+    ("gpuPerformance", "Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate."),
+    (
+        "animatedZoom",
+        "The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.",
+    ),
+    (
+        "gpuPreference",
+        "From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.",
+    ),
+    (
+        "lowLatencyDrawing",
+        "From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.",
+    ),
+    (
+        "historyStates",
+        "The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.",
+    ),
+    (
+        "realTimeDrawing",
+        "Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.",
+    ),
+    (
+        "renderThreads",
+        "How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.",
+    ),
+    (
+        "linuxDisplayServer",
+        "From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.",
+    ),
+    (
+        "monitorProfileDisplay",
+        "Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.",
+    ),
+    // File Handling
+    ("backgroundSave", "On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written."),
+    (
+        "backgroundExport",
+        "On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.",
+    ),
+    (
+        "autosaveRecovery",
+        "Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.",
+    ),
+    ("autosaveInterval", "How many minutes pass between recovery copies while Automatically Save Recovery Data is on."),
+    (
+        "recoveryFolder",
+        "On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.",
+    ),
+    ("recoveryOffForComplex", "No timed recovery copies are made of documents with more than 20,000 objects."),
+    (
+        "recentFilesCount",
+        "Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.",
+    ),
+    (
+        "lowResProxyEps",
+        "When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.",
+    ),
+    (
+        "antiAliasedBitmaps",
+        "In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.",
+    ),
+    (
+        "updateLinks",
+        "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
+    ),
+    (
+        "templatesFolder",
+        "On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.",
+    ),
+    (
+        "editOriginalSystemDefaults",
+        "Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.",
+    ),
+    (
+        "appendConverted",
+        "A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.",
+    ),
+    (
+        "useCompression",
+        "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
+    ),
+    // Clipboard Handling
+    (
+        "copyAsSvg",
+        "Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.",
+    ),
+    ("copyAsPdf", "On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
+    ("copyAicb", "VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet."),
+    (
+        "aicbMode",
+        "Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.",
+    ),
+    (
+        "pasteTextFormatting",
+        "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

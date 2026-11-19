@@ -61,13 +61,17 @@ fn a_uniform_or_unreadable_width_profile_stays_a_live_stroke() {
 }
 
 #[test]
-fn dashes_aligned_to_corners_keep_the_drawn_look() {
-    // GUARDS: the look holds the fitted pattern and the solid ends the style's dash array doesn't.
+fn dashes_aligned_to_corners_read_as_aligned_dashes() {
+    // The look holds the fitted pattern, which the style's dash array doesn't: the reader takes the
+    // stroke only where VectorCraft's own fitting draws as that look.
     let data = b"/KnownStyle :\n(Stitches) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
             /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
             /Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
             /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n1 J 0 j 2 w 10 M [5 10 ]0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
-    assert!(!art_styles(data)["Stitches"].plain);
+    let style = &art_styles(data)["Stitches"];
+    assert!(style.plain, "{style:?}");
+    let [StyleItem::Stroke { dash: Some(dash), .. }] = style.items.as_slice() else { panic!("{:?}", style.items) };
+    assert_eq!((dash.pattern.as_slice(), dash.align_corners), ([5.0, 10.0].as_slice(), true));
 }
 
 /// The style `Shade`: a Drop Shadow whose dictionary holds `keys`.
@@ -1023,7 +1027,8 @@ fn any_object_takes_the_distort_effects_that_draw_as_its_drawn_look() {
     assert!(simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.0], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.1], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Punk and Bloat", "-35 /Real (d_factor) ,\n"));
-    assert!(!simple("Adobe Zigzag", ""));
+    // Zig Zag: objects other than type check it against their drawn look (`read::ops`).
+    assert!(simple("Adobe Zigzag", ""));
     assert!(!simple("Adobe Transform", &format!("1 /Int (numCopies) ,\n{SWITCHES}")));
     // With another effect, only type takes it.
     let chain = [basic("Adobe Twirl", "45 /Real (angle) ,\n"), basic("Adobe Offset Path", "4 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n")];
@@ -1445,7 +1450,8 @@ fn warp_numbers_are_the_dialogs_order() {
 /// and nothing for styles it doesn't read.
 #[test]
 fn a_style_is_read_as_a_writer_checks_it() {
-    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let parse = |data: &str, name: &str| crate::import::parse_art_style(data.as_bytes(), name);
+    let read = |data: &str, own: Option<&Paint>| parse(data, "Odd").and_then(|st| crate::import::read_parsed_style(&st, own));
     let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
     let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
     let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
@@ -1456,11 +1462,18 @@ fn a_style_is_read_as_a_writer_checks_it() {
     assert_eq!(got.appearance.items[0].paint(), &own);
     assert_eq!(got.transparency.map(|t| (t.0, t.1)), Some((0.5, BlendMode::Multiply)));
     assert!(got.simple && !got.pathfinder);
+    // One parse read on two objects: each takes its own gradient, and the parse is left as it was.
+    let parsed = parse(&data, "Odd").unwrap();
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let first = crate::import::read_parsed_style(&parsed, Some(&own)).unwrap();
+    let second = crate::import::read_parsed_style(&parsed, Some(&black)).unwrap();
+    assert_eq!((first.appearance.items[0].paint(), second.appearance.items[0].paint()), (&own, &black));
+    assert_eq!(parsed.style, parse(&data, "Odd").unwrap().style);
     // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
     assert!(read(&data, None).is_none());
     let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
     assert!(read(&pattern, None).is_none());
-    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(parse(&data, "Even").is_none());
     assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
     // Damaged text: every cut of the style, and stray bytes, without a panic.
     for cut in 0..data.len() {

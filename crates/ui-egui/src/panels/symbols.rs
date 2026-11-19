@@ -2,6 +2,7 @@
 //! selects a symbol (it becomes the Symbol Sprayer's current symbol); double-click opens it in symbol editing mode. Symbol
 //! libraries open in library panels ([`SymbolLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -19,9 +20,20 @@ use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::caches::SymbolInstances;
 use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
+
+/// The largest side of a symbol thumbnail, in pixels. A larger chip draws its thumbnail scaled up.
+const MAX_THUMB_PX: f32 = 1024.0;
+
+/// The pixels on a side of the thumbnail for a chip `size` points wide at `pixels_per_point`: 8
+/// to [`MAX_THUMB_PX`].
+fn thumb_px(size: f32, pixels_per_point: f32) -> u32 {
+    let px = (size * pixels_per_point).round();
+    if px.is_nan() { 8 } else { px.clamp(8.0, MAX_THUMB_PX) as u32 }
+}
 
 /// A thumbnail of symbol `name` (an instance at its natural size), cached by its key in `keys`
 /// ([`Thumbs`]).
@@ -30,7 +42,7 @@ fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Optio
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
         static CACHE: crate::graphics::TexCache<HashMap<(u64, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
-    let px = (size * ui.ctx().pixels_per_point()).round().max(8.0) as u32;
+    let px = thumb_px(size, ui.ctx().pixels_per_point());
     let key = (*keys.keys.get(name)?, px);
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return Some(t);
@@ -133,27 +145,104 @@ pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: 
     }
 }
 
+/// The cache key of an [`art_chip`]: the symbol's key, the pixels across and down, and the bits of
+/// the art's bounds.
+type ArtKey = (u64, u32, u32, [u64; 4]);
+
+/// Symbol `name`'s art on white in `r`, its bounds `art` (at its own size, as a mapped graphic
+/// measures them) stretched to fill `r`, as a box the art is scaled into shows it. The art is
+/// rendered at most [`MAX_THUMB_PX`] pixels on a side, cached by its key in `keys`.
+pub(crate) fn art_chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str, art: vectorcraft_geom::Rect) {
+    thread_local! {
+        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+        static CACHE: crate::graphics::TexCache<HashMap<ArtKey, egui::TextureHandle>> = crate::graphics::TexCache::default();
+    }
+    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
+    let ppp = ui.ctx().pixels_per_point();
+    let (w, h) = (thumb_px(r.width(), ppp), thumb_px(r.height(), ppp));
+    let Some(&symbol) = keys.keys.get(name) else { return };
+    let key = (symbol, w, h, [art.x0, art.y0, art.x1, art.y1].map(f64::to_bits));
+    let tex = match CACHE.with(|c| c.borrow().get(&key).cloned()) {
+        Some(t) => t,
+        None => {
+            let Some(img) = RENDERER.with(|rr| render_art(&mut rr.borrow_mut(), doc, name, art, (w, h))) else { return };
+            let tex = ui.ctx().load_texture(format!("sym-art-{name}-{w}x{h}"), crate::canvas::color_image(&img), egui::TextureOptions::LINEAR);
+            CACHE.with(|c| {
+                let mut c = c.borrow_mut();
+                if c.len() > 64 {
+                    c.clear();
+                }
+                c.insert(key, tex.clone());
+            });
+            tex
+        }
+    };
+    ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+}
+
+/// Symbol `name` of `doc` (an instance at its natural size, as [`render_thumb`] places it) drawn
+/// into `w` × `h` pixels with its bounds `art` stretched to fill them. `None` for bounds with no
+/// area.
+fn render_art(
+    r: &mut vectorcraft_render::Renderer,
+    doc: &Document,
+    name: &str,
+    art: vectorcraft_geom::Rect,
+    (w, h): (u32, u32),
+) -> Option<vectorcraft_render::Rendered> {
+    let (aw, ah) = (art.width(), art.height());
+    if !(aw.is_finite() && ah.is_finite() && aw > 0.0 && ah > 0.0) {
+        return None;
+    }
+    let (sw, sh) = symbol_size(doc, name);
+    let mut d = doc.clone();
+    let layer = d.alloc_id();
+    d.layers = vec![Arc::new(Node::layer(layer, "Preview", vectorcraft_doc::LayerColor::Preset(0)))];
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(sw / 20.0, sh / 20.0);
+    let n = Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf }));
+    let view =
+        vectorcraft_geom::Affine::scale_non_uniform(f64::from(w) / aw, f64::from(h) / ah) * vectorcraft_geom::Affine::translate((-art.x0, -art.y0));
+    r.render_node(&d, &n, u16::try_from(w).ok()?, u16::try_from(h).ok()?, view)
+}
+
 /// The active document's current symbol (`symbol.list`'s `current`), read without running a
 /// command; `None` without a document or symbols.
 fn current(app: &VectorcraftApp) -> Option<String> {
     app.session.active().and_then(|st| vectorcraft_engine::cmd::current_symbol(&st.doc))
 }
 
-/// Does the selection hold (in it or in its groups) a symbol instance that `wanted` takes?
-fn instance_selected(app: &VectorcraftApp, wanted: impl Fn(&Node) -> bool) -> bool {
-    app.session.active().is_some_and(|st| {
-        st.selection.objects.iter().any(|id| {
-            let mut any = false;
-            if let Some(n) = st.doc.node(*id) {
-                n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }) && wanted(c));
-            }
-            any
-        })
-    })
+#[cfg(test)]
+thread_local! {
+    /// How many times [`selected_instances`] walked the selection on this thread.
+    static INSTANCE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn has_instances_selected(app: &VectorcraftApp) -> bool {
-    instance_selected(app, |_| true)
+/// The symbol instances in the selection and in its groups, found in one walk of the selected
+/// subtrees per (document uid, revision) ([`crate::caches::CanvasCache::symbol_instances`]);
+/// `None` without a document.
+fn selected_instances(app: &mut VectorcraftApp) -> Option<&mut SymbolInstances> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision);
+    if app.canvas.symbol_instances.as_ref().is_none_or(|(k, _)| *k != key) {
+        #[cfg(test)]
+        INSTANCE_SCANS.with(|n| n.set(n.get() + 1));
+        let mut found = SymbolInstances::default();
+        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+                    found.changed |= !c.extras().symbol_overrides.is_empty();
+                    found.ids.push(c.id);
+                }
+            });
+        }
+        app.canvas.symbol_instances = Some((key, found));
+    }
+    app.canvas.symbol_instances.as_mut().map(|(_, found)| found)
+}
+
+fn has_instances_selected(app: &mut VectorcraftApp) -> bool {
+    selected_instances(app).is_some_and(|found| !found.ids.is_empty())
 }
 
 /// Collect the IDs of selected instances of symbol `name` (including inside groups).
@@ -221,15 +310,19 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
 
 /// Does the selection hold a symbol instance with appearance changes of its own (a dynamic
 /// symbol's), which Reset drops?
-pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
-    instance_selected(app, |c| !c.extras().symbol_overrides.is_empty())
+pub(crate) fn changed_instances_selected(app: &mut VectorcraftApp) -> bool {
+    selected_instances(app).is_some_and(|found| found.changed)
 }
 
 /// Does the selection hold a symbol instance whose scale, rotation or shear differs from its
 /// symbol's, which Reset Transformation restores?
-fn transformed_instances_selected(app: &VectorcraftApp) -> bool {
+fn transformed_instances_selected(app: &mut VectorcraftApp) -> bool {
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
-    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c))
+    let Some(found) = selected_instances(app) else { return false };
+    let ids = &found.ids;
+    *found
+        .transformed
+        .get_or_insert_with(|| ids.iter().filter_map(|id| doc.node(*id)).any(|n| vectorcraft_engine::cmd::reset_transformation_changes(&doc, n)))
 }
 
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
@@ -296,7 +389,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
+    let Some((doc, keys, document)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d), d.uid)) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let view = app.ui.symbols_view;
     let sel = current(app);
@@ -305,6 +398,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The symbols drawn selected: the ones Select All Unused picked, else the current one.
     let on = |n: &str| if marked.is_empty() { sel.as_deref() == Some(n) } else { marked.iter().any(|m| m == n) };
     let mut clicked: Option<(String, bool)> = None;
+    // Art released on a symbol with Alt (Option) held redefines that symbol; while Alt art is over
+    // a symbol, the list does not take it as a new symbol.
+    let mut redefine: Option<(String, Vec<u64>)> = None;
+    let mut over_symbol = false;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
@@ -316,7 +413,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for n in &names {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
                 // Dragged onto the canvas, the symbol is placed there.
-                drag_symbol(ui, &resp, n, uid);
+                widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                 if on(n) {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -324,6 +421,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(3.0 + side / 2.0, 0.0), vec2(side, side)), n);
                 ui.painter().text(r.left_center() + vec2(side + 10.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(text), t.text);
+                if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
+                    redefine = Some((n.clone(), ids));
+                }
                 let resp = resp.on_hover_text(n);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
@@ -342,7 +442,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal_wrapped(|ui| {
                 for n in &names {
                     let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
-                    drag_symbol(ui, &resp, n, uid);
+                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
                     chip(ui, &doc, &keys, r.shrink(2.0), n);
                     let on = on(n);
                     ui.painter().rect_stroke(
@@ -351,6 +451,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         Stroke::new(if on { 2.0 } else { 1.0 }, if on { t.accent } else { t.border }),
                         StrokeKind::Inside,
                     );
+                    if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
+                        redefine = Some((n.clone(), ids));
+                    }
                     let resp = resp.on_hover_text(n);
                     if resp.double_clicked() {
                         clicked = Some((n.clone(), true));
@@ -370,8 +473,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.min_rect()
     });
     let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
-    if let Some(ids) = widgets::art_drop(ui, &zone)
-        && let Err(e) = app.run("symbol.new", json!({ "ids": ids, "type": "dynamic" }))
+    if !over_symbol && let Some(ids) = widgets::art_drop(ui, &zone) {
+        // Shift held at the release keeps the dropped art as ordinary art.
+        let mut p = json!({ "ids": ids, "type": "dynamic" });
+        if modifiers_at_release(ui).shift {
+            p["keepArt"] = json!(true);
+        }
+        if let Err(e) = app.run("symbol.new", p) {
+            app.status(e);
+        }
+    }
+    // Redefine Symbol with the dropped art, which becomes an instance of it, in one undo step.
+    if let Some((name, ids)) = redefine
+        && let Err(e) = app.run("symbol.update", json!({ "name": name, "ids": ids }))
     {
         app.status(e);
     }
@@ -399,6 +513,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Symbol"), false, inst, 24.0).clicked() {
             app.run("symbol.breakLink", json!({})).ok();
         }
+        // Opens Symbol Options on the current symbol, as the panel menu's Symbol Options… does;
+        // Alt does the same.
+        if widgets::icon_button_enabled(ui, "dc-options", tl!("Symbol Options"), false, sel.is_some(), 24.0).clicked() {
+            app.run("ui.symbolOptions", json!({"edit": true, "name": sel})).ok();
+        }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
         // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
@@ -409,8 +528,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
-            // dialog's default.
-            let (cmd, p) = if ui.input(|i| i.modifiers.alt) { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
+            // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
+            // Both are read as the primary button went up, when it did in this frame.
+            let m = modifiers_at_release(ui);
+            let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
+            if m.shift {
+                p["keepArt"] = json!(true);
+            }
             app.run(cmd, p).ok();
         }
         // Alt deletes an unused symbol without asking; a symbol with instances still asks.
@@ -419,9 +543,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // it: the dragged symbol, or every symbol Select All Unused picked when it is one of them.
         if let Some(name) = symbol_dropped(ui, &trash, &names, uid) {
             let picked = if marked.contains(&name) { &marked[..] } else { &[] };
-            delete(app, picked, Some(&name), super::alt_held(ui));
+            delete(app, picked, Some(&name), alt_at_release(ui));
         } else if trash.clicked() {
-            delete(app, &marked, sel.as_deref(), super::alt_held(ui));
+            delete(app, &marked, sel.as_deref(), alt_at_release(ui));
         }
     });
 }
@@ -434,9 +558,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
+    // Shift keeps the selected art as ordinary art instead of making it an instance. It is read as
+    // the primary button went up, when it did in this frame.
+    let shift = modifiers_at_release(ui).shift;
+    let redefine = if shift { json!({"name": sel, "keepArt": true}) } else { name.clone() };
+    let new = if shift { json!({"keepArt": true}) } else { json!({}) };
     let items: [(&str, bool, &str, Value); 3] = [
-        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({})),
-        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone()),
+        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", new),
+        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", redefine),
         (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
     ];
     for (label, enabled, cmd, params) in items {
@@ -499,26 +628,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The panel state key of the document (`uid`) the symbol being dragged from the panel belongs to.
-const DRAG_DOC: &str = "sym-drag-doc";
-
-/// Make `resp` a drag source of the symbol `name` of the document `uid`, and keep `uid` while it
-/// is dragged.
-fn drag_symbol(ui: &Ui, resp: &egui::Response, name: &str, uid: Option<u64>) {
-    if resp.drag_started_by(egui::PointerButton::Primary) {
-        set_pstate(ui.ctx(), DRAG_DOC, uid);
-    }
-    widgets::drag_source(ui, resp, || PanelDrag::Symbol(name.to_string()));
-}
-
 /// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
 /// released on `button` this frame, if any; `button` is outlined while one is held over it, also
 /// when it is disabled for clicks. A symbol dragged from another document is ignored. Only the
 /// release of the primary button drops the symbol; the release of another button ends the drag.
 fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
     let held = button.dnd_hover_payload::<PanelDrag>()?;
-    let PanelDrag::Symbol(name) = &*held else { return None };
-    if !names.contains(name) || pstate::<Option<u64>>(ui.ctx(), DRAG_DOC) != uid {
+    let PanelDrag::Symbol { document, name } = &*held else { return None };
+    if !names.contains(name) || Some(*document) != uid {
         return None;
     }
     widgets::drop_target_outline(ui, button.rect);
@@ -526,6 +643,49 @@ fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Optio
         return None;
     }
     button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
+}
+
+/// The ids of the art dragged off the canvas of the active document `doc` (`uid`) and released
+/// with Alt (Option) held on the symbol tile or row `item` this frame, if any. While such art is
+/// held over `item` with Alt, `over` is set and `item` is outlined. Art of another document, or
+/// whose objects `doc` no longer has, is not taken. Only the release of the primary button drops
+/// the art; the release of another button ends the drag.
+fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option<u64>, over: &mut bool) -> Option<Vec<u64>> {
+    if !alt_at_release(ui) {
+        return None;
+    }
+    let held = item.dnd_hover_payload::<PanelDrag>()?;
+    let PanelDrag::Art(ids) = &*held else { return None };
+    *over = true;
+    let ours = uid.is_some() && widgets::art_drag_doc(ui.ctx()) == uid;
+    if !ours || ids.is_empty() || !ids.iter().all(|id| doc.node(*id).is_some_and(|n| !n.is_layer())) {
+        return None;
+    }
+    widgets::drop_target_outline(ui, item.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return None;
+    }
+    item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
+}
+
+/// Whether Alt (Option) is held for a drop or a click: when the primary button went up in this frame, as it
+/// went up, else now.
+fn alt_at_release(ui: &Ui) -> bool {
+    modifiers_at_release(ui).alt
+}
+
+/// The modifiers held for a drop or a click: when the primary button went up in this frame, as it went up,
+/// else now.
+fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
+    ui.input(|i| {
+        i.events
+            .iter()
+            .find_map(|e| match e {
+                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
+                _ => None,
+            })
+            .unwrap_or(i.modifiers)
+    })
 }
 
 /// The panel state key of the symbols Select All Unused picked.
@@ -628,9 +788,15 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a symbol's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
+    }
+    /// A built-in library's symbol in the UI language; a User Defined or loaded library's symbol as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, symbollib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The symbol's art on white, as the Symbols panel shows it.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {
@@ -760,6 +926,11 @@ mod tests {
         egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
     }
 
+    /// The primary button going up at `at` with Alt (Option) held.
+    fn alt_release(at: Pos2) -> egui::Event {
+        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::ALT }
+    }
+
     fn symbols(app: &mut VectorcraftApp) -> Vec<String> {
         let list = app.run("symbol.list", json!({})).unwrap();
         list["symbols"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap_or_default().to_string()).collect()
@@ -770,6 +941,35 @@ mod tests {
         let painted: Vec<&[u8; 4]> = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[3] > 200).collect();
         let red = painted.iter().filter(|p| p[0] > 150 && p[1] < 80 && p[2] < 80).count();
         (painted.len(), red)
+    }
+
+    /// A thumbnail is at most 1,024 pixels on a side, whatever the size of the chip it draws.
+    #[test]
+    fn thumbnails_are_bounded_in_size() {
+        assert_eq!(thumb_px(40.0, 2.0), 80);
+        assert_eq!(thumb_px(1.0, 1.0), 8);
+        assert_eq!(thumb_px(100_000.0, 2.0), 1024);
+        assert_eq!(thumb_px(f32::NAN, 1.0), 8);
+    }
+
+    /// Art drawn into a box fills the box, its bounds stretched to the box's proportions, as the
+    /// art's map scales it; art with no area draws nothing.
+    #[test]
+    fn mapped_art_fills_its_box_in_the_box_s_proportions() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Wide"})).unwrap();
+        let doc = &*s.doc().unwrap().doc;
+        let art = vectorcraft_effects::graphic_bounds(doc, "Wide").expect("the art's bounds");
+        let mut r = vectorcraft_render::Renderer::new();
+        // A square box draws the 2:1 art stretched to fill it, as its map scales it.
+        let img = render_art(&mut r, doc, "Wide", art, (40, 40)).expect("the art");
+        let (painted, red) = painted(&img);
+        assert!(red * 10 >= 40 * 40 * 9 && red == painted, "{painted} painted, {red} red");
+        assert!(render_art(&mut r, doc, "Wide", vectorcraft_geom::Rect::new(0.0, 0.0, 0.0, 10.0), (40, 40)).is_none());
     }
 
     /// A symbol that nests another (a library's included) shows the nested art in its
@@ -813,13 +1013,14 @@ mod tests {
         let doc = &app.session.active().unwrap().doc;
         let first = doc.layers[0].children().unwrap().first().unwrap();
         assert!(matches!(first.kind, NodeKind::SymbolInstance { .. }), "the art became an instance");
-        // Dragging the symbol's tile out of the panel carries the symbol.
+        // Dragging the symbol's tile out of the panel carries the symbol and its document.
         frame(&ctx, &mut app, vec![]);
         let tile = pos2(26.0, 26.0);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol(names[0].clone())));
+        let document = app.session.active().unwrap().uid;
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: names[0].clone() }));
     }
 
     /// One headless frame of the panel menu; returns its painted labels.
@@ -836,6 +1037,249 @@ mod tests {
         let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
         menu_frame(ctx, app, vec![egui::Event::PointerMoved(item), button(item, true)]);
         menu_frame(ctx, app, vec![button(item, false)]);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held.
+    fn click_menu_held(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        click_menu_held_then(ctx, app, label, modifiers, vec![]);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held, `after` following the release in
+    /// its frame.
+    fn click_menu_held_then(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
+        let held = egui::Event::ModifiersChanged(modifiers);
+        let labels = menu_frame(ctx, app, vec![held.clone()]);
+        let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
+        let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
+        menu_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(item), press(true)]);
+        let mut last = vec![held, press(false)];
+        last.extend(after);
+        menu_frame(ctx, app, last);
+    }
+
+    /// Redefine Symbol in the panel menu with Shift held updates the symbol and leaves the
+    /// selected art as ordinary art, still selected; without Shift the art becomes an instance.
+    #[test]
+    fn shift_redefine_symbol_in_the_menu_keeps_the_art_as_ordinary_art() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let rect = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        let dot_art = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbols.iter().find(|s| s.name == "Dot").map(|s| s.art.clone());
+        let before = dot_art(&app);
+        click_menu_held(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::SHIFT);
+        assert_ne!(dot_art(&app), before, "Dot is redefined");
+        assert_eq!(art(&app, "Dot"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        click_menu_held(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::NONE);
+        assert_eq!(art(&app, "Dot"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// `leaf_and_dot` with a selected 60 × 20 rectangle; returns its id.
+    fn leaf_dot_and_rect() -> (VectorcraftApp, NodeId) {
+        let mut app = leaf_and_dot();
+        let rect = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        (app, rect)
+    }
+
+    /// New Symbol… in the panel menu with Shift held opens Symbol Options, and its OK makes the
+    /// symbol and leaves the selected art as ordinary art, still selected, in one undo step, though
+    /// Shift is let go before OK; Cancel makes no symbol. Without Shift, OK makes the art an
+    /// instance.
+    #[test]
+    fn shift_new_symbol_in_the_menu_keeps_the_art_as_ordinary_art() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "Cancel makes no symbol");
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        menu_frame(&ctx, &mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        let undo = undo_len(&app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::NONE);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// Clicks the panel's New Symbol button with `modifiers` held.
+    fn click_new(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        click_button_then(app, "New Symbol", modifiers, vec![]);
+    }
+
+    /// Clicks the panel's button labeled `label` with `modifiers` held, `after` following the
+    /// release in its frame.
+    fn click_button_then(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, app, vec![], modifiers);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        let mut events = vec![egui::Event::PointerMoved(at), press(true), press(false)];
+        events.extend(after);
+        frame_held(&ctx, app, events, modifiers);
+    }
+
+    /// Shift held as the primary button goes up on New Symbol, on the panel's button or in its
+    /// menu, or on Redefine Symbol in the menu, keeps the selected art as ordinary art, though Shift
+    /// is let go later in the same frame. Alt held as the button goes up on Delete Symbol deletes
+    /// an unused symbol without asking, in the same case.
+    #[test]
+    fn shift_or_alt_let_go_after_the_release_in_the_same_frame_still_counts() {
+        let let_go = || vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        let menu_ctx = || {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx
+        };
+        let made = ["Leaf", "Dot", "New Symbol"];
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift makes the symbol");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT, let_go());
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), made, "New Symbol button with Shift and Alt makes the symbol");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift and Alt: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_menu_held_then(&menu_ctx(), &mut app, "New Symbol…", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), made, "New Symbol… with Shift makes the symbol");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol… with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        let dot_art = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbols.iter().find(|s| s.name == "Dot").map(|s| s.art.clone());
+        let before = dot_art(&app);
+        click_menu_held_then(&menu_ctx(), &mut app, "Redefine Symbol", egui::Modifiers::SHIFT, let_go());
+        assert_ne!(dot_art(&app), before, "Redefine Symbol with Shift redefines Dot");
+        assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift: the rectangle stays ordinary art");
+        let mut app = leaf_and_dot();
+        click_button_then(&mut app, "Delete Symbol", egui::Modifiers::ALT, let_go());
+        assert!(app.ui.dialog.is_none(), "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
+    }
+
+    /// The New Symbol button with Shift held opens Symbol Options, whose OK keeps the selected art
+    /// as ordinary art; with Shift and Alt it makes the symbol at once under the default name and
+    /// keeps the art. Alt alone still makes the art an instance at once.
+    #[test]
+    fn shift_new_symbol_button_keeps_the_art_with_or_without_alt() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        click_new(&mut app, egui::Modifiers::SHIFT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
+        assert_eq!(symbols(&mut app).len(), 2, "no symbol before OK");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        let undo = undo_len(&app);
+        click_new(&mut app, egui::Modifiers::SHIFT | egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol", "New Symbol 2"]);
+        assert_eq!(art(&app, "New Symbol 2"), (0, 1), "Shift and Alt: the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        click_new(&mut app, egui::Modifiers::ALT);
+        assert_eq!(art(&app, "New Symbol 3"), (1, 0), "Alt alone: the rectangle becomes an instance");
+    }
+
+    /// The center of the panel's Symbol Options button, and of Break Link to Symbol and New Symbol
+    /// beside it, in a frame of `app`.
+    fn options_button(app: &mut VectorcraftApp) -> (Pos2, Pos2, Pos2) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let found = clickable(&frame_held(&ctx, app, vec![], egui::Modifiers::NONE));
+        let at = |label: &str| found.iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        (at("Break Link to Symbol"), at("Symbol Options"), at("New Symbol"))
+    }
+
+    /// Clicks the panel at `at` with `modifiers` held.
+    fn click_at(app: &mut VectorcraftApp, at: Pos2, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        frame_held(&ctx, app, vec![], modifiers);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+    }
+
+    /// The bottom bar's Symbol Options button sits between Break Link to Symbol and New Symbol and
+    /// opens Symbol Options on the current symbol, as the panel menu's item does, with or without
+    /// Alt, and adds no undo step; in a document without symbols it is disabled and opens nothing.
+    #[test]
+    fn symbol_options_button_edits_the_current_symbol() {
+        let mut app = leaf_and_dot();
+        app.run("select.all", json!({})).unwrap();
+        let (break_link, options, new) = options_button(&mut app);
+        assert!(break_link.x < options.x && options.x < new.x, "Break Link, Symbol Options, New Symbol: {break_link:?} {options:?} {new:?}");
+        let undo = undo_len(&app);
+        for (current, modifiers) in [("Dot", egui::Modifiers::NONE), ("Leaf", egui::Modifiers::ALT)] {
+            app.run("symbol.setCurrent", json!({ "name": current })).unwrap();
+            click_at(&mut app, options, modifiers);
+            let d = app.ui.dialog.as_ref().expect("Symbol Options opens");
+            assert_eq!(d.kind, crate::dialogs::symbol_options::KIND);
+            assert_eq!((d.fields.get("name"), d.fields.get("__edit")), (Some(&json!(current)), Some(&json!(true))), "{modifiers:?}");
+            crate::dialogs::cancel(&mut app);
+        }
+        assert_eq!(undo_len(&app), undo, "opening the dialog adds no undo step");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+        let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+        empty.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        for (app, disabled) in [(&mut app, false), (&mut empty, true)] {
+            let out = frame_held(&ctx, app, vec![], egui::Modifiers::NONE);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let button = &nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Symbol Options")).expect("a Symbol Options button").1;
+            assert_eq!(button.is_disabled(), disabled, "disabled without a current symbol");
+        }
+        click_at(&mut empty, options, egui::Modifiers::NONE);
+        assert_eq!(dialog_kind(&empty), None, "no symbol, no dialog");
+    }
+
+    /// Art dropped on the panel with Shift held as the primary button goes up becomes a new
+    /// symbol and stays ordinary art, still selected, though Shift is let go later in the same
+    /// frame; dropped without Shift, it becomes an instance.
+    #[test]
+    fn shift_art_drop_on_the_panel_keeps_the_art_as_ordinary_art() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        let at = pos2(180.0, 60.0);
+        let release = |modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::SHIFT);
+        let undo = undo_len(&app);
+        let let_go = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+        frame_held(&ctx, &mut app, vec![release(egui::Modifiers::SHIFT), let_go], egui::Modifiers::SHIFT);
+        assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+        frame_held(&ctx, &mut app, vec![release(egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// `ui.symbolOptions` takes `keepArt` only as true or false, and only for a new symbol.
+    #[test]
+    fn symbol_options_checks_keep_art() {
+        let (mut app, _) = leaf_dot_and_rect();
+        for bad in [json!("yes"), json!(1)] {
+            let e = app.run("ui.symbolOptions", json!({ "keepArt": bad })).unwrap_err();
+            assert!(e.contains("`keepArt` must be true or false"), "{bad}: {e}");
+        }
+        let e = app.run("ui.symbolOptions", json!({"edit": true, "name": "Dot", "keepArt": true})).unwrap_err();
+        assert!(e.contains("only to a new symbol"), "{e}");
+        assert_eq!(dialog_kind(&app), None);
+        app.run("ui.symbolOptions", json!({"edit": true, "name": "Dot", "keepArt": false})).unwrap();
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
     }
 
     /// #4918: Select All Unused picks the symbols nothing places, Delete Symbol asks once and
@@ -1006,6 +1450,134 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(false));
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], false);
+    }
+
+    /// Does the selection hold a symbol instance that `wanted` takes, found by walking every
+    /// selected subtree on each call: what the cached flags must match.
+    fn walked(app: &VectorcraftApp, wanted: impl Fn(&Node) -> bool) -> bool {
+        app.session.active().is_some_and(|st| {
+            st.selection.objects.iter().any(|id| {
+                let mut any = false;
+                if let Some(n) = st.doc.node(*id) {
+                    n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }) && wanted(c));
+                }
+                any
+            })
+        })
+    }
+
+    /// Any instance, one with appearance changes, one Reset Transformation changes: walked again.
+    fn walked_flags(app: &VectorcraftApp) -> [bool; 3] {
+        let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return [false; 3] };
+        [
+            walked(app, |_| true),
+            walked(app, |c| !c.extras().symbol_overrides.is_empty()),
+            walked(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c)),
+        ]
+    }
+
+    fn cached_flags(app: &mut VectorcraftApp) -> [bool; 3] {
+        [has_instances_selected(app), changed_instances_selected(app), transformed_instances_selected(app)]
+    }
+
+    fn scans() -> usize {
+        INSTANCE_SCANS.with(std::cell::Cell::get)
+    }
+
+    /// The Symbols and Properties panels' instance flags (Break Link, Reset Symbol Instance and the
+    /// Properties panel's Reset, Reset Transformation) are those a walk of the selection gives, for
+    /// plain, changed, scaled and grouped instances, several selected objects, nothing selected,
+    /// Undo and another document; the selection is walked once per document revision, however
+    /// often they are read.
+    #[test]
+    fn instance_flags_are_found_once_per_revision_and_match_a_walk_of_the_selection() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let id = |v: Value| v["id"].as_u64().unwrap();
+        let rect = id(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        let second = id(app.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})).unwrap());
+        let other = id(app.run("shape.rectangle", json!({"x": 300, "y": 10, "width": 40, "height": 40})).unwrap());
+        // Reads every flag several times; the walk runs only when the revision changed.
+        let check = |app: &mut VectorcraftApp, want: [bool; 3], what: &str| {
+            let before = scans();
+            for _ in 0..3 {
+                assert_eq!(cached_flags(app), want, "{what}");
+            }
+            assert_eq!(walked_flags(app), want, "{what}: a walk of the selection agrees");
+            assert!(scans() - before <= 1, "{what}: walked {} times", scans() - before);
+        };
+        app.run("select.set", json!({"ids": [rect]})).unwrap();
+        check(&mut app, [false; 3], "no instance");
+        // Two objects, so the instance's art is a group whose first object can be painted.
+        let inst = id(app.run("symbol.new", json!({"name": "S", "ids": [rect, second], "type": "dynamic"})).unwrap());
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        check(&mut app, [true, false, false], "a plain instance");
+        app.run("symbol.instance.setAppearance", json!({"id": inst, "path": [0], "fill": "#ff0000"})).unwrap();
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        check(&mut app, [true, true, false], "an instance with appearance changes");
+        let scaled = id(app.run("symbol.place", json!({"name": "S", "x": 200, "y": 100})).unwrap());
+        app.run("select.set", json!({"ids": [scaled]})).unwrap();
+        app.run("object.scale", json!({"sx": 150, "sy": 50})).unwrap();
+        check(&mut app, [true, false, true], "a scaled instance");
+        app.run("select.set", json!({"ids": [scaled, other]})).unwrap();
+        let group = id(app.run("object.group", json!({})).unwrap());
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        check(&mut app, [true, false, true], "an instance in a selected group");
+        app.run("select.set", json!({"ids": [inst, group]})).unwrap();
+        check(&mut app, [true, true, true], "several selected objects");
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        check(&mut app, [false; 3], "select.set to a path");
+        app.run("select.none", json!({})).unwrap();
+        check(&mut app, [false; 3], "nothing selected");
+        // Undo takes the group apart again.
+        app.run("edit.undo", json!({})).unwrap();
+        let undone = walked_flags(&app);
+        check(&mut app, undone, "after Undo");
+        // At one revision the walk runs once; a new revision walks again.
+        app.run("select.set", json!({"ids": [inst, scaled]})).unwrap();
+        let before = scans();
+        cached_flags(&mut app);
+        cached_flags(&mut app);
+        assert_eq!(scans(), before + 1);
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        cached_flags(&mut app);
+        assert_eq!(scans(), before + 2);
+        // Another document has its own uid, so its flags are found again.
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let plain = id(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        app.run("select.set", json!({"ids": [plain]})).unwrap();
+        check(&mut app, [false; 3], "another document");
+    }
+
+    /// The Properties panel (its Reset quick action) and the Symbols panel (Break Link) share one
+    /// walk of the selection while the document does not change.
+    #[test]
+    fn properties_and_symbols_panels_walk_the_selection_once_per_revision() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let rect = |app: &mut VectorcraftApp, x: f64| {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap()
+        };
+        let ids = [rect(&mut app, 10.0), rect(&mut app, 60.0)];
+        let inst = app.run("symbol.new", json!({"name": "S", "ids": ids, "type": "dynamic"})).unwrap()["id"].as_u64().unwrap();
+        app.run("symbol.instance.setAppearance", json!({"id": inst, "path": [0], "fill": "#ff0000"})).unwrap();
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let before = scans();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::properties::show(&mut app, ui));
+        out.textures_delta.clear();
+        assert_eq!(scans(), before + 1, "the Properties panel reads the flags");
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                super::super::properties::show(&mut app, ui);
+                show(&mut app, ui);
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(scans(), before + 1, "one walk for both panels over four frames");
+        assert_eq!(cached_flags(&mut app), [true, true, false]);
+        assert_eq!(scans(), before + 1);
     }
 
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
@@ -1439,12 +2011,7 @@ mod tests {
 
     /// Clicks the panel's Delete Symbol button with `modifiers` held.
     fn click_delete(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let out = frame_held(&ctx, app, vec![], modifiers);
-        let at = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+        click_button_then(app, "Delete Symbol", modifiers, vec![]);
     }
 
     /// Clicks the panel menu's Delete Symbol item.
@@ -1979,7 +2546,12 @@ mod tests {
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from), button(from, true)]);
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
-            assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())), "{view}");
+            let document = uid(&app).expect("an active document");
+            assert_eq!(
+                egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(),
+                Some(&PanelDrag::Symbol { document, name: "Leaf".into() }),
+                "{view}"
+            );
             let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(new.center())], egui::Modifiers::NONE);
             assert!(outlined(&out, new), "{view}: outlined while Leaf is held over it");
             frame(&ctx, &mut app, vec![button(new.center(), false)]);
@@ -2008,14 +2580,14 @@ mod tests {
         let undo = app.session.active().unwrap().history.undo.len();
         let ctx = egui::Context::default();
         // The payloads are set directly, as if dragged from this document's panel.
-        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let document = uid(&app).expect("an active document");
         let new = button_rect(&ctx, &mut app, "New Symbol");
         let elsewhere = new.center() - vec2(0.0, 60.0);
         let cases = [
             ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, new.center()),
             ("art", PanelDrag::Art(vec![leaf]), new.center()),
-            ("a stale name", PanelDrag::Symbol("Gone".into()), new.center()),
-            ("a symbol released elsewhere", PanelDrag::Symbol("Leaf".into()), elsewhere),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, new.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Leaf".into() }, elsewhere),
         ];
         for (case, drag, at) in cases {
             egui::DragAndDrop::set_payload(&ctx, drag);
@@ -2042,7 +2614,8 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        let document = uid(&app).expect("an active document");
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
         // While Leaf is held, a new document with a Leaf of its own becomes active.
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
@@ -2069,7 +2642,8 @@ mod tests {
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
         let held = frame_held(ctx, app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE);
-        frame_held(ctx, app, vec![button(to, false)], modifiers);
+        let release = egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        frame_held(ctx, app, vec![release], modifiers);
         held
     }
 
@@ -2222,14 +2796,14 @@ mod tests {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         // The payloads are set directly, as if dragged from this document's panel.
-        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let document = uid(&app).expect("an active document");
         let trash = button_rect(&ctx, &mut app, "Delete Symbol");
         let elsewhere = trash.center() - vec2(0.0, 60.0);
         let cases = [
             ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, trash.center()),
             ("art", PanelDrag::Art(vec![leaf]), trash.center()),
-            ("a stale name", PanelDrag::Symbol("Gone".into()), trash.center()),
-            ("a symbol released elsewhere", PanelDrag::Symbol("Dot".into()), elsewhere),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, trash.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Dot".into() }, elsewhere),
         ];
         for (case, drag, at) in cases {
             egui::DragAndDrop::set_payload(&ctx, drag);
@@ -2246,7 +2820,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
         app.run("symbol.delete", json!({"name": "Leaf"})).unwrap();
         let undo = app.session.active().unwrap().history.undo.len();
         let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash.center())], egui::Modifiers::NONE);
@@ -2258,7 +2832,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Dot".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Dot".into() }));
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
         app.run("symbol.new", json!({"name": "Dot"})).unwrap();
@@ -2272,6 +2846,177 @@ mod tests {
         assert_eq!(app.session.active().unwrap().history.undo.len(), other, "another document: no undo step");
         assert!(app.session.set_active(0));
         assert_eq!(symbols(&mut app), ["Dot"], "the first document keeps its Dot");
+    }
+
+    /// The rects `out` outlines as drop targets (1.5 pt strokes).
+    fn drop_outlines(out: &egui::FullOutput) -> Vec<Rect> {
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if (r.stroke.width - 1.5).abs() < 0.01 => Some(r.rect),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where symbol `name`'s tile or row is in the panel: its name in the list views, its tile (the
+    /// 44 pt squares, in panel order) in Thumbnail View.
+    fn item_at(ctx: &egui::Context, app: &mut VectorcraftApp, name: &str) -> Pos2 {
+        if app.ui.symbols_view != View::Thumbnail {
+            return panel_labels(ctx, app, &[name]).first().map(|l| l.1).unwrap_or_else(|| panic!("a {name} row"));
+        }
+        let out = frame_held(ctx, app, vec![], egui::Modifiers::NONE);
+        let tiles: Vec<Rect> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if (r.rect.width() - 44.0).abs() < 0.01 && (r.rect.height() - 44.0).abs() < 0.01 => Some(r.rect),
+                _ => None,
+            })
+            .collect();
+        let i = symbols(app).iter().position(|n| n == name).unwrap_or_else(|| panic!("a {name} symbol"));
+        tiles.get(i).map(|r| r.center()).unwrap_or_else(|| panic!("a {name} tile in {tiles:?}"))
+    }
+
+    /// The art of symbol `name` in the active document.
+    fn symbol_art(app: &VectorcraftApp, name: &str) -> Arc<Node> {
+        let doc = &app.session.active().unwrap().doc;
+        doc.symbols.iter().find(|s| s.name == name).map(|s| s.art.clone()).unwrap_or_else(|| panic!("a {name} symbol"))
+    }
+
+    fn undo_len(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Art dragged off the canvas and released with Alt (Option on macOS) held on a symbol's tile
+    /// or row, in each view, redefines that symbol and not the current one: its instances take the
+    /// art, the art becomes an instance of it, and no symbol is added, in one undo step. Only that
+    /// tile or row is outlined while the art is held over it with Alt.
+    #[test]
+    fn alt_art_drop_on_a_symbol_redefines_that_symbol_in_one_step() {
+        for view in ["thumbnail", "smallList", "largeList"] {
+            let mut app = leaf_and_dot();
+            app.run("ui.panelView", json!({"panel": "symbols", "view": view})).unwrap();
+            let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+            let (leaf, dot) = (symbol_art(&app, "Leaf"), symbol_art(&app, "Dot"));
+            let placed = instance_of(&app, "Leaf").expect("a Leaf instance");
+            let undo = undo_len(&app);
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let (at, other) = (item_at(&ctx, &mut app, "Leaf"), item_at(&ctx, &mut app, "Dot"));
+            widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::ALT);
+            let outlines = drop_outlines(&out);
+            assert_eq!(outlines.len(), 1, "{view}: only the Leaf item is outlined: {outlines:?}");
+            assert!(outlines[0].contains(at) && !outlines[0].contains(other), "{view}: {outlines:?}");
+            frame_held(&ctx, &mut app, vec![alt_release(at)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{view}: no symbol added");
+            assert_eq!(undo_len(&app), undo + 1, "{view}: one undo step");
+            // The Leaf instance there was takes the 40 × 20 rectangle's shape, where the old art was square.
+            let doc = app.session.active().unwrap().doc.clone();
+            let shape = doc.node(placed).and_then(|n| n.geometric_bounds()).map(|b| b.width() / b.height());
+            assert!(shape.is_some_and(|r| (r - 2.0).abs() < 1e-6), "{view}: Leaf is the dropped art: {shape:?}");
+            assert!(Arc::ptr_eq(&dot, &symbol_art(&app, "Dot")), "{view}: the current symbol Dot is unchanged");
+            assert_eq!(art(&app, "Leaf"), (2, 0), "{view}: the art became a Leaf instance");
+            app.run("edit.undo", json!({})).unwrap();
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{view}: undo restores Leaf");
+            assert_eq!(art(&app, "Leaf"), (1, 1), "{view}: undo restores the art");
+            app.run("edit.redo", json!({})).unwrap();
+            assert_eq!(art(&app, "Leaf"), (2, 0), "{view}: redo");
+        }
+    }
+
+    /// Alt held as the primary button goes up redefines the symbol, though Alt is let go later in
+    /// the same frame.
+    #[test]
+    fn alt_let_go_after_the_release_in_the_same_frame_still_redefines() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::ALT);
+        frame_held(&ctx, &mut app, vec![alt_release(at), egui::Event::ModifiersChanged(egui::Modifiers::NONE)], egui::Modifiers::ALT);
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "no symbol added");
+        assert!(!Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is redefined");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+    }
+
+    /// Art released on a symbol without Alt makes a new symbol, as a drop elsewhere on the list
+    /// does, and leaves the symbol under the pointer as it was; nothing is outlined but the list.
+    #[test]
+    fn a_plain_art_drop_on_a_symbol_makes_a_new_symbol() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+        let outlines = drop_outlines(&out);
+        assert!(outlines.len() == 1 && outlines[0].width() > 100.0, "the list is outlined, not the tile: {outlines:?}");
+        frame(&ctx, &mut app, vec![button(at, false)]);
+        assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
+        assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is unchanged");
+    }
+
+    /// An Alt drop that cannot redefine the symbol under the pointer changes nothing, makes no new
+    /// symbol and adds no undo step: art of another document, objects the document no longer has,
+    /// no objects, and a release away from the panel are not outlined, and art holding an instance
+    /// of the symbol is refused when it is released.
+    #[test]
+    fn an_alt_art_drop_that_cannot_redefine_changes_nothing() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let instance = instance_of(&app, "Leaf").expect("a Leaf instance");
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        let doc = uid(&app).unwrap();
+        let away = pos2(230.0, 395.0);
+        let cases = [
+            ("another document's art", doc + 1, vec![NodeId(shape)], at, false),
+            ("objects the document lacks", doc, vec![NodeId(u64::MAX)], at, false),
+            ("no objects", doc, vec![], at, false),
+            ("a release away from the panel", doc, vec![NodeId(shape)], away, false),
+            ("a Leaf instance", doc, vec![instance], at, true),
+        ];
+        for (case, from, ids, to, outline) in cases {
+            widgets::drag_art(&ctx, from, ids);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::ALT);
+            assert_eq!(drop_outlines(&out).len(), usize::from(outline), "{case}: {:?}", drop_outlines(&out));
+            frame_held(&ctx, &mut app, vec![alt_release(to)], egui::Modifiers::ALT);
+            egui::DragAndDrop::clear_payload(&ctx);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}: no symbol added");
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{case}: Leaf is unchanged");
+            assert_eq!(undo_len(&app), undo, "{case}: no undo step");
+        }
+    }
+
+    /// Art held over a symbol, with Alt or without, and released with the secondary button is not
+    /// dropped: no symbol is redefined or added and no undo step is added.
+    #[test]
+    fn a_secondary_button_release_drops_no_art() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        let secondary = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() };
+        for (case, modifiers) in [("with Alt", egui::Modifiers::ALT), ("without Alt", egui::Modifiers::NONE)] {
+            widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], modifiers);
+            assert_eq!(drop_outlines(&out).len(), 1, "{case}: the art is held over a target");
+            frame_held(&ctx, &mut app, vec![secondary.clone()], modifiers);
+            egui::DragAndDrop::clear_payload(&ctx);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}: no symbol added");
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{case}: Leaf is unchanged");
+            assert_eq!(undo_len(&app), undo, "{case}: no undo step");
+        }
     }
 
     /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.

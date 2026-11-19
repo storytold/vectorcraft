@@ -17,6 +17,7 @@ pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
 pub mod css_properties;
+pub mod discover;
 pub mod doc_info;
 pub mod flattener_preview;
 pub mod glyphs;
@@ -37,7 +38,9 @@ pub mod opentype;
 pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
+pub mod preflight;
 pub mod properties;
+pub mod retype;
 pub mod script_console;
 pub mod separations;
 pub mod stroke;
@@ -51,6 +54,8 @@ pub mod transform;
 pub mod transparency;
 pub mod variables;
 
+use std::sync::Arc;
+
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -62,9 +67,11 @@ use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
 use crate::{VectorcraftApp, icons};
 
-/// The first selected node (cloned), if any.
-pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    first_node(app).cloned()
+/// The first selected node, as the `Arc` the document holds, if any. It does not change with later
+/// edits: read it again after one.
+pub fn first_selected(app: &VectorcraftApp) -> Option<Arc<Node>> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| layers::node_arc(&st.doc, *id))
 }
 
 /// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
@@ -183,17 +190,22 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "colorThemes" => color_themes::show(app, ui),
         color_wheel::ID => color_wheel::show(app, ui),
         links::ID => links::show(app, ui),
+        preflight::ID => preflight::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
+        discover::ID => discover::show(app, ui),
+        retype::ID => retype::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
+        crate::addons::packaging::preview::ID => crate::addons::packaging::preview::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
+        crate::addons::units::ID => crate::addons::units::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
@@ -239,12 +251,14 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "attributes" => attributes::menu(app, ui),
         svg_interactivity::ID => svg_interactivity::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        color_wheel::ID => color_wheel::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
         css_properties::ID => css_properties::menu(app, ui),
         variables::ID => variables::menu(app, ui),
         script_console::ID => script_console::menu(app, ui),
+        retype::ID => retype::menu(app, ui),
         "actions" => actions::menu(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::panel_menu(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
@@ -327,9 +341,10 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
 /// document revision, Appearance panel item and picked gradient mesh points (picking points
 /// changes no revision).
 pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
-    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>);
+    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>, &'static str);
     let Some(st) = app.session.active() else { return (false, false) };
-    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points());
+    // The tool too: while the Live Paint Bucket is active the proxies show its colors.
+    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points(), app.session.tool_id());
     match pstate::<Option<(Key, (bool, bool))>>(ctx, "proxy-mixed") {
         Some((k, mixed)) if k == key => mixed,
         _ => {
@@ -352,8 +367,13 @@ pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
 /// Which Stroke panel values the selection doesn't share and whether Align Stroke applies
 /// ([`vectorcraft_engine::DocState::stroke_mixed`]), cached per document revision. While the Type
 /// tool edits text, the selected characters' stroke shows as it is, and aligns to their glyphs.
+/// While the Live Paint Bucket is active, the panel shows the one stroke it paints with, as it does
+/// with nothing selected.
 pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeMixed {
     if character::text_editing(app).is_some() {
+        return StrokeMixed { can_align: true, ..Default::default() };
+    }
+    if app.session.tool_id() == "livePaintBucket" {
         return StrokeMixed { can_align: true, ..Default::default() };
     }
     let Some(st) = app.session.active() else { return StrokeMixed::default() };
@@ -492,12 +512,14 @@ pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params:
     match phase {
         Live::Idle => {}
         Live::Dragging | Live::Released => {
-            if app.session.begin_interaction(label).is_ok() {
+            if app.begin_interaction(label).is_ok() {
                 if let Err(e) = app.session.preview(cmd, &params) {
                     app.ui.status = e.to_string();
                 }
-                if phase == Live::Released {
-                    app.session.commit_interaction().ok();
+                if phase == Live::Released
+                    && let Err(e) = app.session.commit_interaction()
+                {
+                    app.ui.status = e.to_string();
                 }
                 app.sync_views();
             } else if phase == Live::Released {
@@ -794,6 +816,12 @@ mod tests_blend;
 mod tests_brush_libraries;
 #[cfg(test)]
 mod tests_color_wheel;
+#[cfg(test)]
+mod tests_color_wheel_box;
+#[cfg(test)]
+mod tests_color_wheel_harmony;
+#[cfg(test)]
+mod tests_color_wheel_vision;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]

@@ -532,7 +532,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let inner = ui.available_width() - 10.0;
                 for (cat, gs) in groups() {
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(format!("{}:", tl!(cat))).size(12.0).color(t.text_strong));
+                    ui.label(egui::RichText::new(crate::i18n::colon(tl!(cat))).size(12.0).color(t.text_strong));
                     ui.add_space(4.0);
                     for g in gs {
                         // A flyout group: its tools framed together, as one toolbar button holds them.
@@ -694,13 +694,18 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     if on {
         ui.painter().rect_filled(fill, 2.0, t.selection);
     } else if resp.hovered() {
-        ui.painter().rect_filled(fill, 2.0, t.hover);
+        // A dimmed row can't be dragged in again, so its hover is a recess in the panel's darker
+        // fill rather than the lighter hover fill: over that fill the dim text falls to 4.3:1 in
+        // the default theme, under the 4.5:1 it is drawn for (#8294).
+        ui.painter().rect_filled(fill, 2.0, if dimmed { t.panel_darker } else { t.hover });
     }
-    // The active tool's row is lit, dimmed or not.
+    // The active tool's row is lit, dimmed or not. A tool the toolbar holds is drawn in the dim
+    // text colour, not the disabled colour: at the drawer's 12.5 px the disabled colour is
+    // unreadable against the panel (#8294).
     let color = if on {
         t.text_strong
     } else if dimmed {
-        t.text_disabled
+        t.text_dim
     } else {
         t.text
     };
@@ -709,13 +714,7 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     let painter = ui.painter().with_clip_rect(rect);
     let shortcut = crate::shortcut_editor::tool_shortcut(tool.id).map(crate::shortcut_editor::as_typed);
     let keys_w = shortcut.as_ref().map_or(0.0, |k| {
-        let keys = if on {
-            t.text_strong
-        } else if dimmed {
-            t.text_disabled
-        } else {
-            t.text_dim
-        };
+        let keys = if on { t.text_strong } else { t.text_dim };
         let g = painter.layout_no_wrap(k.to_string(), egui::FontId::proportional(11.5), keys);
         let w = g.size().x;
         painter.galley(pos2(rect.right() - 10.0 - w, rect.center().y - g.size().y / 2.0), g, keys);

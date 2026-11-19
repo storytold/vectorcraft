@@ -188,7 +188,7 @@ fn angle_profiles_join_samples_the_shorter_way_round() {
 #[test]
 fn strokes_without_pressure_round_trip_unchanged() {
     let json = serde_json::to_value(StrokeLayer::new(Paint::None, 2.0)).unwrap();
-    for key in ["pressure", "tilt", "bearing", "rotation"] {
+    for key in ["pressure", "tilt", "bearing", "rotation", "wheel"] {
         assert!(json.get(key).is_none(), "{key}");
     }
     let st: StrokeLayer = serde_json::from_value(json).unwrap();
@@ -199,19 +199,21 @@ fn strokes_without_pressure_round_trip_unchanged() {
     let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
     ap.stroke_mut().unwrap().pressure = Some(PressureProfile::sample());
     assert_eq!(ap.without_pressure().stroke().unwrap().pressure, None);
-    // The pen's tilt, bearing and rotation load, save and stay behind the same way.
+    // The pen's tilt, bearing, rotation and wheel load, save and stay behind the same way.
     let posed = StrokeLayer {
         tilt: Some(PressureProfile::sample()),
         bearing: Some(AngleProfile::sample()),
         rotation: Some(AngleProfile { points: vec![(0.0, -45.0)] }),
+        wheel: Some(PressureProfile { points: vec![(0.0, 0.25), (1.0, 0.75)] }),
         ..back
     };
+    assert_eq!(serde_json::to_value(&posed).unwrap()["wheel"], serde_json::json!({"points": [[0.0, 0.25], [1.0, 0.75]]}));
     let again: StrokeLayer = serde_json::from_value(serde_json::to_value(&posed).unwrap()).unwrap();
     assert_eq!(again, posed);
     let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
     *ap.stroke_mut().unwrap() = posed;
     let st = ap.without_pressure().stroke().cloned().unwrap();
-    assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation), (None, None, None, None));
+    assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation, st.wheel), (None, None, None, None, None));
 }
 
 /// The Lens profile's widths at its middle, a quarter of the way along and past its end.
