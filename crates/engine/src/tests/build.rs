@@ -9491,9 +9491,12 @@ fn image_trace_split_view_keeps_and_validates_its_divider() {
     assert_eq!((back.node(g).unwrap().trace_view(), back.node(g).unwrap().trace_split()), (vectorcraft_doc::TraceView::Split, 0.25));
     // Bad dividers are refused and change nothing.
     let steps = s.doc().unwrap().history.undo.len();
-    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5])] {
+    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5]), json!(null)] {
         assert!(s.execute("imageTrace.setView", &json!({"view": "split", "split": bad})).is_err(), "{bad}");
     }
+    // A null divider with another view is refused too, and the view stays.
+    assert!(s.execute("imageTrace.setView", &json!({"view": "outlines", "split": null})).is_err());
+    assert_eq!(node(&s, g).trace_view(), vectorcraft_doc::TraceView::Split);
     assert_eq!((s.doc().unwrap().history.undo.len(), node(&s, g).trace_split()), (steps, 0.25));
     for edge in [0.0, 1.0] {
         s.execute("imageTrace.setView", &json!({"view": "split", "split": edge})).unwrap();

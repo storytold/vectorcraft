@@ -51,6 +51,80 @@ fn op_of(id: &str) -> Option<PathfinderOp> {
     PATHFINDER_EFFECTS.iter().find(|e| e.0 == id).map(|e| e.2)
 }
 
+/// Does effect `id` keep Pathfinder Options of its own ([`PathfinderEffectOptions`]): one of
+/// [`PATHFINDER_EFFECTS`] (Trap has options of its own)?
+pub fn takes_pathfinder_options(id: &str) -> bool {
+    op_of(id).is_some()
+}
+
+/// The parameters holding a Pathfinder effect's Pathfinder Options.
+pub const PATHFINDER_OPTION_KEYS: [&str; 3] = ["precision", "removeRedundantPoints", "removeUnpainted"];
+
+/// The range of a Pathfinder effect's `precision` (pt), the Pathfinder panel's range.
+pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=10.0;
+
+/// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
+macro_rules! options_doc {
+    () => {
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
+    };
+}
+
+/// The documentation of [`PATHFINDER_OPTION_KEYS`], shared by the Pathfinder effects' parameters.
+pub const PATHFINDER_OPTIONS_DOC: &str = options_doc!();
+
+/// The parameters of a Pathfinder effect other than Soft Mix.
+pub const PATHFINDER_PARAMS_DOC: &str = concat!("{", options_doc!(), "} (groups and layers: live Pathfinder over the members)");
+
+/// The parameters of Effect › Pathfinder › Soft Mix.
+pub const SOFT_MIX_PARAMS_DOC: &str = concat!(
+    "{mixingRate?: 1..100 % (50), ",
+    options_doc!(),
+    "} blend overlapping fills in CMYK bottom to top (groups and layers: live Pathfinder over the members)"
+);
+
+/// The Pathfinder Options a Pathfinder effect evaluates with, read from its parameters. An effect
+/// without them (saved before effects kept their own) evaluates as it did then: the default
+/// precision, with no points or pieces removed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PathfinderEffectOptions {
+    /// Refit tolerance of the results, in points ([`PATHFINDER_EFFECT_PRECISION`]).
+    pub precision: f64,
+    /// Drop anchors that don't change a result's shape.
+    pub remove_redundant_points: bool,
+    /// Divide and Outline leave out the pieces of members with no visible fill.
+    pub remove_unpainted: bool,
+}
+
+impl Default for PathfinderEffectOptions {
+    fn default() -> Self {
+        PathfinderEffectOptions { precision: po::DEFAULT_PRECISION, remove_redundant_points: false, remove_unpainted: false }
+    }
+}
+
+impl PathfinderEffectOptions {
+    /// The options in `p`: a missing or non-numeric value takes its default and a precision out of
+    /// range its nearest bound, so a live effect always evaluates.
+    pub fn from_params(p: &Value) -> Self {
+        let d = PathfinderEffectOptions::default();
+        let (lo, hi) = (*PATHFINDER_EFFECT_PRECISION.start(), *PATHFINDER_EFFECT_PRECISION.end());
+        PathfinderEffectOptions {
+            precision: crate::util::num(p, "precision", d.precision).clamp(lo, hi),
+            remove_redundant_points: crate::util::flag(p, "removeRedundantPoints", d.remove_redundant_points),
+            remove_unpainted: crate::util::flag(p, "removeUnpainted", d.remove_unpainted),
+        }
+    }
+
+    /// These options as the parameters [`PATHFINDER_OPTION_KEYS`] name.
+    pub fn to_params(self) -> Value {
+        serde_json::json!({
+            "precision": self.precision,
+            "removeRedundantPoints": self.remove_redundant_points,
+            "removeUnpainted": self.remove_unpainted,
+        })
+    }
+}
+
 /// Does `n` (a group or layer) carry a visible Pathfinder effect, or is it a compound shape?
 pub fn has_pathfinder(n: &Node) -> bool {
     n.is_compound_shape()
@@ -503,6 +577,23 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         out.extend(source.iter().skip(art).cloned());
         return Some(out);
     }
+    // When the group has a visible fill of its own, that fill paints its members' geometry, a
+    // compound shape's area included ([`evaluate_container`]), so Remove Unpainted Artwork keeps
+    // every Divide piece. Outline's open segments still go by their source's fill.
+    let own_fill = has_visible_fill(group);
+    // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
+    // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
+    let area_style = group.is_compound_shape().then(|| {
+        let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
+        Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
+    });
+    let style_of = |s: &Node| -> Option<Node> {
+        let a = area_style.as_ref().filter(|_| s.id == group.id && s.appearance.items.is_empty())?;
+        let mut a = a.clone();
+        (a.opacity, a.blend) = (s.opacity, s.blend);
+        Some(a)
+    };
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -535,6 +626,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
             continue;
         }
         let Some(op) = op_of(&e.id) else { continue };
+        let options = PathfinderEffectOptions::from_params(&e.params);
         let shape_mode =
             matches!(op, PathfinderOp::Unite | PathfinderOp::MinusFront | PathfinderOp::Intersect | PathfinderOp::Exclude | PathfinderOp::MinusBack);
         let nodes = SymbolNodes::default();
@@ -558,7 +650,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
                 let key = sources.len() as u64;
                 if let Some(top) = lv.pop() {
-                    shapes.push(po::Shape::new(po::unite_all(&refs), FillRule::NonZero, key));
+                    shapes.push(po::Shape::new(po::unite_all_with(&refs, options.precision), FillRule::NonZero, key));
                     sources.push(top);
                 }
             } else {
@@ -574,24 +666,40 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         if shapes.is_empty() {
             return Some(vec![]);
         }
+        // Remove Redundant Points: each result loses the anchors that don't change its shape.
+        let tidy = |path: PathData| if options.remove_redundant_points { po::remove_redundant_points(&path, options.precision) } else { path };
         stack = if op == PathfinderOp::SoftMix {
             let rate = mixing_rate(&e.params);
-            po::regions(&shapes)
+            po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(soft_mix_face(r.path, &r.sources, rate, &shapes, &sources)))
+                .map(|r| Arc::new(soft_mix_face(tidy(r.path), &r.sources, rate, &shapes, &sources)))
                 .collect()
         } else if op == PathfinderOp::HardMix {
-            po::regions(&shapes)
+            po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(hard_mix_face(r.path, &r.sources, &shapes, &sources)))
+                .map(|r| Arc::new(hard_mix_face(tidy(r.path), &r.sources, &shapes, &sources)))
                 .collect()
         } else {
-            po::pathfinder(op, &shapes)
+            // Divide and Outline Will Remove Unpainted Artwork: the pieces of members with no
+            // visible fill go.
+            let unpainted = options.remove_unpainted
+                && match op {
+                    PathfinderOp::Divide => !own_fill,
+                    PathfinderOp::Outline => true,
+                    _ => false,
+                };
+            let fill_sources: Vec<Option<Node>> = sources.iter().map(style_of).collect();
+            let fill_source = |k: u64| fill_sources[k as usize].as_ref().unwrap_or(&sources[k as usize]);
+            po::pathfinder_with(op, &shapes, options.precision)
                 .into_iter()
-                .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(styled(&sources[r.key as usize], r.path, op == PathfinderOp::Outline)))
+                .filter(|r| !r.path.is_empty() && !(unpainted && !has_visible_fill(fill_source(r.key))))
+                .map(|r| {
+                    let outline = op == PathfinderOp::Outline;
+                    let src = if outline { fill_source(r.key) } else { &sources[r.key as usize] };
+                    Arc::new(styled(src, tidy(r.path), outline))
+                })
                 .collect()
         };
     }
@@ -674,6 +782,11 @@ pub fn paints(item: &AppearanceItem) -> bool {
             AppearanceItem::Stroke(s) => s.width > 0.0,
             AppearanceItem::Fill(_) => true,
         }
+}
+
+/// Has `n` a visible fill that paints, as the Pathfinder panel's Remove Unpainted Artwork counts it?
+fn has_visible_fill(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none()))
 }
 
 /// Do the own fills or strokes of `n`, a group or layer, paint anything?

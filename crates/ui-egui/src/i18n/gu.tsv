@@ -283,6 +283,10 @@
 	Arc Lower…	નીચે આર્ક…
 	Arc Segment Tool Options	આર્ક સેગમેન્ટ ટૂલ વિકલ્પો
 	Arc Tool	આર્ક ટૂલ
+	Three-Point Arc Tool	ત્રણ-પૉઇન્ટ આર્ક ટૂલ
+	Three-Point Arc	ત્રણ-પૉઇન્ટ આર્ક
+	Arc too large	આર્ક ખૂબ મોટો છે
+	Third Point Sets Direction	ત્રીજો પૉઇન્ટ દિશા નક્કી કરે છે
 	Arc Upper…	ઉપર આર્ક…
 	Arch…	કમાન…
 	Arc…	આર્ક…
@@ -2036,6 +2040,12 @@
 	Knife	નાઇફ
 	Knockout Group	નૉકઆઉટ ગ્રૂપ
 	LZW Compression	LZW કમ્પ્રેશન
+	OKLCH Sliders	OKLCH સ્લાઇડર્સ
+	HSL Sliders	HSL સ્લાઇડર્સ
+	Chroma	ક્રોમા
+	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
+	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
+	Lightness	લાઇટનેસ
 	Lab Spot Colors:	Lab સ્પોટ રંગો:
 	Landscape	લેન્ડસ્કેપ
 	Language	ભાષા
@@ -3280,6 +3290,8 @@ arrowhead	Feather	પીંછું
 	Reselect	ફરી પસંદ કરો
 	Reset	રીસેટ કરો
 	Reset Bar Position	બાર સ્થિતિ રીસેટ કરો
+	Bar Actions	બાર ક્રિયાઓ
+	Reset Bar Actions	બાર ક્રિયાઓ રીસેટ કરો
 	Reset Bounding Box	બાઉન્ડિંગ બોક્સ રીસેટ કરો
 	Rotate Bounding Box	બાઉન્ડિંગ બોક્સ ફેરવો
 	Rotate Bounding Box…	બાઉન્ડિંગ બોક્સ ફેરવો…
@@ -3439,9 +3451,9 @@ arrowhead	Feather	પીંછું
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	લાઇન સેગમેન્ટના છેડાને એ રીતે સ્નેપ કરે છે કે તે નજીકના સીધા સેગમેન્ટને કાટખૂણે મળે.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	કેનવાસ પર દરેક સ્લાઇસનો નંબર તેના ઉપરના ડાબા ખૂણે એક બૉક્સમાં બતાવે છે; બંધ હોય ત્યારે પણ સ્લાઇસની રૂપરેખાઓ દેખાય છે.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	યુઝર અને ઑબ્જેક્ટ સ્લાઇસની રૂપરેખાઓ અને તેમના નંબર બૉક્સનો રંગ; ઑટો સ્લાઇસ તેની ઝાંખી છાયા વાપરે છે.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેની ભાષા કે કેસ ગમે તે હોય.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	ડેસ્કટોપ સંસ્કરણમાં, આ ફોલ્ડરના .wasm પ્લગ-ઇન્સ શરૂઆતમાં અને અહીં નવા ફોલ્ડર સાથે ઠીક પર ક્લિક કરો ત્યારે લોડ થાય છે, સેફ મોડ સિવાય; વેબ સંસ્કરણ તેમને લોડ કરતું નથી.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	સામાન્ય દરેક પ્લગ-ઇનની પોતાની મર્યાદાઓ રાખે છે; મોટું સાથે, પ્લગ-ઇન ફિલ્ટર અથવા આદેશ તેના ઇનપુટ માટેની સૂચનાઓ ઉપરાંત ઓછામાં ઓછી 250 મિલિયન સૂચનાઓ ચલાવી શકે છે. સમય મર્યાદા એ જ રહે છે.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	પ્લગ-ઇનના ઑબ્જેક્ટ ફિલ્ટરનું દરેક રન કેટલી સૂચનાઓ વાપરી શકે; મોટું સામાન્ય કરતાં વધુ મંજૂરી આપે છે, 60 સેકન્ડની એ જ મર્યાદા સાથે. ભારે ફિલ્ટર પોતાનું બજેટ રાખે છે.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	પ્રથમ સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	બીજી સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
@@ -3460,6 +3472,8 @@ arrowhead	Feather	પીંછું
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ઇન્ટરફેસની ભાષા; ઑટો સિસ્ટમની ભાષા વાપરે છે. તમે ભાષા પસંદ કરો કે તરત જ ડાયલોગ તે ભાષામાં બદલાય છે.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ઍનિમેટેડ ઝૂમ ફક્ત આ ચાલુ હોય ત્યારે જ કામ કરે છે; બંધ હોય ત્યારે, ઍનિમેટેડ ઝૂમ ઝાંખું થાય છે અને ઝૂમ ઍનિમેટ થતું નથી.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	વ્હીલથી ઝૂમ સરળતાથી સરકે છે, અને ઝૂમ ટૂલ તમે બાજુમાં ખેંચો અથવા દબાવી રાખો ત્યારે ઝૂમ કરે છે; બંધ હોય ત્યારે, ઝૂમ ટૂલ તમે ખેંચો તે વિસ્તાર પર ઝૂમ કરે છે.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	આગલી શરૂઆતથી, ડેસ્કટોપ સંસ્કરણ આ પ્રકારના ગ્રાફિક્સ પ્રોસેસર દ્વારા કેનવાસ બતાવે છે; આર્ટવર્ક હંમેશાં CPU પર દોરાય છે. સ્વચાલિત Windows અને macOS પર સંકલિત પ્રોસેસરને પસંદ કરે છે. વેબ સંસ્કરણ તેનો ઉપયોગ કરતું નથી.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	આગલી શરૂઆતથી, જ્યાં ગ્રાફિક્સ ડ્રાઇવર મંજૂરી આપે ત્યાં વિન્ડો ડિસ્પ્લેના રિફ્રેશની રાહ જોયા વિના દરેક ફ્રેમ બતાવે છે, સેકન્ડ દીઠ વધુમાં વધુ 240 ફ્રેમ.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	આગલી શરૂઆતથી, ડેસ્કટોપ સંસ્કરણ આ પ્રકારના ગ્રાફિક્સ પ્રોસેસરથી દોરે છે; સ્વચાલિત ડિસ્પ્લે ચલાવતા પ્રોસેસરને પસંદ કરે છે. વેબ સંસ્કરણ તેનો ઉપયોગ કરતું નથી.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	આગલી શરૂઆતથી, વિન્ડો ડિસ્પ્લે રિફ્રેશની રાહ જોયા વિના ફ્રેમ બતાવે છે, સેકન્ડમાં વધુમાં વધુ 240; બંધ હોય ત્યારે ગતિ ડિસ્પ્લે નક્કી કરે છે. શરૂઆતમાં સેટ કરેલો પ્રેઝન્ટ મોડ પ્રાથમિકતા ધરાવે છે.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	દરેક દસ્તાવેજ રાખે તે પૂર્વવત્ પગલાંની મહત્તમ સંખ્યા; ઓછી સંખ્યા ઠીક પર ક્લિક કરો ત્યારે સૌથી જૂનાં પગલાં દૂર કરે છે. પગલાં વધુ મેમરી લે ત્યારે વહેલાં પણ દૂર થઈ શકે છે.
@@ -5630,6 +5644,20 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Orbit Lines	ભ્રમણકક્ષાની રેખાઓ
+	Petal Garland	પાંખડીઓની માળા
+	Lattice Braid	જાળી વેણી
+	Facet Sweep	પાસાદાર રેખા
+	Artistic Brushes	કલાત્મક બ્રશ
+	Paint	રંગકામ
+	Flat Sweep	સપાટ લસરકો
+	Dry Drag	સૂકો ઘસારો
+	Loaded Stroke	ઘાટો પીંછીનો ઘસારો
+	Fan Sweep	પંખા જેવો લસરકો
+@msg	`at` must be "start" or "end"	`at` "start" અથવા "end" હોવું જોઈએ
+@msg	give exactly one of `through` and `toward`	`through` અને `toward` માંથી બરાબર એક આપો
+@msg	no arc fits these points: two are the same or all three lie on one line	આ પૉઇન્ટ્સમાં કોઈ આર્ક બેસતો નથી: બે એકસરખા છે અથવા ત્રણેય એક જ રેખા પર છે
+@msg	give `at` only with `toward`	`at` ફક્ત `toward` સાથે જ આપો
 	Engraving	કોતરણી
 	Fine Hatching	ઝીણી રેખાઓ
 	Dense Hatching	ગાઢ રેખાઓ

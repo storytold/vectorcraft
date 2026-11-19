@@ -839,6 +839,8 @@ digits	Malayalam	말라얄람어
 	Contextual Task Bar	상황별 작업 표시줄
 	Pin Bar Position	표시줄 위치 고정
 	Reset Bar Position	표시줄 위치 재설정
+	Bar Actions	표시줄 동작
+	Reset Bar Actions	표시줄 동작 재설정
 	Resize	크기 조절
 	Tools	도구
 	Toolbars	도구 모음
@@ -1226,6 +1228,10 @@ antiAlias	Sharp	날카롭게
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	모두에 적용(누락 {n}개 더 있음)
 	Arc	호
 	Arc Tool	호 도구
+	Three-Point Arc Tool	3점 호 도구
+	Three-Point Arc	3점 호
+	Arc too large	호가 너무 큽니다
+	Third Point Sets Direction	세 번째 점으로 방향 지정
 	Area / Path Type	영역/패스 문자
 	Area Graph Tool	영역 그래프 도구
 	Area Type Tool	영역 문자 도구
@@ -3383,9 +3389,10 @@ mark-style	Japanese	일본식
 	Edit type set in fonts that aren't available?	사용할 수 없는 글꼴로 설정된 문자를 편집하시겠습니까?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	표준은 각 플러그인 자체의 제한을 유지합니다. 크게에서는 플러그인 필터나 명령이 입력에 필요한 명령어 외에 최소 2억 5천만 개의 명령어를 실행할 수 있습니다. 시간 제한은 그대로입니다.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	플러그인의 개체 필터를 한 번 실행할 때 쓸 수 있는 명령어 수입니다. 크게는 표준보다 많이 허용하며 60초 제한은 같습니다. 무거운 필터는 자체 예산을 유지합니다.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
@@ -3404,6 +3411,8 @@ mark-style	Japanese	일본식
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	인터페이스의 언어입니다. 자동은 시스템 언어를 사용합니다. 언어를 고르면 대화 상자가 바로 그 언어로 바뀝니다.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	애니메이션 확대/축소는 이 옵션이 켜져 있을 때만 작동합니다. 끄면 애니메이션 확대/축소가 흐리게 표시되고 확대/축소에 애니메이션이 없습니다.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	휠로 확대/축소하면 부드럽게 움직이고, 확대/축소 도구는 옆으로 드래그하거나 누르고 있으면 확대/축소합니다. 끄면 확대/축소 도구는 드래그한 영역으로 확대합니다.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서를 통해 캔버스를 표시합니다. 아트워크는 항상 CPU에서 그려집니다. 자동은 Windows와 macOS에서 내장 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	다음 시작부터 그래픽 드라이버가 허용하는 경우 창은 디스플레이 새로 고침을 기다리지 않고 각 프레임을 표시하며, 초당 최대 240프레임입니다.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	다음 시작부터 데스크톱 버전은 이 종류의 그래픽 프로세서로 그립니다. 자동은 디스플레이를 구동하는 프로세서를 우선합니다. 웹 버전은 사용하지 않습니다.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	다음 시작부터 창은 디스플레이 새로 고침을 기다리지 않고 프레임을 표시하며, 초당 최대 240프레임입니다. 끄면 디스플레이가 프레임 속도를 정합니다. 시작할 때 지정한 표시 모드가 우선합니다.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	각 문서가 보관하는 실행 취소 단계의 최대 수입니다. 낮추면 확인을 클릭할 때 가장 오래된 단계가 삭제됩니다. 메모리를 너무 많이 쓰면 단계가 더 일찍 삭제될 수도 있습니다.
@@ -3436,7 +3445,6 @@ mark-style	Japanese	일본식
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	모든 검정을 리치 블랙으로 출력은 RGB 및 그레이스케일 래스터 내보내기와 비트맵으로 인쇄에서 순수 CMYK 검정을 RGB 검정으로 그리며, 벡터 내보내기, CMYK JPEG, TIFF 및 PSD, 기타 인쇄는 바꾸지 않습니다.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	터치 스크린에서는 터치 작업 영역으로 전환합니다. 이 설정을 끄거나 터치 스크린이 사라지면 전환하기 전의 작업 영역으로 돌아갑니다.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	캔버스를 두 손가락으로 탭하면 실행 취소하거나 터치 작업 영역에서 선택 도구와 그리기 도구를 전환하고, 세 손가락으로 탭하면 다시 실행합니다. 프레젠테이션 모드에서는 둘 다 작동하지 않습니다.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 대소문자는 상관없습니다. 한국어 단어에는 하이픈이 붙지 않으며, 인도 언어의 단어는 문자 묶음 안에서 나뉘지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
@@ -4402,6 +4410,11 @@ file-filter	Templates	템플릿
 	Keep the pasted color as a new swatch with a numbered name.	붙여넣은 색상을 번호가 붙은 이름의 새 견본으로 보관합니다.
 	Keep:	유지:
 	Lab	Lab
+	OKLCH Sliders	OKLCH 슬라이더
+	HSL Sliders	HSL 슬라이더
+	Chroma	크로마
+	The largest chroma sRGB holds at this lightness and hue	이 명도와 색조에서 sRGB가 담을 수 있는 최대 크로마
+	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 	Lab Values	Lab 값
 	Large List View	큰 목록 보기
 	Large Thumbnail View	큰 축소판 보기
@@ -5093,6 +5106,10 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	a guide has no curvature circle	안내선에는 곡률원이 없습니다
 @msg	the circle that matches the path there would reach past the canvas	그 위치에서 패스에 맞는 원이 캔버스를 벗어납니다
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	`at` must be "start" or "end"	`at`은(는) "start" 또는 "end"여야 합니다
+@msg	give exactly one of `through` and `toward`	`through`와 `toward` 중 정확히 하나만 지정하세요
+@msg	no arc fits these points: two are the same or all three lie on one line	이 점들에 맞는 호가 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
+@msg	give `at` only with `toward`	`at`은(는) `toward`와 함께만 지정하세요
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -5561,6 +5578,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
 @msg	`view` must be wheel or box	`view`은(는) wheel, box 중 하나여야 합니다
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
+@msg	`sliders` must be none, oklch or hsl	`sliders`는 none, oklch 또는 hsl이어야 합니다
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
@@ -10380,6 +10399,16 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Orbit Lines	궤도 선
+	Petal Garland	꽃잎 화환
+	Lattice Braid	격자 땋기
+	Facet Sweep	면 분할 붓질
+	Artistic Brushes	예술 브러시
+	Paint	페인트
+	Flat Sweep	평평한 붓질
+	Dry Drag	마른 붓질
+	Loaded Stroke	두터운 붓질
+	Fan Sweep	부채꼴 붓질
 	Engraving	판화
 	Fine Hatching	가는 해칭
 	Dense Hatching	촘촘한 해칭

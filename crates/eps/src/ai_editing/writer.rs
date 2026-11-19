@@ -48,8 +48,9 @@ pub(super) use paints::{
     GRADIENT_COMPARISONS, GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, SCANNED_DEFINITIONS, STOP_LINKS,
     SWATCH_PLACEMENT, free_gradient_name,
 };
+pub(crate) use symbols::{DYNAMIC_KEY, OVERRIDES_KEY, hex_decode};
 #[cfg(test)]
-pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
+pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_CHANGES, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
 pub(super) use texts::{FONT_RESOLVES, RESOLVE_EACH_RUN, TYPE_ATTRIBUTES};
 #[cfg(test)]
@@ -287,6 +288,7 @@ pub(super) struct Writer<'a> {
     symbol_scales: HashMap<String, f64>,
     /// The entries a symbol's dictionary adds to its art's dictionary, and the art's id.
     root_entries: Option<(vectorcraft_doc::NodeId, String)>,
+    instance_entries: Option<(vectorcraft_doc::NodeId, String)>,
     /// The objects that may be written with an art style, as they were before baking, by id
     /// ([`styles::styled_objects`]).
     pub(super) styled: HashMap<NodeId, Arc<Node>>,
@@ -406,6 +408,7 @@ impl<'a> Writer<'a> {
             inner_scale: 1.0,
             symbol_scales: HashMap::new(),
             root_entries: None,
+            instance_entries: None,
             styled: HashMap::new(),
             symbol_styled: HashMap::new(),
             pattern_styled: HashMap::new(),
@@ -820,7 +823,7 @@ impl<'a> Writer<'a> {
                     mask_window = self.windowed.take();
                 }
             }
-            NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
+            NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(n, symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
                     return;
@@ -1018,6 +1021,10 @@ impl<'a> Writer<'a> {
         let entries = match &self.root_entries {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
+        };
+        let entries = match &self.instance_entries {
+            Some((id, _)) if *id == n.id => entries.or_else(|| self.instance_entries.take().map(|(_, e)| e)),
+            _ => entries,
         };
         let role = match &self.blend_role {
             Some((id, _)) if *id == n.id => self.blend_role.take().map(|(_, e)| e),
