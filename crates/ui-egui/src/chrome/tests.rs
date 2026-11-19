@@ -8,6 +8,50 @@ fn the_active_tab_stays_in_view() {
     assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
 }
 
+/// When the tabs shown from a later one to the end leave room, the tab before them takes that room
+/// (#8584).
+#[test]
+fn the_tab_before_the_shown_ones_takes_the_room_they_leave() {
+    let widths = [100.0; 10];
+    assert_eq!(super::leading_tab(&widths, 7, 350.0, 90.0), (7, None), "50 left is less than the least room");
+    assert_eq!(super::leading_tab(&widths, 7, 390.0, 90.0), (6, Some(90.0)), "exactly the least room");
+    assert_eq!(super::leading_tab(&widths, 7, 389.0, 90.0), (7, None), "just under the least room");
+    assert_eq!(super::leading_tab(&widths, 0, 2000.0, 90.0), (0, None), "no tab before the first");
+    assert_eq!(super::leading_tab(&widths, 9, 50.0, 90.0), (9, None), "the tabs shown are wider than the room");
+}
+
+/// After a leading tab, the tabs are drawn whole, even when the strip's running sum leaves a hair
+/// less than a tab's width; without one, a tab has the rest of the strip (#8584).
+#[test]
+fn the_tabs_after_the_leading_one_are_drawn_whole() {
+    assert_eq!(super::tab_room(Some(90.0), true, 200.0, 500.0), 90.0, "the leading tab");
+    assert_eq!(super::tab_room(Some(90.0), false, 120.0, 119.99), 120.0, "a tab after it");
+    assert_eq!(super::tab_room(None, false, 120.0, 119.99), 119.99, "no leading tab");
+}
+
+/// A shortened title shows at every width that holds "…", fractional ones included (#8584).
+#[test]
+fn a_shortened_title_fits_at_fractional_widths() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let font = crate::theme::semibold(13.0);
+    let title = "Untitled-12 @ 66.67 % (RGB/Preview)";
+    let mut too_wide = vec![];
+    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let (ellipsis, _) = super::shortened_title(ui.ctx(), "…", font.clone(), egui::Color32::WHITE, 1000.0);
+        let mut width = ellipsis.size().x.ceil() + 1.0;
+        while width < 200.0 {
+            let (galley, fits) = super::shortened_title(ui.ctx(), title, font.clone(), egui::Color32::WHITE, width);
+            if !fits {
+                too_wide.push((width, galley.size().x));
+            }
+            width += 0.25;
+        }
+    });
+    output.textures_delta.clear();
+    assert!(too_wide.is_empty(), "shortened titles wider than their room (room, width): {too_wide:?}");
+}
+
 /// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).
 fn slots(docs: &[usize]) -> Vec<(usize, egui::Rect)> {
     docs.iter().enumerate().map(|(k, &d)| (d, egui::Rect::from_min_size(egui::pos2(k as f32 * 100.0, 0.0), egui::vec2(100.0, 30.0)))).collect()
@@ -2492,11 +2536,13 @@ fn artboard_document_tabs_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Con
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
     out.textures_delta.clear();
+    // A tab's title starts with its document's name (an inactive tab shows the name alone).
+    let names: Vec<String> = app.session.documents().iter().map(|d| d.title()).collect();
     let mut titles: Vec<_> = out
         .shapes
         .iter()
         .filter_map(|shape| match &shape.shape {
-            egui::Shape::Text(t) if t.galley.text().contains(" @ ") => Some(t.visual_bounding_rect()),
+            egui::Shape::Text(t) if names.iter().any(|n| t.galley.text().starts_with(n.as_str())) => Some(t.visual_bounding_rect()),
             _ => None,
         })
         .collect();
@@ -2983,6 +3029,71 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty());
     app.ui.screen_mode = 0;
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
+}
+
+/// The Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools show Hide Shape Widgets in the
+/// Control bar, with a selection and without one; a click hides the widgets and the button then reads
+/// Show Shape Widgets, and a second click shows them again. The button comes before the shape's own
+/// fields, so a window too narrow for the Polygon tool's Reset button still shows it. The Selection,
+/// Spiral and Line Segment tools show no such button.
+#[test]
+fn the_shape_tools_control_bar_hides_and_shows_the_shape_widgets() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let frame_in = |app: &mut crate::VectorcraftApp, width: f32, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 400.0));
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| frame_in(app, 1600.0, events);
+    let button_in = |app: &mut crate::VectorcraftApp, width: f32, name: &str| {
+        frame_in(app, width, vec![]);
+        frame_in(app, width, vec![]).into_iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds())
+    };
+    let button = |app: &mut crate::VectorcraftApp, name: &str| button_in(app, 1600.0, name);
+    let click = |app: &mut crate::VectorcraftApp, name: &str| {
+        let b = button(app, name).unwrap_or_else(|| panic!("no {name}"));
+        let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+    };
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    for ids in [json!([id]), json!([])] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+            app.select_tool(tool);
+            assert!(button(&mut app, "Hide Shape Widgets").is_some(), "{tool} {ids}");
+            click(&mut app, "Hide Shape Widgets");
+            assert!(!app.ui.view.shape_widgets, "{tool} {ids}");
+            assert!(button(&mut app, "Hide Shape Widgets").is_none(), "{tool} {ids}");
+            click(&mut app, "Show Shape Widgets");
+            assert!(app.ui.view.shape_widgets, "{tool} {ids}");
+        }
+    }
+    // Narrower and narrower: once the Polygon tool's Reset button is left out, the toggle still shows.
+    app.select_tool("polygon");
+    let reset = button(&mut app, "Reset").expect("Reset in a wide window");
+    let toggle = button(&mut app, "Hide Shape Widgets").expect("the toggle in a wide window");
+    assert!(toggle.x1 <= reset.x0, "the toggle comes first: {toggle:?} {reset:?}");
+    let narrow = (400..1600).step_by(10).rev().map(|w| w as f32).find(|w| button_in(&mut app, *w, "Reset").is_none()).expect("a width without Reset");
+    assert!(button_in(&mut app, narrow, "Hide Shape Widgets").is_some(), "{narrow} wide");
+    for tool in ["selection", "spiral", "lineSegment"] {
+        app.select_tool(tool);
+        assert!(button(&mut app, "Hide Shape Widgets").is_none(), "{tool}");
+    }
 }
 
 /// Snapping quick access includes the existing glyph and alignment settings. Pointer clicks use
@@ -3669,6 +3780,30 @@ fn the_control_bar_keeps_its_label_and_menu_with_every_group_off() {
     app.run("select.set", json!({ "ids": [] })).unwrap();
     let bar = control_frame(&mut app, &ctx, vec![]);
     assert!(!has(&bar, "Document Setup") && !has(&bar, "Preferences"), "{bar:?}");
+}
+
+/// The Control bar's selection label follows a selection whose middle object changes while its
+/// length, first and last object stay the same, and a target circle with the selection unchanged.
+#[test]
+fn the_control_bar_label_follows_every_selected_object() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = |v: serde_json::Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    let r: Vec<_> = (0..3).map(|i| id(app.run("shape.rectangle", json!({"x": i * 30, "y": 10, "width": 20, "height": 20})).unwrap())).collect();
+    let t = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap());
+    app.run("select.set", json!({ "ids": r })).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let alike = crate::panels::appearance::object_label(&app);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), alike), "{alike}");
+    app.session.active_mut().unwrap().selection.objects[1] = t;
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Mixed Objects"), "{bar:?}");
+    let layer = app.session.active().unwrap().doc.default_layer().unwrap();
+    app.session.active_mut().unwrap().selection.target = Some(layer);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), "Layer"), "the targeted layer");
 }
 
 /// `window.control.options {group, visible?}` turns a group of the Control bar's options on or

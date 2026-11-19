@@ -776,6 +776,7 @@ fn a_stroke_face_through_a_fill_wall_is_cut_where_their_depths_meet() {
         end: None,
         surface: None,
         plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+        cell: None,
     };
     let wall = facet(0.0, [0.0, 0.0, 1.0], 0.0);
     // z = x - 8: behind the wall left of x = 8, in front of it right of it.
