@@ -10453,6 +10453,11 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Vector Packs	Pacchetti vettoriali
+	Compass Rose	Rosa dei venti
+	Botanical Sprig	Rametto botanico
+	Facet Diamond	Diamante sfaccettato
+	Tide Crest	Cresta dell'onda
 	Leaf Vine	Tralcio di foglie
 	Blossom Chain	Catena di fiori
 	Pennant Garland	Ghirlanda di bandierine

@@ -10436,6 +10436,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Vector Packs	向量筆刷包
+	Compass Rose	羅盤玫瑰
+	Botanical Sprig	植物枝條
+	Facet Diamond	切面鑽石
+	Tide Crest	浪尖
 	Leaf Vine	葉藤
 	Blossom Chain	花鏈
 	Pennant Garland	旗幟花環

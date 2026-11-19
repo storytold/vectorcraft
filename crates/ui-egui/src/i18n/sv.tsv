@@ -10871,6 +10871,11 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Vector Packs	Vektorpaket
+	Compass Rose	Kompassros
+	Botanical Sprig	Botanisk kvist
+	Facet Diamond	Fasetterad diamant
+	Tide Crest	Vågkam
 	Leaf Vine	Bladranka
 	Blossom Chain	Blomkedja
 	Pennant Garland	Vimpelgirlang
