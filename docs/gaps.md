@@ -40,6 +40,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-18 | minor | G12: Layers panel ruler guide and blend spine row context menus (#8592): Hide/Show, Lock/Unlock, Release Guides, Delete and Locate Object on guide rows; Select, Blend Options…, Reverse Spine, Reverse Front to Back, Expand, Release and Locate Object on blend spine rows. Scores and estimates unchanged. |
 | 2026-11-18 | minor | G19: PDF export writes the document language chosen in Document Setup as the catalog's `/Lang` (its BCP 47 tag, `en-US` by default) and the XMP packet's `dc:language`, in exported and printed PDFs (#3644); `/MarkInfo` stays with tagged PDF (#3643). Scores and estimates unchanged. |
 | 2026-11-16 | minor | G1: Recolor Artwork - native Lab entry in Color Picker, swatch libraries access in Color Picker, and row right-click context menu ("Pick from Swatches", "Limit to Library") (#4028); scores and estimates unchanged. |
 | 2026-11-15 | minor | G4 type: modal Check Spelling dialog (Edit › Spelling › Check Spelling…, `ui.checkSpelling`, #4936) with Not in Dictionary sentence context, suggestions, Ignore, Ignore All, Change, Change All, Add to Dictionary, Done/Cancel, keyboard navigation, and one-step Undo/Redo; spell check complete; scores and estimates unchanged. |
@@ -534,12 +535,13 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   run hyphenates in its own language (Character panel). English, eleven Indian languages, Bulgarian, Turkish
   and Russian have break points, and German, Polish, Portuguese and Italian have them in builds that embed
   their patterns; other languages stay whole apart from the Exceptions list (#394, #4947).
+- **Done (2026-11-18, #8592):** Layers panel guide and blend spine row context menus: right-clicking a ruler guide row shows Hide / Show, Lock / Unlock, Release Guides, Delete and Locate Object / Locate Layer (selecting an unselected editable guide or preserving a multi-guide selection); right-clicking a blend spine row selects the blend and shows Select, Blend Options…, Reverse Spine, Reverse Front to Back, Expand, Release and Locate Object / Locate Layer. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus in the panels that have none, and menus on guide and blend spine rows in the Layers panel.
+  panel per context, and context menus in the panels that have none.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
