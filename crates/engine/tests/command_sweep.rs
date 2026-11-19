@@ -604,6 +604,17 @@ fn structured_junk() {
         ("brush.options", json!({"name": "Arrow", "params": {"width": -5, "direction": "diagonal", "flip_along": "yes"}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "flip_across": true}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 0, "spacing": 1e308, "fit": "nope", "side": null}})),
+        ("brush.apply", json!({"name": "Chain", "id": 2})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "colorization": {"method": "hueShift"}}}),
+        ),
+        ("brush.objectOptions", json!({"id": 2, "params": {"scale": "x", "fit": "nope", "side": null}})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"colorization": {"method": "hueShift", "key": {"model": "rgb", "r": 1e308, "g": -1e308, "b": 0}}}}),
+        ),
+        ("brush.objectOptions", json!({"ids": [1e308, -1], "params": {}, "reset": true})),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),
@@ -998,6 +1009,11 @@ fn structured_junk() {
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
+        ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
+        ("addon.pathtools.bridge", json!({"gap": -1e308, "reach": f64::MAX, "ids": [0, 1, 2]})),
+        ("addon.pathtools.bridge", json!({"gap": 1000, "reach": 10000, "radius": null, "keepOriginals": true})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
@@ -1058,6 +1074,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Unit Converter add-on.
+        ("addon.units.convert", json!({"value": f64::MAX, "unit": "yards"})),
+        ("addon.units.convert", json!({"value": "1e308m*1e308", "unit": "q"})),
+        ("addon.units.convert", json!({"value": "-2p6/0", "unit": ["mm"]})),
+        ("addon.units.convert", json!({"value": [1], "unit": 5})),
+        ("addon.units.selectionSize", json!({"ids": [u64::MAX]})),
         // Cutting Tools add-on: Stencil Bridges.
         ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
         ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),
@@ -1248,6 +1270,36 @@ fn polygon_properties_junk() {
                 Ok(_) => {
                     if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
                         failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live line's Line Properties with junk values (the fixtures have no line), on a line, a line
+/// whose ends meet and one at the coordinate limit: never a panic, and the document stays sound.
+#[test]
+fn line_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"lineLength": 4.0e6, "lineAngle": 45})];
+    for key in ["lineLength", "lineAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for (a, b) in [((10.0, 20.0), (110.0, 70.0)), ((50.0, 50.0), (50.0, 50.0)), ((-4.0e6, 4.0e6), (4.0e6, -4.0e6))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = no_panic(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}))) else {
+                continue;
+            };
+            match catch_quiet(|| no_panic(s.execute("object.setLiveShape", p))) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{a:?} {b:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{a:?} {b:?}]: {e}"));
                     }
                 }
             }

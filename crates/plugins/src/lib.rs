@@ -53,7 +53,7 @@ pub mod wat;
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
 pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
-pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
+pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
 

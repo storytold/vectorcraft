@@ -1241,9 +1241,10 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     let inst = d.layers[0].children().unwrap()[0].clone();
     let mut r = Renderer::new();
     r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
-    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    let symbols = d.symbol_boxes();
+    assert!(r.charge_fx_instance(&symbols, &inst), "one object fits");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
-    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert!(!r.charge_fx_instance(&symbols, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
 }
 

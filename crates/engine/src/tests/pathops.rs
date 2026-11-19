@@ -533,6 +533,133 @@ fn offset_path_stops_after_the_first_failure() {
     }
 }
 
+/// A straight line, closed as the Shape Modes close open paths, encloses no area, so it does not
+/// change the result's shape: Unite, Minus Front, Exclude and Minus Back still give the 100 pt square's area
+/// (with a line in a group selected beside it, the group's square too), and the reply carries a
+/// warning that names Outline Stroke, as it does with the line in a compound path or in a group
+/// selected alone; where the line leaves nothing (Intersect, the backmost object in Minus Front, or
+/// the frontmost in Minus Back), the error names it, and where the other objects leave nothing
+/// anyway, a flat closed path included, it doesn't. An open evenodd square traced twice is the same. An open path
+/// that encloses an area once closed (a bow tie whose lobes cancel in signed area included), closed
+/// shapes alone, and Divide, where a line cuts, give no warning (#7849).
+#[test]
+fn shape_modes_report_lines_that_enclose_no_area() {
+    use crate::cmd::SHAPE_MODE_OPEN_PATH_NO_AREA;
+    fn id_of(v: Value) -> NodeId {
+        NodeId(v["id"].as_u64().unwrap())
+    }
+    fn line_of(s: &mut Session) -> NodeId {
+        id_of(s.execute("shape.line", &json!({"x1": 20, "y1": 50, "x2": 80, "y2": 50})).unwrap())
+    }
+    fn vee_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 50}, {"x": 50, "y": 150}, {"x": 80, "y": 50}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn bow_tie_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 120}, {"x": 80, "y": 180}, {"x": 80, "y": 120}, {"x": 20, "y": 180}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn twice_around_of(s: &mut Session) -> NodeId {
+        let d = "M20 20 L80 20 L80 80 L20 80 L20 20 L80 20 L80 80 L20 80";
+        let id = id_of(s.execute("path.create", &json!({ "d": d })).unwrap());
+        s.execute("path.setFillRule", &json!({"rule": "evenOdd"})).unwrap();
+        id
+    }
+    fn grouped_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.group", &json!({})).unwrap())
+    }
+    fn compound_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.compoundPath.make", &json!({})).unwrap())
+    }
+    fn square_of(s: &mut Session) -> NodeId {
+        rect(s, 50.0, 0.0, 100.0, 100.0)
+    }
+    type Build = fn(&mut Session) -> NodeId;
+    // (case, command, the other object, whether it goes behind the 100 pt square, warned, area drawn)
+    type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
+    let cases: [Case; 12] = [
+        ("a line", "unite", line_of, false, true, Some(10_000.0)),
+        ("a line in front", "minusFront", line_of, false, true, Some(10_000.0)),
+        ("a line", "exclude", line_of, false, true, Some(10_000.0)),
+        ("a line behind", "minusBack", line_of, true, true, Some(10_000.0)),
+        ("an open evenodd square traced twice", "unite", twice_around_of, false, true, Some(10_000.0)),
+        ("a group of a line and a square", "unite", grouped_line_of, false, true, Some(20_000.0)),
+        ("a compound path of a line and a square", "unite", compound_line_of, false, true, Some(20_000.0)),
+        ("an open path that encloses an area", "unite", vee_of, false, false, None),
+        ("an open bow tie, whose signed area is zero", "unite", bow_tie_of, false, false, None),
+        ("a square", "unite", square_of, false, false, Some(15_000.0)),
+        ("a square", "minusFront", square_of, false, false, Some(5_000.0)),
+        ("a line, dividing", "divide", line_of, false, false, None),
+    ];
+    for (what, op, build, behind, warned, want) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let r = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_or_else(|e| panic!("{what}, {op}: {e}"));
+        let warning = r.get("warning").and_then(Value::as_str);
+        assert_eq!(warning, warned.then_some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{what}, {op}: {r}");
+        if let Some(want) = want {
+            let got = area_of(&s, ids(&r)[0]);
+            assert!((got - want).abs() < 1.0, "{what}, {op}: area {got}, want {want}");
+        }
+    }
+    // A group of a line and a square selected alone: its members are the shapes, and the line warns.
+    let mut s = session();
+    let group = grouped_line_of(&mut s);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let r = s.execute("object.pathfinder.unite", &json!({})).unwrap();
+    assert_eq!(r.get("warning").and_then(Value::as_str), Some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{r}");
+    let got = area_of(&s, ids(&r)[0]);
+    assert!((got - 10_000.0).abs() < 1.0, "a group alone: area {got}");
+    // A line that leaves nothing (Intersect, the backmost object in Minus Front, or the frontmost in
+    // Minus Back) gives an error that names it; two squares that don't meet give the plain one.
+    // (command, the other object, whether it goes behind the square, whether the error names the line)
+    let cases: [(&str, Build, bool, bool); 4] = [
+        ("intersect", line_of, false, true),
+        ("minusFront", line_of, true, true),
+        ("minusBack", line_of, false, true),
+        ("intersect", |s| rect(s, 300.0, 0.0, 50.0, 50.0), false, false),
+    ];
+    for (op, build, behind, named) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let e = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_err().to_string();
+        assert!(e.contains("produced an empty result"), "{op}: {e}");
+        assert_eq!(e.contains("Outline Stroke"), named, "{op}: {e}");
+    }
+    // Two squares that don't meet leave Intersect empty whatever a line beside them does.
+    let mut s = session();
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0), line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "{e}");
+    // A closed path without area (a flat one) leaves Intersect empty with or without the line, so
+    // the error is the plain one.
+    let mut s = session();
+    let flat = id_of(s.execute("path.create", &json!({"d": "M50 0 L50 100 Z"})).unwrap());
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), flat, line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "a flat closed path: {e}");
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();
@@ -993,6 +1120,10 @@ fn path_commands_refuse_a_param_of_the_wrong_type() {
     // A distance with a unit, and a join named in capitals.
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A product with a unit, which the offset used to refuse: 0.05x2 in is 0.1 in.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.05x2 in", "joins": "Bevel"})).unwrap());
     assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
     // Null switches keep Clean Up's defaults, which remove the stray point.
     let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();

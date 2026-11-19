@@ -1991,6 +1991,31 @@ fn frames_made_into_a_symbol_leave_their_thread_with_their_text() {
     }
 }
 
+/// New Symbol and Redefine Symbol with `keepArt: true` on a frame of threaded text leave the
+/// thread as it was: every frame stays a frame of the thread with the text it holds, and the
+/// symbol's art holds a copy of the text the frame shows.
+#[test]
+fn frames_kept_as_art_by_a_new_or_redefined_symbol_stay_in_their_thread() {
+    for command in ["symbol.new", "symbol.update"] {
+        let (mut s, frames) = three_frames(&TEXT.repeat(4), 200.0);
+        let shown = frames.map(|id| text(&s, id));
+        let name = if command == "symbol.update" {
+            let mark = new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 20, "height": 20})).unwrap());
+            s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+            s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+            "Mark"
+        } else {
+            "Story"
+        };
+        s.execute("select.set", &json!({"ids": [frames[1]]})).unwrap();
+        let r = s.execute(command, &json!({"name": name, "keepArt": true})).unwrap();
+        assert!(r["id"].is_null(), "{command}: {r}");
+        assert_eq!(threads(&s), [frames], "{command}: the thread is as it was");
+        assert_eq!(frames.map(|id| text(&s, id)), shown, "{command}: each frame keeps its text");
+        assert_eq!(symbol_texts(&s, name), [shown[1].clone()], "{command}: the symbol's art holds the text the frame shows");
+    }
+}
+
 /// A frame of a numbered thread pasted while an opacity mask is edited numbers from 1 in the
 /// mask art too.
 #[test]

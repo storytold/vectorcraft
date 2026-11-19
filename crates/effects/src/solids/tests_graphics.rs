@@ -87,6 +87,48 @@ fn a_graphic_is_drawn_on_the_front_cap_at_its_offset_size_and_turn() {
 }
 
 #[test]
+fn a_mesh_carries_its_caps_graphics_flat_in_the_arts_plane() {
+    let d = document();
+    let graphics =
+        json!([{"symbol": "Mark", "x": 20.0, "y": -10.0, "scale": 200.0}, {"symbol": "Mark", "face": "back", "x": 20.0, "y": -10.0, "scale": 200.0}]);
+    // Turned, so the caps' corners in the mesh are not the art's.
+    let n = object(EXTRUDE, json!({"rotationX": -20.0, "rotationY": 35.0, "rotationZ": 10.0, "graphics": graphics}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &n).unwrap();
+    // The walls first, then the front cap and the back cap, each two triangles.
+    assert_eq!(
+        parts.iter().map(|p| p.graphics.as_ref().map(|g| g.face)).collect::<Vec<_>>(),
+        [None, Some(PlanarFace::Front), Some(PlanarFace::Back)]
+    );
+    let total: usize = parts.iter().map(|p| p.mesh.triangles.len()).sum();
+    let plain = super::super::three_d_meshes_in(Some(&d), &object(EXTRUDE, json!({"rotationX": -20.0, "rotationY": 35.0, "rotationZ": 10.0})));
+    assert_eq!(total, plain.as_ref().map_or(0, |p| p.iter().map(|p| p.mesh.triangles.len()).sum()), "no triangle is lost or doubled");
+    assert!(plain.unwrap().iter().all(|p| p.graphics.is_none()));
+    // The art points of each cap's corners are the art's own square; the graphic is drawn flat at
+    // its place, mirrored on the back so it reads from behind.
+    for (part, drawn) in parts[1..].iter().zip([Rect::new(60.0, 30.0, 80.0, 50.0), Rect::new(20.0, 30.0, 40.0, 50.0)]) {
+        let Some(g) = &part.graphics else { panic!("no graphics") };
+        assert_eq!(g.art.len(), part.mesh.positions.len());
+        assert!(close(g.art_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0)), "{:?}", g.art_bounds());
+        assert_eq!(g.graphics.len(), 1);
+        let art = mesh_graphics_art(&d, NodeId(9), g).unwrap().unwrap();
+        let paths: Vec<(PathData, Paint)> = art
+            .children()
+            .into_iter()
+            .flatten()
+            .filter_map(|c| Some((c.path_data()?.clone(), c.appearance.items.first()?.paint().clone())))
+            .collect();
+        assert!(close(bounds_of(&paths), drawn), "{:?}: {:?}", g.face, bounds_of(&paths));
+        assert_eq!(paths[0].1, Paint::solid(red()), "unshaded");
+    }
+    // A plane is all one face; a graphic whose symbol is gone draws nothing.
+    let n = object(ROTATE, json!({"rotationY": 35.0, "graphics": [{"symbol": "Gone"}]}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &n).unwrap();
+    assert_eq!(parts.len(), 1);
+    let Some(g) = &parts[0].graphics else { panic!("no graphics") };
+    assert_eq!(mesh_graphics_art(&d, NodeId(9), g), Ok(None));
+}
+
+#[test]
 fn without_the_document_or_its_symbol_nothing_is_drawn() {
     let n = object(EXTRUDE, json!({"graphics": [{"symbol": "Mark"}]}));
     let art = solid_art_in(None, &n).unwrap();
@@ -489,12 +531,13 @@ fn graphics_are_checked() {
     let n = object(EXTRUDE, json!({}));
     let check = |id: &str, graphics: Value| validate_three_d_in(None, &n, id, &json!({"graphics": graphics}));
     assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "back", "x": 3.0, "scale": 50.0, "rotation": -90.0}])).is_ok());
+    assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "side", "x": -40.0, "y": 5.0}])).is_ok());
     assert!(check(EXTRUDE, json!([])).is_ok());
     for bad in [
         json!("Mark"),
         json!([{"face": "front"}]),
         json!([{"symbol": ""}]),
-        json!([{"symbol": "Mark", "face": "side"}]),
+        json!([{"symbol": "Mark", "face": "top"}]),
         json!([{"symbol": "Mark", "scale": 0.0}]),
         json!([{"symbol": "Mark", "rotation": 400.0}]),
         json!([{"symbol": "Mark", "x": "1"}]),
@@ -504,10 +547,12 @@ fn graphics_are_checked() {
         assert!(check(EXTRUDE, bad.clone()).is_err(), "{bad}");
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
+    assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "side"}])).is_err());
     assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
     // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "side"}]})).is_err());
     assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
@@ -527,10 +572,13 @@ fn the_frame_at_an_index_is_that_effects() {
 
 #[test]
 fn a_change_to_a_plane_drops_the_back_caps_graphics() {
-    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}]});
+    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}, {"symbol": "Mark", "face": "side"}]});
     let plane = three_d_params_as(EXTRUDE, &p, ROTATE);
     assert_eq!(plane["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
     assert!(validate_three_d_params(ROTATE, &plane).is_ok());
+    // Revolve drops the side's graphics too; Extrude & Bevel keeps every face's.
+    assert_eq!(three_d_params_as(EXTRUDE, &p, crate::REVOLVE)["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
+    assert_eq!(three_d_params_as(EXTRUDE, &p, EXTRUDE)["graphics"], p["graphics"]);
     // Back to Extrude & Bevel, the front's graphic stays.
     assert_eq!(three_d_params_as(ROTATE, &plane, EXTRUDE)["graphics"], plane["graphics"]);
 }
@@ -563,6 +611,15 @@ fn art_nested_too_deep_is_refused_and_not_drawn() {
     // A loaded file draws its other graphics.
     let both = object(EXTRUDE, json!({"graphics": [{"symbol": "Deep"}, {"symbol": "Mark"}]}));
     assert_eq!(graphics_in(&solid_art_in(Some(&d), &both).unwrap()).len(), 1);
+    // A mesh's graphics leave it out as well and draw the others.
+    let parts = super::super::three_d_meshes_in(Some(&d), &both).unwrap();
+    let Some(g) = parts.iter().find_map(|p| p.graphics.as_ref()) else { panic!("no graphics") };
+    let art = mesh_graphics_art(&d, NodeId(9), g).unwrap().unwrap();
+    assert_eq!(art.children().map_or(0, |c| c.len()), 1);
+    let deep = object(EXTRUDE, json!({"graphics": [{"symbol": "Deep"}]}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &deep).unwrap();
+    let Some(g) = parts.iter().find_map(|p| p.graphics.as_ref()) else { panic!("no graphics") };
+    assert_eq!(mesh_graphics_art(&d, NodeId(9), g), Ok(None));
 }
 
 #[test]
