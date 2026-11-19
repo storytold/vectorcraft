@@ -1010,7 +1010,7 @@ fn an_edit_out_of_sight_builds_nothing() {
     let drawn_hidden = extruded(&mut d, 70.0);
     let ids = [d.insert(Some(l), 0, hidden).unwrap(), group.children().unwrap()[0].id, d.insert(Some(l), 0, drawn_hidden).unwrap()];
     d.insert(Some(l), 0, group).unwrap();
-    let opts = RenderOptions { hidden: vec![ids[2]], ..Default::default() };
+    let opts = RenderOptions { hidden: [ids[2]].into(), ..Default::default() };
     let mut r = Renderer::new();
     r.render(&d, 100, 100, Affine::IDENTITY, &opts);
     let mut e = d.clone();
