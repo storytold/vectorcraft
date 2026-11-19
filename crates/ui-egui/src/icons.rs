@@ -39,6 +39,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-touch-type" => "dc-touch-type",
         "tool-line" => "dc-line",
         "tool-arc" => "dc-arc",
+        "tool-three-point-arc" => "dc-arc-three-point",
         "tool-spiral" => "tornado",
         "tool-rect-grid" => "dc-rect-grid",
         "tool-polar-grid" => "dc-polar-grid",

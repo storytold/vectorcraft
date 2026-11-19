@@ -115,6 +115,7 @@
 	Add to Selection	Zur Auswahl hinzufügen
 	Add to Swatches	Zu Farbfeldern hinzufügen
 	Add Used Colors	Verwendete Farben hinzufügen
+	Add Selected Colors	Ausgewählte Farben hinzufügen
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
 	Plug-in Instruction Budget	Anweisungsbudget für Plug-ins
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
@@ -214,6 +215,10 @@ font-technology	Variable	Variabel
 	Arc	Bogen
 	Arc Lower…	Bogen unten…
 	Arc Tool	Bogen-Werkzeug
+	Three-Point Arc Tool	Dreipunkt-Bogen-Werkzeug
+	Three-Point Arc	Dreipunkt-Bogen
+	Arc too large	Bogen zu groß
+	Third Point Sets Direction	Dritter Punkt gibt die Richtung an
 	Arc Upper…	Bogen oben…
 	Arch…	Torbogen…
 	Arc…	Bogen…
@@ -5263,6 +5268,10 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	a guide has no curvature circle	eine Hilfslinie hat keinen Krümmungskreis
 @msg	the circle that matches the path there would reach past the canvas	der Kreis, der dort zum Pfad passt, würde über die Arbeitsfläche hinausreichen
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
+@msg	`at` must be "start" or "end"	`at` muss „start“ oder „end“ sein
+@msg	give exactly one of `through` and `toward`	geben Sie genau eines von `through` und `toward` an
+@msg	no arc fits these points: two are the same or all three lie on one line	zu diesen Punkten passt kein Bogen: zwei sind gleich oder alle drei liegen auf einer Linie
+@msg	give `at` only with `toward`	geben Sie `at` nur zusammen mit `toward` an
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
 @msg	no artboard {i} (0-based; the document has {_1})	keine Zeichenfläche {i} (Zählung ab 0; das Dokument hat {_1})

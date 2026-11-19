@@ -837,7 +837,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "retype.find",
         "Find Matching Fonts",
         "",
-        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does (more false, omitted or null: a new search), or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more other than true, false or null, is an error and leaves the list as it was; returns what retype.list returns",
     ),
     (
         "retype.list",

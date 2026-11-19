@@ -125,6 +125,7 @@
 	Add to Selection	Seçime Ekle
 	Add to Swatches	Renk Örneklerine Ekle
 	Add Used Colors	Kullanılan Renkleri Ekle
+	Add Selected Colors	Seçilen Renkleri Ekle
 	Additional Plug-ins Folder	Ek Eklentiler Klasörü
 	Plug-in Instruction Budget	Eklenti Talimat Bütçesi
 	Additional Fonts Folder	Ek Yazı Tipleri Klasörü
@@ -222,6 +223,10 @@ font-technology	Variable	Değişken
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
+	Three-Point Arc Tool	Üç Noktalı Yay Aracı
+	Three-Point Arc	Üç Noktalı Yay
+	Arc too large	Yay çok büyük
+	Third Point Sets Direction	Üçüncü Nokta Yönü Belirler
 	Arc Upper…	Ark Üst…
 	Arch…	Kemer…
 	Arc…	Yay…
@@ -5087,6 +5092,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	a guide has no curvature circle	bir kılavuzun eğrilik çemberi yoktur
 @msg	the circle that matches the path there would reach past the canvas	yolla orada eşleşen çember tuvalin dışına taşardı
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	`at` must be "start" or "end"	`at` "start" veya "end" olmalıdır
+@msg	give exactly one of `through` and `toward`	`through` ve `toward` değerlerinden tam olarak birini verin
+@msg	no arc fits these points: two are the same or all three lie on one line	bu noktalara uyan bir yay yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	give `at` only with `toward`	`at` değerini yalnızca `toward` ile birlikte verin
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
