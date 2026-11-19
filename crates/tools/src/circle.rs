@@ -205,8 +205,16 @@ impl CircleTool {
     fn points(&self) -> Vec<Point> {
         let mut out: Vec<Point> = self.first.into_iter().collect();
         if let Some((b, _)) = self.second {
-            out.push(b);
-            out.extend(self.pointer);
+            match self.press {
+                // Let go where it was pressed, a press on the first point draws nothing and one on
+                // the second point draws the circle on the two.
+                Some(Press::Third { on_first: true, dragged: false, .. }) => {}
+                Some(Press::Third { on_second: true, dragged: false, .. }) => out.push(b),
+                _ => {
+                    out.push(b);
+                    out.extend(self.pointer);
+                }
+            }
             return out;
         }
         match self.press {
@@ -302,9 +310,16 @@ impl Tool for CircleTool {
             PointerKind::Down => {
                 if let (Some(a), Some((b, clicked))) = (self.first, self.second) {
                     let at = self.snap.press(cx, ev.pos, &[], None);
-                    let on = |q: Point| at == q || ev.pos.distance(q) <= cx.tol(REACH_PX);
-                    let on_second = on(b) || ev.pos.distance(clicked) <= cx.tol(REACH_PX);
-                    self.press = Some(Press::Third { at, from: ev.pos, on_first: on(a), on_second, dragged: false });
+                    let reach = cx.tol(REACH_PX);
+                    let to_second = ev.pos.distance(b).min(ev.pos.distance(clicked));
+                    let (mut on_first, mut on_second) = (at == a || ev.pos.distance(a) <= reach, at == b || to_second <= reach);
+                    // A press in reach of both points is on the one it snapped to, otherwise on the
+                    // nearer one.
+                    if on_first && on_second {
+                        let first = if (at == a) != (at == b) { at == a } else { ev.pos.distance(a) < to_second };
+                        (on_first, on_second) = (first, !first);
+                    }
+                    self.press = Some(Press::Third { at, from: ev.pos, on_first, on_second, dragged: false });
                     self.pointer = Some(at);
                     return vec![];
                 }
@@ -332,17 +347,22 @@ impl Tool for CircleTool {
                 match &mut self.press {
                     // With `dragThird` off, the second point follows the pointer as it does before
                     // the press.
+                    // The point stays where it was pressed until the press is a drag.
                     Some(Press::Second { at, snapped, from, on_first: false, dragged }) if !drag_third => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
-                        let leave = first.map(|a| Leave::segment(cx, a, ev.mods.shift));
-                        *snapped = self.snap.drag(cx, ev.pos, leave.as_ref());
-                        *at = first.map_or(*snapped, |a| round_diameter(cx, a, *snapped, ev.mods));
-                        self.pointer = Some(*at);
+                        if *dragged {
+                            let leave = first.map(|a| Leave::segment(cx, a, ev.mods.shift));
+                            *snapped = self.snap.drag(cx, ev.pos, leave.as_ref());
+                            *at = first.map_or(*snapped, |a| round_diameter(cx, a, *snapped, ev.mods));
+                            self.pointer = Some(*at);
+                        }
                     }
                     Some(Press::Third { at, from, dragged, .. }) => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
-                        *at = self.snap.drag(cx, ev.pos, None);
-                        self.pointer = Some(*at);
+                        if *dragged {
+                            *at = self.snap.drag(cx, ev.pos, None);
+                            self.pointer = Some(*at);
+                        }
                     }
                     Some(Press::First { at, from, dragged }) => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
@@ -443,7 +463,12 @@ impl Tool for CircleTool {
         let points = self.points();
         let color = crate::draw2::FEEDBACK;
         if let Some((c, r)) = drawn_circle(&points, self.options.standard_anchors) {
-            let path = shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
+            // The path the release draws: with `standardAnchors` off, the one with an anchor at each point.
+            let path = if self.options.standard_anchors {
+                shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath()
+            } else {
+                shapes::circle_with_anchors_at(c, r, &points).to_bezpath()
+            };
             // The canvas draws a dashed outline dash by dash along its whole length: a circle longer
             // than DASHED_PX on screen is drawn solid instead.
             let dashed = std::f64::consts::TAU * r <= cx.tol(DASHED_PX);
@@ -487,6 +512,11 @@ impl Tool for CircleTool {
             "standardAnchors": o.standard_anchors,
             "dragThird": o.drag_third,
         })
+    }
+
+    /// Takes the values [`check_options`] takes.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        check_options(&Map::from_iter([(key.to_string(), value.clone())]))
     }
 
     /// Sets one option; a value the option does not take leaves it as it was. Switching

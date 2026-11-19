@@ -162,6 +162,25 @@ fn anchors_at_the_points_asks_for_them() {
     assert_eq!(acts, vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": points, "anchors": "points"}))]);
 }
 
+/// With `standardAnchors` off, the tool shows the path with an anchor at each point, the one its
+/// release draws.
+#[test]
+fn anchors_at_the_points_show_the_path_they_draw() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("standardAnchors", &json!(false));
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (380.0, 300.0), Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Drag, (310.0, 340.0), Mods::default()));
+    let points = [Point::new(300.0, 300.0), Point::new(380.0, 300.0), Point::new(310.0, 340.0)];
+    let (c, r) = circle_of(&points).expect("a circle");
+    let want = shapes::circle_with_anchors_at(c, r, &points).to_bezpath();
+    let o = t.overlays(&cx);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Path { path, .. } if *path == want)), "{o:?}");
+}
+
 /// With `standardAnchors` off, a circle within 1 pt of the canvas edge whose path with anchors at
 /// the points curves past that edge is not shown and not drawn; with standard anchors it is.
 #[test]
@@ -180,8 +199,65 @@ fn anchors_at_the_points_keep_the_path_on_the_canvas() {
     click(&mut t, &cx, points[0]);
     t.pointer(&cx, &ev(PointerKind::Down, points[1], Mods::default()));
     t.pointer(&cx, &ev(PointerKind::Drag, points[2], Mods::default()));
-    assert_eq!(preview(&t.overlays(&cx)), None);
+    // No outline at all: at this size the tool would draw it solid, not dashed.
+    let o = t.overlays(&cx);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Path { .. })), "{o:?}");
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, points[2], Mods::default())), vec![]);
+}
+
+/// With `dragThird` off, a click in reach of both placed points is on the nearer one: nearer the
+/// first point it places nothing, nearer the second it draws the circle on the two.
+#[test]
+fn with_third_point_by_dragging_off_a_click_near_both_points_takes_the_nearer() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    assert_eq!(click(&mut t, &cx, (104.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (101.0, 100.0)), vec![]);
+    assert_eq!(click(&mut t, &cx, (103.0, 100.0)), circle(&[(100.0, 100.0), (104.0, 100.0)]));
+}
+
+/// With `dragThird` off, a press on the second point shows the circle on the two points, which its
+/// release draws, and a press on the first point shows none.
+#[test]
+fn with_third_point_by_dragging_off_a_press_shows_the_circle_its_release_draws() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    click(&mut t, &cx, (200.0, 100.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (101.0, 101.0), Mods::default()));
+    assert_eq!(preview(&t.overlays(&cx)), None);
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (101.0, 101.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(PointerKind::Down, (202.0, 101.0), Mods::default()));
+    let o = t.overlays(&cx);
+    assert!(near(preview(&o).expect("the circle is shown"), Rect::new(100.0, 50.0, 200.0, 150.0)), "{o:?}");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (202.0, 101.0), Mods::default())), circle(&[(100.0, 100.0), (200.0, 100.0)]));
+}
+
+/// With `dragThird` off, a press that moves less than 2 screen points keeps the point where it was
+/// pressed, for the second point and for the third.
+#[test]
+fn with_third_point_by_dragging_off_a_short_move_keeps_the_pressed_point() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let (down, drag, up) = (PointerKind::Down, PointerKind::Drag, PointerKind::Up);
+    let mut t = CircleTool::default();
+    t.set_option("dragThird", &json!(false));
+    click(&mut t, &cx, (100.0, 100.0));
+    t.pointer(&cx, &ev(down, (200.0, 100.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (201.0, 100.0), Mods::default()));
+    assert_eq!(t.pointer(&cx, &ev(up, (200.0, 100.0), Mods::default())), vec![]);
+    t.pointer(&cx, &ev(down, (150.0, 200.0), Mods::default()));
+    t.pointer(&cx, &ev(drag, (151.0, 200.0), Mods::default()));
+    let three = circle(&[(100.0, 100.0), (200.0, 100.0), (150.0, 200.0)]);
+    assert_eq!(t.pointer(&cx, &ev(up, (150.0, 200.0), Mods::default())), three);
 }
 
 /// With `dragThird` off, a second click places the second point and a third click draws the circle
@@ -300,6 +376,9 @@ fn an_alt_click_places_the_second_point_where_it_is_shown() {
 fn check_options_takes_only_the_values_the_options_take() {
     let ok = json!({"center": false, "radii": true, "diameter": false, "color": "gray", "standardAnchors": false, "dragThird": false});
     assert_eq!(check_options(ok.as_object().unwrap()), Ok(()));
+    // The tool's own check, which `tool.setOption` also runs, takes the same values.
+    let tool = CircleTool::default();
+    assert_eq!(tool.check_options(ok.as_object().unwrap()), Ok(()));
     for (bad, error) in [
         (json!({"center": 1}), "`center` must be true or false"),
         (json!({"dragThird": null}), "`dragThird` must be true or false"),
@@ -307,6 +386,7 @@ fn check_options_takes_only_the_values_the_options_take() {
         (json!({"colour": "red"}), "unknown Circle tool option `colour`"),
     ] {
         assert_eq!(check_options(bad.as_object().unwrap()), Err(error.to_string()), "{bad}");
+        assert_eq!(tool.check_options(bad.as_object().unwrap()), Err(error.to_string()), "{bad}");
     }
 }
 

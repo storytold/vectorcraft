@@ -371,8 +371,9 @@ pub fn circle_through_points(points: &[Point]) -> Option<(Point, f64)> {
 /// circle, as [`circle_through_points`] gives it) plus as many more as split each arc between two
 /// of them into equal parts of at most a quarter turn. The path starts at the first point and runs
 /// as [`ellipse`] does (left, top, right on the page); each curve's handles are 4/3·tan(θ/4) of
-/// the radius along the tangents at its ends (θ, its turn). A point given twice is one anchor;
-/// with no points it starts at the left, as [`ellipse`] does.
+/// the radius along the tangents at its ends (θ, its turn). Two points with `center` at their
+/// midpoint give four anchors. A point given twice is one anchor; with no points it starts at the
+/// left, as [`ellipse`] does.
 pub fn circle_with_anchors_at(center: Point, radius: f64, points: &[Point]) -> PathData {
     let quarter = PI / 2.0;
     let angle = |p: Point| (p.y - center.y).atan2(p.x - center.x);
@@ -381,6 +382,13 @@ pub fn circle_with_anchors_at(center: Point, radius: f64, points: &[Point]) -> P
     let mut placed: Vec<(f64, Point)> = points.iter().map(|p| ((angle(*p) - start).rem_euclid(TAU), *p)).collect();
     placed.sort_by(|a, b| a.0.total_cmp(&b.0));
     placed.dedup_by(|a, b| a.1 == b.1);
+    // Two points with the center at their midpoint are the ends of a diameter: the second is half a
+    // turn from the first, also where rounding moves the angle from the center off it.
+    if let [(_, a), (turn, b)] = placed.as_mut_slice()
+        && a.midpoint(*b) == center
+    {
+        *turn = PI;
+    }
     if placed.is_empty() {
         placed.push((0.0, Point::new(center.x - radius, center.y)));
     }
@@ -859,6 +867,20 @@ mod tests {
                 assert!((seg.eval(0.5).distance(center) - 5.0).abs() < 5.0 * 1e-3, "{seg:?}");
             }
         }
+    }
+
+    /// The two ends of a diameter give four anchors, also where the midpoint rounds off it: at
+    /// x = 10⁶, steps of 2⁻³³ put the second point more than half a turn from the first, seen from
+    /// the rounded center.
+    #[test]
+    fn a_diameter_gives_four_anchors_where_its_midpoint_rounds() {
+        let u = 2f64.powi(-33);
+        let (a, b) = (Point::new(1_000_000.0, 0.0), Point::new(1_000_000.0 + 9.0 * u, 8.0 * u));
+        let (center, radius) = circle_through_points(&[a, b]).expect("a circle");
+        let path = circle_with_anchors_at(center, radius, &[a, b]);
+        let sub = &path.subpaths[0];
+        assert_eq!(sub.anchors.len(), 4, "{sub:?}");
+        assert_eq!((sub.anchors[0].p, sub.anchors[2].p), (a, b));
     }
 
     /// Nearly on one line: a point 10⁻⁴ off a chord 2000 long still gives the circle (its sagitta

@@ -6582,8 +6582,9 @@ slider back to the Auto-Smooth level.
 
 ## Circle through two or three points
 
-`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes
-through the points, as a live ellipse with the current paint, and selects it. Two points are the ends of a diameter.
+`shape.circleThroughPoints {points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]], anchors?}` draws the circle whose
+edge passes through the points, with the current paint, and selects it: a live ellipse with the default
+`anchors: "standard"`, and a plain path with `anchors: "points"`. Two points are the ends of a diameter.
 Without `points`, it uses the two or three selected anchor points, from one path or several: anchor points selected with
 Direct Selection, or all the anchor points of a path selected whole, such as a triangle. The ends of selected segments
 do not count. The result is `{id, cx, cy, radius}`, and one undo removes the circle. The circle is not pixel-aligned,
