@@ -5895,7 +5895,7 @@ and `layerRows`, the rows highlighted in the panel.
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are; in isolation mode
   the panel's menu and row menu turn these pairs off, and the Alt-clicks change nothing), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
-  hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
+  ruler guide, not a hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
   while a symbol is edited only the editing layer or art on it) / `object.exitIsolation {all?}`. With a sublayer
   isolated, `object.exitIsolation` isolates its parent layer and selects the sublayer, so repeated calls go up one
   layer at a time until the top-level layer is left, as the
