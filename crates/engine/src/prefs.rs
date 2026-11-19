@@ -57,6 +57,9 @@ pub struct Prefs {
     pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
+    /// tool does and its keys, for tools that have a description.
+    pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
@@ -280,6 +283,11 @@ pub struct Prefs {
     pub low_res_proxy_eps: bool,
     pub anti_aliased_bitmaps: bool,
     pub update_links: String,
+    /// PDF Text: what the text of a PDF, `.ai` or `.ait` file opened or placed from the app
+    /// becomes when the open or place does not say (`text`: editable type in the file's fonts;
+    /// `outlines`: the glyph outlines the file draws). The Import PDF dialog starts from it and
+    /// keeps the choice it confirms.
+    pub pdf_text_as: String,
     // Clipboard Handling
     pub copy_as_svg: bool,
     pub copy_as_pdf: bool,
@@ -400,6 +408,11 @@ pub struct Prefs {
     /// selected, the panel and the Properties panel's Transform section measure and transform it
     /// from its symbol's registration point instead of the reference point.
     pub use_registration_point_for_symbol: bool,
+    /// The Transform panel menu's Show on Shape Creation: drawing a shape with the Rectangle,
+    /// Rounded Rectangle, Ellipse, Polygon, Star or Line Segment tool (a drag or OK in the tool's
+    /// dialog, also on the active perspective plane), a shape the Shaper tool recognizes, or running
+    /// one of [`crate::DRAWS_SHAPE`], shows the Transform panel.
+    pub show_on_shape_creation: bool,
     /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
     /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
     /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
@@ -453,6 +466,7 @@ impl Default for Prefs {
             interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_tool_cards: false,
             show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
@@ -580,6 +594,7 @@ impl Default for Prefs {
             low_res_proxy_eps: false,
             anti_aliased_bitmaps: false,
             update_links: s("askWhenModified"),
+            pdf_text_as: s("text"),
             copy_as_svg: true,
             copy_as_pdf: false,
             copy_aicb: false,
@@ -621,6 +636,7 @@ impl Default for Prefs {
             single_corner_radius: true,
             transform_panel_patterns: "default".to_string(),
             use_registration_point_for_symbol: false,
+            show_on_shape_creation: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],
             blend_options: None,

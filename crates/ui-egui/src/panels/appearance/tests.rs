@@ -915,6 +915,13 @@ fn with_nothing_selected_it_lists_what_new_art_gets() {
     for want in ["No Selection: Fancy".to_string(), effect_label("stylize.dropShadow"), "Opacity: 50%".into(), "Dashed".into()] {
         assert!(shown.contains(&want), "{want} in {shown:?}");
     }
+    // The style name follows the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let shown = frame(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: Fancy", crate::i18n::tr(fr, "No Selection"));
+    assert!(shown.contains(&want), "{want} in {shown:?}");
 }
 
 /// Both stroke rows expose named Weight inputs, and the drop-shadow effect names its Blur input and
@@ -1015,6 +1022,184 @@ fn a_mixed_selection_lists_what_its_objects_share() {
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 180, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [ids[0].clone(), t]}));
     assert_eq!(frame(&mut app).iter().find(|t| *t != "?").map(String::as_str), Some("Mixed Objects"));
+}
+
+/// The [`summary`] `ctx` holds for the active document, checked field by field against what
+/// [`object_label`] and [`mixed`] work out from scratch.
+fn fresh_summary(app: &VectorcraftApp, ctx: &egui::Context) -> Arc<Summary> {
+    let s = summary(app, ctx).unwrap();
+    assert_eq!(s.label, object_label(app), "the kind label");
+    let parts = |m: &Mixed| (m.shared.clone(), m.transparency, m.fills_differ);
+    assert_eq!(s.mixed(app).map(parts), mixed(app).as_ref().map(parts), "the mixed summary");
+    s
+}
+
+/// The object row's kind and the Mixed Appearances summary are worked out once per document
+/// revision and list of subjects: a repaint with nothing changed reuses them, and they follow an
+/// edit, Undo and Redo, a selection that changes only in the middle, a target circle and another
+/// document at the same revision.
+#[test]
+fn the_selection_summary_is_reused_until_the_document_or_its_subjects_change() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let art = |app: &mut VectorcraftApp| -> (Vec<NodeId>, NodeId) {
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let r = (0..3).map(|i| id(app.run("shape.rectangle", json!({"x": i * 30, "y": 0, "width": 20, "height": 20})).unwrap())).collect();
+        (r, id(app.run("text.create", json!({"x": 0, "y": 100, "text": "Hi"})).unwrap()))
+    };
+    let (r, t) = art(&mut app);
+    app.run("select.set", json!({"ids": r})).unwrap();
+    let s = fresh_summary(&app, &ctx);
+    assert!(s.mixed(&app).is_none(), "alike rectangles");
+    assert!(Arc::ptr_eq(&s, &fresh_summary(&app, &ctx)), "a repaint with nothing changed reuses the summary");
+    // An edit of the middle object, then Undo and Redo.
+    app.run("transparency.set", json!({"ids": [r[1]], "opacity": 50})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| m.transparency), "the middle one's opacity differs");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_none(), "undone");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some(), "redone");
+    // The middle id changes at the same revision, length, first and last id.
+    app.session.active_mut().unwrap().selection.objects[1] = t;
+    assert_eq!(fresh_summary(&app, &ctx).label, "Mixed Objects");
+    // A target circle with the selected objects unchanged, and back.
+    let layer = app.session.active().unwrap().doc.default_layer().unwrap();
+    app.session.active_mut().unwrap().selection.target = Some(layer);
+    assert_eq!(fresh_summary(&app, &ctx).label, "Layer");
+    app.session.active_mut().unwrap().selection.target = None;
+    assert_eq!(fresh_summary(&app, &ctx).label, "Mixed Objects");
+    // Another document with the same ids selected at the same revision, where the first object's
+    // opacity differs instead.
+    let revision = app.session.active().unwrap().revision;
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| !m.transparency));
+    let (r2, t2) = art(&mut app);
+    assert_eq!((&r2, t2), (&r, t), "the second document numbers its objects alike");
+    app.run("transparency.set", json!({"ids": [r[0]], "opacity": 50})).unwrap();
+    let st = app.session.active_mut().unwrap();
+    st.selection.objects = vec![r[0], t, r[2]];
+    st.selection.target = None;
+    st.revision = revision;
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| m.transparency), "the second document's own summary");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| !m.transparency), "the first document's again");
+}
+
+/// The CPU time this thread has used, from Linux's scheduler statistics; `None` elsewhere.
+fn thread_cpu() -> Option<std::time::Duration> {
+    let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    stat.split_whitespace().next()?.parse().ok().map(std::time::Duration::from_nanos)
+}
+
+/// The milliseconds `f` takes: this thread's CPU time where Linux reports it, otherwise the wall clock.
+fn time_ms(f: impl FnOnce()) -> f64 {
+    let d = match thread_cpu() {
+        Some(before) => {
+            f();
+            thread_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before))
+        }
+        None => {
+            let start = std::time::Instant::now();
+            f();
+            start.elapsed()
+        }
+    };
+    d.as_secs_f64() * 1000.0
+}
+
+/// A document of `n` small rectangles, all selected; with `mixed`, every second one at 50% opacity.
+fn many_rectangles(n: usize, mixed: bool) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let r = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 4, "height": 4})).unwrap()["id"].as_u64().unwrap();
+    let mut d = vectorcraft_doc::Document::clone(&app.session.active().unwrap().doc);
+    let template = d.node(NodeId(r)).unwrap().clone();
+    let layer = d.layers[0].id;
+    d.children_mut(Some(layer)).unwrap().clear();
+    let mut ids = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut node = template.clone();
+        node.id = d.alloc_id();
+        if mixed && i % 2 == 1 {
+            node.opacity = 0.5;
+        }
+        ids.push(d.insert(Some(layer), usize::MAX, node).unwrap());
+    }
+    app.session.add_document(d, None);
+    app.session.active_mut().unwrap().selection.objects = ids;
+    app
+}
+
+/// Timings of the selection summary the Control bar and the Appearance panel show on each repaint,
+/// on 5,000, 20,000 and 200,000 selected rectangles, alike and with every second one's opacity
+/// different, in milliseconds per repaint: worked out from scratch (`object_label` for the Control
+/// bar, then `mixed` and `object_label` for the panel); through [`summary`], whose first repaint
+/// works it out and the rest reuse it; and through [`summary`] with its stored entry removed before
+/// every repaint, as when the document or the selection changes each time. They run in turn on the same document,
+/// 7 runs each, and the results are checked equal. Ignored by default; it prints the median, fastest and slowest run
+/// and sets no bound on them:
+/// `cargo test --release -p vectorcraft-ui-egui --lib selection_summary_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn selection_summary_perf() {
+    const RUNS: usize = 7;
+    const REPAINTS: usize = 20;
+    let stats = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        format!("{:.3} ({:.3}-{:.3})", v[v.len() / 2], v[0], v[v.len() - 1])
+    };
+    eprintln!("selection_summary_perf: {}", if thread_cpu().is_some() { "thread CPU time" } else { "wall clock" });
+    eprintln!(
+        "selection_summary_perf: {:>8} {:<6} {:>28} {:>28} {:>28}",
+        "selected", "kind", "from scratch ms (min-max)", "summary ms (min-max)", "summary, changed ms (min-max)"
+    );
+    for n in [5_000, 20_000, 200_000] {
+        for mixed_case in [false, true] {
+            let app = many_rectangles(n, mixed_case);
+            let (mut old, mut new, mut changed) = (vec![], vec![], vec![]);
+            for _ in 0..RUNS {
+                let mut seen = None;
+                old.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            let bar = object_label(&app);
+                            let mix = mixed(&app);
+                            let row = object_label(&app);
+                            seen = Some((bar, row, mix.map(|m| (m.shared, m.transparency, m.fills_differ))));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                let ctx = egui::Context::default();
+                let mut cached = None;
+                new.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            let bar = summary(&app, &ctx).map_or("No Selection", |s| s.label);
+                            let s = summary(&app, &ctx).unwrap();
+                            let mix = s.mixed(&app).map(|m| (m.shared.clone(), m.transparency, m.fills_differ));
+                            cached = Some((bar, s.label, mix));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                assert_eq!(cached, seen, "{n} {mixed_case}");
+                let mut fresh = None;
+                changed.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            ctx.data_mut(|d| d.remove::<Arc<Summary>>(egui::Id::unique("ap-summary")));
+                            let bar = summary(&app, &ctx).map_or("No Selection", |s| s.label);
+                            let s = summary(&app, &ctx).unwrap();
+                            let mix = s.mixed(&app).map(|m| (m.shared.clone(), m.transparency, m.fills_differ));
+                            fresh = Some((bar, s.label, mix));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                assert_eq!(fresh, seen, "{n} {mixed_case}");
+            }
+            let kind = if mixed_case { "mixed" } else { "alike" };
+            eprintln!("selection_summary_perf: {:>8} {:<6} {:>28} {:>28} {:>28}", n, kind, stats(old), stats(new), stats(changed));
+        }
+    }
 }
 
 /// The panel's subject is the `Arc` the document holds for the selected object, a targeted group
