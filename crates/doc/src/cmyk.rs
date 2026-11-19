@@ -663,19 +663,97 @@ struct CmykSource {
     icc: Option<Vec<u8>>,
 }
 
+/// Does any directory in TIFF `bytes` declare an ICC, XMP, Photoshop or descriptive text tag
+/// whose payload exceeds [`MAX_TIFF_ICC`] (individually or combined)? Checked before
+/// `craft_image_codecs` opens the file so its metadata reader cannot allocate oversized payloads
+/// for a small raster.
+fn oversized_tiff_metadata(bytes: &[u8]) -> bool {
+    let le = bytes.starts_with(b"II");
+    let big = match bytes.get(..4) {
+        Some(b"II*\0" | b"MM\0*") => false,
+        Some(b"II+\0" | b"MM\0+") => true,
+        _ => return false,
+    };
+    let u16_at = |at: usize| -> Option<u16> {
+        let b: [u8; 2] = bytes.get(at..at.checked_add(2)?)?.try_into().ok()?;
+        Some(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+    };
+    let u32_at = |at: usize| -> Option<u32> {
+        let b: [u8; 4] = bytes.get(at..at.checked_add(4)?)?.try_into().ok()?;
+        Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    };
+    let u64_at = |at: usize| -> Option<u64> {
+        let b: [u8; 8] = bytes.get(at..at.checked_add(8)?)?.try_into().ok()?;
+        Some(if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+    };
+    let word_len: usize = if big { 8 } else { 4 };
+    let word = |at: usize| if big { u64_at(at) } else { u32_at(at).map(u64::from) };
+    let width_of = |ty: u16| -> u64 {
+        match ty {
+            1 | 2 | 6 | 7 => 1,
+            3 | 8 => 2,
+            4 | 9 | 11 | 13 => 4,
+            5 | 10 | 12 | 16..=18 => 8,
+            _ => 1,
+        }
+    };
+    let Some(mut ifd) = word(if big { 8 } else { 4 }).and_then(|o| usize::try_from(o).ok()) else {
+        return false;
+    };
+    let mut seen = Vec::new();
+    let mut total = 0u64;
+    for _ in 0..4096 {
+        if ifd == 0 || seen.contains(&ifd) {
+            break;
+        }
+        seen.push(ifd);
+        let Some(entries) = (if big { u64_at(ifd) } else { u16_at(ifd).map(u64::from) }) else {
+            break;
+        };
+        let Some(first) = ifd.checked_add(if big { 8 } else { 2 }) else {
+            break;
+        };
+        let entry_len = 4 + 2 * word_len;
+        let count_cap = usize::try_from(entries).unwrap_or(usize::MAX).min(4096);
+        for i in 0..count_cap {
+            let Some(e) = i.checked_mul(entry_len).and_then(|d| first.checked_add(d)) else {
+                break;
+            };
+            let (Some(tag), Some(ty), Some(count)) = (u16_at(e), e.checked_add(2).and_then(u16_at), e.checked_add(4).and_then(word)) else {
+                break;
+            };
+            if matches!(tag, 270 | 271 | 272 | 305 | 306 | 315 | 700 | 33432 | 34377 | 34675 | 37724) {
+                let payload = count.saturating_mul(width_of(ty));
+                total = total.saturating_add(payload);
+                if payload > MAX_TIFF_ICC || total > MAX_TIFF_ICC {
+                    return true;
+                }
+            }
+        }
+        let Some(next_at) = count_cap.checked_mul(entry_len).and_then(|d| first.checked_add(d)) else {
+            break;
+        };
+        let Some(next) = word(next_at).and_then(|o| usize::try_from(o).ok()) else {
+            break;
+        };
+        ifd = next;
+    }
+    false
+}
+
 /// The samples of CMYK TIFF `bytes` (8 or 16 bits), their inks together or one plane per ink, with
 /// the TIFF's CMYK ICC profile; `None` for other images, CMYK ones with alpha, ones larger than
 /// [`MAX_CMYK_PIXELS`], truncated ones, and ones whose samples take more than
 /// [`crate::MAX_RASTER_ALLOC`].
 fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
-    if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
+    if !is_tiff(bytes) || oversized_tiff(bytes).is_some() || oversized_tiff_metadata(bytes) {
         return None;
     }
     let limits =
         craft_image_codecs::Limits { max_pixels: MAX_CMYK_PIXELS, max_alloc: crate::MAX_RASTER_ALLOC, ..craft_image_codecs::Limits::default() };
     let opts = craft_image_codecs::DecodeOptions { limits, keep_orientation: true };
     // Header and metadata readers use IFD0; keep samples on the same page.
-    let img = craft_image_codecs::decode_tiff_page(bytes, 0, &opts).ok()?;
+    let mut img = craft_image_codecs::decode_tiff_page(bytes, 0, &opts).ok()?;
     if img.layout() != craft_image_codecs::ChannelLayout::Cmyk
         || img.warnings.iter().any(|w| matches!(w, craft_image_codecs::DecodeWarning::Truncated { .. }))
     {
@@ -683,7 +761,7 @@ fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
     }
     let (width, height) = img.dimensions();
     pixels(width, height)?;
-    let icc = cmyk_icc(img.icc.clone()).filter(|p| p.len() <= MAX_TIFF_ICC as usize);
+    let icc = cmyk_icc(img.icc.take()).filter(|p| p.len() <= MAX_TIFF_ICC as usize);
     let samples = match img.sample_type() {
         craft_image_codecs::SampleType::U8 => Samples::Eight(img.into_data()),
         craft_image_codecs::SampleType::U16 => Samples::Sixteen(img.to_u16_samples()?),
@@ -1920,6 +1998,48 @@ mod tests {
         };
         assert_eq!(oversized_tiff(&file(8)), None, "about 8 million steps");
         assert_eq!(oversized_tiff(&file(17)), Some((1, 17)), "about 17 million steps");
+    }
+
+    /// A tiny CMYK raster with an oversized metadata payload (ICC, XMP, Photoshop resources or
+    /// layers) is rejected before `craft_image_codecs` opens it and allocates the metadata.
+    #[test]
+    fn a_small_cmyk_tiff_with_oversized_metadata_is_refused_before_decoding() {
+        let base_entries = [
+            (256u16, 4u16, vec![1u64]),
+            (257, 4, vec![1]),
+            (258, 3, vec![8, 8, 8, 8]),
+            (259, 3, vec![1]),
+            (262, 3, vec![5]),
+            (273, 4, vec![8]),
+            (277, 3, vec![4]),
+            (278, 4, vec![1]),
+            (279, 4, vec![4]),
+        ];
+        let baseline = tiff_file(false, &base_entries, &[10, 20, 30, 40]);
+        assert!(!oversized_tiff_metadata(&baseline));
+        assert!(stored_cmyk_tiff(&baseline, None).is_some());
+
+        let over = usize::try_from(MAX_TIFF_ICC + 1).unwrap();
+        let mut data = vec![0u8; 4 + over];
+        data[..4].copy_from_slice(&[10, 20, 30, 40]);
+
+        for tag in [34675u16, 700, 34377, 37724] {
+            let mut entries = base_entries.to_vec();
+            entries.push((tag, 7, vec![0, 0, 0, 0, 0]));
+            entries.sort_by_key(|e| e.0);
+            let mut file = tiff_file(false, &entries, &data);
+            // Patch the metadata entry's count to `over` and its value offset to byte 12 (right
+            // after the 4 pixel bytes in `data`).
+            let ifd = 8 + data.len();
+            let idx = entries.iter().position(|e| e.0 == tag).unwrap();
+            let entry_at = ifd + 2 + idx * 12;
+            file[entry_at + 4..entry_at + 8].copy_from_slice(&u32::try_from(over).unwrap().to_le_bytes());
+            file[entry_at + 8..entry_at + 12].copy_from_slice(&12u32.to_le_bytes());
+
+            assert!(oversized_tiff_metadata(&file), "tag {tag}");
+            assert!(tiff_source(&file).is_none(), "tag {tag}");
+            assert!(stored_cmyk_tiff(&file, None).is_none(), "tag {tag}");
+        }
     }
 
     fn inks() -> Inks {
