@@ -713,8 +713,8 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,wheel?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,wheel?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners; an ellipse takes `anchors`, 2–1000, default 4). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -2002,7 +2002,7 @@ control channel's `ui.key`, `ui.move`, `ui.wheel`, `ui.click`, `ui.drag`, `ui.po
 `ui.render` and `ui.set` for their numbers, switches and `mods`, and the headless session's key, pointer and screenshot
 calls. Omitting a param or giving null keeps its default, with two exceptions: `ui.click`'s `count` and `ui.drag`'s
 `count` and `steps` refuse null, and a headless pointer event needs its `x` and `y`. A pointer event's `pressure`,
-`holdMs`, `tiltX`, `tiltY` and `rotation` must be numbers and its `space` must be `doc` or `screen`. A pointer packet
+`holdMs`, `tiltX`, `tiltY`, `rotation` and `wheel` must be numbers and its `space` must be `doc` or `screen`. A pointer packet
 with one malformed event sends none of its events:
 
 ```json
@@ -3953,6 +3953,18 @@ already walks Image Trace. Short agent entry points:
   Tilt goes from its first value with the pen lying flat to its second upright, and on Bearing or Rotation from its
   first value at −180° to its second at 180°. A stroke without that input draws the brush's own value (a Scatter
   brush's value half way between the two).
+- Airbrush finger wheel: `path.freehand` and `brush.freehand` take a point's wheel seventh,
+  `[x, y, pressure, tiltX, tiltY, rotation, wheel]`, or as `{…, wheel?}`, and a `pointer_gesture` event takes `wheel`,
+  which the Paintbrush records. The wheel is 0..1 from one end of the wheel's travel to the other. In a point, a
+  value outside it, or one that is neither a number nor null, is refused; a `pointer_gesture` event's wheel outside
+  it is clamped, as its pressure is. The stroke keeps it as `wheel` (a point without
+  one counts as half way). Calligraphic and Scatter `modes` and an Art brush's `width_mode` take `stylusWheel`: the
+  value goes from the value less the variation (a Scatter brush's first value, an Art brush's `width`) at 0 to the
+  value plus the variation (the second value, `width_max`) at 1, and a stroke without a wheel draws the value half
+  way. Brush Options offers Stylus Wheel for a Calligraphic or Scatter brush's Size and an Art brush's Width. The
+  desktop app reads the wheel from XInput2 (`Abs Wheel`) under X11 and from AppKit (`tangentialPressure`) on macOS;
+  it does not read it on Windows or in the web build. `.ai` brush definitions read and write the wheel as variation
+  code 3.
 - Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
   value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
@@ -6255,7 +6267,7 @@ objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStro
 note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
 paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
 (false). When every subpath of a path or compound path turns alike, its strokes' width profiles (left and right swapped) and pen
-pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
+pressure, tilt, bearing, rotation and wheel turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
 `recentUrls` keeps the 30 newest distinct URLs given in the session, newest first. The panel's URL menu lists the
 first 10 of them by default; the panel menu's Panel Options… opens the `attributesPanelOptions` dialog (field `count`),
@@ -6502,16 +6514,16 @@ focal points stay highlighted where it left them; Escape during a drag puts the 
 switching to another tool clears them.
 
 `path.freehand`, `brush.freehand`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`,
-`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90 and a
-`rotation` outside 0 to 360 with an error such as `` `tiltX` must be from -90 to 90 ``, naming the key, and a point
-given as an array of more than six numbers with `` `points[3]` must be an array of at most 6 entries ``, naming the
-point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
+`path.joinScrub` and `path.blob` refuse a pen `pressure` outside 0 to 1, a `tiltX` or `tiltY` outside -90 to 90, a
+`rotation` outside 0 to 360 and a stylus `wheel` outside 0 to 1 with an error such as
+`` `tiltX` must be from -90 to 90 ``, naming the key, and a point given as an array of more than seven numbers with
+`` `points[3]` must be an array of at most 7 entries ``, naming the point. `path.blob` and `path.eraseRegion` refuse a `size` outside 0.1 to 1000 pt with
 `` `size` must be from 0.1 to 1000 `` and a `sizeVariation` over 1000 pt with
 `` `sizeVariation` must be from 0 to 1000 ``, in every `sizeMode` and when it is left out. `path.blob` refuses a
 negative `sizeVariation` with the same message, and `path.eraseRegion` with "sizeVariation must be 0 or more". The
 document and the selection do not change and no undo step is recorded. A null is read as a key left out, and a point given as `[x, y]`
 has no pen values. The pressure and tilt ranges are those of
-[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, size and size variation ranges are
+[Pointer Events](https://www.w3.org/TR/pointerevents3/); the rotation, wheel, size and size variation ranges are
 VectorCraft's own values.
 
 `path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
@@ -6519,13 +6531,14 @@ Eraser Tool Options set them ([Erase paths using the Eraser
 tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
 `angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
 and `sizeMode` with `sizeVariation` (points, 0 to 1000), each `"fixed"` (the default), `"random"`, `"pressure"`,
-`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
-value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
-it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
-Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
-the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
-drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
-Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+`"tilt"`, `"bearing"`, `"rotation"` or `"stylusWheel"`. A value that varies takes up to its variation either way.
+Random draws one value for the drag. Pressure goes from the value less the variation where the pen presses lightest to
+the value plus it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright.
+Bearing and Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. Stylus Wheel
+goes from less at 0 to more at 1 of an airbrush pen's finger wheel. The tip at each point of the drag takes what the
+pen read there (the points' pressure, tilt, rotation and wheel, as `path.freehand` takes them); a drag without that
+reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way Tilt, Bearing,
+Rotation and Stylus Wheel run, and the value itself without a reading are VectorCraft's own rules.
 The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
 the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases, and the
 outline of the area a drag covers takes, at each step, the tip the pen's readings give halfway along it. A Random
@@ -6553,9 +6566,9 @@ and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key le
 an `x` without a `y`, or a `y` without an `x`, with "x and y must be given together". `path.freehand`,
 `path.curvature`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`, `path.joinScrub` and
 `path.blob` refuse a point in `points` whose x or y is not a number, such as `["10", 10]` or a point written as a
-string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt or
-rotation that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
-(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
+string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt,
+rotation or wheel that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
+(`pressure`, `tiltX`, `tiltY`, `rotation` or `wheel`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
 `path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
@@ -9204,9 +9217,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
-its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
-in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+its symbols and pattern swatches included, type in a composite font giving the fonts of the parts its characters fall
+in, which the fonts and fontDetails categories list; with `selectionOnly`, the fonts of the selected type),
+`fontUses` (`[{font, type, uses}]`: each font of `fonts`, in order, as the fonts
+category's rows give it, such as `TrueType; 2 uses`: `type` is `truetype` or `opentype` by the outlines of the face
+the type is drawn in (`glyf`, or `CFF` or `CFF2`), `unknown` for a font not installed in the family and style it
+names; `uses` is the number of text objects set in the font, each counted once however many of its runs use it, the
+type in a mask or in a symbol's or pattern's art once however many objects show it), `fontDetails`
+(`[{font, match, family, style, file, embedding}]`: each font of `fonts`, in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
 `family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
 file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
 face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
@@ -9735,6 +9753,15 @@ a warning.
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/stencil.plt","sortPaths":true,"insideFirst":true}}}
 ```
+
+In the app, Export As… with the HP-GL format opens HP-GL Options (`ui.hpglOptionsDialog` opens it too): Version,
+Curve Tolerance, Origin (Bottom Left or Center), Pens (One Pen per Color, or Pen Table with a row per pen to type
+its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and Draw Inner Paths First
+(`insideFirst`). Pen Table starts from the pens One Pen per Color gives the art this export plots (the chosen
+artboards, the bounds of the art, or the selection with Export Selection or Export Selected Art Only), or one black
+pen when that art draws nothing. When the export refuses the options or the artboard choice, One Pen per Color stays
+chosen and the dialog shows why. OK checks the options and the artboard choice, and remembers the options for the
+next export; a canceled save panel writes nothing and keeps the options remembered before.
 
 ## TIFF, BMP and Targa export
 
@@ -12981,8 +13008,8 @@ step, and `press_key` Escape or a switch to another tool during it puts the valu
 
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale,
-width profiles and the pen pressure, tilt, bearing and rotation recorded with the Paintbrush (a stroke without a
-recording counts as half pressure, half tilt and 0°, as brushes read it; angles turn the shorter way round; a key's
+width profiles and the pen pressure, tilt, bearing, rotation and wheel recorded with the Paintbrush (a stroke without
+a recording counts as half pressure, half tilt, 0° and the wheel half way, as brushes read it; angles turn the shorter way round; a key's
 profiles, recordings, arrowheads, dashes and gradient along or across the stroke turn with its path when the blend
 starts it at another anchor), while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one
 kind with different stop counts resample to a common set of stops, keeping each step (two stops at one offset). Groups pair their members in stacking order (members only

@@ -1083,6 +1083,15 @@ lighting	Light	Światło
 	Document Raster Effects Settings Dialog	Okno ustawień efektów rastrowych dokumentu
 	Drop Shadow	Cień
 	DXF Options Dialog	Okno opcji DXF
+	HP-GL Options	Opcje HP-GL
+	HP-GL Options Dialog	Okno opcji HP-GL
+	Curve Tolerance:	Tolerancja krzywych:
+	Origin:	Początek układu:
+	Pens:	Pisaki:
+	One Pen per Color	Jeden pisak na kolor
+	Pen Table	Tabela pisaków
+	Draw the Nearest Path Next	Rysuj następnie najbliższą ścieżkę
+	Draw Inner Paths First	Najpierw rysuj ścieżki wewnętrzne
 	Edit Toolbar	Edytuj pasek narzędzi
 	Edit Views	Edytuj widoki
 	Effect…	Efekt…
@@ -3386,6 +3395,7 @@ antiAlias	Sharp	Ostre
 	Width Point Edit	Edycja punktu szerokości
 	Art	Artystyczny
 	Bearing	Kierunek
+	Stylus Wheel	Kółko pióra
 	Bristle	Włosiankowy
 	Calligraphic	Kaligraficzny
 	Dots	Kropki
@@ -3531,6 +3541,9 @@ theme	Appearance	Wygląd
 	embedding for preview and print	osadzanie do podglądu i drukowania
 	embedding allowed	osadzanie dozwolone
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	nieznany typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} użycie|{n} użycia|{n} użyć
 	substituted: shown in {family} {style} ({detail})	zastąpiony: wyświetlany krojem {family} {style} ({detail})
 	missing: shown in {family} {style}	brak: wyświetlany krojem {family} {style}
 	missing	brak

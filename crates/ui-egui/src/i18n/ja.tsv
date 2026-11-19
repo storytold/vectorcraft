@@ -1533,6 +1533,15 @@ antiAlias	Sharp	シャープ
 	DXF Info	DXF 情報
 	DXF Options	DXF オプション
 	DXF Options Dialog	DXF オプションダイアログ
+	HP-GL Options	HP-GL オプション
+	HP-GL Options Dialog	HP-GL オプションダイアログ
+	Curve Tolerance:	カーブの許容値:
+	Origin:	原点:
+	Pens:	ペン:
+	One Pen per Color	カラーごとに 1 本のペン
+	Pen Table	ペンテーブル
+	Draw the Nearest Path Next	最も近いパスを次に描画
+	Draw Inner Paths First	内側のパスを先に描画
 	Darken	比較 (暗)
 	Darkness	濃さ
 	Dashed	破線
@@ -2581,6 +2590,7 @@ antiAlias	Sharp	シャープ
 	Pressure	筆圧
 	Tilt	傾き
 	Bearing	方位
+	Stylus Wheel	スタイラスホイール
 	Shape:	形状:
 	Bristle Length:	毛の長さ:
 	Bristle Density:	毛の密度:
@@ -2611,6 +2621,9 @@ antiAlias	Sharp	シャープ
 	embedding for preview and print	プレビューと印刷用に埋め込み可
 	embedding allowed	埋め込み可
 	{file}; {embedding}	{file}、{embedding}
+	unknown type	不明な種類
+	{type}; {uses}	{type}、{uses}
+@plural	{n} use|{n} uses	使用 {n} 回
 	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
 	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
 	missing	見つかりません
