@@ -534,11 +534,7 @@ fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
 
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.
 fn encoded(by_pen: &[Vec<Vec<(i64, i64)>>], pens: &[[u8; 3]]) -> Vec<u8> {
-    let pens: Vec<_> = pens
-        .iter()
-        .enumerate()
-        .map(|(index, &rgb)| craft_plotter::hpgl::write::Pen { number: index + 1, rgb })
-        .collect();
+    let pens: Vec<_> = pens.iter().enumerate().map(|(index, &rgb)| craft_plotter::hpgl::write::Pen { number: index + 1, rgb }).collect();
     craft_plotter::hpgl::write::write_hpgl2(&pens, by_pen)
 }
 

@@ -1184,10 +1184,7 @@ fn encoded_numbers_follow_the_reference_guide() {
 fn hpgl2_shared_writer_preserves_raw_bytes_and_pen_indices() {
     let paths = vec![vec![vec![(32, -32)]], vec![], vec![vec![(33, -31)], vec![(34, -30)]]];
     let pens = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
-    assert_eq!(
-        encoded(&paths, &pens),
-        b"IN;NP4;PC1,1,2,3;PC2,4,5,6;PC3,7,8,9;PU;SP1;PE<=?\xc0@\xc0;PU;SP3;PE<\xc1\xc1<\xc1\xc1;PU;SP0;"
-    );
+    assert_eq!(encoded(&paths, &pens), b"IN;NP4;PC1,1,2,3;PC2,4,5,6;PC3,7,8,9;PU;SP1;PE<=?\xc0@\xc0;PU;SP3;PE<\xc1\xc1<\xc1\xc1;PU;SP0;");
 }
 
 #[test]
