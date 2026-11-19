@@ -485,10 +485,12 @@ pub(super) fn artboard_list(app: &VectorcraftApp, ui: &mut Ui, cur: usize) -> Op
                     }
                     // Every number ends where the widest one ends.
                     let numbers = ui.painter().layout_no_wrap(boards.len().to_string(), egui::FontId::proportional(12.0), t.text_dim).size().x;
-                    let width = ui.available_width().max(LIST_W);
                     let mut chosen = None;
                     ui.spacing_mut().item_spacing.y = 0.0;
                     area.show_rows(ui, ROW_H, boards.len(), |ui, range| {
+                        // The width beside the scroll bar's column: rows as wide as the list
+                        // itself would widen it by the bar on every pass.
+                        let width = ui.available_width().max(LIST_W);
                         for i in range {
                             let Some(board) = boards.get(i) else { continue };
                             let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
