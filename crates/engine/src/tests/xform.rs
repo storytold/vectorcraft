@@ -480,6 +480,41 @@ fn reflect_and_shear_tools() {
     assert!((b.width() - 150.0).abs() < 1e-6, "{b:?}");
 }
 
+/// Two clicks with the Reflect tool reflect the selection across the line through both points as
+/// one undo step; with Alt on the second click, a copy is reflected and Undo removes it.
+#[test]
+fn two_reflect_clicks_reflect_across_their_line_as_one_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    s.select_tool("reflect", ViewInfo::default()).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64, alt: bool| {
+        drag_at(s, PointerKind::Down, (x, y), alt);
+        drag_at(s, PointerKind::Up, (x, y), alt);
+    };
+    let n = undo_len(&s);
+    click(&mut s, 300.0, 50.0, false);
+    assert_eq!(undo_len(&s), n);
+    assert!(close(bounds(&s, a), Rect::new(100.0, 100.0, 200.0, 150.0)));
+    click(&mut s, 300.0, 250.0, false);
+    assert!(close(bounds(&s, a), Rect::new(400.0, 100.0, 500.0, 150.0)), "{:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(close(bounds(&s, a), Rect::new(100.0, 100.0, 200.0, 150.0)));
+
+    let children = |s: &Session| s.doc().unwrap().doc.layers[0].children().unwrap().len();
+    click(&mut s, 50.0, 300.0, false);
+    click(&mut s, 350.0, 300.0, true);
+    assert_eq!(children(&s), 2);
+    assert!(close(bounds(&s, a), Rect::new(100.0, 100.0, 200.0, 150.0)));
+    // The copy is selected and reflected across y = 300.
+    let copy = s.doc().unwrap().selection.objects.clone();
+    assert!(copy.len() == 1 && copy[0] != a, "{copy:?}");
+    assert!(close(bounds(&s, copy[0]), Rect::new(100.0, 450.0, 200.0, 500.0)), "{:?}", bounds(&s, copy[0]));
+    assert_eq!(undo_len(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(children(&s), 1);
+}
+
 /// Reflect and Shear return an error for an `axis` they don't take, naming it (both also take an
 /// angle, Shear's from -359° to 359°): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
 /// then reflects across the vertical axis and Shear shears along the horizontal one.

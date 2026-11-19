@@ -46,6 +46,7 @@ mod bar;
 mod context;
 mod entries;
 mod invoke;
+mod keyboard;
 mod labels;
 mod run;
 mod slots;
@@ -71,6 +72,9 @@ pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
 pub(crate) use invoke::with_held_keys;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
+pub(crate) use keyboard::handle_input as handle_keyboard_input;
+// Shared numeric fields preserve their caret when a transient menu returns their focus.
+pub(crate) use keyboard::restoring_field_focus;
 pub(crate) use labels::lists_plugin;
 pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};

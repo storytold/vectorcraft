@@ -132,7 +132,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Locate Object",
             ["Window", "Layers"],
             None,
-            "{id?, layersOnly?} (default: the frontmost selected object in the stacking order) highlight the object's row; the Layers panel opens the layers around it and scrolls to it, also when the row was already highlighted → {id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
+            "{id?, layersOnly?} (default: the frontmost selected object in the stacking order) highlight the object's row; the Layers panel opens the layers around it, and scrolls to its row when the row is in the list, also when the row was already highlighted (Show Layers Only, a search, the filter, or editing an opacity mask on another layer can leave the row out) → {id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
             has_doc,
             locate
         ),
