@@ -209,7 +209,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         seen.1
     });
     let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
-    let other = exporting || crate::plugin_runs::any_shown(app) || crate::trace_runs::any_shown(app);
+    let other = exporting || crate::plugin_runs::any_shown(app) || crate::trace_runs::any_shown(app) || crate::placing::any_shown(app);
     if now - since < DELAY || app.ui.dialog.is_some() || other {
         return;
     }
