@@ -36,11 +36,15 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<E
         },
     );
     out.textures_delta.clear();
+    // A tab's title starts with its document's name (an inactive tab shows the name alone).
+    let names: Vec<String> = app.session.documents().iter().map(|d| d.title()).collect();
     let mut titles: Vec<_> = out
         .shapes
         .iter()
         .filter_map(|s| match &s.shape {
-            egui::Shape::Text(t) if t.galley.text().contains(" @ ") => Some(egui::Rect::from_min_size(t.pos, t.galley.size())),
+            egui::Shape::Text(t) if names.iter().any(|n| t.galley.text().starts_with(n.as_str())) => {
+                Some(egui::Rect::from_min_size(t.pos, t.galley.size()))
+            }
             _ => None,
         })
         .collect();
@@ -275,15 +279,26 @@ fn hovering_back_to_source_resumes_move_instead_of_copying() {
     let (mut app, ctx, _, tabs) = drag_fixture();
     let id = app.session.active().unwrap().selection.objects[0];
     let undo = app.session.active().unwrap().history.undo.len();
-    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tabs[1].center())]);
+    let over = tabs[1].center();
+    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(over)]);
     frame(&mut app, &ctx, 0.25, vec![]);
     frame(&mut app, &ctx, 0.8, vec![]);
-    frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(tabs[0].center())]);
-    frame(&mut app, &ctx, 1.4, vec![]);
+    assert_eq!(app.session.active_index(), Some(1));
+    // The current document's tab shows its whole title, so the tabs move as Target becomes current,
+    // and the pointer stays over Target's tab: a small movement there switches to no other tab.
+    let tabs = frame(&mut app, &ctx, 0.85, vec![]);
+    assert!(tabs[1].contains(over), "the pointer stays over Target's tab: {:?} {over:?}", tabs[1]);
+    frame(&mut app, &ctx, 0.86, vec![Event::PointerMoved(over + egui::vec2(1.0, 0.0))]);
+    frame(&mut app, &ctx, 0.9, vec![]);
+    frame(&mut app, &ctx, 1.3, vec![]);
+    assert_eq!(app.session.active_index(), Some(1), "no other document becomes current");
+    let tabs = frame(&mut app, &ctx, 1.31, vec![]);
+    frame(&mut app, &ctx, 1.35, vec![Event::PointerMoved(tabs[0].center())]);
+    frame(&mut app, &ctx, 1.85, vec![]);
     assert_eq!(app.session.active_index(), Some(0));
     let drop = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(175.0, 180.0));
-    frame(&mut app, &ctx, 1.5, vec![Event::PointerMoved(drop)]);
-    frame(&mut app, &ctx, 1.6, vec![button(drop, false)]);
+    frame(&mut app, &ctx, 1.9, vec![Event::PointerMoved(drop)]);
+    frame(&mut app, &ctx, 2.0, vec![button(drop, false)]);
     let st = app.session.active().unwrap();
     assert_eq!(st.selection.objects, vec![id]);
     assert_eq!(st.history.undo.len(), undo + 1);
@@ -299,6 +314,8 @@ fn a_drop_back_in_the_source_uses_the_release_position_and_alt() {
     frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tabs[1].center())]);
     frame(&mut app, &ctx, 0.25, vec![]);
     frame(&mut app, &ctx, 0.8, vec![]);
+    // The current document's tab shows its whole title, so the tabs move as Target becomes current.
+    let tabs = frame(&mut app, &ctx, 0.85, vec![]);
     frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(tabs[0].center())]);
     frame(&mut app, &ctx, 1.4, vec![]);
     assert_eq!(app.session.active_index(), Some(0));
@@ -369,6 +386,8 @@ fn hovering_back_to_a_source_whose_type_is_measured_again_resumes_move() {
     frame(&mut app, &ctx, 0.25, vec![]);
     frame(&mut app, &ctx, 0.8, vec![]);
     assert_eq!(app.session.active_index(), Some(1));
+    // The current document's tab shows its whole title, so the tabs move as Target becomes current.
+    let tabs = frame(&mut app, &ctx, 0.85, vec![]);
     let left = app.session.documents()[0].doc.clone();
     frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(tabs[0].center())]);
     frame(&mut app, &ctx, 1.4, vec![]);

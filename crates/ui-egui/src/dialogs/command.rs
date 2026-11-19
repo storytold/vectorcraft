@@ -84,7 +84,8 @@ fn heading_in(lang: crate::i18n::Lang, label: &str) -> String {
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
 /// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
-/// Precision Tools › Common Tangents. (Cancel rolls a preview back whichever dialog started it.)
+/// Precision Tools › Common Tangents and the bounding shapes (Add Bounding Rectangle… and Add
+/// Bounding Circle…). (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
@@ -95,7 +96,9 @@ fn previews(d: &Dialog) -> bool {
         | crate::addons::cutting::WEED
         | crate::addons::cutting::BANNER
         | crate::addons::cutting::NEST
-        | crate::addons::pathtools::COMMON_TANGENTS => true,
+        | crate::addons::pathtools::COMMON_TANGENTS
+        | crate::addons::pathtools::BOUNDING_RECTANGLE
+        | crate::addons::pathtools::BOUNDING_CIRCLE => true,
         _ => false,
     }
 }
@@ -150,6 +153,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "object.pathfinder.trap" => &["thickness"],
         crate::addons::cutting::BRIDGES => &["width"],
         "object.textWrap.options" => &["offset"],
+        crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset"],
         _ => &[],
     }
 }
@@ -159,6 +163,11 @@ fn lengths(command: &str) -> &'static [&'static str] {
 pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
     match (command, key) {
         ("object.textWrap.options", "offset") => Some(vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE),
+        // The bounding shapes take an offset of 0 or more, and the command refuses one that takes
+        // the shape past the canvas edge.
+        (crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE, "offset") => {
+            Some(0.0..=vectorcraft_engine::MAX_COORD)
+        }
         _ => None,
     }
 }
@@ -182,6 +191,7 @@ fn order(command: &str) -> &'static [&'static str] {
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
         crate::addons::pathtools::COMMON_TANGENTS => &["tangents", "centerline"],
+        crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset", "each"],
         _ => &[],
     }
 }

@@ -198,14 +198,24 @@ pub fn export(doc: &Document, opts: &HpglOptions) -> Result<HpglOutput, String> 
     Ok(export_regions(doc, opts, &[opts.region])?.pop().unwrap_or_default())
 }
 
+/// An error unless a plot can cover `region`: its corners are finite and it has a width and a
+/// height (either corner may come first).
+pub fn check_region(region: Rect) -> Result<(), String> {
+    let r = region.abs();
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+        return Err("the export region is empty".into());
+    }
+    Ok(())
+}
+
 /// Write the visible art of `doc` over each of `regions` as an HP-GL plot, one per region, as
 /// [`export`] does with `opts.region`. The plots share one pen numbering, so a color is the same
 /// pen in each, and one point budget.
 pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> Result<Vec<HpglOutput>, String> {
-    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
-    if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
-        return Err("the export region is empty".into());
+    for r in regions {
+        check_region(*r)?;
     }
+    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
     if !TOLERANCE_RANGE.contains(&opts.tolerance) {
         return Err("the curve tolerance must be from 0.01 to 10 points".into());
     }
