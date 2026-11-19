@@ -10140,3 +10140,7 @@ breakText	Glyphs	字符
 	Pulse Stroke	脈動筆觸
 	Round Flow	圓頭流線
 	Chisel Flow	斜頭流線
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	編輯原稿所用應用程式：
+file-filter	Applications	應用程式

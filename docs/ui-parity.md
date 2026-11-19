@@ -20,6 +20,10 @@
 
 ## Feature submission evidence
 
+Draft enhancement #5804: Preferences › File Handling can select a raster editor through the native picker, with a private draft outside engine preferences and generic dialog fields. OK saves it, Cancel discards it, and Reset restores PhotoCraft. With Use System Defaults off, a missing chosen editor falls back to PhotoCraft, then the system default; validation and launch failures are reported. Control/MCP and synthetic input cannot choose an application or run external Edit Original. Web behavior, parity scores and estimates are unchanged; macOS/Linux smoke tests remain pending.
+
+**2026-11-09 revision:** draft implementation and regression coverage for #5804; no parity rescore.
+
 Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.
 
 A flare keeps its settings through transforms and saves. With a flare selected, double-clicking the Flare tool opens Flare Tool Options filled from it, and OK draws it again in its place as one undo step (`shape.editFlare`; none when nothing changed); the Flare tool shows the selected flare's center and end handles, and dragging either changes its length or direction; Object › Expand turns it into plain objects ([Draw and edit flares](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/draw-shapes/draw-and-edit-flares.html)). Regressions: `edit_flare_draws_a_transformed_flare_again_in_its_place_in_one_undo_step`, `dragging_a_selected_flares_handles_changes_its_length_and_direction` and `with_a_flare_selected_the_options_show_its_settings_and_ok_draws_it_again`. Scores and estimates unchanged.

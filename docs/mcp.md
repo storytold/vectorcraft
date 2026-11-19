@@ -9240,6 +9240,8 @@ the panel, in the order `links.list` gives them; the panel menu passes the selec
 them. An embedded image gives the name its row shows. An id that is not an image or a placed document, a
 malformed `ids`, or nothing to copy is an error, and the clipboard is left as it was.
 
+Draft #5804 adds a local, native-picker-only raster editor override when Use System Defaults is off. Its saved choice and Preferences draft are outside engine preferences and `Dialog::fields`: `prefs.set` (including bulk values), `ui.dialog.set` and `ui.set` cannot assign it. The chooser refuses control requests and synthetic input. If the chosen application is missing, Edit Original tries PhotoCraft and then the system default; validation or launch errors are reported. The existing refusal of automated external Edit Original remains. No executable arguments or shell command are accepted.
+
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
 {"name":"run_command","arguments":{"command":"links.placementOptions","params":{"ids":[12],"preserve":"fit","align":"top"}}}

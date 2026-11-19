@@ -10086,3 +10086,7 @@ breakText	Glyphs	글리프
 @msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
 @msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
 @msg	Two panels pass through each other.	두 패널이 서로 관통합니다.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	원본 편집 앱:
+file-filter	Applications	응용 프로그램

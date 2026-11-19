@@ -10,6 +10,10 @@
 
 ## Feature submission evidence
 
+Draft enhancement #5804: Preferences › File Handling can select a raster editor through the native picker, with a private draft outside engine preferences and generic dialog fields. OK saves it, Cancel discards it, and Reset restores PhotoCraft. With Use System Defaults off, a missing chosen editor falls back to PhotoCraft, then the system default; validation and launch failures are reported. Control/MCP and synthetic input cannot choose an application or run external Edit Original. Web behavior, parity scores and estimates are unchanged; macOS/Linux smoke tests remain pending.
+
+**2026-11-19 revision:** merged main while preserving the private raster-editor choice; no parity rescore.
+
 > **Eraser fill update (2026-11-11):** filled open paths without a visible painted stroke retain fill outside the sweep or Alt-drag marquee (#6582); stroked paths retain main behavior; scores and estimates unchanged.
 
 **Feature evidence last updated:** 2026-11-15.

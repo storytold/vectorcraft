@@ -7782,3 +7782,7 @@ shape	Open	Otvoren
 	Pulse Stroke	Pulsirajući potez
 	Round Flow	Okrugli tok
 	Chisel Flow	Kosi tok
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Uredi original pomoću:
+file-filter	Applications	Aplikacije

@@ -10090,3 +10090,7 @@ breakText	Glyphs	Glyphen
 @msg	Other blanks not shown: {count}	Weitere Zuschnitte nicht angezeigt: {count}
 @msg	A joint does not close by {gap} pt.	Eine Verbindung schließt um {gap} pt nicht.
 @msg	Two panels pass through each other.	Zwei Felder durchdringen einander.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Original bearbeiten mit:
+file-filter	Applications	Anwendungen

@@ -10340,3 +10340,7 @@ breakText	Glyphs	Glify
 @msg	Other blanks not shown: {count}	Inne wykroje nie są pokazane: {count}
 @msg	A joint does not close by {gap} pt.	Połączenie nie domyka się o {gap} pt.
 @msg	Two panels pass through each other.	Dwa panele przechodzą przez siebie.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edytuj oryginał w:
+file-filter	Applications	Aplikacje

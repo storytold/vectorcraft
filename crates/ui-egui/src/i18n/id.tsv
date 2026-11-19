@@ -7742,3 +7742,7 @@ breakText	Glyphs	Glif
 	Pulse Stroke	Goresan Berdenyut
 	Round Flow	Aliran Bulat
 	Chisel Flow	Aliran Serong
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edit asli dengan:
+file-filter	Applications	Aplikasi

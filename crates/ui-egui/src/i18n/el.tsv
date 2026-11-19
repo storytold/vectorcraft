@@ -8658,3 +8658,7 @@ breakText	Glyphs	Γλύφοι
 	Round Flow	Στρογγυλή ροή
 	Chisel Flow	Λοξή ροή
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: χρησιμοποιήστε "{_1}" ή "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Επεξεργασία πρωτοτύπου με:
+file-filter	Applications	Εφαρμογές

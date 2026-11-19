@@ -8684,3 +8684,7 @@ breakText	Glyphs	Glifs
 	Round Flow	Flux rodó
 	Chisel Flow	Flux bisellat
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edita l’original amb:
+file-filter	Applications	Aplicacions

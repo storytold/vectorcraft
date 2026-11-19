@@ -10123,3 +10123,7 @@ breakText	Glyphs	Glifi
 @msg	Other blanks not shown: {count}	Altri fustellati non mostrati: {count}
 @msg	A joint does not close by {gap} pt.	Una giunzione non si chiude di {gap} pt.
 @msg	Two panels pass through each other.	Due pannelli si attraversano.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Modifica originale con:
+file-filter	Applications	Applicazioni

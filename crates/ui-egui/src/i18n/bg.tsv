@@ -7727,3 +7727,7 @@ breakText	Glyphs	Глифи
 	Pulse Stroke	Пулсиращ щрих
 	Round Flow	Кръгъл поток
 	Chisel Flow	Скосен поток
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редактиране на оригинала с:
+file-filter	Applications	Приложения

@@ -10083,3 +10083,7 @@ theme	Appearance	अपीयरेंस
 @msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
 @msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
 @msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	मूल फ़ाइल इसमें एडिट करें:
+file-filter	Applications	ऐप्स

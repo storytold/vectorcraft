@@ -10477,3 +10477,7 @@ breakText	Glyphs	Glyfy
 @msg	Other blanks not shown: {count}	Další přířezy nejsou zobrazeny: {count}
 @msg	A joint does not close by {gap} pt.	Spoj se nezavírá o {gap} pt.
 @msg	Two panels pass through each other.	Dva panely procházejí jeden druhým.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Upravit originál v:
+file-filter	Applications	Aplikace

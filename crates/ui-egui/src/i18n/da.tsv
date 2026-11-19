@@ -10573,3 +10573,7 @@ breakText	Glyphs	Glyffer
 	Pulse Stroke	Pulserende strøg
 	Round Flow	Rundt strøg
 	Chisel Flow	Skråt strøg
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigér original med:
+file-filter	Applications	Programmer

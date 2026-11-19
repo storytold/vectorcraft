@@ -8329,3 +8329,7 @@ breakText	Glyphs	Glyph
 	Round Flow	Nét tròn
 	Chisel Flow	Nét vát
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: hãy dùng "{_1}" hoặc "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Chỉnh sửa bản gốc bằng:
+file-filter	Applications	Ứng dụng

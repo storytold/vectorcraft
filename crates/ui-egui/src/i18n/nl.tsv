@@ -10516,3 +10516,7 @@ breakText	Glyphs	Glyphs
 @msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
 @msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
 @msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Origineel bewerken met:
+file-filter	Applications	Programma’s

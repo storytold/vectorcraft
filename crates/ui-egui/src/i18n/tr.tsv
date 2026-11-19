@@ -10435,3 +10435,7 @@ breakText	Glyphs	Glifler
 @msg	Other blanks not shown: {count}	Gösterilmeyen diğer açınımlar: {count}
 @msg	A joint does not close by {gap} pt.	Bir birleşim {gap} pt kadar kapanmıyor.
 @msg	Two panels pass through each other.	İki panel birbirinin içinden geçiyor.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Orijinali şununla düzenle:
+file-filter	Applications	Uygulamalar

@@ -8741,3 +8741,7 @@ breakText	Glyphs	Merkit
 	Round Flow	Pyöreä veto
 	Chisel Flow	Viisto veto
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
+file-filter	Applications	Sovellukset

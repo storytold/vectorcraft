@@ -739,6 +739,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         return;
     }
     if let Some(d) = app.ui.dialog.take() {
+        if d.kind == "preferences" {
+            crate::original_editor::cancel(app);
+        }
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }

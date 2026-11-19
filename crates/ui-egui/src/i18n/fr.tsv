@@ -10463,3 +10463,7 @@ breakText	Glyphs	Glyphes
 	Pulse Stroke	Trait pulsé
 	Round Flow	Flux rond
 	Chisel Flow	Flux biseauté
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Modifier l’original avec :
+file-filter	Applications	Applications

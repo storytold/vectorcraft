@@ -26,6 +26,10 @@
 
 ## Feature submission evidence
 
+Draft enhancement #5804: Preferences › File Handling can select a raster editor through the native picker, with a private draft outside engine preferences and generic dialog fields. OK saves it, Cancel discards it, and Reset restores PhotoCraft. With Use System Defaults off, a missing chosen editor falls back to PhotoCraft, then the system default; validation and launch failures are reported. Control/MCP and synthetic input cannot choose an application or run external Edit Original. Web behavior, parity scores and estimates are unchanged; macOS/Linux smoke tests remain pending.
+
+**2026-11-19 revision:** merged main while preserving the private raster-editor choice; no parity rescore.
+
 M4: Explicitly requested editing data keeps a single artboard larger than its 14,400 pt capped PDF page (#6865). Scores and estimates unchanged.
 
 Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.

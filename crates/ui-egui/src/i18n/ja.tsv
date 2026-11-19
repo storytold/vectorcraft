@@ -10187,3 +10187,7 @@ breakText	Glyphs	字形
 @msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
 @msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
 @msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	元のファイルを編集するアプリ:
+file-filter	Applications	アプリケーション

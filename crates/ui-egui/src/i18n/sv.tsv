@@ -10168,3 +10168,7 @@ digits	Hindi	Hindi
 	Pulse Stroke	Pulserande drag
 	Round Flow	Runt flöde
 	Chisel Flow	Snedflöde
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigera original med:
+file-filter	Applications	Program

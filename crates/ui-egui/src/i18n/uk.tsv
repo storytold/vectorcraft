@@ -10099,3 +10099,7 @@ breakText	Glyphs	Гліфи
 @msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
 @msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
 @msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редагувати оригінал у:
+file-filter	Applications	Програми
