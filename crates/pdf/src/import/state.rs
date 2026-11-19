@@ -123,7 +123,8 @@ pub(super) struct Builder<'p> {
     pub(super) held: Vec<HeldStroke>,
     /// The glyphs of the lines a fill pass finished beyond the most kept for their stroke pass that
     /// a stroke may still have gone over, until the first stroke after them
-    /// ([`Builder::hold_stroke`]) or a boundary of stroke passes ([`Builder::end_fills`]).
+    /// ([`Builder::hold_stroke`]), a boundary of stroke passes ([`Builder::end_fills`]) or
+    /// anything else drawn ([`Builder::flush_text`]).
     pub(super) lost: Option<crate::import_text::LostFills>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,

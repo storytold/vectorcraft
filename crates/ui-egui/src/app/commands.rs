@@ -214,9 +214,19 @@ impl VectorcraftApp {
                 Ok(Some(started)) => return Ok(started),
                 Ok(None) => {}
             }
+            // Edit › Color Settings' Ask When Pasting, then any swatch conflict.
+            if let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params) {
+                return r;
+            }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }
+        }
+        // A drag from another document asks as Paste does (its swatches are always added).
+        if id == dialogs::profile_mismatch::DROP
+            && let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params)
+        {
+            return r;
         }
         // Native files carry the view they reopen at.
         if fileio::SaveMode::of(id).is_some() {
@@ -265,6 +275,10 @@ impl VectorcraftApp {
                 }
                 // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
                 panels::color_guide::after_command(self, id, &params, v, spot_base);
+                // A renamed color group stays selected in the Swatches panel.
+                if let Some(ctx) = self.ui_ctx.clone() {
+                    panels::swatches::after_command(&ctx, id, &params, v);
+                }
                 if id == "file.new" {
                     self.status("");
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
@@ -449,11 +463,18 @@ impl VectorcraftApp {
     /// and the tool remembered for the toolbar group and for the Touch workspace's drawing mode
     /// stays as it was.
     pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
+        let back = self.ui.brush_key_color_pick.as_ref().map(|pick| pick.back.clone());
+        crate::dialogs::cancel_brush_key_color(self, false);
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
         self.held_tool.clear();
-        self.activate_tool(id, true)?;
+        if let Err(error) = self.activate_tool(id, true) {
+            if let Some(back) = back.filter(|_| self.session.tool_id() == "eyedropper") {
+                self.return_to_tool(&back);
+            }
+            return Err(error);
+        }
         let now = self.session.tool_id();
         if crate::touch::is_drawing_tool(now) {
             self.ui.touch_drawing_tool = Some(now.to_string());
@@ -498,6 +519,7 @@ impl VectorcraftApp {
         }
         self.ui.flyout = None;
         switched?;
+        crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {
