@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say, and its clipping is handled as links.update handles it. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's, and one naming the distorted images that preserve was not applied to)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say, and its clipping is handled as links.update handles it. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's, and, when preserve is given, one naming the distorted images it was not applied to)}",
             has_doc,
             relink
         ),
@@ -609,13 +609,14 @@ pub(crate) fn kept_unread(bytes: &[u8]) -> bool {
 /// `blob`, an image [`fileio::raster_image`] read from a file, ready to keep. When `unread` (the
 /// file is one [`kept_unread`] names), its pixels are decoded once to check that they can be read,
 /// and a `linked` image's preview is made from that decode ([`ImageBlob::checked_with_proxy`]);
-/// otherwise a `linked` image gets its preview ([`ImageBlob::with_proxy`]). An error when the
-/// pixels can't be read.
+/// otherwise a `linked` image gets its preview ([`ImageBlob::with_proxy`]). The preview keeps the
+/// clipping path the image keeps ([`fileio::preview_with_clip`]). An error when the pixels can't
+/// be read.
 pub(crate) fn readable(blob: ImageBlob, unread: bool, linked: bool) -> Result<ImageBlob> {
     if !unread {
-        return Ok(if linked { blob.with_proxy() } else { blob });
+        return Ok(if linked { fileio::preview_with_clip(blob.with_proxy()) } else { blob });
     }
-    blob.checked_with_proxy(linked).ok_or_else(|| EngineError::Other("the image's pixels can't be read".into()))
+    blob.checked_with_proxy(linked).map(fileio::preview_with_clip).ok_or_else(|| EngineError::Other("the image's pixels can't be read".into()))
 }
 
 /// [`readable`], and the pixels it decoded are kept in the image store the renderers share
@@ -626,6 +627,7 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
         return readable(blob, unread, linked);
     }
     let (blob, pixels) = blob.checked_with_pixels(linked).ok_or_else(|| EngineError::Other("the image's pixels can't be read".into()))?;
+    let blob = fileio::preview_with_clip(blob);
     if let Some(pixels) = pixels {
         vectorcraft_render::keep_decoded_image(&blob, pixels);
     }
@@ -1668,7 +1670,7 @@ fn resolve_links(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_e
                     store_image(d, &g.key, blob, true);
                 } else if let Some(b) = d.images.get(&g.key).filter(|b| b.proxy.is_none()) {
                     // Linked before links kept a preview.
-                    let b = b.clone().with_proxy();
+                    let b = fileio::preview_with_clip(b.clone().with_proxy());
                     d.images.insert(g.key.clone(), b);
                 }
                 // Found away from its path, or read again: the link follows.

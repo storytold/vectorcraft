@@ -293,7 +293,9 @@ impl From<NodeWire> for Node {
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
             clip_pieces: w.clip_pieces,
-            image_quad: w.image_quad,
+            // Corners the image can't take are dropped as they are read: it is placed by its
+            // transform, and no later transform makes them its distortion.
+            image_quad: w.image_quad.filter(|q| matches!(&w.kind, NodeKind::Image(im) if crate::image_quad::check_for(im, q).is_ok())),
         };
         Node {
             id: w.id,

@@ -6951,7 +6951,8 @@ Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.mak
 (`object.createObjectMosaic`), Create Gradient Mesh (`object.mesh.create`) and Place with Replace (`file.place` with
 `replace`) refuse a distorted image with an error that names the distortion. Update Links (`links.update`) and Relink
 (`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
-Relink's `preserve`; Relink then adds a `warnings` entry naming those images. The clipping path a PSD, PSB or DCS
+Relink's `preserve`. When `preserve` is given, Relink adds a `warnings` entry naming those images; without it, Relink
+adds none for them. The clipping path a PSD, PSB or DCS
 file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
 path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
 the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file, written as stored (PNG, or
