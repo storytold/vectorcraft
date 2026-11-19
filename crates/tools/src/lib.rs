@@ -681,6 +681,7 @@ pub(crate) mod testutil {
             plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
+            interaction_doc: None,
         }
     }
 
