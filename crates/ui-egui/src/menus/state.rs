@@ -61,6 +61,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // A View › Rotate View item is checked when the active view is turned to its angle; without
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
+        // Object › Align's Align To items: the choice the Align panel shows.
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::shown_align_to(app) == v,
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
         "view.statusBarShow" => p.get("show").and_then(Value::as_str) == Some(app.ui.status_bar_show.param()),
@@ -71,6 +73,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolbarCompact" => app.ui.toolbar_compact,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
@@ -99,12 +102,21 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        // The Tile layout the panes show.
+        "window.arrange.tile" => app.ui.tiled && crate::canvas::TileLayout::from_params(p) == Ok(app.ui.tile_layout),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
         "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        // Customize… is checked while the proof simulates a profile it chose.
+        "ui.proofSetupDialog" => {
+            matches!(
+                vectorcraft_render::proof::view().setup.target,
+                vectorcraft_color::cms::ProofTarget::Cmyk(_) | vectorcraft_color::cms::ProofTarget::Rgb(_)
+            )
+        }
         "perspective.grid.snap" => perspective_grid(app).is_some_and(|g| g.snap),
         "perspective.grid.lockStation" => perspective_grid(app).is_some_and(|g| g.lock_station),
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
@@ -144,9 +156,9 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Menu items shown only with Preferences › Type › Show East Asian Options on: Type › Composite
-/// Fonts….
+/// Fonts… and Type › Kinsoku Shori Settings….
 fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
-    id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
+    [crate::dialogs::composite_fonts::COMMAND, crate::dialogs::kinsoku_sets::COMMAND].contains(&id) && !app.session.prefs.show_east_asian_options
 }
 
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
@@ -219,16 +231,24 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" | "type.highlightFontSize" => {
-            crate::panels::character::text_style(app).is_some()
-        }
+        "type.bold"
+        | "type.italic"
+        | "type.underline"
+        | "type.superscript"
+        | "type.subscript"
+        | "type.lineComposer"
+        | "type.hyphenate"
+        | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
-        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
+        "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
+        "file.cancelPlace" => crate::placing::can_cancel(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
@@ -264,12 +284,13 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
             app.session.active().is_some()
         }
+        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::pdf_summary_open(app),
         "ui.importSvgFilter" => {
             app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
         }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
-        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
+        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" | "ui.colorGroupOptions" => app.session.active().is_some(),
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
             app.session.active().is_some()
         }
@@ -286,6 +307,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::object_available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
             crate::panels::character::text_style(app).is_some()
         }
@@ -307,6 +329,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
+        "ui.recolorUndo" => crate::dialogs::recolor::can_step(app, true),
+        "ui.recolorRedo" => crate::dialogs::recolor::can_step(app, false),
         "ui.dialogReset" => crate::dialogs::can_reset(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
@@ -316,11 +340,14 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
-        "ui.epsOptionsDialog" => app.session.active().is_some(),
-        "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
+        "ui.epsOptionsDialog" | "ui.hpglOptionsDialog" => app.session.active().is_some(),
+        "file.saveForWeb" => app.session.active().is_some(),
+        // A browser preview opens a file, and the web build has none to open.
+        "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some() && !crate::io::is_web(app),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {

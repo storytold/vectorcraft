@@ -55,13 +55,10 @@ fn available(app: &VectorcraftApp, cmd: &str) -> bool {
 /// Selection counts as its blend.
 fn selects_blend_without_spine(app: &VectorcraftApp) -> bool {
     let Some(st) = app.session.active().filter(|st| st.selection.symbol_part.is_none()) else { return false };
+    let mut find = st.doc.nearest_finder();
     st.selection.objects.iter().any(|id| {
-        let ancestry = st.doc.ancestry(*id).unwrap_or_default();
-        let blend = ancestry.iter().rev().find_map(|a| match st.doc.node(*a).map(|n| &n.kind) {
-            Some(NodeKind::Blend { spec, .. }) => Some(spec.no_spine),
-            _ => None,
-        });
-        blend == Some(true)
+        let blend = find.nearest(*id, |n| matches!(n.kind, NodeKind::Blend { .. }));
+        matches!(blend.map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine)
     })
 }
 

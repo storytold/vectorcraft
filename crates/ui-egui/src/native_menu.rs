@@ -610,7 +610,7 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
 /// the hash changes as the interaction begins and as it ends.
-fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
+pub(crate) fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
@@ -622,7 +622,8 @@ fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);
-    (crate::i18n::current().code(), menus::plugin_revision(), crate::scripts_menu::revision()).hash(&mut h);
+    (crate::i18n::current().code(), menus::plugin_revision(), crate::scripts_menu::revision(), crate::dialogs::proof_setup::saved_revision())
+        .hash(&mut h);
     crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed).hash(&mut h);
     let fonts = vectorcraft_text::FontDb::global();
     (fonts.generation(), fonts.installed_fonts_ready()).hash(&mut h);

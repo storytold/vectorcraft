@@ -111,7 +111,7 @@ fn lengths(kind: &str) -> &'static [&'static str] {
 /// number: fields that ↑/↓ step by one (Shift: ten) and that do math, as the distances do.
 fn suffix(kind: &str, key: &str) -> Option<&'static str> {
     match (kind, key) {
-        ("rotate" | "shear" | "reflect" | "move" | "lineSegment", "angle") => Some("°"),
+        ("rotate" | "shear" | "reflect" | "move" | "lineSegment", "angle") | ("shear", "axisAngle") => Some("°"),
         ("scale", "sx" | "sy") | ("spiral", "decay") => Some("%"),
         _ => None,
     }
@@ -138,6 +138,7 @@ fn order(kind: &str) -> &'static [&'static str] {
         "spiral" => &["radius", "decay", "segments"],
         "artboardOptions" => &["name", "width", "height"],
         "lineSegment" => &["length", "angle"],
+        "shear" => &["angle", "axis", "axisAngle"],
         _ => &[],
     }
 }
@@ -163,8 +164,7 @@ fn choices(kind: &str, key: &str) -> Vec<(&'static str, &'static str)> {
     match (kind, key) {
         ("offsetPath", "joins") => vec![("miter", tl!("Miter")), ("round", tl!("Round")), ("bevel", tl!("Bevel"))],
         ("average", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical"), axis("both", "Both")],
-        ("reflect", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical"), axis("angle", "Angle")],
-        ("shear", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical")],
+        ("reflect" | "shear", "axis") => vec![axis("horizontal", "Horizontal"), axis("vertical", "Vertical"), axis("angle", "Angle")],
         _ => vec![],
     }
 }
@@ -368,11 +368,19 @@ pub(super) fn grid_then(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, more: imp
             if lengths.contains(&k.as_str()) {
                 length_field(ui, d, &k, &humanized(&k), unit);
             } else if let Some(suffix) = suffix(&d.kind, &k) {
-                let row = row_label(ui, &humanized(&k));
+                let label = match (d.kind.as_str(), k.as_str()) {
+                    ("shear", "axisAngle") => tl!("Axis Angle").into(),
+                    _ => humanized(&k),
+                };
+                // Shear's Axis Angle is the axis while the Angle axis is chosen, and keeps its value otherwise.
+                let enabled = d.kind != "shear" || k != "axisAngle" || d.str("axis") == "angle";
+                let row = row_label(ui, &label);
                 ui.label_inputs_by(row.id, |ui| {
-                    if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", &k), d.f64(&k, 0.0), suffix, 3, FIELD_W) {
-                        d.fields.insert(k, json!(v));
-                    }
+                    ui.add_enabled_ui(enabled, |ui| {
+                        if let Some(v) = crate::widgets::plain_field(ui, ("dlg-num", &k), d.f64(&k, 0.0), suffix, 3, FIELD_W) {
+                            d.fields.insert(k, json!(v));
+                        }
+                    });
                 });
                 ui.end_row();
             } else if let Some(ends) = skew_ends(&d.kind, &k) {
@@ -839,15 +847,22 @@ pub(crate) fn humanize(k: &str) -> String {
         "Traps With Process Color" => "Traps with Process Color:".into(),
         "Cols" => "Columns:".into(),
         "Flip Cols" => "Flip Columns:".into(),
+        "Each" => "One per Object:".into(),
         _ => format!("{s}:"),
     }
 }
 
-/// [`humanize`] translated where it is painted: the ":" stays outside the translated text.
+/// A style attribute as the style dialogs list it: the [`humanized`] key, then its value.
+pub(super) fn attribute_line(key: &str, value: &Value) -> String {
+    format!("{} {value}", humanized(key))
+}
+
+/// [`humanize`] translated where it is painted: the ":" stays outside the translated text and is
+/// written as the UI language writes a label's colon ([`crate::i18n::colon`]).
 pub(super) fn humanized(k: &str) -> String {
     let h = humanize(k);
     match h.strip_suffix(':') {
-        Some(base) => format!("{}:", tl!(base)),
+        Some(base) => crate::i18n::colon(tl!(base)),
         None => tl!(&h).to_string(),
     }
 }

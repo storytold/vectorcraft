@@ -37,9 +37,6 @@ fn cp(label: &'static str, id: &'static str, p: Value) -> Item {
 fn todo(label: &'static str) -> Item {
     Item::Todo(label, "")
 }
-fn todos(label: &'static str, sc: &'static str) -> Item {
-    Item::Todo(label, sc)
-}
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
 }
@@ -49,6 +46,7 @@ mod bar;
 mod context;
 mod entries;
 mod invoke;
+mod keyboard;
 mod labels;
 mod run;
 mod slots;
@@ -64,13 +62,19 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
+#[cfg(test)]
+use entries::flatten;
 pub use entries::{
-    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_shortcut,
+    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_label,
+    shown_shortcut,
 };
 pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
 pub(crate) use invoke::with_held_keys;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
+pub(crate) use keyboard::handle_input as handle_keyboard_input;
+// Shared numeric fields preserve their caret when a transient menu returns their focus.
+pub(crate) use keyboard::restoring_field_focus;
 pub(crate) use labels::lists_plugin;
 pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
@@ -80,6 +84,7 @@ pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 use slots::RECENT_FONT_IDS;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
 pub(crate) use submenus::PATH_EFFECTS;
+pub(crate) use tree::arrange_documents_items;
 pub use tree::{menu_tree, menu_tree_named};
 pub use ui_commands::UI_COMMANDS;
 

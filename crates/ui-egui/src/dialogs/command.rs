@@ -36,7 +36,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             let mut rows = v.as_str() == Some("rows");
             ui.add_space(4.0);
             egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
                 ui.label_inputs_by(row.id, |ui| {
                     ui.horizontal(|ui| {
                         if widgets::radio(ui, tl!("By Rows"), rows, true) {
@@ -84,7 +84,8 @@ fn heading_in(lang: crate::i18n::Lang, label: &str) -> String {
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
 /// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
-/// Precision Tools › Common Tangents. (Cancel rolls a preview back whichever dialog started it.)
+/// Precision Tools › Common Tangents and the bounding shapes (Add Bounding Rectangle… and Add
+/// Bounding Circle…). (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
@@ -95,7 +96,9 @@ fn previews(d: &Dialog) -> bool {
         | crate::addons::cutting::WEED
         | crate::addons::cutting::BANNER
         | crate::addons::cutting::NEST
-        | crate::addons::pathtools::COMMON_TANGENTS => true,
+        | crate::addons::pathtools::COMMON_TANGENTS
+        | crate::addons::pathtools::BOUNDING_RECTANGLE
+        | crate::addons::pathtools::BOUNDING_CIRCLE => true,
         _ => false,
     }
 }
@@ -150,6 +153,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "object.pathfinder.trap" => &["thickness"],
         crate::addons::cutting::BRIDGES => &["width"],
         "object.textWrap.options" => &["offset"],
+        crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset"],
         _ => &[],
     }
 }
@@ -159,6 +163,11 @@ fn lengths(command: &str) -> &'static [&'static str] {
 pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
     match (command, key) {
         ("object.textWrap.options", "offset") => Some(vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE),
+        // The bounding shapes take an offset of 0 or more, and the command refuses one that takes
+        // the shape past the canvas edge.
+        (crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE, "offset") => {
+            Some(0.0..=vectorcraft_engine::MAX_COORD)
+        }
         _ => None,
     }
 }
@@ -182,6 +191,7 @@ fn order(command: &str) -> &'static [&'static str] {
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
         crate::addons::pathtools::COMMON_TANGENTS => &["tangents", "centerline"],
+        crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset", "each"],
         _ => &[],
     }
 }
@@ -250,8 +260,14 @@ const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "des
 const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
-const FIRST_BASELINE: form::Choices =
-    &[("Ascent", "ascent"), ("Cap Height", "capHeight"), ("x Height", "xHeight"), ("Leading", "leading"), ("Fixed", "fixed")];
+const FIRST_BASELINE: form::Choices = &[
+    ("Ascent", "ascent"),
+    ("Cap Height", "capHeight"),
+    ("x Height", "xHeight"),
+    ("Leading", "leading"),
+    ("Em Box Height", "emBoxHeight"),
+    ("Fixed", "fixed"),
+];
 
 /// Area Type Options › Align (vertical alignment of the lines in each row/column).
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
@@ -311,6 +327,35 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options › First Baseline offers Em Box Height: OK sets it with its Min, and the
+    /// dialog opens again with it chosen.
+    #[test]
+    fn area_type_options_dialog_sets_the_em_box_height_first_baseline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        // The labels `i18n::tests::first_baseline_choices_are_in_complete_catalogs` checks.
+        let labels: Vec<&str> = choices("text.areaOptions", "firstBaseline").unwrap().iter().map(|(l, _)| *l).collect();
+        assert_eq!(labels, ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"]);
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "ascent");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+        fields.insert("firstBaseline".into(), json!("emBoxHeight"));
+        fields.insert("firstBaselineMin".into(), json!(4.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (vectorcraft_doc::FirstBaseline::EmBoxHeight, 4.0));
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "emBoxHeight");
     }
 
     /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter

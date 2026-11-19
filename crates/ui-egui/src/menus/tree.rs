@@ -1,6 +1,6 @@
 use super::slots::{PERSPECTIVE_SLOTS, RECENT_FONT_IDS, RECENT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
 use super::submenus::{INSERT_BREAK, INSERT_SPECIAL, INSERT_WHITESPACE, PATH_EFFECTS, TYPE_SIZES, effect_menu, font_items, insert_items};
-use super::{Item, Sep, c, cp, json, sub, todos};
+use super::{Item, Sep, c, cp, json, sub};
 
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
@@ -95,7 +95,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Paste without Formatting", "edit.pasteWithoutFormatting"),
                 c("Clear", "edit.clear"),
                 Sep,
-                cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
+                cp("Find and Replace…", "edit.findReplace", crate::dialogs::find_replace::menu_params()),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
                 sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)]),
                 // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
@@ -141,6 +141,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
                 c("Assign Profile…", "edit.assignProfile"),
+                c("Refresh Monitor Profile", "view.refreshMonitorProfile"),
                 Sep,
                 c("Keyboard Shortcuts…", "edit.keyboardShortcuts"),
                 c("Preferences…", "edit.preferences"),
@@ -163,6 +164,11 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                        Sep,
+                        // The Align panel's Align To choices, checked as the panel shows them.
+                        c("Align to Selection", "align.toSelection"),
+                        c("Align to Key Object", "align.toKeyObject"),
+                        c("Align to Artboard", "align.toArtboard"),
                     ],
                 ),
                 // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
@@ -451,6 +457,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Find Font…", "type.findFont"),
                 c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
+                c("Kinsoku Shori Settings…", crate::dialogs::kinsoku_sets::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -471,6 +478,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 Sep,
                 c("Create Outlines", "type.createOutlines"),
+                c("Retype", "type.retype"),
                 c("Scale Text Attributes", "type.scaleTextAttributes"),
                 c("Optical Margin Alignment", "type.opticalMarginAlignment"),
                 Sep,
@@ -564,9 +572,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub(
-                    "Proof Setup",
-                    vec![
+                sub("Proof Setup", {
+                    let mut v = vec![
                         cp("Working CMYK", "view.proofSetup", json!({"target": "workingCmyk", "proof": true})),
                         cp("Legacy Macintosh RGB (Gamma 1.8)", "view.proofSetup", json!({"target": "legacyMacRgb", "proof": true})),
                         cp("Internet Standard RGB (sRGB)", "view.proofSetup", json!({"target": "srgb", "proof": true})),
@@ -574,9 +581,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
-                    ],
-                ),
+                        c("Customize…", "ui.proofSetupDialog"),
+                    ];
+                    // The setups saved in the Proof Setups folder.
+                    let saved = crate::dialogs::proof_setup::saved_items();
+                    if !saved.is_empty() {
+                        v.push(Sep);
+                        v.extend(saved);
+                    }
+                    v
+                }),
                 c("Proof Colors", "view.proofColors"),
                 Sep,
                 c("Zoom In", "view.zoomIn"),
@@ -655,16 +669,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         ("Window", {
             let mut window_items = vec![
                 c("New Window", "window.newWindow"),
-                sub(
-                    "Arrange",
-                    vec![
-                        c("Cascade", "window.arrange.cascade"),
-                        c("Tile", "window.arrange.tile"),
+                sub("Arrange", {
+                    let mut arrange = vec![c("Cascade", "window.arrange.cascade")];
+                    arrange.extend(tile_items());
+                    arrange.extend([
                         c("Float in Window", "window.arrange.floatInWindow"),
                         c("Float All in Windows", "window.arrange.floatAllInWindows"),
                         c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
-                    ],
-                ),
+                    ]);
+                    arrange
+                }),
                 sub("Workspace", crate::workspaces::menu_items()),
                 Sep,
                 c("Control", "window.control"),
@@ -706,6 +720,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
+                panel("Production Preflight", crate::panels::preflight::ID),
+                panel("Retype", crate::panels::retype::ID),
                 panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
@@ -752,7 +768,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("VectorCraft on getartcraft.com", "help.appPage"),
                 c("VectorCraft on GitHub", "help.github"),
                 Sep,
-                todos("VectorCraft Help…", "F1"),
+                c("VectorCraft Help…", "help.discover"),
                 c("Safe Mode…", "help.safeMode"),
                 c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
@@ -779,6 +795,27 @@ pub(super) fn transform_items() -> Vec<Item> {
         c("Reset Bounding Box", "object.resetBoundingBox"),
         cp("Rotate Bounding Box…", "object.rotateBoundingBox", json!({"angle": 0})),
     ]
+}
+
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each (also under the
+/// application bar's Arrange Documents button).
+fn tile_items() -> Vec<Item> {
+    vec![
+        c("Tile", "window.arrange.tile"),
+        cp("Tile All Vertically", "window.arrange.tile", json!({"layout": "vertical"})),
+        cp("Tile All Horizontally", "window.arrange.tile", json!({"layout": "horizontal"})),
+        cp("2-Up Layout", "window.arrange.tile", json!({"layout": "2up"})),
+        cp("3-Up Layout", "window.arrange.tile", json!({"layout": "3up"})),
+        cp("4-Up Layout", "window.arrange.tile", json!({"layout": "4up"})),
+        cp("6-Up Layout", "window.arrange.tile", json!({"layout": "6up"})),
+    ]
+}
+
+/// The application bar's Arrange Documents menu: Consolidate All Windows, then the Tile layouts.
+pub(crate) fn arrange_documents_items() -> Vec<Item> {
+    let mut items = vec![c("Consolidate All Windows", "window.arrange.consolidateAllWindows"), Sep];
+    items.extend(tile_items());
+    items
 }
 
 /// Object → Arrange (also in the canvas context menu).

@@ -469,8 +469,8 @@ The public [Map artworks on 3D object](https://helpx.adobe.com/illustrator/deskt
 page describes graphics: art kept with the document and placed on single surfaces of a 3D object, and the
 [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
 page lists Graphics and Add Materials and Graphics on the Materials tab. VectorCraft maps graphics onto
-Extrude & Bevel's front and back caps, the plane of the Plane type (Rotate), and the swept side of Revolve, which the
-public page's example of a label on a bottle describes.
+Extrude & Bevel's front and back caps and its side (its walls and bevels), the plane of the Plane type (Rotate), and
+the swept side of Revolve, which the public page's example of a label on a bottle describes.
 
 - The panel's **Materials** tab shows the document's graphics as thumbnails. A graphic is a document symbol, as
   the public page allows existing symbols to be used. **Add as Single Graphic** keeps the selected art as a new
@@ -479,9 +479,9 @@ public page's example of a label on a bottle describes.
 - Clicking a thumbnail maps that graphic onto the front of the 3D effect of each selected object
   (`threeD.mapGraphic`), in one undo step. A graphic larger than the object starts scaled down to fit inside it.
 - Below the thumbnails the tab lists the graphics mapped onto the first selected object. The selected one shows
-  its Face (Front or Back; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics go
-  on its side), X and Y (the offset of its center from the center of the
-  object's bounds, in the face's plane), Scale (a percentage of the symbol's size) and Rotation
+  its Face (Front, Back or Side; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics
+  go on its side), X and Y (the offset of its center from the center of the
+  object's bounds, in the face's plane, or on a side from its middle unrolled flat), Scale (a percentage of the symbol's size) and Rotation
   (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
 - While the tab is open, a blue handle sits on the center of each mapped graphic whose face is turned toward the
   viewer. Dragging a handle moves that graphic over its face, previewed while the pointer is down and recorded as
@@ -522,6 +522,20 @@ These rules are VectorCraft's own:
   or point, takes none. A graphic larger than the half of the side seen from the front starts
   scaled to fit it. The panel shows no handle for a Revolve's graphics; X and Y move them. Expand Appearance keeps
   every face of a surface with graphics.
+- On Extrude & Bevel a graphic on the Side lies on the walls and bevels, unrolled flat. X runs along the art's own
+  outline (the front cap's edge, or with a bevel carved into the shape the walls' outline), through its corners and
+  around its curves: 0 is where the outline's top crosses the vertical line
+  through the middle of its bounds, and X grows clockwise around the outline as the front is seen, so the graphic
+  reads the right way round from outside. Y runs from the front cap's edge toward the back cap's, measured from the
+  middle: across each bevel step along its slant, and across the walls along the depth. Both are lengths before
+  the twist and the taper, which carry the graphic with the side. The side is cut at the anchor of the outline
+  nearest half way around from X = 0. On a compound shape the graphics go on its longest contour, and on an object
+  with several solids (a fill and its stroke's outline, or the members of a group or layer) they go once, on the
+  side of the solid with the longest outline. Each piece of the side that shows its outside to the viewer draws the
+  part of the graphic that falls on it, shaded as the piece is, with the same cutting and seams as on Revolve; a
+  piece of a stroke's face cut where it passes through a wall draws the part within its own outline. A graphic larger than the
+  part of the side unrolled about X = 0 that does not reach its cut starts scaled to fit it. The blue handle sits on the graphic's center while that point is on a
+  piece the viewer sees, and dragging it moves the graphic over the visible part of the side.
 - The symbol's fills and strokes are drawn as filled areas, a stroke as its outline, and their gradients and
   patterns are placed with the graphic. Images, hidden objects,
   guides and clipping paths in the symbol are left out, and clipping groups draw their art unclipped. Instances
@@ -530,19 +544,63 @@ These rules are VectorCraft's own:
 - Without perspective, the graphic maps exactly. With perspective, straight lines stay straight and each curve is
   cut into 8 cubic pieces before it is mapped. The part of a graphic at or behind the eye is left out.
 - An object takes up to 64 graphics. One graphic draws up to 4,096 fills and strokes, and the graphics of one 3D
-  effect draw up to 400,000 path elements together (on Revolve, 400,000 points after the curves are cut, and up to
+  effect draw up to 400,000 path elements together (on Revolve's side and Extrude & Bevel's, 400,000 points after the curves are cut, and up to
   2,000,000 once they are cut at the faces, with up to 64,000,000 points cut together, and the copies of their
   paints in the parts take up to 256 MiB per object, apart from those of the surfaces). Commands refuse a graphic
   past either limit. A loaded file
   draws the object without a graphic past the first limit, and without all of its graphics past the second.
-- A hollow Extrude & Bevel has no caps, so its graphics are not drawn until Cap is turned on again, and
-  `threeD.mapGraphic` refuses to map a new one onto it. Changing the type to Inflate drops the graphics, and
-  changing between Extrude, Plane and Revolve keeps them, except that Plane and Revolve drop the graphics on the
-  back cap; on Revolve the front's graphics go on its side.
+- A hollow Extrude & Bevel has no caps, so the graphics on its caps are not drawn until Cap is turned on again,
+  and `threeD.mapGraphic` refuses to map a new one onto a cap; its side takes graphics. With a depth of 0 the object
+  is a plane, and `threeD.mapGraphic` maps graphics onto its front only. Changing the type to Inflate drops the
+  graphics, and changing between Extrude, Plane and Revolve keeps them, except that Plane and Revolve drop the
+  graphics on the back cap and on Extrude & Bevel's side; on Revolve the front's graphics go on its side.
 - `effect.apply` and `effect.setParams` refuse a graphic that names a symbol the document does not have, unless
   the effect already holds a graphic of that symbol. A graphic whose symbol is deleted is no longer drawn. Renaming a symbol renames it in the graphics that use it,
   in the layers, in the art of symbols, patterns, graph designs, brushes and opacity masks, and in graphic
   styles, and Select All Unused in the Symbols panel counts a symbol a graphic uses as used, a graphic in a graphic style included.
+
+## Map Art
+
+The Extrude & Bevel (Classic) and Revolve (Classic) dialogs have a **Map Art…** button on their Object tab. It
+shows Map Art in place of the tabs until **Done**, and the dialog's Preview, OK and Cancel apply to the maps with the
+other settings ([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=189),
+[the same section in the 2010 help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=274)).
+Rotate (Classic) and the other 3D effects take no map. The command is `threeD.mapArt` ([mcp.md](mcp.md#map-art)).
+
+- **Surface**: the first, previous, next and last buttons and a number field pick the surface, with the count beside
+  them. A light gray mark shows that the surface faces the viewer and a dark gray mark that it is hidden. With Preview
+  on, the surface is outlined in red on the artboard.
+- **Symbol**: None or one of the document's symbols. Each surface keeps one symbol.
+- The surface is shown laid out flat with the box of the mapped art on it. A drag inside the box moves the art, a
+  drag of a side or corner handle scales it about its center, and a drag just outside the box turns it. X, Y,
+  Horizontal Scale, Vertical Scale and Rotation give the same values as numbers.
+- **Scale to Fit** centers the art and scales it to fill the surface. **Clear** removes the surface's map, as None
+  does, and **Clear All** removes every map.
+- **Shade Artwork** gives the mapped art the tone and highlight of the face it lies on. **Invisible Geometry**
+  draws the mapped art and leaves out the solid's faces.
+
+Extrude & Bevel (Classic) numbers its surfaces through the object's solids in the order they are built (the top fill's
+solid, then each stroke's): each solid's front cap and back cap, then each side wall from corner to corner of the
+outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number,
+and a solid whose bevel is as deep as the solid has no walls.
+A side wall is laid out at its own length, which a bevel added around the shape makes longer than the outline. A bevel
+is laid out at the length of the wall below it, so mapped art on a bevel is stretched or squeezed along its edge
+nearer the cap. Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
+the side of the member with the longest profile, and Invisible Geometry leaves out every member's faces. The numbering
+is VectorCraft's own.
+
+- A map's X and Y place the center of the art from the center of the surface laid out flat, so a map follows the
+  center when the surface changes size. A map past the object's surface count draws nothing and stays in the effect.
+- Mapped art is drawn on the parts of its surface that face the viewer, clipped to the surface, and over a wall, a
+  bevel or Revolve's side it bends with the facets. The Wireframe surface draws no mapped art.
+- The canvas, exports, printing and **Object › Expand Appearance** draw the mapped art the same way. Renaming a symbol
+  renames it in the maps, copying the object to another document brings the symbols its maps use, and Select All
+  Unused counts a symbol a map uses as used.
+- A map's art follows the rules and limits of a graphic's art ([Graphics](#graphics)). An object takes up to 64 maps,
+  and its maps share the 400,000 path elements of one 3D effect's graphics; past that limit the object draws without
+  its mapped art. The art of the maps on walls, bevels and Revolve's side, at each map's scale and with its curves cut
+  into straight pieces, may also take at most 400,000 points together, and commands refuse art past it. The limits and the shading of the mapped art are
+  VectorCraft's own.
 
 ## Parameters (`effect.apply`, `effect.setParams`)
 
@@ -553,7 +611,7 @@ uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shad
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely. All four take `shadow` (boolean, false), `shadowPosition` (`behind` or `below`), `shadowDistance` (0..100%, 0) and `shadowBounds` (10..400%, 100) ([Shadows](#shadows)); values out of range are rejected before editing.
 `threeD.extrude`, `threeD.rotate` and `threeD.revolve` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
-with `symbol` (the name of a document symbol), `face` (`front` or `back`, default `front`; `threeD.rotate` and
+with `symbol` (the name of a document symbol), `face` (`front`, `back` or `side`, default `front`; `threeD.rotate` and
 `threeD.revolve` take `front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
 default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
 All four take `render` ([3D and Materials panel](#3d-and-materials-panel)): an object whose `mode` is `shaded` (the
@@ -567,11 +625,11 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base and Adobe Substance), graphics on Inflate and on Extrude & Bevel's walls and bevels,
-  shadows of lights after the first, and **ray-traced rendering** are not built: shading uses directional
-  lights, in the paint of the fill or stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and
-  only the first light casts a shadow ([Shadows](#shadows)). Graphics map onto planar faces and Revolve's side only
-  ([Graphics](#graphics)).
+- **Materials** (base and Adobe Substance), graphics on Inflate, shadows of lights after the first, and
+  **ray-traced rendering** are not built: shading uses directional lights, in the paint of the fill or stroke the
+  solid is built for ([Fills and strokes](#fills-and-strokes)), and only the first light casts a shadow
+  ([Shadows](#shadows)). Graphics map onto planar faces, Extrude & Bevel's side as one surface unrolled flat, and
+  Revolve's side only ([Graphics](#graphics)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn
   back to front, with a flat cap or flat back turned toward the viewer drawn after all of them. Concave solids
@@ -619,7 +677,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   the faces are shaded with it is VectorCraft's own. The Black Overprint shading color keeps each face's paint and
   draws the shading over it as overprinting black, without the highlight. The shading is on the black plate in
   Separations Preview and PDF output. Their Rotation tab has the track cube
-  ([Track cube](#track-cube)). Map art, Turntable and 3D export are separate, unbuilt items.
+  ([Track cube](#track-cube)). Extrude & Bevel (Classic) and Revolve (Classic) take Map Art
+  ([Map Art](#map-art)). Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

@@ -12,8 +12,10 @@ pub mod bbox;
 pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
+pub mod circle;
 pub mod corners;
 pub mod cropimage;
+pub mod curvature_circle;
 pub mod cut;
 pub mod dimension;
 pub mod direct;
@@ -27,12 +29,14 @@ pub mod meshedit;
 pub mod mirror;
 pub mod nineslice;
 pub mod objects_on_path;
+pub mod option_check;
 pub mod params;
 pub mod pathtype;
 pub mod pen;
 pub mod pie;
 pub mod place;
 pub mod printtiling;
+pub mod quickpen;
 pub mod repeat_grid;
 pub mod repeat_radial;
 pub mod rulerguide;
@@ -40,10 +44,13 @@ pub mod select;
 pub mod settings;
 pub mod shape;
 pub mod shaperwidget;
+pub mod sidewidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
+pub mod three_point_arc;
 pub mod touchtype;
+pub mod trace_split;
 pub mod typewidget;
 pub mod xform;
 
@@ -102,6 +109,10 @@ pub enum Overlay {
     Swatch { p: Point, color: [u8; 4], selected: bool },
     /// A hairline in a translucent colour (perspective gridlines), RGBA.
     GridLine { a: Point, b: Point, color: [u8; 4] },
+    /// Hover text for the disc of `radius` (document units) around `center`: while the pointer
+    /// rests there and nothing is being dragged, the UI shows `text`, an English UI string it
+    /// translates, as a tooltip. Nothing is drawn for it.
+    HoverText { center: Point, radius: f64, text: &'static str },
 }
 
 /// What an IME's "delete the text around the cursor" counts: UTF-8 bytes (winit's raw
@@ -160,6 +171,18 @@ pub trait Tool: Send {
         Value::Null
     }
     fn set_option(&mut self, _key: &str, _value: &Value) {}
+    /// Whether [`Self::set_option`] takes `value` for option `key` as it is: an error names an
+    /// option the tool doesn't have, a value of the wrong type or a number out of range
+    /// (`tool.setOption` checks every option it is given with this before it sets any). A tool
+    /// without options takes none.
+    fn check_option(&self, key: &str, _value: &Value) -> Result<(), String> {
+        Err(option_check::unknown(key))
+    }
+    /// Whether [`Self::set_option`] takes all of `values`, set together in one call: by default
+    /// each one checked on its own with [`Self::check_option`].
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        values.iter().try_for_each(|(k, v)| self.check_option(k, v))
+    }
     /// Is an interaction in progress (drag, open pen path)?
     fn busy(&self) -> bool {
         false
@@ -272,8 +295,8 @@ pub trait Tool: Send {
         false
     }
     /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
-    /// selection, a gradient vector, a Scale, Rotate, Reflect or Shear tool drag), or the
-    /// Paintbrush's brush. None for a tool with nothing of its own to show.
+    /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
+    /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
     fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
         None
     }
@@ -365,8 +388,12 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "dimension" => Box::new(dimension::DimensionTool::default()),
         "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
+        circle::ID => Box::new(circle::CircleTool::default()),
+        curvature_circle::ID => Box::new(curvature_circle::CurvatureCircleTool::default()),
+        quickpen::ID => Box::new(quickpen::QuickPenTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
+        three_point_arc::ID => Box::new(three_point_arc::ThreePointArcTool::default()),
         other => symbolism::create(other)
             .or_else(|| builder::create(other))
             .or_else(|| draw2::create(other))
@@ -610,6 +637,7 @@ pub(crate) mod testutil {
             snap_to_glyph: false,
             glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
+            shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
             appearance_item: None,
@@ -657,7 +685,21 @@ pub(crate) mod testutil {
             plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
+            interaction_doc: None,
         }
+    }
+
+    /// Held for reading by tests that count the layouts the Type tool keeps, and for writing by
+    /// tests that change what layout reads (fonts, hyphenation exceptions): tests run in parallel,
+    /// and a count must not include a refresh another test caused.
+    static LAYOUT_INPUTS: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+    pub fn steady_layout_inputs() -> std::sync::RwLockReadGuard<'static, ()> {
+        LAYOUT_INPUTS.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn changing_layout_inputs() -> std::sync::RwLockWriteGuard<'static, ()> {
+        LAYOUT_INPUTS.write().unwrap_or_else(|e| e.into_inner())
     }
 }
 

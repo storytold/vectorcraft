@@ -260,6 +260,100 @@ fn a_stroke_effect_reshapes_a_stroke_a_dynamic_instance_adds() {
     assert!(b.x0 <= 31.0 && b.x1 >= 169.0, "the bounds take in the offset stroke: {b:?}");
     let drawn = vectorcraft_render::drawn_bounds(&doc, doc.node(id).unwrap()).expect("the instance is drawn");
     assert!(drawn.x0 <= 31.0 && drawn.x1 >= 169.0, "the drawn bounds take in the offset stroke: {drawn:?}");
+    assert_eq!(hit_at(&s, 30.5, vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() }), Some(id), "a click on the added stroke");
+}
+
+/// What a click at (`x`, 100) with `opt` hits.
+fn hit_at(s: &Session, x: f64, opt: vectorcraft_doc::hit::HitOptions) -> Option<NodeId> {
+    vectorcraft_doc::hit::hit_test(&s.doc().unwrap().doc, vectorcraft_geom::Point::new(x, 100.0), opt).map(|h| h.leaf)
+}
+
+/// [`instance_with_row`] of a symbol whose art is an instance of another symbol made of the square.
+fn nested_instance_with_row(s: &mut Session) -> (NodeId, usize) {
+    square(s);
+    let inner = NodeId(run(s, "symbol.new", json!({"name": "Inner"}))["id"].as_u64().unwrap());
+    run(s, "select.set", json!({"ids": [inner.0]}));
+    let id = NodeId(run(s, "symbol.new", json!({"name": "Outer"}))["id"].as_u64().unwrap());
+    run(s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(s, id).appearance.items.len() - 1;
+    run(s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    (id, row)
+}
+
+/// Effect › Pathfinder › Add on a group holding a symbol instance combines the art the instance
+/// draws: the effects on the instance's fill and stroke reshape the result as they reshape the
+/// instance, in a symbol placed inside another symbol too.
+#[test]
+fn pathfinder_takes_a_symbol_instance_fill_and_stroke_effects() {
+    for (fill, x, color) in [(true, 44, RED), (false, 40, BLUE)] {
+        let mut s = session();
+        let (id, row) = instance_with_row(&mut s, "Square", fill);
+        offset_row(&mut s, id, row, 10.0);
+        let g = NodeId(run(&mut s, "object.group", json!({"ids": [id.0]}))["id"].as_u64().unwrap());
+        run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.add"}));
+        let r = render(&s);
+        assert!(near(r.pixel(x, 100), color), "fill {fill}: the result keeps the offset: {:?}", r.pixel(x, 100));
+        assert!(near(r.pixel(100, 100), RED), "fill {fill}: the result keeps the art's fill: {:?}", r.pixel(100, 100));
+    }
+    // An effect of the instance's own reshapes the art as well.
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, row, 10.0);
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "item": null, "effect": "path.offsetPath", "params": {"offset": 5}}));
+    assert!(near(render(&s).pixel(37, 100), RED), "both offsets grow the art on the canvas: {:?}", render(&s).pixel(37, 100));
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [id.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.add"}));
+    assert!(near(render(&s).pixel(37, 100), RED), "both offsets grow the result: {:?}", render(&s).pixel(37, 100));
+
+    let mut s = session();
+    let (id, row) = nested_instance_with_row(&mut s);
+    offset_row(&mut s, id, row, 10.0);
+    assert!(near(render(&s).pixel(44, 100), RED), "the nested art grows on the canvas: {:?}", render(&s).pixel(44, 100));
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [id.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.add"}));
+    assert!(near(render(&s).pixel(44, 100), RED), "the nested art grows in the result: {:?}", render(&s).pixel(44, 100));
+}
+
+/// A click where the effect on a symbol instance's fill or stroke paints its art outside the
+/// instance's bounds selects the instance; a click past the drawn art, a fill with Selection by
+/// Path Only and outline mode do not.
+#[test]
+fn a_click_where_a_symbol_instance_fill_or_stroke_effect_paints_selects_it() {
+    use vectorcraft_doc::hit::HitOptions;
+    let opt = HitOptions { tol: 1.0, ..Default::default() };
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    assert_eq!(hit_at(&s, 44.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(hit_at(&s, 44.0, opt), Some(id), "a click on the grown fill");
+    assert_eq!(hit_at(&s, 100.0, opt), Some(id), "a click inside the instance");
+    assert_eq!(hit_at(&s, 36.0, opt), None, "a click past the grown fill");
+    assert_eq!(hit_at(&s, 44.0, HitOptions { path_only: true, ..opt }), None, "Selection by Path Only leaves the fill out");
+    assert_eq!(hit_at(&s, 44.0, HitOptions { outline: true, ..opt }), None, "outline mode draws the art as it is");
+
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", false);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(hit_at(&s, 40.0, opt), Some(id), "a click on the moved stroke");
+    assert_eq!(hit_at(&s, 45.0, opt), None, "a click between the moved stroke and the fill");
+    assert_eq!(hit_at(&s, 40.0, HitOptions { path_only: true, ..opt }), Some(id), "Selection by Path Only takes the stroke");
+
+    let mut s = session();
+    let (id, row) = nested_instance_with_row(&mut s);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(hit_at(&s, 44.0, opt), Some(id), "a click on the grown fill of the nested art");
+
+    // A path in the art with an Offset Path of its own: both offsets grow what it draws.
+    let mut s = session();
+    let art = square(&mut s);
+    run(&mut s, "effect.apply", json!({"ids": [art.0], "item": null, "effect": "path.offsetPath", "params": {"offset": 5}}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Offset"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 10.0);
+    assert!(near(render(&s).pixel(37, 100), RED), "both offsets grow the art on the canvas: {:?}", render(&s).pixel(37, 100));
+    assert_eq!(hit_at(&s, 37.0, opt), Some(id), "a click where both offsets grow the art");
 }
 
 /// A group in the symbol's art with a fill of its own: the instance's fill effect reshapes what
@@ -284,12 +378,188 @@ fn a_fill_effect_reshapes_the_fill_of_a_group_in_the_art() {
     assert!(b.x0 <= 31.0 && b.x1 >= 169.0, "the bounds take in the group's grown fill: {b:?}");
     let drawn = vectorcraft_render::drawn_bounds(&doc, doc.node(id).unwrap()).expect("the instance is drawn");
     assert!(drawn.x0 <= 31.0 && drawn.x1 >= 169.0, "the drawn bounds take in the group's grown fill: {drawn:?}");
+    assert_eq!(hit_at(&s, 35.0, vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() }), Some(id), "a click on the group's grown fill");
 
     let before = render(&s);
     run(&mut s, "effect.expandAppearance", json!({}));
     no_effects_left(&node(&s, id));
     let after = render(&s);
     assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
+/// An image whose fill Convert to Shape gives a shape, selected. The frame runs from 85 to 115;
+/// the fill's shape is 9 pt larger on each side.
+fn image_with_shaped_fill(s: &mut Session) -> NodeId {
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(s, "select.set", json!({"ids": [im.0]}));
+    run(s, "appearance.addFill", json!({}));
+    run(s, "paint.setFill", json!({"color": "#0000ff", "item": 0}));
+    run(s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    im
+}
+
+/// The objects a marquee from `x0` to `x1` across y = 100 touches, as the canvas shows them, in
+/// outline with `outline`.
+fn marquee_at(s: &Session, x0: f64, x1: f64, outline: bool) -> Vec<NodeId> {
+    let r = vectorcraft_geom::Rect::new(x0, 90.0, x1, 110.0);
+    vectorcraft_doc::hit::marquee_in_view(&s.doc().unwrap().doc, r, None, true, outline, false)
+}
+
+/// A marquee touches a symbol instance where the geometry effects of its fill or stroke paint its
+/// art outside its box, as a click there selects it, except in outline.
+#[test]
+fn a_marquee_where_a_symbol_instance_fill_or_stroke_effect_paints_selects_it() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), []);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), [id], "a marquee across the grown fill");
+    assert_eq!(marquee_at(&s, 30.0, 37.0, false), [], "a marquee past the grown fill");
+    assert_eq!(marquee_at(&s, 38.0, 45.0, true), [], "outline mode draws the art as it is");
+
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", false);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 42.0, false), [id], "a marquee across the moved stroke");
+    assert_eq!(marquee_at(&s, 43.0, 45.0, false), [], "a marquee between the moved stroke and the fill");
+
+    let mut s = session();
+    let (id, row) = nested_instance_with_row(&mut s);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), [id], "a marquee across the grown fill of the nested art");
+}
+
+/// A marquee touches an image where the shape of its own fill lies outside its frame, and an
+/// instance of a symbol made of that image where the instance's fill effect grows that shape, as
+/// clicks there select them, except in outline.
+#[test]
+fn a_marquee_on_the_shape_of_an_image_fill_selects_it() {
+    let mut s = session();
+    let im = image_with_shaped_fill(&mut s);
+    assert_eq!(marquee_at(&s, 74.0, 79.0, false), [im], "a marquee across the fill's shape outside the frame");
+    assert_eq!(marquee_at(&s, 70.0, 75.0, false), [], "a marquee past the fill's shape");
+    assert_eq!(marquee_at(&s, 74.0, 79.0, true), [], "outline mode draws the frame");
+
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Image"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 64.0, 68.0, false), [id], "a marquee across the instance's grown fill");
+    assert_eq!(marquee_at(&s, 58.0, 63.0, false), [], "a marquee past the grown fill");
+}
+
+/// An image in the symbol's art whose fill Convert to Shape gives a shape: the instance's fill
+/// effect grows what that fill paints, and a click there selects the instance.
+#[test]
+fn a_click_on_the_grown_fill_of_an_image_in_the_art_selects_the_instance() {
+    let mut s = session();
+    image_with_shaped_fill(&mut s);
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Image"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 70.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    assert!(near(render(&s).pixel(70, 100), BLUE), "the image's fill grows by the offset: {:?}", render(&s).pixel(70, 100));
+    assert_eq!(hit_at(&s, 70.0, opt), Some(id), "a click on the image's grown fill");
+    assert_eq!(hit_at(&s, 60.0, opt), None, "a click past the grown fill");
+}
+
+/// A group in the symbol's art with Effect › Pathfinder › Subtract: the instance's fill effect
+/// grows the result, and a click past both shapes where only the subtracted shape would grow does
+/// not select the instance.
+#[test]
+fn a_click_on_a_shape_a_pathfinder_effect_in_the_art_subtracts_misses_the_instance() {
+    let mut s = session();
+    // The back square runs from 50 to 110 and the front one from 80 to 140; the result runs from 50 to 80.
+    let back = NodeId(run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 60, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut s, "stroke.set", json!({"weight": 4}));
+    let front = NodeId(run(&mut s, "shape.rectangle", json!({"x": 80, "y": 50, "width": 60, "height": 100}))["id"].as_u64().unwrap());
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [back.0, front.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.subtract"}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Subtracted"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 45.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    assert!(near(r.pixel(45, 100), RED), "the result's fill grows by the offset: {:?}", r.pixel(45, 100));
+    assert!(near(r.pixel(145, 100), WHITE), "the subtracted shape is not drawn: {:?}", r.pixel(145, 100));
+    assert_eq!(hit_at(&s, 45.0, opt), Some(id), "a click on the result's grown fill");
+    assert_eq!(hit_at(&s, 145.0, opt), None, "a click where only the subtracted shape would grow");
+}
+
+/// A Shaper group in the symbol's art: the instance's fill effect grows the faces it shows, and a
+/// click where only its original shapes would grow does not select the instance.
+#[test]
+fn a_click_on_a_shaper_groups_original_shapes_in_the_art_misses_the_instance() {
+    let mut s = session();
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": []}));
+    for x in [0, 50] {
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": []}));
+        run(&mut s, "shape.rectangle", json!({"x": x, "y": 50, "width": 100, "height": 100}));
+    }
+    // The scribble inside the overlap removes the front rectangle's face; the face left runs from 0 to 50.
+    let g = NodeId(run(&mut s, "shaper.scribble", json!({"points": [[65, 70], [85, 90], [65, 110], [85, 130]]}))["id"].as_u64().unwrap());
+    assert!(node(&s, g).extras().shaper.is_some());
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Shaped"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 57.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    assert!(near(r.pixel(57, 100), RED), "the face's fill grows by the offset: {:?}", r.pixel(57, 100));
+    assert!(near(r.pixel(125, 100), WHITE), "the original shapes are not drawn: {:?}", r.pixel(125, 100));
+    assert_eq!(hit_at(&s, 57.0, opt), Some(id), "a click on the face's grown fill");
+    assert_eq!(hit_at(&s, 125.0, opt), None, "a click on an original shape");
+}
+
+/// A Shaper group in the symbol's art with a stroke of its own below its Contents row: the
+/// instance's stroke effect moves what that stroke paints, and a click selects the instance where
+/// the canvas draws the moved stroke, not inside the original shapes.
+#[test]
+fn a_click_on_a_shaper_group_with_a_stroke_below_its_contents_selects_the_instance_where_it_draws() {
+    let mut s = session();
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": []}));
+    for x in [0, 50] {
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": []}));
+        run(&mut s, "shape.rectangle", json!({"x": x, "y": 50, "width": 100, "height": 100}));
+    }
+    // The scribble removes the front rectangle's face; the group's stroke outlines both rectangles.
+    let g = NodeId(run(&mut s, "shaper.scribble", json!({"points": [[65, 70], [85, 90], [65, 110], [85, 130]]}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    let stroke = node(&s, g).appearance.items.len() - 1;
+    run(&mut s, "paint.setStroke", json!({"ids": [g.0], "item": stroke, "color": "#0000ff"}));
+    run(&mut s, "stroke.set", json!({"ids": [g.0], "item": stroke, "weight": 4}));
+    run(&mut s, "appearance.moveItem", json!({"ids": [g.0], "from": "contents", "to": stroke + 1}));
+    assert_eq!(node(&s, g).appearance.split_contents().0.len(), stroke + 1, "the group's stroke is below its Contents row");
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Shaped"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert!(near(r.pixel(160, 100), BLUE), "the group's stroke moves out by the offset: {:?}", r.pixel(160, 100));
+    assert!(near(r.pixel(125, 100), WHITE), "the original shapes are not drawn: {:?}", r.pixel(125, 100));
+    assert_eq!(hit_at(&s, 160.0, opt), Some(id), "a click on the group's moved stroke");
+    assert_eq!(hit_at(&s, 125.0, opt), None, "a click inside an original shape");
 }
 
 /// Of several fills, only the topmost one's effects reach the art, and only while it is visible.

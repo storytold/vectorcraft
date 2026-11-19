@@ -377,6 +377,7 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    crate::panels::image_trace::split_row(app, ui);
     if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
         crate::panels::image_trace::open_settings(app);
     }
@@ -985,7 +986,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
+        if let Some(id) = super::stroke::profile_dropdown(app, ui, stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     });
