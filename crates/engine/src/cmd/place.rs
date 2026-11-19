@@ -726,12 +726,16 @@ impl Session {
     /// reply. The document Place started in must be the active one, and the object Replace swaps
     /// must still be in it as it was when Place started; when the selection changed meanwhile,
     /// `select.set` selects that object again first, so a replay of the journal replaces the same
-    /// object.
+    /// object. A failed completion puts back the selection and context from before that internal
+    /// reselection, after ordinary pending edits and typing have settled.
     pub fn place_read(&mut self, read: PlaceRead) -> Result<Value> {
         if self.doc()?.uid != read.job.doc {
             return Err(bad(PLACE, NOT_ACTIVE));
         }
         let params = read.job.params.clone();
+        let mut reselect = None;
+        let mut rollback = None;
+        let mut settled = Vec::new();
         if let Some(old) = read.job.old {
             let st = self.doc()?;
             // Deleted, changed, or another object with its id: an undo that removes the object frees
@@ -740,14 +744,103 @@ impl Session {
                 return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
             }
             if st.selection.objects != [old] || st.selection.symbol_part.is_some() {
-                self.execute("select.set", &json!({ "ids": [old.0] }))?;
+                let (kept, warnings) = self.collect_settled_warnings(|s| {
+                    if s.depth == 0 {
+                        s.finish_tool_edit_later()?;
+                    }
+                    if !s.previewing {
+                        for warning in s.keep_typing()? {
+                            s.note_settled_warning(&warning);
+                        }
+                    }
+                    Ok::<(), EngineError>(())
+                });
+                for warning in &warnings {
+                    self.note_settled_warning(warning);
+                }
+                kept?;
+                // Settling an earlier edit must not let a changed target pass the guard.
+                let st = self.doc()?;
+                if st.uid != read.job.doc {
+                    return Err(bad(PLACE, NOT_ACTIVE));
+                }
+                if st.doc.node(old) != read.job.replaced.as_ref() {
+                    return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
+                }
+                settled = warnings;
+                rollback = Some((
+                    self.active,
+                    st.clone(),
+                    self.paint.clone(),
+                    self.fill_active,
+                    self.pending_paint.clone(),
+                    self.active_appearance_item.clone(),
+                    self.batch_paint_docs.clone(),
+                    self.journal.len(),
+                    self.journal.held(),
+                ));
+                // Keep the old retained prefix while the internal selection journals: an
+                // error must not lose entries that a bounded journal would otherwise trim.
+                self.journal.hold(Some(self.journal.first_kept()));
+                reselect = Some(old);
             }
         }
-        self.place_hand_off = Some(read);
-        let r = self.execute(PLACE, &params);
+        let r = (|| {
+            if let Some(old) = reselect {
+                self.execute("select.set", &json!({ "ids": [old.0] }))?;
+            }
+            self.place_hand_off = Some(read);
+            self.execute(PLACE, &params)
+        })();
         self.place_hand_off = None;
-        r
+        if let Some((active, before, paint, fill_active, pending, appearance, paint_docs, journal, held)) = rollback {
+            if r.is_err() {
+                if let Some(st) = self.docs.iter_mut().find(|st| st.uid == before.uid) {
+                    let revision = st.revision.max(before.revision);
+                    *st = before;
+                    st.revision = revision + 1;
+                }
+                self.active = active;
+                self.paint = paint;
+                self.fill_active = fill_active;
+                self.pending_paint = pending;
+                self.active_appearance_item = appearance;
+                self.batch_paint_docs = paint_docs;
+                self.journal.truncate(journal);
+                for group in self.docs.iter_mut().filter_map(|st| st.undo_group.as_mut()) {
+                    group.journal.retain(|&(n, _)| n < journal);
+                    group.steps.retain(|&(n, _)| n < journal);
+                }
+                self.clear_deferred_overlay_cache();
+                self.decoded_images.empty();
+                self.sync_front_profiles();
+                super::compositefonts::sync(self);
+                self.after_command(None);
+            }
+            self.journal.hold(held);
+        }
+        r.map(|reply| place_read_warnings(reply, &settled))
     }
+}
+
+/// Keep the ordinary preview-warning fields when typing settled before the completion baseline.
+fn place_read_warnings(mut reply: Value, settled: &[String]) -> Value {
+    if !settled.is_empty()
+        && let Some(out) = reply.as_object_mut()
+    {
+        let mut warnings = settled.to_vec();
+        if let Some(previous) = out.get("previewWarning").and_then(Value::as_str)
+            && !warnings.iter().any(|warning| warning == previous)
+        {
+            warnings.push(previous.to_string());
+        }
+        let warning = Value::String(warnings.join("; "));
+        if out.get("warning").is_none_or(Value::is_null) {
+            out.insert("warning".into(), warning.clone());
+        }
+        out.insert("previewWarning".into(), warning);
+    }
+    reply
 }
 
 fn place(s: &mut Session, p: &Value) -> Result<Value> {

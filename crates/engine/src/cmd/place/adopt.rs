@@ -12,6 +12,7 @@ use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind, PatternDef, Symbol};
 
+use super::super::clipboard::SymbolOptions;
 use super::super::compositefonts::{CompositeImport, node_families, plan_import};
 use super::super::{Result, bad};
 use super::unique_name;
@@ -58,14 +59,32 @@ fn paint_refs(p: &mut Paint, f: &mut impl FnMut(Ref)) {
 fn effect_symbol_refs(appearance: &mut vectorcraft_doc::Appearance, f: &mut impl FnMut(Ref)) {
     let items = appearance.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
     for effect in appearance.effects.iter_mut().chain(items) {
-        let key = if vectorcraft_render::effects::takes_graphics(&effect.id) {
+        let graphics = vectorcraft_render::effects::takes_graphics(&effect.id);
+        let key = if graphics {
             vectorcraft_render::effects::GRAPHICS
         } else if vectorcraft_render::effects::takes_map_art(&effect.id) {
             vectorcraft_render::effects::MAP_ART
         } else {
             continue;
         };
-        for graphic in effect.params.get_mut(key).and_then(serde_json::Value::as_array_mut).into_iter().flatten() {
+        let mut surfaces = BTreeSet::new();
+        for (index, graphic) in effect.params.get_mut(key).and_then(serde_json::Value::as_array_mut).into_iter().flatten().enumerate() {
+            // Match the renderer: graphics cap the raw list; Map Art keeps the first valid map
+            // per surface, then caps that accepted list. Ignored file records remain untouched.
+            if graphics && index >= vectorcraft_render::effects::MAX_GRAPHICS {
+                break;
+            }
+            let accepted = if graphics {
+                vectorcraft_render::effects::MappedGraphic::from_value(graphic).is_ok()
+            } else {
+                vectorcraft_render::effects::SurfaceMap::from_value(graphic).is_ok_and(|map| surfaces.insert(map.surface))
+            };
+            if !accepted {
+                continue;
+            }
+            if surfaces.len() > vectorcraft_render::effects::MAX_MAPS {
+                break;
+            }
             if let Some(serde_json::Value::String(symbol)) = graphic.get_mut("symbol") {
                 f(Ref::Symbol(symbol));
             }
@@ -442,7 +461,7 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd:
             // The art takes ids of `dst`: those of `src` may name objects of `dst` already.
             def.art = Arc::new(dst.reid(&def.art));
             dst.symbols.push(def);
-            dst.set_symbol_pixel_aligned(new, src.symbol_pixel_aligned(old));
+            SymbolOptions::of(src, old).give(dst, new);
         }
     }
     for (old, new) in copies(&patterns) {

@@ -865,7 +865,7 @@ pub struct SymbolOptions {
 
 impl SymbolOptions {
     /// The options `d` keeps for symbol `name`.
-    fn of(d: &Document, name: &str) -> Self {
+    pub(in crate::cmd) fn of(d: &Document, name: &str) -> Self {
         Self {
             size: stored_natural_size(d, name),
             registration: d.symbol_registration(name),
@@ -876,7 +876,7 @@ impl SymbolOptions {
     }
 
     /// Make them the options of `d`'s symbol `name`.
-    fn give(&self, d: &mut Document, name: &str) {
+    pub(in crate::cmd) fn give(&self, d: &mut Document, name: &str) {
         set_natural_size(d, name, self.size);
         d.set_symbol_registration(name, self.registration);
         d.set_symbol_export_type(name, self.export_type);

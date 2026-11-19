@@ -640,7 +640,13 @@ mod review_5972993766_adoption {
         assert!(adoption_same_node(&actual.art, &expected.art), "CONTROL: existing destination symbol payload is unchanged");
         assert_eq!(actual.dynamic, expected.dynamic);
         assert_eq!(d.symbol_pixel_aligned(&expected.name), aligned, "CONTROL: existing destination option is unchanged");
-        let tile = d.pattern(&format!("Existing {} tile", expected.name)).unwrap();
+        // Resource import can rename definitions while the panel swatch name stays stable.
+        let swatch = d.swatch(&format!("Existing {} tile", expected.name)).expect("CONTROL: existing destination palette consumer is retained");
+        let Paint::Pattern { pattern, xf } = &swatch.paint else {
+            panic!("CONTROL: existing destination palette consumer remains a pattern")
+        };
+        assert_eq!(*xf, Affine::IDENTITY, "CONTROL: existing destination pattern paint keeps its transform");
+        let tile = d.pattern(pattern).expect("CONTROL: existing destination palette consumer resolves to its pattern");
         assert!(
             matches!(&tile.art[0].kind, NodeKind::SymbolInstance { symbol, xf } if symbol == &expected.name && *xf == Affine::translate((2.0, 3.0))),
             "CONTROL: existing destination user is unchanged"
@@ -1033,4 +1039,535 @@ fn review_597299_cancelled_previews_cannot_choose_application_swatch_defaults() 
             assert!(preview.unwrap_err().to_string().contains("cannot be previewed"));
         }
     }
+}
+
+// Append inside review_7583_followups.rs; existing prefix remains byte-exact.
+mod review_597585_adoption_mapping {
+    use super::*;
+    use vectorcraft_doc::Effect;
+
+    const SYMBOL: &str = "Review597585 ignored mapping symbol";
+    const FONT: &str = "Review597585 ignored mapping font";
+
+    fn review597585_mapping_source(classic: bool, accepted: bool, valid_font: bool) -> Document {
+        let mut font = CompositeFont::new(FONT, "Source Sans 3", "Regular");
+        font.parts.roman.size = 125.0;
+        let mut d = font_document(&font);
+        let text = Arc::make_mut(&mut d.layers[0]).children_mut().unwrap().remove(0);
+        assert!(matches!(text.kind, NodeKind::Text(_)), "CONTROL: the only lettering becomes symbol art");
+        assert!(d.layers[0].children().unwrap().is_empty());
+        d.symbols.push(Symbol { name: SYMBOL.into(), art: text, dynamic: false });
+        if !valid_font {
+            font.parts.roman.size = 9.0;
+            assert!(font.check().is_err(), "CONTROL: referenced Roman9 is rejected by the normal font contract");
+            d.composite_fonts = vec![font].into();
+        }
+        let entry = if classic {
+            if accepted { json!({"surface": 1, "symbol": SYMBOL}) } else { json!({"surface": 1, "symbol": SYMBOL, "scaleX": 0}) }
+        } else if accepted {
+            json!({"symbol": SYMBOL})
+        } else {
+            json!({"symbol": SYMBOL, "scale": 0})
+        };
+        let effect = Effect {
+            id: if classic { vectorcraft_render::effects::CLASSIC_EXTRUDE } else { vectorcraft_render::effects::ROTATE }.into(),
+            params: if classic { json!({"mapArt": [entry]}) } else { json!({"graphics": [entry]}) },
+            visible: true,
+        };
+        let mut carrier = rectangle(&mut d, Paint::solid(Color::rgb8(31, 71, 111)));
+        carrier.appearance.effects.push(effect);
+        assert_eq!(vectorcraft_render::effects::appearance_graphic_symbols(&carrier.appearance).len(), usize::from(accepted));
+        put(&mut d, carrier);
+        d
+    }
+
+    fn review597585_mapping_effect(d: &Document) -> Effect {
+        let mut found = Vec::new();
+        for layer in &d.layers {
+            layer.walk(&mut |n| found.extend(n.appearance.effects.iter().cloned()));
+        }
+        assert_eq!(found.len(), 1, "CONTROL: one original carrier effect survives");
+        found.remove(0)
+    }
+
+    #[test]
+    fn review_597585_adoption_ignores_renderer_rejected_native_mapping() {
+        let _context = FixtureContext::hold();
+        let directory = TestDirectory::new();
+        let mut regressions = Vec::new();
+        for classic in [false, true] {
+            // Both legitimate routes precede the ignored-record regression for this effect kind.
+            for (accepted, valid_font) in [(true, true), (true, false), (false, false)] {
+                let native = review597585_mapping_source(classic, accepted, valid_font);
+                let path = directory.0.join(format!("ignored-{classic}-{accepted}-{valid_font}.vectorcraft"));
+                let loaded = write_native(&path, &native);
+                let input = review597585_mapping_effect(&loaded);
+                let key = if classic { "mapArt" } else { "graphics" };
+                let entry = &input.params[key][0];
+                let parsed = if classic {
+                    vectorcraft_render::effects::SurfaceMap::from_value(entry).is_ok()
+                } else {
+                    vectorcraft_render::effects::MappedGraphic::from_value(entry).is_ok()
+                };
+                assert_eq!(parsed, accepted, "CONTROL: native reading preserves the intended typed renderer acceptance");
+                let loaded_font = CompositeFont::named(&loaded.composite_fonts, FONT).unwrap();
+                assert_eq!(
+                    loaded_font.parts.roman.size,
+                    if valid_font { 125.0 } else { 9.0 },
+                    "CONTROL: native reading does not normalize away Roman9"
+                );
+                assert_eq!(loaded_font.check().is_ok(), valid_font);
+                let carrier = loaded.layers[0].children().unwrap().first().unwrap();
+                assert_eq!(
+                    vectorcraft_render::effects::appearance_graphic_symbols(&carrier.appearance),
+                    if accepted { vec![SYMBOL.to_string()] } else { vec![] }
+                );
+                if accepted && valid_font {
+                    vectorcraft_render::effects::validate_three_d_at_in(Some(&loaded), carrier, &input.id, &input.params, (None, 0))
+                        .expect("CONTROL: the ordinary valid native mapping passes the effect's real validation");
+                }
+                let mut target = Document::new(80.0, 60.0);
+                let existing = rectangle(&mut target, Paint::solid(Color::rgb8(190, 20, 30)));
+                target.symbols.push(Symbol { name: SYMBOL.into(), art: Arc::new(existing.clone()), dynamic: false });
+                let mut session = Session::new();
+                session.add_document(target, None);
+                let before = document(&session).clone();
+                let job = session.prepare_place(&json!({"path": path, "link": false})).expect("CONTROL: normal native placement prepares");
+                let read = job.read().expect("CONTROL: real native metadata/art reading succeeds before adoption");
+                let result = session.place_read(read);
+                if accepted && !valid_font {
+                    let error = result.expect_err("CONTROL: a renderer-accepted reference still validates its font");
+                    assert!(error.to_string().contains("size"), "CONTROL: this is the ordinary part-size validation error: {error}");
+                    assert_eq!(document(&session), &before, "CONTROL: font rejection preserves the destination");
+                    continue;
+                }
+                if !accepted && result.is_err() {
+                    regressions.push(format!("classic={classic}: ignored record rejected visible rectangle: {}", result.unwrap_err()));
+                    continue;
+                }
+                let placed = result.expect("CONTROL: valid mapped native placement succeeds");
+                assert_eq!(placed["linked"], false);
+                let d = document(&session);
+                assert_eq!(
+                    *d.symbols.iter().find(|s| s.name == SYMBOL).unwrap().art,
+                    existing,
+                    "CONTROL: destination's colliding definition is unchanged"
+                );
+                let actual = review597585_mapping_effect(d);
+                if accepted {
+                    let name = actual.params[key][0]["symbol"].as_str().unwrap();
+                    assert_ne!(name, SYMBOL, "CONTROL: a valid reference follows the imported alias");
+                    assert!(d.symbols.iter().any(|s| s.name == name));
+                    assert!(CompositeFont::named(&d.composite_fonts, FONT).is_some());
+                } else {
+                    if actual.params[key][0] != *entry || d.symbols.len() != 1 || !d.composite_fonts.is_empty() {
+                        regressions.push(format!("classic={classic}: ignored raw record was renamed or imported unused resources"));
+                    }
+                }
+            }
+        }
+        assert!(regressions.is_empty(), "REGRESSION: renderer-ignored native mapping is not an adoption dependency: {regressions:?}");
+    }
+}
+
+// Append inside review_7583_followups.rs; independent of the other new fragment.
+mod review_597585_adoption_options {
+    use super::*;
+    use vectorcraft_engine::cmd::clipboard::{Clipboard, SymbolOptions};
+
+    const SYMBOL: &str = "Review597585 sliced symbol";
+    const TILE: &str = "Review597585 sliced native tile";
+
+    fn review597585_options(d: &Document, name: &str) -> SymbolOptions {
+        let mut probe = d.clone();
+        let user = Node::new(probe.alloc_id(), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY });
+        put(&mut probe, user);
+        Clipboard::from_document(&probe).symbol_options.get(name).expect("CONTROL: public clipboard reader finds the symbol options").clone()
+    }
+
+    fn review597585_options_source(sliced: bool) -> Document {
+        let mut d = Document::new(80.0, 60.0);
+        let art = rectangle(&mut d, Paint::solid(Color::rgb8(29, 71, 113)));
+        d.symbols.push(Symbol { name: SYMBOL.into(), art: Arc::new(art), dynamic: false });
+        let user = Node::new(
+            d.alloc_id(),
+            NodeKind::SymbolInstance { symbol: SYMBOL.into(), xf: Affine::translate((12.0, 16.0)) * Affine::scale_non_uniform(2.0, 1.5) },
+        );
+        put(&mut d, user);
+        let mut session = Session::new();
+        session.add_document(d, None);
+        session
+            .execute("symbol.options", &json!({"name": SYMBOL, "nineSlice": sliced, "alignToPixelGrid": true}))
+            .expect("CONTROL: ordinary source options are accepted");
+        if sliced {
+            session
+                .execute(
+                    "symbol.options",
+                    &json!({"name": SYMBOL, "registration": 0, "exportType": "graphic", "nineSliceGuides": [0.2, 0.3, 0.25, 0.15]}),
+                )
+                .expect("CONTROL: non-default registration/export/guides are accepted");
+        }
+        let mut result = document(&session).clone();
+        if sliced {
+            // The document model's existing stored-natural-size record, read by Clipboard.
+            result
+                .unknown
+                .insert(vectorcraft_doc::SYMBOL_SIZES.into(), Value::Object(serde_json::Map::from_iter([(SYMBOL.to_string(), json!([8.0, 6.0]))])));
+        }
+        result
+    }
+
+    fn review597585_options_capture(directory: &Path, label: &str, native: &Document, mut outer: Document) -> Vec<Document> {
+        let path = directory.join(format!("{label}.vectorcraft"));
+        write_native(&path, native);
+        outer.fix_next_id();
+        let mut source = Session::new();
+        source.add_document(outer, None);
+        let placed = source.execute("file.place", &json!({"path": path, "link": true})).expect("CONTROL: linked native placement succeeds");
+        assert_eq!(placed["linked"], true);
+        let id = placed["ids"][0].as_u64().unwrap();
+        source.execute("object.pattern.make", &json!({"ids": [id], "name": TILE, "edit": false})).unwrap();
+        source.execute("select.set", &json!({"ids": [id]})).unwrap();
+        source.execute("edit.clear", &json!({})).unwrap();
+        let original = document(&source).clone();
+        source.execute("swatch.defaults.save", &json!({})).expect("CONTROL: palette capture expands the native link");
+        assert_eq!(document(&source), &original, "CONTROL: capture preserves its source");
+        let prefs = source.prefs.to_json();
+        let bytes = vectorcraft_format::base64_decode(prefs["defaultSwatches"]["data"].as_str().unwrap()).unwrap();
+        let capsule = vectorcraft_format::load_file(&bytes).expect("CONTROL: native palette capsule reads").doc;
+        std::fs::remove_file(&path).unwrap();
+        assert!(!path.exists(), "CONTROL: original link is gone before restart");
+        let mut fresh = restarted(&source);
+        fresh.execute("file.new", &json!({"profile": null})).expect("CONTROL: restarted palette creates its document");
+        vec![capsule, document(&fresh).clone()]
+    }
+
+    fn review597585_options_user(d: &Document) -> (String, Affine) {
+        let Paint::Pattern { pattern, .. } = &d.swatch(TILE).expect("CONTROL: new native tile swatch survives").paint else {
+            panic!("CONTROL: tile remains a pattern")
+        };
+        let mut users = Vec::new();
+        for root in &d.pattern(pattern).unwrap().art {
+            root.walk(&mut |n| {
+                if let NodeKind::SymbolInstance { symbol, xf } = &n.kind {
+                    users.push((symbol.clone(), *xf));
+                }
+            });
+        }
+        assert_eq!(users.len(), 1, "CONTROL: one actual scaled native symbol consumer survives");
+        users.remove(0)
+    }
+
+    #[test]
+    fn review_597585_adoption_native_symbol_options_and_slice_coordinates_survive_restart() {
+        let _context = FixtureContext::hold();
+        let directory = TestDirectory::new();
+        let mut regressions = Vec::new();
+        // Unsliced defaults are legitimate controls before either sliced regression.
+        for sliced in [false, true] {
+            for collision in [false, true] {
+                let native = review597585_options_source(sliced);
+                let loaded = write_native(&directory.0.join(format!("options-source-{sliced}-{collision}.vectorcraft")), &native);
+                let expected = review597585_options(&loaded, SYMBOL);
+                assert_eq!(expected.nine_slice.is_some(), sliced, "CONTROL: source read retains guide policy");
+                assert!(expected.pixel_aligned);
+                assert_eq!(expected.size, sliced.then_some((8.0, 6.0)), "CONTROL: non-default stored size survives native reading");
+                let mut outer = Document::new(80.0, 60.0);
+                outer.swatches.clear();
+                outer.swatch_groups.clear();
+                let existing = if collision {
+                    let art = rectangle(&mut outer, Paint::solid(Color::rgb8(190, 20, 30)));
+                    outer.symbols.push(Symbol { name: SYMBOL.into(), art: Arc::new(art.clone()), dynamic: false });
+                    let old_user = Node::new(outer.alloc_id(), NodeKind::SymbolInstance { symbol: SYMBOL.into(), xf: Affine::IDENTITY });
+                    outer.patterns.push(PatternDef::new("Review597585 existing symbol tile", vec![Arc::new(old_user)]));
+                    outer.swatches.push(Swatch {
+                        name: "Review597585 existing symbol tile".into(),
+                        paint: Paint::Pattern { pattern: "Review597585 existing symbol tile".into(), xf: Affine::IDENTITY },
+                        global: false,
+                        spot: false,
+                    });
+                    let options = review597585_options(&outer, SYMBOL);
+                    Some((art, options))
+                } else {
+                    None
+                };
+                for (stage, d) in
+                    review597585_options_capture(&directory.0, &format!("options-{sliced}-{collision}"), &loaded, outer).into_iter().enumerate()
+                {
+                    if let Some((old_art, old_options)) = &existing {
+                        let current = d.symbols.iter().find(|s| s.name == SYMBOL).unwrap();
+                        let mut expected_art = old_art.clone();
+                        expected_art.id = current.art.id;
+                        assert_eq!(
+                            serde_json::to_value(current.art.as_ref()).unwrap(),
+                            serde_json::to_value(expected_art).unwrap(),
+                            "CONTROL: destination definition stays intact"
+                        );
+                        assert_eq!(review597585_options(&d, SYMBOL), *old_options, "CONTROL: destination options stay intact");
+                    }
+                    let (name, xf) = review597585_options_user(&d);
+                    assert_eq!(name == SYMBOL, !collision, "CONTROL: collision determines actual adopted name");
+                    let adopted = d.symbols.iter().find(|s| s.name == name).unwrap();
+                    let source = loaded.symbols.iter().find(|s| s.name == SYMBOL).unwrap();
+                    let mut source_art = source.art.as_ref().clone();
+                    source_art.id = adopted.art.id;
+                    assert_eq!(
+                        serde_json::to_value(adopted.art.as_ref()).unwrap(),
+                        serde_json::to_value(source_art).unwrap(),
+                        "CONTROL: source art remains unchanged independently of options"
+                    );
+                    let actual = review597585_options(&d, &name);
+                    if !sliced {
+                        assert_eq!(actual, expected, "CONTROL: ordinary unsliced options retain existing behavior");
+                        assert!(loaded.symbol_slice_map(SYMBOL, xf).is_none() && d.symbol_slice_map(&name, xf).is_none());
+                    } else {
+                        let source_map = loaded.symbol_slice_map(SYMBOL, xf).expect("CONTROL: actual source instance has a nondegenerate9-slice map");
+                        let probes = [Point::new(1.0, 1.0), Point::new(7.0, 5.0), Point::new(4.0, 3.0)];
+                        assert!(
+                            probes.iter().any(|p| source_map.map_point(*p).distance(xf * *p) > 0.1),
+                            "CONTROL: these coordinates distinguish sliced corners from ordinary scaling"
+                        );
+                        let target_map = d.symbol_slice_map(&name, xf);
+                        let coordinates_match = probes.iter().all(|p| {
+                            let placed = target_map.as_ref().map_or(xf * *p, |m| m.map_point(*p));
+                            placed.distance(source_map.map_point(*p)) < 1e-7
+                        });
+                        if actual != expected || !coordinates_match {
+                            regressions.push(format!("collision={collision}, stage={stage}: options or actual9-slice coordinates lost at {name}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(regressions.is_empty(), "REGRESSION: native symbol options/9-slice mapping survive capture/restart: {regressions:?}");
+    }
+}
+
+fn review_597585_replace_destination() -> (Session, NodeId, NodeId) {
+    let mut session = Session::new();
+    session.add_document(Document::new(400.0, 300.0), None);
+    let a = NodeId(session.execute("shape.rectangle", &json!({"x":10,"y":10,"width":20,"height":20})).unwrap()["id"].as_u64().unwrap());
+    session.execute("paint.setFill", &json!({"color":"#cc2030"})).unwrap();
+    let b = NodeId(session.execute("shape.rectangle", &json!({"x":200,"y":100,"width":20,"height":20})).unwrap()["id"].as_u64().unwrap());
+    session.execute("paint.setFill", &json!({"color":"#2040cc"})).unwrap();
+    session.execute("select.set", &json!({"ids":[a.0]})).unwrap();
+    (session, a, b)
+}
+
+fn review_597585_replace_snapshot(session: &Session) -> Value {
+    let st = session.doc().unwrap();
+    json!({"doc":st.doc.as_ref(),"selection":st.selection,
+        "undo":st.history.undo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
+        "redo":st.history.redo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
+        "step":st.history.step(),"journal":{"first":session.journal.first_kept(),"len":session.journal.len(),
+            "held":session.journal.held(),"entries":session.journal.iter().cloned().collect::<Vec<_>>()}})
+}
+
+#[test]
+fn review_597585_failed_async_replace_keeps_the_pre_completion_selection() {
+    let _context = FixtureContext::hold();
+    let directory = TestDirectory::new();
+    let good_path = directory.0.join("replace-valid.vectorcraft");
+    let bad_path = directory.0.join("replace-invalid-font.vectorcraft");
+    let font = CompositeFont::new("Review597585ReplaceSource", "Source Sans 3", "Regular");
+    let source = font_document(&font);
+    let mut maker = Session::new();
+    maker.add_document(Document::new(80.0, 60.0), None);
+    maker.execute("shape.rectangle", &json!({"x":4,"y":4,"width":8,"height":6})).unwrap();
+    let good = write_native(&good_path, document(&maker));
+    assert!(good.composite_fonts.is_empty(), "CONTROL: ordinary successful replay has no global-font alias dependency");
+    let mut bad = source.clone();
+    bad.composite_fonts[0].parts.roman.size = 9.0;
+    let expected_error = bad.composite_fonts[0].check().unwrap_err();
+    let loaded = write_native(&bad_path, &bad);
+    assert_eq!(loaded.composite_fonts[0].parts.roman.size, 9.0, "CONTROL: native reading preserves the rejected validation input");
+    assert_eq!(loaded.composite_fonts[0].check().unwrap_err(), expected_error);
+
+    // Successful completion still replaces captured A, not the newer selection B.
+    let (mut success, a, b) = review_597585_replace_destination();
+    let params = json!({"path":good_path,"replace":true,"link":false});
+    let read = success.prepare_place(&params).unwrap().read().expect("CONTROL: the async native read succeeds");
+    let b_before = document(&success).node(b).unwrap().clone();
+    let undo = success.doc().unwrap().history.undo.len();
+    success.execute("select.set", &json!({"ids":[b.0]})).unwrap();
+    let reply = success.place_read(read).expect("CONTROL: ordinary successful Replace completes");
+    assert_eq!(reply["linked"], false);
+    assert!(document(&success).node(a).is_none(), "CONTROL: captured A is the replaced object");
+    assert_eq!(document(&success).node(b), Some(&b_before), "CONTROL: newer selection B is untouched");
+    assert_eq!(success.doc().unwrap().selection.objects, vec![NodeId(reply["ids"][0].as_u64().unwrap())]);
+    assert_eq!(success.doc().unwrap().history.undo.len(), undo + 1);
+    let journal: Vec<_> = success.journal.iter().rev().take(2).rev().cloned().collect();
+    assert_eq!(
+        journal.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(),
+        ["select.set", "file.place"],
+        "CONTROL: preserve the existing exact successful journal contract"
+    );
+    let (mut replay, replay_a, replay_b) = review_597585_replace_destination();
+    assert_eq!((replay_a, replay_b), (a, b));
+    replay.execute("select.set", &json!({"ids":[replay_b.0]})).unwrap();
+    for (id, params) in &journal {
+        replay.replay(id, params).unwrap();
+    }
+    let undated = |session: &Session| {
+        let mut d = document(session).clone();
+        d.metadata.created = None;
+        d
+    };
+    assert_eq!(undated(&replay), undated(&success), "CONTROL: the successful journal replays the same captured target A");
+
+    // With A still selected, an ordinary validation failure already rolls back fully.
+    let (mut unchanged, a, _) = review_597585_replace_destination();
+    let params = json!({"path":bad_path,"replace":true,"link":false});
+    let read = unchanged.prepare_place(&params).unwrap().read().expect("CONTROL: read succeeds before the native adoption error");
+    let before = review_597585_replace_snapshot(&unchanged);
+    let paint = unchanged.paint.clone();
+    let error = unchanged.place_read(read).expect_err("CONTROL: native placement rejects the invalid composite font");
+    assert!(error.to_string().contains(&expected_error), "the chosen adoption error, not a changed/deleted-target guard: {error}");
+    assert_eq!(unchanged.doc().unwrap().selection.objects, vec![a]);
+    assert_eq!(
+        review_597585_replace_snapshot(&unchanged),
+        before,
+        "CONTROL: unchanged-A failure leaves no document, selection, history or journal change"
+    );
+
+    assert_eq!(unchanged.paint, paint, "CONTROL: unchanged-A failure preserves new-art paint");
+
+    let (mut session, a, b) = review_597585_replace_destination();
+    let read = session.prepare_place(&params).unwrap().read().expect("CONTROL: the actual async read succeeded");
+    session.execute("select.set", &json!({"ids":[b.0]})).unwrap();
+    let before = review_597585_replace_snapshot(&session);
+    let selection = session.doc().unwrap().selection.clone();
+    let paint = session.paint.clone();
+    let fill_active = session.fill_active;
+    let a_before = document(&session).node(a).unwrap().clone();
+    let error = session.place_read(read).expect_err("the real Place completion reaches composite validation");
+    assert!(error.to_string().contains(&expected_error), "read-success/error cause must be the chosen native validation: {error}");
+    let after = review_597585_replace_snapshot(&session);
+    assert_eq!(after["doc"], before["doc"], "failed completion changes no document resources or art");
+    assert_eq!(document(&session).node(a), Some(&a_before), "captured A remains byte-equivalent");
+    assert_eq!(after["undo"], before["undo"]);
+    assert_eq!(after["redo"], before["redo"]);
+    assert_eq!(after["step"], before["step"]);
+    assert_eq!(session.doc().unwrap().selection, selection, "REGRESSION: a failed async Replace restores the complete pre-completion selection B");
+    assert_eq!(session.paint, paint, "failed completion restores pre-completion new-art paint");
+    assert_eq!(session.fill_active, fill_active);
+    assert_eq!(after["journal"], before["journal"], "failed reselection/placement leaves no successful replay entry behind");
+}
+
+fn review_597585_rollback_snapshot(session: &Session) -> Value {
+    let st = session.doc().unwrap();
+    json!({"doc":st.doc.as_ref(),"selection":st.selection,
+        "undo":st.history.undo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
+        "redo":st.history.redo.iter().map(|entry|json!({"label":entry.label,"doc":entry.doc.as_ref(),"selection":entry.selection.as_ref()})).collect::<Vec<_>>(),
+        "step":st.history.step(),"journal":{"first":session.journal.first_kept(),"len":session.journal.len(),
+            "held":session.journal.held(),"entries":session.journal.iter().cloned().collect::<Vec<_>>()}})
+}
+
+fn review_597585_rollback_font_destination(held: &CompositeFont) -> Session {
+    let mut session = Session::new();
+    session.add_document(Document::new(100.0, 80.0), None);
+    session.execute("type.compositeFonts.set", &json!({"fonts":[held]})).unwrap();
+    session.execute("shape.rectangle", &json!({"x":10,"y":10,"width":12,"height":9})).unwrap();
+    assert_eq!(CompositeFont::named(&document(&session).composite_fonts, &held.name), Some(held));
+    assert_eq!(*FontDb::global().composite_font(&held.name).unwrap(), *held);
+    session
+}
+
+fn review_597585_rollback_menu_has(reply: &Value, name: &str) -> bool {
+    reply["families"]
+        .as_array()
+        .expect("CONTROL: the real public font-list reply")
+        .iter()
+        .any(|family| family.as_str().is_some_and(|f| f.eq_ignore_ascii_case(name)))
+}
+
+fn review_597585_rollback_preview(session: &mut Session, path: &Path, incoming: &CompositeFont, held: &CompositeFont) {
+    session.begin_interaction("Preview native font").unwrap();
+    let reply = session
+        .preview("command.batch", &json!({"commands":[{"command":"file.place","params":{"path":path,"link":false,"at":[50,40]}}]}))
+        .expect("CONTROL: a real editable native placement previews successfully");
+    assert_eq!(reply["results"][0]["linked"], false);
+    assert_eq!(CompositeFont::named(&document(session).composite_fonts, &incoming.name), Some(incoming));
+    assert_eq!(*FontDb::global().composite_font(&incoming.name).unwrap(), *incoming, "CONTROL: the preview genuinely registers the imported meaning");
+    assert_eq!(CompositeFont::named(&document(session).composite_fonts, &held.name), Some(held));
+    assert_eq!(*FontDb::global().composite_font(&held.name).unwrap(), *held);
+}
+
+#[test]
+fn review_597585_native_font_previews_restore_registry_on_cancel_and_replacement() {
+    let _context = FixtureContext::hold();
+    let directory = TestDirectory::new();
+    let path = directory.0.join("rollback-preview-font.vectorcraft");
+    let held = CompositeFont::new("Review597585KeptH", "Source Sans 3", "Regular");
+    let mut incoming = CompositeFont::new("Review597585PreviewF", "Source Sans 3", "Regular");
+    incoming.parts.roman.size = 125.0;
+    incoming.check().unwrap();
+    let mut maker = Session::new();
+    maker.add_document(Document::new(80.0, 60.0), None);
+    maker.execute("type.compositeFonts.set", &json!({"fonts":[incoming]})).unwrap();
+    maker.execute("text.create", &json!({"x":4,"y":16,"text":"Ab","font":incoming.name})).unwrap();
+    let loaded = write_native(&path, document(&maker));
+    assert_eq!(CompositeFont::named(&loaded.composite_fonts, &incoming.name), Some(&incoming));
+    // A normal public font edit makes the source name cold; no registry state is injected.
+    maker.execute("type.compositeFonts.set", &json!({"fonts":[]})).unwrap();
+    assert!(FontDb::global().composite_font(&incoming.name).is_none());
+
+    // Commit is a legitimate positive control: it must keep the imported font.
+    let mut committed = review_597585_rollback_font_destination(&held);
+    let original = document(&committed).clone();
+    let undo = committed.doc().unwrap().history.undo.len();
+    let menu = committed.execute("text.fontList", &json!({})).unwrap();
+    assert!(review_597585_rollback_menu_has(&menu, &held.name));
+    assert!(!review_597585_rollback_menu_has(&menu, &incoming.name));
+    review_597585_rollback_preview(&mut committed, &path, &incoming, &held);
+    committed.commit_interaction().unwrap();
+    assert_eq!(committed.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(CompositeFont::named(&document(&committed).composite_fonts, &incoming.name), Some(&incoming));
+    assert_eq!(*FontDb::global().composite_font(&incoming.name).unwrap(), incoming);
+    assert_eq!(*FontDb::global().composite_font(&held.name).unwrap(), held);
+    committed.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(document(&committed), &original, "CONTROL: one Undo restores the committed native preview");
+    assert!(FontDb::global().composite_font(&incoming.name).is_none());
+    assert_eq!(*FontDb::global().composite_font(&held.name).unwrap(), held);
+
+    // Capture both boundary observations before the final leak assertions, so the
+    // cancel failure cannot hide the independent replacement-preview consumer.
+    let mut observations = Vec::new();
+    for cancel in [true, false] {
+        let mut session = review_597585_rollback_font_destination(&held);
+        let before = review_597585_rollback_snapshot(&session);
+        let registry = review_batch_font_registry();
+        let menu = session.execute("text.fontList", &json!({})).unwrap();
+        assert!(review_597585_rollback_menu_has(&menu, &held.name));
+        assert!(!review_597585_rollback_menu_has(&menu, &incoming.name));
+        review_597585_rollback_preview(&mut session, &path, &incoming, &held);
+        let (registry_restored, consumer_restored) = if cancel {
+            session.cancel_interaction().unwrap();
+            // Read immediately, before another command's usual post-sync could mask the leak.
+            let restored = review_batch_font_registry() == registry;
+            assert_eq!(review_597585_rollback_snapshot(&session), before, "cancel restores the entire art/selection/history/journal first");
+            let menu = session.execute("text.fontList", &json!({})).unwrap();
+            (restored, !review_597585_rollback_menu_has(&menu, &incoming.name))
+        } else {
+            // This query is the FIRST consumer after resetting the prior preview.
+            // Its result can reveal stale F even though execute's later sync removes F.
+            let menu = session.preview("text.fontList", &json!({})).unwrap();
+            assert!(review_597585_rollback_menu_has(&menu, &held.name));
+            let consumer_restored = !review_597585_rollback_menu_has(&menu, &incoming.name);
+            assert_eq!(review_597585_rollback_snapshot(&session), before, "replacement restores art/selection/history/journal before the query");
+            let restored = review_batch_font_registry() == registry;
+            session.cancel_interaction().unwrap();
+            (restored, consumer_restored)
+        };
+        assert_eq!(*FontDb::global().composite_font(&held.name).unwrap(), held, "the existing H definition remains registered");
+        assert_eq!(CompositeFont::named(&document(&session).composite_fonts, &held.name), Some(&held));
+        assert!(CompositeFont::named(&document(&session).composite_fonts, &incoming.name).is_none());
+        observations.push((cancel, registry_restored, consumer_restored));
+        // The public query's ordinary post-command sync also restores the old baseline.
+        assert_eq!(review_batch_font_registry(), registry);
+    }
+    assert!(
+        observations.iter().all(|(_, registry, consumer)| *registry && *consumer),
+        "REGRESSION: cancel and replacement must restore fonts before returning or running another consumer: {observations:?}"
+    );
 }
