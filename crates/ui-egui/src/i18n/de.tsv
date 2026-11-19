@@ -10390,7 +10390,6 @@ breakText	Glyphs	Glyphen
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
 	Nature Icons	Natursymbole
-	Leaf	Blatt
 	Flower	Blume
 	Tree	Baum
 	Mountain	Berg

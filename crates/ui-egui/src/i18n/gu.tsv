@@ -5637,7 +5637,6 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
 	Nature Icons	પ્રકૃતિ ચિહ્નો
-	Leaf	પાન
 	Flower	ફૂલ
 	Tree	વૃક્ષ
 	Mountain	પર્વત

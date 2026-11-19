@@ -10487,7 +10487,6 @@ breakText	Glyphs	字形
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
 	Nature Icons	自然アイコン
-	Leaf	葉
 	Flower	花
 	Tree	木
 	Mountain	山
