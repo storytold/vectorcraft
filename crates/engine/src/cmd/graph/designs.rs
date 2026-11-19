@@ -60,10 +60,14 @@ pub(super) fn from_library(s: &Session, p: &Value, cmd: &str) -> Result<Option<(
 
 /// Add designs `names` of library `lib` to `d` with the resources their art uses, and redraw the
 /// graphs that already name a design the document lacked: one of `names`, or one their art uses.
+/// The graphs in the art of the symbols that came in are drawn with the designs the document kept.
 pub(super) fn bring_in(d: &mut Document, lib: &Document, names: &[String]) -> Result<()> {
-    let added = import_graph_designs(lib, d, names)?;
-    if !added.is_empty() {
-        refresh_graphs(d, &added, &[], &BTreeSet::new())?;
+    let imported = import_graph_designs(lib, d, names)?;
+    if !imported.kept_designs.is_empty() {
+        redraw_symbols_with_designs(d, &imported.added_symbols, &imported.kept_designs);
+    }
+    if !imported.added_designs.is_empty() {
+        refresh_graphs(d, &imported.added_designs, &[], &BTreeSet::new())?;
     }
     Ok(())
 }
@@ -93,7 +97,9 @@ fn draws_with(g: &GraphSpec, name: &str) -> bool {
         let label = g.series.get(if scatter { s * 2 } else { s }).map_or("", String::as_str);
         g.legend && !g.series.is_empty() && s < entries && !super::labels::blank_label(label)
     };
-    let shown = |s: usize| g.mark_points || in_legend(s);
+    // Point markers use the same range of designs: a scatter graph plots a pair of series for each.
+    let plotted = if scatter { nser.div_ceil(2) } else { nser };
+    let shown = |s: usize| s < plotted && (g.mark_points || in_legend(s));
     let marked = |s: usize| shown(s) && (matches!(g.kind, GraphKind::Scatter | GraphKind::Radar) || g.series_kind(s) == GraphKind::Line);
     let columnar = |s: usize| matches!(g.series_kind(s), GraphKind::Column | GraphKind::StackedColumn | GraphKind::Bar | GraphKind::StackedBar);
     g.series_markers.iter().enumerate().any(|(s, m)| m.as_deref() == Some(name) && marked(s))

@@ -1849,15 +1849,17 @@ pub(crate) fn graph_design_library(src: &Document) -> Option<Document> {
 /// brushes and images their art uses, placed as Paste places them ([`Clipboard::import_into`]; a
 /// global or spot color whose name `d` gives another color is `d`'s). A design `d` has under the
 /// same name stays as it is, and the art of `src`'s design of that name is not followed. → the
-/// names of the designs added: those of `names` `d` lacked, and those their art uses. An error,
-/// with `d` unchanged, when `d` would hold more than [`GraphDesign::MAX`] designs.
-pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[String]) -> Result<BTreeSet<String>> {
+/// names of the designs added ([`Imported::added_designs`]): those of `names` `d` lacked, and those
+/// their art uses; with the symbols added and the designs `d` kept that their art draws with
+/// ([`Imported::added_symbols`], [`Imported::kept_designs`]). An error, with `d` unchanged, when `d`
+/// would hold more than [`GraphDesign::MAX`] designs.
+pub(crate) fn import_graph_designs(src: &Document, d: &mut Document, names: &[String]) -> Result<Imported> {
     let library = OnceCell::new();
     let held = |n: &str| d.graph_designs.iter().any(|x| x.name == n);
     let followed: Vec<GraphDesign> = src.graph_designs.iter().filter(|g| names.contains(&g.name) || !held(&g.name)).cloned().collect();
     let used = designs_used(&Defs { graph_designs: &followed, ..Defs::of(src, &library) }, names);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
-    Ok(clip.import_used(d, &used, &SwatchChoices::default(), false)?.added_designs)
+    clip.import_used(d, &used, &SwatchChoices::default(), false)
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups

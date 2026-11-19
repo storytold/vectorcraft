@@ -5818,6 +5818,73 @@ fn a_design_brought_in_from_a_library_redraws_the_graphs_in_symbols_that_name_it
 }
 
 #[test]
+fn a_design_brought_in_from_a_library_leaves_a_scatter_graph_that_names_it_for_a_slot_it_does_not_plot() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // Four data columns plot two series, so marker slot 2 is never drawn.
+    let id = make(&mut s, "scatter", ",y1,x1,y2,x2\nP,1,10,2,20\nQ,3,11,4,22");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert!(spec(&s, id).mark_points, "Mark Data Points is on");
+    s.execute("graph.marker", &json!({"design": "Coin", "library": lib, "seriesIndexes": [2]})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    assert_eq!(spec(&s, id).series_markers.get(2).cloned().flatten().as_deref(), Some("Coin"));
+    // An edit of the graph's art that drawing the graph again would not keep.
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let names: Vec<Option<String>> = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+    assert_eq!(names[0].as_deref(), Some("Mine"), "not drawn again: {names:?}");
+}
+
+#[test]
+fn a_symbol_a_library_design_brings_draws_its_graph_with_the_documents_design_it_keeps() {
+    // The library's design "A" holds an instance of symbol "Chart", whose graph draws columns with
+    // the library's "B": a rectangle and an ellipse.
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut src, "B");
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute("graph.column", &json!({"design": "B"})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap()["id"].as_u64().unwrap();
+    src.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    src.execute("graph.design", &json!({"new": "A"})).unwrap();
+    let bytes = vectorcraft_format::save_file(&src.doc().unwrap().doc);
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Lib.vectorcraft"});
+    let lib = s.execute("swatch.library.load", &p).unwrap()["library"].as_str().unwrap().to_string();
+    // The document's own "B" is a single rectangle, and stays.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "B"})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "A"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.graph_designs.len(), 2, "A came in and B stayed");
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns: Vec<usize> = series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [1, 1, 1, 1], "drawn with the document's B");
+}
+
+#[test]
 fn a_design_brought_in_from_a_library_redraws_a_graph_in_an_opacity_mask() {
     let mut s = Session::new();
     let lib = load_coin_library(&mut s);
@@ -6323,6 +6390,16 @@ fn a_swatch_library_file_is_read_no_further_than_the_size_limit() {
     assert!(e.contains("larger than"), "{e}");
     let e = s.swatch_libraries.load_within(&p, "swatch.library.load", Some(9), parsed).unwrap_err().to_string();
     assert!(e.contains("parsed"), "{e}");
+}
+
+#[test]
+fn reading_the_head_of_a_swatch_library_file_stops_at_the_limit() {
+    let dir = vectorcraft_testkit::TempDir::new("graph-design-library-head");
+    let path = dir.join("long.gpl");
+    std::fs::write(&path, vec![b'a'; 1 << 20]).unwrap();
+    // The read the limit check relies on returns the bytes up to one past the limit, not the file.
+    let head = crate::cmd::fileio::read_file_head(&path.to_string_lossy(), 9).unwrap();
+    assert_eq!(head.len(), 9);
 }
 
 #[test]
