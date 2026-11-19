@@ -135,6 +135,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_options_stored: false,
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
