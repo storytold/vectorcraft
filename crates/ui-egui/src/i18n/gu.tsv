@@ -5506,6 +5506,13 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Paper Cutouts	કાગળના કટઆઉટ
+	Coral Layers	કોરલ સ્તરો
+	Mint Layers	મિન્ટ સ્તરો
+	Midnight Layers	મધ્યરાત્રિના સ્તરો
+	Sunflower Sheet	સૂર્યમુખી શીટ
+	Rose Layers	ગુલાબી સ્તરો
+	Monochrome Stack	એકરંગી થપ્પો
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ટૂલબારનું ટૂલ અને તેની કીઓ શું કરે છે તે ટિપને બદલે કાર્ડમાં બતાવે છે; ટૂલ ટિપ્સ બતાવો ચાલુ હોવું જરૂરી છે.
 	Selects whole objects and groups to move, resize or rotate them.	આખા ઑબ્જેક્ટ અને જૂથો પસંદ કરે છે, જેથી તેમને ખસેડી, તેમનું કદ બદલી કે ફેરવી શકાય.

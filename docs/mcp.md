@@ -5578,7 +5578,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Textures, Painted and Sketched, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). Textures
+Rules, Hand-Drawn, Textures, Painted and Sketched, Paper Cutouts, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects, Neon & Glow). Textures
 (`textures`) paints its fills and strokes with the texture effects: Fine Grain (`texture.grain`), Canvas Weave and Burlap
 Sack (`texture.texturizer`), Cracked Glaze (`texture.craquelure`), Mosaic Floor (`texture.mosaicTiles`), Quilted Squares
 (`texture.patchwork`), Leaded Glass (`texture.stainedGlass`) and Damp Paper (`sketch.waterPaper`). `graphicStyle.libraries` lists them
@@ -5597,6 +5597,10 @@ effect that repaints fill and stroke together: `artistic.watercolor`, `artistic.
 `sketch.charcoal`, `brushStrokes.inkOutlines`, `brushStrokes.sumiE` and `sketch.graphicPen`, in that order. The
 colors and effect settings are VectorCraft's own. These are raster effects, so the document's raster effects
 resolution sets how fine they draw.
+
+Paper Cutouts (`paper-cutouts`) holds Coral Layers, Mint Layers, Midnight Layers, Sunflower Sheet,
+Rose Layers and Monochrome Stack. Each original style paints a solid paper face with two colored
+cut edges and a hard, unblurred cast shadow. The colors and shadow offsets are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"graphicStyle.library","params":{"library":"hand-drawn"}}}

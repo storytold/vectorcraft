@@ -8486,6 +8486,13 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Paper Cutouts	Potongan Kertas
+	Coral Layers	Lapisan Koral
+	Mint Layers	Lapisan Mint
+	Midnight Layers	Lapisan Tengah Malam
+	Sunflower Sheet	Lembar Bunga Matahari
+	Rose Layers	Lapisan Mawar
+	Monochrome Stack	Tumpukan Monokrom
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Menampilkan kartu berisi fungsi alat di bilah alat dan tombolnya sebagai pengganti tipnya; memerlukan Tampilkan tips alat.
 	Selects whole objects and groups to move, resize or rotate them.	Memilih objek dan grup utuh untuk dipindahkan, diubah ukurannya, atau diputar.

@@ -10233,6 +10233,13 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Paper Cutouts	Papierschnitte
+	Coral Layers	Korallschichten
+	Mint Layers	Minzschichten
+	Midnight Layers	Mitternachtsschichten
+	Sunflower Sheet	Sonnenblumenblatt
+	Rose Layers	Rosenschichten
+	Monochrome Stack	Monochromer Stapel
 	Dashed Arrow	Gestrichelter Pfeil
 	Pressure Sensitive	Druckempfindlich
 	Flex Ribbon	Flexibles Band

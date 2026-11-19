@@ -10682,6 +10682,13 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Paper Cutouts	Papirudklip
+	Coral Layers	Korallag
+	Mint Layers	Myntelag
+	Midnight Layers	Midnatslag
+	Sunflower Sheet	Solsikkeark
+	Rose Layers	Rosenlag
+	Monochrome Stack	Monokrom stak
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Viser et kort med, hvad et værktøj på værktøjslinjen og dets taster gør, i stedet for dets tip; kræver Vis værktøjstips.
 	Selects whole objects and groups to move, resize or rotate them.	Markerer hele objekter og grupper for at flytte, skalere eller rotere dem.

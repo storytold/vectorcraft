@@ -7843,6 +7843,13 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Paper Cutouts	Papirni izrezi
+	Coral Layers	Koraljni slojevi
+	Mint Layers	Mentini slojevi
+	Midnight Layers	Ponoćni slojevi
+	Sunflower Sheet	List suncokreta
+	Rose Layers	Ružičasti slojevi
+	Monochrome Stack	Jednobojni slojevi
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Prikazuje karticu s onim što alat s trake radi i što rade njegove tipke, umjesto njegovog opisa; potrebno je Prikaži opise alata.
 	Selects whole objects and groups to move, resize or rotate them.	Odabire cijele objekte i grupe radi pomjeranja, promjene veličine ili rotacije.

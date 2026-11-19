@@ -10250,6 +10250,13 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Paper Cutouts	剪紙
+	Coral Layers	珊瑚色圖層
+	Mint Layers	薄荷色圖層
+	Midnight Layers	午夜色圖層
+	Sunflower Sheet	向日葵紙片
+	Rose Layers	玫瑰色圖層
+	Monochrome Stack	單色疊層
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	以卡片取代提示，顯示工具列工具及其按鍵的作用；需要開啟顯示工具提示。
 	Selects whole objects and groups to move, resize or rotate them.	選取整個物件和群組，以移動、縮放或旋轉它們。

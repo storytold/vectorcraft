@@ -10512,6 +10512,13 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Paper Cutouts	Recortes de papel
+	Coral Layers	Capas coral
+	Mint Layers	Capas menta
+	Midnight Layers	Capas de medianoche
+	Sunflower Sheet	Hoja de girasol
+	Rose Layers	Capas rosa
+	Monochrome Stack	Pila monocroma
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Muestra una ficha con lo que hacen una herramienta de la barra y sus teclas en lugar de su información; requiere Mostrar información sobre herramientas.
 	Selects whole objects and groups to move, resize or rotate them.	Selecciona objetos y grupos completos para moverlos, cambiar su tamaño o girarlos.

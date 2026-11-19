@@ -10906,6 +10906,13 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Paper Cutouts	ქაღალდის ამონაჭრები
+	Coral Layers	მარჯნის ფენები
+	Mint Layers	პიტნის ფენები
+	Midnight Layers	შუაღამის ფენები
+	Sunflower Sheet	მზესუმზირის ფურცელი
+	Rose Layers	ვარდისფერი ფენები
+	Monochrome Stack	მონოქრომული დასტა
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ინსტრუმენტების ზოლის ინსტრუმენტისა და მისი კლავიშების მოქმედებას მინიშნების ნაცვლად ბარათზე აჩვენებს; საჭიროა მინიშნებების ჩვენება.
 	Selects whole objects and groups to move, resize or rotate them.	მთლიანად მონიშნავს ობიექტებსა და ჯგუფებს მათი გადასაადგილებლად, ზომის შესაცვლელად ან მოსაბრუნებლად.

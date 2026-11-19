@@ -8795,6 +8795,13 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Paper Cutouts	Retalls de paper
+	Coral Layers	Capes de corall
+	Mint Layers	Capes de menta
+	Midnight Layers	Capes de mitjanit
+	Sunflower Sheet	Full de gira-sol
+	Rose Layers	Capes de rosa
+	Monochrome Stack	Pila monocroma
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra una fitxa amb el que fa una eina de la barra i el que fan les seves tecles en lloc del seu consell; cal Mostra els consells d’eines.
 	Selects whole objects and groups to move, resize or rotate them.	Selecciona objectes i grups sencers per moure’ls, canviar-ne la mida o girar-los.

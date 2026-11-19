@@ -8769,6 +8769,13 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Paper Cutouts	Χάρτινα αποκόμματα
+	Coral Layers	Στρώσεις κοραλλί
+	Mint Layers	Στρώσεις μέντας
+	Midnight Layers	Στρώσεις μεσονυκτίου
+	Sunflower Sheet	Φύλλο ηλιοτρόπιου
+	Rose Layers	Στρώσεις ροζ
+	Monochrome Stack	Μονόχρωμη στοίβα
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Εμφανίζει μια κάρτα με το τι κάνει ένα εργαλείο της γραμμής και τα πλήκτρα του, αντί για τη συμβουλή του· απαιτεί την Εμφάνιση συμβουλών εργαλείων.
 	Selects whole objects and groups to move, resize or rotate them.	Επιλέγει ολόκληρα αντικείμενα και ομάδες για μετακίνηση, αλλαγή μεγέθους ή περιστροφή.

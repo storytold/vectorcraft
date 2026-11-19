@@ -765,7 +765,7 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 86, "{names:?}");
+    assert_eq!(names.len(), 92, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
@@ -1082,6 +1082,16 @@ fn painted_and_sketched_style_names_are_in_every_catalog() {
     assert_eq!(labels.len(), 8);
     for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
         for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+#[test]
+fn paper_cutout_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("paper-cutouts").expect("built in");
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())) {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }

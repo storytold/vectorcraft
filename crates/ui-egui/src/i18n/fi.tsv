@@ -8852,6 +8852,13 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Paper Cutouts	Paperileikkeet
+	Coral Layers	Korallikerrokset
+	Mint Layers	Minttukerrokset
+	Midnight Layers	Keskiyön kerrokset
+	Sunflower Sheet	Auringonkukka-arkki
+	Rose Layers	Ruusukerrokset
+	Monochrome Stack	Yksivärinen pino
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Näyttää vihjeen sijaan kortin siitä, mitä työkalurivin työkalu ja sen näppäimet tekevät; vaatii asetuksen Näytä työkaluvihjeet.
 	Selects whole objects and groups to move, resize or rotate them.	Valitsee kokonaisia objekteja ja ryhmiä niiden siirtämistä, koon muuttamista tai kiertämistä varten.

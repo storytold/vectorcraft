@@ -10266,6 +10266,13 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Paper Cutouts	Ritagli di carta
+	Coral Layers	Livelli corallo
+	Mint Layers	Livelli menta
+	Midnight Layers	Livelli di mezzanotte
+	Sunflower Sheet	Foglio girasole
+	Rose Layers	Livelli rosa
+	Monochrome Stack	Pila monocromatica
 	Dashed Arrow	Freccia tratteggiata
 	Pressure Sensitive	Sensibile alla pressione
 	Flex Ribbon	Nastro flessibile
