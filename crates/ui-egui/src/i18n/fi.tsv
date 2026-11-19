@@ -1502,6 +1502,10 @@ lighting	Light	Valo
 	Add Anchor Point Tool	Lisää ankkuripiste -työkalu
 	Anchor Point Tool	Ankkuripistetyökalu
 	Arc Tool	Kaarityökalu
+	Three-Point Arc Tool	Kolmen pisteen kaaren työkalu
+	Three-Point Arc	Kolmen pisteen kaari
+	Arc too large	Kaari on liian suuri
+	Third Point Sets Direction	Kolmas piste määrää suunnan
 	Area Graph Tool	Aluekaaviotyökalu
 	Area Type Tool	Aluetekstityökalu
 	Artboard Tool	Piirtoalustatyökalu
@@ -4364,6 +4368,7 @@ theme	Appearance	Ulkoasu
 	Add to Graphic Styles	Lisää grafiikkatyyleihin
 	Graphic Style Library	Grafiikkatyylikirjasto
 	Add Used Colors	Lisää käytetyt värit
+	Add Selected Colors	Lisää valitut värit
 	Delete Swatch	Poista värimalli
 	Duplicate Swatch	Monista värimalli
 	Merge Swatches	Yhdistä värimallit
@@ -5607,6 +5612,10 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	a guide has no curvature circle	apuviivalla ei ole kaarevuusympyrää
 @msg	the circle that matches the path there would reach past the canvas	ympyrä, joka vastaa polkua siinä kohdassa, ylittäisi kankaan
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	`at` must be "start" or "end"	`at` on oltava "start" tai "end"
+@msg	give exactly one of `through` and `toward`	anna täsmälleen yksi parametreista `through` ja `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	näihin pisteisiin ei sovi kaarta: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	give `at` only with `toward`	anna `at` vain yhdessä parametrin `toward` kanssa
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
 @msg	no artboard {i} (0-based; the document has {_1})	ei piirtoalustaa {i} (0-pohjainen; asiakirjassa on {_1})
@@ -8971,6 +8980,11 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Paint	Maalaus
+	Flat Sweep	Tasainen veto
+	Dry Drag	Kuiva veto
+	Loaded Stroke	Runsas siveltimenveto
+	Fan Sweep	Viuhkaveto
 	Engraving	Kaiverrus
 	Fine Hatching	Hieno viivoitus
 	Dense Hatching	Tiheä viivoitus

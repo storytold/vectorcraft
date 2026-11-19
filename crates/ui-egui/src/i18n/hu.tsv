@@ -209,6 +209,7 @@
 	Add to Selection	Hozzáadás a kijelöléshez
 	Add to Swatches	Hozzáadás a színmintákhoz
 	Add Used Colors	Használt színek hozzáadása
+	Add Selected Colors	Kijelölt színek hozzáadása
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
 	Plug-in Instruction Budget	Bővítmények utasításkerete
@@ -321,6 +322,10 @@ font-technology	Variable	Változó
 	Arc	Ív
 	Arc Lower…	Alsó ív…
 	Arc Tool	Ív
+	Three-Point Arc Tool	Hárompontos ív eszköz
+	Three-Point Arc	Hárompontos ív
+	Arc too large	Az ív túl nagy
+	Third Point Sets Direction	A harmadik pont adja meg az irányt
 	Arc Upper…	Felső ív…
 	Arch…	Boltív…
 	Arc…	Ív…
@@ -6061,6 +6066,10 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a guide has no curvature circle	a segédvonalnak nincs görbületi köre
 @msg	the circle that matches the path there would reach past the canvas	az útvonalhoz ott illeszkedő kör túlnyúlna a vásznon
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
+@msg	`at` must be "start" or "end"	`at`: "start" vagy "end" kell
+@msg	give exactly one of `through` and `toward`	pontosan egyet adjon meg a `through` és a `toward` közül
+@msg	no arc fits these points: two are the same or all three lie on one line	ezekre a pontokra nem illeszkedik ív: kettő egybeesik, vagy mindhárom egy egyenesen van
+@msg	give `at` only with `toward`	az `at` csak a `toward` mellett adható meg
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
 @msg	no artboard {i} (0-based; the document has {_1})	nincs ilyen sorszámú rajztábla: {i} (0-tól számozva; a dokumentumban ennyi van: {_1})
@@ -10728,6 +10737,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Paint	Festék
+	Flat Sweep	Lapos húzás
+	Dry Drag	Száraz húzás
+	Loaded Stroke	Telített ecsetvonás
+	Fan Sweep	Legyezővonás
 	Engraving	Metszet
 	Fine Hatching	Finom vonalkázás
 	Dense Hatching	Sűrű vonalkázás
