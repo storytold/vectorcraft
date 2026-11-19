@@ -255,6 +255,116 @@ fn a_partial_revolve_caps_its_ends_with_sectors_and_closes_its_cut_sides() {
     assert!(!closed(&hollow));
 }
 
+/// A vertical line 40 pt from the axis, from y 10 to 90: an open cylinder of radius 40 about the
+/// axis at x 0, its middle height 50.
+fn tube() -> (PathData, Rect) {
+    let mut b = BezPath::new();
+    b.move_to((40.0, 10.0));
+    b.line_to((40.0, 90.0));
+    (PathData::from_bezpath(&b), Rect::new(0.0, 10.0, 40.0, 90.0))
+}
+
+#[test]
+fn a_revolved_sides_corners_lie_where_the_canvas_places_the_unrolled_side() {
+    let (p, r) = tube();
+    let o = Revolve { map_surface: true, ..Revolve::default() };
+    let (m, on) = revolve_mesh_surface(&p, FillRule::NonZero, r, o).unwrap();
+    assert_eq!(on.len(), m.triangles.len());
+    assert_eq!(m.triangles.len(), revolve_mesh(&p, FillRule::NonZero, r, o).unwrap().triangles.len());
+    let step = 40.0 * std::f64::consts::TAU / 64.0;
+    let (mut side, mut caps) = (0, 0);
+    for (t, points) in m.triangles.iter().zip(&on) {
+        let c = corners(&m, *t);
+        let Some(points) = points else {
+            // The end caps: flat at the top and bottom of the tube.
+            assert!(c.iter().all(|q| (q[1].abs() - 40.0).abs() < 1e-9), "{c:?}");
+            caps += 1;
+            continue;
+        };
+        side += 1;
+        for (q, uv) in c.iter().zip(points) {
+            // y runs down the profile from its middle (the mesh is y up), and x around the axis is
+            // the angle from the front (90°, toward the viewer), increasing to the viewer's right,
+            // times the radius.
+            assert!((uv.y + q[1]).abs() < 1e-9, "{q:?} {uv:?}");
+            let turned = std::f64::consts::FRAC_PI_2 - q[2].atan2(q[0]);
+            let around = (turned + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+            let seam = (uv.x.abs() - 40.0 * std::f64::consts::PI).abs() < step + 1e-6;
+            assert!((uv.x - 40.0 * around).abs() < 1e-6 || seam, "{q:?} {uv:?}");
+        }
+        // No triangle reaches across the cut at the back: each spans one step around the axis.
+        let (lo, hi) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
+        assert!(hi - lo < step + 1e-6, "{points:?}");
+    }
+    assert_eq!((side, caps > 0), (2 * 64, true));
+    // The cut is at the back: the side runs half a turn each way from the front.
+    let xs = on.iter().flatten().flatten().map(|p| p.x);
+    let (lo, hi) = xs.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| (lo.min(x), hi.max(x)));
+    assert!((lo + 40.0 * std::f64::consts::PI).abs() < 1e-6 && (hi - 40.0 * std::f64::consts::PI).abs() < 1e-6, "{lo} {hi}");
+}
+
+#[test]
+fn a_revolved_sides_layout_matches_its_drawn_faces_at_every_turn() {
+    let (p, r) = tube();
+    for o in [
+        Revolve { map_surface: true, angle: 90.0, ..Revolve::default() },
+        Revolve { map_surface: true, angle: 250.0, offset: 15.0, edge: Edge::Right, rotation_x: -20.0, rotation_y: 35.0, ..Revolve::default() },
+    ] {
+        let (m, on) = revolve_mesh_surface(&p, FillRule::NonZero, r, o).unwrap();
+        // The drawn faces' surface points, which the canvas places the graphics by.
+        let drawn: Vec<Point> = crate::revolve(&p, r, o).unwrap().iter().filter_map(|f| f.surface.as_ref()).flat_map(|c| c.uv.clone()).collect();
+        let near = |q: Point| drawn.iter().any(|d| d.distance(q) < 1e-6);
+        let points: Vec<Point> = on.iter().flatten().flatten().copied().collect();
+        assert!(!points.is_empty() && points.iter().all(|q| near(*q)), "{o:?}");
+        assert!(drawn.iter().all(|d| points.iter().any(|q| q.distance(*d) < 1e-6)), "{o:?}");
+        // The end sectors and the two cut sides carry no surface points.
+        assert!(on.iter().any(Option::is_none) && on.len() == m.triangles.len());
+    }
+    // Without the layout, no triangle carries one.
+    let (_, on) = revolve_mesh_surface(&p, FillRule::NonZero, r, Revolve::default()).unwrap();
+    assert!(on.iter().all(Option::is_none));
+}
+
+#[test]
+fn a_tapered_sides_triangles_are_the_drawn_faces_triangles() {
+    // A cone's side: each face's ends lie at different distances from the axis, so its layout on
+    // the surface is not one affine map, and each triangle must take the corners the canvas cuts
+    // the face into.
+    let mut b = BezPath::new();
+    b.move_to((10.0, 10.0));
+    b.line_to((40.0, 90.0));
+    let p = PathData::from_bezpath(&b);
+    let r = Rect::new(0.0, 10.0, 40.0, 90.0);
+    let o = Revolve { map_surface: true, ..Revolve::default() };
+    let key = |t: &[Point]| {
+        let mut k: Vec<(i64, i64)> = t.iter().map(|q| ((q.x * 1e6).round() as i64, (q.y * 1e6).round() as i64)).collect();
+        k.sort_unstable();
+        k
+    };
+    let drawn: Vec<_> = crate::revolve(&p, r, o).unwrap().iter().filter_map(|f| f.surface.as_ref()).map(|c| key(&c.uv)).collect();
+    assert!(drawn.iter().all(|k| k.len() == 3), "the canvas draws the smooth side in triangles");
+    let (_, on) = revolve_mesh_surface(&p, FillRule::NonZero, r, o).unwrap();
+    let side: Vec<_> = on.iter().flatten().collect();
+    assert_eq!(side.len(), drawn.len());
+    assert!(side.iter().all(|t| drawn.contains(&key(t.as_slice()))));
+}
+
+#[test]
+fn only_the_longest_contour_of_a_revolved_profile_lies_on_the_side_surface() {
+    let mut b = BezPath::new();
+    b.move_to((40.0, 10.0));
+    b.line_to((40.0, 90.0));
+    b.move_to((20.0, 30.0));
+    b.line_to((20.0, 50.0));
+    let p = PathData::from_bezpath(&b);
+    let r = Rect::new(0.0, 10.0, 40.0, 90.0);
+    let (m, on) = revolve_mesh_surface(&p, FillRule::NonZero, r, Revolve { map_surface: true, cap_ends: false, ..Revolve::default() }).unwrap();
+    for (t, points) in m.triangles.iter().zip(&on) {
+        let radius = corners(&m, *t).iter().map(|q| q[0].hypot(q[2])).fold(0.0f64, f64::max);
+        assert_eq!(points.is_some(), radius > 30.0, "{radius}");
+    }
+}
+
 #[test]
 fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direction() {
     // A wall 100 pt tall and one 0.5 pt tall, each drawn up and down the page.
