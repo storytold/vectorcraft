@@ -6057,6 +6057,7 @@ imageTrace	Outline	Contour
 @msg	onto must name a panel floating in another group	onto moet een zwevend paneel in een andere groep benoemen
 @msg	below and above must name a panel floating in another group	below en above moeten een zwevend paneel in een andere groep benoemen
 @msg	give only one of onto, below and above	geef slechts één van onto, below en above
+@msg	give only one of `index`, `indices` and `t`	geef slechts één van `index`, `indices` en `t`
 @msg	column must be true or a number from 1	column moet true zijn of een getal vanaf 1
 @msg	x and y must both be numbers	x en y moeten allebei getallen zijn
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" is geen kleur: schrijf het als #rrggbb

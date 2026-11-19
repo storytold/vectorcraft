@@ -5466,6 +5466,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	onto must name a panel floating in another group	onto başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	below and above must name a panel floating in another group	below ve above başka bir grupta yüzen bir paneli adlandırmalıdır
 @msg	give only one of onto, below and above	onto, below ve above değerlerinden yalnızca birini verin
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices` ve `t` değerlerinden yalnızca birini verin
 @msg	column must be true or a number from 1	column true veya 1'den başlayan bir sayı olmalıdır
 @msg	x and y must both be numbers	x ve y'nin her ikisi de sayı olmalıdır
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" bir renk değildir: #rrggbb olarak yazın

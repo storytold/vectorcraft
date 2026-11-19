@@ -5641,6 +5641,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	onto must name a panel floating in another group	onto måste ange en panel som flyter i en annan grupp
 @msg	below and above must name a panel floating in another group	below och above måste ange en panel som flyter i en annan grupp
 @msg	give only one of onto, below and above	ange bara en av onto, below och above
+@msg	give only one of `index`, `indices` and `t`	ange bara en av `index`, `indices` och `t`
 @msg	column must be true or a number from 1	column måste vara true eller ett tal från 1
 @msg	x and y must both be numbers	x och y måste båda vara tal
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" är inte en färg: skriv den som #rrggbb

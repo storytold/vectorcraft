@@ -6073,6 +6073,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	onto must name a panel floating in another group	onto musí určovat panel plovoucí v jiné skupině
 @msg	below and above must name a panel floating in another group	below a above musí určovat panel plovoucí v jiné skupině
 @msg	give only one of onto, below and above	zadejte jen jedno z onto, below a above
+@msg	give only one of `index`, `indices` and `t`	zadejte jen jedno z `index`, `indices` a `t`
 @msg	column must be true or a number from 1	column musí být true nebo číslo od 1
 @msg	x and y must both be numbers	x i y musí být čísla
 @msg	"{0}" is not a colour: write it as #rrggbb	„{0}“ není barva: zapište ji jako #rrggbb

@@ -8092,6 +8092,15 @@ continuous point. Indices that are not the two halves of one discontinuous point
 included), another `t`, or another `single` value are errors that leave the document and its undo history unchanged.
 Width Point Edit on either half shows both halves as Incoming and Outgoing, with Single Width Only, and its Delete
 removes both.
+`ui.widthPointEdit {id, indices: [i…]}` (or double-clicking one of several Shift-selected width points) opens Width
+Point Edit on several points: Side 1, Side 2 and Total Width are blank (null) where the points differ, a side width
+typed in sets that side of every point (both sides while the link is on, which it is when every point has equal sides;
+turn it off to keep each point's other side), and Total Width scales each point's own two sides. OK sets them all with
+one `stroke.widthProfile.set` (one undo step, none when nothing changed), and Delete removes them all; with a
+discontinuous point among them, Incoming and Outgoing edit its two halves and both edit the continuous points.
+Malformed or out-of-range `indices`, or more than one of `index`, `indices` and `t`, are errors that open no dialog. OK
+and Delete on existing points are refused when those points changed since the dialog opened or another document is
+active.
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.

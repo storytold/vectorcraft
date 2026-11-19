@@ -6054,6 +6054,7 @@ imageTrace	Outline	Kontur
 @msg	onto must name a panel floating in another group	onto harus menyebutkan panel yang mengambang di grup lain
 @msg	below and above must name a panel floating in another group	below dan above harus menyebutkan panel yang mengambang di grup lain
 @msg	give only one of onto, below and above	berikan hanya satu dari onto, below, dan above
+@msg	give only one of `index`, `indices` and `t`	berikan hanya satu dari `index`, `indices`, dan `t`
 @msg	column must be true or a number from 1	column harus true atau angka mulai dari 1
 @msg	x and y must both be numbers	x dan y harus keduanya angka
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" bukan warna: tulis sebagai #rrggbb

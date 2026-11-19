@@ -5718,6 +5718,7 @@ imageTrace	Outline	Obris
 @msg	onto must name a panel floating in another group	onto mora navesti panel koji pluta u drugoj grupi
 @msg	below and above must name a panel floating in another group	below i above moraju navesti panel koji pluta u drugoj grupi
 @msg	give only one of onto, below and above	navedite samo jedno od onto, below i above
+@msg	give only one of `index`, `indices` and `t`	navedite samo jedno od `index`, `indices` i `t`
 @msg	column must be true or a number from 1	column mora biti true ili broj od 1
 @msg	x and y must both be numbers	x i y moraju oba biti brojevi
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" nije boja: napišite je kao #rrggbb

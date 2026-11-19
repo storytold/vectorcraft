@@ -5788,6 +5788,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	onto must name a panel floating in another group	onto deve indicare un pannello mobile in un altro gruppo
 @msg	below and above must name a panel floating in another group	below e above devono indicare un pannello mobile in un altro gruppo
 @msg	give only one of onto, below and above	indica solo uno tra onto, below e above
+@msg	give only one of `index`, `indices` and `t`	indica solo uno tra `index`, `indices` e `t`
 @msg	column must be true or a number from 1	column deve essere true o un numero da 1
 @msg	x and y must both be numbers	x e y devono essere entrambi numeri
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" non è un colore: scrivilo come #rrggbb

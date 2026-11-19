@@ -1442,7 +1442,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.widthPointEdit",
         "Width Point Edit…",
         "",
-        "{id, index?: existing width point, t?: 0..1 for a new point, adjustAdjoining?: bool (false)} open Width Point Edit on path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking the stroke opens it too, Shift on a width point enabling adjoining adjustment): OK runs stroke.widthPoint.set; discard: true (Delete) removes an existing point or discards a prospective point",
+        "{id, index?: existing width point, indices?: [i…] several existing width points, t?: 0..1 for a new point (give only one of index, indices and t), adjustAdjoining?: bool (false)} open Width Point Edit on path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; for several points also totalWidth, and side1, side2 and totalWidth are null where the points differ; double-clicking the stroke opens it too, on one of several Shift-selected width points for all of them, Shift on a width point enabling adjoining adjustment): OK runs stroke.widthPoint.set, for several points one stroke.widthProfile.set (none when nothing changed); discard: true (Delete) removes the existing points or discards a prospective point",
     ),
     (
         "ui.corners",

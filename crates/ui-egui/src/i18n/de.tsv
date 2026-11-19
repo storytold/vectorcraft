@@ -5651,6 +5651,7 @@ variable-list-end	{0}, {1}	{0} und {1}
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	give only one of onto, below and above	nur eines von onto, below und above angeben
+@msg	give only one of `index`, `indices` and `t`	nur eines von `index`, `indices` und `t` angeben
 @msg	column must be true or a number from 1	column muss true oder eine Zahl ab 1 sein
 @msg	x and y must both be numbers	x und y müssen beide Zahlen sein
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ist keine Farbe: Schreiben Sie sie als #rrggbb

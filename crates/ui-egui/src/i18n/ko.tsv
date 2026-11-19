@@ -5437,6 +5437,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices`, `t` 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
 @msg	`{panel}` has no display sizes to cycle	`{panel}`에는 전환할 표시 크기가 없습니다

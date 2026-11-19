@@ -5707,6 +5707,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	onto must name a panel floating in another group	το onto πρέπει να ορίζει πίνακα που αιωρείται σε άλλη ομάδα
 @msg	below and above must name a panel floating in another group	τα below και above πρέπει να ορίζουν πίνακα που αιωρείται σε άλλη ομάδα
 @msg	give only one of onto, below and above	δώστε μόνο ένα από τα onto, below και above
+@msg	give only one of `index`, `indices` and `t`	δώστε μόνο ένα από τα `index`, `indices` και `t`
 @msg	column must be true or a number from 1	το column πρέπει να είναι true ή αριθμός από 1 και πάνω
 @msg	x and y must both be numbers	τα x και y πρέπει να είναι αριθμοί
 @msg	"{0}" is not a colour: write it as #rrggbb	το "{0}" δεν είναι χρώμα: γράψτε το ως #rrggbb

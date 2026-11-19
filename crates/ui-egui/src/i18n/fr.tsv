@@ -5719,6 +5719,7 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msg	onto must name a panel floating in another group	onto doit désigner un panneau flottant dans un autre groupe
 @msg	below and above must name a panel floating in another group	below et above doivent désigner un panneau flottant dans un autre groupe
 @msg	give only one of onto, below and above	indiquez un seul de onto, below et above
+@msg	give only one of `index`, `indices` and `t`	indiquez un seul de `index`, `indices` et `t`
 @msg	column must be true or a number from 1	column doit être true ou un nombre à partir de 1
 @msg	x and y must both be numbers	x et y doivent tous deux être des nombres
 @msg	"{0}" is not a colour: write it as #rrggbb	« {0} » n’est pas une couleur : écrivez-la sous la forme #rrggbb
