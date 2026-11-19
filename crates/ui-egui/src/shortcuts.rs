@@ -970,6 +970,10 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     for d in digits {
         let _ = app.session.tool_key(ToolKey::Digit(d), Mods::default(), view);
     }
+    // `[` and `]` while the Quick Pen tool draws a piece: the arc being dragged takes the new size.
+    if app.session.tool_id() == vectorcraft_tools::quickpen::ID {
+        tool_brackets(app, ctx, view);
+    }
     // Tab, when the tool takes it (the Smart Pen Tool placing an anchor).
     if app.session.tool_claims_key(ToolKey::Tab, view) && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
         let _ = app.session.tool_key(ToolKey::Tab, Mods::default(), view);
@@ -1073,9 +1077,14 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
             }
         }
     }
-    // `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism
-    // tools' diameter, with Shift their intensity). Read as typed, so
-    // layouts where a bracket takes Option or AltGr count too; `{` and `}` are Shift's.
+    tool_brackets(app, ctx, view)
+}
+
+/// `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism tools'
+/// diameter, with Shift their intensity). Read as typed, so layouts where a bracket takes Option or
+/// AltGr count too; `{` and `}` are Shift's. Did the tool take one?
+fn tool_brackets(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo) -> bool {
+    let m = ctx.input(|i| i.modifiers);
     if !(m.command || m.ctrl) {
         let typed: Vec<(String, ToolKey, bool)> = ctx.input(|i| {
             i.events

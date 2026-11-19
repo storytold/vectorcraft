@@ -2237,6 +2237,25 @@ fn brackets_size_the_blob_brush_and_the_eraser() {
     assert_eq!(app.session.paint.stroke_width, 3.0);
 }
 
+/// A typed `[` or `]` reaches the Quick Pen tool while a press drags a sharp-corner arc: the arc
+/// being dragged takes the new size.
+#[test]
+fn brackets_size_the_quick_pen_arc_being_dragged() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    app.select_tool(vectorcraft_tools::quickpen::ID);
+    app.session.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    let v = vectorcraft_engine::ViewInfo { smart_guides: false, ..Default::default() };
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 100.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), v).unwrap();
+    assert!(app.session.tool_busy());
+    frame(&mut app, vec![egui::Event::Text("[".into())]);
+    assert_eq!(app.session.tool_options()["turn"], 165.0);
+}
+
 fn remembered_paint_app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
