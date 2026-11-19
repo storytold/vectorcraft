@@ -67,6 +67,285 @@ fn the_strip_scroll_bar_stays_a_slim_line_while_the_pointer_is_on_it() {
     assert!(widest > 0.0, "the scroll bar is drawn");
     assert!(widest <= 4.5, "the scroll bar is {widest} points wide");
 }
+
+/// The filled rectangles of a scroll bar drawn at the right of `content` in `shapes`: narrow
+/// rectangles that start at or past the content's right edge.
+fn bar_rects(shapes: &[egui::Shape], content: Rect, widest: f32) -> Vec<(Rect, Color32)> {
+    shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Rect(r)
+                if r.fill != Color32::TRANSPARENT && r.rect.width() <= widest && r.rect.height() > 4.0 && r.rect.min.x >= content.right() - 0.5 =>
+            {
+                Some((r.rect, r.fill))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+// Regression test for #5941: a scrolling list in a panel or a dialog showed no scroll bar until the
+// pointer came over it, so nothing told the user that the list had more rows. In every brightness
+// the bar shows while the pointer is elsewhere, in a column of its own beside the rows, and its
+// handle stands out from its track.
+#[test]
+fn a_scroll_bar_shows_while_the_pointer_is_elsewhere() {
+    for brightness in theme::Brightness::ALL {
+        let ctx = themed(brightness);
+        let rows = std::cell::Cell::new(Rect::NOTHING);
+        let mut add = |ui: &mut Ui| {
+            ui.allocate_ui(vec2(160.0, 200.0), |ui| {
+                egui::ScrollArea::vertical().id_salt("list").auto_shrink([false, false]).show(ui, |ui| {
+                    for i in 0..40 {
+                        ui.label(format!("Row {i}"));
+                    }
+                    rows.set(ui.max_rect());
+                });
+            });
+        };
+        frame(&ctx, 0.0, vec![egui::Event::PointerMoved(pos2(500.0, 350.0))], &mut add);
+        let shapes = frame(&ctx, 1.0, vec![], &mut add);
+        let rows = rows.get();
+        assert!(rows.width() < 160.0, "{brightness:?}: the rows leave a column for the bar: {rows:?}");
+        let bar = bar_rects(&shapes, rows, 10.0);
+        let (Some(track), Some(handle)) =
+            (bar.iter().max_by(|a, b| a.0.height().total_cmp(&b.0.height())), bar.iter().min_by(|a, b| a.0.height().total_cmp(&b.0.height())))
+        else {
+            panic!("{brightness:?}: the scroll bar is drawn at rest: {bar:?}");
+        };
+        assert!(handle.0.height() < track.0.height(), "{brightness:?}: a handle on a track: {bar:?}");
+        assert_eq!(handle.1.a(), 255, "{brightness:?}: the handle is opaque: {:?}", handle.1);
+        let gap = (i32::from(handle.1.r()) - i32::from(track.1.r())).abs();
+        assert!(gap >= 24, "{brightness:?}: handle {:?} on track {:?}", handle.1, track.1);
+    }
+}
+
+// Regression test for #5941: a drop-down list opens with its current option in view. With its field
+// in the middle of a short window, neither side has room for the list's 200 pt, and the menu is cut
+// to the room beside the field; the current option still shows whole, at the end of the list and in
+// its middle, also when the room beside the field is less than half the list.
+#[test]
+fn a_dropdown_in_a_short_window_opens_with_its_current_option_in_view() {
+    let items: Vec<String> = (0..20).map(|i| format!("Option {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    // (window height, space above the field, current option): about 105 pt and 65 pt on either side
+    // of the field.
+    for (height, above, current) in [(260.0, 117.0, 19), (260.0, 117.0, 10), (180.0, 77.0, 10), (180.0, 77.0, 3)] {
+        let ctx = themed(Default::default());
+        let field = std::cell::Cell::new(Rect::NOTHING);
+        let mut add = |ui: &mut Ui| {
+            ui.add_space(above);
+            field.set(ui.horizontal(|ui| dropdown_names(ui, "short-list", labels[current], &labels, 160.0)).response.rect);
+        };
+        let mut run = |time: f64, events: Vec<egui::Event>| {
+            let raw = egui::RawInput {
+                time: Some(time),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, height))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, &mut add);
+            out.textures_delta.clear();
+            out.shapes
+        };
+        run(0.0, vec![]);
+        let at = field.get().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(0.1, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(0.2, vec![press(false)]);
+        let mut clipped = vec![];
+        for i in 3..10 {
+            clipped = run(f64::from(i) * 0.1, vec![]);
+        }
+        // Each shape with the clip rect it is painted in.
+        let mut shapes = vec![];
+        fn flat(s: egui::Shape, clip: Rect, out: &mut Vec<(egui::Shape, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, clip, out)),
+                s => out.push((s, clip)),
+            }
+        }
+        clipped.into_iter().for_each(|c| flat(c.shape, c.clip_rect, &mut shapes));
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        // The options that show whole: inside the list and inside the clip they are painted in.
+        let rows: Vec<(String, Rect)> = shapes
+            .iter()
+            .filter_map(|(s, clip)| match s {
+                egui::Shape::Text(t) if list.contains_rect(t.visual_bounding_rect()) && clip.contains_rect(t.visual_bounding_rect()) => {
+                    Some((t.galley.text().to_owned(), t.visual_bounding_rect()))
+                }
+                _ => None,
+            })
+            .collect();
+        let case = format!("{height} pt window, {} current", labels[current]);
+        assert!(rows.len() < labels.len(), "{case}: the list does not show every option in {list:?}: {rows:?}");
+        assert!(rows.iter().any(|(s, _)| s == labels[current]), "{case}: the current option shows whole in {list:?}: {rows:?}");
+    }
+}
+
+// #5941: a drop-down list that draws its own rows (warp styles, tracing presets) has no current
+// option for the drop-down to scroll to, so it opens where it was scrolled when it last closed, and
+// a row picked below the first ones is still in view when the list opens again. That holds for a
+// field in the middle of a short window too, where the list is taller on the pass it opens than
+// beside the field, and for a list scrolled to its end.
+#[test]
+fn a_dropdown_that_draws_its_own_rows_opens_where_it_was_scrolled() {
+    // (window height, space above the field, wheel, a row the wheel brings into view)
+    for (height, above, wheel, row) in [(300.0, 20.0, -300.0, "Row 15"), (260.0, 117.0, -2000.0, "Row 19")] {
+        own_rows_reopen(height, above, wheel, row);
+    }
+}
+
+fn own_rows_reopen(height: f32, above: f32, wheel: f32, row: &str) {
+    let case = format!("{height} pt window, {above} pt above the field");
+    let items: Vec<String> = (0..20).map(|i| format!("Row {i:02}")).collect();
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let current = std::cell::RefCell::new(String::from("Row 00"));
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(above);
+        let shown = current.borrow().clone();
+        let r = ui.horizontal(|ui| {
+            combo(ui, "own-rows", &shown, 160.0, |ui| {
+                let mut chosen = None;
+                for (i, s) in items.iter().enumerate() {
+                    if ui.selectable_label(*s == shown, s.as_str()).clicked() {
+                        chosen = Some(i);
+                    }
+                }
+                chosen
+            })
+        });
+        if let Some(i) = r.inner {
+            current.replace(items[i].clone());
+        }
+        field.set(r.response.rect);
+    };
+    let mut time = 0.0;
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let raw = egui::RawInput {
+            time: Some(time),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, height))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, &mut add);
+        out.textures_delta.clear();
+        out.shapes
+    };
+    // The rows that show whole, with their tops: inside the open list and the clip they are painted
+    // in.
+    let rows = |clipped: Vec<egui::epaint::ClippedShape>| -> Vec<(String, f32)> {
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        let mut shapes = vec![];
+        fn flat(s: egui::Shape, clip: Rect, out: &mut Vec<(egui::Shape, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, clip, out)),
+                s => out.push((s, clip)),
+            }
+        }
+        clipped.into_iter().for_each(|c| flat(c.shape, c.clip_rect, &mut shapes));
+        shapes
+            .iter()
+            .filter_map(|(s, clip)| match s {
+                egui::Shape::Text(t) if list.contains_rect(t.visual_bounding_rect()) && clip.contains_rect(t.visual_bounding_rect()) => {
+                    Some((t.galley.text().to_owned(), t.visual_bounding_rect().top().round()))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let has = |rows: &[(String, f32)], name: &str| rows.iter().any(|(s, _)| s == name);
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let open = |run: &mut dyn FnMut(Vec<egui::Event>) -> Vec<egui::epaint::ClippedShape>| {
+        run(vec![egui::Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        let mut clipped = vec![];
+        for _ in 0..4 {
+            clipped = run(vec![]);
+        }
+        clipped
+    };
+    let first = rows(open(&mut run));
+    assert!(has(&first, "Row 00") && !has(&first, row), "{case}: the list opens at its top: {first:?}");
+    // Scrolled down to `row` and closed.
+    let list = ctx
+        .memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+        .expect("the list is open");
+    run(vec![egui::Event::PointerMoved(list.center())]);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, wheel),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    run(vec![wheel]);
+    let mut clipped = vec![];
+    for _ in 0..4 {
+        clipped = run(vec![]);
+    }
+    let scrolled = rows(clipped);
+    assert!(has(&scrolled, row), "{case}: the wheel scrolls {row} into view: {scrolled:?}");
+    // Closed and opened again twice: each time its rows are where they were when it closed.
+    for time in ["first", "second"] {
+        run(vec![egui::Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        run(vec![]);
+        let reopened = rows(open(&mut run));
+        assert_eq!(reopened, scrolled, "{case}: the list opens again where it was scrolled, the {time} time");
+    }
+    // `row` picked: the field shows it, and the list opens again where it was when it was picked.
+    let top = scrolled.iter().find(|(s, _)| s == row).map(|(_, top)| *top).expect("the row shows");
+    let on_row = pos2(list.left() + 30.0, top + 6.0);
+    let click = |pressed| egui::Event::PointerButton { pos: on_row, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(on_row), click(true)]);
+    run(vec![click(false)]);
+    run(vec![]);
+    assert_eq!(*current.borrow(), row, "{case}: the click picks {row}");
+    let reopened = rows(open(&mut run));
+    assert_eq!(reopened, scrolled, "{case}: the list opens again where {row} was picked");
+}
+
+// Regression test for #5941: the toolbar's and the dock icon column's scroll bar showed nothing
+// until the pointer came over the column. Its slim line shows at rest, still at most 4 points
+// wide (#808).
+#[test]
+fn the_strip_scroll_bar_shows_while_the_pointer_is_elsewhere() {
+    let ctx = themed(Default::default());
+    let column = std::cell::Cell::new(Rect::NOTHING);
+    let mut add = |ui: &mut Ui| {
+        column.set(
+            ui.allocate_ui(vec2(80.0, 200.0), |ui| {
+                strip_scroll(ui, "strip", |ui| {
+                    for i in 0..40 {
+                        ui.label(format!("Tool {i}"));
+                    }
+                });
+            })
+            .response
+            .rect,
+        );
+    };
+    frame(&ctx, 0.0, vec![egui::Event::PointerMoved(pos2(500.0, 350.0))], &mut add);
+    let shapes = frame(&ctx, 1.0, vec![], &mut add);
+    let column = column.get();
+    // The bar lies along the column's right edge, inside it.
+    let buttons = Rect::from_min_max(column.min, pos2(column.right() - 6.0, column.bottom()));
+    let bar = bar_rects(&shapes, buttons, 4.5);
+    assert!(!bar.is_empty(), "the slim scroll bar is drawn at rest");
+}
 // Regression test for #900: a number field with a spinner and a preset list drew as three
 // boxes side by side: its text box was a point taller than the 26-point row, and each joint had
 // two borders.
