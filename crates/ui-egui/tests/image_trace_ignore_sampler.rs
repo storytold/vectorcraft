@@ -1196,7 +1196,7 @@ fn review_596866_nested_trace_selection() -> (VectorcraftApp, egui::Context, Nod
         json!({"name": "second-sampler-source.png", "dataBase64": vectorcraft_format::base64_encode(&bytes), "link": false, "at": [280, 150]}),
     )
     .unwrap();
-    app.run("imageTrace.make", json!({"preset": "Default", "params": {"mode": "blackAndWhite", "threshold": 127, "noise": 1, "ignoreWhite": false}}))
+    app.run("imageTrace.make", json!({"preset": "Default", "params": {"mode": "blackAndWhite", "threshold": 127, "noise": 1, "ignoreWhite": true}}))
         .unwrap();
     let second = selected(&app).id;
     assert_ne!(first, second);
