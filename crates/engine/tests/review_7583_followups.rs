@@ -264,6 +264,8 @@ fn review7583_thumbnail_queue_skips_one_rejected_native_file_and_continues() {
     let queued = options["names"].as_array().expect("Place tool exposes queued file names");
     assert_eq!(options["count"], 2, "REGRESSION: a thumbnail rejection leaves no stale cursor entry");
     assert_eq!(queued.iter().map(|name| name.as_str().unwrap()).collect::<Vec<_>>(), ["first.vectorcraft", "last.vectorcraft"]);
+
+    review_598368_all_skipped_queue(&mut session, &directory.0, &bad, &rejected, &expected_error);
 }
 
 const NATIVE_DOTS: &str = "ReviewNativeDots";
@@ -1600,4 +1602,177 @@ fn review_597585_native_font_previews_restore_registry_on_cancel_and_replacement
         observations.iter().all(|(_, registry, consumer)| *registry && *consumer),
         "REGRESSION: cancel and replacement must restore fonts before returning or running another consumer: {observations:?}"
     );
+}
+
+fn review_598368_text(session: &Session, id: NodeId) -> String {
+    let NodeKind::Text(text) = &document(session).node(id).expect("CONTROL: live text object").kind else {
+        panic!("CONTROL: expected text");
+    };
+    text.plain_text()
+}
+
+/// Use the same public Type pointer/key route as the engine's text-editing regressions.
+fn review_598368_type_at_end(session: &mut Session, id: NodeId) -> vectorcraft_engine::ViewInfo {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let view = vectorcraft_engine::ViewInfo::default();
+    session.select_tool("type", view).unwrap();
+    let bounds = document(session).bounds_of(&[id], false).expect("CONTROL: real text has hit bounds");
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        session.pointer(&PointerEvent::new(kind, bounds.x1 - 1.0, bounds.center().y), view).unwrap();
+    }
+    session.tool_key(ToolKey::End, Mods::default(), view).unwrap();
+    let options = session.tool_options();
+    assert_eq!(options["editing"], id.0, "CONTROL: the actual Type tool owns this text");
+    assert_eq!(options["caret"], review_598368_text(session, id).len());
+    assert_eq!(options["start"], options["end"]);
+    view
+}
+
+fn review_598368_sources(directory: &Path) -> (PathBuf, PathBuf, String) {
+    let good = directory.join("replace-type-valid.vectorcraft");
+    let bad = directory.join("replace-type-invalid.vectorcraft");
+    let mut maker = Session::new();
+    maker.add_document(Document::new(80.0, 60.0), None);
+    maker.execute("shape.rectangle", &json!({"x":4,"y":4,"width":8,"height":6})).unwrap();
+    write_native(&good, document(&maker));
+    let font = CompositeFont::new("Review598368ReplaceSource", "Source Sans 3", "Regular");
+    let mut invalid = font_document(&font);
+    invalid.composite_fonts[0].parts.roman.size = 9.0;
+    let reason = invalid.composite_fonts[0].check().unwrap_err();
+    let loaded = write_native(&bad, &invalid);
+    assert_eq!(loaded.composite_fonts[0].check().unwrap_err(), reason, "CONTROL: native read retains the ordinary adoption error");
+    (good, bad, reason)
+}
+
+/// Pending typing changes A even while A remains selected; validation must see the settled text.
+#[test]
+fn review_598368_same_selection_replace_settles_typing_before_target_validation() {
+    let _context = FixtureContext::hold();
+    let directory = TestDirectory::new();
+    let (good, _, _) = review_598368_sources(&directory.0);
+    for pending in [false, true] {
+        let mut session = Session::new();
+        session.add_document(Document::new(400.0, 300.0), None);
+        session.prefs.real_time_drawing = false;
+        let a = NodeId(
+            session.execute("text.create", &json!({"x":40,"y":100,"text":"Alpha","font":"Source Sans 3","size":20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        session.execute("select.set", &json!({"ids":[a.0]})).unwrap();
+        let original = document(&session).node(a).unwrap().clone();
+        let params = json!({"path":good,"replace":true,"link":false});
+        let read = session.prepare_place(&params).unwrap().read().expect("CONTROL: valid native source reads before Type editing");
+        let view = review_598368_type_at_end(&mut session, a);
+        assert_eq!(document(&session).node(a), Some(&original), "CONTROL: opening the Type caret does not change the captured target");
+        let undo = session.doc().unwrap().history.undo.len();
+        if !pending {
+            let reply = session.place_read(read).expect("CONTROL: unchanged selected text A still replaces normally");
+            assert!(document(&session).node(a).is_none());
+            assert!(document(&session).node(NodeId(reply["ids"][0].as_u64().unwrap())).is_some());
+            assert_eq!(session.doc().unwrap().history.undo.len(), undo + 1);
+            continue;
+        }
+        session.tool_text("!", view).unwrap();
+        assert!(session.in_interaction(), "CONTROL: real typing has a pending interaction");
+        assert_eq!(session.tool_options()["typing"], true);
+        assert_eq!(session.doc().unwrap().selection.objects, vec![a]);
+        assert_eq!(document(&session).node(a), Some(&original), "CONTROL: Real-time Drawing off leaves the stored target unchanged until settlement");
+        assert_eq!(review_598368_text(&session, a), "Alpha");
+        let error = session.place_read(read).expect_err("REGRESSION: settled typing changes the retained target even with the same selection");
+        assert!(error.to_string().contains("replace: the object to replace was changed or deleted"));
+        assert_eq!(review_598368_text(&session, a), "Alpha!", "typing is committed, not discarded or replaced");
+        assert_eq!(session.doc().unwrap().selection.objects, vec![a]);
+        assert!(!session.in_interaction());
+        assert_eq!(session.doc().unwrap().history.undo.len(), undo + 1);
+        assert_eq!(session.doc().unwrap().history.undo.last().unwrap().label, "Typing");
+    }
+}
+
+/// A failed temporary reselection must preserve an unrelated real Type range, not only DocState.
+#[test]
+fn review_598368_failed_replace_preserves_live_type_range_and_typing() {
+    let _context = FixtureContext::hold();
+    let directory = TestDirectory::new();
+    let (good, bad, reason) = review_598368_sources(&directory.0);
+    for succeeds in [true, false] {
+        let mut session = Session::new();
+        session.add_document(Document::new(400.0, 300.0), None);
+        let a = NodeId(session.execute("shape.rectangle", &json!({"x":10,"y":10,"width":20,"height":20})).unwrap()["id"].as_u64().unwrap());
+        let b = NodeId(
+            session.execute("text.create", &json!({"x":200,"y":100,"text":"Bravo","font":"Source Sans 3","size":20})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        session.execute("select.set", &json!({"ids":[a.0]})).unwrap();
+        let params = json!({"path":if succeeds {&good} else {&bad},"replace":true,"link":false});
+        let read = session.prepare_place(&params).unwrap().read().expect("CONTROL: actual async read succeeds before adoption");
+        let (view, options) = review_598368_type_range(&mut session, b);
+        let before = review_597585_replace_snapshot(&session);
+        let b_before = document(&session).node(b).unwrap().clone();
+        let result = session.place_read(read);
+        if succeeds {
+            result.expect("CONTROL: normal Replace finishes before the Type tool observes the final selection");
+            review_598368_successful_type_replace(&session, a, b, &b_before);
+            continue;
+        }
+        let error = result.expect_err("CONTROL: chosen native adoption validation fails after temporary reselection");
+        assert!(error.to_string().contains(&reason), "CONTROL: the ordinary expected adoption cause: {error}");
+        assert_eq!(review_597585_replace_snapshot(&session), before, "document, selection, history and journal roll back before tool-state oracles");
+        assert_eq!(session.tool_id(), "type");
+        assert_eq!(session.tool_options(), options, "REGRESSION: failure preserves the actual caret and selected character range B");
+        assert!(session.tool_wants_text());
+        session.tool_text("Z", view).unwrap();
+        assert_eq!(review_598368_text(&session, b), "Zavo", "REGRESSION: real typing replaces the retained Br range");
+        session.tool_text("!", view).unwrap();
+        assert_eq!(review_598368_text(&session, b), "Z!avo", "continued typing uses the retained new caret");
+        session.keep_typing().unwrap();
+        assert_eq!(review_598368_text(&session, b), "Z!avo");
+        assert!(document(&session).node(a).is_some(), "failed Replace never consumes A");
+    }
+}
+
+fn review_598368_all_skipped_queue(session: &mut Session, directory: &Path, bad: &Document, rejected: &Path, expected_error: &str) {
+    // Even when every file is rejected, the same async completion reports them all without
+    // replacing the already loaded valid cursor. Keep the actual first validation cause.
+    let rejected_last = directory.join("rejected-last.vectorcraft");
+    let loaded = write_native(&rejected_last, bad);
+    assert_eq!(loaded.composite_fonts[0].check().unwrap_err(), expected_error);
+    let before = review_597585_replace_snapshot(session);
+    let cursor = session.tool_options();
+    let loads = session.place_queue_loads();
+    let params = json!({"paths": [rejected_last, rejected], "link": false, "thumbnail": 8});
+    let read = session.prepare_place_queue(&params).unwrap().read().expect("CONTROL: all-skipped async read returns its per-file results");
+    let error = session.place_queue_read(read).expect_err("CONTROL: all-skipped completion does not load an empty cursor").to_string();
+    assert_eq!(review_597585_replace_snapshot(session), before);
+    assert_eq!(session.tool_id(), "place");
+    assert_eq!(session.tool_options(), cursor);
+    assert_eq!(session.place_queue_loads(), loads);
+    assert!(error.contains(expected_error), "the first existing cause is retained: {error}");
+    let first = error.find("rejected-last.vectorcraft").expect("REGRESSION: first skipped file is named");
+    let second = error.find("rejected.vectorcraft").expect("REGRESSION: later skipped file is named");
+    assert!(first < second, "REGRESSION: skipped files retain input order: {error}");
+    assert_eq!(error.matches(expected_error).count(), 2, "REGRESSION: both skipped reasons remain present: {error}");
+}
+
+fn review_598368_type_range(session: &mut Session, b: NodeId) -> (vectorcraft_engine::ViewInfo, Value) {
+    use vectorcraft_tools::{Mods, ToolKey};
+    let view = review_598368_type_at_end(session, b);
+    session.tool_key(ToolKey::Home, Mods::default(), view).unwrap();
+    for _ in 0..2 {
+        session.tool_key(ToolKey::Right, Mods { shift: true, ..Mods::default() }, view).unwrap();
+    }
+    let options = session.tool_options();
+    assert_eq!(options["editing"], b.0);
+    assert_eq!((options["start"].clone(), options["end"].clone()), (json!(0), json!(2)), "CONTROL: actual keys select the first two characters");
+    assert_eq!(options["typing"], false, "CONTROL: no pending typing can explain losing this edit");
+    assert!(!session.in_interaction());
+    assert_eq!(session.doc().unwrap().selection.objects, vec![b]);
+    (view, options)
+}
+
+fn review_598368_successful_type_replace(session: &Session, a: NodeId, b: NodeId, b_before: &Node) {
+    assert!(document(session).node(a).is_none());
+    assert_eq!(document(session).node(b), Some(b_before));
+    let journal: Vec<_> = session.journal.iter().rev().take(2).rev().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(journal, ["select.set", "file.place"], "CONTROL: successful command depth and two-entry journal stay intact");
+    assert!(session.tool_options()["editing"].is_null(), "CONTROL: a successful replacement ends the old text edit normally");
 }

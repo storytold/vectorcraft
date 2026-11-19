@@ -5230,7 +5230,7 @@ it, masks that member's solids ([three-d.md](three-d.md#groups)).
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
 and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..90%), `bevelInside`,
-`bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
+`bevelBothSides`; `bevel` `custom` with `bevelName` and `bevelProfile` is a custom bevel (below). `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
 solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
@@ -5242,12 +5242,47 @@ points returns "The shape is too complex for a 3D effect", and one whose faces d
 has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
 takes up to 65,536 points.
 
+Custom bevels come from the bevels file, `Bevels.vectorcraft` next to the preferences (none on the web or in runs
+with `VECTORCRAFT_NO_PREFS`). `threeD.bevels.edit` (3D and Materials panel › Bevel Shape › Edit Bevels…) opens it,
+and first creates it with one example bevel when it is missing. Each symbol whose art is one open path is one bevel,
+named after the symbol and listed after the built-in shapes. These rules are VectorCraft's own: the path runs from its
+first anchor at the cap's edge to its last at the side wall, across the page across the bevel's width and down the
+page along its height, and curves are cut into straight lines of at most 64 points. The file is read when the app
+starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it again. A file larger than 64 MB is
+not read, at most 256 symbols are read, and a symbol that is not one open path, has more than 4,096 anchors, is cut
+into more than 8,192 straight lines, needs more point-to-line distances to simplify than are left of the 40,000,000
+the file may take, has ends that are not apart both across and down, or repeats an earlier name is
+listed in `skipped`. `threeD.bevels.list`
+returns each bevel's `name` and `points`, the `file` path, the `skipped` symbols and any read `error`.
+
+Under automation read roots, the bevels file counts as a path the client did not give. `threeD.bevels.list` returns
+`file` as `null` when the file is outside the read roots, and its `error` names the file by its file name; the bevels,
+`skipped` and the reason stay. `threeD.bevels.edit` and `threeD.bevels.reload` refuse a file outside the read roots
+with the root-check error, naming the file by its file name: `edit` then makes no folder or file and neither opens the
+file nor brings it to the front, and `reload` does not read it. Inside the read roots, `edit` opens the file under the
+client's roots. The 3D and Materials panel's Edit Bevels… is not confined.
+
+`threeD.extrude` and `threeD.classicExtrude` take `bevel: {"custom": name}` in `effect.apply` and `effect.setParams`,
+and store it as `bevel: "custom"` with `bevelName` and `bevelProfile`, a copy of the points (`[[x, y], …]`, 2 to 64
+shares 0..1 of the width and height from `[0, 0]` to `[1, 1]`), so the document draws the bevel without the file. An
+unknown name, `custom` without `bevelProfile`, points that do not run from `[0, 0]` to `[1, 1]` within 0..1, or a
+`bevelName` that is not a string is refused and the document is not changed. The command's journal entry records the
+points as `savedBevel`, and `savedBevel` given with `{"custom": name}` is used in place of the file's points, so a
+replay draws the same bevel after the file changes or drops the name. The help page
+[Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
+describes custom bevels drawn as open paths and kept as symbols in a bevels document.
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.bevels.list","params":{}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.extrude","item":null,"params":{"bevel":{"custom":"Example Bevel"},"bevelWidth":8,"bevelHeight":8}}}}
+```
+
 ## Extrude & Bevel (Classic)
 
 `effect.apply {effect: "threeD.classicExtrude", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
 3D (Classic) › Extrude & Bevel (Classic)…. It builds the same solid as `threeD.extrude` and draws its faces with the
 classic surfaces. Parameters: `depth` (points, 0..2000, default 50), `cap` (true solid, false hollow), `bevel` (`none`,
-`classic`, `rounded`, `cove`, `step`, `ogee`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
+`classic`, `rounded`, `cove`, `step`, `ogee`, or a custom bevel as for `threeD.extrude`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
 is tall), `bevelInside` (false adds the bevel around the shape, true carves it into the shape), `rotationX/Y/Z` and
 `perspectiveAngle` as above, and the surface:
 
@@ -12432,6 +12467,47 @@ on an open path that are not drawn because they fall before the path's start can
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
 ```
+
+## Retype tracking
+
+`type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
+has. A line of three or more glyphs gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
+tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
+advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
+kept when the tracked type draws the whole line in place, or more of it from its start than untracked type does. When
+untracked type also draws the whole line, for example when gaps are as wide as whole spaces, the line stays untracked
+if the tracking is under one unit or the tracked type would drop a gap one space wide, so `a b c` stays `a b c`.
+Otherwise the tracked type is kept, and only gaps wider than the tracking alone keep spaces (narrower gaps, when
+tracking tighter than a space gives each space a negative advance). Glyphs tracked tighter than a quarter em stay on
+one line as long as each one starts after the one before it. Negative tracking is set only on a line that is opaque,
+uses the Normal blend mode, has a solid fill or none and has no stroke; other tightly spaced lines split into one object
+per glyph. A line splits where its type stops drawing the outlines in place, and the glyphs after the split take the
+tracking their own gaps give. These rules are VectorCraft's own. Each entry of the result's `fonts` list has
+`tracking`.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{}}}
+```
+
+## Retype several lines
+
+`type.retype` joins lines that follow each other in paint order, with the same group, paint, font, size, turn and
+tracking (an untracked line of one or two glyphs takes the tracking of the others), into one type object when each
+line's baseline is the same distance below the one before (between 0.25 and 3 times the size) and the lines line up at their starts, ends or centers. The object is area type with Convert To Area
+Type's frame, its lines separated by line breaks, with left, right or center alignment, checked in that order. Its
+leading is Auto when Auto puts the last baseline in place, else the mean distance between the baselines, to a
+thousandth of a point when that still puts the last baseline in place. Lines with an opacity below 100%, a blend mode
+other than Normal, a gradient or pattern fill, or a stroke stay one object per line. These rules are VectorCraft's own.
+
+Every joined object is laid out and compared with the outlines. When area type would not draw each glyph where its
+outline was, including after Text Wrap objects above it reflow it, or when its frame would reach past the canvas's
+coordinate limit, the lines become one multi-line point type object (one object per line when its bounds would reach
+past that limit). When that also moves a glyph, the lines before that glyph's line stay one object, and the lines
+from that line on are joined again from it. When the Text Wrap objects on the layers Retype changes would copy more
+than 2,000,000 units into the wrap shapes of their area type (one for each anchor, subpath and shape, for each area
+type object below them), Retype does not check the wrap and the lines become multi-line point type. Each entry of
+the result's `texts` list holds an object's lines joined by `\n`, and each entry of its `fonts` list also has
+`leading` (points; null for Auto leading or a single line) and `area`.
 
 ## Retype panel
 

@@ -530,27 +530,18 @@ fn default_swatches_missing_full_brush_image_keeps_the_previous_saved_palette() 
 #[test]
 fn default_swatches_unreadable_saved_palette_adds_no_partial_document() {
     let _cms = color_context();
-    let mut s = Session::new();
-    s.add_document(raw_palette(), None);
-    // A single unusable persisted palette, not a parser/stress input campaign.
-    let mut values = s.prefs.to_json();
-    values["defaultSwatches"] = json!({"kind": "custom", "data": vectorcraft_format::base64_encode(b"unreadable saved palette")});
-    s.apply_prefs(serde_json::from_value(values).unwrap());
-    let original = s.doc().unwrap().doc.clone();
-    let active = s.active_index();
-    let count = s.documents().len();
-    let history = s.doc().unwrap().history.undo.len();
-    assert!(s.execute("file.new", &json!({"width": 123, "height": 87})).is_err());
-    assert_eq!(s.documents().len(), count, "apply failure does not insert a partial document");
-    assert_eq!(s.active_index(), active);
-    assert_eq!(s.doc().unwrap().doc, original);
-    assert_eq!(s.doc().unwrap().history.undo.len(), history);
-    s.execute("swatch.defaults.reset", &json!({})).unwrap();
-    s.execute("file.new", &json!({})).unwrap();
-    let d = &s.doc().unwrap().doc;
-    let (swatches, groups) = vectorcraft_color::default_swatches(d.color_mode.model());
-    assert_eq!(&*d.swatches, &swatches, "Factory recovers without decoding the unusable Custom data");
-    assert_eq!(&*d.swatch_groups, &groups);
+    let dir = TestDirectory::new();
+    save_profile(&dir.0, &customized_profile());
+    // Both a damaged encoding and a readable encoding of invalid native data retain a full baseline.
+    let invalid_native = b"unreadable saved palette";
+    let native_reason = vectorcraft_format::load_file(invalid_native).err().unwrap().to_string();
+    for (data, reason) in
+        [("not base64 %".to_string(), "not valid base64".to_string()), (vectorcraft_format::base64_encode(invalid_native), native_reason)]
+    {
+        for profile in [None, Some("Print")] {
+            review_598379_unreadable_fallback(&dir.0, profile, &data, &reason);
+        }
+    }
 }
 
 /// A saved pattern keeps its document-local composite family without replacing a category's.
@@ -1748,4 +1739,140 @@ mod review_5970498365 {
             assert_eq!(source.doc().unwrap().doc, original);
         }
     }
+}
+
+/// Compare the independent successful profile/factory baseline, including resources not in its palette.
+fn review_598379_fallback_resources(actual: &Document, expected: &Document) {
+    assert_eq!(actual.swatches, expected.swatches);
+    assert_eq!(actual.swatch_groups, expected.swatch_groups);
+    assert_eq!(actual.patterns, expected.patterns);
+    assert_eq!(actual.symbols, expected.symbols);
+    assert_eq!(actual.images, expected.images);
+    assert_eq!(actual.graphic_styles, expected.graphic_styles);
+    assert_eq!(actual.char_styles, expected.char_styles);
+    assert_eq!(actual.para_styles, expected.para_styles);
+    assert_eq!(actual.composite_fonts, expected.composite_fonts);
+    assert_eq!(json!(vectorcraft_brush::library(actual)), json!(vectorcraft_brush::library(expected)));
+    assert_eq!(actual.color_profiles, expected.color_profiles);
+    assert_eq!(actual.ruler_origin, expected.ruler_origin);
+    assert_eq!(actual.spot_use_lab, expected.spot_use_lab);
+}
+
+fn review_598379_unreadable_fallback(directory: &Path, profile: Option<&str>, data: &str, reason: &str) {
+    let params = json!({"width": 123, "height": 87, "colorMode": "rgb", "profile": profile});
+    let mut baseline = Session::new();
+    baseline.attach_new_doc_profiles(directory.to_path_buf());
+    let control = baseline.execute("file.new", &params).unwrap();
+    assert!(control.get("swatchDefaultsError").is_none(), "CONTROL: normal creation has no saved-palette error");
+    assert_eq!(control.get("profile").and_then(serde_json::Value::as_str), profile, "CONTROL: the selected category participates");
+    let expected = baseline.doc().unwrap().doc.clone();
+
+    let mut s = Session::new();
+    s.attach_new_doc_profiles(directory.to_path_buf());
+    let (existing, _) = resource_palette(&directory.join("existing-document-image.png"));
+    s.add_document(existing, None);
+    let mut values = s.prefs.to_json();
+    values["defaultSwatches"] = json!({"kind": "custom", "data": data});
+    s.apply_prefs(serde_json::from_value(values.clone()).unwrap());
+    let original = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let active = s.active_index();
+    let count = s.documents().len();
+    let undo = s.doc().unwrap().history.undo.len();
+    let redo = s.doc().unwrap().history.redo.len();
+    let result = s.execute("file.new", &params).unwrap();
+    let warning = result["swatchDefaultsError"].as_str().unwrap();
+    assert!(warning.contains(reason), "the warning retains its actual decode/read failure: {warning}");
+    assert!(warning.contains("could not be loaded") && warning.contains("Swatches > Restore Factory Default Swatches"), "{warning}");
+    let mut warnings = control["warnings"].as_array().cloned().unwrap_or_default();
+    warnings.push(json!(warning));
+    assert_eq!(result["warnings"], json!(warnings), "existing warnings are retained before the recovery warning");
+    assert_eq!(result.get("profile"), control.get("profile"));
+    assert_eq!(result.get("profileError"), control.get("profileError"));
+    assert_eq!(s.documents().len(), count + 1, "the complete profile/factory fallback is created");
+    assert_ne!(s.active_index(), active);
+    assert_eq!(s.documents()[0].doc, original, "the existing document and its resources remain intact");
+    assert_eq!(s.documents()[0].selection, selection);
+    assert_eq!((s.documents()[0].history.undo.len(), s.documents()[0].history.redo.len()), (undo, redo));
+    assert_eq!(s.prefs.to_json()["defaultSwatches"], values["defaultSwatches"], "the bad record is retained until explicit Reset");
+    review_598379_fallback_resources(&s.doc().unwrap().doc, &expected);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.size(), expected.artboards[0].rect.size());
+    assert!(s.doc().unwrap().history.undo.is_empty());
+    review_598379_reset_recovery(&mut s, &params);
+}
+
+fn review_598379_reset_recovery(s: &mut Session, params: &serde_json::Value) {
+    s.execute("swatch.defaults.reset", &json!({})).unwrap();
+    assert_eq!(s.prefs.to_json()["defaultSwatches"]["kind"], "factory");
+    let result = s.execute("file.new", params).unwrap();
+    assert!(result.get("swatchDefaultsError").is_none());
+    let d = &s.doc().unwrap().doc;
+    let (swatches, groups) = vectorcraft_color::default_swatches(d.color_mode.model());
+    assert_eq!(&*d.swatches, &swatches, "Factory recovers without decoding the unusable Custom data");
+    assert_eq!(&*d.swatch_groups, &groups);
+}
+
+/// One ordinary 512px image supplies more than the inline budget without a large node graph.
+fn review_598379_image_palette() -> Document {
+    let mut random = 0x6d2b_79f5u32;
+    let pixels = image::RgbaImage::from_fn(512, 512, |_, _| {
+        random ^= random << 13;
+        random ^= random >> 17;
+        random ^= random << 5;
+        image::Rgba(random.to_le_bytes())
+    });
+    let mut out = Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(pixels).write_to(&mut out, image::ImageFormat::Png).unwrap();
+    let bytes = out.into_inner();
+    let decoded = image::load_from_memory(&bytes).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (512, 512), "CONTROL: valid ordinary PNG image");
+    assert!(bytes.len() > 1024 * 1024, "CONTROL: the lossless image alone exceeds the encoded preference budget");
+    let mut d = raw_palette();
+    d.images.insert("pixels".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(bytes), proxy: None });
+    let mut image = image_node(&mut d, None);
+    let NodeKind::Image(im) = &mut image.kind else { panic!("image fixture") };
+    im.width = 512;
+    im.height = 512;
+    d.patterns.push(PatternDef::new("Inline budget image", vec![Arc::new(image)]));
+    d.swatches.push(Swatch {
+        name: "Inline budget image".into(),
+        paint: Paint::Pattern { pattern: "Inline budget image".into(), xf: Affine::IDENTITY },
+        global: false,
+        spot: false,
+    });
+    d.fix_next_id();
+    d
+}
+
+#[test]
+fn default_swatches_review_598379_encoded_limit_keeps_previous_palette() {
+    let _cms = color_context();
+    let mut s = Session::new();
+    s.add_document(raw_palette(), None);
+    s.execute("swatch.defaults.save", &json!({})).unwrap();
+    let previous = s.prefs.to_json();
+    assert!(previous["defaultSwatches"]["data"].as_str().unwrap().len() < 1024 * 1024, "CONTROL: the ordinary palette saves below the limit");
+    let small = s.doc().unwrap().doc.clone();
+    s.add_document(review_598379_image_palette(), None);
+    let source = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let history = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    let revision = s.doc().unwrap().revision;
+    let dirty = s.doc().unwrap().is_dirty();
+    let active_cms = cms::active_settings();
+    let working = cms::working_settings();
+    let error = s.execute("swatch.defaults.save", &json!({})).unwrap_err().to_string();
+    assert!(error.contains("1 MiB") && error.contains("1048576 encoded bytes") && error.contains("previous default palette was kept"), "{error}");
+    assert_eq!(s.prefs.to_json(), previous, "no replacement, truncation or migration of the previous preference");
+    assert_eq!(s.documents()[0].doc, small);
+    assert_eq!(s.doc().unwrap().doc, source, "failure leaves source artwork and resources intact");
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len()), history);
+    assert_eq!(s.doc().unwrap().revision, revision);
+    assert_eq!(s.doc().unwrap().is_dirty(), dirty);
+    assert_eq!(cms::active_settings(), active_cms);
+    assert_eq!(cms::working_settings(), working);
+    let mut fresh = restarted(&s);
+    fresh.execute("file.new", &json!({"profile": null})).unwrap();
+    assert_palette(&fresh.doc().unwrap().doc, &raw_palette());
 }

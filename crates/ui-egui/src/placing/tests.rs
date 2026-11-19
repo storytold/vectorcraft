@@ -2080,3 +2080,83 @@ fn cancelling_a_place_via_escape_key() {
 
     assert_eq!(state(&app), before, "document completely unmodified");
 }
+
+fn review_4635344122_mixed_completion(app: &mut VectorcraftApp, params: &Value, skipped: &[Value], background: bool) {
+    if background {
+        app.run("file.place", params.clone()).unwrap();
+        assert_eq!(crate::dialogs::confirm(app).unwrap()["background"], true);
+        app.placing.wait_for_reads();
+        poll(app);
+    } else {
+        assert_eq!(app.run("file.place.queue", params.clone()).unwrap()["count"], 2);
+    }
+    assert!(app.placing.pending.is_empty());
+    assert_eq!(app.session.tool_options()["count"], 2);
+    assert_eq!(app.session.tool_options()["name"], "first.bmp");
+    assert_eq!(app.place.thumbnails(), ["first.bmp", "last.bmp"]);
+    let (status, notes) = app.ui.status_notes.as_ref().expect("the omitted files are reported");
+    assert_eq!(status, &app.ui.status);
+    assert_eq!(notes.len(), 2);
+    for (note, file) in notes.iter().zip(skipped) {
+        assert!(note.contains(file["name"].as_str().unwrap()), "{note}");
+        assert!(note.contains(file["error"].as_str().unwrap()), "{note}");
+    }
+    assert!(status.contains(&notes[0]), "one omitted file's complete reason is visible without opening notes");
+    let reported = (app.ui.status.clone(), app.ui.status_notes.clone(), app.ui.status_sets);
+    poll(app);
+    poll(app);
+    assert_eq!((app.ui.status.clone(), app.ui.status_notes.clone(), app.ui.status_sets), reported, "completion reports once");
+}
+
+fn review_4635344122_all_skipped(app: &mut VectorcraftApp, invalid: Value, skipped: &[Value], background: bool) {
+    // An entirely rejected queue stays an error and preserves the existing valid cursor.
+    if background {
+        app.run("file.place", invalid).unwrap();
+        assert_eq!(crate::dialogs::confirm(app).unwrap()["background"], true);
+        app.placing.wait_for_reads();
+        poll(app);
+    } else {
+        assert!(app.run("file.place.queue", invalid).is_err());
+    }
+    assert!(app.placing.pending.is_empty());
+    for file in skipped {
+        assert!(app.ui.status.contains(file["name"].as_str().unwrap()), "{}", app.ui.status);
+        assert!(app.ui.status.contains(file["error"].as_str().unwrap()), "{}", app.ui.status);
+    }
+    assert_eq!(app.session.tool_options()["count"], 2);
+    assert_eq!(app.session.tool_options()["name"], "first.bmp");
+    assert_eq!(app.place.thumbnails(), ["first.bmp", "last.bmp"]);
+}
+
+/// Both queue completion routes retain valid files and explain every omitted file once.
+#[test]
+fn review_4635344122_place_queue_reports_skipped_files_on_both_reading_routes() {
+    let good = saved("queue-notes", "first.bmp", &picture(Bmp, 60, 40));
+    let last = saved("queue-notes", "last.bmp", &picture(Bmp, 30, 20));
+    let bad = saved("queue-notes", "bad & first.png", b"not a PNG");
+    let other = saved("queue-notes", "bad 'second.png", b"also not a PNG");
+    let params = json!({"paths": [good, bad, other, last]});
+    // Obtain the actual producer's reasons, not a second interpretation of its file errors.
+    let mut reference = app(false);
+    let reply = reference.run("file.place.queue", params.clone()).unwrap();
+    assert_eq!(reply["count"], 2);
+    let skipped = reply["skipped"].as_array().unwrap();
+    assert_eq!(skipped.len(), 2);
+    for background in [false, true] {
+        let mut app = app(background);
+        // Ordinary success keeps the same cursor, thumbnails and status behavior.
+        app.run("file.place.queue", json!({"paths": [good, last]})).unwrap();
+        assert_eq!(app.place.thumbnails(), ["first.bmp", "last.bmp"]);
+        assert!(app.ui.status_notes.is_none());
+        app.select_tool("selection");
+        let doc = app.session.doc().unwrap();
+        let before = (doc.doc.clone(), doc.selection.objects.clone(), doc.history.undo.len());
+        review_4635344122_mixed_completion(&mut app, &params, skipped, background);
+        review_4635344122_all_skipped(&mut app, json!({"paths": [bad, other]}), skipped, background);
+        let doc = app.session.doc().unwrap();
+        assert!(doc.doc == before.0 && doc.selection.objects == before.1 && doc.history.undo.len() == before.2);
+        let reported = (app.ui.status.clone(), app.ui.status_sets);
+        poll(&mut app);
+        assert_eq!((app.ui.status.clone(), app.ui.status_sets), reported);
+    }
+}

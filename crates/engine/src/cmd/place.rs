@@ -741,37 +741,34 @@ impl Session {
         let mut rollback = None;
         let mut settled = Vec::new();
         if let Some(old) = read.job.old {
+            // The retained target must be checked against committed art even while it is still
+            // selected: deferred typing can otherwise change it later inside the Place edit.
+            let (kept, warnings) = self.collect_settled_warnings(|s| {
+                if s.depth == 0 {
+                    s.finish_tool_edit_later()?;
+                }
+                if !s.previewing {
+                    for warning in s.keep_typing()? {
+                        s.note_settled_warning(&warning);
+                    }
+                }
+                Ok::<(), EngineError>(())
+            });
+            for warning in &warnings {
+                self.note_settled_warning(warning);
+            }
+            kept?;
             let st = self.doc()?;
-            // Deleted, changed, or another object with its id: an undo that removes the object frees
-            // its id for the next object made.
+            if st.uid != read.job.doc {
+                return Err(bad(PLACE, NOT_ACTIVE));
+            }
+            // Deleted, changed, or another object with its id: an undo that removes the object
+            // frees its id for the next object made. Settling must precede this comparison.
             if st.doc.node(old) != read.job.replaced.as_ref() {
                 return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
             }
+            settled = warnings;
             if st.selection.objects != [old] || st.selection.symbol_part.is_some() {
-                let (kept, warnings) = self.collect_settled_warnings(|s| {
-                    if s.depth == 0 {
-                        s.finish_tool_edit_later()?;
-                    }
-                    if !s.previewing {
-                        for warning in s.keep_typing()? {
-                            s.note_settled_warning(&warning);
-                        }
-                    }
-                    Ok::<(), EngineError>(())
-                });
-                for warning in &warnings {
-                    self.note_settled_warning(warning);
-                }
-                kept?;
-                // Settling an earlier edit must not let a changed target pass the guard.
-                let st = self.doc()?;
-                if st.uid != read.job.doc {
-                    return Err(bad(PLACE, NOT_ACTIVE));
-                }
-                if st.doc.node(old) != read.job.replaced.as_ref() {
-                    return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
-                }
-                settled = warnings;
                 rollback = Some((
                     self.active,
                     st.clone(),
@@ -788,6 +785,12 @@ impl Session {
                 self.journal.hold(Some(self.journal.first_kept()));
                 reselect = Some(old);
             }
+        }
+        // A provisional selection must not end the current Type edit. Keep both commands
+        // top-level for their existing journal, but let the tool observe only the final state.
+        let outer_tool_actions = self.in_tool_actions;
+        if reselect.is_some() {
+            self.in_tool_actions = true;
         }
         let r = (|| {
             if let Some(old) = reselect {
@@ -819,9 +822,12 @@ impl Session {
                 self.decoded_images.empty();
                 self.sync_front_profiles();
                 super::compositefonts::sync(self);
-                self.after_command(None);
             }
             self.journal.hold(held);
+        }
+        if reselect.is_some() {
+            self.in_tool_actions = outer_tool_actions;
+            self.after_command(r.is_ok().then_some(PLACE));
         }
         r.map(|reply| place_read_warnings(reply, &settled))
     }
@@ -1184,7 +1190,15 @@ fn queue(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let QueueRead { entries, files, skipped, .. } = read;
     if entries.is_empty() {
-        let why = skipped.first().and_then(|e| e["error"].as_str()).unwrap_or("nothing to place");
+        let why = if skipped.is_empty() {
+            "nothing to place".to_string()
+        } else {
+            skipped
+                .iter()
+                .map(|file| format!("{}: {}", file["name"].as_str().unwrap_or_default(), file["error"].as_str().unwrap_or_default()))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
         return Err(bad(QUEUE, why));
     }
     // Reloading the cursor keeps the tool to return to.

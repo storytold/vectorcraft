@@ -747,5 +747,7 @@ pub(super) const DENIED: &[&str] = &[
     "stroke.arrowheads.list",
     "swatch.defaults.reset",
     "text.similarFonts",
+    "threeD.bevels.edit",
+    "threeD.bevels.list",
     "type.compositeFonts.set",
 ];
