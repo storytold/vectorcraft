@@ -5512,6 +5512,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Image Brush	છબી બ્રશ
+	Soft Bloom	નરમ ફૂલ
+	Halftone Field	હાફટોન ક્ષેત્ર
+	Solar Grain	સૂર્ય કણ
+	Color Flecks	રંગીન છાંટા
 	Fine Stipple	સૂક્ષ્મ બિંદુ છાંયાંકન
 	Dense Stipple	ઘન બિંદુ છાંયાંકન
 	Soft Stipple	નરમ બિંદુ છાંયાંકન

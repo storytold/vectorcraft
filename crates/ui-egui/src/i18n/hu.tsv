@@ -10634,6 +10634,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Image Brush	Képecsetek
+	Soft Bloom	Lágy virágzás
+	Halftone Field	Féltónusmező
+	Solar Grain	Napszemcse
+	Color Flecks	Színes pettyek
 	Paper Cutouts	Papírkivágások
 	Coral Layers	Korallrétegek
 	Mint Layers	Mentás rétegek

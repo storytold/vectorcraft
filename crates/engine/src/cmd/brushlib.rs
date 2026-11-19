@@ -16,7 +16,7 @@ use vectorcraft_brush::{
     Variation,
 };
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, ImageBlob, ImageObject, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::brushsym::{apply_brush, brush_targets, roots, stroke_paint};
@@ -183,6 +183,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
     BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
+    BuiltinBrushLibrary { id: "image-brush", name: "Image Brush", make: image_brush },
 ];
 
 /// Built-in library `id`, made once.
@@ -570,6 +571,80 @@ fn pattern_borders() -> BrushLibrary {
 
 fn scatter(name: &str, art: Node, s: Scatter) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Scatter(Scatter { art, ..s }) }
+}
+
+/// Four original raster stamps. Scatter brushes preserve their image art while placing a copy
+/// along the path; art brushes bend their art and cannot bend an image. Each 24 px stamp is placed
+/// 6 pt wide, the size of the Scatter Shapes art, so a 1 pt stroke on a 10 pt line shows a stamp.
+fn image_brush() -> BrushLibrary {
+    const SIDE: u32 = 24;
+    const PT_PER_PX: f64 = 0.25;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushes = Vec::new();
+    for (index, name) in ["Soft Bloom", "Halftone Field", "Solar Grain", "Color Flecks"].into_iter().enumerate() {
+        let mut pixels = Vec::with_capacity((SIDE * SIDE * 4) as usize);
+        for y in 0..SIDE {
+            for x in 0..SIDE {
+                let (dx, dy) = (x as f64 - 11.5, y as f64 - 11.5);
+                let r = dx.hypot(dy);
+                let angle = dy.atan2(dx);
+                let rgba = match index {
+                    0 => {
+                        let edge = 7.0 + 3.0 * (5.0 * angle).cos();
+                        [199, 69, 139, (220.0 * ((edge - r) / 2.5).clamp(0.0, 1.0)) as u8]
+                    }
+                    1 => {
+                        let (gx, gy) = ((x % 6) as f64 - 2.5, (y % 6) as f64 - 2.5);
+                        [39, 139, 175, if r < 11.0 && gx.hypot(gy) < 1.9 { 225 } else { 0 }]
+                    }
+                    2 => {
+                        let ray = (9.0 * angle).cos().abs();
+                        [234, 144, 40, if r < 3.5 || (r < 10.5 && ray > 0.72) { 235 } else { 0 }]
+                    }
+                    _ => {
+                        let seed = (x * 37 + y * 71 + x * y * 13) % 19;
+                        [if seed % 2 == 0 { 67 } else { 114 }, 79, 167, if r < 11.0 && seed < 5 { 210 } else { 0 }]
+                    }
+                };
+                pixels.extend_from_slice(&rgba);
+            }
+        }
+        let Ok(image) =
+            craft_image_codecs::Image::from_raw(SIDE, SIDE, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels)
+        else {
+            continue;
+        };
+        let Ok(png) = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
+            continue;
+        };
+        let key = format!("image-brush-{index}");
+        doc.images.insert(key.clone(), ImageBlob::png(png));
+        let art = Node::new(
+            NodeId(0),
+            NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: SIDE,
+                height: SIDE,
+                xf: Affine::scale(PT_PER_PX) * Affine::translate((-12.0, -12.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        brushes.push(scatter(
+            name,
+            art,
+            Scatter {
+                size: (90.0, 110.0),
+                spacing: (125.0, 155.0),
+                scatter: (-20.0, 20.0),
+                rotation: (-15.0, 15.0),
+                colorization: Colorization::None,
+                ..Default::default()
+            },
+        ));
+    }
+    built("Image Brush", doc, brushes)
 }
 
 /// Scatter Shapes: scatter brushes of shapes drawn here; Sparkles scatters the library's own

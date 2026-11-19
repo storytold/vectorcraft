@@ -8795,6 +8795,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Image Brush	Πινέλα εικόνας
+	Soft Bloom	Απαλό άνθος
+	Halftone Field	Πεδίο ημιτόνων
+	Solar Grain	Ηλιακός κόκκος
+	Color Flecks	Χρωματικές πιτσιλιές
 	Fine Stipple	Λεπτή στιγμογραφία
 	Dense Stipple	Πυκνή στιγμογραφία
 	Soft Stipple	Απαλή στιγμογραφία

@@ -10701,6 +10701,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Image Brush	Кисти изображений
+	Soft Bloom	Мягкое цветение
+	Halftone Field	Полутоновое поле
+	Solar Grain	Солнечное зерно
+	Color Flecks	Цветные брызги
 	Fine Stipple	Тонкая точечная штриховка
 	Dense Stipple	Плотная точечная штриховка
 	Soft Stipple	Мягкая точечная штриховка

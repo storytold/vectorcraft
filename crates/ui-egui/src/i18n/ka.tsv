@@ -10932,6 +10932,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Image Brush	გამოსახულების ფუნჯები
+	Soft Bloom	რბილი ყვავილი
+	Halftone Field	ნახევარტონური ველი
+	Solar Grain	მზის მარცვალი
+	Color Flecks	ფერადი ლაქები
 	Fine Stipple	წვრილი წერტილოვანი ტექსტურა
 	Dense Stipple	მკვრივი წერტილოვანი ტექსტურა
 	Soft Stipple	რბილი წერტილოვანი ტექსტურა

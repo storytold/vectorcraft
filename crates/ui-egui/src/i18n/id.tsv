@@ -8492,6 +8492,11 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Image Brush	Kuas gambar
+	Soft Bloom	Mekar lembut
+	Halftone Field	Bidang halftone
+	Solar Grain	Butir surya
+	Color Flecks	Bintik warna
 	Fine Stipple	Arsiran titik halus
 	Dense Stipple	Arsiran titik rapat
 	Soft Stipple	Arsiran titik lembut

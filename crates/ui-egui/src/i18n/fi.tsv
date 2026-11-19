@@ -8878,6 +8878,11 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Image Brush	Kuvasiveltimet
+	Soft Bloom	Pehmeä kukinta
+	Halftone Field	Rasterikenttä
+	Solar Grain	Aurinkorakeet
+	Color Flecks	Väripilkut
 	Fine Stipple	Hieno pistetys
 	Dense Stipple	Tiheä pistetys
 	Soft Stipple	Pehmeä pistetys

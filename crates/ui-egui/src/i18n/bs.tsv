@@ -7849,6 +7849,11 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Image Brush	Slikovni kistovi
+	Soft Bloom	Meko cvjetanje
+	Halftone Field	Polutonsko polje
+	Solar Grain	Sunčano zrno
+	Color Flecks	Šarene mrlje
 	Fine Stipple	Fino tačkasto sjenčenje
 	Dense Stipple	Gusto tačkasto sjenčenje
 	Soft Stipple	Meko tačkasto sjenčenje
