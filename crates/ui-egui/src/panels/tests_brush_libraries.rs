@@ -258,7 +258,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 4.0);
+    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 5.0);
     assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
     assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
