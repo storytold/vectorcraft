@@ -212,6 +212,89 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     body(app, ui, TILE);
 }
 
+/// The color group selected alone in the panel (what Color Group Options opens on), if any.
+pub(crate) fn sole_selected_group(app: &VectorcraftApp) -> Option<String> {
+    let (ctx, st) = (app.ui_ctx.as_ref()?, app.session.active()?);
+    if !body::selection_is_current(app, ctx) {
+        return None;
+    }
+    let mut sel: Vec<String> = pstate(ctx, "swatch-selected");
+    sel.retain(|n| n == REGISTRATION || st.doc.swatch_name_taken(n));
+    actions::sole_group(app, &sel)
+}
+
+/// Command `id` ran with `params` and replied `reply`: a color group that `swatch.renameGroup`
+/// or `swatch.editGroup` renamed stays selected in the panel under its new name, and Shift-click still extends the
+/// selection from it. Ungroup Color Group and Delete Swatch take the names they removed out of the
+/// selection, so a group that later takes such a name is not selected in its place. The steps of a
+/// `command.batch` are followed in order up to the first step that is not one of [`KEEPS_GROUPS`]:
+/// such a step may switch documents or replace a group, and the selection stays as it is from there.
+pub(crate) fn after_command(ctx: &egui::Context, id: &str, params: &Value, reply: &Value) {
+    let rename = |old: &str, new: Option<&str>| {
+        let mut sel: Vec<String> = pstate(ctx, "swatch-selected");
+        match new {
+            Some(new) => sel.iter_mut().filter(|n| *n == old).for_each(|n| *n = new.to_string()),
+            None => sel.retain(|n| n != old),
+        }
+        set_pstate(ctx, "swatch-selected", sel);
+        if pstate::<String>(ctx, "swatch-anchor") == old {
+            set_pstate(ctx, "swatch-anchor", new.unwrap_or_default().to_string());
+        }
+    };
+    match id {
+        "swatch.renameGroup" | "swatch.editGroup" => {
+            if let (Some(old), Some(new)) = (params["group"].as_str(), reply["name"].as_str()) {
+                rename(old, Some(new));
+            }
+        }
+        "swatch.ungroup" => {
+            if let Some(name) = params["name"].as_str() {
+                rename(name, None);
+            }
+        }
+        "swatch.delete" => {
+            let names = params["names"].as_array().map(Vec::as_slice).unwrap_or_default();
+            for name in names.iter().chain(std::iter::once(&params["name"])).filter_map(Value::as_str) {
+                rename(name, None);
+            }
+        }
+        "command.batch" => {
+            let steps = params["commands"].as_array().map(Vec::as_slice).unwrap_or_default();
+            let results = reply["results"].as_array().map(Vec::as_slice).unwrap_or_default();
+            for (step, r) in steps.iter().zip(results) {
+                let id = step["command"].as_str().unwrap_or_default();
+                if !KEEPS_GROUPS.contains(&id) {
+                    break;
+                }
+                after_command(ctx, id, &step["params"], r);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The batch steps the panel's selection follows: they act on the active document only, and
+/// remove no color group except the ones they name.
+const KEEPS_GROUPS: &[&str] = &[
+    "swatch.renameGroup",
+    "swatch.ungroup",
+    "swatch.delete",
+    "swatch.new",
+    "swatch.newGroup",
+    "swatch.edit",
+    "swatch.move",
+    "swatch.merge",
+    "swatch.duplicate",
+    "swatch.addUsedColors",
+    "swatch.sortByKind",
+    "swatch.sortByName",
+    "swatch.editGroup",
+    "swatch.spotOptions",
+    "swatch.setSpot",
+    "swatch.list",
+    "swatch.unused",
+];
+
 /// Item actions target the clicked swatch, independently of the paint or other selected chips.
 fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Entry) {
     if e.is_folder() {

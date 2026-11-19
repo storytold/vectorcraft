@@ -1329,7 +1329,7 @@ fn shown_sources(n: &Node, item: Option<usize>, stroke: bool) -> Vec<(&Node, Opt
         return vec![(n, item)];
     }
     let mut nodes = vec![];
-    super::paint::painted(n, true, &mut nodes);
+    super::paint::painted(n, true, stroke, &mut nodes);
     nodes.into_iter().map(|c| (c, None)).collect()
 }
 
@@ -1459,7 +1459,7 @@ fn color_below(
     let own = |p: Option<&Part>| matches!(p, Some(Part::Art(_) | Part::Object | Part::Rows));
     let art_edits = picked.is_some() && (hide.is_none() || own(hide) || full.iter().any(|p| own(Some(p))) || own(scope));
     let mut copy = (art_edits || !full.is_empty() || hide == Some(&Part::Rows)).then(|| Document::clone(&st.doc));
-    let mut hidden = vec![];
+    let mut hidden = HashSet::new();
     // The art of the picked object's instance in `copy`, as a copy of its symbol that only this
     // instance draws, so other instances of the symbol keep it.
     let symbol = match (picked, copy.as_mut()) {
@@ -1470,9 +1470,9 @@ fn color_below(
     match (hide, picked) {
         (None, Some((sp, _))) => art_mut(copy.as_mut(), symbol, &sp.path).ok_or_else(lost)?.visible = false,
         (None, None) => hidden.extend(ids),
-        (Some(Part::Doc(id)), _) => hidden.push(*id),
+        (Some(Part::Doc(id)), _) => hidden.extend([*id]),
         // The art's root is all the instance draws.
-        (Some(Part::Art(path)), Some((sp, _))) if path.is_empty() => hidden.push(sp.instance),
+        (Some(Part::Art(path)), Some((sp, _))) if path.is_empty() => hidden.extend([sp.instance]),
         (Some(Part::Art(path)), _) => art_mut(copy.as_mut(), symbol, path).ok_or_else(lost)?.visible = false,
         (Some(Part::Rows), Some((sp, _))) => hide_rows(art_mut(copy.as_mut(), symbol, &sp.path).ok_or_else(lost)?, None, stroke),
         (Some(Part::Rows), None) => {

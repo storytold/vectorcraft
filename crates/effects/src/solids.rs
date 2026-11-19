@@ -24,6 +24,10 @@ mod source;
 pub(crate) use source::{resolve, resolve_for};
 
 pub(crate) mod graphics;
+pub use graphics::map_art::{
+    MAP_ART, MAP_ART_NOT_TAKEN, MAP_INVISIBLE, MAP_SHADE, MAX_MAP_SURFACE, MAX_MAPS, SurfaceMap, surface_maps, takes_map_art, with_surface_map,
+};
+use graphics::map_art::{MapArt, MapBudget, SolidLayout};
 pub use graphics::{
     GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, MeshGraphics, graphic_symbols, mapped_graphics, mesh_graphics_art, missing_symbol,
     names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
@@ -32,6 +36,7 @@ pub use graphics::{
     MAX_OFFSET as GRAPHIC_MAX_OFFSET, NOT_TAKEN as GRAPHICS_NOT_TAKEN, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols,
     fitting as graphic_fitting_scale, rename_appearance_graphic_symbol,
 };
+pub use vectorcraft_three_d::SurfaceKind;
 
 pub(crate) mod shadow;
 
@@ -180,6 +185,7 @@ pub fn extrude_options(p: &Value) -> Extrude {
             both_sides: flag(p, "bevelBothSides", false),
         }),
         hidden: false,
+        map_surfaces: false,
         map_surface: false,
     }
 }
@@ -431,11 +437,22 @@ fn visible(item: &AppearanceItem, member: f32) -> bool {
 /// ([`side_carrier`]): their art, or the parts they draw on its pieces
 /// ([`graphics::surface_parts`]), or when the object `n`'s surfaces can't be built at all. They are
 /// built as the art builds them ([`surfaces_with`]), so its pieces are the ones the art draws, cuts
-/// included. Without `doc` nothing is drawn, and nothing is checked.
+/// included. On Extrude & Bevel (Classic), the art Map Art places on walls and bevels must also fit
+/// ([`graphics::validate_unrolled_symbols`]). Without `doc` nothing is drawn, and nothing is checked.
 fn check_side_graphics(doc: Option<&Document>, n: &Node, id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
     let Some(doc) = doc else { return Ok(()) };
     let Some(b) = union_bounds(shapes) else { return Ok(()) };
     let (parts, bounds) = solid_parts(shapes, b);
+    // Map Art unrolls its art onto walls and bevels; the caps draw it as it is.
+    if id == CLASSIC_EXTRUDE && !surface_maps(p).is_empty() {
+        let options = vectorcraft_three_d::Extrude { map_surfaces: true, ..classic_extrude_options(p) };
+        let unrolled: Vec<Option<Point>> = parts
+            .iter()
+            .flat_map(|(_, _, area, rule, _, _)| vectorcraft_three_d::extrude_surfaces(area, *rule, bounds, options).unwrap_or_default())
+            .map(|s| (!matches!(s.kind, SurfaceKind::End(_))).then(|| graphics::map_art::flat_center(&s)))
+            .collect();
+        graphics::validate_unrolled_symbols(doc, p, &|surface| surface.checked_sub(1).and_then(|k| unrolled.get(k).copied().flatten()))?;
+    }
     if side_carrier(id, p, &parts, bounds).is_none() {
         return Ok(());
     }
@@ -1924,8 +1941,11 @@ fn surfaces_with(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profil
                         filled.push(Filled { at: out.len(), member, caps, opacity, blend, masked: masks_surface(&paint, colored) });
                     }
                 }
-                let art =
-                    if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored, false) };
+                let art = if classic {
+                    classic::surface(n, &f, &paint, (opacity, blend), &p, None, false).0
+                } else {
+                    surface(n, f, &paint, opacity, blend, colored, false)
+                };
                 out.push((s.scopes.as_slice(), Arc::new(art)));
             }
         }
@@ -1939,15 +1959,28 @@ fn surfaces_with(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profil
     let carrier = if graphics_on { side_carrier(&fx.id, &p, &parts, bounds) } else { None };
     let mut solids = vec![];
     let mut built = vec![];
+    // With mapped art, each solid's place among the object's numbered surfaces: the surfaces are
+    // counted through the parts in order, those of a part whose solid is left out too.
+    let map_art = MapArt::of(doc, &fx.id, &p).filter(|_| fx.id == CLASSIC_EXTRUDE);
+    let mut layouts: Vec<SolidLayout> = vec![];
+    let mut surfaces_before = 0usize;
     let made = built_solids_cast(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES, cast, carrier);
-    for (k, ((item, opacity, _, _, scopes, member), f)) in parts.iter().zip(made).enumerate() {
+    for (k, ((item, opacity, area, rule, scopes, member), f)) in parts.iter().zip(made).enumerate() {
         let item: &AppearanceItem = item;
+        let layout = map_art.as_ref().map(|_| {
+            let options = classic_extrude_options(&p);
+            let surfaces = vectorcraft_three_d::extrude_surfaces(area, *rule, bounds, options).unwrap_or_default();
+            let first = surfaces_before;
+            surfaces_before += surfaces.len();
+            SolidLayout { first, surfaces, ends: Some((bounds, options, view_options(&p))) }
+        });
         match f {
             Ok(Some((f, _))) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => {
                 return None;
             }
             Ok(Some((f, faces))) => {
                 solids.push((item, *opacity, *scopes, f, *member));
+                layouts.extend(layout);
                 built.push(faces);
             }
             // A stroke's outline past the limits is left out; the fill's solid still draws, and
@@ -2035,6 +2068,34 @@ fn surfaces_with(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profil
     let split =
         split && solids.iter().filter(|(item, _, _, f, _)| composite(item, f)).map(|(.., f, _)| f.len()).sum::<usize>() <= MAX_FACE_COMPOSITES;
     let members: Vec<usize> = solids.iter().map(|s| s.4).collect();
+    // The classic surfaces of the solids, with mapped art when the effect has maps. When the art of
+    // any solid is past the limits the object's maps share, every solid draws without mapped art.
+    let mut classic_arts = if classic {
+        let draw = |with_art: bool, copies: &mut usize| {
+            let mut budget = MapBudget::default();
+            let mut dropped = false;
+            let mut arts = Vec::with_capacity(solids.len());
+            for (k, (item, member, _, f, _)) in solids.iter().enumerate() {
+                let (paint, opacity, blend) = paint_of(item, *member);
+                let mapped = map_art.as_ref().filter(|_| with_art).zip(layouts.get(k)).map(|(art, layout)| classic::Mapped {
+                    art,
+                    layout,
+                    budget: &mut budget,
+                    copies: &mut *copies,
+                });
+                let (art, _, left_out) = classic::surface(n, f, &paint, (opacity, blend), &p, mapped, false);
+                dropped |= left_out;
+                arts.push(art);
+            }
+            (arts, dropped)
+        };
+        let mut used = paint_bytes;
+        let (arts, dropped) = draw(map_art.is_some(), &mut used);
+        if dropped { draw(false, &mut paint_bytes).0 } else { arts }
+    } else {
+        vec![]
+    }
+    .into_iter();
     // Which surfaces lie over an underlay of their facets, in one order or whole
     // ([`in_one_order`], [`underlaid_surface`]).
     let seals: Vec<bool> = solids.iter().map(|(.., f, _)| underlaid(f, colored)).collect();
@@ -2061,7 +2122,7 @@ fn surfaces_with(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profil
             };
             let drawn = parts.iter().any(|p| !p.is_empty());
             let art = if classic {
-                classic::surface(n, f, &paint, opacity, blend, &p)
+                classic_arts.next().unwrap_or_else(|| Node::group(n.id, vec![]))
             } else {
                 let faces = drawn || (split && shared.get(shape).copied().unwrap_or(false));
                 with_side_parts(n.id, surface(n, f, &paint, opacity, blend, colored, faces), parts)
@@ -2391,28 +2452,7 @@ pub fn graphic_side_size(doc: Option<&Document>, n: &Node, item: Option<usize>, 
 /// The 3D effect `pick` finds in the effects of `n` or its `item`, and the shapes it builds from.
 fn frame_shapes(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'_>) -> Option<(Effect, Vec<Profile>)> {
     let n = &*resolve(doc, n, "").ok()?;
-    let (fx, shapes) = if is_container(n) {
-        let (index, fx) = pick(&n.appearance.effects).filter(|_| item.is_none())?;
-        let mut shapes = members(n, "").ok()?;
-        reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
-        (fx, shapes)
-    } else {
-        let (path, rule) = profile(n)?;
-        let ctx = GeomContext::of(n);
-        match item {
-            None => {
-                let (index, fx) = pick(&n.appearance.effects)?;
-                let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
-                (fx, vec![Profile { path, rule, items: solid_paints(n), opacity: 1.0, scopes: vec![] }])
-            }
-            Some(k) => {
-                let it = n.appearance.items.get(k)?;
-                let (index, fx) = pick(it.effects())?;
-                let path = geometry(&geometry(&path, &n.appearance.effects, &ctx), it.effects().get(..index)?, &ctx.item(it));
-                (fx, vec![Profile { path, rule, items: vec![it.clone()], opacity: 1.0, scopes: vec![] }])
-            }
-        }
-    };
+    let (fx, shapes) = picked(n, item, pick)?;
     Some((fx.clone(), shapes))
 }
 
@@ -2459,6 +2499,175 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
     })
 }
 
+/// One numbered surface of a 3D object that takes Map Art: what it is, its size laid out flat in
+/// points, whether the viewer sees any of it, and the edges of its outline on the page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapSurface {
+    pub kind: SurfaceKind,
+    pub width: f64,
+    pub height: f64,
+    pub visible: bool,
+    pub outline: Vec<[Point; 2]>,
+}
+
+/// The numbered surfaces of the 3D effect at `index` of the effects of `n` (on the object itself
+/// with `item` `None`, else on its fill or stroke `item`), which must be an Extrude & Bevel
+/// (Classic) or Revolve (Classic), shown or hidden, in the order Map Art numbers them from 1.
+/// `None` for any other effect, and when the object's art can't be built.
+pub fn map_surfaces_at(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<Vec<MapSurface>> {
+    let n = &*resolve(doc, n, "").ok()?;
+    let (fx, shapes) = picked(n, item, &|fx: &[Effect]| fx.get(index).filter(|e| takes_map_art(&e.id)).map(|e| (index, e)))?;
+    let p = crate::merged_params(&fx.id, &fx.params);
+    let b = union_bounds(&shapes)?;
+    // The edges of `facets` on each local surface of `surfaces`, in one pass over the facets: every
+    // edge of an end, and the edges of the cells that lie along the sides of the flat surface.
+    let seen = |surfaces: &[vectorcraft_three_d::SolidSurface], facets: &[Facet]| -> Vec<Vec<[Point; 2]>> {
+        let mut edges: Vec<Vec<[Point; 2]>> = vec![vec![]; surfaces.len()];
+        // Each surface laid out flat, and how near a point must be to its side to lie along it.
+        let frames: Vec<(Rect, f64)> = surfaces
+            .iter()
+            .map(|s| {
+                let flat = match s.kind {
+                    SurfaceKind::Side => Rect::new(-s.width / 2.0, -s.height / 2.0, s.width / 2.0, s.height / 2.0),
+                    _ => Rect::new(0.0, 0.0, s.width, s.height),
+                };
+                (flat, (s.width.max(s.height) * 1e-6).max(1e-9))
+            })
+            .collect();
+        let ends: Vec<(usize, PlanarFace)> = surfaces
+            .iter()
+            .enumerate()
+            .filter_map(|(k, s)| match s.kind {
+                SurfaceKind::End(end) => Some((k, end)),
+                _ => None,
+            })
+            .collect();
+        for f in facets.iter().filter(|f| !f.away) {
+            if let Some(at) = f.end {
+                for &(k, end) in &ends {
+                    if end == at
+                        && let Some(out) = edges.get_mut(k)
+                    {
+                        for c in &f.contours {
+                            out.extend(c.iter().zip(c.iter().cycle().skip(1)).take(c.len()).map(|(a, b)| [*a, *b]));
+                        }
+                    }
+                }
+            }
+            let Some(cell) = f.cell.as_deref().filter(|c| c.uv.len() == c.page.len()) else { continue };
+            let k = cell.surface;
+            // A facet of an end adds to an end's surface only its own edges, above.
+            if f.end.is_some() && surfaces.get(k).is_some_and(|s| matches!(s.kind, SurfaceKind::End(_))) {
+                continue;
+            }
+            let (Some(&(flat, near)), Some(out)) = (frames.get(k), edges.get_mut(k)) else { continue };
+            let count = cell.uv.len();
+            for i in 0..count {
+                let j = (i + 1) % count;
+                let (Some(a), Some(c)) = (cell.uv.get(i), cell.uv.get(j)) else { continue };
+                let along = |at: f64, of: fn(&Point) -> f64| (of(a) - at).abs() <= near && (of(c) - at).abs() <= near;
+                let on_side = along(flat.x0, |p| p.x) || along(flat.x1, |p| p.x) || along(flat.y0, |p| p.y) || along(flat.y1, |p| p.y);
+                if let (true, Some(from), Some(to)) = (on_side, cell.page.get(i), cell.page.get(j)) {
+                    out.push([*from, *to]);
+                }
+            }
+        }
+        edges
+    };
+    let listed = |surfaces: &[vectorcraft_three_d::SolidSurface], facets: &[Facet], out: &mut Vec<MapSurface>| {
+        for (s, outline) in surfaces.iter().zip(seen(surfaces, facets)) {
+            out.push(MapSurface { kind: s.kind, width: s.width, height: s.height, visible: !outline.is_empty(), outline });
+        }
+    };
+    let mut out = vec![];
+    if fx.id == crate::CLASSIC_REVOLVE {
+        // Revolve (Classic) has one surface: its side, in a group that of the member with the
+        // longest profile. A group's members share one sampling of their curves, and a group past
+        // those shared limits has no surface.
+        let mut options = vectorcraft_three_d::Revolve { map_surface: true, ..crate::revolve::options_of(&fx.id, &p) };
+        if is_container(n) {
+            options = crate::revolve::shared_options(&shapes, options).ok()?;
+        }
+        let shape = shapes.get(crate::revolve::graphics_member(&shapes, b, options)?)?;
+        let (width, height) = vectorcraft_three_d::revolve_surface_size(&shape.path, b, options)?;
+        let surfaces = [vectorcraft_three_d::SolidSurface { kind: SurfaceKind::Side, width, height, center: None }];
+        let facets = vectorcraft_three_d::revolve_facets(&shape.path, b, options).unwrap_or_default();
+        listed(&surfaces, &facets, &mut out);
+        return Some(out);
+    }
+    let (parts, bounds) = solid_parts(&shapes, b);
+    let options = vectorcraft_three_d::Extrude { map_surfaces: true, ..classic_extrude_options(&p) };
+    let view = view_options(&p);
+    // The faces of the solids count together against the limit the art draws within.
+    let mut kept = 0usize;
+    for (_, _, area, rule, _, _) in &parts {
+        let surfaces = vectorcraft_three_d::extrude_surfaces(area, *rule, bounds, options).unwrap_or_default();
+        let facets = vectorcraft_three_d::extrude(area, *rule, bounds, options, view).unwrap_or_default();
+        kept = kept.saturating_add(facets.len());
+        if kept > MAX_OBJECT_FACES {
+            return None;
+        }
+        listed(&surfaces, &facets, &mut out);
+    }
+    Some(out)
+}
+
+/// [`map_surfaces_at`] for `n` as it is with 3D effect `id` and parameters `p` among the effects of
+/// the object itself (`item` `None`) or of its fill or stroke `item`: in place of the effect at
+/// `index` when that is an effect `id`, else of the last effect `id` there, or after those effects
+/// when there is none. A dialog lists the surfaces of the effect it edits with this, whether or not
+/// its preview has changed the object.
+pub fn map_surfaces_with(
+    doc: Option<&Document>,
+    n: &Node,
+    (item, index): (Option<usize>, Option<usize>),
+    id: &str,
+    p: &Value,
+) -> Option<Vec<MapSurface>> {
+    let mut n = n.clone();
+    let effects = n.appearance.effects_mut(item)?;
+    let at = index.filter(|&k| effects.get(k).is_some_and(|e| e.id == id)).or_else(|| effects.iter().rposition(|e| e.id == id));
+    let index = match at {
+        Some(index) => {
+            effects.get_mut(index)?.params = p.clone();
+            index
+        }
+        None => {
+            effects.push(crate::new_effect(id, p)?);
+            effects.len() - 1
+        }
+    };
+    map_surfaces_at(doc, &n, item, index)
+}
+
+/// The 3D effect `pick` finds in the effects of `n` (resolved) or of its `item`, with the shapes
+/// it builds from: the members of a group or layer, or the object's own profile after the geometry
+/// effects before the 3D effect.
+fn picked<'n>(n: &'n Node, item: Option<usize>, pick: &Pick<'_>) -> Option<(&'n Effect, Vec<Profile>)> {
+    Some(if is_container(n) {
+        let (index, fx) = pick(&n.appearance.effects).filter(|_| item.is_none())?;
+        let mut shapes = members(n, "").ok()?;
+        reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
+        (fx, shapes)
+    } else {
+        let (path, rule) = profile(n)?;
+        let ctx = GeomContext::of(n);
+        match item {
+            None => {
+                let (index, fx) = pick(&n.appearance.effects)?;
+                let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
+                (fx, vec![Profile { path, rule, items: solid_paints(n), opacity: 1.0, scopes: vec![] }])
+            }
+            Some(k) => {
+                let it = n.appearance.items.get(k)?;
+                let (index, fx) = pick(it.effects())?;
+                let path = geometry(&geometry(&path, &n.appearance.effects, &ctx), it.effects().get(..index)?, &ctx.item(it));
+                (fx, vec![Profile { path, rule, items: vec![it.clone()], opacity: 1.0, scopes: vec![] }])
+            }
+        }
+    })
+}
+
 /// The bounds of the art symbol `name` of `doc` draws as a graphic, in the symbol's coordinates.
 pub fn graphic_bounds(doc: &Document, name: &str) -> Option<Rect> {
     graphics::art_bounds(doc, name)
@@ -2501,8 +2710,8 @@ impl SolidMesh {
 /// The parts of `mesh`, a solid that 3D effect `id` with parameters `p` built about `bounds`, painted
 /// `color` from a fill or stroke at `opacity`: for each planar face that carries graphics (Extrude &
 /// Bevel's caps, the plane), the triangles on it as a mesh of their own with the art point of each
-/// corner ([`MeshGraphics`]), then the rest. Revolve's side, whose graphics are not mapped onto its
-/// mesh, stays plain.
+/// corner ([`MeshGraphics`]), then the rest. Revolve's meshes are split by their side instead
+/// (`revolve::surface_meshes`), so a Revolve's mesh stays plain here.
 fn split_graphics(id: &str, p: &Value, bounds: Rect, mesh: Mesh, (color, opacity): ([f32; 4], f32)) -> Vec<SolidMesh> {
     let list = graphics::mapped_graphics(p);
     if list.is_empty() || !takes_graphics(id) || id == crate::REVOLVE {
