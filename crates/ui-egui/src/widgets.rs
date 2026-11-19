@@ -31,7 +31,7 @@ pub use buttons::{
     primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{
-    button_width, flat_button_fit_width, icon_button_info, paint_icon_button_named, primary_button_width, secondary_button_width,
+    button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
 };
 #[cfg(test)]
 use chips::gradient_chip_colors;
@@ -39,8 +39,8 @@ pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, 
 pub use color::{
     FieldAxis, Live, MarkerResponse, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named,
     channel_slider_stepped, channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped,
-    color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_markers, ring_square, segment_color,
-    segment_color_on, segmented_wheel, stepped_area, wheel_of,
+    color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture, ring_markers, ring_square,
+    segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{

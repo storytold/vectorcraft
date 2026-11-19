@@ -303,18 +303,30 @@ luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-ze
 colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
 colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
 24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
-selects its row for the sliders and a drag moves the row without changing a color). `wheelTool` turns on a wheel tool
-on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the base
-color's brightness (the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
+selects its row for the sliders and a drag moves the row without changing a color; the moved row keeps the color group
+swatch it took). `wheelTool` turns on a wheel tool
+on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the selected
+color's brightness (the base color's when none is selected; the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
 `added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked.
 `wheelAxes: "hueBrightness"` makes both wheels show hue and brightness: brightness runs from black at the center to
-full at the edge, the wheel is drawn at the base color's saturation, a marker drag sets hue and brightness, the slider
-under the wheel sets saturation, and Add Color adds the hue and brightness clicked at the base color's saturation.
+full at the edge, the wheel is drawn at the selected color's saturation (the base color's when none is selected), a marker drag sets hue and brightness, the slider
+under the wheel sets saturation, and Add Color adds the hue and brightness clicked at the selected color's saturation.
 `hueSaturation`, unset (each opening) or any other value shows hue and saturation; switching changes no color. A color bar's
 right-click menu has Remove Color too. The base color can't be removed. A removed color's row is dropped, unless it
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
-group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
+group's swatch at that place is removed, unless the row is excluded: an excluded row with current colors leaves the group's swatch at its place as it is. A row with no current colors recolors no art; with a group, the new color of
 one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
+The base color is the row with `base: true`, or the first color the Edit tab shows when no row has it; the harmony rules
+build from it, and selecting another color for the sliders leaves it the base. A right-click on a wheel marker or a
+color bar opens a menu with Set As Base Color (moves `base: true` to that row), Select Shade (a grid of the color's hue
+at 7 saturations, 0% to 100%, by 7 brightnesses, 100% down to 14%; a click moves the color there as a drag of its
+marker would, so linked colors follow), Color Picker and Remove Color; the base color's menu has neither Set As Base
+Color nor Remove Color. A right-click elsewhere on either wheel offers Add New Color, which adds a color as the Add
+Color tool does. A color added on the line from the center to a marker moves with that marker while the colors are
+unlinked: the marker's row gets `tie: n` and the added row `follows: n`, and dragging the marker, or Select Shade on
+it, moves every row that follows its `tie` by the same change. Set Current Color As Base Color, before the color chips,
+makes the selected color the base. The rows keep these marks when Randomize (`recolor.randomize`) or Prominent Colors
+(`recolor.weigh`) changes them, and the rows the dialog sends `recolor.apply` leave `base`, `tie` and `follows` out.
 `groupStorage` shows the Color Groups list (true when the dialog opens); setting `group` to a color group's name makes
 it the group being edited, as opening on it does, and refuses a name no group has; `groupAction` (`save`, `new` or
 `delete`) runs the list's Save Changes, New Color Group or Delete button on the next frame, or first on confirm (see
