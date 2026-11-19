@@ -1496,6 +1496,169 @@ fn a_color_bars_menu_removes_its_color() {
     assert_eq!(field(h.state(), "__sel"), json!([0]));
 }
 
+/// Right-clicks the point `at`.
+fn right_click_at(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, at: Pos2) {
+    h.event(Event::PointerMoved(at));
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+}
+
+/// The smaller angle between hues `a` and `b`, in degrees.
+fn hue_gap(a: f32, b: f32) -> f32 {
+    (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0))
+}
+
+/// A marker's right-click menu has Set As Base Color, Select Shade, Color Picker and Remove Color.
+/// Set As Base Color marks the row as the base, whose menu then has neither Set As Base Color nor
+/// Remove Color; with another color selected, a harmony rule builds from the base color, and OK
+/// recolors the art.
+#[test]
+fn a_markers_menu_sets_the_base_color_that_the_rules_build_from() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, hsb[1][0], hsb[1][1]);
+    right_click_at(&mut h, at);
+    for item in ["   Set As Base Color", "   Select Shade", "   Color Picker", "   Remove Color"] {
+        assert!(h.query_by_label(item).is_some(), "{item}");
+    }
+    h.get_by_label("   Set As Base Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows[1]["base"], json!(true), "{rows}");
+    assert!(rows[0].get("base").is_none() && rows[2].get("base").is_none());
+    right_click_at(&mut h, at);
+    assert!(h.get_by_label("   Set As Base Color").accesskit_node().is_disabled(), "it is the base already");
+    assert!(h.get_by_label("   Remove Color").accesskit_node().is_disabled(), "the base color can't be removed");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    // The selected color is another one; the rule still builds from the base.
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(3);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Harmony Rules:").click();
+    h.run_steps(2);
+    h.get_by_label("Triad").click();
+    h.run_steps(3);
+    let now = new_hsb(h.state());
+    assert!(hue_gap(now[1][0], hsb[1][0]) < 1.0, "the base color keeps its hue: {hsb:?} -> {now:?}");
+    assert!(hue_gap(now[0][0], now[1][0]) > 110.0 && hue_gap(now[2][0], now[1][0]) > 110.0, "the others are a triad from it: {now:?}");
+    assert_eq!(field(h.state(), "rows")[1]["base"], json!(true), "the rule keeps the base mark");
+    let before = fills(h.state());
+    let app = h.state_mut();
+    dialogs::confirm(app).unwrap();
+    assert_eq!(fills(app), before, "OK keeps the previewed colors");
+}
+
+/// Select Shade on a marker's menu shows a grid of the color's hue; a click on a cell gives the color
+/// that saturation and brightness, keeping its hue, and closes the menu. Unlinked, the other colors
+/// stay; linked, they move as a drag would move them.
+#[test]
+fn select_shade_gives_a_marker_the_shade_clicked() {
+    for linked in [false, true] {
+        let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+        set(h.state_mut(), "linked", json!(linked));
+        h.run_steps(3);
+        let hsb = new_hsb(h.state());
+        let at = wheel_at(&h, hsb[0][0], hsb[0][1]);
+        right_click_at(&mut h, at);
+        h.get_by_label("   Select Shade").click();
+        h.run_steps(2);
+        let cell = "Saturation 50%, Brightness 57%";
+        h.get_by_label(cell).click();
+        h.run_steps(3);
+        let now = new_hsb(h.state());
+        assert!(hue_gap(now[0][0], hsb[0][0]) < 1.0 && (now[0][1] - 0.5).abs() < 0.01 && (now[0][2] - 4.0 / 7.0).abs() < 0.01, "{now:?}");
+        let other_moved = (now[1][2] - hsb[1][2]).abs() > 0.01;
+        assert_eq!(other_moved, linked, "linked {linked}: {hsb:?} -> {now:?}");
+        assert!(h.query_by_label(cell).is_none(), "the menu closes");
+        assert_eq!(field(h.state(), "__sel"), json!([0]));
+    }
+}
+
+/// Color Picker on a marker's menu opens the Color Picker for that color.
+#[test]
+fn a_markers_menu_opens_the_color_picker() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, hsb[1][0], hsb[1][1]);
+    right_click_at(&mut h, at);
+    h.get_by_label("   Color Picker").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+}
+
+/// A right-click on the wheel away from the markers offers Add New Color, which adds the hue and
+/// saturation there as a new color. A color added on the line from the center to a marker moves
+/// with that marker when the colors are unlinked, and the others stay.
+#[test]
+fn add_new_color_on_a_markers_line_moves_with_that_marker() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    set(h.state_mut(), "linked", json!(false));
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, 90.0, 0.6);
+    right_click_at(&mut h, at);
+    assert!(h.query_by_label("   Set As Base Color").is_none(), "no marker there");
+    h.get_by_label("   Add New Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 3, "{rows}");
+    assert_eq!((&rows[2]["from"], &rows[2]["added"]), (&json!([]), &json!(true)));
+    assert!(rows[2].get("follows").is_none(), "off every marker's line");
+    let [hue, s, v] = new_hsb(h.state())[2];
+    assert!((hue - 90.0).abs() < 1.0 && (s - 0.6).abs() < 0.01 && (v - hsb[0][2]).abs() < 0.01, "{:?}", [hue, s, v]);
+    assert_eq!(field(h.state(), "__sel"), json!([2]));
+    // Halfway along the second color's line.
+    let on_line = wheel_at(&h, hsb[1][0], hsb[1][1] / 2.0);
+    right_click_at(&mut h, on_line);
+    h.get_by_label("   Add New Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 4);
+    assert!(rows[1]["tie"].is_u64() && rows[3]["follows"] == rows[1]["tie"], "{rows}");
+    // Drag the second color's marker a little way round: the color on its line turns with it.
+    let before = new_hsb(h.state());
+    let start = wheel_at(&h, before[1][0], before[1][1]);
+    h.hover_at(start);
+    h.run_steps(1);
+    h.drag_at(start);
+    h.run_steps(1);
+    let mut p = start;
+    for k in 1..=6 {
+        p = wheel_at(&h, before[1][0] + 5.0 * k as f32, before[1][1]);
+        h.hover_at(p);
+        h.run_steps(1);
+    }
+    h.drop_at(p);
+    h.run_steps(2);
+    let after = new_hsb(h.state());
+    let turned = hue_gap(after[1][0], before[1][0]);
+    assert!(turned > 20.0, "the marker turned: {before:?} -> {after:?}");
+    assert!((hue_gap(after[3][0], before[3][0]) - turned).abs() < 1.0, "the color on its line turned as far: {before:?} -> {after:?}");
+    assert!(hue_gap(after[0][0], before[0][0]) < 0.5 && hue_gap(after[2][0], before[2][0]) < 0.5, "the others stay: {before:?} -> {after:?}");
+}
+
+/// Set Current Color As Base Color makes the selected color the base; it is off while the selected
+/// color is the base. A color bar's menu has Set As Base Color too.
+#[test]
+fn set_current_color_as_base_color_marks_the_selected_color() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let name = "Set Current Color As Base Color";
+    assert!(h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled(), "the base color is the selected one");
+    set(h.state_mut(), "__sel", json!([2]));
+    h.run_steps(3);
+    click_button(&mut h, name);
+    assert_eq!(field(h.state(), "rows")[2]["base"], json!(true));
+    assert!(h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled());
+    show_display(&mut h, "Show color bars");
+    right_click_bar(&mut h, "Color 1");
+    h.get_by_label("   Set As Base Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!((&rows[0]["base"], rows[2].get("base")), (&json!(true), None), "{rows}");
+}
+
 // Optional local visual QA; these captures are not committed assets.
 fn capture_recolor(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
     if let Some(dir) = std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR") {
@@ -1584,6 +1747,224 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         h.run_steps(2);
         assert_eq!(colors(h.state_mut()), 2, "Recolor Cancel restores the original artwork");
     }
+}
+
+/// Whether the dialog's button `name` is disabled.
+fn disabled(h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str) -> bool {
+    h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled()
+}
+
+/// Undo Changes and Redo Changes step back and forward through the dialog's own color edits, and
+/// the art previews each step; the document's undo history is unchanged until OK, which records
+/// one step. Both buttons start disabled, and a new edit after Undo Changes leaves nothing to redo.
+#[test]
+fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
+    let mut h = edit_harness(&["#ff0000", "#00ff00", "#0000ff"]);
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Assign").click();
+    h.run_steps(3);
+    assert!(disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"), "nothing to step to on opening");
+    let state = |h: &egui_kittest::Harness<'_, VectorcraftApp>| (field(h.state(), "rows"), fills(h.state()));
+    let start = state(&h);
+    h.get_by_label("Randomly change color order").click();
+    h.run_steps(3);
+    let first = state(&h);
+    assert_ne!(first, start, "the order changed and previews");
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    let second = state(&h);
+    assert_ne!(second, first);
+    assert!(!disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"));
+    for (button, want) in [("Undo Changes", &first), ("Undo Changes", &start), ("Redo Changes", &first), ("Redo Changes", &second)] {
+        h.get_by_role_and_label(egui::accesskit::Role::Button, button).click();
+        h.run_steps(3);
+        assert_eq!(&state(&h), want, "{button}");
+    }
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "the dialog's steps leave the document's history alone");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(state(&h), first);
+    assert!(!disabled(&h, "Redo Changes"));
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    assert!(disabled(&h, "Redo Changes"), "a new edit leaves nothing to redo");
+    let last = state(&h);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    let app = h.state_mut();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(fills(app), last.1, "OK keeps the edits");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "as one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fills(app), start.1);
+    // A new opening has nothing to undo.
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    h.run_steps(3);
+    assert!(disabled(&h, "Undo Changes") && disabled(&h, "Redo Changes"), "nothing to step to on a new opening");
+    h.get_by_label("Cancel").click();
+    h.run_steps(2);
+}
+
+/// A drag is one step from press to release: Undo Changes after dragging the Edit tab's Brightness
+/// slider across several frames gives the rows the drag started on, with nothing left to undo.
+#[test]
+fn a_drag_is_one_step_of_undo_changes() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    let rows = field(h.state(), "rows");
+    let slider = widget_of_size(&h, vec2(220.0, 22.0));
+    let v = new_hsb(h.state())[0][2];
+    let at = egui::pos2(slider.left() + 4.0 + v * (slider.width() - 8.0), slider.center().y);
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    for k in 1..=6 {
+        h.hover_at(egui::pos2(at.x + 12.0 * k as f32, at.y));
+        h.run_steps(1);
+    }
+    h.drop_at(egui::pos2(at.x + 72.0, at.y));
+    h.run_steps(2);
+    assert_ne!(field(h.state(), "rows"), rows, "the drag changed the colors");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), rows, "one Undo Changes goes back to before the drag");
+    assert!(disabled(&h, "Undo Changes"), "the drag was one step");
+    assert!(!disabled(&h, "Redo Changes"));
+}
+
+/// Reset is a step of its own: Undo Changes gives back the rows Reset discarded.
+#[test]
+fn undo_changes_reverses_reset() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#00ff00", "#0000ff"]);
+    let mut h = assign_harness(app, json!({}));
+    let start = field(h.state(), "rows");
+    h.get_by_label("Randomly change saturation and brightness").click();
+    h.run_steps(3);
+    let edited = field(h.state(), "rows");
+    assert_ne!(edited, start);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Reset the rows to the artwork's colors").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), start, "Reset reads the art's colors");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Undo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), edited, "Undo Changes gives back the rows before Reset");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Redo Changes").click();
+    h.run_steps(3);
+    assert_eq!(field(h.state(), "rows"), start, "Redo Changes resets them again");
+}
+
+/// `ui.recolorUndo` and `ui.recolorRedo` step the open dialog as its buttons do, also through a
+/// field set without a frame between, and a new count of Colors is one step that restores the count
+/// and the rows; outside the dialog they are an error, and a new opening has nothing to undo.
+#[test]
+fn the_recolor_undo_and_redo_commands_step_the_open_dialog() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    assert!(app.run("ui.recolorUndo", json!({})).is_err(), "no dialog open");
+    // A field set before the dialog's first frame is a step back to the fields it opened with.
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    set(&mut app, "colors", json!(2));
+    assert!(dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false), "Undo Changes can run before the first frame");
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": false, "canRedo": true}));
+    assert_eq!(field(&app, "colors"), Value::Null);
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 4, "the rows of the art as it opened");
+    dialogs::cancel(&mut app);
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert!(!dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false));
+    let start = field(&app, "rows");
+    assert_eq!(start.as_array().unwrap().len(), 4);
+    set(&mut app, "colors", json!(2));
+    dialog_frame(&mut app, &ctx);
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2);
+    let two = field(&app, "rows");
+    set(&mut app, "globalAdjust", json!({"saturation": -50}));
+    dialog_frame(&mut app, &ctx);
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": true, "canRedo": true}));
+    assert_eq!((field(&app, "globalAdjust"), field(&app, "rows")), (Value::Null, two.clone()));
+    app.run("ui.recolorUndo", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start.clone()), "the count and its rows, not reduced again");
+    assert!(!dialogs::recolor::can_step(&app, true));
+    assert_eq!(app.run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(false));
+    app.run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (json!(2), two));
+    // A field set without a frame between is a step before Undo Changes goes back.
+    set(&mut app, "method", json!("exact"));
+    assert_eq!(app.run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(true));
+    assert_eq!(field(&app, "method"), json!("scaleTints"));
+    dialogs::cancel(&mut app);
+    assert!(app.run("ui.recolorRedo", json!({})).is_err(), "Cancel closed the dialog");
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    assert!(!dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false), "a new opening");
+}
+
+/// An edit made while the pointer is held from the dialog's first frame is a step from the fields
+/// the dialog opened with, not where Undo Changes starts.
+#[test]
+fn an_edit_with_the_pointer_down_from_the_first_frame_is_a_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    let at = Pos2::new(2.0, 2.0);
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true)], 1.0, |app, ui| dialogs::show(app, ui.ctx()));
+    let start = field(&app, "rows");
+    assert_eq!(start.as_array().unwrap().len(), 4);
+    set(&mut app, "colors", json!(2));
+    frame(&mut app, &ctx, vec![], 2.0, |app, ui| dialogs::show(app, ui.ctx()));
+    frame(&mut app, &ctx, vec![button(false)], 3.0, |app, ui| dialogs::show(app, ui.ctx()));
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2);
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": false, "canRedo": true}));
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start));
+}
+
+/// Rows or weights set before the first frame, which the art's reduction then replaces or drops,
+/// are no step: Undo Changes is not available and changes nothing.
+#[test]
+fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
+    for (k, v) in [("rows", json!([{"to": "#123456"}])), ("weights", json!([25, 75]))] {
+        let mut app = app();
+        art(&mut app, &["#ff0000", "#0000ff"]);
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        set(&mut app, k, v);
+        assert!(!dialogs::recolor::can_step(&app, true), "{k}: Undo Changes is not available");
+        let r = app.run("ui.recolorUndo", json!({})).unwrap();
+        assert_eq!(r, json!({"changed": false, "canUndo": false, "canRedo": false}), "{k}");
+        assert!(!app.session.in_interaction(), "{k}: a step that changes nothing previews nothing");
+        assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
+    }
+}
+
+/// `ui.recolorUndo` and `ui.recolorRedo` preview the step they go to at once, without a frame
+/// between, as the buttons do.
+#[test]
+fn the_recolor_undo_and_redo_commands_preview_the_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    let start = fills(&app);
+    set(&mut app, "globalAdjust", json!({"saturation": -100}));
+    dialog_frame(&mut app, &ctx);
+    let adjusted = fills(&app);
+    assert_ne!(adjusted, start, "the adjustment previews");
+    app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(fills(&app), start, "Undo Changes previews the step before");
+    app.run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!(fills(&app), adjusted, "Redo Changes previews the step after");
+    dialogs::cancel(&mut app);
 }
 
 /// With the Color Groups list shown, the Color Picker opened from a row and closed with Cancel

@@ -199,11 +199,14 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("bristle-brushes"),
             json!("pattern-borders"),
             json!("scatter-shapes"),
+            json!("stipple"),
             json!("game-trails"),
             json!("energy-beams"),
             json!("dry-media"),
             json!("tech-circuit"),
-            json!("arrows")
+            json!("engraving"),
+            json!("arrows"),
+            json!("image-brush")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
@@ -245,6 +248,12 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
         app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
         Some("Flex Ribbon")
     );
+    let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 4.0);
+    assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
+    assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
     app.run("brush.delete", json!({ "names": all })).unwrap();

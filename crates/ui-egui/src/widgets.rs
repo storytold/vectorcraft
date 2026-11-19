@@ -37,10 +37,10 @@ pub(crate) use buttons::{
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_stepped,
-    channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel,
-    hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area,
-    wheel_of,
+    FieldAxis, Live, MarkerResponse, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named,
+    channel_slider_stepped, channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped,
+    color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture, ring_markers, ring_square,
+    segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
