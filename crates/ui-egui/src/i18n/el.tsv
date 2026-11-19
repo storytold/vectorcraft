@@ -8938,3 +8938,4 @@ breakText	Glyphs	Γλύφοι
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Επεξεργασία πρωτοτύπου με:
 file-filter	Applications	Εφαρμογές
+	Include visible stroke edges when snapping with Smart Guides.	Συμπεριλάβετε τα ορατά όρια του περιγράμματος στην προσκόλληση με έξυπνους οδηγούς.

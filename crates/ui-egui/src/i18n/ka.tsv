@@ -11073,3 +11073,4 @@ font-script	Japanese	იაპონური
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	ორიგინალის რედაქტირება პროგრამით:
 file-filter	Applications	აპლიკაციები
+	Include visible stroke edges when snapping with Smart Guides.	ჭკვიანი დამხმარე ხაზებით მიბმისას გაითვალისწინეთ კონტურის ხილული კიდეები.

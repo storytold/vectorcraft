@@ -10360,3 +10360,4 @@ theme	Appearance	अपीयरेंस
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	मूल फ़ाइल इसमें एडिट करें:
 file-filter	Applications	ऐप्स
+	Include visible stroke edges when snapping with Smart Guides.	स्मार्ट गाइड्स से स्नैप करते समय स्ट्रोक के दिखाई देने वाले किनारों को शामिल करें।

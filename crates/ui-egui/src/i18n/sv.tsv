@@ -10880,3 +10880,4 @@ digits	Hindi	Hindi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigera original med:
 file-filter	Applications	Program
+	Include visible stroke edges when snapping with Smart Guides.	Ta med konturens synliga kanter när du fäster med smarta stödlinjer.

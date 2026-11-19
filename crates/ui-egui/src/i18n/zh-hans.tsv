@@ -10602,3 +10602,4 @@ breakText	Glyphs	字形
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	编辑原稿所用应用：
 file-filter	Applications	应用程序
+	Include visible stroke edges when snapping with Smart Guides.	使用智能参考线对齐时，将可见的描边边缘纳入对齐目标。

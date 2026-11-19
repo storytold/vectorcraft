@@ -10793,3 +10793,4 @@ breakText	Glyphs	Glyphs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Origineel bewerken met:
 file-filter	Applications	Programma’s
+	Include visible stroke edges when snapping with Smart Guides.	Neem zichtbare contourranden mee bij het uitlijnen met slimme hulplijnen.

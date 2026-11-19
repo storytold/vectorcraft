@@ -10850,3 +10850,4 @@ breakText	Glyphs	Glyffer
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigér original med:
 file-filter	Applications	Programmer
+	Include visible stroke edges when snapping with Smart Guides.	Medtag stregens synlige kanter ved fastgørelse med smarte hjælpelinjer.

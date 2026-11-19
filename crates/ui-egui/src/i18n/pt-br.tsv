@@ -10826,3 +10826,4 @@ swatch	Yellow Green	Verde-amarelado
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Editar original com:
 file-filter	Applications	Aplicativos
+	Include visible stroke edges when snapping with Smart Guides.	Incluir as bordas visíveis do traçado ao ajustar com as Guias Inteligentes.

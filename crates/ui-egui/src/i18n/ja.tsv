@@ -10464,3 +10464,4 @@ breakText	Glyphs	字形
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	元のファイルを編集するアプリ:
 file-filter	Applications	アプリケーション
+	Include visible stroke edges when snapping with Smart Guides.	スマートガイドでのスナップに、表示されている線の境界を含めます。

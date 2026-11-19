@@ -10742,3 +10742,4 @@ breakText	Glyphs	Glifák
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Eredeti szerkesztése ezzel:
 file-filter	Applications	Alkalmazások
+	Include visible stroke edges when snapping with Smart Guides.	A körvonal látható széleit is figyelembe veszi az intelligens segédvonalakkal való illesztéskor.

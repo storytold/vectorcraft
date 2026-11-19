@@ -8964,3 +8964,4 @@ breakText	Glyphs	Glifs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Edita l’original amb:
 file-filter	Applications	Aplicacions
+	Include visible stroke edges when snapping with Smart Guides.	Inclou les vores visibles del traç en ajustar amb les guies intel·ligents.

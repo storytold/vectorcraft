@@ -10740,3 +10740,4 @@ breakText	Glyphs	Glyphes
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Modifier l’original avec :
 file-filter	Applications	Applications
+	Include visible stroke edges when snapping with Smart Guides.	Prendre en compte les bords visibles du contour pour le magnétisme des repères commentés.

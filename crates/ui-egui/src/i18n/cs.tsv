@@ -10754,3 +10754,4 @@ breakText	Glyphs	Glyfy
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Upravit originál v:
 file-filter	Applications	Aplikace
+	Include visible stroke edges when snapping with Smart Guides.	Při přichytávání pomocí chytrých vodítek zahrnout viditelné okraje tahu.

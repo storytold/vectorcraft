@@ -7932,3 +7932,4 @@ breakText	Glyphs	Глифи
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактиране на оригинала с:
 file-filter	Applications	Приложения
+	Include visible stroke edges when snapping with Smart Guides.	Включва видимите ръбове на щриха при прилепване с интелигентни водачи.

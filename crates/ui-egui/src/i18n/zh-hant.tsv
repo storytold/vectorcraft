@@ -10417,3 +10417,4 @@ breakText	Glyphs	字符
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	編輯原稿所用應用程式：
 file-filter	Applications	應用程式
+	Include visible stroke edges when snapping with Smart Guides.	使用智慧型參考線靠齊時，將可見的筆畫邊緣納入靠齊目標。

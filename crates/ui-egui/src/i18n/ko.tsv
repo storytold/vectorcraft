@@ -10363,3 +10363,4 @@ breakText	Glyphs	글리프
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	원본 편집 앱:
 file-filter	Applications	응용 프로그램
+	Include visible stroke edges when snapping with Smart Guides.	스마트 안내선으로 스냅할 때 보이는 선의 가장자리도 포함합니다.

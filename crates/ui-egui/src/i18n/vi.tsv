@@ -8609,3 +8609,4 @@ breakText	Glyphs	Glyph
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Chỉnh sửa bản gốc bằng:
 file-filter	Applications	Ứng dụng
+	Include visible stroke edges when snapping with Smart Guides.	Tính cả mép nét hiển thị khi hút bằng đường căn thông minh.

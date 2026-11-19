@@ -8975,3 +8975,4 @@ file-filter	Applications	Aplikasi
 @msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor irisan memiliki referensi dengan jenis yang tidak dikenal ({_1})
 @msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor irisan memiliki nilai dengan tipe yang tidak dikenal ({_1})
 @msg	the layers can't be read ({e}): the file was placed as its merged image	lapisan tidak dapat dibaca ({e}): berkas ditempatkan sebagai gambar gabungannya
+	Include visible stroke edges when snapping with Smart Guides.	Sertakan tepi stroke yang terlihat saat melakukan snap dengan panduan cerdas.

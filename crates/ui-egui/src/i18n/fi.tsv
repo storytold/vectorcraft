@@ -9021,3 +9021,4 @@ breakText	Glyphs	Merkit
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
 file-filter	Applications	Sovellukset
+	Include visible stroke edges when snapping with Smart Guides.	Ota viivan näkyvät reunat mukaan kohdistettaessa älykkäillä apuviivoilla.
