@@ -240,25 +240,50 @@ fn an_overprinting_gradient_with_a_hard_stop_at_an_end_keeps_the_ink_below_on_a_
     // Level 3's shading with the stretch next to it, so each level is checked against its own
     // plate of the gradient alone.
     let (inked, none) = (Color::cmyk(0.6, 0.3, 0.0, 0.0), Color::cmyk(0.0, 0.3, 0.0, 0.0));
+    // Each with where it puts cyan at Level 3 and at Level 2: halfway along its vector, before its
+    // start and past its end.
     let ends = [
-        ("none then cyan at 0", [(0.0, none), (0.0, inked), (1.0, inked)]),
-        ("cyan then none at 1", [(0.0, inked), (1.0, inked), (1.0, none)]),
-        ("cyan then none at 0", [(0.0, inked), (0.0, none), (1.0, none)]),
-        ("none then cyan at 1", [(0.0, none), (1.0, none), (1.0, inked)]),
+        ("none then cyan at 0", [(0.0, none), (0.0, inked), (1.0, inked)], [[true, true, true], [true, false, true]]),
+        ("cyan then none at 1", [(0.0, inked), (1.0, inked), (1.0, none)], [[true, true, true], [true, true, false]]),
+        ("cyan then none at 0", [(0.0, inked), (0.0, none), (1.0, none)], [[false, false, false], [false, true, false]]),
+        ("none then cyan at 1", [(0.0, none), (1.0, none), (1.0, inked)], [[false, false, false], [false, false, true]]),
     ];
     let c = Point::new(100.0, 50.0);
     let around = GradientGeom { start: c, end: c + Vec2::new(50.0, -10.0), aspect: 0.7, focal: None };
     let across = GradientGeom { start: Point::new(40.0, 40.0), end: Point::new(160.0, 60.0), aspect: 1.0, focal: None };
     let pad = GradientSpread::Pad;
     let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
-    let shapes = [(GradientKind::Linear, across, "linear"), (GradientKind::Radial, around, "radial"), (GradientKind::Diamond, around, "diamond")];
+    // The points probed: halfway along the vector, before its start (a linear gradient only) and
+    // past its end, all inside the art.
+    let at = |g: GradientGeom, t: f64| g.start + (g.end - g.start) * t;
+    let shapes = [
+        (GradientKind::Linear, across, "linear", [Some(at(across, 0.5)), Some(at(across, -0.125)), Some(at(across, 1.125))]),
+        (GradientKind::Radial, around, "radial", [Some(at(around, 0.5)), None, Some(at(around, 1.2))]),
+        (GradientKind::Diamond, around, "diamond", [Some(at(around, 0.5)), None, Some(at(around, 1.2))]),
+    ];
     let mut cases = vec![];
-    for (name, stops) in &ends {
-        for (kind, geom, shape) in shapes {
+    let mut wrong = vec![];
+    for (name, stops, inks) in &ends {
+        for (kind, geom, shape, probes) in shapes {
             let fill = gradient(kind, stops, geom, pad);
-            cases.push((format!("{shape}, {name}"), overprinting(fill, Paint::None), cyan.clone(), "Cyan"));
+            let art = overprinting(fill, Paint::None);
+            // The gradient's own cyan prints at the probes where it puts some down, alone and over
+            // the cyan below; elsewhere the plate is paper alone and the cyan below prints.
+            for (level, inks) in [Level::Three, Level::Two].into_iter().zip(inks) {
+                let (_, alone) = plate_of(&over(None, std::slice::from_ref(&art)), "Cyan", level);
+                let (_, printed) = plate_of(&over(Some(cyan.clone()), std::slice::from_ref(&art)), "Cyan", level);
+                for (p, ink) in probes.iter().zip(inks).filter_map(|(p, ink)| p.map(|p| (p, *ink))) {
+                    let (a, b) = (alone.over_white(p.x as u32, p.y as u32)[0], printed.over_white(p.x as u32, p.y as u32)[0]);
+                    let ok = if ink { (60..=150).contains(&a) && (60..=150).contains(&b) } else { a >= 250 && b <= 10 };
+                    if !ok {
+                        wrong.push(format!("{shape}, {name} at level {level:?} at {p:?}: {a} alone, {b} over the cyan, cyan expected: {ink}"));
+                    }
+                }
+            }
+            cases.push((format!("{shape}, {name}"), art, cyan.clone(), "Cyan"));
         }
     }
+    assert!(wrong.is_empty(), "{wrong:#?}");
     let cases: Vec<_> = cases.iter().map(|(name, art, under, ink)| (name.as_str(), art.clone(), under.clone(), *ink)).collect();
     assert_keeps_the_ink_below_of(&cases, true);
 }
