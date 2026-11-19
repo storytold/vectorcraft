@@ -4425,6 +4425,67 @@ fn live_paint_group_eyedropper_picks_up_the_group_and_appends_without_effects() 
     assert!(faces1.iter().zip(&faces0).all(|(f, f0)| f.items.len() > f0.items.len()), "every face takes the fill");
 }
 
+/// Reversed onto a clicked object, an empty Live Paint group first in the selection passes to the next
+/// selected Live Paint group, whose faces' fill and edges' stroke are both picked up.
+#[test]
+fn live_paint_group_eyedropper_reversed_skips_an_empty_group_for_the_next_whole_group() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5})).unwrap();
+    let empty = rect(&mut s, 600.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
+    let e = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let en = node(&s, e);
+    let parts: Vec<NodeId> =
+        vectorcraft_tools::builder::faces(&en).iter().chain(vectorcraft_tools::builder::edges(&en).iter()).map(|p| p.id).collect();
+    s.edit("t", |d, _| {
+        d.node_mut(e).unwrap().children_mut().unwrap().retain(|c| !parts.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    let target = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+    s.execute("appearance.copyFrom", &json!({"source": target.0, "reverse": true, "ids": [e.0, g.0]})).unwrap();
+    let a = (*node(&s, target).appearance).clone();
+    assert_eq!(a.fill_paint(), Paint::solid(Color::from_hex("#ff00ff").unwrap()), "the faces' fill");
+    assert_eq!((a.stroke_paint(), a.stroke_width()), (Paint::solid(Color::from_hex("#0000ff").unwrap()), 5.0), "the edges' stroke");
+}
+
+/// An Eyedropper pick whose source is the selected Live Paint group leaves the group's own faces and
+/// edges as they are.
+#[test]
+fn live_paint_group_eyedropper_does_not_target_its_own_source_group() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "color": "#ff0000"})).unwrap();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50], "color": "#00ff00"})).unwrap();
+    let before = part_looks(&s, g);
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": g.0})).unwrap();
+    assert_eq!(part_looks(&s, g), before);
+}
+
+/// A Live Paint group left with only its hidden source paths is still a selection: a stroke edit of its
+/// contents changes nothing and leaves the settings for new art as they are.
+#[test]
+fn live_paint_group_with_only_source_paths_leaves_new_art_alone_for_a_contents_edit() {
+    let mut s = session();
+    let g = live(&mut s);
+    let n = node(&s, g);
+    let parts: Vec<NodeId> = vectorcraft_tools::builder::faces(&n).iter().chain(vectorcraft_tools::builder::edges(&n).iter()).map(|p| p.id).collect();
+    s.edit("t", |d, _| {
+        d.children_mut(Some(g)).unwrap().retain(|c| !parts.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let (paint0, stroke0) = (s.paint.clone(), s.new_art_stroke());
+    s.execute("stroke.setAdvanced", &json!({"target": "contents", "item": 0, "arrowScale": [200, 150]})).unwrap();
+    assert_eq!((s.paint.clone(), s.new_art_stroke()), (paint0, stroke0), "new art keeps its stroke");
+}
+
 /// A selected Live Paint group with no part of the edited kind is still a selection: a stroke edit
 /// of a group without edges, or a fill gradient edit of a group without faces, changes nothing and
 /// leaves the settings for new art as they are.

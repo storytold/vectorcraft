@@ -300,7 +300,8 @@ impl ItemTarget {
         };
         let before = ids.len();
         ids.retain(|id| !skipped.contains(id));
-        let skipped_any = ids.len() != before;
+        // A contents edit already leaves hidden source paths out of `ids`, so `skipped` is checked on its own too.
+        let skipped_any = ids.len() != before || !skipped.is_empty();
         Ok((ids, skipped_any))
     }
 
@@ -1815,13 +1816,23 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     // Reversed, the first selected object's attributes go onto the clicked object; with nothing
     // selected, what the Eyedropper picked up last does (#4382).
     let (source, mut targets) = if reverse {
-        // A Live Paint group selected first is picked up as a whole ([`live_paint_look`]); its hidden source paths are
-        // not what it draws.
+        // The selected objects are tried in order: a Live Paint group with a look is picked up as a whole
+        // ([`live_paint_look`]), any other object gives its first painted leaf, and a group with nothing to pick
+        // up (its hidden source paths are not what it draws) passes to the next object.
         let d = &s.doc()?.doc;
-        let group = selected.first().copied().filter(|id| d.node(*id).and_then(live_paint_look).is_some());
-        let (_, _, hidden) = super::paint::live_paint_split(d, &selected);
-        let first = leaf_targets(s, &selected)?.into_iter().find(|id| !hidden.contains(id));
-        let source = match group.or(first) {
+        let mut first = None;
+        for root in &selected {
+            if d.node(*root).and_then(live_paint_look).is_some() {
+                first = Some(*root);
+                break;
+            }
+            let (_, _, hidden) = super::paint::live_paint_split(d, &[*root]);
+            if let Some(leaf) = leaf_targets(s, &[*root])?.into_iter().find(|id| !hidden.contains(id)) {
+                first = Some(leaf);
+                break;
+            }
+        }
+        let source = match first {
             Some(first) => Some(first),
             None if s.eyedropper_sample.is_some() => None,
             None => return Err(bad(C, "select the object to copy from")),
@@ -1855,7 +1866,14 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // A pick of the whole appearance gives a face every fill row and an edge every stroke row.
     let whole = attrs.appearance.fill == FillAttrs::ALL && attrs.appearance.stroke == StrokeAttrs::ALL;
-    targets.retain(|id| Some(*id) != source && !hidden.contains(id));
+    // A source that is a Live Paint group is not one of its own targets: neither are its faces and edges.
+    let mut inside_source = HashSet::new();
+    if let Some(n) = source.and_then(|id| s.doc().ok()?.doc.node(id)).filter(|n| is_live_paint(n)) {
+        n.walk(&mut |c| {
+            inside_source.insert(c.id);
+        });
+    }
+    targets.retain(|id| Some(*id) != source && !hidden.contains(id) && !inside_source.contains(id));
     let mut targets = without_design_art(&s.doc()?.doc, targets, C)?;
     let node = match source {
         Some(id) => {
