@@ -1529,6 +1529,32 @@ fn a_batch_moves_the_selection_only_with_its_group() {
     assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Brights".to_string()], "Brights".to_string()));
 }
 
+/// Sort by Name keeps the groups, so a rename after it in a batch still moves the selection, and
+/// Edit Color Group's `rename` moves it as Color Group Options does, alone or in a batch.
+#[test]
+fn the_selection_follows_sorting_and_group_edits() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-selected", vec!["Brights".to_string()]);
+    set_pstate(&ctx, "swatch-anchor", "Brights".to_string());
+    let follows = |name: &str| (vec![name.to_string()], name.to_string());
+    let steps = json!([
+        {"command": "swatch.sortByName", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Vivid"), "Sort by Name");
+    app.run("swatch.editGroup", json!({"group": "Vivid", "colors": ["#ff0000"], "rename": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Bold"), "Edit Color Group");
+    let steps = json!([
+        {"command": "swatch.editGroup", "params": {"group": "Bold", "colors": ["#00ff00"], "rename": "Loud"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Loud", "name": "Calm"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Calm"), "Edit Color Group in a batch");
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.

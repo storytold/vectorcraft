@@ -224,7 +224,7 @@ pub(crate) fn sole_selected_group(app: &VectorcraftApp) -> Option<String> {
 }
 
 /// Command `id` ran with `params` and replied `reply`: a color group that `swatch.renameGroup`
-/// renamed stays selected in the panel under its new name, and Shift-click still extends the
+/// or `swatch.editGroup` renamed stays selected in the panel under its new name, and Shift-click still extends the
 /// selection from it. Ungroup Color Group and Delete Swatch take the names they removed out of the
 /// selection, so a group that later takes such a name is not selected in its place. The steps of a
 /// `command.batch` are followed in order up to the first step that is not one of [`KEEPS_GROUPS`]:
@@ -242,7 +242,7 @@ pub(crate) fn after_command(ctx: &egui::Context, id: &str, params: &Value, reply
         }
     };
     match id {
-        "swatch.renameGroup" => {
+        "swatch.renameGroup" | "swatch.editGroup" => {
             if let (Some(old), Some(new)) = (params["group"].as_str(), reply["name"].as_str()) {
                 rename(old, Some(new));
             }
@@ -287,6 +287,8 @@ const KEEPS_GROUPS: &[&str] = &[
     "swatch.duplicate",
     "swatch.addUsedColors",
     "swatch.sortByKind",
+    "swatch.sortByName",
+    "swatch.editGroup",
     "swatch.spotOptions",
     "swatch.setSpot",
     "swatch.list",
