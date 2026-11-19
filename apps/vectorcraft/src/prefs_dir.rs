@@ -81,6 +81,14 @@ pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Have View › Proof Setup list the proof setups saved in the `Proof Setups` folder, which
+/// `view.proofSetup.save` makes when it saves a setup by name.
+pub fn attach_proof_setups(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Proof Setups") {
+        session.attach_proof_setups(dir);
+    }
+}
+
 /// Keep each script's `Folder.userData` in the `Script Data` folder, and the file access people
 /// allow scripts with Always in `Script Grants.json` beside it. Both are made when a script first
 /// needs them.
