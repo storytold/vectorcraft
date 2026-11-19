@@ -106,6 +106,7 @@ mod png_options;
 pub mod print;
 pub mod print_presets;
 pub mod profile_mismatch;
+pub mod proof_setup;
 pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
@@ -371,6 +372,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    ProofSetup: [proof_setup::KIND] => proof_setup::SPEC,
     IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
@@ -788,6 +790,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
         }
+        if d.kind == proof_setup::KIND {
+            proof_setup::cancel(app, &d);
+        }
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
         }
@@ -843,13 +848,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 }
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
-/// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// for its turn again, a Proof Setup preview that another dialog replaced is undone, the search a
+/// Missing Fonts or Find Linked Files dialog started stops once that dialog is gone, and with no
+/// dialog open the choice about a stopped plug-in that another
 /// dialog replaced opens again, else the questions about the next restored document's linked files
 /// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    proof_setup::restore_replaced(app);
     profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
