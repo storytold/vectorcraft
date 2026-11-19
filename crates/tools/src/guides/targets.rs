@@ -1743,6 +1743,10 @@ impl Targets {
         (u * s, ov, true)
     }
 
+    fn scale_keeps_sign(n: f64, s: f64) -> bool {
+        n.is_finite() && n * s > 0.0
+    }
+
     /// The existing open sign region for a free box corner, in local handle space.
     fn free_corner_contact_domain(to_local: Affine, p: Point, origin: Point, d0: Vec2, (sx, sy): (f64, f64), tol: f64) -> ContactDomain {
         let to_local = Affine::translate(-origin.to_vec2()) * to_local;
@@ -1804,7 +1808,7 @@ impl Targets {
         let (d0, [sx, _, _, sy, _, _]) = (handle.pos(r) - origin, a.as_coeffs());
         let (to_doc, to_local) = (bx.to_doc(), bx.to_doc().inverse());
         // A scale that collapses or flips the box is no snap.
-        let valid = |n: f64, s: f64| n.is_finite() && n * s > 0.0;
+        let valid = Self::scale_keeps_sign;
         // The target line along the x axis (`x`: a vertical line) or the y axis nearest `p`, the
         // ruler guides running past it included.
         let nearest = |p: Point, x: bool| -> Hit {
