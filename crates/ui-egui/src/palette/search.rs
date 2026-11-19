@@ -664,7 +664,9 @@ type RankKey = (bool, bool, u8, u8, u32, u8, u8, usize);
 /// Corners…) or means the same as a word of its label, menu path or description ("remove bg" for
 /// Remove Background…), or when the query is the initials of a label ("ea" for Export As…). A query
 /// word that is no word, stem form or word start of any result's label, menu path or id also
-/// matches the words of labels and menu paths it is a typo of ([`Index::typos`]).
+/// matches the words of labels and menu paths it is a typo of ([`Index::typos`]); with such a word,
+/// a result also matches when each other word of the query is text in one of its names or ids
+/// ("rop shdaow" for Drop Shadow).
 /// Results where a word matched only through a description come after every other result. Before
 /// them, results where a word matched only through a typo come after every other result, and their
 /// whole-query match is read with each such word replaced by the word it is a typo of ("gruop" as
@@ -688,9 +690,9 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
     let mut indexed: Vec<Vec<u8>> = Vec::with_capacity(tokens.len());
     let mut typos: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
     let mut meanings: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
-    // After a word that is nothing in any result and a typo of nothing, a result is found only by
-    // the substring rule or its initials, where a typo grade changes nothing, so the later words are
-    // not compared.
+    // After a word that is nothing in any result, text in no result's names or ids and a typo of
+    // nothing, a result is found only by its initials, where a typo grade changes nothing, so the
+    // later words are not compared.
     let mut compare = true;
     for (k, t) in tokens.iter().enumerate() {
         // A repeated word is graded once.
@@ -707,7 +709,7 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         // A word that matches only words of descriptions is still compared with the words of labels
         // and menu paths it may be a typo of.
         let near = if compare && grades.iter().all(|&g| g == NONE || g == DESCRIPTION_WORD) { index.typos(t) } else { vec![] };
-        if near.is_empty() && grades.iter().all(|&g| g == NONE) {
+        if near.is_empty() && grades.iter().all(|&g| g == NONE) && !entries.iter().any(|e| e.haystack.contains(t)) {
             compare = false;
         }
         index.mark_typos(&near, &mut grades);
@@ -727,6 +729,9 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         // Each word's grade, the worst and their sum; with initials, every word counts as a word
         // the label starts, as the initials stand for every word of the label.
         let (mut all_indexed, mut worst, mut sum) = (fits && !tokens.is_empty(), 0u8, 0u32);
+        // Whether each word is in this result's index or is text in its names or ids, for a result
+        // a word matches only through a typo.
+        let mut held = all_indexed;
         // The query as read for the whole-query match, with each word matched only through a typo
         // replaced by the word of this result it is a typo of; and as read with each word matched
         // through a word with the same meaning replaced by that word too.
@@ -746,6 +751,7 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
             if g == NONE {
                 all_indexed = false;
+                held &= e.haystack.contains(token);
             }
             if g > SUBSTRING && e.haystack.contains(token) {
                 g = SUBSTRING;
@@ -784,7 +790,7 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
             worst = worst.max(g);
             sum += u32::from(g);
         }
-        if !(substring || all_indexed || initials) {
+        if !(substring || all_indexed || initials || (typo && held)) {
             continue;
         }
         let tier = if typo {
@@ -1129,6 +1135,13 @@ mod tests {
         assert!(ranked(&c, "cux").is_empty(), "3 letters");
         assert_eq!(ranked(&c, "recktanglee"), ["c.three"], "two edits in a longer word");
         assert!(ranked(&c, "rectanglexxx").is_empty());
+        // A word found only as text inside a word of the result goes with a word with a typo, in
+        // either order, and a word found nowhere in the result still leaves it out.
+        let c = synthetic(vec![entry("Zz Drop Shadow", "a.one"), entry("Zz Drop", "b.two")]);
+        assert_eq!(ranked(&c, "rop shdaow"), ["a.one"]);
+        assert_eq!(ranked(&c, "shdaow rop"), ["a.one"]);
+        assert!(ranked(&c, "rop shdaow qqq").is_empty());
+        assert!(ranked(&c, "qqq rop shdaow").is_empty());
         // Below a result whose name holds the word as text, and below one that holds it whole.
         let c = synthetic(vec![entry("Zz Color", "a.one"), entry("Zz Bcolrb", "b.two")]);
         assert_eq!(ranked(&c, "colr"), ["b.two", "a.one"]);
@@ -1201,6 +1214,7 @@ mod tests {
         }
         assert_eq!(first("pen"), "tool:pen");
         assert!(place(&c, "pen", "file.open").is_some(), "Open… holds the text");
+        assert!(place(&c, "rop shdaow", "effect:stylize.dropShadow").is_some(), "{:?}", ranked(&c, "rop shdaow"));
     }
 
     /// A query word finds a result whose label or menu path holds another word of its group of words

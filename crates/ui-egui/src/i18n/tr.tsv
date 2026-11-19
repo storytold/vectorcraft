@@ -852,6 +852,7 @@ font-technology	Variable	Değişken
 	Duplicate Action or Action Set	Eylemi veya Eylem Setini Çoğalt
 	Delete the action set “{name}” and its actions?	“{name}” eylem seti ve eylemleri silinsin mi?
 	Delete the selected action sets and their actions?	Seçili eylem setleri ve eylemleri silinsin mi?
+	Delete all action sets and their actions?	Tüm eylem setleri ve eylemleri silinsin mi?
 	Delete Theme	Temayı Sil
 	Delete theme	Temayı sil
 	Delete these {n} graphic styles?	Bu {n} grafik stilleri silinsin mi?
@@ -1331,6 +1332,7 @@ font-technology	Variable	Değişken
 	Fit to Selected Art	Seçilen Sanata Sığdır
 	Flag…	Bayrak…
 	Flare	parlama
+	Edit Flare	Parlamayı Düzenle
 	Flare Tool	Mercek Parlaması Aracı
 	Flare Tool Options	Genişletme Aracı Seçenekleri
 	Halo	Hale
@@ -2089,6 +2091,9 @@ font-technology	Variable	Değişken
 	Navigate	Gezin
 	Navigator	Gezgin
 	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Attributes Panel Options	Nitelikler Paneli Seçenekleri
+	Number of Recent URLs:	Son URL Sayısı:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 ile 30 arasında bir tam sayı olmalıdır
 	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler
@@ -2523,6 +2528,7 @@ shape	Open	Açık
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
 	Replace Actions…	Eylemleri Değiştir…
+	Clear Actions	Eylemleri Temizle
 	Reset Actions	Eylemleri Sıfırla
 	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
 	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
@@ -2960,6 +2966,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl basılıyken fare tekerleği tuvali yana kaydırır.
 	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -3734,9 +3742,9 @@ digits	Malayalam	Malayalam
 	Styling:	Şekillendirme:
 	Stylize	Stilize Et
 	Subdivisions	Alt bölümler
-	Subscript	Abonelik
-	Subscript (on the roadmap)	Abonelik (yol haritasında)
-	Subscript:	Abonelik:
+	Subscript	Alt simge
+	Subscript (on the roadmap)	Alt simge (yol haritasında)
+	Subscript:	Alt simge:
 	Subset fonts below:	Aşağıdaki yazı tiplerinin alt kümesi:
 	Subtract	Çıkar
 	Suffix	son ek
@@ -5007,6 +5015,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no graphic style `{n}`	grafik stili yok `{n}`
 @msg	no interaction in progress	herhangi bir etkileşim devam etmiyor
 @msg	no key object	anahtar nesne yok
+@msg	Align to Key Object isn't available with the Artboard tool	Anahtar Nesneye Hizala, Çalışma Yüzeyi Aracı ile kullanılamaz
 @msg	no library `{key}` (see {list})	`{key}` kitaplığı yok (bkz. {list})
 @msg	no native format	yerel format yok
 @msg	no pages	sayfa yok
@@ -5173,6 +5182,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	select a Live Paint group	bir Canlı Boyama grubu seçin
 @msg	select a blend	bir karışım seç
 @msg	select a clip group	bir klip grubu seçin
+@msg	select a flare	bir parlama seçin
 @msg	select a gradient mesh	bir degrade ağı seçin
 @msg	select a linked image: an embedded one has no file	bağlantılı bir görsel seçin: gömülü görselin dosyası yok
 @msg	select a repeat	bir tekrar seç
@@ -5405,6 +5415,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} bağlantılı görsel diskte değişti: Bağlantıları Güncelle yeni sürümleri gösterir
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Diskte değişen {n} bağlantılı dosya güncellendi
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	belge, bu PDF/X dosyasının dışarıda bıraktığı bir taşma payı ayarlıyor: "Belge taşma payı ayarlarını kullan" seçeneğini açın
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} nesne kesim kenarına ulaşıyor ancak taşma payından önce bitiyor
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} {n} notla dışa aktarıldı: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} yazı tipi dosyası artık {folder} içinde
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} yazı tipi dosyası artık {folder} içinde; {failed} eklenemedi: {reason}
@@ -6731,6 +6742,8 @@ theme	Appearance	Görünüm
 @msg	no such spine point	böyle bir omurga noktası yok
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` en fazla 10000 omurga noktası dizininden oluşan bir liste olmalıdır
 @msg	`with` moves points, not a handle	`with` noktaları taşır, tutamacı değil
+@msg	`link` and `independent` cannot both be true	`link` ve `independent` aynı anda true olamaz
+@msg	`link` places a handle: give `handle`	`link` bir tutamaç yerleştirir: `handle` verin
 @msg	no such spine segment	böyle bir omurga segmenti yok
 @msg	not a blend	bir karışım değil
 @msg	select a blend or give `id`	bir karışım seçin veya `id` belirtin
@@ -7022,6 +7035,9 @@ variable-list-end	{0}, {1}	{0} ve {1}
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Düz Logo modu görüntüyü {_3} × {_4} boyutundan ortalama alarak küçültüp {_1} × {_2} pikselde izledi.
 @plural	{n} more export waiting|{n} more exports waiting	{n} dışa aktarma daha bekliyor|{n} dışa aktarma daha bekliyor
 @msg	Export cancelled	Dışa aktarma iptal edildi
+	Cancel Save	Kaydetmeyi İptal Et
+@plural	{n} more save waiting|{n} more saves waiting	{n} kaydetme daha bekliyor|{n} kaydetme daha bekliyor
+@msg	Save canceled	Kaydetme iptal edildi
 	Add filters from the list above	Yukarıdaki listeden filtre ekleyin
 	Add to Stack	Yığına Ekle
 	Applied Filters	Uygulanan Filtreler
@@ -9322,6 +9338,12 @@ axis	Y Axis	Y ekseni
 	Bus Lines	Veriyolu hatları
 	Terminal Nodes	Bağlantı düğümleri
 
+# Original arrow art brushes.
+	Arrows	Oklar
+	Solid Arrow	Dolu Ok
+	Open Arrow	Açık Ok
+	Chevron Arrow	Köşeli Ok
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga
@@ -10006,10 +10028,18 @@ breakText	Glyphs	Glifler
 	Smooth Bridge…	Yumuşak Köprü…
 	Smooth Bridge	Yumuşak Köprü
 	Keep Originals	Orijinalleri Koru
-@msg	select two circles to bridge	köprüyle birleştirilecek iki daire seçin
+@msg	select two or more circles to bridge	köprüyle birleştirilecek iki veya daha fazla daire seçin
 @msg	one circle is inside the other	bir daire diğerinin içinde
 @msg	the circles are too far apart for this radius: raise the radius	daireler bu yarıçap için birbirinden çok uzak: yarıçapı artırın
 @msg	the circles are too far apart for this radius	daireler bu yarıçap için birbirinden çok uzak
+	Constant Gap	Sabit Boşluk
+	Reach:	Erişim:
+@msg	the circles are too far apart for this gap: raise the gap	daireler bu boşluk için birbirinden çok uzak: boşluğu artırın
+@msg	the circles are too far apart for this gap	daireler bu boşluk için birbirinden çok uzak
+@msg	no two circles are within reach: raise the reach	erişim içinde hiçbir iki daire yok: erişimi artırın
+@msg	select at most 2000 circles to bridge	köprüyle birleştirmek için en fazla 2000 daire seçin
+@msg	that makes too many bridges (at most 8000): lower the reach	bu çok fazla köprü oluşturur (en fazla 8000): erişimi azaltın
+@msg	the bridged circles are too complex to unite	köprülenen daireler birleştirilemeyecek kadar karmaşık
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Ortak Teğetler…
 	Common Tangents	Ortak Teğetler
@@ -10381,6 +10411,16 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Tap	Kısa Basma
+	Clear Hold	Basılı Tutmayı Temizle
+	Hold Shortcuts	Basılı Tutma Kısayolları
+	Hold Shortcut Delay	Basılı Tutma Kısayolu Gecikmesi
+	How hold shortcuts work	Basılı tutma kısayolları nasıl çalışır
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Tıklayın, ardından bunun için basılı tutulacak tuşa basın (Esc iptal edilir). Tuşu basılı tutmak bunu çalıştırır; kısa basmak tuşun kendi kısayolunu çalıştırır.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Bir tuşa kısa basmak onun kısayolunu çalıştırır. Tuşu gecikme süresi boyunca basılı tutmak bunun yerine Basılı tutun sütunundaki aracı veya komutu çalıştırır. Basılı tutma kısayolu, tek başına veya Shift ile bir harf, rakam ya da noktalama tuşudur.
+@msg	Hold {_1} is already used by {_2}	Basılı tutma {_1} zaten {_2} tarafından kullanılıyor
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	basılı tutma kısayolu, tek başına veya Shift ile bir karakter yazan tuştur ({shown} Cmd, Ctrl veya Alt içeriyor)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} basılı tutma kısayolu olamaz: bir harf, rakam veya noktalama tuşu kullanın
 	Check	Denetle
 	Check Fold Lines	Katlama Çizgilerini Denetle
 @msg	No cut lines are in the selection.	Seçimde kesim çizgisi yok.
@@ -10401,6 +10441,7 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Dashed Arrow	Kesikli Ok
 	Pressure Sensitive	Basınca Duyarlı
 	Flex Ribbon	Esnek Şerit
 	Pulse Stroke	Atımlı Çizgi
