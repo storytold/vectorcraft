@@ -3150,6 +3150,12 @@
 @msg	The paths overlap, so they have no internal tangents	પાથ એકબીજા પર ચઢેલા છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 @msg	One path lies inside the other, so they have no internal tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 @msg	The point lies inside the path, so it has no tangents	બિંદુ પાથની અંદર છે, તેથી તેની કોઈ સ્પર્શરેખા નથી
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	બાઉન્ડિંગ લંબચોરસ ઉમેરો
+	Add Bounding Circle	બાઉન્ડિંગ વર્તુળ ઉમેરો
+	Add Bounding Rectangle…	બાઉન્ડિંગ લંબચોરસ ઉમેરો…
+	Add Bounding Circle…	બાઉન્ડિંગ વર્તુળ ઉમેરો…
+	One per Object	દરેક ઑબ્જેક્ટ માટે એક
 	Remove Guide	ગાઇડ દૂર કરો
 	Remove Item	આઇટમ દૂર કરો
 	Remove JavaScript File	JavaScript ફાઇલ દૂર કરો

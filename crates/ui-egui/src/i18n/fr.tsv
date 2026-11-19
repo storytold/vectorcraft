@@ -8268,6 +8268,16 @@ breakText	Glyphs	Glyphes
 @msg	`circle` is past the last circle found ({found})	`circle` dépasse le dernier cercle trouvé ({found})
 @msg	object {value} is not a path or compound path	l’objet {value} n’est ni un tracé ni un tracé transparent
 @msg	these shapes are too small to measure	ces formes sont trop petites pour être mesurées
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Ajouter un rectangle englobant
+	Add Bounding Circle	Ajouter un cercle englobant
+	Add Bounding Rectangle…	Ajouter un rectangle englobant…
+	Add Bounding Circle…	Ajouter un cercle englobant…
+	One per Object	Une par objet
+@msg	nothing to enclose	rien à entourer
+@msg	`offset` must be 0 or more	`offset` doit être supérieur ou égal à 0
+@msg	the shape would have no size	la forme n’aurait aucune taille
+@msg	the shape would reach past the edge of the canvas	la forme dépasserait le bord de la zone de travail
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Outils de document
 	Save a Timestamped Copy	Enregistrer une copie horodatée

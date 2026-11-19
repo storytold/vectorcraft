@@ -10162,6 +10162,16 @@ breakText	Glyphs	Glifler
 @msg	`circle` is past the last circle found ({found})	`circle` bulunan son dairenin ötesinde ({found})
 @msg	object {value} is not a path or compound path	{value} nesnesi bir yol veya bileşik yol değil
 @msg	these shapes are too small to measure	bu şekiller ölçülemeyecek kadar küçük
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Çevreleyen Dikdörtgen Ekle
+	Add Bounding Circle	Çevreleyen Daire Ekle
+	Add Bounding Rectangle…	Çevreleyen Dikdörtgen Ekle…
+	Add Bounding Circle…	Çevreleyen Daire Ekle…
+	One per Object	Nesne başına bir
+@msg	nothing to enclose	çevrelenecek hiçbir şey yok
+@msg	`offset` must be 0 or more	`offset` 0 veya daha büyük olmalıdır
+@msg	the shape would have no size	şeklin boyutu olmayacaktır
+@msg	the shape would reach past the edge of the canvas	şekil tuvalin kenarını aşacaktır
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Belge Araçları
 	Save a Timestamped Copy	Zaman Damgalı Bir Kopya Kaydet
