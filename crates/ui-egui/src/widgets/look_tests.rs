@@ -421,7 +421,7 @@ fn a_popover_stays_open_for_a_click_on_its_anchor_or_during_a_panel_drag() {
         shown.get()
     };
     let far = Some(pos2(500.0, 350.0));
-    let panel_drag = || Some(PanelDrag::Symbol("s".into()));
+    let panel_drag = || Some(PanelDrag::Symbol { document: 1, name: "s".into() });
     // Whether it is open after: a click elsewhere; a click on its anchor that doesn't toggle it;
     // a panel drag released elsewhere.
     let open = [open_after_click(far, None), open_after_click(None, None), open_after_click(far, panel_drag())];
@@ -613,4 +613,29 @@ fn a_long_dropdown_uses_window_room_and_shows_its_scroll_bar_when_clipped() {
             && r.rect.left() >= popup.right() - list_scroll_style().allocated_width() - 8.0
     });
     assert!(has_scroll_bar, "the overflowing dropdown draws its scroll bar without hover in {popup:?}");
+}
+
+/// Enter on text that reads as no number in a range field refuses it as a unit field does: the
+/// field flashes and an open dialog is not confirmed with the old value.
+#[test]
+fn a_range_field_refuses_text_that_reads_as_no_number() {
+    let typed = |text: &str| {
+        let ctx = themed(Default::default());
+        let picked = std::cell::Cell::new(None);
+        let mut add = |ui: &mut Ui| {
+            if let Some(v) = range_field(ui, "count", 12.0, 0.0..=100.0, "", 0, 80.0) {
+                picked.set(Some(v));
+            }
+        };
+        arm_field_focus(&ctx, "count");
+        frame(&ctx, 0.0, vec![], &mut add);
+        frame(&ctx, 0.1, vec![], &mut add);
+        let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        frame(&ctx, 0.2, vec![egui::Event::Text(text.into()), enter(true), enter(false)], &mut add);
+        let refused = ctx.data_mut(|d| d.remove_temp::<bool>(dialog_reject_commit_flag())).unwrap_or(false);
+        (picked.get(), refused)
+    };
+    assert_eq!(typed("40"), (Some(40.0), false), "a number commits");
+    assert_eq!(typed("abc"), (None, true), "text that reads as no number is refused");
+    assert_eq!(typed("(10+5)*2"), (None, true), "parentheses the field doesn't read are refused");
 }

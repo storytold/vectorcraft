@@ -396,6 +396,177 @@ fn hidden_and_offboard_art_is_left_out() {
     assert!(export(&d, Rect::new(0.0, 0.0, 0.0, 10.0), Kind::Emf).is_err(), "an empty region");
 }
 
+/// One metafile of `doc` over `region`, applying the live effects for this region alone: what
+/// [`export`] did for each region before [`export_regions`] applied them once for all regions.
+fn export_baking_each_region(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String> {
+    let r = region.abs();
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+        return Err("the export region is empty".into());
+    }
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
+    let doc = baked.as_ref().unwrap_or(doc);
+    let (ops, mut warnings) = crate::scene::Scene::new(doc, r, kind == Kind::Emf).run();
+    let bytes = match kind {
+        Kind::Emf => crate::emf::write(&ops, r, doc.info_title()),
+        Kind::Wmf => crate::wmf::write(&ops, r, &mut warnings),
+    };
+    Ok(Output { bytes, warnings })
+}
+
+/// A Zig Zag effect with its default settings.
+fn zig_zag() -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect { id: "distort.zigZag".into(), params: Default::default(), visible: true }
+}
+
+/// `boards` 100 pt squares side by side, each holding `paths` rectangles with a live Zig Zag
+/// and a gradient-filled one, and every second one an instance of a symbol whose art has a Zig
+/// Zag too; `boards` regions, one over each square.
+fn zig_zag_boards(boards: usize, paths: usize) -> (Document, Vec<Rect>) {
+    let mut d = Document::new(100.0 * boards as f64, 100.0);
+    let mut art = path(shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 20.0)), blue(), red(), 1.0);
+    art.appearance.effects.push(zig_zag());
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Zig".into(), art: Arc::new(art) });
+    let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    for b in 0..boards {
+        let x = 100.0 * b as f64;
+        for i in 0..paths {
+            let at = (i % 9) as f64 * 9.0;
+            let mut n = path(shapes::rectangle(Rect::new(x + at + 2.0, at + 2.0, x + at + 20.0, at + 15.0)), red(), blue(), 0.5);
+            n.appearance.effects.push(zig_zag());
+            add(&mut d, n);
+        }
+        add(&mut d, path(shapes::rectangle(Rect::new(x + 60.0, 60.0, x + 90.0, 90.0)), g.clone(), Paint::None, 0.0));
+        if b % 2 == 1 {
+            let inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Zig".into(), xf: Affine::translate((x + 50.0, 10.0)) });
+            add(&mut d, inst);
+        }
+    }
+    let regions = (0..boards).map(|b| Rect::new(100.0 * b as f64, 0.0, 100.0 * (b + 1) as f64, 100.0)).collect();
+    (d, regions)
+}
+
+/// Each region's metafile is byte for byte, and warning for warning, what a separate export of
+/// that region writes, in EMF and WMF, in the regions' order and in reverse.
+#[test]
+fn export_regions_writes_what_each_region_writes_alone() {
+    let (d, mut regions) = zig_zag_boards(3, 2);
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    assert!(vectorcraft_effects::bake_document_placing_symbols(&d, true, layers).is_some(), "the document has live effects to apply");
+    for _ in 0..2 {
+        for kind in [Kind::Emf, Kind::Wmf] {
+            let outs = export_regions(&d, &regions, kind).unwrap();
+            assert_eq!(outs.len(), regions.len());
+            for (r, out) in regions.iter().zip(&outs) {
+                let alone = export_baking_each_region(&d, *r, kind).unwrap();
+                assert!(out.bytes == alone.bytes, "{kind:?} over {r:?}: the bytes differ");
+                assert_eq!(out.warnings, alone.warnings, "{kind:?} over {r:?}");
+                let one = export(&d, *r, kind).unwrap();
+                assert!(one.bytes == alone.bytes, "{kind:?} over {r:?}: export's bytes differ");
+                assert_eq!(one.warnings, alone.warnings, "{kind:?} over {r:?}");
+            }
+            if kind == Kind::Wmf {
+                assert!(outs.iter().all(|o| o.warnings.iter().any(|w| w.contains("gradients"))), "{:?}", outs[0].warnings);
+            }
+        }
+        regions.reverse();
+    }
+}
+
+/// An empty region among valid ones writes nothing and is the one error; no region writes no
+/// metafile.
+#[test]
+fn export_regions_with_an_empty_region_writes_nothing() {
+    let (d, regions) = zig_zag_boards(2, 1);
+    for kind in [Kind::Emf, Kind::Wmf] {
+        for empty in [Rect::new(10.0, 10.0, 10.0, 50.0), Rect::new(0.0, 0.0, f64::NAN, 10.0), Rect::new(0.0, 0.0, f64::INFINITY, 10.0)] {
+            let with_empty = [regions[0], empty, regions[1]];
+            assert_eq!(export_regions(&d, &with_empty, kind).map(|o| o.len()), Err("the export region is empty".to_string()), "{kind:?}");
+        }
+        assert!(export_regions(&d, &[], kind).unwrap().is_empty(), "{kind:?}");
+        // A region given right to left or bottom to top is the same region.
+        let flipped = Rect::new(regions[1].x1, regions[1].y1, regions[1].x0, regions[1].y0);
+        let outs = export_regions(&d, &[flipped], kind).unwrap();
+        assert!(outs[0].bytes == export(&d, regions[1], kind).unwrap().bytes, "{kind:?}");
+    }
+}
+
+/// The CPU time all of this process's threads have used, from Linux's scheduler statistics; `None`
+/// elsewhere.
+fn process_cpu() -> Option<std::time::Duration> {
+    let mut ns = 0u64;
+    for task in std::fs::read_dir("/proc/self/task").ok()? {
+        let stat = std::fs::read_to_string(task.ok()?.path().join("schedstat")).ok()?;
+        ns += stat.split_whitespace().next()?.parse::<u64>().ok()?;
+    }
+    Some(std::time::Duration::from_nanos(ns))
+}
+
+/// The time `f` takes: this process's CPU time where Linux reports it, otherwise the wall clock.
+fn time<T>(f: impl FnOnce() -> T) -> (std::time::Duration, T) {
+    match process_cpu() {
+        Some(before) => {
+            let t = f();
+            (process_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before)), t)
+        }
+        None => {
+            let start = std::time::Instant::now();
+            let t = f();
+            (start.elapsed(), t)
+        }
+    }
+}
+
+/// Timings of an export of 1, 2 and 8 artboards that applies the live effects once for each
+/// artboard and of [`export_regions`], which applies them once, in EMF and WMF: 500 rectangles with
+/// a live Zig Zag on each artboard. The two take turns going first, 7 runs each, and every run's
+/// files are compared. Ignored by default; it prints the median, fastest and slowest run and sets
+/// no bound on them:
+/// `cargo test --release -p vectorcraft-metafile --lib export_regions_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn export_regions_perf() {
+    const RUNS: usize = 7;
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    eprintln!("export_regions_perf: {}", if process_cpu().is_some() { "process CPU time" } else { "wall clock" });
+    eprintln!("export_regions_perf: {:>6} {:<4} {:>32} {:>32}", "boards", "kind", "bake per board ms (min-max)", "bake once ms (min-max)");
+    for boards in [1, 2, 8] {
+        let (d, regions) = zig_zag_boards(boards, 500);
+        for kind in [Kind::Emf, Kind::Wmf] {
+            let each = || regions.iter().map(|r| export_baking_each_region(&d, *r, kind).unwrap()).collect::<Vec<_>>();
+            let once = || export_regions(&d, &regions, kind).unwrap();
+            let (mut old, mut new) = (Vec::new(), Vec::new());
+            for run in 0..RUNS {
+                let ((to, a), (tn, b)) = if run % 2 == 0 {
+                    let o = time(each);
+                    (o, time(once))
+                } else {
+                    let n = time(once);
+                    (time(each), n)
+                };
+                old.push(to);
+                new.push(tn);
+                assert_eq!(a.len(), b.len());
+                for (a, b) in a.iter().zip(&b) {
+                    assert!(a.bytes == b.bytes && a.warnings == b.warnings, "{boards} boards, {kind:?}");
+                }
+            }
+            old.sort();
+            new.sort();
+            eprintln!(
+                "export_regions_perf: {boards:>6} {:<4} {:>12.1} ({:>8.1}-{:>8.1}) {:>12.1} ({:>8.1}-{:>8.1})",
+                kind.id(),
+                ms(old[RUNS / 2]),
+                ms(old[0]),
+                ms(old[RUNS - 1]),
+                ms(new[RUNS / 2]),
+                ms(new[0]),
+                ms(new[RUNS - 1]),
+            );
+        }
+    }
+}
+
 #[test]
 fn an_instance_whose_art_reaches_the_artboard_is_written() {
     // The symbol's red rectangle, (100, 100) to (140, 140), drawn from (-50, -50): on the artboard,

@@ -35,6 +35,11 @@ pub const HEAVY_FUEL: u64 = 1_000_000_000;
 /// Wall-clock budget of a heavy filter's run, in milliseconds.
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
 
+/// Instructions a filter's run may use besides [`Limits::fuel_per_byte`] for each byte of input
+/// when Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget is Large
+/// ([`Plugin::large_limits`]): 5 times the default.
+pub const LARGE_FUEL: u64 = 250_000_000;
+
 /// The limit a run reports when its input and parameters together are past half its memory.
 pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
 
@@ -214,6 +219,12 @@ impl Plugin {
     }
     pub fn limits(&self) -> &Limits {
         &self.limits
+    }
+    /// Its limits with the Large instruction budget: at least [`LARGE_FUEL`] instructions besides
+    /// those for each byte of input, and every other limit, the time budget included, as it is. A
+    /// heavy filter keeps its larger budget.
+    pub fn large_limits(&self) -> Limits {
+        Limits { fuel_base: self.limits.fuel_base.max(LARGE_FUEL), ..self.limits.clone() }
     }
     /// Module size in bytes.
     pub fn size(&self) -> usize {
