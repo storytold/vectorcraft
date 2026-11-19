@@ -85,9 +85,9 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
     );
 }
 
-/// With the last document active, the tabs that end the strip leave room before the » button, and
-/// the tab before them fills it with its title shortened instead of the strip starting with that
-/// room empty (#8584).
+/// With the last document active, the tabs from it to the end leave room before the » button, and
+/// the tab before them fills that room with its title shortened instead of the strip ending short
+/// of the » button (#8584).
 #[test]
 fn with_the_last_document_active_the_tab_before_the_shown_ones_fills_the_room() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

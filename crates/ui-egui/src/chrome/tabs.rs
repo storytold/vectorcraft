@@ -131,9 +131,19 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 /// When the tabs `widths` wide from `first` to the last one leave at least `least` of `room` before
 /// the » button, the tab before `first` fills that room with its title shortened (#8584). → the
 /// first tab the strip shows and, when it is that tab, the width it gets.
-fn leading_tab(widths: &[f32], first: usize, room: f32, least: f32) -> (usize, Option<f32>) {
+pub(super) fn leading_tab(widths: &[f32], first: usize, room: f32, least: f32) -> (usize, Option<f32>) {
     let rest: f32 = widths.get(first..).map_or(0.0, |w| w.iter().sum());
     if first > 0 && room - rest >= least { (first - 1, Some(room - rest)) } else { (first, None) }
+}
+
+/// The room a tab `w` wide has: `left` of the strip, or with a leading tab `lead` wide
+/// ([`leading_tab`]), `lead` for it (`leading`) and its whole width for each tab after it.
+pub(super) fn tab_room(lead: Option<f32>, leading: bool, w: f32, left: f32) -> f32 {
+    match lead {
+        Some(l) if leading => l,
+        Some(_) => w,
+        None => left,
+    }
 }
 
 /// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
@@ -206,8 +216,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
         // long as some of the title fits (#8584); its tooltip shows the whole title. The active
         // tab always shows, shortened to the strip when it is wider than the whole strip. The
-        // leading tab before the ones that fit whole takes only the room they leave.
-        let left = lead.filter(|_| k == first).unwrap_or(strip.left() + room - x);
+        // leading tab before the ones that fit whole takes only the room they leave, and the tabs
+        // after it are drawn whole.
+        let left = tab_room(lead, k == first, *w, strip.left() + room - x);
         let is_active = Some(k) == active;
         // A shortened title too wide for its room even as "…" is not drawn, so it stays clear of
         // the ×.
