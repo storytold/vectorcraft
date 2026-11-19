@@ -459,7 +459,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
             // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
             // Both are read as the button went up on it.
-            let m = modifiers_released_in(ui, new.rect);
+            let m = modifiers_released_in(ui, new.interact_rect);
             let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
             if m.shift {
                 p["keepArt"] = json!(true);
@@ -474,7 +474,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let picked = if marked.contains(&name) { &marked[..] } else { &[] };
             delete(app, picked, Some(&name), alt_at_release(ui));
         } else if trash.clicked() {
-            delete(app, &marked, sel.as_deref(), modifiers_released_in(ui, trash.rect).alt);
+            delete(app, &marked, sel.as_deref(), modifiers_released_in(ui, trash.interact_rect).alt);
         }
     });
 }
@@ -604,21 +604,42 @@ fn alt_at_release(ui: &Ui) -> bool {
     modifiers_at_release(ui).alt
 }
 
-/// The modifiers held for a click on `rect`: when the primary button last went up over `rect` in
-/// this frame, as it went up (egui reports the click of the last release in the frame), else now,
-/// as for a click from the keyboard or a screen reader.
+/// The modifiers held for a click on the widget whose interact rectangle is `rect`: when the
+/// primary button last went up in this frame as a click (the pointer stayed within egui's click
+/// distance of where the button went down) over `rect` or within egui's interact radius of it
+/// (egui counts a release that close as a click on the widget), as it went up (egui reports the
+/// click of the last such release in the frame), else now, as for a click from the keyboard or a
+/// screen reader. A release that ends a drag is not a click and is skipped.
 fn modifiers_released_in(ui: &Ui, rect: egui::Rect) -> egui::Modifiers {
+    let radius = ui.ctx().global_style().interaction.interact_radius;
+    let max_click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
     ui.input(|i| {
-        i.events
-            .iter()
-            .rev()
-            .find_map(|e| match e {
-                egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers } if rect.contains(*pos) => {
-                    Some(*modifiers)
+        // Where the button went down in this frame, and whether the pointer has since moved too far
+        // for a click; a press in an earlier frame is taken as the start of a click.
+        let mut origin: Option<egui::Pos2> = None;
+        let mut moved = false;
+        let mut found = None;
+        for e in &i.events {
+            match e {
+                egui::Event::PointerMoved(pos) => {
+                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
                 }
-                _ => None,
-            })
-            .unwrap_or(i.modifiers)
+                egui::Event::PointerButton { pos, pressed: true, .. } => {
+                    origin = Some(*pos);
+                    moved = false;
+                }
+                egui::Event::PointerButton { pos, button, pressed: false, modifiers } => {
+                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
+                    if *button == egui::PointerButton::Primary && !moved && rect.distance_sq_to_pos(*pos) <= radius * radius {
+                        found = Some(*modifiers);
+                    }
+                    origin = None;
+                    moved = false;
+                }
+                _ => {}
+            }
+        }
+        found.unwrap_or(i.modifiers)
     })
 }
 
@@ -1264,6 +1285,64 @@ mod tests {
         click_button_let_go(&mut app, "Delete Symbol", egui::Modifiers::ALT);
         assert_eq!(dialog_kind(&app), None, "Alt deletes an unused symbol without asking");
         assert_eq!(symbols(&mut app), ["Leaf", "New Symbol", "New Symbol 2"]);
+    }
+
+    /// A click just outside New Symbol, which egui still counts as a click on it, reads Shift and
+    /// Alt as the primary button goes up there, though they are let go later in the same frame.
+    #[test]
+    fn a_click_just_outside_new_symbol_reads_the_modifiers_as_the_button_goes_up() {
+        let (mut app, _) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let modifiers = egui::Modifiers::SHIFT | egui::Modifiers::ALT;
+        let out = frame_held(&ctx, &mut app, vec![], modifiers);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "New Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a New Symbol button");
+        let at = pos2(b.x0 as f32 - 2.0, ((b.y0 + b.y1) / 2.0) as f32);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        let events = vec![egui::Event::PointerMoved(at), press(true), press(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        frame_held(&ctx, &mut app, events, modifiers);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+    }
+
+    /// An Alt-click on Delete Symbol followed in the same frame by a drag that ends just outside
+    /// it without Alt reads Alt from the click: the release that ends the drag is not a click.
+    #[test]
+    fn a_drag_ending_near_delete_symbol_after_an_alt_click_keeps_the_click_modifiers() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let b = nodes
+            .iter()
+            .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Delete Symbol"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("a Delete Symbol button");
+        let center = pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let near = pos2(b.x0 as f32 - 1.0, center.y);
+        let from = pos2(near.x, near.y - 12.0);
+        let button = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        let (alt, none) = (egui::Modifiers::ALT, egui::Modifiers::NONE);
+        let events = vec![
+            egui::Event::PointerMoved(center),
+            button(center, true, alt),
+            button(center, false, alt),
+            egui::Event::ModifiersChanged(none),
+            egui::Event::PointerMoved(from),
+            button(from, true, none),
+            egui::Event::PointerMoved(near),
+            button(near, false, none),
+        ];
+        frame_held(&ctx, &mut app, events, alt);
+        assert_eq!(dialog_kind(&app), None, "Alt deletes the unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
     }
 
     /// `ui.symbolOptions` takes `keepArt` only as true or false, and only for a new symbol.
