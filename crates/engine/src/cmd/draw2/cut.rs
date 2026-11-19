@@ -438,7 +438,7 @@ fn erase_rect(s: &mut Session, r: Rect) -> Result<Value> {
 
 /// The variation modes `path.eraseRegion` takes for each of `angleMode`, `roundnessMode` and
 /// `sizeMode`.
-const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\", \"rotation\" or \"stylusWheel\"";
 
 /// Eraser Tool Options' Angle, Roundness and Size variations: for each of angle (`angleMode` with
 /// `angleVariation` in degrees, at most 180), roundness (`roundnessMode` with `roundnessVariation`
