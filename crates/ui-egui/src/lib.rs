@@ -253,6 +253,13 @@ pub struct VectorcraftApp {
     /// Whether a screen mode put the window full screen (`chrome::sync_fullscreen`), so Normal
     /// Screen Mode takes it back out, and leaves a window the user made full screen as it is.
     pub(crate) fullscreen_for_mode: bool,
+    /// Whether Full Screen Mode with Menu Bar maximized the window (`chrome::sync_fullscreen`), so
+    /// Normal Screen Mode puts it back, and leaves a window the user maximized as it is.
+    pub(crate) maximized_for_mode: bool,
+    /// Whether the window is maximized, as the desktop host reads it from the window before each
+    /// frame; `None` where it can't (egui's own reading then counts). egui reads it on macOS only
+    /// at startup and when it maximizes the window itself (#3635).
+    pub host_maximized: Option<bool>,
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,

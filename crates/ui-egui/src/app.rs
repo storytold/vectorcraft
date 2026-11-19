@@ -144,6 +144,8 @@ impl VectorcraftApp {
             desktop_keeps_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,
+            maximized_for_mode: false,
+            host_maximized: None,
             graphics_adapter: None,
             beacon: &crate::hang_beacon::BEACON,
             place: Default::default(),

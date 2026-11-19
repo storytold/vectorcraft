@@ -392,17 +392,34 @@ pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Full Screen Mode and Presentation Mode fill the screen (#4365: the taskbar and the window's
 /// frame stayed): the window goes full screen when one of them starts, and back when a mode with
 /// the menu bar returns. A window that was full screen already stays so.
+///
+/// Full Screen Mode with Menu Bar fills the screen too, as a maximized window that keeps the menu
+/// bar (#7233: it looked the same as Normal Screen Mode, so F seemed to do nothing at first), and
+/// Normal Screen Mode puts back a window it maximized. A window that was maximized or full screen
+/// already stays so; whether it is maximized comes from the host when it says
+/// ([`VectorcraftApp::host_maximized`]), as egui doesn't follow a zoom from the macOS title bar.
+/// Both wait for the window to be out of full screen.
 pub fn sync_fullscreen(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let want = app.ui.screen_mode >= 2;
-    let is = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-    if want && !is && !app.fullscreen_for_mode {
+    let mode = app.ui.screen_mode;
+    let (is, maximized) = ctx.input(|i| (i.viewport().fullscreen.unwrap_or(false), i.viewport().maximized.unwrap_or(false)));
+    let maximized = app.host_maximized.unwrap_or(maximized);
+    if mode >= 2 && !is && !app.fullscreen_for_mode {
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
         app.fullscreen_for_mode = true;
-    } else if !want && app.fullscreen_for_mode {
+    } else if mode < 2 && app.fullscreen_for_mode {
         if is {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
         }
         app.fullscreen_for_mode = false;
+    }
+    if mode == 1 && !is && !maximized && !app.maximized_for_mode {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+        app.maximized_for_mode = true;
+    } else if mode == 0 && !is && app.maximized_for_mode {
+        // Also when the window doesn't read as maximized yet: a window manager may confirm the
+        // maximize after the mode has already ended.
+        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+        app.maximized_for_mode = false;
     }
 }
 

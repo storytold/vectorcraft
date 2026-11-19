@@ -3037,6 +3037,68 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// #7233: Full Screen Mode with Menu Bar, F's first step, fills the screen as a maximized window
+/// (it looked the same as Normal Screen Mode), and Normal Screen Mode puts the window back; a
+/// window the user maximized or made full screen is left as it is, and a window leaving Full
+/// Screen Mode is maximized or put back once it is out of full screen. The host's reading of
+/// maximized counts over egui's, which misses a zoom from the macOS title bar.
+#[test]
+fn full_screen_mode_with_menu_bar_maximizes_the_window() {
+    let mut app = title_test_app(true);
+    let ctx = egui::Context::default();
+    // The window commands one frame sends, with the window full screen and maximized (as egui
+    // reads it) or not.
+    let sent = |app: &mut crate::VectorcraftApp, fullscreen: bool, maximized: bool| -> Vec<egui::ViewportCommand> {
+        let mut input = egui::RawInput::default();
+        let vp = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+        (vp.fullscreen, vp.maximized) = (Some(fullscreen), Some(maximized));
+        let mut out = ctx.run_ui(input, |ui| super::sync_fullscreen(app, ui.ctx()));
+        out.textures_delta.clear();
+        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
+        cmds.into_iter().filter(|c| matches!(c, egui::ViewportCommand::Fullscreen(_) | egui::ViewportCommand::Maximized(_))).collect()
+    };
+    let mode = |app: &mut crate::VectorcraftApp, mode: u8| {
+        app.run("view.screenMode", json!({ "mode": mode })).unwrap();
+    };
+    use egui::ViewportCommand::{Fullscreen, Maximized};
+    // F steps through the three modes.
+    app.run("view.screenMode", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 1);
+    assert_eq!(sent(&mut app, false, false), [Maximized(true)], "Full Screen Mode with Menu Bar");
+    assert!(sent(&mut app, false, true).is_empty(), "once");
+    app.run("view.screenMode", json!({})).unwrap();
+    assert_eq!(sent(&mut app, false, true), [Fullscreen(true)], "Full Screen Mode");
+    app.run("view.screenMode", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 0);
+    assert_eq!(sent(&mut app, true, true), [Fullscreen(false)], "out of full screen first");
+    assert_eq!(sent(&mut app, false, true), [Maximized(false)], "then back to the window as it was");
+    assert!(sent(&mut app, false, false).is_empty());
+    // Straight from Full Screen Mode to Full Screen Mode with Menu Bar: maximized once out of
+    // full screen.
+    mode(&mut app, 2);
+    assert_eq!(sent(&mut app, false, false), [Fullscreen(true)]);
+    mode(&mut app, 1);
+    assert_eq!(sent(&mut app, true, false), [Fullscreen(false)]);
+    assert_eq!(sent(&mut app, false, false), [Maximized(true)]);
+    mode(&mut app, 0);
+    assert_eq!(sent(&mut app, false, true), [Maximized(false)]);
+    // Maximized or full screen by the user's own choice: the mode leaves it so.
+    mode(&mut app, 1);
+    assert!(sent(&mut app, false, true).is_empty(), "already maximized");
+    mode(&mut app, 0);
+    assert!(sent(&mut app, false, true).is_empty(), "still maximized, as the user had it");
+    mode(&mut app, 1);
+    assert!(sent(&mut app, true, false).is_empty(), "full screen already");
+    mode(&mut app, 0);
+    assert!(sent(&mut app, true, false).is_empty());
+    // Zoomed from the macOS title bar: egui doesn't see it, the host does.
+    app.host_maximized = Some(true);
+    mode(&mut app, 1);
+    assert!(sent(&mut app, false, false).is_empty(), "maximized as the host reads it");
+    mode(&mut app, 0);
+    assert!(sent(&mut app, false, false).is_empty(), "left zoomed");
+}
+
 /// The Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools show Hide Shape Widgets in the
 /// Control bar, with a selection and without one; a click hides the widgets and the button then reads
 /// Show Shape Widgets, and a second click shows them again. The button comes before the shape's own
