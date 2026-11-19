@@ -210,7 +210,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("engraving"),
             json!("arrows"),
             json!("image-brush"),
-            json!("artistic")
+            json!("artistic"),
+            json!("vector-packs")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
@@ -251,11 +252,17 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     click(&mut app, &ctx, "Orbit Lines", Modifiers::NONE, 3.0);
     assert!(has(&app, "Orbit Lines") && !has(&app, "Facet Sweep"));
     assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Vector Packs"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("vector-packs"), Some(4)));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Compass Rose", Modifiers::NONE, 4.0);
+    assert!(has(&app, "Compass Rose") && !has(&app, "Facet Diamond"));
+    assert_eq!(undo_len(&app), undo + 1);
     let r = app.run("window.brushLibrary", json!({"library": "Ornamental"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("ornamental"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Scrollwork", Modifiers::NONE, 4.0);
+    click(&mut app, &ctx, "Scrollwork", Modifiers::NONE, 5.0);
     assert!(has(&app, "Scrollwork") && !has(&app, "Twin Curl"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
