@@ -899,6 +899,59 @@ fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
 }
 
+/// The status message of a failed script run shows text the script threw as it is, even when it
+/// reads like one of the app's own errors, and translates the words around it; the app's own error
+/// is translated. Both a run that ends in one call and a run the frames take to its end show it.
+#[test]
+fn german_script_status_preserves_authored_error_and_translates_native_error() {
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let failed = |app: &mut crate::VectorcraftApp, source: &str, frames: bool| {
+        app.session.script_frames = frames;
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"}));
+        if frames {
+            assert_eq!(r.map(|v| v["running"].clone()), Ok(json!(true)), "{source}");
+            for _ in 0..1_000 {
+                if !app.session.script_running() {
+                    break;
+                }
+                crate::script_runs::poll(app);
+            }
+        } else {
+            assert!(r.is_err(), "{source}");
+        }
+        assert!(!app.session.script_running());
+        super::status_bar::status_message(app)
+    };
+    let long = "invalid array length ".repeat(120);
+    for frames in [false, true] {
+        let shown = failed(&mut app, "throw new Error('invalid array length')", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: Error: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "throw 'invalid array length'", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "new Array(-1)", frames);
+        assert!(shown.starts_with("t.js: Zeile 1, Spalte 1: ") && shown.contains("ungültige Array-Länge"), "{shown}");
+        for text in ["", "invalid array length\nsecond line", "{name}: {e}", "t.js: line 1, column 1: invalid array length (thrown)", long.as_str()] {
+            let source = format!("throw {}", serde_json::to_string(text).unwrap());
+            assert_eq!(failed(&mut app, &source, frames), format!("t.js: Zeile 1, Spalte 1: {text} (ausgelöst)"), "{text}");
+        }
+    }
+    // Another message, even one spelled like the script's text, is translated as before.
+    failed(&mut app, "throw 'invalid array length'", false);
+    app.ui.status = "invalid array length".to_string();
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    // A change of language while the message stays keeps the script's text.
+    failed(&mut app, "throw new Error('invalid array length')", false);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    assert_eq!(super::status_bar::status_message(&app), "t.js\u{a0}: ligne 1, colonne 1\u{a0}: Error: invalid array length (levée)");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(super::status_bar::status_message(&app), app.ui.status);
+    // After a run that completes, the message is an ordinary one.
+    app.session.script_frames = false;
+    app.run("script.run", json!({"source": "1", "name": "t.js"})).unwrap();
+    assert_eq!(app.session.script_authored_failure(), None);
+}
+
 /// The message of an open that starts with a line about its linked files lists the open's notes on
 /// hover and for screen readers, in a wide and in a narrow window. A later message leaves the list
 /// out.
@@ -3590,6 +3643,30 @@ fn the_control_bar_keeps_its_label_and_menu_with_every_group_off() {
     app.run("select.set", json!({ "ids": [] })).unwrap();
     let bar = control_frame(&mut app, &ctx, vec![]);
     assert!(!has(&bar, "Document Setup") && !has(&bar, "Preferences"), "{bar:?}");
+}
+
+/// The Control bar's selection label follows a selection whose middle object changes while its
+/// length, first and last object stay the same, and a target circle with the selection unchanged.
+#[test]
+fn the_control_bar_label_follows_every_selected_object() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = |v: serde_json::Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    let r: Vec<_> = (0..3).map(|i| id(app.run("shape.rectangle", json!({"x": i * 30, "y": 10, "width": 20, "height": 20})).unwrap())).collect();
+    let t = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap());
+    app.run("select.set", json!({ "ids": r })).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let alike = crate::panels::appearance::object_label(&app);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), alike), "{alike}");
+    app.session.active_mut().unwrap().selection.objects[1] = t;
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Mixed Objects"), "{bar:?}");
+    let layer = app.session.active().unwrap().doc.default_layer().unwrap();
+    app.session.active_mut().unwrap().selection.target = Some(layer);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), "Layer"), "the targeted layer");
 }
 
 /// `window.control.options {group, visible?}` turns a group of the Control bar's options on or

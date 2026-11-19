@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Spine Point",
             [],
             None,
-            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
+            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool, link?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`; `link` makes the point smooth with the other handle in line at its own length, a retracted one pulled out to the moved handle's length where a segment leaves the point on its side; `link` needs `handle` and cannot go with `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
         ),

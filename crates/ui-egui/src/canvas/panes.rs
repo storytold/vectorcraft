@@ -10,12 +10,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::grid::LineLook;
-use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
+use super::outline::{c32, node_outline, to_screen_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
-    Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop, cache_key,
-    dim_on_canvas, frame_options, frame_ppp, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
-    shows_artboards, textured_quad, vec2, view_rects,
+    Affine, BezPath, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop,
+    cache_key, dim_on_canvas, frame_options, frame_ppp, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2,
+    rulers, shows_artboards, textured_quad, vec2, view_rects,
 };
 use crate::doc_windows::Win;
 use crate::thumb_worker::ThumbWorker;
@@ -46,6 +46,29 @@ pub struct Panes {
     /// By slot: the size of the view's area its view was last fitted to in a pane, and the zoom and
     /// center the fit gave.
     fits: HashMap<Slot, (egui::Vec2, f64, Point)>,
+    /// By slot: the outlines of the selected objects the pane drew last, and what they show.
+    outlines: HashMap<Slot, Outlines>,
+    /// How many times a pane's outlines were made.
+    outlines_made: u64,
+}
+
+/// A pane's selected-object outlines as screen shapes, and the document revision, document,
+/// selection and screen mapping they were made for.
+struct Outlines {
+    revision: u64,
+    /// A weak reference to the document: while it exists, no other document can take the
+    /// allocation's address.
+    doc: std::sync::Weak<vectorcraft_doc::Document>,
+    selection: Vec<vectorcraft_doc::NodeId>,
+    affine: [f64; 6],
+    shapes: Vec<egui::Shape>,
+}
+
+impl Outlines {
+    /// Whether these outlines show `st`'s selection through the screen mapping `affine`.
+    fn shows(&self, st: &vectorcraft_engine::DocState, affine: &[f64; 6]) -> bool {
+        self.revision == st.revision && self.doc.ptr_eq(&Arc::downgrade(&st.doc)) && self.affine == *affine && self.selection == st.selection.objects
+    }
 }
 
 impl Panes {
@@ -56,6 +79,7 @@ impl Panes {
         self.last.clear();
         self.last_slots.clear();
         self.fits.clear();
+        self.outlines.clear();
     }
 
     /// Upload `img`, the render `key` describes, for `slot`.
@@ -311,6 +335,9 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             app.canvas.panes.clear();
         }
         app.canvas.panes.last.clear();
+        // Only the floating windows draw panes now.
+        let floating = &app.ui.floating;
+        app.canvas.panes.outlines.retain(|(u, n), _| floating.iter().any(|w| w.uid == *u && w.view == *n));
         app.canvas.panes.last_slots.clear();
         return false;
     }
@@ -326,6 +353,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     app.canvas.panes.shown.retain(|s, _| live.contains(s));
     app.canvas.panes.pending.retain(|s, _| live.contains(s));
     app.canvas.panes.fits.retain(|s, _| live.contains(s));
+    app.canvas.panes.outlines.retain(|s, _| live.contains(s));
     // A window that moved to another pane fits it, and so does a window whose pane changed place or
     // size because a window opened, closed, floated or docked, or because the panes came back from
     // one window. A window that keeps its pane keeps its zoom and scroll, as when a tab brings its
@@ -563,7 +591,9 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
         guides_of(app, st, (&painter, &xf, &t), rect);
     }
     if app.ui.view.edges {
-        selected_objects(st, &painter, &xf);
+        selected_objects(&mut app.canvas.panes, slot, st, &painter, &xf);
+    } else {
+        app.canvas.panes.outlines.remove(&slot);
     }
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, None, RulerScale::document(app.session.general_unit(), st.doc.ruler_origin_for(v.artboard)), &t);
@@ -581,23 +611,45 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     resp.contains_pointer() && ui.input(|inp| inp.pointer.any_pressed())
 }
 
-/// The outlines of the objects selected in `st`, in their layers' colors; their bounds when they
-/// have too many points to outline.
-fn selected_objects(st: &vectorcraft_engine::DocState, painter: &egui::Painter, xf: &Xf) {
+/// Draw the outlines of the objects selected in `st` ([`outline_shapes`]) in `slot`'s pane, from
+/// the outlines `panes` kept for the slot while they show the same revision, document, selection
+/// and screen mapping, and made again otherwise.
+fn selected_objects(panes: &mut Panes, slot: Slot, st: &vectorcraft_engine::DocState, painter: &egui::Painter, xf: &Xf) {
+    let affine = xf.affine().as_coeffs();
+    if !panes.outlines.get(&slot).is_some_and(|o| o.shows(st, &affine)) {
+        let shapes = outline_shapes(st, xf);
+        let kept = Outlines { revision: st.revision, doc: Arc::downgrade(&st.doc), selection: st.selection.objects.clone(), affine, shapes };
+        panes.outlines.insert(slot, kept);
+        panes.outlines_made += 1;
+    }
+    for shape in panes.outlines.get(&slot).map_or(&[][..], |o| &o.shapes) {
+        painter.add(shape.clone());
+    }
+}
+
+/// The outlines of the objects selected in `st` as lines on the screen through `xf`, in their
+/// layers' colors; their bounds when they have too many points to outline.
+fn outline_shapes(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<egui::Shape> {
+    let mut shapes = vec![];
+    if st.selection.objects.is_empty() {
+        return shapes;
+    }
     let symbols = st.doc.symbol_boxes();
     let nodes: Vec<(vectorcraft_doc::NodeId, &vectorcraft_doc::Node)> =
         st.selection.objects.iter().filter_map(|id| Some((*id, st.doc.node(*id)?))).collect();
     let color = |id: vectorcraft_doc::NodeId| Stroke::new(1.0, c32(st.doc.layer_color(id)));
+    let mut stroke = |bp: &BezPath, s: Stroke| shapes.extend(to_screen_path(bp, xf).into_iter().map(|line| egui::Shape::line(line, s)));
     if too_many_anchors(nodes.iter().map(|(_, n)| *n)) {
         let bounds = nodes.iter().filter_map(|(_, n)| n.geometric_bounds_with(&symbols)).reduce(|a, b| a.union(b));
         if let (Some(b), Some((id, _))) = (bounds, nodes.first()) {
-            stroke_path(painter, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, color(*id));
+            stroke(&vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color(*id));
         }
-        return;
+        return shapes;
     }
     for (id, n) in nodes {
-        stroke_path(painter, &node_outline(n, &symbols), xf, color(id));
+        stroke(&node_outline(n, &symbols), color(id));
     }
+    shapes
 }
 
 #[cfg(test)]

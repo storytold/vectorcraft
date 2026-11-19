@@ -152,6 +152,7 @@ impl VectorcraftApp {
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
             picks: picks::Picks::default(),
+            original_editor: Default::default(),
             screen_sampler: None,
             font_check: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -164,6 +165,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            toasts: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
@@ -185,6 +187,8 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            pending_profile_open: None,
+            queued_profile_opens: Default::default(),
             script_picked: Vec::new(),
             script_picked_left_out: false,
             pen_end: Default::default(),
@@ -197,6 +201,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -638,6 +643,10 @@ impl VectorcraftApp {
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
+        // A shape drawn on the canvas, in a dialog or by a command in this pass shows the Transform
+        // panel (Show on Shape Creation).
+        panels::transform::show_on_shape_creation(self, &ctx);
+        crate::toasts::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {

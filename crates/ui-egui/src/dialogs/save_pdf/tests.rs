@@ -68,6 +68,372 @@ fn every_section_draws() {
     assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("permissions"), "{warnings:?}");
 }
 
+/// `ui.pdfSummary.save` writes the Summary as the section shows it, as UTF-8 text with LF line
+/// endings: Options with each changed option in the order of the sections, a blank line, then
+/// Warnings. The dialog stays open and the document does not change.
+#[test]
+fn save_summary_writes_the_summary_as_text() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    set_field(&mut app, "security.printing", json!("low"));
+    let revision = app.session.active().unwrap().revision;
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/Ünïcode (1) summary.txt"})).unwrap();
+    assert_eq!(r["path"], "/tmp/Ünïcode (1) summary.txt", "the path is used as given");
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/Ünïcode (1) summary.txt");
+    assert_eq!(r["bytes"], w[0].1.len());
+    let text = String::from_utf8(w[0].1.clone()).expect("UTF-8");
+    assert!(!text.contains('\r') && text.ends_with('\n'), "LF line endings: {text:?}");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[..5], ["Options", "General › Thumbnails: On", "Security › Printing: low", "", "Warnings"], "{text}");
+    assert!(lines.len() == 6 && lines[5].starts_with("⚠ ") && lines[5].contains("permissions"), "{text}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    assert_eq!(app.session.active().unwrap().revision, revision, "the document does not change");
+    assert_eq!(app.ui.status, "Saved /tmp/Ünïcode (1) summary.txt");
+}
+
+/// A text option whose value holds CRLF or CR line breaks is written with LF line breaks, so the
+/// file has one kind of line ending.
+#[test]
+fn save_summary_writes_line_breaks_in_values_as_lf() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.outputCondition", json!("first\r\nsecond\rthird"));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains('\r'), "LF line endings: {text:?}");
+    assert!(text.contains("first\nsecond\nthird\n"), "{text:?}");
+}
+
+/// With every option as the preset has it and nothing to warn about, the file holds the lines
+/// that say so, in the interface language.
+#[test]
+fn save_summary_writes_the_lines_for_no_changes_and_no_warnings() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let r = app.run(SAVE_SUMMARY, json!({"path": "/tmp/zusammenfassung.txt"}));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    r.unwrap();
+    let de = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    let de_lang = crate::i18n::Lang::from_code("de").unwrap();
+    let expected = format!(
+        "{}\n{}\n\n{}\n{}\n",
+        crate::i18n::tr(de_lang, "Options"),
+        crate::i18n::fmt(crate::i18n::tr(de_lang, "Every option matches {base}."), &[("base", crate::i18n::tr(de_lang, "the preset"))]),
+        crate::i18n::tr(de_lang, "Warnings"),
+        crate::i18n::tr(de_lang, "None."),
+    );
+    assert_eq!(de, expected);
+    assert_ne!(de, text, "the labels are translated");
+}
+
+/// The preset editor's Summary is saved too, measured against the app's default preset, and the
+/// editor stays open.
+#[test]
+fn save_summary_writes_the_preset_editors_summary() {
+    let (mut app, written, _) = app();
+    open_preset(&mut app, &json!({})).unwrap();
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: On\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(false));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/preset summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert_eq!(text, format!("Options\nEvery option matches {}.\n\nWarnings\nNone.\n", pdf::DEFAULT_PRESET));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(PRESET_KIND), "the editor stays open");
+}
+
+/// A path that is empty or not a string, and no Save PDF dialog open, are errors that write
+/// nothing.
+#[test]
+fn save_summary_refuses_a_bad_path_and_a_closed_dialog() {
+    let (mut app, written, _) = app();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), "the Save PDF dialog is not open");
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": ""})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "  "})).unwrap_err(), "path is empty");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": 5})).unwrap_err(), "`path` must be a string");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command needs a path: omitted or null, it is an error that shows no save panel and writes
+/// nothing.
+#[test]
+fn save_summary_requires_a_path() {
+    let (mut app, written, _) = app();
+    let asked: Rc<RefCell<usize>> = Rc::default();
+    let a = asked.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        *a.borrow_mut() += 1;
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({})).unwrap_err(), "missing `path`");
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": null})).unwrap_err(), "missing `path`");
+    assert_eq!(*asked.borrow(), 0, "no save panel");
+    assert!(written.borrow().is_empty());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+}
+
+/// The command uses the Summary the section drew for the same fields and document, without
+/// computing the settings again (an export in memory), and computes them once a field changes.
+#[test]
+fn save_summary_uses_the_summary_the_section_drew() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    app.ui_ctx = Some(ctx.clone());
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(&mut app, ui.ctx()));
+    out.textures_delta.clear();
+    // The drawn Summary, replaced with one that no computation gives.
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let drawn = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key)).expect("the section's Summary");
+    assert_eq!(drawn.0, stamp, "drawn for these fields");
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert_eq!(text, "Options\nGeneral › Thumbnails: kept\n\nWarnings\nNone.\n");
+    set_field(&mut app, "thumbnails", json!(true));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n"), "computed for the changed field: {text}");
+}
+
+/// The Summary drawn for one document is not used for another that becomes active with the same
+/// revision and the same fields.
+#[test]
+fn save_summary_does_not_use_another_documents_summary() {
+    let (mut app, written, _) = app();
+    let first = app.session.active_index().unwrap();
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    let second = app.session.active_index().unwrap();
+    app.session.set_active(first);
+    app.run("file.export.pdf", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let (key, stamp) = summary_key(&app, &params(app.ui.dialog.as_ref().unwrap()));
+    let kept: Result<Value, String> = Ok(json!({"changed": [{"option": "thumbnails", "value": "kept"}], "warnings": []}));
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, kept)));
+    app.session.set_active(second);
+    app.session.active_mut().unwrap().revision = revision;
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains("kept"), "the other document's Summary: {text}");
+}
+
+/// The Summary is computed again when the saved preset it compares against is replaced while the
+/// dialog stays open.
+#[test]
+fn save_summary_compares_against_a_replaced_preset() {
+    let (mut app, written, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Mine"})).unwrap();
+    set_field(&mut app, "thumbnails", json!(false));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: Off\n"), "{text}");
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": false})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nEvery option matches the preset.\n"), "compared against the replaced preset: {text}");
+}
+
+/// The Summary is computed again when the saved flattener preset the dialog names is deleted while
+/// the dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_deleted_flattener_preset() {
+    let (mut app, written, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine Flat", "preset": "Low Resolution"})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "flattenerPreset", json!("Mine Flat"));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("flattener.presets.delete", json!({"name": "Mine Flat"})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains("Mine Flat"), "the deleted preset is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the deleted preset");
+}
+
+/// The Summary is computed again when a loaded profile the dialog converts to is removed while the
+/// dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_removed_profile() {
+    use vectorcraft_color::cms;
+    let name = "Summary Stamp CMYK";
+    // The built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    let mut bytes = cms::icc_bytes(cms::DEVICE_CMYK).unwrap().to_vec();
+    let (from, to) = (utf16(cms::DEVICE_CMYK), utf16(&format!("{name:<width$}", width = cms::DEVICE_CMYK.len())));
+    let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+    bytes[at..at + to.len()].copy_from_slice(&to);
+    let path = vectorcraft_testkit::temp_dir("save-summary-profile").join("stamp.icc");
+    std::fs::write(&path, bytes).unwrap();
+    let (mut app, written, _) = app();
+    assert_eq!(app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap()["name"], name);
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.conversion", json!("destination"));
+    set_field(&mut app, "output.destination", json!(name));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("color.removeProfile", json!({"name": name})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains(name), "the removed profile is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the removed profile");
+}
+
+/// With the desktop's file writer: a file already at the path is replaced whole, a folder's path
+/// is an error that leaves the folder as it was, and under automation write roots a path outside
+/// them is refused without writing.
+#[test]
+fn save_summary_writes_files_on_disk_within_the_automation_roots() {
+    let base = std::env::temp_dir().join(format!("vc-pdf-summary-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in ["out", "outside"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+    }
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
+    let services = Services {
+        write: Some(Box::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(std::path::Path::new(p), b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone());
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    let mut save = |path: &std::path::Path| {
+        let p = json!({"path": path.to_string_lossy()});
+        vectorcraft_engine::file_access::confine(roots.as_ref(), || app.run(SAVE_SUMMARY, p))
+    };
+    let file = base.join("out").join("Ünïcode (1), summary.txt");
+    std::fs::write(&file, "an older file, longer than the summary\n".repeat(40)).unwrap();
+    save(&file).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "Options\nEvery option matches the preset.\n\nWarnings\nNone.\n");
+    assert!(save(&base.join("out")).is_err(), "a folder is not a file");
+    assert!(base.join("out").is_dir() && file.is_file());
+    let outside = base.join("outside").join("summary.txt");
+    assert!(save(&outside).is_err(), "outside the write roots");
+    assert!(!outside.exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// A failed `document.pdfSettings` is the command's error, and nothing is written.
+#[test]
+fn save_summary_reports_a_failed_summary() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "compatibility", json!("bogus"));
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let expected = summary_settings(&mut app, &p).unwrap_err();
+    assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), expected);
+    assert!(written.borrow().is_empty());
+}
+
+/// The Summary section's Save Summary… button: the save panel suggests `<document> PDF
+/// Summary.txt`, the file holds the text the section shows, and the dialog stays open. A canceled
+/// panel writes nothing; a failed write is told over the dialog, which shows again when the
+/// message closes. The web downloads the file under the suggested name.
+#[test]
+fn the_save_summary_button_writes_the_summary() {
+    let (mut app, written, _) = app();
+    let suggested: Rc<RefCell<Vec<String>>> = Rc::default();
+    let s = suggested.clone();
+    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+        s.borrow_mut().push(pick.name.clone());
+        Some(format!("/tmp/{}", pick.name))
+    }));
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Summary"));
+    set_field(&mut app, "thumbnails", json!(true));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    click_save_summary(&mut app, &ctx);
+    let title = app.session.active().unwrap().title();
+    let stem = std::path::Path::new(&title).file_stem().unwrap().to_string_lossy().into_owned();
+    let name = format!("{stem} PDF Summary.txt");
+    assert_eq!(suggested.borrow()[..], *std::slice::from_ref(&name));
+    {
+        let w = written.borrow();
+        assert_eq!(w.len(), 1, "written once");
+        assert_eq!(w[0].0, format!("/tmp/{name}"));
+        let text = String::from_utf8(w[0].1.clone()).unwrap();
+        assert!(text.starts_with("Options\nGeneral › Thumbnails: On\n\nWarnings\n"), "{text}");
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog stays open");
+    // Canceled: nothing written, no status, the dialog stays.
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    app.ui.status.clear();
+    click_save_summary(&mut app, &ctx);
+    assert_eq!(written.borrow().len(), 1, "a canceled panel writes nothing");
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    // A failed write: a message names the file, over the dialog.
+    app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
+    app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("disk full".into())));
+    click_save_summary(&mut app, &ctx);
+    let told = app.ui.dialog.clone().expect("a message");
+    assert_eq!(told.kind, super::super::confirm::MESSAGE, "status {:?}, waiting {:?}", app.ui.status, app.ui.told);
+    assert!(told.str("message").contains(&name), "{:?}", told.fields);
+    assert_eq!(super::super::parent(&told).map(|d| d.kind), Some(KIND.to_string()), "the dialog is under the message");
+    super::super::cancel(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the dialog shows again");
+    // The web downloads it under the suggested name.
+    let downloads: Log = Log::default();
+    let dl = downloads.clone();
+    app.services.download = Some(Box::new(move |n: &str, b: &[u8]| {
+        dl.borrow_mut().push((n.to_string(), b.to_vec()));
+        Ok(())
+    }));
+    click_save_summary(&mut app, &ctx);
+    let d = downloads.borrow();
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].0, name);
+    assert!(String::from_utf8(d[0].1.clone()).unwrap().starts_with("Options\n"));
+}
+
+/// The saved Summary writes each option line with the colon the interface language uses, as the
+/// Summary section shows it: French puts a no-break space before the colon, Japanese writes a
+/// full-width colon.
+#[test]
+fn the_summary_text_uses_the_languages_colon() {
+    let changed = json!({"option": "thumbnails", "value": true});
+    for (code, colon) in [("en", ":"), ("fr", "\u{a0}:"), ("ja", "：")] {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).expect("registered"));
+        let line = option_line(&changed, |_| "X".to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(line.starts_with(&format!("X{colon} ")), "{code}: {line:?}");
+    }
+}
+
+/// Click the Summary section's Save Summary… button in frames of the dialog layer (the dialog's
+/// window draws nothing in its first frame, which sizes it).
+fn click_save_summary(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0));
+    let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+    };
+    run(app, vec![]);
+    let labels = run(app, vec![]);
+    let at =
+        labels.iter().find(|(t, _)| t.trim() == "Save Summary…").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Save Summary… in {labels:?}"));
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    run(app, vec![egui::Event::PointerMoved(at), button(true)]);
+    run(app, vec![button(false)]);
+}
+
 #[test]
 fn confirm_runs_export_pdf_with_the_dialog_options() {
     let (mut app, written, opened) = app();
@@ -462,6 +828,201 @@ fn marks_and_bleeds_reach_the_pdf() {
         ellipse |= (b.width() - 20.0).abs() < 0.1 && (b.height() - 20.0).abs() < 0.1;
     });
     assert!(ellipse, "the non-printing layer is included");
+}
+
+/// The four custom bleed values, `[top, bottom, left, right]`.
+fn bleed_of(d: &Dialog) -> [f64; 4] {
+    BLEED_SIDES.map(|p| get(d, p).as_f64().unwrap_or(f64::NAN))
+}
+
+/// Headless frames of the dialog layer with an accessibility tree, as a 1280 × 900 window.
+struct LinkFrames(egui::Context);
+
+impl LinkFrames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self(ctx)
+    }
+
+    fn run(&self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.0.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The bleed link's button once the dialog has settled: its name, whether it shows pressed,
+    /// whether it is grayed out, and its center.
+    fn link(&self, app: &mut VectorcraftApp) -> (String, bool, bool, egui::Pos2) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let names = ["Make the bleed values differ", "Make all bleed settings the same"];
+        let mut found = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button && n.label().is_some_and(|l| names.contains(&l)));
+        let (_, n) = found.next().expect("a bleed link button");
+        assert!(found.next().is_none(), "one bleed link button");
+        let b = n.bounds().expect("bounds");
+        let pressed = n.toggled() == Some(egui::accesskit::Toggled::True) || n.is_selected() == Some(true);
+        let center = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+        (n.label().unwrap_or_default().to_string(), pressed, n.is_disabled(), center)
+    }
+
+    fn click(&self, app: &mut VectorcraftApp, at: egui::Pos2) {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        self.run(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        self.run(app, vec![press(false)]);
+    }
+}
+
+/// The link button beside the custom bleed values: the built-in presets' equal sides open linked,
+/// an edit to one side sets all four while linked and only that one while unlinked, and linking
+/// again gives every side the top's value. The link isn't an export option, and the linked values
+/// reach the PDF's page boxes.
+#[test]
+fn the_bleed_link_keeps_the_four_sides_the_same() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/bleed.pdf"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make the bleed values differ", true, false), "equal sides open linked");
+    edit_bleed(app.ui.dialog.as_mut().unwrap(), 2, 6.0);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [6.0; 4], "linked: the left value sets all four");
+
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make all bleed settings the same", false), "the click unlinks");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields.get(BLEED_LINKED), Some(&json!(false)));
+    edit_bleed(d, 1, 9.0);
+    edit_bleed(d, 3, 2.0);
+    assert_eq!(bleed_of(d), [6.0, 9.0, 6.0, 2.0], "unlinked: each side is its own");
+    edit_bleed(d, 0, 4.0);
+    assert_eq!(bleed_of(d), [4.0, 9.0, 6.0, 2.0]);
+
+    let (.., at) = f.link(&mut app);
+    f.click(&mut app, at);
+    let (name, pressed, ..) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed), ("Make the bleed values differ", true), "the click links again");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(bleed_of(d), [4.0; 4], "linking gives every side the top's value");
+    let p = params(d);
+    assert_eq!(p["bleed"], json!({"useDocument": false, "top": 4.0, "bottom": 4.0, "left": 4.0, "right": 4.0}));
+    assert!(p.get(BLEED_LINKED).is_none() && preset_params(d).get(BLEED_LINKED).is_none(), "the link is the dialog's own");
+
+    super::super::confirm(&mut app).unwrap();
+    let bytes = &written.borrow()[0].1;
+    let page = &vectorcraft_pdf::info(bytes, None).unwrap().pages[0];
+    let bleed = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Bleed).expect("a bleed box").1;
+    let trim = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Trim).expect("a trim box").1;
+    assert_eq!((trim.x0 - bleed.x0, trim.y0 - bleed.y0, bleed.x1 - trim.x1, bleed.y1 - trim.y1), (4.0, 4.0, 4.0, 4.0));
+}
+
+/// A preset whose four bleed values differ opens unlinked; choosing a preset or Reset sets the link
+/// from that preset's values rather than keeping the one shown before.
+#[test]
+fn presets_and_reset_set_the_bleed_link_from_their_values() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d), "unequal sides open unlinked");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0], "opening leaves the values as they are");
+
+    let mut d = d.clone();
+    link_bleed(&mut d, true);
+    apply_preset(&mut app, &mut d, "Uneven");
+    assert!(!bleed_linked(&d) && bleed_of(&d) == [3.0, 5.0, 3.0, 3.0], "choosing the preset takes its values and its link");
+    apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+    assert!(bleed_linked(&d), "the default preset's sides are equal");
+    link_bleed(&mut d, false);
+    app.ui.dialog = Some(d);
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "Reset sets the link from the preset's values");
+
+    // The preset editor has the same link.
+    open_preset(&mut app, &json!({"name": "Uneven"})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, false));
+    f.click(&mut app, at);
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4]);
+}
+
+/// With Use Document Bleed Settings on, the fields show the document's bleed and the link is
+/// grayed out; the custom values and the link stay as they were for when it is turned off.
+#[test]
+fn the_document_bleed_grays_the_link_and_keeps_the_custom_values() {
+    let (mut app, _, _) = app();
+    app.run("document.setup", json!({"bleed": 9})).unwrap();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    set_field(&mut app, "__section", json!("Marks and Bleeds"));
+    set_field(&mut app, "bleed.useDocument", json!(true));
+    let f = LinkFrames::new();
+    let (name, pressed, disabled, at) = f.link(&mut app);
+    assert_eq!((name.as_str(), pressed, disabled), ("Make all bleed settings the same", false, true));
+    f.click(&mut app, at);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED), "a grayed-out link does not change");
+    assert_eq!(bleed_of(d), [3.0, 5.0, 3.0, 3.0]);
+    set_field(&mut app, "bleed.useDocument", json!(false));
+    let (name, _, disabled, _) = f.link(&mut app);
+    assert_eq!((name.as_str(), disabled), ("Make all bleed settings the same", false));
+}
+
+/// `ui.dialog.set` can set the link (`__bleedLinked`) as its button does, refuses a value other
+/// than true or false, and a new `bleed` lets the link follow its values.
+#[test]
+fn ui_dialog_set_links_the_bleed() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(super::super::accepts_field(d, field), "{field}");
+        let old = d.fields.get(field).cloned();
+        super::super::set_field(d, field.into(), value);
+        super::super::field_set(app, field, old.as_ref())
+    };
+    set(&mut app, BLEED_LINKED, json!(true)).unwrap();
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0; 4], "linking gives every side the top's value");
+    for bad in [json!("yes"), json!(1), Value::Null] {
+        let e = set(&mut app, BLEED_LINKED, bad.clone()).unwrap_err();
+        assert!(e.contains("__bleedLinked must be true or false"), "{bad}: {e}");
+    }
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key(BLEED_LINKED) && bleed_linked(d), "equal values set are linked");
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 2, "left": 1, "right": 1})).unwrap();
+    assert!(!bleed_linked(app.ui.dialog.as_ref().unwrap()), "unequal values set are unlinked");
+
+    // Writing the same `bleed` again also lets the link follow its values; a `__bleedLinked` set
+    // after it in the same request still decides.
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    set(&mut app, "bleed", json!({"top": 1, "bottom": 1, "left": 1, "right": 1})).unwrap();
+    assert!(bleed_linked(app.ui.dialog.as_ref().unwrap()), "the same equal values set again are linked");
+    set(&mut app, BLEED_LINKED, json!(false)).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!bleed_linked(d) && bleed_of(d) == [1.0; 4], "a later __bleedLinked unlinks them");
+}
+
+/// An unlinked edit that makes the four sides equal leaves the link off, so the next edit
+/// changes one side only.
+#[test]
+fn an_unlinked_edit_that_evens_the_sides_keeps_the_link_off() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!bleed_linked(d));
+    edit_bleed(d, 1, 3.0);
+    assert!(!bleed_linked(d), "the link stays off");
+    edit_bleed(d, 2, 6.0);
+    assert_eq!(bleed_of(d), [3.0, 3.0, 6.0, 3.0], "the next edit changes one side");
 }
 
 #[test]

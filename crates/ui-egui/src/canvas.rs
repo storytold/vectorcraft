@@ -52,7 +52,7 @@ use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
 use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
-pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
+pub(crate) use grid::{RulerScale, checker_texture, checker_tile, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
 use home::home;
@@ -63,7 +63,9 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 pub use overlays::SharedPaths;
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
+use overlays::{
+    HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, overlay_hover_text, selection_overlay,
+};
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
@@ -79,6 +81,7 @@ pub use tool_overlays::{HiddenChars, SpellingMarks};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
     print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
+    trace_split_overlay,
 };
 pub(crate) use view::animated_zoom;
 pub(crate) use view::drag_rotation;
@@ -424,6 +427,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
+        overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
@@ -1349,6 +1353,7 @@ fn selection_visuals(
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);
         radial_repeat_overlay(app, painter, xf);
+        trace_split_overlay(app, painter, xf);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);

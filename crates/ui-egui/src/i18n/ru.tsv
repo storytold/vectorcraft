@@ -556,6 +556,11 @@ font-technology	Variable	Вариативные
 	Color blindness – Deuteranopia-type	Дальтонизм — дейтеранопия
 	Color blindness – Protanopia-type	Дальтонизм — протанопия
 	Color blindness – Tritanopia-type	Дальтонизм — тританопия
+	Show Color Vision Preview	Показать имитацию цветового зрения
+	Protanopia	Протанопия
+	Deuteranopia	Дейтеранопия
+	Tritanopia	Тританопия
+	Achromatopsia	Ахроматопсия
 	Color Burn	Затемнение основы
 	Color conversion:	Преобразование цвета:
 	Color Dodge	Осветление основы
@@ -598,6 +603,9 @@ font-technology	Variable	Вариативные
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
+	Show Harmony	Показать гармонию
+	Harmony Rule	Правило гармонии
+	Harmony color	Цвет гармонии
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -729,6 +737,16 @@ font-technology	Variable	Вариативные
 	Create New Swatch…	Создать новый образец…
 	Create New {kind} Style	Создать новый стиль {kind}
 	Create Object Mosaic…	Создать мозаику объектов…
+	Create Object Mosaic	Создать мозаику объектов
+	Current Size:	Текущий размер:
+	New Size:	Новый размер:
+	Tile Spacing:	Интервал между плитками:
+	Number of Tiles:	Количество плиток:
+	Constrain Ratio:	Сохранять пропорции:
+	Result:	Результат:
+	Resize Using Percentages	Изменить размер в процентах
+	Delete Raster	Удалить растровое изображение
+	Use Ratio	Использовать пропорции
 	Create Outlines	Создать контуры
 	Create Path	Создать контур
 	Create PDF layers from layers and sublayers	Создавать слои PDF из слоёв и подслоёв
@@ -817,6 +835,7 @@ font-technology	Variable	Вариативные
 	Delete Brush	Удалить кисть
 	Delete Color	Удалить цвет
 	Restore Generated Table	Восстановить созданную таблицу
+	Unshift All Colors	Отменить сдвиг всех цветов
 	Delete Character Style	Удалить стиль символа
 	Delete Empty Artboards	Удалить пустые монтажные области
 	Delete Freeform Point	Удалить произвольную точку
@@ -855,6 +874,7 @@ font-technology	Variable	Вариативные
 	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
+	Delete all action sets and their actions?	Удалить все наборы действий и их действия?
 	Delete Theme	Удалить тему
 	Delete theme	Удалить тему
 	Delete these {n} graphic styles?	Удалить эти графические стили ({n})?
@@ -991,6 +1011,8 @@ font-technology	Variable	Вариативные
 	Duplicate	Дублировать
 	Duplicate and Offset 10 pt	Дублировать и сместить на 10 пт
 	Duplicate Artboard	Дублировать монтажную область
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щёлкните, чтобы добавить монтажную область с этой стороны; щёлкните с Alt, чтобы дублировать эту монтажную область вместе с графикой
+	Click to add an artboard on this side	Щёлкните, чтобы добавить монтажную область с этой стороны
 	Copy Artboard	Копировать монтажную область
 	Cut Artboard	Вырезать монтажную область
 	Rename Artboards	Переименовать монтажные области
@@ -1009,10 +1031,25 @@ font-technology	Variable	Вариативные
 	Duplicate Symbol	Дублировать символ
 	Duplicate {kind} Style	Дублировать стиль {kind}
 	Dutch	Нидерландский
+	PSD Import Options	Параметры импорта PSD
+	Place PSD	Поместить PSD
+	Convert Layers to Objects	Преобразовать слои в объекты
+	Import Hidden Layers	Импортировать скрытые слои
+	Flatten Layers to a Single Image	Свести слои в одно изображение
+	Import Slices	Импортировать фрагменты
 	DXF Import Options	Параметры импорта DXF
 	DXF Info	Сведения о DXF
 	DXF Options	Параметры DXF
 	DXF Options Dialog	Диалоговое окно «Параметры DXF»
+	HP-GL Options	Параметры HP-GL
+	HP-GL Options Dialog	Диалоговое окно «Параметры HP-GL»
+	Curve Tolerance:	Допуск кривых:
+	Origin:	Начало координат:
+	Pens:	Перья:
+	One Pen per Color	Одно перо на цвет
+	Pen Table	Таблица перьев
+	Draw the Nearest Path Next	Следующим рисовать ближайший контур
+	Draw Inner Paths First	Сначала рисовать внутренние контуры
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Каждая страница печатается как одно изображение с разрешением растровых эффектов документа.
 	Earth Tones	Земляные тона
@@ -1249,6 +1286,15 @@ font-technology	Variable	Вариативные
 	Shading Color	Цвет затенения
 	Black Overprint	Чёрный с наложением
 	Draw Hidden Faces	Рисовать скрытые грани
+	Map Art…	Наложение графики…
+	Map Art	Наложение графики
+	First Surface	Первая поверхность
+	Previous Surface	Предыдущая поверхность
+	Next Surface	Следующая поверхность
+	Last Surface	Последняя поверхность
+	Scale to Fit	Масштабировать по размеру
+	Shade Artwork	Затенять графику
+	Invisible Geometry	Невидимая геометрия
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
 	This system has no screen color sampler	В этой системе нет средства выбора цвета с экрана
@@ -1315,6 +1361,19 @@ font-technology	Variable	Вариативные
 	Fill: click for swatches, Shift-click for the color mixer	Заливка: щёлкните для образцов, Shift+щелчок — для смесителя цветов
 	Find	Найти
 	Find and Replace…	Найти и заменить…
+	Find and Replace	Найти и заменить
+	Find:	Найти:
+	Replace With:	Заменить на:
+	Replace & Find	Заменить и найти
+	Replace All	Заменить все
+	Match Case	Учитывать регистр
+	Find Whole Word	Найти слово целиком
+	Search Backwards	Искать назад
+	Check Hidden Layers	Проверять скрытые слои
+	Check Locked Layers	Проверять заблокированные слои
+@msg	No matches found	Совпадений не найдено
+@msg	Matches replaced: {n}	Заменено совпадений: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	в байтах {_1}..{_2} объекта {_3} нет совпадения с `find`
 	Find Font	Найти шрифт
 	Find Font…	Найти шрифт…
 	Find Next	Найти далее
@@ -1349,6 +1408,7 @@ font-technology	Variable	Вариативные
 	Fit to Selected Art	Вписать в выделенный рисунок
 	Flag…	Флаг…
 	Flare	Блик
+	Edit Flare	Редактировать блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
 	Halo	Ореол
@@ -1364,6 +1424,17 @@ font-technology	Variable	Вариативные
 	Largest:	Самое большое:
 	Direction:	Направление:
 	Symbolism Tools Options	Параметры инструментов символов
+	Tool:	Инструмент:
+	Symbol Set Density	Плотность набора символов
+	Symbol Sprayer Options	Параметры распылителя символов
+	Scrunch:	Сжатие:
+	Spin:	Вращение:
+	Screen:	Прозрачность:
+	Stain:	Тонирование:
+	Symbol Sizer Options	Параметры размера символов
+	Proportional Resizing	Пропорциональное изменение размера
+	Resizing Affects Density	Изменение размера влияет на плотность
+	Show Brush Size and Intensity	Показывать размер и интенсивность кисти
 	Symbol Set Density:	Плотность набора символов:
 	Flat Image	Плоское изображение
 	Flat Logo	Плоский логотип
@@ -2217,6 +2288,15 @@ file-filter	Templates	Шаблоны
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
+	Kinsoku Shori Settings…	Настройки kinsoku shori…
+	Kinsoku Shori Settings	Настройки kinsoku shori
+	Kinsoku Sets	Наборы kinsoku
+	Kinsoku Set Base	Основа набора kinsoku
+	Based on:	На основе:
+	Cannot Start Line	Не может начинать строку
+	Cannot End Line	Не может заканчивать строку
+	Hanging Punctuation	Висячая пунктуация
+	Inseparable Characters	Неразрывные символы
 	Push In First	Сначала втягивать
 	Push Out First	Сначала выталкивать
 	Push Out Only	Только выталкивать
@@ -2270,6 +2350,9 @@ file-filter	Templates	Шаблоны
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Параметры панели «Навигатор»
+	Attributes Panel Options	Параметры панели «Атрибуты»
+	Number of Recent URLs:	Число последних URL:
+@msg	`count` must be a whole number from 1 to 30	`count` должно быть целым числом от 1 до 30
 	Draw Dashed Lines as Solid Lines	Рисовать штриховые линии сплошными
 	Needs the desktop app	Требуется настольное приложение
 	Neutral Gradients	Нейтральные градиенты
@@ -2330,6 +2413,7 @@ file-filter	Templates	Шаблоны
 	Pressure	Нажим
 	Tilt	Наклон
 	Bearing	Азимут
+	Stylus Wheel	Колесико пера
 	Shape:	Форма:
 	Bristle Length:	Длина щетинок:
 	Bristle Density:	Плотность щетинок:
@@ -2360,6 +2444,9 @@ file-filter	Templates	Шаблоны
 	embedding for preview and print	внедрение для просмотра и печати
 	embedding allowed	внедрение разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестный тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} использование|{n} использования|{n} использований
 	substituted: shown in {family} {style} ({detail})	заменен: показан шрифтом {family} {style} ({detail})
 	missing: shown in {family} {style}	отсутствует: показан шрифтом {family} {style}
 	missing	отсутствует
@@ -2747,6 +2834,7 @@ diagnostics	ui	интерфейс
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
 	Replace Actions…	Заменить действия…
+	Clear Actions	Очистить действия
 	Reset Actions	Сбросить действия
 	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
 	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
@@ -3192,6 +3280,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Удержание клавиши запускает инструмент или команду из её столбца «Удерживать» в «Сочетаниях клавиш»; короткое нажатие запускает её обычное сочетание.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Сколько секунд нужно удерживать клавишу, прежде чем вместо её обычного сочетания сработает сочетание удержания.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	При перемещении опорных точек каждая кривая с одним перемещённым концом сохраняет форму относительно своих концов.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
@@ -3201,6 +3291,7 @@ digits	Malayalam	Малаялам
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Свойства динамического прямоугольника показывают одно поле «Радиус угла» для всех четырёх углов; если выключено, у каждого угла своё поле.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Что трансформируют изменения на панели «Трансформировать»: объект, плитки его узора или и то и другое; «По умолчанию» следует «Трансформировать плитки узора».
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когда выделен один экземпляр символа, панель «Трансформировать» использует точку регистрации символа как опорную точку.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Рисование прямоугольника, эллипса, многоугольника, звезды или линии открывает панель «Трансформировать», если она закрыта.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемняет холст вне монтажных областей, пока активен инструмент «Монтажная область».
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когда включено «Затемнять область вне монтажной области», область вне монтажных областей остаётся тёмной, пока вы перетаскиваете инструментом «Монтажная область».
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Насколько близко, в пикселях, указатель должен быть к объекту, опорной точке или маркеру, чтобы щелчок выделил его.
@@ -3273,6 +3364,9 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Насколько близко на экране указатель или перетаскиваемая точка должны подойти к объекту, чтобы умные направляющие привязали их; расстояние одинаково при любом масштабе.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Привязывает конец отрезка или окружность, нарисованную от центра, так, чтобы она касалась ближайшей кривой.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Привязывает конец отрезка так, чтобы он встречал ближайший прямой сегмент под прямым углом.
+	Edit type set in fonts that aren't available?	Редактировать текст, набранный недоступными шрифтами?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3376,6 +3470,7 @@ digits	Malayalam	Малаялам
 	Save Document Preset	Сохранить набор документа
 	Preset {number}	Набор {number}
 	Save Preset…	Сохранить набор…
+	Save Summary…	Сохранить сводку…
 	Save Print Preset	Сохранить набор печати
 	Save Recovery Data	Сохранить данные восстановления
 	Save Save for Web Preset	Сохранить набор «Сохранить для web»
@@ -3507,6 +3602,9 @@ digits	Malayalam	Малаялам
 	No menu item	Нет пункта меню
 	Toolbar	Панель инструментов
 	{toolbar}, in the {tool} group	{toolbar}, в группе «{tool}»
+	In the menu bar: {path}	В строке меню: {path}
+	In the {group} group: press and hold to open it	В группе {group}: нажмите и удерживайте, чтобы открыть её
+	{home}, not shown now	{home}, сейчас не показано
 @plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
@@ -3650,6 +3748,7 @@ digits	Malayalam	Малаялам
 	Show Brush Size	Показать размер кисти
 	Show Center	Показать центр
 	Show Code	Показать код
+	Show in Browser	Показать в браузере
 	Show Color Groups	Показать цветовые группы
 	Show Color Swatches	Показать цветовые образцы
 	Show Corner Widget	Показать угловой виджет
@@ -3678,6 +3777,7 @@ digits	Malayalam	Малаялам
 	Show Modified	Показать изменённые
 	Show Note	Показать примечание
 	Show Options	Показать параметры
+	Show on Shape Creation	Показывать при создании фигуры
 	Show Recent Colors	Показать последние цвета
 	Toggle RGB Percent	Переключить RGB в процентах
 	Show Original Path	Показать исходный контур
@@ -3705,6 +3805,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показать миниатюры
 	Show Tile Edge	Показать край плитки
 	Show Tints/Shades	Показать оттенки/тени
+	Show Tool Cards	Показывать карточки инструментов
 	Show Tool Tips	Показывать подсказки
 	Show Transparency Grid	Показать сетку прозрачности
 	Show Video Rulers	Показать видео-линейки
@@ -3788,6 +3889,8 @@ digits	Malayalam	Малаялам
 	Outlines	Контуры
 	Outlines with Source Image	Контуры с исходным изображением
 	Source Image	Исходное изображение
+	Split View	Разделённый вид
+	Divider	Разделитель
 	Press and hold to view the source image	Удерживайте, чтобы увидеть исходное изображение
 	Image Trace View	Просмотр трассировки изображения
 	Snap Options	Параметры привязки
@@ -4910,6 +5013,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Installed plug-in {_1}	Установлен модуль {_1}
 @msg	Internal error: {msg} (please report this bug)	Внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Объединение быстрой заливки: выделите группу быстрой заливки и контуры для добавления
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Имена `Face` и `Edge` носят грани и границы группы быстрой заливки: дайте контуру другое имя
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Быстрая заливка принимает контуры и составные контуры: сначала преобразуйте текст, изображения и другие объекты в контуры
 @msg	Live Paint: select paths or compound paths	Быстрая заливка: выделите контуры или составные контуры
 @msg	Live Paint: these paths are too degenerate to paint	Быстрая заливка: эти контуры слишком вырождены для заливки
@@ -5112,6 +5216,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	choose a location for the package	выберите расположение для пакета
 @msg	clipboard is empty	буфер обмена пуст
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: в цветовой таблице должен остаться хотя бы один цвет
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` обозначает цвет, который обозначает и другой ключ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не является цветом, например "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не более {MAX_TABLE} цветов
 @msg	command `{0}` is not available right now: {1}	команда `{0}` сейчас недоступна: {1}
@@ -5229,6 +5334,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no graphic style `{n}`	нет графического стиля `{n}`
 @msg	no interaction in progress	нет взаимодействия в процессе
 @msg	no key object	нет ключевого объекта
+@msg	Align to Key Object isn't available with the Artboard tool	«Выровнять по ключевому объекту» недоступно с инструментом «Монтажная область»
 @msg	no library `{key}` (see {list})	нет библиотеки `{key}` (см. {list})
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
@@ -5284,6 +5390,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such spine point	такой точки остова нет
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` должен быть списком не более чем из 10000 индексов точек остова
 @msg	`with` moves points, not a handle	`with` перемещает точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могут одновременно быть true
+@msg	`link` places a handle: give `handle`	`link` размещает маркер: укажите `handle`
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
 @msg	no such user library	такой пользовательской библиотеки нет
@@ -5375,6 +5483,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	select a blend	выделите переход
 @msg	select a blend or give `id`	выделите переход или укажите `id`
 @msg	select a clip group	выделите группу обрезки
+@msg	select a flare	выделите блик
 @msg	select a gradient mesh	выделите градиентную сетку
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор
@@ -5442,6 +5551,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	the PDF is password-protected: give its password	PDF защищён паролем: укажите его пароль
 @msg	the PDF password is wrong	неверный пароль PDF
 @msg	the Save PDF dialog didn't open	диалоговое окно «Сохранить PDF» не открылось
+@msg	the Save PDF dialog is not open	диалоговое окно «Сохранить PDF» не открыто
 @msg	the WMF header is damaged	заголовок WMF повреждён
 @msg	the art could not be sampled	не удалось взять образец рисунка
 @msg	the art has no bounds	у рисунка нет границ
@@ -5632,6 +5742,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}
@@ -5809,6 +5920,49 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msg	the PSD file's layer groups are nested too deeply	группы слоёв файла PSD вложены слишком глубоко
 @msg	a layer of the PSD file is too large to read	слой файла PSD слишком велик для чтения
 @msg	the PSD file's layers take more memory to read than allowed	для чтения слоёв файла PSD нужно больше памяти, чем разрешено
+@msg	the file is no longer loaded	файл больше не загружен
+@msg	the layers can't be read ({e}): the file was placed as its merged image	не удаётся прочитать слои ({e}): файл помещён как сведённое изображение
+@msg	1 type layer came in as pixels: the text isn't editable	1 текстовый слой импортирован как пиксели: текст нельзя редактировать
+@msg	{n} type layers came in as pixels: the text isn't editable	текстовых слоёв, импортированных как пиксели: {n}; текст нельзя редактировать
+@msg	1 adjustment layer was not applied	1 корректирующий слой не применён
+@msg	{n} adjustment layers were not applied	не применено корректирующих слоёв: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 слой-заливка не отрисован (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	не отрисовано слоёв-заливок: {n} (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	the layer effects of 1 layer weren't drawn	эффекты слоя для 1 слоя не отрисованы
+@msg	the layer effects of {n} layers weren't drawn	эффекты слоёв не отрисованы; число слоёв: {n}
+@msg	the vector masks of 1 layer weren't applied	векторные маски 1 слоя не применены
+@msg	the vector masks of {n} layers weren't applied	векторные маски слоёв не применены; число слоёв: {n}
+@msg	the knockout of 1 layer wasn't applied	выбивка 1 слоя не применена
+@msg	the knockout of {n} layers wasn't applied	выбивка слоёв не применена; число слоёв: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 слой пропущен (скрытые слои и обрезанные по ним слои)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	пропущено слоёв: {n} (скрытые слои и обрезанные по ним слои)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 слой, обрезанный по неотрисованному слою-заливке, пропущен
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	пропущено слоёв, обрезанных по неотрисованным слоям-заливкам: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	слои в режимах наложения, которых нет в VectorCraft ({modes}), сведены со слоями под ними
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 слой в режиме наложения, которого нет в VectorCraft, импортирован как Обычный: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	слоёв в режимах наложения, которых нет в VectorCraft, импортировано как Обычный: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 слой, обрезанный по нижнему слою, импортирован без обрезки: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	слоёв, обрезанных по нижнему слою и импортированных без обрезки: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers относится к PSD-файлу, помещаемому с layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: связанный PSD-файл помещается как плоское изображение; укажите link: false, чтобы внедрить его с фрагментами
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: связанный PSD-файл помещается как плоское изображение; не указывайте link или укажите link: false
+@msg	the slices can't be read ({e}) and were left out	не удаётся прочитать фрагменты ({e}), они пропущены
+@msg	1 slice lies outside the canvas or has no size and was left out	1 фрагмент лежит вне холста или не имеет размера и пропущен
+@msg	{n} slices lie outside the canvas or have no size and were left out	пропущено фрагментов вне холста или без размера: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 фрагмент оказался бы вне холста и пропущен
+@msg	{n} slices would lie outside the canvas and were left out	пропущено фрагментов, которые оказались бы вне холста: {n}
+@msg	the slices' descriptor holds too many values	дескриптор фрагментов содержит слишком много значений
+@msg	the slices' descriptor has a version other than 16	версия дескриптора фрагментов отличается от 16
+@msg	the slices are stored in version {v}, which isn't read	фрагменты сохранены в версии {v}, которая не читается
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	фрагментов в файле: {count}, больше читаемых {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	в дескрипторе фрагментов нет списка фрагментов
+@msg	the slices' descriptor lists something other than a slice	дескриптор фрагментов перечисляет что-то, кроме фрагмента
+@msg	a slice in the slices' descriptor has no bounds	у фрагмента в дескрипторе фрагментов нет границ
+@msg	a slice's bounds in the slices' descriptor aren't numbers	границы фрагмента в дескрипторе фрагментов не являются числами
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	текст во фрагментах длиннее читаемых {MAX_TEXT} символов
+@msg	the slices' descriptor nests too deep	дескриптор фрагментов вложен слишком глубоко
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	в дескрипторе фрагментов есть ссылка неизвестного вида ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	в дескрипторе фрагментов есть значение неизвестного типа ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	не удаётся прочитать слои ({e}): файл открыт как сведённое изображение
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
 @msg	the PSD file is cut short	файл PSD обрезан
@@ -5836,6 +5990,25 @@ variable-list-end	{0}, {1}	{0} и {1}
 	Preserve Embedded Profiles	Сохранять встроенные профили
 	Convert to Working Space	Преобразовывать в рабочее пространство
 	Preserve Numbers	Сохранять числа
+	Profile Mismatches:	Несоответствие профилей:
+	Ask When Opening	Спрашивать при открытии
+	Ask When Pasting	Спрашивать при вставке
+	Missing Profiles:	Отсутствующие профили:
+	Embedded Profile Mismatch	Несоответствие встроенного профиля
+	Missing Profile	Отсутствует профиль
+	Paste Profile Mismatch	Несоответствие профиля при вставке
+	“{name}” is not tagged with a {model} profile.	У «{name}» нет профиля {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	У «{name}» профиль {model} «{profile}», который не является рабочим пространством {model} «{working}».
+	Use the embedded profile	Использовать встроенный профиль
+	Convert the colors to the working space	Преобразовать цвета в рабочее пространство
+	Discard the embedded profile	Отбросить встроенный профиль
+	Leave as is	Оставить как есть
+	Assign the working space	Назначить рабочее пространство
+	Assign profile:	Назначить профиль:
+	Preserve the color numbers	Сохранить числовые значения цветов
+	Convert to keep the colors' appearance	Преобразовать, сохранив вид цветов
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` используется только с `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Вставленные цвета взяты из документа с профилем {model} «{from}»; у этого документа профиль «{to}».
 	Texture	Текстура
 	Craquelure…	Кракелюры…
 	Grain…	Зерно…
@@ -6444,6 +6617,9 @@ lighting	Light	Свет
 	Continue in Background	Продолжить в фоне
 	Cancel Export	Отменить экспорт
 @msg	Export cancelled	Экспорт отменён
+	Cancel Save	Отменить сохранение
+@plural	{n} more save waiting|{n} more saves waiting	Ещё {n} сохранение в очереди|Ещё {n} сохранения в очереди|Ещё {n} сохранений в очереди
+@msg	Save canceled	Сохранение отменено
 # Paragraph panel menu › Justification…
 	Desired	Желательно
 	Word Spacing:	Интервал между словами:
@@ -6862,6 +7038,7 @@ axis	Y Axis	Ось Y
 	Checkpoint	Контрольная точка
 	Inventory Icons	Иконки инвентаря
 	Skill Icons	Иконки навыков
+	Weather Icons	Иконки погоды
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -6967,6 +7144,12 @@ axis	Y Axis	Ось Y
 	Bus Lines	Линии шины
 	Terminal Nodes	Контактные узлы
 
+# Original arrow art brushes.
+	Arrows	Кисти-стрелки
+	Solid Arrow	Сплошная стрелка
+	Open Arrow	Открытая стрелка
+	Chevron Arrow	Стрелка с шевроном
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна
@@ -6983,6 +7166,252 @@ axis	Y Axis	Ось Y
 	Stars	Звёзды
 	Triangles	Треугольники
 	Sparkles	Искры
+	Warm Gray	Тёплый серый
+	Cool Gray	Холодный серый
+	Neutrals	Нейтральные
+	Ivory	Слоновая кость
+	Linen	Лён
+	Oat	Овёс
+	Greige	Грейж
+	Stone	Камень
+	Taupe	Серо-коричневый
+	Slate	Сланец
+	Clay	Глина
+	Terracotta	Терракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Песок
+	Olive	Оливковый
+	Moss	Мох
+	Rosy	Розоватый
+	Neutral	Нейтральный
+	Golden	Золотистый
+	Pastel	Пастельные
+	Pastel Red	Пастельный красный
+	Pastel Orange	Пастельный оранжевый
+	Pastel Amber	Пастельный янтарный
+	Pastel Yellow	Пастельный жёлтый
+	Pastel Lime	Пастельный лаймовый
+	Pastel Green	Пастельный зелёный
+	Pastel Teal	Пастельный сине-зелёный
+	Pastel Cyan	Пастельный голубой
+	Pastel Azure	Пастельный лазурный
+	Pastel Blue	Пастельный синий
+	Pastel Violet	Пастельный фиолетовый
+	Pastel Magenta	Пастельный пурпурный
+	Soft Red	Мягкий красный
+	Soft Orange	Мягкий оранжевый
+	Soft Amber	Мягкий янтарный
+	Soft Yellow	Мягкий жёлтый
+	Soft Lime	Мягкий лаймовый
+	Soft Green	Мягкий зелёный
+	Soft Teal	Мягкий сине-зелёный
+	Soft Cyan	Мягкий голубой
+	Soft Azure	Мягкий лазурный
+	Soft Blue	Мягкий синий
+	Soft Violet	Мягкий фиолетовый
+	Soft Magenta	Мягкий пурпурный
+	Vivid Red	Яркий красный
+	Vivid Orange	Яркий оранжевый
+	Vivid Amber	Яркий янтарный
+	Vivid Yellow	Яркий жёлтый
+	Vivid Lime	Яркий лаймовый
+	Vivid Green	Яркий зелёный
+	Vivid Teal	Яркий сине-зелёный
+	Vivid Cyan	Яркий голубой
+	Vivid Azure	Яркий лазурный
+	Vivid Blue	Яркий синий
+	Vivid Violet	Яркий фиолетовый
+	Vivid Magenta	Яркий пурпурный
+	Deep	Глубокие
+	Deep Red	Тёмно-красный
+	Deep Orange	Тёмно-оранжевый
+	Deep Amber	Тёмно-янтарный
+	Deep Yellow	Тёмно-жёлтый
+	Deep Lime	Тёмно-лаймовый
+	Deep Green	Тёмно-зелёный
+	Deep Teal	Тёмный сине-зелёный
+	Deep Cyan	Тёмно-голубой
+	Deep Azure	Тёмно-лазурный
+	Deep Blue	Тёмно-синий
+	Deep Violet	Тёмно-фиолетовый
+	Deep Magenta	Тёмно-пурпурный
+	Gold	Золото
+	Silver	Серебро
+	Bronze	Бронза
+	Copper	Медь
+	Brass	Латунь
+	Rose Gold	Розовое золото
+	Gunmetal	Оружейный металл
+	Platinum	Платина
+	Pewter	Олово
+	Ember	Тлеющие угли
+	Lagoon	Лагуна
+	Dusk	Сумерки
+	Clay to Teal	От глины к сине-зелёному
+	Plum to Olive	От сливового к оливковому
+	Complementary Coral	Коралловый, дополнительная
+	Split Complementary Coral	Коралловый, расщепленная дополнительная
+	Analogous Coral	Коралловый, аналоговая
+	Triad Coral	Коралловый, триада
+	Tetrad Coral	Коралловый, тетрада
+	Pentagram Coral	Коралловый, пентаграмма
+	Complementary Teal	Сине-зелёный, дополнительная
+	Split Complementary Teal	Сине-зелёный, расщепленная дополнительная
+	Analogous Teal	Сине-зелёный, аналоговая
+	Triad Teal	Сине-зелёный, триада
+	Tetrad Teal	Сине-зелёный, тетрада
+	Pentagram Teal	Сине-зелёный, пентаграмма
+	Soft Spectrum	Мягкий спектр
+	Red to Amber	От красного к янтарному
+	Orange to Yellow	От оранжевого к жёлтому
+	Amber to Lime	От янтарного к лаймовому
+	Yellow to Green	От жёлтого к зелёному
+	Lime to Teal	От лаймового к сине-зелёному
+	Green to Cyan	От зелёного к голубому
+	Teal to Azure	От сине-зелёного к лазурному
+	Cyan to Blue	От голубого к синему
+	Azure to Violet	От лазурного к фиолетовому
+	Blue to Magenta	От синего к пурпурному
+	Violet to Red	От фиолетового к красному
+	Magenta to Orange	От пурпурного к оранжевому
+	Dawn	Рассвет
+	Noon	Полдень
+	Sunset	Закат
+	Night	Ночь
+	Overcast	Пасмурно
+	White to Black	От белого к чёрному
+	Light Grays	Светло-серые
+	Dark Grays	Тёмно-серые
+	Warm Grays	Тёплые серые
+	Cool Grays	Холодные серые
+	Fade to Transparent	Переход в прозрачность
+	White Fade	Белый переход
+	Vignette	Виньетка
+	Mist	Дымка
+	Petal	Лепесток
+	Fern	Папоротник
+	Smoke	Дым
+	Honey	Мёд
+	Seafoam	Морская пена
+	Lavender	Лаванда
+	Driftwood	Плавник
+	Ink Wash	Размывка тушью
+	Tide	Прилив
+	Bloom	Цветение
+	Dew	Роса
+	Pollen	Пыльца
+	Lichen	Лишайник
+	Prism Veil	Призматическая вуаль
+	Opal Ribbon	Опаловая лента
+	Pearl Flash	Жемчужная вспышка
+	Aurora Foil	Фольга северного сияния
+	Iris Sheen	Радужный отлив
+	Frost Spectrum	Морозный спектр
+	Silver Tide	Серебряный прилив
+	Rose Quartz Gleam	Блеск розового кварца
+	Moonstone Shift	Перелив лунного камня
+	Violet Edge	Фиолетовый край
+	Mint Halo	Мятный ореол
+	Amber Corona	Янтарная корона
+	Polar Glint	Полярный блик
+	Pastel Orbit	Пастельная орбита
+	Coral and Navy	Коралловый и тёмно-синий
+	Plum and Lime	Сливовый и лаймовый
+	Teal and Gold	Сине-зелёный и золотой
+	Indigo and Peach	Индиго и персиковый
+	Forest and Rose	Лесной и розовый
+	Red Glow	Красное свечение
+	Orange Glow	Оранжевое свечение
+	Amber Glow	Янтарное свечение
+	Yellow Glow	Жёлтое свечение
+	Lime Glow	Лаймовое свечение
+	Green Glow	Зелёное свечение
+	Teal Glow	Сине-зелёное свечение
+	Cyan Glow	Голубое свечение
+	Azure Glow	Лазурное свечение
+	Blue Glow	Синее свечение
+	Violet Glow	Фиолетовое свечение
+	Magenta Glow	Пурпурное свечение
+	Polka Dots	Горошек
+	Vertical Stripes	Вертикальные полосы
+	Horizontal Stripes	Горизонтальные полосы
+	Diagonal Stripes	Диагональные полосы
+	Checkerboard	Шахматная доска
+	Diamonds	Ромбы
+	Crosses	Крестики
+	Coarse Grit	Крупное зерно
+	Stipple	Пунктир
+	Scratches	Царапины
+	Sparse Flecks	Редкие крапинки
+	Dense Flecks	Густые крапинки
+	Sine Bands	Синусоидальные полосы
+	Ripple Lines	Линии ряби
+	Interference Rings	Интерференционные кольца
+	Offset Rings	Смещённые кольца
+	Warped Checks	Искажённая клетка
+	Pinched Stripes	Сжатые полосы
+	Chevron Pulse	Пульсирующие шевроны
+	Radiating Lenses	Лучистые линзы
+	Soft Shadow	Мягкая тень
+	Hard Shadow	Жёсткая тень
+	Lifted Card	Приподнятая карточка
+	Neon Tube	Неоновая трубка
+	Inner Light	Внутренний свет
+	Feathered	Растушёванный
+	Haze	Марево
+	Double Rule	Двойная линейка
+	Triple Rule	Тройная линейка
+	Dashed Border	Штриховая рамка
+	Dotted Border	Точечная рамка
+	Offset Keyline	Смещённый контур
+	Inset Keyline	Внутренний контур
+	Outside Stroke	Внешняя обводка
+	Pointer	Указатель
+	Highlighter	Маркер
+	Sketchy Line	Набросочная линия
+	Scribble Fill	Заливка каракулями
+	Wobble	Дрожание
+	Zig Zag Edge	Зигзагообразный край
+	Wavy Edge	Волнистый край
+	Puffy	Пухлый
+	Starburst	Звёздный взрыв
+	Glossy	Глянцевый
+	Brushed Metal	Шлифованный металл
+	Spotlight	Прожектор
+	Sunset Band	Полоса заката
+	Sea Glass	Морское стекло
+	Pearl	Жемчуг
+	Chrome Rim	Хромированный ободок
+	Glow Orb	Светящийся шар
+	Pill Badge	Значок-капсула
+	Round Badge	Круглый значок
+	Flag Wave	Развевающийся флаг
+	Bulge	Выпуклость
+	Twisted	Закрученный
+	Echo	Эхо
+	Spiral Copies	Копии по спирали
+	Multiply Tint	Оттенок умножения
+	Darken Veil	Затемняющая вуаль
+	Ghosted	Призрачный
+	Two Tone	Двухцветный
+	Overlay Glaze	Глазурь перекрытия
+	Screen Light	Свет растра
+	Soft Light Wash	Размывка мягким светом
+	Cyan Neon	Голубой неон
+	Magenta Laser	Пурпурный лазер
+	Amber Tube	Янтарная трубка
+	Electric Lime	Электрический лайм
+	Pulse Violet	Пульсирующий фиолетовый
+	Cobalt Phosphor	Кобальтовый люминофор
+	Burst	Вспышка
+	Rounded Square	Скруглённый квадрат
+	Sun	Солнце
+	Moon	Луна
+	Cloud	Облако
+	Rain	Дождь
+	Thunder	Гром
+	Snow	Снег
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
@@ -7772,10 +8201,18 @@ breakText	Glyphs	Глифы
 	Smooth Bridge…	Плавный мост…
 	Smooth Bridge	Плавный мост
 	Keep Originals	Сохранить оригиналы
-@msg	select two circles to bridge	выделите две окружности для соединения
+@msg	select two or more circles to bridge	выделите две или более окружностей для соединения
 @msg	one circle is inside the other	одна окружность находится внутри другой
 @msg	the circles are too far apart for this radius: raise the radius	окружности слишком далеко друг от друга для этого радиуса: увеличьте радиус
 @msg	the circles are too far apart for this radius	окружности слишком далеко друг от друга для этого радиуса
+	Constant Gap	Постоянный зазор
+	Reach:	Охват:
+@msg	the circles are too far apart for this gap: raise the gap	окружности слишком далеко друг от друга для этого зазора: увеличьте зазор
+@msg	the circles are too far apart for this gap	окружности слишком далеко друг от друга для этого зазора
+@msg	no two circles are within reach: raise the reach	нет двух окружностей в пределах охвата: увеличьте охват
+@msg	select at most 2000 circles to bridge	выделите не более 2000 окружностей для соединения
+@msg	that makes too many bridges (at most 8000): lower the reach	получается слишком много мостов (не более 8000): уменьшите охват
+@msg	the bridged circles are too complex to unite	соединяемые окружности слишком сложны для объединения
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общие касательные…
 	Common Tangents	Общие касательные
@@ -7792,6 +8229,7 @@ breakText	Glyphs	Глифы
 @msg	One path lies inside the other, so they have no common tangents	Один контур лежит внутри другого, поэтому у них нет общих касательных
 @msg	The paths overlap, so they have no internal tangents	Контуры перекрываются, поэтому у них нет внутренних касательных
 @msg	One path lies inside the other, so they have no internal tangents	Один контур лежит внутри другого, поэтому у них нет внутренних касательных
+@msg	The point lies inside the path, so it has no tangents	Точка лежит внутри контура, поэтому у неё нет касательных
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разобрать штрихи на контуры
 @msg	select paths with dashed strokes to expand	выделите контуры со штриховой обводкой для разбора
@@ -9653,6 +10091,7 @@ shape	Open	Открытый
 @msg	the character's size can't be measured	размер символа невозможно измерить
 @msg	the code runs past its last instruction	код выполняется дальше своей последней инструкции
 @msg	the compound shape is too complex to expand	составная фигура слишком сложна, чтобы её разобрать
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	линия или другой открытый контур, не охватывающий площади, не добавляет площади к составной фигуре; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
 @msg	the container of the listed objects is gone	контейнер перечисленных объектов больше не существует
 @msg	the copy `{user_id}` can't be read as a library	копию `{user_id}` невозможно прочитать как библиотеку
 @msg	the copy would leave the canvas	копия вышла бы за пределы холста
@@ -10000,7 +10439,6 @@ shape	Open	Открытый
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	в файлах {kind} нет прозрачности, а в файле оказалось бы {what}: сначала объедините прозрачность (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	изображения {kind} невозможно открыть (см. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не входит в число допустимых вариантов
-@msg	{k} has control characters{_1}	{k} содержит управляющие символы{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} слишком длинно (не более {MAX_TEXT} символов)
 @msg	{k} must be > 0	{k} должно быть > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} должно быть числом (pt) или длиной, например "210 mm"
@@ -10206,3 +10644,56 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Вместо подсказки показывает карточку о том, что делают инструмент панели и его клавиши; требуется Показывать подсказки.
+	Selects whole objects and groups to move, resize or rotate them.	Выделяет объекты и группы целиком, чтобы перемещать, масштабировать или поворачивать их.
+	Selects anchor points and path segments to reshape a path.	Выделяет опорные точки и сегменты контура, чтобы изменить форму контура.
+	Draws paths point by point, with straight segments and smooth curves.	Рисует контуры точка за точкой, с прямыми сегментами и плавными кривыми.
+	Draws smooth curves through the points you click.	Рисует плавные кривые через точки, по которым вы щёлкаете.
+	Adds text at a point, or in a frame you drag.	Добавляет текст в точке или в рамке, которую вы растягиваете.
+	Draws rectangles and squares.	Рисует прямоугольники и квадраты.
+	Draws rectangles with rounded corners.	Рисует прямоугольники со скруглёнными углами.
+	Draws ellipses and circles.	Рисует эллипсы и окружности.
+	Draws polygons with sides of equal length.	Рисует многоугольники с равными сторонами.
+	Draws stars.	Рисует звёзды.
+	Turns objects around a reference point.	Поворачивает объекты вокруг опорной точки.
+	Flips objects across an axis through a reference point.	Зеркально отражает объекты относительно оси, проходящей через опорную точку.
+	Resizes objects from a reference point.	Масштабирует объекты от опорной точки.
+	Slants objects from a reference point.	Наклоняет объекты от опорной точки.
+	Moves the view of the document.	Перемещает вид документа.
+	Magnifies or reduces the view.	Увеличивает или уменьшает масштаб вида.
+	Copies the color and other attributes of one object to the selection.	Копирует цвет и другие атрибуты одного объекта на выделение.
+	Sets the direction and length of a gradient.	Задаёт направление и длину градиента.
+	Creates, selects and resizes artboards.	Создаёт, выделяет и масштабирует монтажные области.
+	Changes the width of a stroke along its length.	Изменяет ширину обводки по её длине.
+	Bends art by dragging pins placed on it.	Изгибает графику перетаскиванием булавок, расставленных на ней.
+	Pushes the outlines of paths in the direction you drag.	Сдвигает очертания контуров в направлении перетаскивания.
+	Twists the outlines of paths into swirls.	Закручивает очертания контуров в вихри.
+	Pulls the outlines of paths in toward the brush.	Стягивает очертания контуров к кисти.
+	Pushes the outlines of paths out from the brush.	Раздувает очертания контуров от кисти наружу.
+	Adds curved details along the outlines of paths.	Добавляет изогнутые детали вдоль очертаний контуров.
+	Adds spiky details along the outlines of paths.	Добавляет острые детали вдоль очертаний контуров.
+	Adds wrinkles along the outlines of paths.	Добавляет складки вдоль очертаний контуров.
+	Moves, copies and resizes objects on the perspective grid.	Перемещает, копирует и масштабирует объекты на сетке перспективы.
+	Makes a series of steps between two or more objects.	Создаёт ряд переходов между двумя или более объектами.
+	Places dimension lines that show measured lengths.	Размещает размерные линии с измеренными длинами.
+	Tap	Короткое нажатие
+	Clear Hold	Очистить удержание
+	Hold Shortcuts	Клавиши удержания
+	Hold Shortcut Delay	Задержка клавиш удержания
+	How hold shortcuts work	Как работают клавиши удержания
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щелкните, затем нажмите клавишу, которую нужно удерживать для этого (Esc отменяет). Удержание клавиши запускает это; короткое нажатие запускает собственное сочетание клавиши.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Короткое нажатие клавиши запускает ее сочетание. Удержание клавиши в течение задержки запускает вместо этого инструмент или команду из ее столбца «Удерживать». Клавиша удержания — это клавиша буквы, цифры или знака препинания, отдельно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Удержание {_1} уже используется для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавиша удержания — это клавиша, которая вводит символ, отдельно или с Shift ({shown} содержит Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не может быть клавишей удержания: используйте букву, цифру или клавишу знака препинания
+	Dashed Arrow	Пунктирная стрелка
+	Pressure Sensitive	Чувствительные к нажиму
+	Flex Ribbon	Гибкая лента
+	Pulse Stroke	Пульсирующий штрих
+	Round Flow	Круглый поток
+	Chisel Flow	Косой поток
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редактировать оригинал в:
+file-filter	Applications	Приложения

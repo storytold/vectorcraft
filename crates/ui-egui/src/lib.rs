@@ -55,6 +55,9 @@ pub mod layout_migration;
 pub mod menus;
 pub mod native_menu;
 pub mod opening;
+mod original_editor;
+#[doc(hidden)]
+pub use original_editor::Choice as OriginalEditorChoice;
 pub mod palette;
 mod panel_docking;
 pub mod panels;
@@ -79,6 +82,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
+pub mod toasts;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
@@ -269,6 +273,7 @@ pub struct VectorcraftApp {
     system_paste_at: f64,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
+    pub(crate) original_editor: original_editor::Draft,
     /// The screen color sampler shown and not answered yet, and where its color goes.
     pub(crate) screen_sampler: Option<screen_color::Waiting>,
     /// The look for fonts installed or removed meanwhile, running
@@ -292,6 +297,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The messages shown over the window ([`toasts`]).
+    pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -346,6 +353,12 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The file File › Open read that waits for the answer to its profile question
+    /// ([`dialogs::profile_mismatch`]), kept out of the dialog's fields.
+    pub(crate) pending_profile_open: Option<dialogs::profile_mismatch::PendingOpen>,
+    /// Files File › Open read while another one's profile question was open, each asking its own
+    /// question in turn.
+    pub(crate) queued_profile_opens: std::collections::VecDeque<dialogs::profile_mismatch::PendingOpen>,
     /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) script_picked: Vec<String>,
@@ -375,6 +388,9 @@ pub struct VectorcraftApp {
     /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
     /// when it is let go ([`shortcuts::HeldTool`]).
     pub(crate) held_tool: Vec<shortcuts::HeldTool>,
+    /// A key with a hold shortcut that waits for its release, and the keys whose repeats are held
+    /// back until they are let go ([`shortcuts::HoldKeys`]).
+    pub(crate) hold_keys: shortcuts::HoldKeys,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

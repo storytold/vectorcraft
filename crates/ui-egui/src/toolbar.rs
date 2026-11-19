@@ -298,6 +298,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
                     let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                    crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
                     let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -351,7 +352,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         app.select_tool(shown.id);
                     }
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(shown)));
-                    resp.on_hover_text(tip(shown));
+                    card::hover(resp, shown, card::Side::Beside, Some(tip(shown)));
                 }
             });
             i += row.len();
@@ -459,7 +460,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
@@ -835,7 +837,7 @@ fn flyout_body(
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating {
-            ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
+            ui.horizontal(|ui| tool_strip(ui, t, active, tools, toolbar, locate))
         } else {
             // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
             // rows' height is given, since the row this sits in starts one widget tall.
@@ -921,6 +923,9 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(tool)));
+        // A row already shows the name and shortcut: its card adds the rest, and without one it has
+        // no tool tip.
+        let resp = card::hover(resp, tool, card::Side::Row, None);
         if resp.clicked() {
             chosen = Some(tool.id);
         }
@@ -975,11 +980,19 @@ fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
 /// tool clicked and the button of `locate`.
-fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Option<&str>) -> (Option<&'static str>, Option<egui::Rect>) {
+fn tool_strip(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+) -> (Option<&'static str>, Option<egui::Rect>) {
     let mut chosen = None;
     let mut located = None;
     for tool in tools.iter().filter_map(|id| tool_info(id)) {
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
+        crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
             ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -989,7 +1002,7 @@ fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: O
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
-        if resp.on_hover_text(tip(tool)).clicked() {
+        if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);
         }
         if locate == Some(tool.id) {
@@ -1226,5 +1239,6 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     fit.separator(ui);
 }
 
+pub(crate) mod card;
 #[cfg(test)]
 pub(crate) mod tests;

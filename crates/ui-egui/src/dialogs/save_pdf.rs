@@ -4,7 +4,8 @@
 //! The fields are the `document.exportPdf` options (sections are objects such as `compression`),
 //! plus `preset`, `range`, `path?` and UI-only `__` keys, so agents fill the dialog with
 //! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`]; the Summary is
-//! `document.pdfSettings`. Save Preset… names the settings as a preset (`pdf.preset.save`).
+//! `document.pdfSettings`, and its Save Summary… writes it to a text file (`ui.pdfSummary.save`).
+//! Save Preset… names the settings as a preset (`pdf.preset.save`).
 //! Opened from Export As with Use Artboards off (`__artBounds`), the dialog has no Artboards
 //! section, and OK writes one page of the visible art's bounds through [`io::export`]; opened
 //! from Export Selection (`__selection` too), the page is the selection's crop. While Alt (Option
@@ -552,10 +553,12 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
 const OPTION_FLAGS: [&str; 2] = ["__requireOpenPassword", "__restrictPermissions"];
 
 /// Replace every option with `settings` (from [`settings_fields`]), the password checkboxes
-/// included. The preset, the artboard choice, the path and the other UI-only fields (the section,
-/// the Save Preset name) stay.
+/// included, and let the bleed link follow the new values. The preset, the artboard choice, the
+/// path and the other UI-only fields (the section, the Save Preset name) stay.
 fn replace_settings(d: &mut Dialog, settings: Map<String, Value>) {
-    d.fields.retain(|k, _| matches!(k.as_str(), "preset" | "range" | "path") || (k.starts_with("__") && !OPTION_FLAGS.contains(&k.as_str())));
+    d.fields.retain(|k, _| {
+        matches!(k.as_str(), "preset" | "range" | "path") || (k.starts_with("__") && !OPTION_FLAGS.contains(&k.as_str()) && k != BLEED_LINKED)
+    });
     d.fields.extend(settings);
 }
 
@@ -687,23 +690,104 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
     flag(ui, d, "bleed.useDocument", tl!("Use document bleed settings"), true);
     // With the document's bleed the fields show it (Document Setup's `[top, bottom, left, right]`).
     let document = (get(d, "bleed.useDocument").as_bool() == Some(true)).then(|| app.session.active().map_or([0.0; 4], |s| s.doc.setup.bleed));
-    egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
-        for pair in [
-            [(0, "bleed.top", tl!("Top:")), (1, "bleed.bottom", tl!("Bottom:"))],
-            [(2, "bleed.left", tl!("Left:")), (3, "bleed.right", tl!("Right:"))],
-        ] {
-            for (i, p, label) in pair {
-                ui.label(label);
-                match document {
-                    Some(b) => {
-                        ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+    // Save PDF and the PDF preset editor link the four sides; Print's Marks and Bleed doesn't.
+    let pdf = d.kind == KIND || d.kind == PRESET_KIND;
+    ui.horizontal(|ui| {
+        egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
+            for pair in [
+                [(0, "bleed.top", tl!("Top:")), (1, "bleed.bottom", tl!("Bottom:"))],
+                [(2, "bleed.left", tl!("Left:")), (3, "bleed.right", tl!("Right:"))],
+            ] {
+                for (i, p, label) in pair {
+                    ui.label(label);
+                    match document {
+                        Some(b) => {
+                            ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+                        }
+                        None if pdf => {
+                            if let Some(x) = widgets::num_field(ui, p, get(d, p).as_f64(), unit, 80.0) {
+                                edit_bleed(d, i, x);
+                            }
+                        }
+                        None => length(ui, d, p, unit, true),
                     }
-                    None => length(ui, d, p, unit, true),
                 }
+                ui.end_row();
             }
-            ui.end_row();
+        });
+        if pdf {
+            let linked = bleed_linked(d);
+            let tip = if linked { tl!("Make the bleed values differ") } else { tl!("Make all bleed settings the same") };
+            // With the document's bleed the link is grayed out and keeps its state for the custom values.
+            let clicked = ui
+                .add_enabled_ui(document.is_none(), |ui| widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0))
+                .inner
+                .clicked();
+            if clicked {
+                link_bleed(d, !linked);
+            }
         }
     });
+}
+
+/// The custom bleed's sides in Save PDF and the PDF preset editor, `[top, bottom, left, right]`.
+const BLEED_SIDES: [&str; 4] = ["bleed.top", "bleed.bottom", "bleed.left", "bleed.right"];
+/// The field holding whether the link keeps the four custom bleed values the same. Without it,
+/// the sides are linked when they are equal (a preset's, or ones `ui.dialog.set` set).
+const BLEED_LINKED: &str = "__bleedLinked";
+
+/// Whether the custom bleed's sides are linked.
+fn bleed_linked(d: &Dialog) -> bool {
+    d.fields.get(BLEED_LINKED).and_then(Value::as_bool).unwrap_or_else(|| {
+        let top = get(d, BLEED_SIDES[0]).as_f64();
+        BLEED_SIDES[1..].iter().all(|p| get(d, p).as_f64() == top)
+    })
+}
+
+/// Link (every side takes the top's value) or unlink (the sides keep their values) the bleed.
+fn link_bleed(d: &mut Dialog, on: bool) {
+    d.fields.insert(BLEED_LINKED.into(), json!(on));
+    if on {
+        let top = get(d, BLEED_SIDES[0]).as_f64().unwrap_or(0.0);
+        for p in &BLEED_SIDES[1..] {
+            set(d, p, json!(top));
+        }
+    }
+}
+
+/// Side `side` of the custom bleed was edited to `value`: linked, every side takes it. The link
+/// keeps the state it had before the edit, so an unlinked edit that makes the sides equal leaves
+/// it off.
+fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
+    let linked = bleed_linked(d);
+    d.fields.insert(BLEED_LINKED.into(), json!(linked));
+    if linked {
+        for p in BLEED_SIDES {
+            set(d, p, json!(value));
+        }
+    } else if let Some(p) = BLEED_SIDES.get(side) {
+        set(d, p, json!(value));
+    }
+}
+
+/// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
+/// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
+/// same values included, drops the link's state, so the link follows the values set.
+pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
+    match field {
+        BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
+            Some(Value::Bool(on)) => {
+                link_bleed(d, on);
+                Ok(())
+            }
+            v => Err(format!("{BLEED_LINKED} must be true or false, not {}", v.unwrap_or(Value::Null))),
+        },
+        "bleed" => {
+            d.fields.remove(BLEED_LINKED);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 /// A dropdown of names such as colour profiles or flattener presets (`names`, the first one
@@ -909,26 +993,57 @@ pub(super) fn option_label(option: &str) -> String {
 }
 
 /// `document.pdfSettings` for the dialog with the document's warnings (an export in memory),
-/// cached until a field or the document changes.
+/// cached until a field, the document, the saved PDF or flattener presets, the loaded color
+/// profiles or the available fonts change.
 fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
-    let revision = app.session.active().map_or(0, |s| s.revision);
-    let stamp = egui::Id::unique((p.to_string(), revision));
-    let key = egui::Id::unique("save-pdf-summary");
+    let (key, stamp) = summary_key(app, p);
     if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key))
         && s == stamp
     {
         return v;
     }
-    let mut q = p.clone();
-    q["includeDocument"] = json!(true);
-    let v = app.session.execute("document.pdfSettings", &q).map_err(|e| e.to_string());
+    let v = summary_settings(app, p);
     ctx.data_mut(|m| m.insert_temp(key, (stamp, v.clone())));
     v
 }
 
+/// Where [`summary_of`] keeps the Summary, and the stamp of what it was computed for: the params
+/// `p`, the active document and its revision, the saved PDF presets (which `preset` can name), the
+/// saved flattener presets (which `flattenerPreset` can name), the loaded color profiles (which
+/// `output.destination` and `output.outputIntent` can name) and the available fonts (which decide
+/// what is embedded or outlined).
+fn summary_key(app: &VectorcraftApp, p: &Value) -> (egui::Id, egui::Id) {
+    let document = app.session.active().map(|s| (s.uid, s.revision));
+    let prefs = &app.session.prefs;
+    let presets = serde_json::to_string(&(&prefs.pdf_presets, &prefs.flattener_presets)).unwrap_or_default();
+    let shared = (vectorcraft_color::cms::profiles_generation(), vectorcraft_text::FontDb::global().generation());
+    (egui::Id::unique("save-pdf-summary"), egui::Id::unique((p.to_string(), document, presets, shared)))
+}
+
+/// `document.pdfSettings` for the dialog's `document.exportPdf` params `p`, with the document's
+/// warnings (an export in memory).
+fn summary_settings(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut q = p.clone();
+    q["includeDocument"] = json!(true);
+    app.session.execute("document.pdfSettings", &q).map_err(|e| e.to_string())
+}
+
+/// The `document.pdfSettings` params of the Summary: the dialog's export params, without the
+/// preset editor's own `name` and `description`, which are not PDF options.
+fn summary_params(d: &Dialog) -> Value {
+    let mut p = params(d);
+    if d.kind == PRESET_KIND
+        && let Some(o) = p.as_object_mut()
+    {
+        o.remove("name");
+        o.remove("description");
+    }
+    p
+}
+
 fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
-    let v = match summary_of(app, ui.ctx(), &params(d)) {
+    let v = match summary_of(app, ui.ctx(), &summary_params(d)) {
         Ok(v) => v,
         Err(e) => {
             heading(ui, tl!("Error"));
@@ -937,29 +1052,143 @@ fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         }
     };
     heading(ui, tl!("Options"));
-    let mut changed: Vec<&Value> = v["changed"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
-    changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
+    let changed = changed_options(&v);
     if changed.is_empty() {
-        let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { tl!("the preset") };
-        note(ui, &crate::i18n::fmt(tl!("Every option matches {base}."), &[("base", base)]));
+        note(ui, &unchanged_line(d));
     }
     option_rows(ui, changed, option_label);
     heading(ui, tl!("Warnings"));
     warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
+    ui.add_space(8.0);
+    if widgets::secondary_button(ui, tl!("Save Summary…")).clicked() {
+        // The text of the Summary drawn now: saving it does not compute the settings again.
+        let text = summary_text(d, &v);
+        if let Err(e) = crate::picks::in_dialog(app, d, move |app, d| save_summary_from_dialog(app, d, &text)) {
+            app.status(e);
+        }
+    }
+}
+
+/// The changed options of `document.pdfSettings`'s reply `v`, in the order of the sections.
+fn changed_options(v: &Value) -> Vec<&Value> {
+    let mut changed: Vec<&Value> = v["changed"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+    changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
+    changed
+}
+
+/// The Summary's line when no option differs from the preset.
+fn unchanged_line(d: &Dialog) -> String {
+    let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { tl!("the preset") };
+    crate::i18n::fmt(tl!("Every option matches {base}."), &[("base", base)])
+}
+
+/// The Summary of `document.pdfSettings`'s reply `v` as text, line for line as the section shows
+/// it in the interface language: Options and each changed option (or the line saying none
+/// changed), a blank line, then Warnings and each warning (or "None."). Lines end in LF, including
+/// line breaks inside an option's value.
+fn summary_text(d: &Dialog, v: &Value) -> String {
+    let lang = crate::i18n::current();
+    let mut lines = vec![tl!("Options").to_string()];
+    let changed = changed_options(v);
+    if changed.is_empty() {
+        lines.push(unchanged_line(d));
+    }
+    lines.extend(changed.into_iter().map(|c| option_line(c, option_label)));
+    lines.push(String::new());
+    lines.push(tl!("Warnings").to_string());
+    let warnings = v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if warnings.is_empty() {
+        lines.push(tl!("None.").to_string());
+    }
+    lines.extend(warnings.iter().map(|w| warning_line(lang, w.as_str().unwrap_or_default())));
+    let mut text = lines.join("\n").replace("\r\n", "\n").replace('\r', "\n");
+    text.push('\n');
+    text
+}
+
+/// The UI command that writes the Summary to a text file.
+pub(crate) const SAVE_SUMMARY: &str = "ui.pdfSummary.save";
+
+/// Is a dialog with the Summary open (Save PDF, or the preset editor)?
+pub(crate) fn summary_open(app: &VectorcraftApp) -> bool {
+    app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND || d.kind == PRESET_KIND)
+}
+
+/// `ui.pdfSummary.save {path}`: write the open Save PDF dialog's (or preset editor's) Summary as
+/// text to `path` (the web downloads it under the path's file name). The Summary the section last
+/// drew for the same fields, document, saved PDF and flattener presets, loaded color profiles
+/// and available fonts is used as it is; the settings are computed only when there is none. The dialog stays open and the document is not changed →
+/// `{path, bytes}`. A missing, empty or non-string `path` is an error that writes nothing.
+pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = "path";
+    let path = match p.get(key) {
+        None | Some(Value::Null) => return Err("missing `path`".into()),
+        Some(Value::String(s)) if s.trim().is_empty() => return Err("path is empty".into()),
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(_) => return Err(format!("`{key}` must be a string")),
+    };
+    let d = app.ui.dialog.clone().filter(|_| summary_open(app)).ok_or("the Save PDF dialog is not open")?;
+    let p = summary_params(&d);
+    let v = match app.ui_ctx.clone() {
+        Some(ctx) => summary_of(app, &ctx, &p),
+        None => summary_settings(app, &p),
+    }?;
+    write_summary(app, path, &summary_text(&d, &v))
+}
+
+/// Save Summary…: the Summary's `text` to a file picked in a save panel (the web downloads it). A
+/// write that fails is told in a message over the dialog, which shows again when it closes; a
+/// canceled panel writes nothing.
+fn save_summary_from_dialog(app: &mut VectorcraftApp, d: &mut Dialog, text: &str) -> Result<(), String> {
+    let waiting = app.ui.told.len();
+    let r = write_summary(app, None, text);
+    // The message about a failed write: the open dialog when the panel answered after this frame,
+    // else waiting behind the dialog being drawn.
+    let told = app.ui.dialog.take_if(|t| t.kind == super::confirm::MESSAGE).or_else(|| {
+        (app.ui.told.len() > waiting && app.ui.told.last().is_some_and(|t| t.kind == super::confirm::MESSAGE)).then(|| app.ui.told.pop()).flatten()
+    });
+    if let Some(mut told) = told {
+        told.fields.insert(super::PARENT.into(), serde_json::to_value(&*d).unwrap_or_default());
+        *d = told;
+    }
+    match r {
+        Err(e) if e == "cancelled" => Ok(()),
+        r => r.map(|_| ()),
+    }
+}
+
+/// Write the Summary's `text` (UTF-8) to `path`, else to a picked `<document> PDF Summary.txt`
+/// next to the document → `{path, bytes}`.
+fn write_summary(app: &mut VectorcraftApp, path: Option<String>, text: &str) -> Result<Value, String> {
+    let title = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
+    let path = io::write_named(app, path, &format!("{stem} PDF Summary.txt"), text.as_bytes())?;
+    app.status(format!("Saved {path}"));
+    Ok(json!({ "path": path, "bytes": text.len() }))
 }
 
 /// A Summary line per changed option (`{option, value}`), labelled by `label`.
 pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item = &'a Value>, label: impl Fn(&str) -> String) {
     let t = Tokens::get(ui.ctx());
     for c in changed {
-        let value = match &c["value"] {
-            Value::Bool(b) => if *b { tl!("On") } else { tl!("Off") }.to_string(),
-            Value::String(s) if c["option"] == "marks.kind" => choice_label(crate::i18n::current(), "marks.kind", s).to_string(),
-            Value::String(s) => s.clone(),
-            other => other.to_string(),
-        };
-        ui.label(egui::RichText::new(format!("{} {value}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())))).color(t.text));
+        ui.label(egui::RichText::new(option_line(c, &label)).color(t.text));
     }
+}
+
+/// The displayed value of the changed option `c` (`{option, value}`).
+fn option_value(c: &Value) -> String {
+    match &c["value"] {
+        Value::Bool(b) => if *b { tl!("On") } else { tl!("Off") }.to_string(),
+        Value::String(s) if c["option"] == "marks.kind" => choice_label(crate::i18n::current(), "marks.kind", s).to_string(),
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// The Summary's line for the changed option `c` (`{option, value}`), labeled by `label`, with the
+/// colon the interface language writes.
+fn option_line(c: &Value, label: impl Fn(&str) -> String) -> String {
+    format!("{} {}", crate::i18n::colon(&label(c["option"].as_str().unwrap_or_default())), option_value(c))
 }
 
 /// The Summary's warnings ("None." without any).

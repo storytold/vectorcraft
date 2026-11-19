@@ -16,6 +16,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("disableAutoAddDelete", "Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment."),
     ("usePreciseCursors", "Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on."),
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
+    ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
@@ -41,6 +42,8 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
     ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
+    ("holdShortcuts", "Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut."),
+    ("keyHoldDelay", "How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),
     ("newArtBasic", "New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance."),
@@ -57,6 +60,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useRegistrationPointForSymbol",
         "With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.",
     ),
+    ("showOnShapeCreation", "Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed."),
     ("fadeRegionOutsideArtboard", "Darkens the canvas outside the artboards while the Artboard tool is active."),
     (
         "artboardUpdateWhileDragging",
@@ -218,6 +222,9 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

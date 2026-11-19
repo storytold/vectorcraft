@@ -498,6 +498,22 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Attributes Panel Options dialog's heading and field, and the error for a count out of range.
+#[test]
+fn attributes_panel_options_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Attributes Panel Options", "Number of Recent URLs:"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let range = "`count` must be a whole number from 1 to 30";
+    assert!(message_literals().contains(range));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, range), range, "{code}");
+    }
+}
+
 /// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
 /// falling back to the plain row).
 #[test]
@@ -554,6 +570,114 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
+/// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
+/// its numbers, and translates a reason given inside one.
+#[test]
+fn psd_import_strings_are_in_complete_catalogs() {
+    use crate::io::opened_with_notes;
+    use vectorcraft_engine::cmd::fileio::{PSD_LAYER_WARNINGS, PSD_MERGED_WARNING};
+    let labels =
+        ["Place PSD", "PSD Import Options", "Convert Layers to Objects", "Import Hidden Layers", "Flatten Layers to a Single Image", "Import Slices"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let (nested, damaged) = ("the slices' descriptor nests too deep", "the PSD file's layer records are damaged");
+    let unread_slices = "the slices can't be read (the slices' descriptor nests too deep) and were left out";
+    let unread_layers = "the layers can't be read (the PSD file's layer records are damaged): the file was placed as its merged image";
+    let merged = PSD_MERGED_WARNING.replace("{modes}", "Hue, Luminosity");
+    let (one, many) = PSD_LAYER_WARNINGS[1];
+    let (one, many) = (one.to_string(), many.replace("{n}", "3"));
+    let mut shown: Vec<String> = PSD_LAYER_WARNINGS.iter().flat_map(|(one, many)| [one.to_string(), many.replace("{n}", "3")]).collect();
+    shown.push(merged.clone());
+    shown.extend(
+        [
+            "the file is no longer loaded",
+            unread_layers,
+            "hiddenLayers applies to a PSD file placed with layers: true",
+            "importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices",
+            "layers: a linked PSD file is placed as its flat image; leave link out or give link: false",
+            unread_slices,
+            "1 slice lies outside the canvas or has no size and was left out",
+            "3 slices lie outside the canvas or have no size and were left out",
+            "1 slice would lie outside the canvas and was left out",
+            "3 slices would lie outside the canvas and were left out",
+            "the slices' descriptor holds too many values",
+            "the slices' descriptor has a version other than 16",
+            "the slices are stored in version 9, which isn't read",
+            "the file has 10001 slices, more than the 10000 read",
+            "the slices' descriptor has no list of slices",
+            "the slices' descriptor lists something other than a slice",
+            "a slice in the slices' descriptor has no bounds",
+            "a slice's bounds in the slices' descriptor aren't numbers",
+            "a text in the slices has more than the 65536 characters read",
+            nested,
+            "the slices' descriptor has a reference of an unknown kind (abcd)",
+            "the slices' descriptor has a value of an unknown type (abcd)",
+        ]
+        .map(String::from),
+    );
+    let numbers = |s: &str| {
+        let mut all = s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+        all.sort();
+        all
+    };
+    let (note, notes) = ("Opened with {n} note: {first}", "Opened with {n} notes: {first}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in &shown {
+            let tr = message(lang, s);
+            assert_ne!(&tr, s, "{code}");
+            assert_eq!(numbers(&tr), numbers(s), "{code}: {s} -> {tr}");
+        }
+        for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
+            let (tr, inner_tr) = (message(lang, s), message(lang, inner));
+            assert_ne!(inner_tr, inner, "{code}: {inner}");
+            assert!(tr.contains(&inner_tr) && !tr.contains(inner), "{code}: {s} -> {tr}");
+        }
+        assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
+        let opened = opened_with_notes(1, &one);
+        let (forms, _) = lang.catalog().message_forms(&opened).expect("the Open heading has a row");
+        let heading = &forms[(lang.0.plural)(1).min(forms.len() - 1)];
+        assert!(heading != note && heading != notes, "{code}");
+        assert_eq!(message(lang, &opened), fmt(heading, &[("n", "1"), ("first", &message(lang, &one))]), "{code}");
+    }
+    assert_eq!(message(de(), &many), "3 Einstellungsebenen wurden nicht angewendet");
+    assert_eq!(message(de(), &opened_with_notes(1, &one)), "Mit 1 Hinweis geöffnet: 1 Einstellungsebene wurde nicht angewendet");
+    assert_eq!(
+        message(de(), unread_slices),
+        "die Slices können nicht gelesen werden (der Deskriptor der Slices ist zu tief verschachtelt) und wurden weggelassen"
+    );
+}
+
+/// Make Compound Shape's warning for a member that adds no area, which the status bar shows and
+/// the message scan doesn't read, is translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn compound_shape_no_area_warning_is_translated() {
+    let warning = vectorcraft_engine::cmd::OPEN_PATHS_ADD_NO_AREA;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, warning), warning, "{code}");
+    }
+}
+
+/// The Save PDF dialog's Save Summary… button and `ui.pdfSummary.save`'s error when no such
+/// dialog is open.
+#[test]
+fn pdf_save_summary_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain("Save Summary…").is_some(), "{} is missing Save Summary…", lang.code);
+    }
+    let closed = "the Save PDF dialog is not open";
+    assert!(message_literals().contains(closed));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, closed), closed, "{code}");
+    }
+}
+
 /// The status messages the Shape Builder tool gives when a gesture builds nothing come from the
 /// tools crate, which [`message_literals`] does not scan, so every complete catalog is checked for
 /// them here.
@@ -595,11 +719,118 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
         .collect();
     names.sort();
+    let duplicates: Vec<&str> = names.windows(2).filter(|pair| pair[0] == pair[1]).map(|pair| pair[0].as_str()).collect();
+    assert_eq!(duplicates, ["Zigzag"], "only the established Pattern Borders / Game Trails name is shared");
     names.dedup();
-    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// The complete catalogs that lack a row for one of `names`, with the names each lacks; `shown`
+/// tells whether a catalog shows a name translated.
+fn lacking(names: &[String], shown: impl Fn(&Catalog, &str) -> bool) -> Vec<String> {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&String> = names.iter().filter(|n| !shown(lang.catalog(), n.as_str())).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    bad
+}
+
+/// Sorted, without repeats.
+fn distinct(mut names: Vec<String>) -> Vec<String> {
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// A built-in graphic style library's panel lists its styles in the UI language, so every style of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_style_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::stylelib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        vectorcraft_doc::style_libs::STYLE_LIBRARIES
+            .iter()
+            .filter_map(|b| stylelib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 86, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in symbol library's panel lists its symbols in the UI language, so every symbol of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_symbol_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::symbollib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        symbollib::BUILTIN
+            .iter()
+            .filter_map(|b| symbollib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 32, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in swatch, gradient or pattern library's panel lists its swatches and color groups in
+/// the UI language, so each name has a row in each complete catalog, or is a numbered name
+/// ("Warm Gray 3") whose name before the number has one. Names that are color values (`#33cc99`,
+/// `K=35`) are shown as they are.
+#[test]
+fn built_in_library_swatch_names_are_in_complete_catalogs() {
+    use vectorcraft_color::libraries::{GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
+    use vectorcraft_engine::cmd::patternlib::{self, PATTERN_LIBRARIES};
+    let mut libs: Vec<_> = SWATCH_LIBRARIES.iter().chain(GRADIENT_LIBRARIES).filter_map(|b| builtin_library(b.id)).collect();
+    libs.extend(PATTERN_LIBRARIES.iter().filter_map(|b| patternlib::library(b.id)).map(|(_, lib)| lib));
+    assert_eq!(libs.len(), SWATCH_LIBRARIES.len() + GRADIENT_LIBRARIES.len() + PATTERN_LIBRARIES.len());
+    let all = libs.iter().flat_map(|lib| lib.iter().map(|w| w.name.clone()).chain(lib.groups.iter().map(|g| g.name.clone())).collect::<Vec<_>>());
+    let names = distinct(all.filter(|n| !n.starts_with('#') && !n.starts_with("K=")).collect());
+    assert_eq!(names.len(), 384, "{names:?}");
+    let numbered = |c: &Catalog, n: &str| {
+        n.rsplit_once(' ').is_some_and(|(head, d)| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) && c.plain(head).is_some())
+    };
+    let bad = lacking(&names, |c, n| c.plain(n).is_some() || numbered(c, n));
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A numbered built-in name shows its name before the number translated and the number as it
+/// is; a name with a row of its own uses that row, and any other name comes back unchanged.
+#[test]
+fn numbered_labels_translate_the_name_before_the_number() {
+    let fr = Lang::from_code("fr").expect("fr registered");
+    assert_eq!(numbered_label(fr, "Grays"), tr(fr, "Grays"));
+    assert_ne!(tr(fr, "Grays"), "Grays");
+    assert_eq!(numbered_label(fr, "Grays 12"), format!("{} 12", tr(fr, "Grays")));
+    for kept in ["K=35", "#33cc99", "Grays x", "Grays ", "Not A Catalog Name 3"] {
+        assert_eq!(numbered_label(fr, kept), kept);
+    }
+    assert_eq!(numbered_label(Lang::EN, "Grays 12"), "Grays 12");
+}
+
+/// General › Show Tool Cards and every tool's description on its card.
+#[test]
+fn tool_card_strings_are_in_complete_catalogs() {
+    let mut bad = vec![];
+    let descriptions = vectorcraft_tools::catalog::all_tools().filter_map(|t| vectorcraft_tools::catalog::tool_description(t.id));
+    let strings: Vec<&str> = std::iter::once("Show Tool Cards").chain(descriptions).collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&&str> = strings.iter().filter(|s| lang.catalog().plain(s).is_none()).collect();
         if !missing.is_empty() {
             bad.push(format!("{} is missing {missing:?}", lang.code));
         }
@@ -624,6 +855,18 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// The Artboard tool's add buttons take their tooltips from the tools crate, which the `tl!` scan
+/// does not read, so each complete catalog is checked for them here.
+#[test]
+fn artboard_add_button_tooltips_are_in_complete_catalogs() {
+    use vectorcraft_tools::xform::{EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED};
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus || COMPLETE_MESSAGES.contains(&lang.code)) {
+        for label in [EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED] {
+            assert!(lang.catalog().plain(label).is_some_and(|t| !t.is_empty() && t != label), "{} is missing {label}", lang.code);
         }
     }
 }
@@ -741,11 +984,13 @@ fn document_info_labels_are_in_complete_catalogs() {
 
 /// The values Document Info makes and shows in the interface language: the font states and
 /// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, the counted instances, rows and columns, and
-/// the transparency settings' values.
+/// values, the names of gradients named by their kind, the counted uses, instances, rows and
+/// columns, and the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
-    const VALUES: [&str; 20] = [
+    const VALUES: [&str; 22] = [
+        "unknown type",
+        "{type}; {uses}",
         "built in",
         "embedding not allowed",
         "embedding for editing",
@@ -767,7 +1012,8 @@ fn document_info_values_are_in_complete_catalogs() {
         "Diamond gradient",
         "Freeform gradient",
     ];
-    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    const COUNTED: [(&str, &str); 4] =
+        [("{n} use", "{n} uses"), ("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
     // The transparency settings' values: the grid's sizes and color presets, on and off, and the
     // built-in flattener presets.
     let transparency = ["Small", "Medium", "Large", "On", "Off", "High Resolution", "Medium Resolution", "Low Resolution"]
@@ -805,16 +1051,15 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
 }
 
 /// Each row in the `search` context, which adds a language's words to a group of words with the same
-/// meaning for the command palette, names a group and adds single words of no other group. No
-/// catalog has to have these rows.
+/// meaning for the command palette, names a group and adds single words of no other group, and no
+/// two rows of a catalog add one word to different groups. No catalog has to have these rows.
 #[test]
 fn search_rows_name_a_group_and_add_single_words() {
     let mut bad = Vec::new();
     for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
         let (entries, _) = parse_entries(l.source);
-        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT) {
-            bad.extend(crate::palette::words::row_problems(src, tr).into_iter().map(|p| format!("{}: {p}", l.code)));
-        }
+        let rows = entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT).map(|(_, src, tr)| (src.as_str(), tr.as_str()));
+        bad.extend(crate::palette::words::catalog_problems(rows).into_iter().map(|p| format!("{}: {p}", l.code)));
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
@@ -849,6 +1094,16 @@ fn eps_option_menu_names_are_in_complete_catalogs() {
         .collect();
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// HP-GL Options' Origin menu names (drawn translated by the dropdown, not through `tl!`).
+#[test]
+fn hpgl_origin_menu_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in crate::dialogs::hpgl_options::ORIGIN_NAMES {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -2571,6 +2826,31 @@ fn messages_translate_by_template_and_their_parts() {
     assert_eq!(message(Lang::EN, nested), nested);
 }
 
+/// Spanish shows the status and error messages of the script engine, the parameter checks, the
+/// importers and the 3D effects in Spanish, with the values, names and command ids they carry kept.
+#[test]
+fn spanish_translates_engine_import_and_parameter_messages() {
+    let es = Lang::from_code("es").expect("registered");
+    for (english, spanish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` debe ser un número entero entre 2 y 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (en el desplazamiento 12)"),
+        ("unknown mode `foo` (set, add, subtract)", "modo desconocido `foo` (set, add, subtract)"),
+        (
+            "the Word document is encrypted or protected with a password; save it without one to place it",
+            "el documento de Word está cifrado o protegido con contraseña; guárdalo sin ella para colocarlo",
+        ),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objeto 7: con una profundidad de 0 el objeto tiene una sola cara: asigna sus gráficos a la parte frontal",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "no existe la punta de flecha personalizada Fin (consulta stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` debe ser un número entero entre 1 y 6"),
+        ("the rectangle or line reaches too many paths to check", "el rectángulo o la línea alcanza demasiados trazados para comprobarlos"),
+    ] {
+        assert_eq!(message(es, english), spanish);
+    }
+}
+
 /// The note `recolor.apply` and the Edit Colors commands give when they leave out locked or hidden
 /// objects is translated whole, its counts included, in every complete-message language.
 #[test]
@@ -2822,6 +3102,19 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
             assert!(words.iter().all(|w| !english.contains(w)), "{code}: {shown}");
             assert!(words.contains(&field), "{code}: {shown}");
         }
+    }
+}
+
+/// No catalog keeps a row for `{k} has control characters{_1}`, the single message that
+/// `file.info`'s two control character refusals replaced.
+#[test]
+fn no_catalog_keeps_the_old_file_info_control_character_row() {
+    let literals = message_literals_in(&["engine"]);
+    let old = "{k} has control characters{_1}";
+    assert!(!literals.contains(old), "the engine still makes {old:?}");
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        assert!(!entries.iter().any(|(ctx, src, _)| ctx.starts_with("@msg") && src.split('|').any(|s| s == old)), "{}: {old:?}", l.code);
     }
 }
 
@@ -3177,6 +3470,31 @@ fn a_repeated_placeholder_matches_the_same_text() {
     assert_eq!(form, "thrown {file} {line} {e}");
     assert_eq!(caps.last(), Some(&("e", "Error: confirm: the next answer is for prompt, not confirm")));
     assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
+}
+
+/// Swedish shows the status and error messages of the script engine, the parameter checks, the
+/// importers, the 3D effects and the cutting add-on in Swedish, with the values, names and command
+/// ids they carry kept.
+#[test]
+fn swedish_translates_engine_import_and_parameter_messages() {
+    let sv = Lang::from_code("sv").expect("registered");
+    for (english, swedish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` måste vara ett heltal från 2 till 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (vid position 12)"),
+        ("unknown dither `foo` (diffusion, pattern, noise or none)", "okänd dithering `foo` (diffusion, pattern, noise eller none)"),
+        ("not a DCS file", "inte en DCS-fil"),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objekt 7: med djupet 0 har objektet en enda yta: mappa dess grafik på framsidan",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "ingen anpassad pilspets Fin (se stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` måste vara ett heltal från 1 till 6"),
+        ("the rectangle or line reaches too many paths to check", "rektangeln eller linjen når för många banor för att kunna kontrolleras"),
+        ("the hem is too deep for the banner", "fållen är för djup för bannern"),
+        ("`diameter` must be from 0.1 to 2500 pt", "`diameter` måste vara från 0,1 till 2500 pt"),
+    ] {
+        assert_eq!(message(sv, english), swedish);
+    }
 }
 
 /// Of two templates that start with text, the one with the longer text before its first
@@ -4629,6 +4947,21 @@ fn script_errors_are_translated() {
     }
 }
 
+/// A message with a value kept as it is translates the words around the value and shows the value
+/// unchanged, whatever it reads like; when the words around it cannot hold its place once, the
+/// message stays English.
+#[test]
+fn a_kept_value_is_shown_as_it_is_in_a_translated_message() {
+    let de = Lang::from_code("de").expect("registered");
+    let (before, after) = ("t.js: line 1, column 1: ", " (thrown)");
+    for kept in ["invalid array length", "", "{e}", "\u{FFFC}", "a\nb", "t.js: line 1, column 1: x (thrown)"] {
+        assert_eq!(message_keeping(de, before, kept, after), format!("t.js: Zeile 1, Spalte 1: {kept} (ausgelöst)"), "{kept:?}");
+    }
+    assert_eq!(message_keeping(de, "t.js\u{FFFC}: line 1, column 1: ", "x", after), "t.js\u{FFFC}: line 1, column 1: x (thrown)");
+    assert_eq!(message_keeping(de, "no such message ", "x", ""), "no such message x");
+    assert_eq!(message_keeping(Lang::EN, before, "invalid array length", after), "t.js: line 1, column 1: invalid array length (thrown)");
+}
+
 /// The errors a script's `$` object, its `alert`, `confirm` and `prompt` dialogs, `vc.document`,
 /// `vc.log`, the methods of its `File` and `Folder` objects and a run's limits give, and the errors
 /// of the script engine commands, are translated in every language of [`COMPLETE_MESSAGES`], on
@@ -5612,6 +5945,21 @@ fn pdfx_bleed_warning_is_translated() {
     for lang in Lang::all().filter(|l| l.code() != Lang::EN.code()) {
         for shown in [message(lang, w), message(lang, &status)] {
             assert!(!shown.contains("leaves out") && !shown.contains("turn on"), "{}: {shown}", lang.code());
+        }
+    }
+}
+
+/// The warning about art that reaches the trim edge but stops short of the bleed is translated in
+/// every complete-message catalog, for one object and for more, alone and in the status bar's note.
+#[test]
+fn short_of_bleed_warning_is_translated() {
+    for n in [1, 3, 5, 21] {
+        let w = vectorcraft_engine::cmd::fileio::pdf::short_of_bleed_warning(n).expect("a warning");
+        let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+        for code in COMPLETE_MESSAGES {
+            for shown in [message(Lang::from_code(code).expect("registered"), &w), message(Lang::from_code(code).expect("registered"), &status)] {
+                assert!(!shown.contains("trim edge") && !shown.contains("short of") && shown.contains(&n.to_string()), "{code}: {shown}");
+            }
         }
     }
 }
