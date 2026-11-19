@@ -125,6 +125,20 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
+    // None of them is a default brush.
+    let defaults: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).collect();
+    for id in ids {
+        let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
+        assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
+    }
+    assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn the_builtin_libraries_list_their_brush_names_and_counts() {
+    let mut s = Session::new();
+    let list = run(&mut s, "brush.libraries", json!({}));
+    let libs = list["libraries"].as_array().unwrap();
     // Looked up by id, so a library added to the list does not shift these checks.
     let entry = |id: &str| libs.iter().find(|l| l["id"] == id).unwrap();
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
@@ -163,6 +177,11 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
     assert_eq!(strs(&added["added"]), ["Laser Bolt"]);
+}
+
+#[test]
+fn every_builtin_library_brush_has_its_kind_and_draws() {
+    let s = Session::new();
     // One kind of brush per library (Ink and Wash: art brushes and a calligraphic one), every
     // brush drawing something.
     for (id, kind) in [
@@ -193,6 +212,11 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             assert!(!vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &stroke).is_empty(), "{} draws nothing", b.name);
         }
     }
+}
+
+#[test]
+fn builtin_library_brushes_bring_the_resources_their_art_uses() {
+    let s = Session::new();
     // The resources their art uses come with them: Striped Ribbon's pattern, Sparkles' symbol.
     let (_, ribbons) = cmd::brushlib::library(&s, "art-ribbons").unwrap();
     assert_eq!(art_patterns(ribbons.brush("Striped Ribbon").unwrap()), ["Pinstripes"]);
@@ -201,13 +225,6 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let BrushKind::Scatter(sparkles) = &shapes.brush("Sparkles").unwrap().kind else { panic!("not a scatter brush") };
     assert!(matches!(&sparkles.art.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Sparkle"));
     assert!(shapes.doc.symbols.iter().any(|x| x.name == "Sparkle"));
-    // None of them is a default brush.
-    let defaults: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).collect();
-    for id in ids {
-        let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
-        assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
-    }
-    assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
 }
 
 #[test]
