@@ -10274,6 +10274,10 @@ breakText	Glyphs	Glifi
 	Rose Layers	Livelli rosa
 	Monochrome Stack	Pila monocromatica
 	Dashed Arrow	Freccia tratteggiata
+	Fine Stipple	Puntinatura fine
+	Dense Stipple	Puntinatura fitta
+	Soft Stipple	Puntinatura morbida
+	Bold Stipple	Puntinatura marcata
 	Pressure Sensitive	Sensibile alla pressione
 	Flex Ribbon	Nastro flessibile
 	Pulse Stroke	Tratto pulsante

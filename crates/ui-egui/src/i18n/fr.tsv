@@ -10624,6 +10624,10 @@ breakText	Glyphs	Glyphes
 	Makes a series of steps between two or more objects.	Crée une série d’étapes entre deux objets ou plus.
 	Places dimension lines that show measured lengths.	Place des lignes de cote qui indiquent des longueurs mesurées.
 	Dashed Arrow	Flèche en pointillés
+	Fine Stipple	Pointillé fin
+	Dense Stipple	Pointillé dense
+	Soft Stipple	Pointillé doux
+	Bold Stipple	Pointillé marqué
 	Pressure Sensitive	Sensible à la pression
 	Flex Ribbon	Ruban souple
 	Pulse Stroke	Trait pulsé

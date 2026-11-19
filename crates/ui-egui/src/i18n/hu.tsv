@@ -10616,6 +10616,10 @@ breakText	Glyphs	Glifák
 	Rose Layers	Rózsaszín rétegek
 	Monochrome Stack	Monokróm köteg
 	Dashed Arrow	Szaggatott nyíl
+	Fine Stipple	Finom pontozás
+	Dense Stipple	Sűrű pontozás
+	Soft Stipple	Lágy pontozás
+	Bold Stipple	Erős pontozás
 	Pressure Sensitive	Nyomásérzékeny
 	Flex Ribbon	Rugalmas szalag
 	Pulse Stroke	Lüktető vonás

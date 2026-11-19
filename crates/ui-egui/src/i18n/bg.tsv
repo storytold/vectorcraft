@@ -7788,6 +7788,10 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Fine Stipple	Фина точкова текстура
+	Dense Stipple	Гъста точкова текстура
+	Soft Stipple	Мека точкова текстура
+	Bold Stipple	Едра точкова текстура
 	Paper Cutouts	Хартиени изрезки
 	Coral Layers	Коралови слоеве
 	Mint Layers	Ментови слоеве

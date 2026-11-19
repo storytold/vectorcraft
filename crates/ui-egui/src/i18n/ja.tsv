@@ -10338,6 +10338,10 @@ breakText	Glyphs	字形
 	Rose Layers	ローズのレイヤー
 	Monochrome Stack	モノクロの重なり
 	Dashed Arrow	破線矢印
+	Fine Stipple	細かい点描
+	Dense Stipple	密な点描
+	Soft Stipple	柔らかい点描
+	Bold Stipple	太い点描
 	Pressure Sensitive	筆圧対応
 	Flex Ribbon	しなやかなリボン
 	Pulse Stroke	脈打つ線

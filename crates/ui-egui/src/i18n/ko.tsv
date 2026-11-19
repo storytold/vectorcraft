@@ -10237,6 +10237,10 @@ breakText	Glyphs	글리프
 	Rose Layers	장미색 레이어
 	Monochrome Stack	단색 쌓기
 	Dashed Arrow	점선 화살표
+	Fine Stipple	가는 점묘
+	Dense Stipple	촘촘한 점묘
+	Soft Stipple	부드러운 점묘
+	Bold Stipple	굵은 점묘
 	Pressure Sensitive	압력 감지
 	Flex Ribbon	유연한 리본
 	Pulse Stroke	맥동 획

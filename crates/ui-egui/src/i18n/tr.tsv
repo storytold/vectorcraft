@@ -10586,6 +10586,10 @@ breakText	Glyphs	Glifler
 	Rose Layers	Gül Katmanları
 	Monochrome Stack	Tek Renkli Yığın
 	Dashed Arrow	Kesikli Ok
+	Fine Stipple	İnce noktalı gölgelendirme
+	Dense Stipple	Yoğun noktalı gölgelendirme
+	Soft Stipple	Yumuşak noktalı gölgelendirme
+	Bold Stipple	Kalın noktalı gölgelendirme
 	Pressure Sensitive	Basınca Duyarlı
 	Flex Ribbon	Esnek Şerit
 	Pulse Stroke	Atımlı Çizgi

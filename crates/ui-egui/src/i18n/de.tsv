@@ -10241,6 +10241,10 @@ breakText	Glyphs	Glyphen
 	Rose Layers	Rosenschichten
 	Monochrome Stack	Monochromer Stapel
 	Dashed Arrow	Gestrichelter Pfeil
+	Fine Stipple	Feine Punktierung
+	Dense Stipple	Dichte Punktierung
+	Soft Stipple	Weiche Punktierung
+	Bold Stipple	Kräftige Punktierung
 	Pressure Sensitive	Druckempfindlich
 	Flex Ribbon	Flexibles Band
 	Pulse Stroke	Pulsierender Strich

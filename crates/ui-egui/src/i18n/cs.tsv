@@ -10628,6 +10628,10 @@ breakText	Glyphs	Glyfy
 	Rose Layers	Růžové vrstvy
 	Monochrome Stack	Jednobarevná sada
 	Dashed Arrow	Přerušovaná šipka
+	Fine Stipple	Jemné tečkování
+	Dense Stipple	Husté tečkování
+	Soft Stipple	Měkké tečkování
+	Bold Stipple	Výrazné tečkování
 	Pressure Sensitive	Citlivé na tlak
 	Flex Ribbon	Pružná stuha
 	Pulse Stroke	Pulzující tah

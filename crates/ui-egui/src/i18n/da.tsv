@@ -10682,6 +10682,10 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Fine Stipple	Fint prikmønster
+	Dense Stipple	Tæt prikmønster
+	Soft Stipple	Blødt prikmønster
+	Bold Stipple	Kraftigt prikmønster
 	Paper Cutouts	Papirudklip
 	Coral Layers	Korallag
 	Mint Layers	Myntelag

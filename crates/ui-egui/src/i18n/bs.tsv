@@ -7843,6 +7843,10 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Fine Stipple	Fino tačkasto sjenčenje
+	Dense Stipple	Gusto tačkasto sjenčenje
+	Soft Stipple	Meko tačkasto sjenčenje
+	Bold Stipple	Krupno tačkasto sjenčenje
 	Paper Cutouts	Papirni izrezi
 	Coral Layers	Koraljni slojevi
 	Mint Layers	Mentini slojevi

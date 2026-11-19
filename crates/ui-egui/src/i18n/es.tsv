@@ -10512,6 +10512,10 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Fine Stipple	Punteado fino
+	Dense Stipple	Punteado denso
+	Soft Stipple	Punteado suave
+	Bold Stipple	Punteado grueso
 	Paper Cutouts	Recortes de papel
 	Coral Layers	Capas coral
 	Mint Layers	Capas menta

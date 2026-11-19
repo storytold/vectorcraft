@@ -10667,6 +10667,10 @@ breakText	Glyphs	Glyphs
 	Rose Layers	Rozenlagen
 	Monochrome Stack	Monochrome stapel
 	Dashed Arrow	Gestreepte pijl
+	Fine Stipple	Fijn stippelen
+	Dense Stipple	Dicht stippelen
+	Soft Stipple	Zacht stippelen
+	Bold Stipple	Grof stippelen
 	Pressure Sensitive	Drukgevoelig
 	Flex Ribbon	Flexibel lint
 	Pulse Stroke	Pulserende streek

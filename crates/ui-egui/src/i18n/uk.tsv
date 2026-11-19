@@ -10250,6 +10250,10 @@ breakText	Glyphs	Гліфи
 	Rose Layers	Рожеві шари
 	Monochrome Stack	Монохромний стос
 	Dashed Arrow	Пунктирна стрілка
+	Fine Stipple	Тонке крапкове штрихування
+	Dense Stipple	Щільне крапкове штрихування
+	Soft Stipple	М’яке крапкове штрихування
+	Bold Stipple	Грубе крапкове штрихування
 	Pressure Sensitive	Чутливі до натиску
 	Flex Ribbon	Гнучка стрічка
 	Pulse Stroke	Пульсуючий штрих
