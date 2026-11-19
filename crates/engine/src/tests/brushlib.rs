@@ -212,12 +212,24 @@ fn artistic_library_strokes_are_editable_and_reopen_from_a_saved_library() {
     let names = ["Orbit Lines", "Petal Garland", "Lattice Braid", "Facet Sweep"];
     assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
     let line = run(&mut s, "shape.line", json!({"x1": 10, "y1": 50, "x2": 190, "y2": 50}))["id"].as_u64().unwrap();
+    let red = vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)), 1.0);
     for b in &lib.brushes {
         let BrushKind::Art(a) = &b.kind else { panic!("{} is not an art brush", b.name) };
         assert!(art_paths(&a.art).len() >= 2, "{} has no editable vector art", b.name);
         for path in [line_to(180.0), line_to(1.0)] {
             assert!(!vectorcraft_brush::stroke_pieces(&lib.doc, b, &path, &black_stroke()).is_empty(), "{} draws nothing", b.name);
         }
+        // The art is black, so with Tints every path takes the stroke color itself.
+        let mut fills = vec![];
+        for piece in vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &red) {
+            piece.walk(&mut |n| {
+                if n.path_data().is_some() {
+                    fills.push(n.appearance.fill_paint().color().map(|c| c.to_rgb()));
+                }
+            });
+        }
+        let is_red = |c: &Option<[f32; 3]>| c.is_some_and(|[r, g, b]| (r - 1.0).abs() < 1e-5 && g.abs() < 1e-5 && b.abs() < 1e-5);
+        assert!(!fills.is_empty() && fills.iter().all(is_red), "{} does not take the stroke color: {fills:?}", b.name);
         let before = undo_len(&s);
         let added = run(&mut s, "brush.addFromLibrary", json!({"library": "artistic", "name": b.name, "apply": true, "ids": [line]}));
         assert_eq!(strs(&added["added"]), [b.name.as_str()]);
@@ -242,6 +254,12 @@ fn a_loaded_library_named_artistic_keeps_its_name_ahead_of_the_builtin_alias() {
     assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], id);
     assert_eq!(run(&mut s, "brush.library", json!({"library": "ARTISTIC"}))["id"], id);
     assert_eq!(run(&mut s, "brush.library", json!({"library": "artistic"}))["id"], "artistic", "exact built-in id still works");
+    // A name a built-in library has selects the built-in, as for every built-in; the loaded one keeps its id.
+    let full = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Artistic Brushes.vectorcraft"}));
+    assert_eq!(full["name"], "Artistic Brushes");
+    let full_id = full["library"].as_str().unwrap();
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic Brushes"}))["id"], "artistic");
+    assert_eq!(run(&mut s, "brush.library", json!({"library": full_id}))["id"], full_id);
 }
 
 /// Every path of brush art `n`: (anchors, opacity).
