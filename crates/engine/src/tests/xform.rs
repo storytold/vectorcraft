@@ -506,6 +506,10 @@ fn two_reflect_clicks_reflect_across_their_line_as_one_undo_step() {
     click(&mut s, 350.0, 300.0, true);
     assert_eq!(children(&s), 2);
     assert!(close(bounds(&s, a), Rect::new(100.0, 100.0, 200.0, 150.0)));
+    // The copy is selected and reflected across y = 300.
+    let copy = s.doc().unwrap().selection.objects.clone();
+    assert!(copy.len() == 1 && copy[0] != a, "{copy:?}");
+    assert!(close(bounds(&s, copy[0]), Rect::new(100.0, 450.0, 200.0, 500.0)), "{:?}", bounds(&s, copy[0]));
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(children(&s), 1);

@@ -87,6 +87,9 @@ struct Drag {
     pointer: Point,
     shift: bool,
     last: Affine,
+    /// The document revision at the press: a press whose document or selection changes before it
+    /// becomes a drag is dropped, so its reference point is never applied to other objects.
+    revision: (u64, u64),
 }
 
 impl Drag {
@@ -350,6 +353,7 @@ impl Tool for TransformTool {
                     pointer: p,
                     shift: false,
                     last: Affine::IDENTITY,
+                    revision: cx.revision,
                 });
                 vec![]
             }
@@ -358,6 +362,12 @@ impl Tool for TransformTool {
                 let mut out = vec![];
                 if !d.began {
                     if p.distance(d.start) < cx.tol(3.0) {
+                        return out;
+                    }
+                    // The document or the selection changed since the press: its reference point
+                    // (or Reflect axis) belongs to the selection as it was, so the press is dropped.
+                    if d.revision != cx.revision {
+                        self.end_drag();
                         return out;
                     }
                     d.began = true;
@@ -460,12 +470,25 @@ impl Tool for TransformTool {
                 self.drop_axis();
                 vec![]
             }
+            // Enter opens the dialog. A press not yet a drag ends with it, so its release sets no
+            // reference point or Reflect axis behind the dialog.
             ToolKey::Enter => {
+                if !self.busy() {
+                    self.end_drag();
+                }
                 self.drop_axis();
                 self.reference_point(cx).map(|o| vec![self.dialog(o)]).unwrap_or_default()
             }
             _ => vec![],
         }
+    }
+
+    /// A dropped press ends whether or not it became a drag, so the release the engine sends after
+    /// it sets no reference point or Reflect axis; a Reflect axis waiting for its second point is
+    /// dropped too, as with Escape.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drop_axis();
+        if self.end_drag().is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -996,6 +1019,60 @@ mod tests {
         assert!(!t.ends_on_escape(&c));
         assert!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
         assert!(click(&mut t, &c, 200.0, 200.0, none).is_empty());
+    }
+
+    /// Enter between the press and the release of the second click opens the dialog at the first
+    /// point and ends the press: the release sets no point and starts no axis. A press the engine
+    /// drops ends the same way, with or without an axis waiting, and a dropped drag is canceled. A
+    /// press whose document or selection changes before it becomes a drag is dropped.
+    #[test]
+    fn enter_or_a_dropped_press_during_a_reflect_click_ends_that_press() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let first = Point::new(100.0, 100.0);
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert_eq!(t.key(&c, ToolKey::Enter, none), vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [100.0, 100.0]}))]);
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(first));
+
+        // A dropped first press: its release sets no point and starts no axis.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert_eq!(t.reference_point(&c), Some(first));
+        // A dropped second press drops the axis too, so the next click is a first click.
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+        assert!(click(&mut t, &c, 150.0, 300.0, none).is_empty());
+        // A dropped drag is canceled, and its release commits nothing.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 300.0, 300.0)).is_empty());
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Drag, 100.0, 250.0))[0], Action::Begin("Reflect".into()));
+        assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+        assert!(!t.ends_on_escape(&c));
+
+        // The selection changes between the press and the first drag event: the press is dropped,
+        // and neither the drag nor its release transforms anything.
+        assert!(click(&mut t, &c, 100.0, 100.0, none).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        let mut moved = cx(&d, &s, &p);
+        (moved.smart_guides, moved.snap_to_point) = (false, false);
+        moved.revision = (c.revision.0, c.revision.1 + 1);
+        assert!(t.pointer(&moved, &ev(PointerKind::Drag, 100.0, 250.0)).is_empty());
+        assert!(!t.busy());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
     }
 
     /// After a click sets the first point, a drag draws the axis from it (Shift in 45° steps from a
