@@ -186,6 +186,53 @@ fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }
 
+/// #5941: a page whose settings run past the bottom of the list showed no scroll bar, so a setting
+/// lower on the page was easy to miss. Every page that scrolls shows its bar inside the window, and
+/// no label is cut off at the side.
+#[test]
+fn a_page_that_scrolls_shows_its_bar() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) if !t.galley.text().trim().is_empty() => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let mut scrolled = 0;
+    for cat in PREF_CATEGORIES {
+        let mut a = app();
+        open(&mut a, Some(cat));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let (mut texts, mut bars) = (vec![], vec![]);
+        for time in [0.0, 0.25, 0.5, 0.75] {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+            let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(&mut a, ui.ctx()));
+            out.textures_delta.clear();
+            (texts, bars) = (vec![], vec![]);
+            out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        }
+        let window = ctx.memory(|m| m.area_rect(egui::Id::unique("dialog-preferences"))).expect("the dialog window is shown");
+        // A label below its clip: the page runs past the bottom of the list.
+        let scrolls = texts.iter().any(|(_, r, clip)| window.contains_rect(*clip) && r.top() >= clip.bottom());
+        if scrolls {
+            scrolled += 1;
+            assert!(bars.iter().any(|b| window.contains_rect(*b)), "{cat}: the page scrolls and its bar shows in {window:?}: {bars:?}");
+        }
+        let cut: Vec<_> = texts
+            .iter()
+            .filter(|(_, r, clip)| clip.y_range().contains(r.center().y) && (r.left() < clip.left() - 1.0 || r.right() > clip.right() + 1.0))
+            .filter(|(_, r, _)| window.intersects(*r))
+            .map(|(s, r, clip)| format!("{s:?} {r:?} in {clip:?}"))
+            .collect();
+        assert!(cut.is_empty(), "{cat}: labels cut off at the side: {cut:?}");
+    }
+    assert!(scrolled > 0, "at least one page runs past the bottom of its list");
+}
+
 #[test]
 fn dialog_ok_applies_prefs_and_ui_fields() {
     let mut a = app();
@@ -1250,6 +1297,46 @@ fn show_samples_on_white_dims_without_in_menu_font_previews() {
     }
 }
 
+/// General › Show Tool Cards: its checkbox is dimmed while Show Tool Tips is unchecked in the
+/// dialog, and a click on it then leaves the setting as it was.
+#[test]
+fn show_tool_cards_dims_without_tool_tips() {
+    fn label(s: &egui::Shape, text: &str) -> Option<(egui::Color32, egui::Rect)> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => t.galley.job.sections.first().map(|s| (s.format.color, t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| label(s, text)),
+            _ => None,
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut a = app();
+    let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 3000.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            category_fields(ui, &mut a, d, "General");
+        });
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| label(&c.shape, "Show Tool Cards"))
+    };
+    let t = Tokens::get(&ctx);
+    for (tips, color, what) in [(true, t.text, "enabled while tool tips are on"), (false, t.text_disabled, "dimmed while they are off")] {
+        let mut d = Dialog::new("preferences", json!({"showToolTips": tips, "showToolCards": false}));
+        let (shown, at) = frame(&mut d, vec![]).unwrap_or_else(|| panic!("no label ({what})"));
+        assert_eq!(shown, color, "{what}");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: at.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut d, vec![egui::Event::PointerMoved(at.center()), press(true)]);
+        frame(&mut d, vec![press(false)]);
+        // A click turns it on while it is enabled, and leaves it off while it is dimmed.
+        assert_eq!(d.fields["showToolCards"], json!(tips), "after a click, {what}");
+    }
+}
+
 /// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
 /// choices this version offers are kept (#502).
 #[test]
@@ -1745,9 +1832,29 @@ fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it()
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Whether a text painted in `rect` shows inside its `clip`: its center is inside the clip, so the
+/// pointer on that center reaches the text's row.
+fn shows_in_clip(rect: egui::Rect, clip: egui::Rect) -> bool {
+    clip.contains(rect.center())
+}
+
+/// A text whose top or bottom edge the clip cuts off shows only while its center is inside the
+/// clip: a row half scrolled out of the list is not yet one the pointer can be moved onto.
+#[test]
+fn a_text_shows_only_while_its_center_is_inside_its_clip() {
+    let clip = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 100.0));
+    let text = |y: f32| egui::Rect::from_min_size(egui::pos2(10.0, y), egui::vec2(50.0, 20.0));
+    assert!(shows_in_clip(text(40.0), clip));
+    assert!(shows_in_clip(text(85.0), clip), "the center is 5 pt above the bottom");
+    assert!(!shows_in_clip(text(95.0), clip), "the top is inside, the center below the bottom");
+    assert!(!shows_in_clip(text(-15.0), clip), "the bottom is inside, the center above the top");
+    assert!(!shows_in_clip(text(200.0), clip));
+}
+
 /// One frame of the open Preferences dialog with `events`, a quarter second after the last. → The
-/// texts it painted where they show (a text its clip rectangle hides is left out), with their
-/// rectangles, and the description of the accessibility node with the keyboard focus, if it has one.
+/// texts it painted where they show (a text whose center its clip rectangle hides is left out),
+/// with their rectangles, and the description of the accessibility node with the keyboard focus, if
+/// it has one.
 fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Option<String>) {
     let time = ctx.input(|i| i.time) + 0.25;
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
@@ -1758,7 +1865,7 @@ fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<eg
         match s {
             egui::Shape::Text(t) => {
                 let r = egui::Rect::from_min_size(t.pos, t.galley.size());
-                if r.intersects(clip) {
+                if shows_in_clip(r, clip) {
                     v.push((t.galley.text().to_string(), r));
                 }
             }
@@ -2333,8 +2440,8 @@ fn hovering_a_hyphenation_row_shows_its_description() {
 }
 
 /// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
-/// field: the line shows each one's sentence in turn, and a screen reader gets it as the focused
-/// control's description.
+/// field, in that order and before the focus comes back to the search field: the line shows each
+/// one's sentence in turn, and a screen reader gets it as the focused control's description.
 #[test]
 fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     let mut a = app();
@@ -2362,7 +2469,7 @@ fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
     };
     let rows = [
         ("Additional Plug-ins Folder:", "pluginsFolder"),
-        ("Plug-in Instruction Budget:", "pluginInstructionBudget"),
+        ("Plug-in Instruction Budget", "pluginInstructionBudget"),
         ("Primary:", "scratchPrimary"),
         ("Secondary:", "scratchSecondary"),
     ];
@@ -2488,7 +2595,8 @@ fn the_display_server_and_monitor_profile_settings_have_a_description_on_every_p
 }
 
 /// The pointer over each Performance row this platform shows, from GPU Performance to Use Monitor
-/// Profile for Canvas on the desktop, shows that row's sentence and no other row's.
+/// Profile for Canvas on the desktop, Low-Latency Drawing included there, shows that row's sentence
+/// and no other row's.
 #[test]
 fn hovering_a_performance_row_shows_its_description() {
     let mut a = app();
