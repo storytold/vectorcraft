@@ -594,6 +594,10 @@ font-technology	Variable	Променливи
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Show Harmony	Показване на хармонията
 	Harmony Rule	Правило за хармония
 	Harmony color	Цвят от хармонията
@@ -1835,6 +1839,10 @@ font-technology	Variable	Променливи
 	Rename Preset	Преименуване на предварителна настройка
 	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
 	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
+	Tracing Presets…	Предварителни настройки за трасиране…
+	Import Image Trace Presets	Импортиране на предварителни настройки за трасиране на изображения
+	Export Image Trace Presets	Експортиране на предварителни настройки за трасиране на изображения
+	Replace the saved presets that have these names?	Да се заменят ли запазените предварителни настройки с тези имена?
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2706,6 +2714,13 @@ font-technology	Variable	Променливи
 	Pen Tool	Инструмент „Перо“
 	Quick Pen Tool	Инструмент „Бързо перо“
 	Quick Pen	Бързо перо
+	Quick Pen Toolbar	Лента на бързото перо
+	Continuous Arc	Непрекъсната дъга
+	Sharp Corner Arc	Дъга с остър ъгъл
+	Flip Arc	Обръщане на дъгата
+	Hide Toolbar	Скриване на лентата с инструменти
+	Pin Toolbar Position	Закачане на позицията на лентата с инструменти
+	Reset Toolbar Position	Нулиране на позицията на лентата с инструменти
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък
@@ -7915,6 +7930,11 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Ornamental	Орнаментални
+	Scrollwork	Завитък
+	Filigree Arrow	Филигранна стрела
+	Petal Sweep	Венчелистен замах
+	Twin Curl	Двоен завитък
 	Vector Packs	Векторни пакети
 	Compass Rose	Роза на компаса
 	Botanical Sprig	Ботаническо клонче

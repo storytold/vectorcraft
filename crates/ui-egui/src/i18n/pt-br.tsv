@@ -557,6 +557,10 @@ antiAlias	Sharp	Nítido
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores
+	Show Document Colors	Mostrar Cores do Documento
+	Document Colors	Cores do Documento
+	Selection Colors	Cores da Seleção
+@plural	Used {n} time|Used {n} times	Usada {n} vez|Usada {n} vezes
 	Show Harmony	Mostrar Harmonia
 	Harmony Rule	Regra de Harmonia
 	Harmony color	Cor da harmonia
@@ -2315,6 +2319,13 @@ antiAlias	Sharp	Nítido
 	Pen Tool	Ferramenta Caneta
 	Quick Pen Tool	Ferramenta Caneta rápida
 	Quick Pen	Caneta rápida
+	Quick Pen Toolbar	Barra de Ferramentas da Caneta rápida
+	Continuous Arc	Arco Contínuo
+	Sharp Corner Arc	Arco de Canto Agudo
+	Flip Arc	Virar Arco
+	Hide Toolbar	Ocultar Barra de Ferramentas
+	Pin Toolbar Position	Fixar Posição da Barra de Ferramentas
+	Reset Toolbar Position	Redefinir Posição da Barra de Ferramentas
 	Pencil	Lápis
 	Pencil Tool	Ferramenta Lápis
 	Percent:	Porcentagem:
@@ -4115,6 +4126,10 @@ font-technology	Variable	Variáveis
 	Rename Preset	Renomear Predefinido
 	Save Image Trace Preset	Salvar Predefinido de Rastreamento de Imagem
 	Delete Image Trace Preset	Excluir Predefinido de Rastreamento de Imagem
+	Tracing Presets…	Predefinições de vetorização…
+	Import Image Trace Presets	Importar Predefinidos de Rastreamento de Imagem
+	Export Image Trace Presets	Exportar Predefinidos de Rastreamento de Imagem
+	Replace the saved presets that have these names?	Substituir os predefinidos salvos que têm esses nomes?
 	Japanese	Japonês
 	Keep a link to an image file instead of only embedding it	Manter um link para o arquivo de imagem em vez de apenas incorporá-lo
 	Latin	Latim
@@ -6840,8 +6855,10 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` deve ser front, back ou side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão, Revolver e Inflar
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolver mapeia os gráficos na sua lateral: mapeie-os na face frontal
+@msg	Inflate maps graphics onto its front and back, not onto a side	Inflar mapeia os gráficos na face frontal e no verso, não em uma lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objeto {_1}: o verso de Inflar recebe gráficos apenas com Ambos os Lados e Tampa ativados
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Os gráficos são complexos demais para esta superfície: simplifique a arte dos símbolos ou reduza Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` aceita no máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Um plano tem uma única face: mapeie seus gráficos na face frontal
@@ -10854,6 +10871,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Seta filigranada
+	Petal Sweep	Traço de pétalas
+	Twin Curl	Voluta dupla
 	Vector Packs	Pacotes vetoriais
 	Compass Rose	Rosa dos ventos
 	Botanical Sprig	Ramo botânico

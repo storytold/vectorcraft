@@ -382,7 +382,8 @@ fn revolve_takes_graphics_on_its_side_only() {
     let kept = three_d_params_as(crate::EXTRUDE, &both, REVOLVE);
     assert_eq!(kept["graphics"].as_array().map(Vec::len), Some(1));
     assert_eq!(kept["graphics"][0]["symbol"], "Red");
-    assert_eq!(three_d_params_as(REVOLVE, &front, crate::INFLATE).get("graphics"), None);
+    // Inflate keeps them, and its front takes them.
+    assert_eq!(three_d_params_as(REVOLVE, &front, crate::INFLATE)["graphics"], front["graphics"]);
 }
 
 #[test]

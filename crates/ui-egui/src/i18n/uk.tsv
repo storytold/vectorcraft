@@ -615,6 +615,10 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії
@@ -1946,6 +1950,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2845,6 +2853,13 @@ file-filter	Templates	Шаблони
 	Pen Tool	Інструмент «Перо»
 	Quick Pen Tool	Інструмент «Швидке перо»
 	Quick Pen	Швидке перо
+	Quick Pen Toolbar	Панель швидкого пера
+	Continuous Arc	Неперервна дуга
+	Sharp Corner Arc	Дуга з гострим кутом
+	Flip Arc	Відобразити дугу
+	Hide Toolbar	Сховати панель інструментів
+	Pin Toolbar Position	Закріпити положення панелі інструментів
+	Reset Toolbar Position	Скинути положення панелі інструментів
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -6486,8 +6501,10 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання», «Обертання» та «Надування»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надування» наносить графіку на передній і задній боки, а не на бічну поверхню
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	об’єкт {_1}: задній бік «Надування» приймає графіку лише з увімкненими параметрами «З обох боків» і «Торці»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
@@ -10434,6 +10451,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Ornamental	Орнаментальні
+	Scrollwork	Завиток
+	Filigree Arrow	Філігранна стріла
+	Petal Sweep	Пелюстковий розчерк
+	Twin Curl	Подвійний завиток
 	Vector Packs	Векторні набори
 	Compass Rose	Роза вітрів
 	Botanical Sprig	Ботанічна гілочка
