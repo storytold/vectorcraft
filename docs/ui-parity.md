@@ -158,7 +158,7 @@ forbids launching or measuring Illustrator, so there has been **no side-by-side 
 | Transform handles, bounding box, Free Transform | 80% | 5–8 | estimated |
 | Nudging, numeric entry, precision, units | 85% | 3–5 | estimated |
 | Modifier keys and temporary tools | 80% | 5–8 | estimated |
-| Keyboard shortcuts (default set) | 70% | 6–10 | estimated |
+| Keyboard shortcuts (default set) | 70% | 6–10 | estimated; optional Switch Selection Tools is user-bindable with no default key (#7645), so default-set coverage is unchanged |
 | Cursors | 75% | 3–5 | estimated |
 | Panels, Control bar, Properties, context menus | 70% | 15–25 | estimated |
 | Look and feel (layout, theme, metrics) | 80% | 5–10 | measured once against public screenshots on 2026-10-02; panels added since not re-measured |
@@ -389,6 +389,8 @@ tools, never checked side by side) isn't captured row by row.
 
 ## Keyboard shortcuts
 
+Switch Selection Tools (`tool.switchSelectionTools`, #7645) appears in Edit › Keyboard Shortcuts with no default key. Its assigned key chooses Direct Selection from Selection, and Selection from Direct Selection or another tool. This is the normal persistent explicit tool choice; V/A shortcuts and Touch mode stay unchanged.
+
 Cmd/Ctrl+/ (`appearance.addFill`) and Cmd/Ctrl+Alt+/ (`appearance.addStroke`) add a new fill and a new stroke to the
 selected objects, as the Appearance panel's Add New Fill and Add New Stroke buttons do.
 
@@ -617,6 +619,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-16 | minor | Eraser review (#6582): ordinary Group/Layer own paints and reproducible evaluated gradient placements are preserved as members are cut. Replacement-art effects, plug-ins/Rasterize, along/across-stroke gradients and placements that cannot reproduce the original appearance keep existing fitting. Scores and estimates unchanged. |
 | 2026-11-16 | minor | Color panel: the spectrum fills the vertical space of a resized panel, with options shown or hidden (#8005). Compact auto-fit flyouts and embedded mixers keep their existing size. Evidence: panels::color::tests::the_spectrum_grows_with_the_color_panel. Scores and estimates unchanged. |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
+| 2026-11-14 | minor | Keyboard Shortcuts lists Switch Selection Tools (`tool.switchSelectionTools`, #7645), with no default key: Selection goes to Direct Selection, and other tools go to Selection through the normal explicit tool-choice path. Existing V/A and Touch behavior stay unchanged. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Floating panels: the app counts as inactive only once none of its windows has had focus for 0.25 s, so focus moving between its own windows (a press on a panel's bar) leaves the panels' OS windows at their level; with two floating panels, a press on one panel's bar no longer hands the keyboard to the other or leaves both behind the main window (#6986). `focus_moving_between_the_apps_windows_leaves_the_palettes_on_top`; scores and estimates unchanged. |
 | 2026-11-14 | minor | Direct Selection: Space during an ordinary path's direction-handle drag moves its anchor and both handles; releasing Space resumes handle adjustment, and a Cmd/Ctrl loan preserves Pen continuation (#7237, request 3 only). Handle-hover labels remain open; scores and estimates unchanged. |
 | 2026-11-12 | minor | Numeric fields: a focus click released more than 1 pt from its press keeps the caret; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326). Scores and estimates unchanged. |

@@ -932,6 +932,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
     ),
     (
+        "tool.switchSelectionTools",
+        "Switch Selection Tools",
+        "",
+        "{} choose Direct Selection while Selection is active, otherwise choose Selection; this is a persistent explicit tool choice, as selecting the tool from the toolbar, and can be assigned a key in Keyboard Shortcuts with no default key. Normal tool deactivation finishes pending work; returns the actual active {tool}",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "",
