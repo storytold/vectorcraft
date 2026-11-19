@@ -41,6 +41,8 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
     ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
+    ("holdShortcuts", "Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut."),
+    ("keyHoldDelay", "How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),
     ("newArtBasic", "New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance."),
