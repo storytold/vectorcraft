@@ -37,10 +37,10 @@ pub(crate) use buttons::{
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_stepped,
-    channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel,
-    hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area,
-    wheel_of,
+    FieldAxis, Live, MarkerResponse, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named,
+    channel_slider_stepped, channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped,
+    color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_markers, ring_square, segment_color,
+    segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
 pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
@@ -674,6 +674,17 @@ mod field_number_tests {
         assert_eq!(field_number("(1,5)", "", true), Some(1.5));
         assert_eq!(field_number("(0,125)", "", true), Some(0.125));
         assert_eq!(field_number("12,5%", "%", false), Some(12.5));
+    }
+
+    /// `x` multiplies in a unitless field as `*` does (#8435), next to a suffix, `%` and a decimal
+    /// comma too.
+    #[test]
+    fn x_multiplies_in_a_unitless_field() {
+        assert_eq!(field_number("45x2", "", false), Some(90.0));
+        assert_eq!(field_number("45x2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% x 2", "%", false), Some(100.0));
+        assert_eq!(field_number("1,5x2", "", false), Some(3.0));
+        assert_eq!(field_number("(10x2)", "", true), Some(20.0));
     }
 }
 

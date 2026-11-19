@@ -702,6 +702,75 @@ fn rotate_and_shear_fields_are_named() {
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Shear");
 }
 
+/// A 100 × 60 rectangle at (100, 40), selected, in a new app.
+fn shear_app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 40, "width": 100, "height": 60})).unwrap();
+    app
+}
+
+/// Types `value` into the panel's Shear field (the second field showing "0°") and presses Enter.
+fn type_shear(app: &mut VectorcraftApp, value: &str) {
+    use crate::panels::tests_appearance::{click, frame_events};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame_events(&ctx, app, vec![], show);
+    let at = texts.iter().filter(|(t, _)| t == "0°").nth(1).unwrap_or_else(|| panic!("no Shear field in {texts:?}")).1.center();
+    click(&ctx, app, at, show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, app, vec![egui::Event::Text(value.into())], show);
+    frame_events(&ctx, app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, app, vec![], show);
+}
+
+/// The Shear field takes -359° to 359°: a typed 120 and -359 shear about the reference point (the
+/// centre) as `object.shear` does with that angle, and 120 slants as -60 does.
+#[test]
+fn the_shear_field_takes_angles_from_minus_359_to_359() {
+    for (typed, angle, like) in [("120", 120.0, Some(-60.0)), ("-359", -359.0, None), ("45", 45.0, None)] {
+        let mut app = shear_app();
+        let before = app.selection_box().unwrap();
+        type_shear(&mut app, typed);
+        assert_eq!(app.ui.status, "", "{typed}: no error");
+        let got = app.selection_box().unwrap();
+        assert_ne!(got, before, "{typed}: sheared");
+        let mut want = shear_app();
+        want.run("object.shear", json!({"angle": angle, "axis": "horizontal", "origin": [150, 70]})).unwrap();
+        assert_eq!(got, want.selection_box().unwrap(), "{typed}");
+        if let Some(like) = like {
+            let mut same = shear_app();
+            same.run("object.shear", json!({"angle": like, "axis": "horizontal", "origin": [150, 70]})).unwrap();
+            let (a, b) = (got.rect, same.selection_box().unwrap().rect);
+            assert!(
+                (a.x0 - b.x0).abs() < 1e-6 && (a.x1 - b.x1).abs() < 1e-6 && (a.y0 - b.y0).abs() < 1e-6 && (a.y1 - b.y1).abs() < 1e-6,
+                "{typed}: {a:?} like {b:?}"
+            );
+        }
+    }
+}
+
+/// A typed ±90 or ±270, which have no shear, and a typed 400 or -400, outside -359 to 359, leave
+/// the rectangle as it is, record no undo step and show `object.shear`'s error in the status bar.
+#[test]
+fn the_shear_field_shows_the_error_for_an_angle_with_no_shear() {
+    let none = |v: &str| format!("invalid parameters for `object.shear`: `angle` cannot be {v}: ±90 and ±270 degrees have no shear");
+    let range = |v: &str| format!("invalid parameters for `object.shear`: `angle` must be from -359 to 359 degrees, not {v}");
+    for (typed, msg) in
+        [("90", none("90")), ("-90", none("-90")), ("270", none("270")), ("-270", none("-270")), ("400", range("400")), ("-400", range("-400"))]
+    {
+        let mut app = shear_app();
+        let (before, revision) = (app.selection_box().unwrap(), app.session.active().unwrap().revision);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        type_shear(&mut app, typed);
+        assert_eq!(app.ui.status, msg, "{typed}");
+        assert_eq!(app.selection_box().unwrap(), before, "{typed}: nothing moved");
+        assert_eq!(app.session.active().unwrap().revision, revision, "{typed}: unchanged");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "{typed}: no undo step");
+    }
+}
+
 /// The Align to Pixel Grid checkbox turns the selected paths' pixel-aligned property on, shows a
 /// dash when they differ (a click then turns it on for both), turns it off when it is on for all,
 /// and is unavailable with type selected.
@@ -956,4 +1025,138 @@ fn align_new_objects_menu_item_toggles_the_active_document() {
     app.session.set_active(1);
     menu_click(&ctx, &mut app, item);
     assert_eq!((on(&app, 0), on(&app, 1)), (true, false));
+}
+
+/// An app with a document and the Transform panel closed.
+fn app_without_transform_panel() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    if crate::panel_docking::visible(&app.ui, "transform") {
+        app.run("window.panel.close", json!({"panel": "transform"})).unwrap();
+    }
+    assert!(!crate::panel_docking::visible(&app.ui, "transform"));
+    app.session.take_shape_drawn();
+    app
+}
+
+/// The panel menu's Show on Shape Creation is unchecked until chosen, and choosing it sets and
+/// clears `showOnShapeCreation`.
+#[test]
+fn show_on_shape_creation_is_a_check_item_in_the_panel_menu() {
+    let mut app = app_without_transform_panel();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert!(menu_texts(&ctx, &mut app).contains(&"   Show on Shape Creation".to_string()));
+    menu_click(&ctx, &mut app, "Show on Shape Creation");
+    assert!(app.session.prefs.show_on_shape_creation);
+    assert!(menu_texts(&ctx, &mut app).contains(&"✓ Show on Shape Creation".to_string()));
+    menu_click(&ctx, &mut app, "Show on Shape Creation");
+    assert!(!app.session.prefs.show_on_shape_creation);
+}
+
+/// With Show on Shape Creation on, a shape drawn by a command or with OK in a shape tool's dialog
+/// shows the closed Transform panel; with it off, after a canceled dialog, for other edits, for
+/// saved steps and in Presentation Mode the panel stays closed.
+#[test]
+fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
+    let ctx = egui::Context::default();
+    let visible = |app: &VectorcraftApp| crate::panel_docking::visible(&app.ui, "transform");
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+
+    let mut app = app_without_transform_panel();
+    app.run("shape.rectangle", rect.clone()).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(!visible(&app), "off: the panel stays closed");
+
+    let mut app = app_without_transform_panel();
+    // A selected rectangle to move, drawn while the preference is off.
+    let id = app.run("shape.rectangle", rect.clone()).unwrap()["id"].as_u64().unwrap();
+    app.session.take_shape_drawn();
+    set_pref(&mut app, "showOnShapeCreation", true);
+    let x0 = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0;
+    let before = x0(&app);
+    app.run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+    assert_eq!(x0(&app), before + 5.0, "the move moved the rectangle");
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(!visible(&app), "an edit that draws no shape");
+    app.replay("shape.rectangle", rect.clone()).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(!visible(&app), "saved steps");
+    // A dialog that is canceled draws nothing; OK draws the shape.
+    app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
+    crate::dialogs::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+    app.ui.dialog = None;
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(!visible(&app), "a canceled dialog");
+    crate::dialogs::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+    crate::dialogs::confirm(&mut app).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(visible(&app), "OK in the Ellipse dialog");
+    // Shown already: another shape leaves it showing.
+    app.run("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 30})).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(visible(&app), "a shape with the panel showing");
+
+    // Presentation Mode keeps the panels hidden, also once it ends.
+    let mut app = app_without_transform_panel();
+    set_pref(&mut app, "showOnShapeCreation", true);
+    app.ui.screen_mode = 3;
+    app.run("shape.star", json!({"cx": 100, "cy": 100, "radius1": 30, "radius2": 15, "points": 5})).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    app.ui.screen_mode = 0;
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(!visible(&app), "Presentation Mode");
+
+    // A floating Transform panel in front stays showing (Window › Transform would close it).
+    let mut app = app_without_transform_panel();
+    set_pref(&mut app, "showOnShapeCreation", true);
+    app.run("window.panel.float", json!({"panel": "transform"})).unwrap();
+    assert!(visible(&app));
+    app.run("shape.line", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50})).unwrap();
+    show_on_shape_creation(&mut app, &ctx);
+    assert!(visible(&app), "a floating panel");
+}
+
+/// The app's frame shows the Transform panel after a shape is drawn, with Show on Shape Creation on,
+/// and the next frame draws the panel's controls; with it off, no frame draws them.
+#[test]
+fn a_frame_after_a_shape_shows_the_transform_panel() {
+    fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    // One frame of the app: the texts it drew.
+    let frame = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| app.ui(ui));
+        out.textures_delta.clear();
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
+    };
+    // The Transform panel's heading for a selected live rectangle.
+    let heading = "Rectangle Properties:";
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+    for on in [false, true] {
+        let mut app = app_without_transform_panel();
+        set_pref(&mut app, "showOnShapeCreation", on);
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        assert!(!crate::panel_docking::visible(&app.ui, "transform"));
+        app.run("shape.rectangle", rect.clone()).unwrap();
+        frame(&mut app);
+        assert_eq!(crate::panel_docking::visible(&app.ui, "transform"), on, "on: {on}");
+        // The panel opens in its icon column's flyout: the next pass draws the flyout's tabs and the
+        // one after it the panel's controls.
+        let tabs = frame(&mut app);
+        let texts = frame(&mut app);
+        assert!(!tabs.iter().any(|t| t == heading) || on, "on: {on}, {tabs:?}");
+        assert_eq!(texts.iter().any(|t| t == heading), on, "on: {on}, {texts:?}");
+    }
 }

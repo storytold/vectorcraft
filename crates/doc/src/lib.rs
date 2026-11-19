@@ -17,6 +17,7 @@ pub mod corners;
 pub mod decode;
 pub mod depth;
 pub mod dimension;
+pub mod flare;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;
@@ -137,7 +138,7 @@ pub use text::{
     RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     VerticalAlign, WrapShape,
 };
-pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
+pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet, KinsokuSet};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -170,7 +171,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
+pub use units::{ColorMode, Unit, arithmetic_signs, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {
@@ -217,6 +218,10 @@ pub struct Document {
     /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub composite_fonts: Shared<Vec<CompositeFont>>,
+    /// Type › Kinsoku Shori Settings…: the custom Kinsoku Shori sets defined in the document, by
+    /// name. A paragraph using one holds a copy of it ([`ParaStyle::kinsoku_set`]).
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec", deserialize_with = "text::read_kinsoku_sets")]
+    pub kinsoku_sets: Shared<Vec<KinsokuSet>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,
