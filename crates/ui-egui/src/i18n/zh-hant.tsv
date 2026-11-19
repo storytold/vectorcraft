@@ -4492,7 +4492,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	當文件設定的語言為英文：美國且 [正常字元樣式] 未指定語言時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
@@ -4513,7 +4513,7 @@ digits	Malayalam	馬來亞拉姆數字
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有開啟此選項時，動畫縮放才會起作用；關閉此選項時，動畫縮放會顯示為灰色，縮放不帶動畫。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滾輪縮放時會平滑過渡，縮放工具在你向側邊拖曳或按住不放時進行縮放；關閉此選項時，縮放工具會縮放到你拖曳過的區域。
-	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	從下次啟動起，桌面版使用這類圖形處理器繪製；「自動」優先使用驅動顯示器的圖形處理器。網頁版不使用此選項。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	從下次啟動起，桌面版透過這類圖形處理器顯示畫布；圖稿一律在 CPU 上繪製。「自動」在 Windows 和 macOS 上優先使用內建圖形處理器。網頁版不使用此選項。
 	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	從下次啟動起，在圖形驅動程式允許時，視窗顯示每一影格而不等待顯示器重新整理，最多每秒 240 影格。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每份文件保留的最大復原步驟數；調低後，按一下「確定」時會刪除最早的步驟。步驟佔用過多記憶體時也可能更早被刪除。
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖曳時顯示圖稿的變化；關閉此選項時，由外框跟隨拖曳，放開後圖稿才改變。尺標參考線在拖曳時總是跟著移動。
