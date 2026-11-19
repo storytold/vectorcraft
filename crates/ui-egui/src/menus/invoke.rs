@@ -64,6 +64,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         "object.scale" => ("scale", json!({"sx": 100, "sy": 100, "uniform": true})),
         // Transform Each opens on the values it was last confirmed with (#1732).
         "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
+        "object.stepAndRepeat" => (crate::dialogs::step_repeat::KIND, crate::dialogs::step_repeat::fields()),
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
         "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
         "path.average" => ("average", json!({"axis": "both"})),
