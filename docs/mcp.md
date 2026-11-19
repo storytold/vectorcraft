@@ -6036,13 +6036,17 @@ and `layerRows`, the rows highlighted in the panel.
   Selection, and Delete or Backspace on highlighted rows: when a layer or sublayer among the rows holds art, hidden,
   locked or nested art included, dialog `confirm` asks "Delete this layer and its artwork?" for one layer, else "Delete
   the selected items and their artwork?"; OK deletes the rows it asked about in that document, one undo step, and
-  Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once),
+  Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once; in
+  isolation mode, with no row highlighted, a current layer outside the isolated art is an error and nothing is deleted,
+  and so is a row outside it, given as `ids` or `id`, dropped on the trash or asked about before isolation mode
+  started),
   `layer.locate {id?, layersOnly?}` (highlights the selected object's row, or with several selected the row of the
   one frontmost in the stacking order, whatever order they were selected in; an `id` locates that object instead;
   the panel opens the rows around it;
   it scrolls to it on every call, also when the row was already highlighted;
   `layersOnly: true`, which the panel sends while Show Layers Only is on, as Locate Layer, highlights the innermost
-  layer or sublayer holding the object instead, or a layer `id` itself, and returns `{id, objectId, ancestry}`)
+  layer or sublayer holding the object instead, or a layer `id` itself, and returns `{id, objectId, ancestry}`; with a
+  group or object isolated, the panel's Locate Layer is off)
   and `layer.clippingMask.toggle`.
 - **Panel menu**: `layer.duplicate {ids?}`, `layer.merge {ids?}` (into the layer highlighted last, keeping the
   stacking order), `layer.flatten {id?}` (every other visible layer's art into one layer; hidden layers are deleted,
@@ -6051,9 +6055,10 @@ and `layerRows`, the rows highlighted in the panel.
   `layer.reverse {ids?}`, `layer.template {ids?, on?}`, `layer.hideOthers` / `layer.showAll`,
   `layer.outlineOthers` / `layer.previewAll` (Ctrl/Cmd+Alt-clicking an eye runs Outline Others for the row's layer, or
   Preview All Layers when the others are in Outline already), `layer.lockOthers` / `layer.unlockAll` (Alt-clicking an eye or a lock
-  runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
+  runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are; in isolation mode
+  the panel's menu and row menu turn these pairs off, and the Alt-clicks change nothing), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
-  hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
+  ruler guide, not a hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
   while a symbol is edited only the editing layer or art on it) / `object.exitIsolation {all?}`. With a sublayer
   isolated, `object.exitIsolation` isolates its parent layer and selects the sublayer, so repeated calls go up one
   layer at a time until the top-level layer is left, as the
@@ -6075,7 +6080,9 @@ and `layerRows`, the rows highlighted in the panel.
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
   checkbox does, except a Dim Images set before it; for several `ids` the dialog shows the first row's settings, and OK sends only the fields set with a
-  control or `ui.dialog.set`; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
+  control or `ui.dialog.set`; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer; in isolation mode `ui.newLayer` for a
+  layer that would be outside the isolated art is an error, OK in the dialog checks again and returns the same error,
+  and the Layers panel's New Layer and New Sublayer are off then), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
   layersOnly, locateSelected, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
   With `locateSelected` on (Locate Selected Objects, off by default), when the last selected object changes on the canvas
