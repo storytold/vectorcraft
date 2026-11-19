@@ -340,6 +340,19 @@ impl Default for ViewFlags {
     }
 }
 
+impl ViewFlags {
+    /// Whether the ruler guides and guide paths draw: View › Show Guides, unless Trim View hides
+    /// them while it is on (#8363). `guides` keeps the choice, so they come back as they were.
+    pub fn guides_shown(&self) -> bool {
+        self.guides && !self.trim_view
+    }
+
+    /// Whether the grid draws: View › Show Grid, unless Trim View hides it while it is on (#8363).
+    pub fn grid_shown(&self) -> bool {
+        self.grid && !self.trim_view
+    }
+}
+
 /// An open modal dialog. `fields` are string-valued so agents can set them uniformly.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Dialog {

@@ -322,7 +322,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     paint_paper(app, st, ui, &painter, &xf, rect, (&t, app.outline_view()));
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
-    let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = (app.ui.view.grid_shown() && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -410,7 +410,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
         }
         artboard_outlines(app, ui, &painter, &xf, &t);
-        if app.ui.view.guides {
+        if app.ui.view.guides_shown() {
             guide_lines(app, &painter, &xf, rect, &t);
         }
         nine_slice_overlay(app, &painter, &xf);
@@ -627,7 +627,7 @@ fn cache_key(
         outline: app.outline_view(),
         trim: app.ui.view.trim_view,
         templates: app.ui.view.templates,
-        guides: app.ui.view.guides,
+        guides: app.ui.view.guides_shown(),
         ppp,
         hidden: vec![],
         rot: v.rotation,
@@ -827,7 +827,7 @@ fn frame_options(
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
         trim: app.ui.view.trim_view,
         hide_templates: !app.ui.view.templates,
-        hide_guides: !app.ui.view.guides,
+        hide_guides: !app.ui.view.guides_shown(),
         tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
             let [r, g, b, _] = c.to_rgba8(1.0);
             [r, g, b]

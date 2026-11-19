@@ -15290,3 +15290,57 @@ fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
     assert_eq!(count(&mut app), 0, "off");
     assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
 }
+
+/// #8363: Trim View hides the ruler guides, the guide paths and the grid while it is on, and they
+/// are neither snapped to nor picked, as hidden guides are; turned off, they come back as they
+/// were. The rulers stay.
+#[test]
+fn trim_view_hides_the_guides_and_the_grid() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.canvas.worker_started = true; // render on this thread
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    (app.ui.view.grid, app.ui.view.guides, app.ui.view.rulers) = (true, true, true);
+    let (red, green) = (Color32::from_rgb(255, 0, 0), Color32::from_rgb(0, 255, 0));
+    app.session.execute("prefs.set", &json!({"values": {"gridColor": "#ff0000", "guideColor": "#00ff00"}})).unwrap();
+    let ctx = egui::Context::default();
+    // → (a gridline, a ruler guide, guide paths in the art, guides snapped to and picked).
+    let drawn = |app: &mut VectorcraftApp| {
+        let s = shapes(app, &ctx);
+        let line = |c: Color32| s.iter().any(|s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == c));
+        let guide_paths = !app.canvas.shown.as_ref().unwrap().1.hide_guides;
+        (line(red), line(green), guide_paths, app.view_info().guides)
+    };
+    assert_eq!(drawn(&mut app), (true, true, true, true), "Trim View off: all of them");
+
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (false, false, false, false), "Trim View on: none of them");
+    assert!(app.ui.view.grid && app.ui.view.guides && app.ui.view.rulers, "the choices stay, and so do the rulers");
+
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (true, true, true, true), "Trim View off: back as they were");
+
+    // Hidden before, they stay hidden after.
+    app.run("view.guides", json!({})).unwrap();
+    app.run("view.trimView", json!({})).unwrap();
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (true, false, false, false), "guides hidden before Trim View stay hidden");
+}
+
+/// #8363: a selected guide path is deselected when Trim View hides it, as Hide Guides does (#3219).
+#[test]
+fn trim_view_deselects_selected_guide_paths() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)]);
+
+    app.run("view.trimView", json!({})).unwrap();
+
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+}
