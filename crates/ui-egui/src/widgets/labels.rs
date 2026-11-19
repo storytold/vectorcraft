@@ -144,6 +144,14 @@ pub fn field_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
     resp
 }
 
+/// A field's label (`text` as given) that a click follows to a panel ([`scrub::panel_label`]):
+/// before a numeric field it scrubs the field and names it.
+pub fn field_panel_label(ui: &mut Ui, text: egui::RichText) -> Response {
+    let resp = scrub::panel_label(ui, text);
+    remember_next_label(ui, resp.id);
+    resp
+}
+
 /// [`dim_label`] for a name that is user or file data (a swatch, style, artboard or font name):
 /// shown as it is, never translated.
 pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
@@ -176,7 +184,7 @@ pub fn subheader(ui: &mut Ui, text: &str) {
     ui.label(egui::RichText::new(tl!(text)).size(12.5).color(t.text));
 }
 
-/// A label drawn with a dotted underline (Illustrator's link labels: "Stroke:", "Opacity:").
+/// A label drawn with a dotted underline (the panels' link labels: "Stroke:", "Opacity:").
 pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), t.text_strong);

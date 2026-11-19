@@ -1,7 +1,10 @@
 //! Swatch Options: name, colour type (process or spot), Global, colour mode with sliders and hex,
-//! previewed live on the canvas (Cancel rolls the preview back). Double-clicking a swatch opens it
-//! for a solid colour; for a gradient it shows the name and the gradient; patterns open pattern
-//! editing ([`open`]).
+//! and the out-of-gamut and out-of-web-color warnings under the colour, previewed live on the canvas
+//! (Cancel rolls the preview back). A click on a warning's icon or colour corrects the colour
+//! (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf,
+//! Swatch options; https://helpx.adobe.com/illustrator/using/adjusting-colors.html).
+//! Double-clicking a swatch opens it for a solid colour; for a gradient it shows the name and the
+//! gradient; patterns open pattern editing ([`open`]).
 //!
 //! Fields: `__swatch` (the swatch being edited), `name`, `spot`, `global`, `mode` (`gray`, `rgb`,
 //! `hsb`, `lab`, `cmyk` or `web`), `color` (`"#rrggbb"` or a colour object such as
@@ -14,7 +17,9 @@ use vectorcraft_color::{Color, Paint};
 
 use super::{DialogSpec, form, run_and_close};
 use crate::VectorcraftApp;
-use crate::panels::color::{Mode, components, from_components, parse_hex, track_color, web_safe};
+use crate::panels::color::{
+    GAMUT_WARNING, Mode, WEB_WARNING, components, from_components, gamut_fix, is_web_safe, parse_hex, track_color, warning_chip, web_safe,
+};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets;
@@ -113,7 +118,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             widgets::gradient_chip(ui, r, &g);
             changed
         }
-        None => editor(ui, d),
+        None => editor(app, ui, d),
     };
     ui.add_space(8.0);
     let mut pv = d.bool("preview");
@@ -123,8 +128,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         d.fields.insert("preview".into(), json!(pv));
     }
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
-        let _ = app.session.begin_interaction("Swatch Options");
-        if let Err(e) = app.session.preview("swatch.edit", &edit_params(d)) {
+        // A failure to begin (typing that can't be kept) shows, and nothing previews.
+        if let Err(e) = app.begin_interaction("Swatch Options") {
+            app.status(e);
+        } else if let Err(e) = app.session.preview("swatch.edit", &edit_params(d)) {
             app.status(e.to_string());
         }
     } else if !pv && pv_changed {
@@ -157,9 +164,9 @@ pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     changed
 }
 
-/// The shared fields of Swatch Options and New Swatch: name, colour type, Global, mode, sliders and
-/// hex. Returns true when anything changed.
-pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// The shared fields of Swatch Options and New Swatch: name, colour type, Global, mode, sliders,
+/// hex and the colour warnings. Returns true when anything changed.
+pub(super) fn editor(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mut changed = false;
     grid(ui, |ui| {
         changed |= name_row(ui, d);
@@ -191,15 +198,46 @@ pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
     });
     ui.add_space(6.0);
-    changed | sliders(ui, d)
+    changed | sliders(app, ui, d)
 }
 
-/// One slider and value field per component of the dialog's mode, the hex field (RGB, HSB and Web)
-/// and a chip of the colour. Returns true when the colour changed.
-fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// A warning under the colour of the swatch dialogs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Warning {
+    Gamut,
+    Web,
+}
+
+/// The warnings the swatch dialogs show in `mode`: out of gamut in RGB, HSB and Lab, and out of web
+/// colors in every mode but Web Safe RGB.
+fn shown_warnings(mode: Mode) -> (bool, bool) {
+    (matches!(mode, Mode::Rgb | Mode::Hsb | Mode::Lab), mode != Mode::WebSafe)
+}
+
+/// The colour and mode a click on `warning` gives `c`, edited in `mode`: the nearest web-safe colour
+/// (in RGB unless the mode is RGB or HSB), or the colour's CMYK equivalent in the active CMYK space
+/// (in CMYK). `None` when the conversion returns no CMYK values.
+fn corrected(app: &mut VectorcraftApp, warning: Warning, mode: Mode, c: &Color) -> Result<Option<(Color, Mode)>, String> {
+    match warning {
+        Warning::Web => Ok(Some((web_safe(c), if matches!(mode, Mode::Rgb | Mode::Hsb) { mode } else { Mode::Rgb }))),
+        Warning::Gamut => {
+            let r = app.run("color.convert", json!({"color": crate::panels::color_json(c), "to": "cmyk"}))?;
+            let v = |i: usize| r["values"][i].as_f64().map(|v| v as f32);
+            Ok(v(0).zip(v(1)).zip(v(2)).zip(v(3)).map(|(((c, m), y), k)| (Color::cmyk(c, m, y, k), Mode::Cmyk)))
+        }
+    }
+}
+
+/// One slider and value field per component of the dialog's mode, the hex field (RGB, HSB and Web),
+/// a chip of the colour and under it the mode's warnings. Returns true when the colour changed.
+fn sliders(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let mode = mode_of(d);
     let color = color_of(d);
+    let (shows_gamut, shows_web) = shown_warnings(mode);
+    let gamut = if shows_gamut { gamut_fix(app, ui.ctx(), "swatch-gamut", &color) } else { None };
+    let web = (shows_web && !is_web_safe(&color)).then(|| web_safe(&color));
+    let mut clicked: Option<Warning> = None;
     // Keep the displayed components while the colour is unchanged (hue survives S = 0 etc.).
     let key = format!("{}|{}", mode_id(mode), serde_json::to_string(&color).unwrap_or_default());
     let comps: Vec<f32> = match d.fields.get("__comps") {
@@ -239,13 +277,47 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 });
             }
         });
-        let (r, _) = ui.allocate_exact_size(vec2(44.0, 44.0), egui::Sense::hover());
-        widgets::swatch_tile(ui, r, &Paint::solid(color), false, false);
+        ui.vertical(|ui| {
+            let (r, _) = ui.allocate_exact_size(vec2(44.0, 44.0), egui::Sense::hover());
+            widgets::swatch_tile(ui, r, &Paint::solid(color), false, false);
+            let warnings: Vec<_> = [(Warning::Gamut, GAMUT_WARNING, gamut), (Warning::Web, WEB_WARNING, web)]
+                .into_iter()
+                .filter_map(|(w, chip, fix)| Some((w, chip, fix?)))
+                .collect();
+            for (w, chip, fix) in &warnings {
+                ui.add_space(4.0);
+                if warning_chip(ui, *chip, fix) {
+                    clicked = Some(*w);
+                }
+            }
+            // Room for the mode's other warnings, so the dialog keeps its height as the colour changes.
+            for _ in warnings.len()..usize::from(shows_gamut) + usize::from(shows_web) {
+                ui.add_space(4.0);
+                ui.scope(|ui| {
+                    ui.set_invisible();
+                    warning_chip(ui, WEB_WARNING, &Color::WHITE)
+                });
+            }
+        });
     });
+    let mut mode = mode;
+    if let Some(w) = clicked {
+        match corrected(app, w, mode, &color) {
+            Ok(Some((c, m))) => {
+                mode = m;
+                d.fields.insert("mode".into(), json!(mode_id(m)));
+                new = Some((c, components(m, &c)));
+            }
+            Ok(None) => {}
+            Err(e) => app.status(e),
+        }
+    }
     let Some((c, comps)) = new else { return false };
     set_color(d, c);
     d.fields.insert("__compsKey".into(), json!(format!("{}|{}", mode_id(mode), serde_json::to_string(&c).unwrap_or_default())));
     d.fields.insert("__comps".into(), json!(comps));
+    // The warnings above were drawn for the colour before the change.
+    ui.ctx().request_repaint();
     true
 }
 
@@ -277,8 +349,121 @@ fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
+
+    /// A test context with the application's fonts and default theme.
+    pub(crate) fn context() -> egui::Context {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        ctx
+    }
+
+    /// Runs one frame of the open dialog with `events` and returns the rectangles it paints.
+    pub(crate) fn draw(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<egui::Rect> {
+        fn collect(s: &egui::Shape, out: &mut Vec<egui::Rect>) {
+            match s {
+                egui::Shape::Rect(r) => out.push(r.rect),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let input =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1280.0, 900.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut boxes = vec![];
+        out.shapes.iter().for_each(|c| collect(&c.shape, &mut boxes));
+        boxes
+    }
+
+    /// Lets the auto-sized dialog settle and returns the rectangles of the next frame.
+    pub(crate) fn settled(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<egui::Rect> {
+        for _ in 0..6 {
+            draw(ctx, app, vec![]);
+        }
+        draw(ctx, app, vec![])
+    }
+
+    /// A primary-button press and release at `at`, in two frames.
+    pub(crate) fn click_at(ctx: &egui::Context, app: &mut VectorcraftApp, at: egui::Pos2) {
+        for pressed in [true, false] {
+            let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            draw(ctx, app, vec![egui::Event::PointerMoved(at), button]);
+        }
+    }
+
+    /// The warning rows under the dialog's 44-point colour chip, top first: the centre of each
+    /// row's icon and the rectangle of its corrected colour.
+    pub(crate) fn warning_rows(boxes: &[egui::Rect]) -> Vec<(egui::Pos2, egui::Rect)> {
+        let near = |a: f32, b: f32| (a - b).abs() < 0.5;
+        let chip = boxes.iter().find(|r| near(r.width(), 44.0) && near(r.height(), 44.0)).copied().unwrap();
+        let mut rows: Vec<egui::Rect> = boxes
+            .iter()
+            .filter(|r| near(r.width(), 16.0) && near(r.height(), 16.0))
+            .filter(|r| r.top() >= chip.bottom() && r.left() >= chip.left() - 1.0 && r.right() <= chip.right() + 1.0)
+            .copied()
+            .collect();
+        rows.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        rows.dedup_by(|a, b| near(a.top(), b.top())); // The tile's fill and border share one rectangle.
+        rows.into_iter().map(|r| (r.center() - vec2(19.0, 0.0), r)).collect()
+    }
+
+    fn dialog(app: &VectorcraftApp) -> &Dialog {
+        app.ui.dialog.as_ref().unwrap()
+    }
+
+    #[test]
+    fn swatch_options_shows_and_corrects_both_warnings() {
+        let (ctx, mut app) = (context(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Sky", "color": "#0000fe", "spot": true})).unwrap();
+        app.run("ui.swatchOptions", json!({"name": "Sky"})).unwrap();
+        let rows = warning_rows(&settled(&ctx, &mut app));
+        assert_eq!(rows.len(), 2, "out of gamut and out of web colors");
+        // The cube's icon shifts to the nearest web-safe colour, in the same mode.
+        click_at(&ctx, &mut app, rows[1].0);
+        assert_eq!((color_of(dialog(&app)).to_hex(), dialog(&app).str("mode")), ("#0000ff".to_string(), "rgb".to_string()));
+        let rows = warning_rows(&settled(&ctx, &mut app));
+        assert_eq!(rows.len(), 1, "web-safe blue is still out of gamut");
+        // The triangle's colour shifts to the CMYK equivalent, edited in CMYK.
+        let ink = corrected(&mut app, Warning::Gamut, Mode::Rgb, &Color::rgb8(0, 0, 255)).unwrap().unwrap().0;
+        click_at(&ctx, &mut app, rows[0].1.center());
+        assert_eq!((color_of(dialog(&app)), dialog(&app).str("mode")), (ink, "cmyk".to_string()));
+        assert!(app.ui.dialog.is_some(), "a correction only edits the fields");
+        super::super::confirm(&mut app).unwrap();
+        let sw = app.session.active().unwrap().doc.swatch("Sky").cloned().unwrap();
+        assert_eq!((sw.paint.color(), sw.spot, sw.global), (Some(ink), true, true), "still a spot colour");
+        app.run("edit.undo", json!({})).unwrap();
+        let sw = app.session.active().unwrap().doc.swatch("Sky").cloned().unwrap();
+        assert_eq!(sw.paint.color().map(|c| c.to_hex()), Some("#0000fe".into()), "one undo step");
+    }
+
+    #[test]
+    fn swatch_warnings_follow_the_mode() {
+        let (ctx, mut app) = (context(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Mid", "color": "#808080"})).unwrap();
+        app.run("ui.swatchOptions", json!({"name": "Mid"})).unwrap();
+        let mut rows_in = |mode: &str, c: Color| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("mode".into(), json!(mode));
+            set_color(d, c);
+            warning_rows(&settled(&ctx, &mut app)).len()
+        };
+        assert_eq!(rows_in("gray", Color::gray(0.5)), 1, "a gray off the web palette, never out of gamut");
+        let cyan = Color::cmyk(1.0, 0.0, 0.0, 0.0);
+        assert_eq!(rows_in("cmyk", cyan), usize::from(!is_web_safe(&cyan)), "CMYK is never out of gamut");
+        assert_eq!(rows_in("web", Color::rgb8(0, 0, 255)), 0, "Web Safe RGB shows no warning");
+        assert_eq!(rows_in("rgb", Color::rgb8(0, 0, 255)), 1, "RGB blue is out of gamut");
+        assert_eq!(rows_in("lab", Color::lab(30.0, 60.0, -100.0)), 2, "Lab shows both");
+        // A web correction of a Lab colour is edited in RGB.
+        let rows = warning_rows(&settled(&ctx, &mut app));
+        click_at(&ctx, &mut app, rows[1].0);
+        assert_eq!(dialog(&app).str("mode"), "rgb");
+        assert!(is_web_safe(&color_of(dialog(&app))));
+    }
 
     #[test]
     fn fields_round_trip_modes_and_colours() {

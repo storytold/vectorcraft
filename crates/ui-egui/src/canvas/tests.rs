@@ -1165,6 +1165,90 @@ fn the_artboard_tool_names_its_active_artboard_once() {
     assert!((active[0].1 - other[0].1).abs() < 2.0, "on the artboard's top edge like the other name: {active:?} vs {other:?}");
 }
 
+/// The texts one headless 800 × 600 canvas frame at `time` seconds draws, tooltips included.
+fn texts_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) -> Vec<String> {
+    fn collect(shape: &Shape, texts: &mut Vec<String>) {
+        match shape {
+            Shape::Text(t) => texts.push(t.galley.text().to_string()),
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, texts)),
+            _ => {}
+        }
+    }
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    out.shapes.iter().for_each(|s| collect(&s.shape, &mut texts));
+    texts
+}
+
+/// The Artboard tool's add buttons: resting the pointer on one shows its tooltip after egui's
+/// tooltip delay, over the disc a press takes and not beside it. No tooltip shows while a drag
+/// is under way, or once the button is gone.
+#[test]
+fn an_artboard_add_button_shows_its_tooltip_while_the_pointer_rests_on_it() {
+    use egui::Event;
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The bottom button: the one below the artboard.
+    let regions: Vec<(Pos2, f32)> = app
+        .session
+        .overlays(app.view_info())
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::HoverText { center, radius, text } if text == tip => Some((xf.to_screen(center), (radius * xf.zoom) as f32)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(regions.len(), 4, "one tooltip for each add button");
+    let (at, r) = regions.iter().copied().max_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    assert!((r - 7.0).abs() < 1e-3, "the disc a press takes: {r}");
+    let shown = |texts: &[String]| texts.iter().any(|s| s == tip);
+    // Resting inside the disc: nothing at first, the tooltip after the delay.
+    assert!(!shown(&texts_at(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at + vec2(r - 1.0, 0.0))])));
+    assert!(!shown(&texts_at(&mut app, &ctx, 1.05, vec![])), "egui's tooltip delay first");
+    let mut seen = false;
+    for k in 1..=20 {
+        seen |= shown(&texts_at(&mut app, &ctx, 1.05 + 0.1 * f64::from(k), vec![]));
+    }
+    assert!(seen, "the tooltip shows while the pointer rests on the button");
+    // Just outside the disc, inside the square around it: no tooltip.
+    let mut t = 4.0;
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at + vec2(r - 1.0, r - 1.0))]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![])), "beside the button");
+    }
+    // A middle-button drag that starts on the button pans the view with the pointer, so the pointer
+    // stays on the button: no tooltip while it lasts.
+    let middle = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at)]);
+    t += 0.1;
+    texts_at(&mut app, &ctx, t, vec![middle(at, true)]);
+    let to = at + vec2(30.0, 0.0);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(to)])), "during a drag");
+    }
+    texts_at(&mut app, &ctx, t, vec![middle(to, false)]);
+    // With an artboard below, there is no room for the bottom button, and its tooltip goes with it.
+    let r0 = app.session.active().unwrap().doc.artboards[0].rect;
+    app.session.execute("artboard.new", &json!({"beside": 0, "side": "bottom"})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc.artboards[0].rect, r0);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let below = xf.to_screen(vectorcraft_geom::Point::new(r0.center().x, r0.y1)) + vec2(0.0, 18.0);
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(below)]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![])), "no tooltip where no button shows");
+    }
+}
+
 #[test]
 fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1645,6 +1729,37 @@ fn switch_selection_and_drawing_modes_command() {
         app.select_tool(id);
         assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}), "{id}");
     }
+}
+
+/// Select Last Selection Tool: the Selection tool before any selection tool is chosen, then the
+/// one of Selection, Direct Selection and Group Selection chosen last; Magic Wand and Lasso don't
+/// count. Running it again keeps that tool, and it changes no art, selection or undo history.
+#[test]
+fn select_last_selection_tool_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let last = |app: &mut VectorcraftApp| app.run("tool.selectLastSelection", json!({})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        (st.doc.clone(), st.selection.clone(), st.history.undo.len())
+    };
+    app.select_tool("pen");
+    let before = state(&app);
+    assert_eq!((last(&mut app), app.session.tool_id()), (json!({"tool": "selection"}), "selection"), "none chosen yet: Selection");
+    for id in ["directSelection", "groupSelection", "selection"] {
+        app.select_tool(id);
+        app.select_tool("pen");
+        assert_eq!(last(&mut app), json!({"tool": id}), "{id}");
+    }
+    app.select_tool("directSelection");
+    for other in ["magicWand", "lasso", "rectangle", "hand"] {
+        app.select_tool(other);
+    }
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "Magic Wand and Lasso are not remembered");
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "again: the same tool, no cycling");
+    assert!(state(&app) == before, "no art, selection or undo step changes");
 }
 
 /// A Switch Selection and Drawing Modes whose tool choice fails returns the error, in both
@@ -2821,10 +2936,20 @@ fn the_art_renders_within_the_largest_texture_side() {
     assert_eq!(pixel_region(&xf, 1024), None, "more than the display's largest texture");
 }
 
+/// Run a test that compares two renders with the color settings that are active when it starts.
+/// A test on another thread can change the process's active settings; this thread keeps its own.
+fn keeping_color_settings(test: fn()) {
+    vectorcraft_color::cms::with_active(vectorcraft_color::cms::active(), test);
+}
+
 /// A placed document's bitmap made in the background renders the canvas again only where the
 /// objects showing its file are: both copies of the file are in the part rendered again.
 #[test]
 fn a_ready_placed_document_bitmap_renders_only_its_part_of_the_canvas() {
+    keeping_color_settings(a_ready_placed_bitmap);
+}
+
+fn a_ready_placed_bitmap() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width":400,"height":300})).unwrap();
     app.ui.task_bar = false;
@@ -2859,9 +2984,8 @@ fn a_ready_placed_document_bitmap_renders_only_its_part_of_the_canvas() {
     };
     let (_, delta) = frame_output(&mut app, &ctx);
     assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "the first frame renders all of it");
-    let t = std::time::Instant::now();
-    while vectorcraft_render::placed_document::busy() && t.elapsed().as_secs() < 20 {
-        std::thread::sleep(std::time::Duration::from_millis(5));
+    while vectorcraft_render::placed_document::busy() {
+        std::thread::yield_now();
     }
     let (_, delta) = frame_output(&mut app, &ctx);
     let (pos, size) = canvas(&app, delta).expect("the bitmap shows");
@@ -3137,6 +3261,10 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
 /// transparency grid renders the art again, and Outline converts the art alone.
 #[test]
 fn translucent_art_over_the_paper_is_blended_before_the_display_profile() {
+    keeping_color_settings(translucent_art_over_the_paper);
+}
+
+fn translucent_art_over_the_paper() {
     use crate::display_profile::{Found, Reading};
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -3490,12 +3618,42 @@ fn the_first_view_reports_the_plug_in_effects_it_deferred() {
     }
 }
 
+/// The render worker's side of a controlled worker: the test thread renders the jobs the canvas
+/// queues, with [`crate::render_worker::render`] and the worker's own renderer and last frame.
+struct WorkerSide {
+    jobs: std::sync::mpsc::Receiver<crate::render_worker::Job>,
+    done: std::sync::mpsc::Sender<crate::render_worker::Done>,
+    renderer: vectorcraft_render::Renderer,
+    kept: Option<crate::canvas::KeptFrame>,
+}
+
+impl WorkerSide {
+    /// A controlled worker for the canvas, and its side.
+    fn start() -> (crate::render_worker::Worker, Self) {
+        let (worker, jobs, done) = crate::render_worker::Worker::test_channel();
+        (worker, Self { jobs, done, renderer: vectorcraft_render::Renderer::new(), kept: None })
+    }
+
+    /// Render the newest job queued, as the worker thread does, and send its frame with a time of
+    /// 50 ms: the canvas then keeps sending the document's frames to the worker. False when no job
+    /// is queued.
+    fn render(&mut self) -> bool {
+        let Some(job) = self.jobs.try_iter().last() else { return false };
+        let done = crate::render_worker::render(&mut self.renderer, &mut self.kept, job);
+        self.done.send(crate::render_worker::Done { ms: 50.0, ..done }).is_ok()
+    }
+}
+
 /// A drag of an object with raster effects (#1257): the drag's frames render while
 /// interacting and draw the object's drop shadow and filtered content from the rasters of the
 /// frame before; the frame after the drag renders without `interacting`, on the render worker,
-/// and draws what a fresh renderer draws.
+/// and draws what a fresh renderer draws. The worker is a controlled one ([`WorkerSide`]).
 #[test]
 fn dragging_an_object_with_raster_effects_draws_its_rasters_moved() {
+    keeping_color_settings(dragging_with_raster_effects);
+}
+
+fn dragging_with_raster_effects() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
@@ -3528,17 +3686,13 @@ fn dragging_an_object_with_raster_effects_draws_its_rasters_moved() {
     }
     // The frame after the drag runs the effects again: on the worker, while the canvas shows
     // the drag's last frame.
-    app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+    let (worker, mut side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
     app.session.pointer(&PointerEvent::new(PointerKind::Up, 181.9, 131.3), view).unwrap();
     assert!(upload(&mut app).is_none(), "not rendered on this thread");
     assert!(app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|k| !k.interacting), "sent to the worker");
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    let mut after = None;
-    while after.is_none() && std::time::Instant::now() < until {
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        after = upload(&mut app);
-    }
-    let after = after.expect("the worker's frame arrives");
+    assert!(side.render(), "the worker renders the frame");
+    let after = upload(&mut app).expect("the worker's frame arrives");
     assert!(app.canvas.key.as_ref().is_some_and(|k| !k.interacting));
     assert!(!app.canvas.moved);
     app.canvas.worker = None;
@@ -3554,6 +3708,10 @@ fn dragging_an_object_with_raster_effects_draws_its_rasters_moved() {
 /// without a drag, renders without `dragging` and draws the same.
 #[test]
 fn a_drag_on_the_canvas_draws_raster_effects_at_a_lower_resolution() {
+    keeping_color_settings(a_drag_at_a_lower_resolution);
+}
+
+fn a_drag_at_a_lower_resolution() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
@@ -3609,9 +3767,13 @@ fn a_drag_on_the_canvas_draws_raster_effects_at_a_lower_resolution() {
 /// the blur reaches far past the raster budget, so the still frame keeps the backdrop's raster
 /// cropped to the view, and each frame of a Selection tool drag draws it from there instead of
 /// previewing it at the drag's lower resolution: on this thread, and on the worker, where the
-/// frames of a heavy document render.
+/// frames of a heavy document render. The worker is a controlled one ([`WorkerSide`]).
 #[test]
 fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
+    keeping_color_settings(a_drag_over_a_wide_blur);
+}
+
+fn a_drag_over_a_wide_blur() {
     for on_worker in [false, true] {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 595, "height": 842})).unwrap();
@@ -3623,9 +3785,9 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
         app.run("select.set", json!({"ids": [square]})).unwrap();
         app.select_tool("selection");
         let ctx = egui::Context::default();
-        // One headless frame with `events`, then, on the worker, frames until the frame it renders
-        // for them is shown.
-        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        // One headless frame with `events`, then, with a worker, its frames rendered and shown
+        // until none is pending.
+        let run = |app: &mut VectorcraftApp, side: &mut Option<WorkerSide>, events: Vec<egui::Event>| {
             let frame = |app: &mut VectorcraftApp, events| {
                 let raw =
                     egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1440.0, 870.0))), events, ..Default::default() };
@@ -3633,39 +3795,40 @@ fn a_drag_over_a_wide_blur_draws_the_blur_from_the_still_frame() {
                 out.textures_delta.clear();
             };
             frame(app, events);
-            let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
-            while app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()) && std::time::Instant::now() < until {
-                std::thread::sleep(std::time::Duration::from_millis(5));
+            for _ in 0..8 {
+                if !side.as_mut().is_some_and(WorkerSide::render) {
+                    break;
+                }
                 frame(app, vec![]);
             }
+            assert!(app.canvas.worker.as_ref().is_none_or(|w| w.pending.is_none()), "the worker's frame is shown");
         };
         let moved = |app: &VectorcraftApp| if on_worker { app.canvas.moved } else { app.canvas.renderer.stats.moved > 0 };
-        run(&mut app, vec![]);
+        let mut side = None;
+        run(&mut app, &mut side, vec![]);
         if let Some(vm) = app.view_mut() {
             (vm.zoom, vm.center) = (2.0, Point::new(290.0, 410.0));
         }
         if on_worker {
-            app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+            let (worker, worker_side) = WorkerSide::start();
+            app.canvas.worker = Some(worker);
             app.canvas.last_ms = 50.0;
+            side = Some(worker_side);
         }
-        run(&mut app, vec![]);
+        run(&mut app, &mut side, vec![]);
         assert_eq!(app.canvas.from_worker, on_worker);
         assert!(!moved(&app), "a still frame, on the worker: {on_worker}");
         let at = app.canvas_rect.unwrap().center();
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        run(&mut app, vec![egui::Event::PointerMoved(at)]);
-        run(&mut app, vec![button(at, true)]);
+        run(&mut app, &mut side, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, &mut side, vec![button(at, true)]);
         for step in [1.0, 2.0, 3.0] {
-            run(&mut app, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]);
+            run(&mut app, &mut side, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]);
             assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && k.dragging), "step {step}, on the worker: {on_worker}");
             assert_eq!(app.canvas.from_worker, on_worker, "step {step}");
-            assert!(
-                !moved(&app),
-                "the blur drawn from the still frame's raster, step {step}, on the worker: {on_worker} ({} ms)",
-                app.perf.render_ms
-            );
+            assert!(!moved(&app), "the blur drawn from the still frame's raster, step {step}, on the worker: {on_worker}");
         }
-        run(&mut app, vec![button(at + vec2(39.0, 21.0), false)]);
+        run(&mut app, &mut side, vec![button(at + vec2(39.0, 21.0), false)]);
         let info = app.run("document.inspect", json!({})).unwrap();
         let children = info["layers"][0]["children"].as_array().unwrap().clone();
         let x0 = |id: &serde_json::Value| children.iter().find(|c| c["id"] == *id).unwrap()["bounds"]["x"].as_f64().unwrap();
@@ -3706,6 +3869,10 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
 /// leaves the document as it was (#1257): here a drag back to where it started.
 #[test]
 fn a_drag_back_to_its_start_renders_again_after_it() {
+    keeping_color_settings(a_drag_back_to_its_start);
+}
+
+fn a_drag_back_to_its_start() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
@@ -3772,6 +3939,10 @@ fn canvas_render_jobs_use_renderer_limited_dimensions() {
 /// controlled worker cannot finish early, even if egui repeats a layout pass.
 #[test]
 fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
+    keeping_color_settings(cached_frames_keep_their_scale);
+}
+
+fn cached_frames_keep_their_scale() {
     for (old_rot, new_rot, old_ppp, new_ppp, pixel, resize_only) in [
         // Isolate the original panel/window resize: zoom, pan, rotation and DPI stay fixed.
         (0.0, 0.0, 1.0, 1.0, false, true),
@@ -3867,9 +4038,13 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
 /// a heavy document), the canvas draws the last frame turned until that frame arrives: each
 /// corner goes where the new view puts the document point that the corner showed. The new frame
 /// is then drawn unturned. In Pixel Preview the last frame's pixels stay over the document rect
-/// they cover.
+/// they cover. The worker is a controlled one ([`WorkerSide`]).
 #[test]
 fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
+    keeping_color_settings(a_turned_view);
+}
+
+fn a_turned_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
@@ -3890,7 +4065,8 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
         })
     };
     // With a worker and a last frame that took 50 ms, the next frame renders on the worker.
-    app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+    let (worker, mut side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
     app.canvas.last_ms = 50.0;
     app.run("view.rotateReset", json!({})).unwrap();
     let mesh = art(&mut app).expect("the last frame, turned");
@@ -3908,11 +4084,8 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
     let [a, b, _, d] = [0, 1, 2, 3].map(|i| mesh.vertices[i].pos);
     assert!((a + (b - a) * uv.x + (d - a) * uv.y - new.to_screen(p)).length() < 0.01, "the rectangle's corner");
     // The worker's frame at 0° then covers the canvas unturned.
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    while app.canvas.key.as_ref().is_some_and(|k| k.rot != 0.0) && std::time::Instant::now() < until {
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        shapes(&mut app, &ctx);
-    }
+    assert!(side.render(), "the worker renders the frame at 0°");
+    shapes(&mut app, &ctx);
     assert!(app.canvas.key.as_ref().is_some_and(|k| k.rot == 0.0), "the worker's frame arrives");
     let b = art(&mut app).expect("the worker's frame").calc_bounds();
     assert!((b.min - rect.min).length() < 0.01 && (b.max - rect.max).length() < 0.01, "{b:?} over {rect:?}");
@@ -3922,7 +4095,8 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
     app.view_mut().unwrap().zoom = 8.0;
     shapes(&mut app, &ctx);
     let [x0, y0, ..] = app.canvas.key.as_ref().and_then(|k| k.pixel).expect("the pixels rendered");
-    app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
+    let (worker, _side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
     app.canvas.last_ms = 50.0;
     app.view_mut().unwrap().rotation = 30.0;
     let mesh = art(&mut app).expect("the last frame's pixels");
@@ -3937,6 +4111,10 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
 /// fill is dropped.
 #[test]
 fn a_pan_fills_the_area_the_last_frame_leaves_until_the_worker_frame_arrives() {
+    keeping_color_settings(a_pan_fills_the_area);
+}
+
+fn a_pan_fills_the_area() {
     let ctx = egui::Context::default();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -4062,6 +4240,10 @@ fn a_pan_fills_the_area_the_last_frame_leaves_until_the_worker_frame_arrives() {
 /// before.
 #[test]
 fn without_a_worker_a_heavy_canvas_is_reprojected_until_the_view_is_still() {
+    keeping_color_settings(without_a_worker_a_heavy_canvas);
+}
+
+fn without_a_worker_a_heavy_canvas() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
@@ -4172,6 +4354,10 @@ fn the_canvas_waits_only_while_the_view_of_a_slow_frame_changes() {
 /// worker's pixel copy ask for that.
 #[test]
 fn a_bitmap_made_for_another_documents_file_leaves_a_pan_waiting() {
+    keeping_color_settings(a_bitmap_for_another_documents_file);
+}
+
+fn a_bitmap_for_another_documents_file() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
@@ -6551,6 +6737,48 @@ fn a_selected_ellipse_shows_its_pie_widgets() {
     assert_eq!(widgets(&mut app), 0, "no bounding box, no widgets");
 }
 
+/// A selected live polygon shows its side widget, a white diamond beside its box, with the
+/// Selection tool and the shape tools while the bounding box shows, and hides with the box while
+/// the polygon is moved.
+#[test]
+fn a_selected_polygon_shows_its_side_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 60, "sides": 5})).unwrap();
+    let ctx = egui::Context::default();
+    // A white diamond as wide and tall as the widget.
+    let size = 2.0 * vectorcraft_tools::sidewidget::RADIUS_PX;
+    let diamond = |ps: &egui::epaint::PathShape| {
+        let span = |f: fn(&egui::Pos2) -> f32| {
+            let v: Vec<f32> = ps.points.iter().map(f).collect();
+            v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min)
+        };
+        ps.closed && ps.points.len() == 4 && ps.fill == Color32::WHITE && (span(|p| p.x) - size).abs() < 0.01 && (span(|p| p.y) - size).abs() < 0.01
+    };
+    let widgets = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(ps) if diamond(ps))).count();
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("polygon");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("lineSegment");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("view.boundingBox", json!({})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "no bounding box, no widget");
+    app.run("view.boundingBox", json!({})).unwrap();
+    // A move of the polygon hides the box, and the widget with it, until the release.
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 150.0), view).unwrap();
+    assert_eq!(widgets(&mut app), 0, "hidden while the polygon moves");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 150.0), view).unwrap();
+    assert_eq!(widgets(&mut app), 1, "back after the release");
+    app.session.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an ellipse has none");
+}
+
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
 /// Path tools.
 #[test]
@@ -6798,8 +7026,134 @@ fn hidden_char_marks(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape
     let blue = Color32::from_rgb(0x4f, 0x9d, 0xff);
     shapes(app, ctx)
         .into_iter()
-        .filter(|s| matches!(s, Shape::Circle(c) if c.fill == blue) || matches!(s, Shape::Text(t) if t.fallback_color == blue))
+        .filter(|s| match s {
+            Shape::Circle(c) => c.fill == blue || c.stroke.color == blue,
+            Shape::Text(t) => t.fallback_color == blue,
+            Shape::LineSegment { stroke, .. } => stroke.color == blue,
+            Shape::Path(p) => p.stroke.color == egui::epaint::ColorMode::Solid(blue),
+            _ => false,
+        })
         .collect()
+}
+
+/// Show Hidden Characters marks each tab, nonbreaking space, narrow nonbreaking space, space of
+/// a set width and discretionary hyphen with a mark of its kind, a plain space with a dot, and
+/// a tab's arrow spans the tab's advance to its stop.
+#[test]
+fn hidden_characters_mark_tabs_nonbreaking_spaces_and_discretionary_hyphens() {
+    use super::tool_overlays::CharMark::*;
+    let text = "a b\tc\u{00A0}d\u{202F}e\u{2003}f\u{2009}g\u{200A}h\u{00AD}i";
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), text, vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    let kinds: Vec<_> = marks.chars.iter().map(|c| c.0).collect();
+    assert_eq!(kinds, [Tab, NoBreakSpace, NarrowNoBreakSpace, FixedSpace, FixedSpace, FixedSpace, DiscretionaryHyphen]);
+    assert_eq!(marks.spaces.len(), 1, "only the plain space has a dot");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let tab = lay.glyphs.iter().find(|g| text[g.byte..].starts_with('\t')).unwrap();
+    assert!(tab.advance > 1.0, "{}", tab.advance);
+    let (_, a, b) = marks.chars[0];
+    let start = t.xf * vectorcraft_geom::Point::new(tab.origin.x, tab.origin.y - 3.0);
+    assert!((a - start).hypot() < 1e-9 && (b.x - a.x - tab.advance).abs() < 1e-9 && b.y == a.y, "{a:?} {b:?} {start:?}");
+}
+
+/// Show Hidden Characters marks a line that a forced line break (U+2028) ends with a bent arrow
+/// and no ¶; the line a paragraph return ends gets ¶, and the story's end #.
+#[test]
+fn hidden_characters_mark_forced_line_breaks() {
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "ab\u{2028}cd\nef", vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert_eq!(lay.lines.len(), 3);
+    assert_eq!(marks.breaks.len(), 1);
+    let (at, along, up) = marks.breaks[0];
+    let first = &lay.lines[0];
+    assert_eq!(at, vectorcraft_geom::Point::new(first.x1 + 1.0, first.baseline));
+    assert_eq!((along - at, up - at), (vectorcraft_geom::Vec2::new(1.0, 0.0), vectorcraft_geom::Vec2::new(0.0, -1.0)));
+    let ends: Vec<_> = marks.ends.iter().map(|e| (e.1, e.0.y)).collect();
+    assert_eq!(ends, [("¶", lay.lines[1].baseline), ("#", lay.lines[2].baseline)]);
+    // A story that ends with a forced line break: the arrow, and # on the empty line after it.
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "ab\u{2028}", vectorcraft_doc::CharStyle::default());
+    let marks = HiddenMarks::of(&t);
+    assert_eq!((marks.breaks.len(), marks.ends.iter().map(|e| e.1).collect::<Vec<_>>()), (1, vec!["#"]));
+}
+
+/// A discretionary hyphen gets one ¬ also where the line breaks at it and the layout draws a
+/// hyphen there, which stands for no character of the text.
+#[test]
+fn hidden_characters_mark_a_discretionary_hyphen_at_a_break_once() {
+    let style = vectorcraft_doc::CharStyle::default();
+    let db = vectorcraft_text::FontDb::global();
+    let word = vectorcraft_text::layout(db, &vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "coco-", style.clone()));
+    let width = word.lines[0].x1 - word.lines[0].x0 + 2.0;
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "coco\u{00AD}co", style);
+    t.kind = vectorcraft_doc::text::TextKind::Area {
+        frame: vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::Rect::new(0.0, 0.0, width, 400.0).to_path(0.1)),
+    };
+    let lay = vectorcraft_text::layout(db, &t);
+    assert_eq!(lay.lines.len(), 2, "the line breaks at the discretionary hyphen");
+    assert!(lay.glyphs.iter().any(|g| g.len == 0), "the layout draws a hyphen at the break");
+    let marks = HiddenMarks::of(&t);
+    assert_eq!(marks.chars.iter().map(|c| c.0).collect::<Vec<_>>(), [super::tool_overlays::CharMark::DiscretionaryHyphen]);
+}
+
+/// In vertical type the marks follow the column: a space's dot sits beside the column, halfway
+/// down the space, and ¶ goes below the column's last character.
+#[test]
+fn hidden_characters_follow_vertical_type() {
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "a b\nc", vectorcraft_doc::CharStyle::default());
+    t.vertical = true;
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let space = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let marks = HiddenMarks::of(&t);
+    let dot = marks.spaces[0];
+    assert!((dot - vectorcraft_geom::Point::new(space.origin.x + 3.0, space.origin.y + space.advance / 2.0)).hypot() < 1e-9, "{dot:?} {space:?}");
+    let (at, glyph, align) = marks.ends[0];
+    assert_eq!((glyph, align), ("¶", egui::Align2::CENTER_TOP));
+    let b = lay.glyphs.iter().find(|g| g.byte == 2).unwrap();
+    assert!(at.y > b.origin.y, "{at:?} below {:?}", b.origin);
+}
+
+/// In a right-to-left paragraph ¶ goes at the line's left end, where the paragraph ends.
+#[test]
+fn hidden_characters_end_a_right_to_left_line_at_its_left() {
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "אב גד\nהו", vectorcraft_doc::CharStyle::default());
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.lines[0].rtl);
+    let marks = HiddenMarks::of(&t);
+    let (at, glyph, align) = marks.ends[0];
+    assert_eq!((glyph, align), ("¶", egui::Align2::RIGHT_BOTTOM));
+    assert_eq!(at.x, lay.lines[0].x0 - 1.0);
+}
+
+/// Type on a path has the marks over its characters and # after its last one.
+#[test]
+fn hidden_characters_mark_type_on_a_path() {
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "a b\tc", vectorcraft_doc::CharStyle::default());
+    let path = vectorcraft_geom::Line::new((0.0, 100.0), (600.0, 100.0)).to_path(0.1);
+    t.kind = vectorcraft_doc::text::TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
+    let marks = HiddenMarks::of(&t);
+    assert_eq!(marks.spaces.len(), 1);
+    assert_eq!(marks.chars.iter().map(|c| c.0).collect::<Vec<_>>(), [super::tool_overlays::CharMark::Tab]);
+    assert_eq!(marks.ends.iter().map(|e| e.1).collect::<Vec<_>>(), ["#"]);
+}
+
+/// The overlay draws each kind of mark: a dot, two rings, the tab's arrow, a tick, ¬, the forced
+/// line break's bent arrow, ¶ and #.
+#[test]
+fn show_hidden_characters_draws_every_kind_of_mark() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let text = "a b\tc\u{00A0}d\u{202F}e\u{2003}f\u{00AD}g\u{2028}h\ni";
+    app.session.execute("text.create", &json!({"x": 20, "y": 60, "text": text})).unwrap();
+    let ctx = egui::Context::default();
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+    let shapes = hidden_chars(&mut app, &ctx, &xf);
+    let count = |f: &dyn Fn(&Shape) -> bool| shapes.iter().filter(|s| f(s)).count();
+    assert_eq!(count(&|s| matches!(s, Shape::Circle(c) if c.fill != Color32::TRANSPARENT)), 1, "{shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Circle(c) if c.fill == Color32::TRANSPARENT)), 2, "{shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::LineSegment { .. })), 2, "the tab's shaft and the tick: {shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Path(_))), 3, "the tab's head and the break's arrow: {shapes:?}");
+    assert_eq!(count(&|s| matches!(s, Shape::Text(_))), 3, "¬, ¶ and #: {shapes:?}");
 }
 
 /// Show Hidden Characters puts a dot over each space of a list paragraph and none over its
@@ -6819,7 +7173,7 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
 fn show_hidden_characters_off_releases_the_text_nodes() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let text = json!({"x": 20, "y": 60, "text": "one two\nthree four"});
+    let text = json!({"x": 20, "y": 60, "text": "one\ttwo\u{00A0}x\nthree\u{2028}four"});
     let id = vectorcraft_doc::NodeId(app.session.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
     let ctx = egui::Context::default();
     app.run("type.hiddenCharacters", json!({})).unwrap();
@@ -8661,6 +9015,11 @@ fn retype_all_of_a_copied_type(ime: bool) {
         frame(&mut app, vec![button(at, pressed, Modifiers::NONE)]);
     }
     frame(&mut app, vec![]);
+    // Without Georgia on this computer, the Type tool asks first; OK starts the edit.
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::confirm::MISSING_FONT_EDIT) {
+        crate::dialogs::confirm(&mut app).unwrap();
+        frame(&mut app, vec![]);
+    }
     assert_eq!(app.session.tool_options()["editing"], json!(copy));
     // 3. Select all of its text and type over it.
     frame(&mut app, vec![key(Key::A, true, Modifiers::COMMAND)]);
@@ -8748,6 +9107,65 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     assert!(!app.session.tool_wants_text());
 }
 
+/// Double-clicking type set in a family that isn't available asks before the Type tool edits it:
+/// Cancel leaves the document, its undo history and the selection as they were, with nothing
+/// edited; OK puts the caret where the type was clicked, and typing edits the type, which keeps
+/// the family it names.
+#[test]
+fn double_clicking_type_in_a_missing_font_asks_before_editing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let params = json!({"x": 100, "y": 150, "text": "Hello world", "size": 24, "font": "Missing Test Family 7258"});
+    let id = app.session.execute("text.create", &params).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    timed(&mut app, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let node = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let b = node(&app).geometric_bounds().unwrap();
+    let at = xf.to_screen(b.center());
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let double_click = |app: &mut VectorcraftApp, time: f64| {
+        timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(app, time + 0.1, vec![]);
+    };
+    let asking = |app: &VectorcraftApp| app.ui.dialog.as_ref().filter(|d| d.kind == crate::dialogs::confirm::MISSING_FONT_EDIT).cloned();
+    double_click(&mut app, 1.0);
+    let d = asking(&app).expect("the question about the missing font");
+    assert!(d.str("detail").contains("Missing Test Family 7258 Regular"), "{}", d.str("detail"));
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+    // Cancel: nothing is edited, and the document, its undo history and the selection stay.
+    let (before, undo, selected) =
+        (node(&app), app.session.doc().unwrap().history.undo.len(), app.session.active().unwrap().selection.objects.clone());
+    crate::dialogs::cancel(&mut app);
+    timed(&mut app, 1.5, vec![]);
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+    assert!(!app.session.tool_wants_text());
+    assert_eq!(node(&app), before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    assert_eq!(app.session.active().unwrap().selection.objects, selected);
+    // A new double-click asks again; OK edits with the caret where the type was clicked.
+    double_click(&mut app, 3.0);
+    assert!(asking(&app).is_some(), "asked again");
+    crate::dialogs::confirm(&mut app).unwrap();
+    timed(&mut app, 3.5, vec![]);
+    assert!(app.ui.dialog.is_none());
+    let o = app.session.tool_options();
+    assert_eq!(o["editing"], json!(id));
+    let caret = o["caret"].as_u64().unwrap();
+    assert!((1..11).contains(&caret), "caret {caret}");
+    app.session.tool_text("X", app.view_info()).unwrap();
+    let NodeKind::Text(t) = &node(&app).kind else { panic!("not text") };
+    assert_eq!(t.plain_text().find('X'), Some(caret as usize), "{}", t.plain_text());
+    assert!(t.runs.iter().all(|r| r.style.font_family == "Missing Test Family 7258"));
+}
+
 #[test]
 fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolation_until_second_escape() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -8800,6 +9218,36 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
     assert!(app.session.active().unwrap().isolation.is_none(), "2nd Escape must exit isolation mode");
 }
 
+/// One Escape leaves isolation mode from a sublayer two levels down, where Exit Isolation Mode goes
+/// up one layer at a time.
+#[test]
+fn escape_leaves_an_isolated_sublayer_in_one_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = app.session.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap()["id"].as_u64().unwrap();
+    let deep = app.session.execute("layer.newSublayer", &json!({"parent": mid})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": deep})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": deep})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            show(app, ui)
+        });
+        out.textures_delta.clear();
+    };
+    let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    timed(&mut app, 0.0, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, Some(vectorcraft_doc::NodeId(deep)));
+    timed(&mut app, 1.0, vec![esc(true), esc(false)]);
+    timed(&mut app, 1.1, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, None, "one Escape leaves every level");
+}
+
 #[test]
 fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -8812,7 +9260,8 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     // Released over empty canvas: an instance centred there.
     let at = xf.to_screen(Point::new(250.0, 180.0));
-    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol(name.clone()));
+    let document = app.session.active().unwrap().uid;
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document, name: name.clone() });
     let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
     let st = app.session.active().unwrap();
@@ -8821,6 +9270,106 @@ fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
     let c = n.geometric_bounds().unwrap().center();
     assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
+}
+
+/// A new active document with a symbol `name` made from a `w` by `h` rectangle and no art; → its
+/// uid.
+fn document_with_symbol(app: &mut VectorcraftApp, name: &str, w: f64, h: f64) -> u64 {
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": w, "height": h})).unwrap();
+    app.session.execute("symbol.new", &json!({"name": name})).unwrap();
+    app.session.execute("edit.clear", &json!({})).unwrap();
+    app.session.active().unwrap().uid
+}
+
+/// The natural size the active document records for symbol `name`.
+fn symbol_size(app: &VectorcraftApp, name: &str) -> (f64, f64) {
+    let st = app.session.active().unwrap();
+    let size = st.doc.unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get(name)).cloned().unwrap();
+    (size[0].as_f64().unwrap(), size[1].as_f64().unwrap())
+}
+
+/// A symbol dragged from one document's Symbols panel and released on the canvas after another
+/// document with a different symbol of the same name became active places the dragged symbol: it
+/// is added under a free name, the other document's symbol is left as it was, the source document
+/// is not changed, and one Undo takes back both the symbol and the instance.
+#[test]
+fn a_symbol_dragged_from_another_document_places_that_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    let ctx = egui::Context::default();
+    // While Leaf is held, a document with a Leaf of its own becomes active.
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf", "Leaf 2"]);
+    assert_eq!(st.history.undo.len(), undo + 1, "added and placed as one undo step");
+    let placed = st.selection.objects.first().copied().expect("the placed instance is selected");
+    let n = st.doc.node(placed).unwrap();
+    assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Leaf 2"), "{:?}", n.kind);
+    let b = n.geometric_bounds().unwrap();
+    assert!((b.width() - 40.0).abs() < 1e-6 && (b.height() - 20.0).abs() < 1e-6, "the dragged symbol's size: {b:?}");
+    assert!((b.center() - xf.to_doc(at)).hypot() < 1e-6, "{b:?}");
+    assert_eq!(symbol_size(&app, "Leaf"), (10.0, 70.0), "this document's Leaf is unchanged");
+    app.run("edit.undo", json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Leaf"]);
+    assert!(st.doc.node(placed).is_none());
+    assert!(app.session.set_active(0));
+    assert_eq!(app.session.active().unwrap().uid, source);
+    assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1, "the source document is unchanged");
+    assert_eq!(symbol_size(&app, "Leaf"), (40.0, 20.0));
+}
+
+/// A symbol dragged from a document that was closed before the release places nothing, even
+/// where the active document has a symbol of the same name.
+#[test]
+fn a_symbol_whose_document_closed_places_nothing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    document_with_symbol(&mut app, "Leaf", 10.0, 70.0);
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != source));
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let undo = app.session.active().unwrap().history.undo.len();
+    let at = xf.to_screen(Point::new(250.0, 180.0));
+    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo, "no edit");
+    assert!(st.selection.objects.is_empty(), "nothing placed");
+}
+
+/// The chip at the pointer shows the dragged symbol from the document it was dragged from after
+/// another document, without a symbol of that name, became active.
+#[test]
+fn the_pointer_chip_of_a_dragged_symbol_shows_its_own_documents_symbol() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let source = document_with_symbol(&mut app, "Leaf", 40.0, 20.0);
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document: source, name: "Leaf".into() });
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)));
+    let run = |events| {
+        let mut out =
+            ctx.run_ui(egui::RawInput { screen_rect, events, ..Default::default() }, |ui| crate::panels::swatches::drag_preview(&app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    // The chip's area is drawn from its second frame.
+    run(vec![egui::Event::PointerMoved(pos2(200.0, 150.0))]);
+    let out = run(vec![]);
+    let thumbnail = out.shapes.iter().any(|c| matches!(&c.shape, Shape::Mesh(m) if m.texture_id != egui::TextureId::default()));
+    assert!(thumbnail, "the chip draws the source document's thumbnail of Leaf");
 }
 
 #[test]
@@ -9012,6 +9561,86 @@ fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
     g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None });
     drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
     assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
+}
+
+#[test]
+fn a_color_dropped_on_a_selected_mesh_recolors_the_point_or_patch_under_it() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{GradientMesh, NodeId, NodeKind};
+    use widgets::PanelDrag;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
+    app.session.execute("object.mesh.create", &json!({"ids": [id.0], "rows": 2, "columns": 2})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
+        let at = xf.to_screen(at);
+        egui::DragAndDrop::set_payload(&ctx, d);
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    };
+    let mesh = |app: &VectorcraftApp| -> GradientMesh {
+        match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+            NodeKind::Mesh(m) => m.clone(),
+            _ => panic!("not a gradient mesh"),
+        }
+    };
+    let colors = |app: &VectorcraftApp| mesh(app).points.iter().map(|q| q.color).collect::<Vec<_>>();
+    let undo_len = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = colors(&app);
+    let m = mesh(&app);
+    let (center, patch) = (m.points[4].p, Point::new((m.points[0].p.x + m.points[4].p.x) / 2.0, (m.points[0].p.y + m.points[4].p.y) / 2.0));
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // On a mesh point: that point alone.
+    drop(&mut app, PanelDrag::paint(Paint::solid(red)), center);
+    let after = colors(&app);
+    assert_eq!(after[4], red);
+    assert_eq!((0..9).filter(|i| after[*i] != before[*i]).count(), 1, "only the point under the pointer");
+    // Inside a patch: its four points.
+    drop(&mut app, PanelDrag::paint(Paint::solid(blue)), patch);
+    let after = colors(&app);
+    assert_eq!([0, 1, 3, 4].map(|i| after[i]), [blue; 4]);
+    assert_eq!([2, 5, 6, 7, 8].map(|i| after[i]), [2, 5, 6, 7, 8].map(|i| before[i]));
+    assert!(app.session.active().unwrap().selection.contains(id), "the selection stays");
+    // The same color again changes nothing and records no undo step.
+    let n = undo_len(&app);
+    drop(&mut app, PanelDrag::paint(Paint::solid(blue)), patch);
+    assert_eq!(undo_len(&app), n);
+    // With Object Selection by Path Only, a drop inside a patch still reaches its points, and a
+    // drop 4 screen pixels outside a corner point still reaches that point.
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let green = Color::rgb(0.0, 1.0, 0.0);
+    let far = Point::new((m.points[4].p.x + m.points[8].p.x) / 2.0, (m.points[4].p.y + m.points[8].p.y) / 2.0);
+    // Art below the patch, with its outline within the selection tolerance, is not taken for it.
+    let h = 1.0 / xf.zoom;
+    let below = app.session.execute("shape.rectangle", &json!({"x": far.x - h, "y": far.y - h, "width": 2.0 * h, "height": 2.0 * h})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    app.session.execute("object.arrange.sendToBack", &json!({"ids": [below]})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    drop(&mut app, PanelDrag::paint(Paint::solid(green)), far);
+    assert_eq!([4, 5, 7, 8].map(|i| colors(&app)[i]), [green; 4]);
+    assert_ne!(app.session.active().unwrap().doc.node(NodeId(below)).unwrap().appearance.fill_paint(), Paint::solid(green));
+    let off = 4.0 / xf.zoom;
+    drop(&mut app, PanelDrag::paint(Paint::solid(red)), Point::new(m.points[0].p.x - off, m.points[0].p.y));
+    assert_eq!(colors(&app)[0], red, "the corner point within reach");
+    assert_eq!(colors(&app)[1], blue);
+    // An unselected object on top of the mesh takes the drop itself.
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
+    let c = m.points[4].p;
+    let cover = app.session.execute("shape.rectangle", &json!({"x": c.x - 10.0, "y": c.y - 10.0, "width": 20, "height": 20})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = colors(&app);
+    drop(&mut app, PanelDrag::paint(Paint::solid(green)), c);
+    assert_eq!(colors(&app), before, "the mesh under it keeps its colors");
+    assert_eq!(app.session.active().unwrap().doc.node(NodeId(cover)).unwrap().appearance.fill_paint(), Paint::solid(green));
 }
 
 #[test]
@@ -10851,6 +11480,46 @@ fn the_tip_brings_back_the_perspective_grid_tool_without_showing_the_grid() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(app.session.tool_id(), "perspectiveGrid");
     assert!(!visible(&app), "the grid stays hidden");
+}
+
+/// The native pen feed's barrel rotation reaches the Paintbrush during canvas hover, before any
+/// stroke begins. Turning the pen or replacing it with a mouse updates a still pointer too.
+#[test]
+fn bristle_pen_tip_reaches_the_canvas_before_a_press() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    app.session.execute("brush.setCurrent", &json!({"name": "Bristle Flat Fan"})).unwrap();
+    app.select_tool("paintbrush");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let at = app.canvas_rect.unwrap().center();
+    let tip = |app: &mut VectorcraftApp| {
+        app.session.overlays(app.view_info()).into_iter().find_map(|o| match o {
+            vectorcraft_tools::Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. } => Some(path.bounding_box()),
+            _ => None,
+        })
+    };
+    feed.set_sample(Some(crate::stylus::PenSample {
+        pressure: 0.0,
+        pose: PenPose { rotation: Some(0.0), ..Default::default() },
+        ..Default::default()
+    }));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    let horizontal = tip(&mut app).expect("hovering pen shows its brush tip");
+    assert!(horizontal.width() > horizontal.height() * 2.0, "{horizontal:?}");
+    feed.set_sample(Some(crate::stylus::PenSample {
+        pressure: 0.0,
+        pose: PenPose { rotation: Some(90.0), ..Default::default() },
+        ..Default::default()
+    }));
+    frame(&mut app, &ctx, vec![]);
+    let vertical = tip(&mut app).expect("turning a still pen turns its tip");
+    assert!(vertical.height() > vertical.width() * 2.0, "{vertical:?}");
+    feed.set(None);
+    frame(&mut app, &ctx, vec![]);
+    assert!(tip(&mut app).is_none(), "a mouse clears a still pen's tip");
 }
 
 /// #764: the pen's tilt and barrel rotation in the host's feed reach the Paintbrush's points,
@@ -13076,6 +13745,10 @@ fn pan_doc() -> (std::sync::Arc<vectorcraft_doc::Document>, CacheKey) {
 /// put in that frame moves with the pan, and the frame matches a whole render where the mark is not.
 #[test]
 fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
+    keeping_color_settings(a_whole_pixel_pan);
+}
+
+fn a_whole_pixel_pan() {
     let (doc, key) = pan_doc();
     for pan in [(10.0, 0.0), (-10.0, 0.0), (0.0, 7.0), (0.0, -7.0), (-13.0, 5.0)] {
         let mut r = vectorcraft_render::Renderer::new();
@@ -13103,6 +13776,10 @@ fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
 /// plug-in registry, and the plug-in is removed after.
 #[test]
 fn a_plug_in_change_draws_the_document_s_plug_in_effects_again() {
+    keeping_color_settings(a_plug_in_change);
+}
+
+fn a_plug_in_change() {
     use vectorcraft_plugins::wat as tpl;
     let id = "test.canvas.redraw";
     let module = vectorcraft_format::base64_encode(&wat::parse_str(tpl::module(&tpl::manifest(id, "effect", "{}"), tpl::ECHO, "", 1)).unwrap());
@@ -13145,6 +13822,10 @@ fn a_plug_in_change_draws_the_document_s_plug_in_effects_again() {
 /// compares such frames with a fresh render pixel by pixel.
 #[test]
 fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
+    keeping_color_settings(a_frame_renders_whole);
+}
+
+fn a_frame_renders_whole() {
     let (doc, key) = pan_doc();
     let other_opts = |f: &dyn Fn(&mut vectorcraft_render::RenderOptions)| {
         let mut job = pan_job(&doc, &key, (10.0, 0.0));
@@ -13222,6 +13903,10 @@ fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
 /// not kept. A frame that may not copy can still be kept.
 #[test]
 fn the_render_worker_keeps_one_frame_up_to_its_limit() {
+    keeping_color_settings(the_render_worker_keeps_one_frame);
+}
+
+fn the_render_worker_keeps_one_frame() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 64})).unwrap()["id"].clone();
@@ -13268,6 +13953,10 @@ fn the_render_worker_keeps_one_frame_up_to_its_limit() {
 /// worker renders whole matches a fresh render, and each copied frame is within one level of it.
 #[test]
 fn worker_frames_match_a_fresh_render_through_a_session() {
+    keeping_color_settings(worker_frames_match_a_fresh_render);
+}
+
+fn worker_frames_match_a_fresh_render() {
     let (doc, key) = pan_doc();
     let mut edited = (*doc).clone();
     edited.layers.reverse();
@@ -13353,6 +14042,10 @@ fn worker_frames_match_a_fresh_render_through_a_session() {
 /// not keep such a frame for the pan to copy from.
 #[test]
 fn a_pan_over_art_the_frame_size_decides_renders_whole() {
+    keeping_color_settings(a_pan_over_art);
+}
+
+fn a_pan_over_art() {
     let (_, key) = pan_doc();
     let effect = |effect: &str, params: serde_json::Value| {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -13408,6 +14101,10 @@ fn a_pan_over_art_the_frame_size_decides_renders_whole() {
 /// before and only once.
 #[test]
 fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
+    keeping_color_settings(a_frame_with_copied_pixels);
+}
+
+fn a_frame_with_copied_pixels() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -13454,6 +14151,10 @@ fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
 /// first step of the next pan copies from it. The jobs are the ones the canvas asks for.
 #[test]
 fn a_pan_after_the_settling_frame_copies() {
+    keeping_color_settings(a_pan_after_the_settling_frame);
+}
+
+fn a_pan_after_the_settling_frame() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -13552,6 +14253,10 @@ fn the_render_worker_thread_copies_a_pan() {
 /// meanwhile, does not queue the frame again while it renders, and shows it once it lands.
 #[test]
 fn a_documents_first_frame_renders_on_the_worker() {
+    keeping_color_settings(a_documents_first_frame);
+}
+
+fn a_documents_first_frame() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
