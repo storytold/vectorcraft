@@ -885,10 +885,14 @@ HP-GL Options: Export As… with the HP-GL format (`file.exportAs {format: "hpgl
 (`bottomLeft`, `center`), `pens` (null for One Pen per Color, or the pen table's `"#rrggbb"` colors, pen 1's first),
 `sortPaths` and `insideFirst`, plus `path` and the artboard choice (`useArtboards`, `range`). A typed Curve
 Tolerance is kept within 0.01 to 10. Choosing Pen Table fills the table with the table set aside when One Pen per
-Color was chosen, else with the pens One Pen per Color gives the art this export plots (its artboards or the art's
-bounds), or one black pen when that art draws nothing. `ui.dialog.confirm` checks the options and the artboard choice
-(one the export refuses keeps the dialog open), remembers the options for the next HP-GL Options and writes the
-`.plt` file(s), asking for a path when there is none (one per artboard with Use Artboards).
+Color was chosen, else with the pens One Pen per Color gives the art this export plots (its artboards, the art's
+bounds, or the selection from Export Selection or with `selectedOnly`), or one black pen when that art draws nothing;
+when the export refuses the options or the artboard choice, `pens` stays null and the dialog shows the error.
+`ui.dialog.confirm` checks the options and the artboard choice (one the export refuses keeps the dialog open),
+remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
+path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
+options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
+Options open.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

@@ -234,7 +234,7 @@ fn options_or_write(
                 }
             }
             let plugin = plugin.filter(|p| !p.manifest().params.is_empty());
-            let dialog = plugin.is_none() && (f.raster || matches!(f.id, "dxf" | "eps"));
+            let dialog = plugin.is_none() && (f.raster || matches!(f.id, "dxf" | "eps" | "hpgl"));
             if selection {
                 // An options dialog keeps the mark as a field of its own, which OK hands on.
                 params[if dialog { SELECTION_FIELD } else { io::EXPORT_SELECTION }] = json!(true);

@@ -107,27 +107,128 @@ fn bad_hpgl_options_keep_the_dialog_open() {
 #[test]
 fn pen_table_starts_from_the_art_s_pens_and_comes_back() {
     let (mut app, _) = app(1);
-    let automatic = fileio::hpgl::automatic_pens(&app.session.active().unwrap().doc, &json!({}));
+    let automatic = fileio::hpgl::automatic_pens(&app.session.active().unwrap().doc, &json!({})).unwrap();
     assert_eq!(automatic.len(), 1, "the ellipse's fill is one pen");
     app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+    let none = || -> Result<Vec<String>, String> { Ok(Vec::new()) };
     let d = app.ui.dialog.as_mut().unwrap();
-    hpgl_options::set_pen_table(d, true, || automatic.clone());
+    hpgl_options::set_pen_table(d, true, || Ok(automatic.clone())).unwrap();
     assert_eq!(d.fields["pens"], json!(automatic));
     d.fields.insert("pens".into(), json!(["#00ff00", "#0000ff"]));
-    hpgl_options::set_pen_table(d, false, Vec::new);
+    hpgl_options::set_pen_table(d, false, none).unwrap();
     assert!(d.fields["pens"].is_null());
+    // The table set aside is not an export option.
+    assert_eq!(d.fields["__pens"], json!(["#00ff00", "#0000ff"]));
+    assert!(form::params(d).get("__pens").is_none());
     // Choosing One Pen per Color again keeps the table set aside.
-    hpgl_options::set_pen_table(d, false, Vec::new);
-    hpgl_options::set_pen_table(d, true, || panic!("the table set aside comes back"));
+    hpgl_options::set_pen_table(d, false, none).unwrap();
+    hpgl_options::set_pen_table(d, true, || panic!("the table set aside comes back")).unwrap();
     assert_eq!(d.fields["pens"], json!(["#00ff00", "#0000ff"]));
     // Nothing set aside and nothing drawn: one black pen.
     d.fields.insert("pens".into(), serde_json::Value::Null);
     d.fields.remove("__pens");
-    hpgl_options::set_pen_table(d, true, Vec::new);
+    hpgl_options::set_pen_table(d, true, none).unwrap();
     assert_eq!(d.fields["pens"], json!(["#000000"]));
-    // The set-aside table is not an export option.
-    assert!(form::params(d).get("__pens").is_none());
     frame(&mut app);
+}
+
+/// Pen Table with options the export refuses keeps One Pen per Color and says why, rather than
+/// starting from one black pen that the corrected options would keep.
+#[test]
+fn pen_table_with_refused_options_keeps_one_pen_per_color() {
+    let (mut app, _) = app(1);
+    app.run("ui.hpglOptionsDialog", json!({"curveTolerance": 20})).unwrap();
+    let d = app.ui.dialog.clone().unwrap();
+    let e = hpgl_options::automatic_pens(&app, &d).unwrap_err();
+    assert!(e.contains("`curveTolerance`"), "{e}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(hpgl_options::set_pen_table(d, true, || Err(e.clone())), Err(e));
+    assert!(d.fields["pens"].is_null(), "One Pen per Color stays chosen");
+    frame(&mut app);
+    // With the tolerance corrected, Pen Table starts from the art's pen.
+    set(&mut app, "curveTolerance", json!(0.1));
+    let d = app.ui.dialog.clone().unwrap();
+    let pens = hpgl_options::automatic_pens(&app, &d).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    hpgl_options::set_pen_table(d, true, || Ok(pens.clone())).unwrap();
+    assert_eq!(d.fields["pens"], json!(pens));
+    assert_eq!(pens.len(), 1, "the ellipse's fill is one pen");
+}
+
+/// Export Selection to HP-GL checks, lists the pens of and writes the selection alone, and the next
+/// whole-document export is not a selection export.
+#[test]
+fn export_selection_to_hpgl_uses_the_selection_and_is_not_remembered() {
+    let (mut app, written) = app(1);
+    // A blue outline that is the selection; the ellipse stays out of the file.
+    app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    app.run("paint.setStroke", json!({"color": "#0000ff"})).unwrap();
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| Some("/out/sel.plt".to_string())));
+    app.run("document.exportSelection", json!({})).unwrap();
+    assert_eq!(kind(&app), Some("hpglOptions"));
+    let d = app.ui.dialog.clone().unwrap();
+    assert!(d.bool(export_as::SELECTION_FIELD) && !d.fields.contains_key(crate::io::EXPORT_SELECTION));
+    assert_eq!(hpgl_options::automatic_pens(&app, &d).unwrap(), ["#0000ff"], "the selection's pen only");
+    // An artboard choice the whole document would refuse is not this export's.
+    set(&mut app, "artboard", json!(5));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(names(&written), ["/out/sel.plt"]);
+    let plot = String::from_utf8_lossy(&written.borrow()[0].1).into_owned();
+    assert_eq!(plot.matches("PD").count(), 1, "the rectangle alone: {plot}");
+    assert!(app.ui.hpgl_options.get(export_as::SELECTION_FIELD).is_none());
+    // A selection export asked for by its param is not remembered either.
+    app.run("ui.hpglOptionsDialog", json!({"path": "/out/b.plt", "exportSelection": true})).unwrap();
+    confirm(&mut app).unwrap();
+    assert!(app.ui.hpgl_options.get(crate::io::EXPORT_SELECTION).is_none());
+    app.run("select.none", json!({})).unwrap();
+    app.run("ui.hpglOptionsDialog", json!({"path": "/out/c.plt"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(names(&written).last().map(String::as_str), Some("/out/c.plt"), "the whole document, with nothing selected");
+}
+
+/// A save panel that is canceled keeps HP-GL Options open, with the options remembered before.
+#[test]
+fn a_canceled_save_panel_keeps_hpgl_options_open() {
+    let (mut app, written) = app(1);
+    app.ui.hpgl_options = json!({"origin": "center"});
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+    set(&mut app, "origin", json!("bottomLeft"));
+    frame(&mut app);
+    assert!(confirm(&mut app).is_err());
+    assert_eq!(kind(&app), Some("hpglOptions"));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("origin"), "bottomLeft");
+    assert_eq!(app.ui.hpgl_options, json!({"origin": "center"}));
+    assert!(written.borrow().is_empty());
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| Some("/out/d.plt".to_string())));
+    confirm(&mut app).unwrap();
+    assert_eq!(names(&written), ["/out/d.plt"]);
+    assert_eq!(app.ui.hpgl_options["origin"], "bottomLeft");
+}
+
+/// A save panel shown off the UI thread leaves the options remembered before until it answers:
+/// canceled, they stay; answered, the export remembers the dialog's.
+#[test]
+fn an_off_thread_save_panel_remembers_hpgl_options_when_it_answers() {
+    let (mut app, _) = app(1);
+    let (shown, written) = crate::tests_picks::off_the_ui_thread(&mut app.services);
+    let poll = |app: &mut VectorcraftApp| crate::picks::poll(app, &egui::Context::default());
+    app.ui.hpgl_options = json!({"origin": "center"});
+    for answer in [&[][..], &["/out/e.plt"][..]] {
+        app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+        set(&mut app, "origin", json!("bottomLeft"));
+        frame(&mut app);
+        let _ = confirm(&mut app);
+        assert_eq!(shown.requests().len(), 1, "the save panel is showing");
+        assert_eq!(app.ui.hpgl_options, json!({"origin": "center"}), "not remembered while the panel is open");
+        shown.answer(answer);
+        poll(&mut app);
+    }
+    assert_eq!(*written.borrow(), ["/out/e.plt"], "the canceled panel wrote nothing");
+    assert_eq!(app.ui.hpgl_options["origin"], "bottomLeft");
 }
 
 /// The pens Pen Table starts from are those of what this export plots: the art's bounds without
@@ -136,7 +237,7 @@ fn pen_table_starts_from_the_art_s_pens_and_comes_back() {
 #[test]
 fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     let (mut app, _) = app(1);
-    let on_board = fileio::hpgl::automatic_pens(&app.session.active().unwrap().doc, &json!({}));
+    let on_board = fileio::hpgl::automatic_pens(&app.session.active().unwrap().doc, &json!({})).unwrap();
     assert_eq!(on_board.len(), 1, "the ellipse's fill is one pen");
     // A blue outline outside the artboard (the paint applies to the new rectangle, the selection).
     app.run("shape.rectangle", json!({"x": 500, "y": 500, "width": 30, "height": 30})).unwrap();
@@ -147,7 +248,7 @@ fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     frame(&mut app);
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("hpglOptions"));
-    let seed = |app: &VectorcraftApp| hpgl_options::automatic_pens(app, &form::params(app.ui.dialog.as_ref().unwrap()));
+    let seed = |app: &VectorcraftApp| hpgl_options::automatic_pens(app, app.ui.dialog.as_ref().unwrap()).unwrap();
     assert_eq!(seed(&app), [on_board[0].as_str(), "#0000ff"], "the art's bounds");
     // The rectangle is the selection.
     set(&mut app, "selectedOnly", json!(true));

@@ -98,18 +98,15 @@ fn hex(v: &Value) -> Option<[u8; 3]> {
 pub fn check(doc: &Document, p: &Value) -> std::result::Result<(), String> {
     let run = || -> Result<()> {
         parse(p)?;
-        let f = super::format("hpgl").ok_or_else(|| bad(C, "no HP-GL format"))?;
-        // The export refuses `rect` for HP-GL.
-        super::encode::page_rect(f, p)?;
         with_plotted(doc, p, |_, _| Ok(()))
     };
     run().map_err(|e| e.to_string())
 }
 
 /// The pen table an export of `doc` with the options and artboard choice in `p`, and no `pens`,
-/// uses: pen 1's color first, as `#rrggbb` colors. Empty when the options or the artboard choice
-/// are refused, or nothing is plotted.
-pub fn automatic_pens(doc: &Document, p: &Value) -> Vec<String> {
+/// uses: pen 1's color first, as `#rrggbb` colors. Empty when nothing is plotted; an error when
+/// the options or the artboard choice are refused.
+pub fn automatic_pens(doc: &Document, p: &Value) -> std::result::Result<Vec<String>, String> {
     let run = || -> Result<Vec<[u8; 3]>> {
         let mut q = p.clone();
         if let Some(o) = q.as_object_mut() {
@@ -122,14 +119,17 @@ pub fn automatic_pens(doc: &Document, p: &Value) -> Vec<String> {
             Ok(plots.first().map(|o| o.pens.clone()).unwrap_or_default())
         })
     };
-    run().unwrap_or_default().iter().map(|[r, g, b]| format!("#{r:02x}{g:02x}{b:02x}")).collect()
+    let pens = run().map_err(|e| e.to_string())?;
+    Ok(pens.iter().map(|[r, g, b]| format!("#{r:02x}{g:02x}{b:02x}")).collect())
 }
 
 /// Run `f` on the document an export of `doc` with `p` plots and the regions of its plots: with
 /// `useArtboards: false`, a copy of `doc` whose one artboard is the bounds of the visible art.
-/// Like the export, it leaves out an opacity-mask or symbol editing layer, and measures the bounds
-/// without the art a plot draws nothing for.
+/// Like the export, it refuses `rect`, leaves out an opacity-mask or symbol editing layer, and
+/// measures the bounds without the art a plot draws nothing for.
 fn with_plotted<T>(doc: &Document, p: &Value, f: impl FnOnce(&Document, Vec<Rect>) -> Result<T>) -> Result<T> {
+    let format = super::format("hpgl").ok_or_else(|| bad(C, "no HP-GL format"))?;
+    super::encode::page_rect(format, p)?;
     let doc = &*doc.without_edit_modes();
     let use_artboards = super::encode::use_artboards(C, p)?;
     if use_artboards == Some(false)

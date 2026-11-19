@@ -9740,8 +9740,10 @@ In the app, Export As… with the HP-GL format opens HP-GL Options (`ui.hpglOpti
 Curve Tolerance, Origin (Bottom Left or Center), Pens (One Pen per Color, or Pen Table with a row per pen to type
 its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and Draw Inner Paths First
 (`insideFirst`). Pen Table starts from the pens One Pen per Color gives the art this export plots (the chosen
-artboards, or the bounds of the art), or one black pen when that art draws nothing. OK checks the options and the
-artboard choice, and remembers the options for the next export.
+artboards, the bounds of the art, or the selection with Export Selection or Export Selected Art Only), or one black
+pen when that art draws nothing. When the export refuses the options or the artboard choice, One Pen per Color stays
+chosen and the dialog shows why. OK checks the options and the artboard choice, and remembers the options for the
+next export; a canceled save panel writes nothing and keeps the options remembered before.
 
 ## TIFF, BMP and Targa export
 

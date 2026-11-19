@@ -5,8 +5,10 @@
 //! Fields: `document.export` params (`format: hpgl`, `path?`, the artboard choice) and the HP-GL
 //! options (`hpglVersion`, `curveTolerance`, `origin`, `pens`, `sortPaths`, `insideFirst`). OK
 //! remembers the options for next time and writes the file (asking where when there is no path);
-//! an option or artboard choice the export refuses keeps the dialog open. A typed Curve Tolerance
-//! is kept within 0.01 to 10 points.
+//! an option or artboard choice the export refuses, or a save panel shown in line that is canceled,
+//! keeps the dialog open. A canceled save panel keeps the options remembered before. Opened by Export
+//! Selection, it checks and writes the selection alone. A typed Curve Tolerance is kept within 0.01
+//! to 10 points.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
@@ -32,10 +34,13 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 };
 
 /// Fields that are not remembered between exports (they belong to one export).
-const PER_EXPORT: [&str; 7] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly"];
+const PER_EXPORT: [&str; 8] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly", io::EXPORT_SELECTION];
 
 /// The pen table set aside while One Pen per Color is chosen, so Pen Table shows it again.
 const SET_ASIDE: &str = "__pens";
+
+/// Why Pen Table could not start from the art's pens, shown under the Pens row.
+const PEN_ERROR: &str = "__penError";
 
 /// The Origin menu's names, in [`Origin::ALL`] order.
 pub(crate) const ORIGIN_NAMES: [&str; 2] = ["Bottom Left", "Center"];
@@ -97,14 +102,22 @@ fn pens(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let table = d.fields.get("pens").is_some_and(Value::is_array);
     widgets::label_row(ui, tl!("Pens:"), LABEL, |ui| {
         if widgets::radio(ui, tl!("One Pen per Color"), !table, true) {
-            set_pen_table(d, false, Vec::new);
+            let _ = set_pen_table(d, false, || Ok(Vec::new()));
+            d.fields.remove(PEN_ERROR);
         }
         ui.add_space(12.0);
         if widgets::radio(ui, tl!("Pen Table"), table, true) {
-            let params = super::form::params(d);
-            set_pen_table(d, true, || automatic_pens(app, &params));
+            let shown = d.clone();
+            match set_pen_table(d, true, || automatic_pens(app, &shown)) {
+                Ok(()) => d.fields.remove(PEN_ERROR),
+                Err(e) => d.fields.insert(PEN_ERROR.into(), json!(e)),
+            };
         }
     });
+    if let Some(e) = d.fields.get(PEN_ERROR).and_then(Value::as_str) {
+        let t = crate::theme::Tokens::get(ui.ctx());
+        ui.label(egui::RichText::new(crate::i18n::message(crate::i18n::current(), e)).color(t.error));
+    }
     // The table as the radio buttons left it, so a row edit committed this frame can't undo a switch.
     // A table longer than a plot takes (set through `ui.dialog.set`) draws no rows: OK refuses it.
     let Some(mut list) = d.fields.get("pens").and_then(Value::as_array).filter(|a| a.len() <= MAX_PENS).cloned() else { return };
@@ -151,29 +164,50 @@ fn pens(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
-/// The pens an export with the dialog's `params` and no pen table would get: its options, artboard
-/// choice and source art (the selection with Export Selected Art Only).
-pub(super) fn automatic_pens(app: &VectorcraftApp, params: &Value) -> Vec<String> {
-    let Some(st) = app.session.active() else { return Vec::new() };
-    fileio::export_source(st, params).map(|doc| fileio::hpgl::automatic_pens(&doc, params)).unwrap_or_default()
+/// The pens an export from dialog `d` with no pen table would get: its options, artboard choice and
+/// source art (the selection with Export Selected Art Only, or when Export Selection opened `d`);
+/// an error when there is no document or the export refuses those.
+pub(super) fn automatic_pens(app: &VectorcraftApp, d: &Dialog) -> Result<Vec<String>, String> {
+    let st = app.session.active().ok_or("no document")?;
+    let (doc, params) = source(st, d)?;
+    fileio::hpgl::automatic_pens(&doc, &params)
+}
+
+/// The document an export from dialog `d` writes and the export params it reads, as
+/// [`io::export`] takes them ([`io::take_selection`]): with Export Selection the selection alone,
+/// without the artboard choice, else the whole document or, with Export Selected Art Only, its
+/// selected objects.
+fn source<'a>(st: &'a vectorcraft_engine::DocState, d: &Dialog) -> Result<(std::borrow::Cow<'a, vectorcraft_doc::Document>, Value), String> {
+    let (selection, params) = io::take_selection(&super::export_as::exported(d, super::form::params(d)))?;
+    if !selection {
+        let doc = fileio::export_source(st, &params).map_err(|e| e.to_string())?;
+        return Ok((doc, params));
+    }
+    let (doc, _) = fileio::selection_doc(st, "document.exportSelection", false).map_err(|e| e.to_string())?;
+    Ok((std::borrow::Cow::Owned(doc), params))
 }
 
 /// Choose Pen Table (`on`) or One Pen per Color. Pen Table shows the table set aside when One Pen
 /// per Color was chosen, else the pens the export would give the art (`automatic`), else one black
-/// pen; One Pen per Color sets the table aside.
-pub(super) fn set_pen_table(d: &mut Dialog, on: bool, automatic: impl FnOnce() -> Vec<String>) {
+/// pen when that art draws nothing; when `automatic` fails the dialog is left as it was and the
+/// error returned. One Pen per Color sets the table aside.
+pub(super) fn set_pen_table(d: &mut Dialog, on: bool, automatic: impl FnOnce() -> Result<Vec<String>, String>) -> Result<(), String> {
     let table = d.fields.get("pens").filter(|v| v.is_array()).cloned();
     match (on, table) {
         (true, None) => {
-            let kept = d.fields.remove(SET_ASIDE).filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
-            let list = kept.unwrap_or_else(|| {
-                let mut pens = automatic();
-                pens.truncate(MAX_PENS);
-                if pens.is_empty() {
-                    pens.push("#000000".into());
+            let kept = d.fields.get(SET_ASIDE).filter(|v| v.as_array().is_some_and(|a| !a.is_empty())).cloned();
+            let list = match kept {
+                Some(list) => list,
+                None => {
+                    let mut pens = automatic()?;
+                    pens.truncate(MAX_PENS);
+                    if pens.is_empty() {
+                        pens.push("#000000".into());
+                    }
+                    json!(pens)
                 }
-                json!(pens)
-            });
+            };
+            d.fields.remove(SET_ASIDE);
             d.fields.insert("pens".into(), list);
         }
         (false, Some(list)) => {
@@ -182,6 +216,7 @@ pub(super) fn set_pen_table(d: &mut Dialog, on: bool, automatic: impl FnOnce() -
         }
         _ => {}
     }
+    Ok(())
 }
 
 /// A typed pen color (`ff0000` or `#FF0000`) as the table holds it, `#ff0000`; `None` unless it is
@@ -206,11 +241,25 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let params = super::form::params(d);
     let st = app.session.active().ok_or("no document")?;
     // A bad option or artboard choice, nothing selected, or no art to export keeps the dialog open.
-    let source = fileio::export_source(st, &params).map_err(|e| e.to_string())?;
-    fileio::hpgl::check(&source, &params)?;
+    let (source, checked) = source(st, d)?;
+    fileio::hpgl::check(&source, &checked)?;
     let remembered = params.as_object().map(|o| o.iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())));
-    app.ui.hpgl_options = Value::Object(remembered.into_iter().flatten().collect());
+    let before = std::mem::replace(&mut app.ui.hpgl_options, Value::Object(remembered.into_iter().flatten().collect()));
     app.ui.dialog = None;
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
-    io::export(app, Some("hpgl"), path, &params)
+    let waiting = app.picks.is_waiting();
+    let r = io::export(app, Some("hpgl"), path, &super::export_as::exported(d, params));
+    if !waiting && app.picks.is_waiting() {
+        // A save panel shown off the UI thread confirms the dialog again when it answers, which
+        // remembers the options then; until it does, and when it is canceled, the options
+        // remembered before stay.
+        app.ui.hpgl_options = before;
+    } else if r.is_err() && app.ui.dialog.is_none() {
+        // An export that stops before writing (a save panel that was canceled or could not be
+        // shown) leaves the dialog open over the options remembered before. A question that a
+        // save panel asked stays open.
+        app.ui.hpgl_options = before;
+        app.ui.dialog = Some(d.clone());
+    }
+    r
 }

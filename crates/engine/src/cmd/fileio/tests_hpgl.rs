@@ -580,15 +580,18 @@ fn export_options_are_checked() {
 fn automatic_pens_list_the_plotted_art_s_colors_in_pen_order() {
     let s = two_boards();
     let doc = &s.doc().unwrap().doc;
-    let pens = |p: Value| hpgl::automatic_pens(doc, &p);
+    let pens = |p: Value| hpgl::automatic_pens(doc, &p).unwrap();
     assert_eq!(pens(json!({})), ["#000000"], "the first artboard");
     assert_eq!(pens(json!({"artboard": 1})), ["#ff0000"]);
     assert_eq!(pens(json!({"useArtboards": true})), ["#000000", "#ff0000"], "one numbering for every file");
     assert_eq!(pens(json!({"useArtboards": false})), ["#000000", "#ff0000"], "the art's bounds");
     // The pens given and the path order are not the export's own pens.
     assert_eq!(pens(json!({"useArtboards": true, "pens": ["#00ff00"], "sortPaths": true})), ["#000000", "#ff0000"]);
-    // A refused artboard choice: no pens.
-    assert!(pens(json!({"artboard": 5})).is_empty());
+    // A refused artboard choice or option is an error, not an empty table.
+    assert!(hpgl::automatic_pens(doc, &json!({"artboard": 5})).is_err());
+    assert!(hpgl::automatic_pens(doc, &json!({"curveTolerance": 20})).unwrap_err().contains("`curveTolerance`"));
+    // So is an area of the page, which the export and the check refuse for HP-GL.
+    assert!(hpgl::automatic_pens(doc, &json!({"rect": [0, 0, 10, 10]})).unwrap_err().contains("rect applies to raster formats"));
 
     // Art outside every artboard is plotted only with the art's bounds.
     let mut off = Session::new();
@@ -597,8 +600,38 @@ fn automatic_pens_list_the_plotted_art_s_colors_in_pen_order() {
     off.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
     off.execute("shape.rectangle", &json!({"x": 500, "y": 500, "width": 30, "height": 30})).unwrap();
     let doc = &off.doc().unwrap().doc;
-    assert!(hpgl::automatic_pens(doc, &json!({})).is_empty());
-    assert_eq!(hpgl::automatic_pens(doc, &json!({"useArtboards": false})), ["#0000ff"]);
+    assert_eq!(hpgl::automatic_pens(doc, &json!({})), Ok(vec![]));
+    assert_eq!(hpgl::automatic_pens(doc, &json!({"useArtboards": false})), Ok(vec!["#0000ff".to_string()]));
+}
+
+/// A placed document opened with only its preview is plotted with its file's art (the plot reads
+/// the file), so the check and the pens of a dialog measure that art as the export does.
+#[test]
+fn a_placed_document_s_pens_are_those_of_its_file_s_art() {
+    use crate::tests_links::{Folder, open, save, session, write};
+    let dir = Folder::new("hpgl-placed");
+    let src = dir.file("logo.vectorcraft");
+    let mut d = vectorcraft_doc::Document::new(100.0, 50.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(255, 0, 0));
+    let look = vectorcraft_doc::Appearance::basic(red, vectorcraft_color::Paint::None, 0.0);
+    let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 50.0));
+    d.insert(Some(layer), 0, vectorcraft_doc::Node::path(id, rect, look)).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    s.execute("file.place", &json!({"path": src, "at": [200, 150]})).unwrap();
+    let poster = dir.file("poster.vectorcraft");
+    save(&mut s, &poster);
+    open(&mut s, &poster);
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.images.values().any(vectorcraft_doc::ImageBlob::is_proxy), "opened with the preview only");
+    for p in [json!({}), json!({"useArtboards": false})] {
+        assert_eq!(hpgl::automatic_pens(doc, &p), Ok(vec!["#ff0000".to_string()]), "{p}");
+        assert_eq!(hpgl::check(doc, &p), Ok(()), "{p}");
+    }
+    let plot = String::from_utf8(bytes(&s.execute("document.export", &json!({"format": "hpgl"})).unwrap())).unwrap();
+    assert!(plot.contains("SP1;") && plot.contains("PD"), "{plot}");
 }
 
 /// `insideFirst` draws the square inside the other one first, though it was made last.
