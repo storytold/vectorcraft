@@ -10176,7 +10176,8 @@ its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and D
 artboards, the bounds of the art, or the selection with Export Selection or Export Selected Art Only), or one black
 pen when that art draws nothing. When the export refuses the options or the artboard choice, One Pen per Color stays
 chosen and the dialog shows why. OK checks the options and the artboard choice, and remembers the options for the
-next export; a canceled save panel writes nothing and keeps the options remembered before.
+next export; a canceled save panel writes nothing and keeps the options remembered before. When another document has
+become the active one since the dialog opened, OK closes it and writes nothing.
 
 ## TIFF, BMP and Targa export
 
