@@ -1237,6 +1237,10 @@ antiAlias	Sharp	シャープ
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	すべてに適用 (ほかに {n} 個が見つかりません)
 	Arc	円弧
 	Arc Tool	円弧ツール
+	Three-Point Arc Tool	3 点円弧ツール
+	Three-Point Arc	3 点円弧
+	Arc too large	円弧が大きすぎます
+	Third Point Sets Direction	3 点目で方向を指定
 	Area / Path Type	エリア内文字／パス上文字
 	Area Graph Tool	面グラフツール
 	Area Type Tool	エリア内文字ツール
@@ -5165,6 +5169,10 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	a guide has no curvature circle	ガイドには曲率円がありません
 @msg	the circle that matches the path there would reach past the canvas	その位置でパスに合う円はキャンバスからはみ出します
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
+@msg	`at` must be "start" or "end"	`at` には "start" または "end" を指定してください
+@msg	give exactly one of `through` and `toward`	`through` と `toward` のどちらか一方だけを指定してください
+@msg	no arc fits these points: two are the same or all three lie on one line	これらの点に合う円弧はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
+@msg	give `at` only with `toward`	`at` は `toward` と一緒にだけ指定してください
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
 @msg	no saved presets	保存したプリセットはありません
@@ -10477,6 +10485,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Paint	ペイント
+	Flat Sweep	平筆の一掃き
+	Dry Drag	ドライドラッグ
+	Loaded Stroke	厚塗りストローク
+	Fan Sweep	扇形の一掃き
 	Engraving	彫刻
 	Fine Hatching	細いハッチング
 	Dense Hatching	密なハッチング

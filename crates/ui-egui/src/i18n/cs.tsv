@@ -1532,6 +1532,10 @@ lighting	Light	Světlo
 	Add Anchor Point Tool	Nástroj Přidat kotevní bod
 	Anchor Point Tool	Nástroj Kotevní bod
 	Arc Tool	Nástroj Oblouk
+	Three-Point Arc Tool	Nástroj Oblouk třemi body
+	Three-Point Arc	Oblouk třemi body
+	Arc too large	Oblouk je příliš velký
+	Third Point Sets Direction	Třetí bod určuje směr
 	Area Graph Tool	Nástroj Plošný graf
 	Area Type Tool	Nástroj Text v oblasti
 	Artboard Tool	Nástroj Pracovní plocha
@@ -5686,6 +5690,10 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	a guide has no curvature circle	vodítko nemá kružnici křivosti
 @msg	the circle that matches the path there would reach past the canvas	kružnice odpovídající cestě v tomto místě by přesáhla plátno
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	`at` must be "start" or "end"	`at` musí být "start" nebo "end"
+@msg	give exactly one of `through` and `toward`	zadejte právě jeden z parametrů `through` a `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	těmto bodům neodpovídá žádný oblouk: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	give `at` only with `toward`	parametr `at` zadejte jen s `toward`
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -10739,6 +10747,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Paint	Malba
+	Flat Sweep	Plochý tah
+	Dry Drag	Suchý tah
+	Loaded Stroke	Sytý tah
+	Fan Sweep	Vějířový tah
 	Engraving	Rytina
 	Fine Hatching	Jemné šrafování
 	Dense Hatching	Husté šrafování

@@ -3586,6 +3586,10 @@ lighting	Light	სინათლე
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
 	Arc Tool	რკალის ხელსაწყო
+	Three-Point Arc Tool	სამწერტილიანი რკალის ხელსაწყო
+	Three-Point Arc	სამწერტილიანი რკალი
+	Arc too large	რკალი ზედმეტად დიდია
+	Third Point Sets Direction	მესამე წერტილი მიმართულებას განსაზღვრავს
 	Area Graph Tool	ფართობითი დიაგრამის ხელსაწყო
 	Area Type Tool	არის ტექსტის ხელსაწყო
 	Artboard Tool	სამუშაო დაფის ხელსაწყო
@@ -7141,6 +7145,10 @@ font-technology	Variable	ცვლადი
 @msg	a guide has no curvature circle	დამხმარე ხაზს სიმრუდის წრე არ აქვს
 @msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	`at` must be "start" or "end"	`at` უნდა იყოს "start" ან "end"
+@msg	give exactly one of `through` and `toward`	მიუთითეთ ზუსტად ერთი: `through` ან `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ამ წერტილებს რკალი არ ერგება: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	give `at` only with `toward`	`at` მიუთითეთ მხოლოდ `toward`-თან ერთად
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
 @msg	no artboard {i} (0-based; the document has {_1})	სამუშაო დაფა {i} არ არსებობს (0-დან ითვლება; დოკუმენტს აქვს {_1})
@@ -11025,6 +11033,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Paint	საღებავი
+	Flat Sweep	ბრტყელი მოსმა
+	Dry Drag	მშრალი მოსმა
+	Loaded Stroke	სქელი მონასმი
+	Fan Sweep	მარაოსებრი მოსმა
 	Engraving	გრავიურა
 	Fine Hatching	წვრილი შტრიხები
 	Dense Hatching	მჭიდრო შტრიხები
