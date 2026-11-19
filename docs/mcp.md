@@ -2335,7 +2335,7 @@ naming the key, and leave the document and its undo history as they were: `opaci
 The blend and envelope commands refuse a string, a number or another value that is not true or false with
 `` `smooth` must be true or false ``, naming the key, and leave the document, its undo history and the options new
 blends and envelopes start with as they were: `smooth` in `object.blend.make` and `object.blend.options`;
-`independent` and `link` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
+`independent`, `symmetric` and `link` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
 in `object.envelope.makeWithWarp`, `resetWithWarp` and `options`, also when an `orientation` is given; `maintainShape`
 in `object.envelope.resetWithMesh`; `antiAlias`, `distortAppearance`, `distortLinearGradients` and
 `distortPatternFills` in `object.envelope.options`; and `editing` in `object.envelope.editContents`. A null is read as
@@ -6750,6 +6750,14 @@ is not a whole number of 0 or more, such as 1.5, -1 or "1" ("`subpath` must be a
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 `path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
 keeps its kind, leave the document as it is and record no undo step.
+`path.setHandle` with `symmetric: true` also places the anchor's other handle opposite the moved one at the same
+length, and the anchor keeps its kind. At an open end, where no segment leaves the anchor on the other side,
+`symmetric` has no effect and the handle moves as it would without it. Both `symmetric` and `independent` default to false, and a call with both true is
+refused with `` `independent` and `symmetric` cannot both be true ``; the document does not change and no undo step
+is recorded. Direct Selection sends `symmetric` while Cmd/Ctrl is held during a handle drag, unless that Cmd/Ctrl
+press lent Direct Selection for the gesture while another tool, such as the Pen, was chosen and has not been let go
+since (#7842). A call that puts both handles where they already are records no undo step. `symmetric: true` with `link: true` is refused
+("`link` and `symmetric` cannot both be true"), and so is `symmetric: true` with `link: true` in `object.blend.spine.moveAnchor`.
 `path.setHandle` with `link: true` (the Anchor Point tool's Alt-drag on a handle) places the handle and makes the
 anchor smooth: the other handle turns to lie in line on the far side of the anchor and keeps its length. A retracted
 other handle is pulled out to the placed handle's length when a segment leaves the anchor on its side, and stays
@@ -6876,7 +6884,7 @@ Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
-`independent` in `path.close` and `path.setHandle`; `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
+`independent` in `path.close` and `path.setHandle`; `symmetric` and `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
 `fill` in `path.freehand` (and in `brush.freehand`); `closed` and the `corner` of a point in `path.curvature`; `corner`
 in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSelected`, `mergeOnlySelection` and
 `merge` in `path.blob`. A null is read as a key left out.
@@ -10911,10 +10919,12 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 `text.reshapePath {id, anchors: [[subpath, anchor]…], dx, dy}` does the same for the path of type on a path
 (Direct Selection dragging one of its anchors): the start and end brackets keep their fractions of the path and the
 text reflows along it.
-`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
-of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
-undo step. A call of `text.reshapeArea`, `text.reshapePath` or `text.setPathHandle` that changes nothing (`dx` and
-`dy` both 0, or a handle moved to where it already is) adds no undo step and keeps redo.
+`text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?, symmetric?}` moves a direction handle
+of one of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in
+one undo step. With `symmetric: true` the other handle goes opposite the moved one at the same length, measured on
+the page, as in `path.setHandle`; `symmetric` and `independent` cannot both be true. A call of `text.reshapeArea`,
+`text.reshapePath` or `text.setPathHandle` that changes nothing (`dx` and `dy` both 0, or handles left where they
+already are) adds no undo step and keeps redo.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
@@ -13575,7 +13585,8 @@ the compound path selected), and the next click starts a new path. Choosing any 
 A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
 (`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where
 the spine passes nearest, `object.blend.spine.moveAnchor {anchor, x, y}` moves a point (a key on it moves along; with
-`handle: "in" | "out"` it places that handle), `object.blend.spine.convertAnchor {anchor, to: "smooth" | "corner", x?, y?}` converts a point's handles (a Smooth drag with `x, y` creates opposite handles; Corner retracts both), `object.blend.spine.reshapeSegment {segment, t, dx, dy, perpendicular?}` bends a segment
+`handle: "in" | "out"` it places that handle, and with `symmetric: true` also the other handle opposite it at the
+same length, as `path.setHandle` does; `symmetric` needs `handle` and cannot go with `independent`), `object.blend.spine.convertAnchor {anchor, to: "smooth" | "corner", x?, y?}` converts a point's handles (a Smooth drag with `x, y` creates opposite handles; Corner retracts both), `object.blend.spine.reshapeSegment {segment, t, dx, dy, perpendicular?}` bends a segment
 so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`perpendicular` works as in `path.reshapeSegment`), and `object.blend.spine.removeAnchor
 {anchor}` deletes a point no key sits on; the first edit turns the spine into a path. Moving a key moves its end of the spine. Release
 (`object.blend.release`) leaves the spine of a blend that has one as a path that paints nothing (`spines` in the result):
