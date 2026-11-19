@@ -3434,6 +3434,65 @@ fn live_paint_bucket_gradient_preset_and_sampled_stop_follow_the_active_proxy() 
     assert_eq!(node(&s, rect), art, "the selection keeps its paint");
 }
 
+/// The Gradient panel's eyedropper, used on a stop of the Live Paint Bucket's gradient, samples the
+/// color clicked into that stop of the bucket's fill, and the selection keeps its paint. A Cmd-click
+/// with the bucket, or with the Eyedropper armed for it, which the selection tool takes, leaves the
+/// bucket's colors as they were.
+#[test]
+fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_click() {
+    let v = ViewInfo::default();
+    let click = |s: &mut Session, mods: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 320.0, 320.0).with_mods(mods), v).unwrap();
+        }
+    };
+    let mut s = session();
+    live(&mut s);
+    let rect = rect(&mut s, 300.0, 300.0, 40.0, 40.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.editGradient", &json!({"stroke": false, "kind": "linear"})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    let art = node(&s, rect);
+    // The panel's eyedropper (`stop_eyedropper`): the Eyedropper, set to switch back to the bucket.
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    assert_eq!(s.selected_stop(), Some(1), "the bucket's stop stays selected for the pick");
+    // A Cmd-click while the pick is armed selects the rectangle and leaves the bucket's gradient.
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!((s.paint.fill.clone(), s.selected_stop()), (fill, Some(1)), "the bucket's fill and stop stay");
+    click(&mut s, Mods::default());
+    let Paint::Gradient(g) = &s.paint.fill else { panic!("the bucket's fill is not a gradient") };
+    assert_eq!(g.gradient.stops[1].color, Color::from_hex("#00ff00").unwrap(), "the sampled stop");
+    assert_eq!(node(&s, rect), art, "the selection keeps its paint");
+    // A Cmd-click selects the rectangle; the bucket keeps its gradient.
+    s.select_tool("livePaintBucket", v).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    click(&mut s, Mods { cmd: true, ..Mods::default() });
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the selection tool took the click");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
+    // Armed again, a Cmd-click on another object deselects the stop; the next click (a Shift-click,
+    // which would sample a color) ends the pick and leaves the bucket's gradient.
+    let other = self::rect(&mut s, 400.0, 400.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    s.select_tool("eyedropper", v).unwrap();
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    for mods in [Mods { cmd: true, ..Mods::default() }, Mods { shift: true, ..Mods::default() }] {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 420.0, 420.0).with_mods(mods), v).unwrap();
+        }
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![other], "the Cmd-click selected the other object");
+    assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
+}
+
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
 /// Bucket is active (its proxies show the default paint), and one selected on the bucket's
 /// gradient is not selected once another tool is chosen.
