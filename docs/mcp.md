@@ -717,15 +717,15 @@ the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-f
 [`oklch()`](https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch) color. The functions take the
 space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
 Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting
-the spaces, tabs and line breaks around it; other whitespace makes the text an error. A hex color, `rgb()` and
-`hsl()` give their numbers as the document's RGB numbers, as `#rrggbb` does in every command, and
-`oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH Sliders lower it; `oklch()` is an error
-while the working RGB space is not sRGB. Values are clamped where CSS clamps them when it parses them (red, green
-and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH lightness to 0 to 1 and a negative
-chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is clipped. An `hsl()` color whose
-saturation and lightness are so large that a channel overflows to an infinity is an error. `opacity` is the alpha
-as a percentage, or `null` when the text gives none. Any other text is an error. The color parameters of the other
-commands still refuse `#rrggbbaa` and `#rgba`.
+the spaces, tabs, line breaks and form feeds around it; other whitespace, such as a vertical tab or a no-break space,
+makes the text an error. A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
+`#rrggbb` does in every command, and `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH
+Sliders lower it; `oklch()` is an error while the working RGB space is not sRGB. Values are clamped where CSS clamps
+them when it parses them (red, green and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH
+lightness to 0 to 1 and a negative chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is
+clipped. An `hsl()` color whose saturation and lightness are so large that a channel overflows to an infinity is an
+error. `opacity` is the alpha as a percentage, or `null` when the text gives none. Any other text is an error. The
+color parameters of the other commands still refuse `#rrggbbaa` and `#rgba`.
 
 `color.format {"color": "#336699", "opacity": 50, "notation": "rgb"}` answers `{"text": "rgb(51 102 153 / 50%)"}`.
 `notation` is `hex` (`#336699`), `hexAlpha` (`#33669980`, and `#336699ff` at 100 % or without `opacity`), `rgb`, `hsl`

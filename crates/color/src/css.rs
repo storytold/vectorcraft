@@ -36,8 +36,8 @@ pub struct CssColor {
 /// [`MAX_CHARS`] characters. Values are clamped where CSS clamps them when it parses them: red, green
 /// and blue to 0..=255 (0..=100 %), alpha to 0..=1, a negative HSL saturation to 0, OKLCH lightness
 /// to 0..=1 and chroma to 0 or more. `none` reads as 0, as CSS reads a missing component when it
-/// converts a color. Spaces, tabs and line breaks may surround the text and its arguments; other
-/// whitespace is not CSS whitespace and makes the text invalid. An `hsl()` color whose red, green or
+/// converts a color. Spaces, tabs, line breaks and form feeds may surround the text and its
+/// arguments; other whitespace is not CSS whitespace and makes the text invalid. An `hsl()` color whose red, green or
 /// blue falls outside 0..=1 has that channel clipped, and an `oklch()` color outside sRGB keeps its
 /// lightness and hue and takes the largest chroma that fits ([`oklab::from_oklch`]); CSS maps such
 /// colors into the gamut by its own rules instead. An `hsl()` color whose saturation and lightness
@@ -66,8 +66,9 @@ pub fn parse(text: &str) -> Option<CssColor> {
     }
 }
 
-/// `s` without the CSS whitespace (spaces, tabs and line breaks) around it
-/// (<https://www.w3.org/TR/css-syntax-3/#whitespace>).
+/// `s` without the CSS whitespace (spaces, tabs, line breaks and form feeds, which CSS reads as line
+/// breaks) around it (<https://www.w3.org/TR/css-syntax-3/#whitespace>,
+/// <https://www.w3.org/TR/css-syntax-3/#input-preprocessing>).
 fn css_trim(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_ascii_whitespace())
 }
@@ -461,7 +462,9 @@ mod tests {
     fn only_spaces_tabs_and_line_breaks_are_whitespace() {
         assert_eq!(bytes("\t rgb(51,\n102 ,\t153)\r\n"), ([51, 102, 153], None));
         assert_eq!(bytes("rgb(51 102 153 /\t0.5 )"), ([51, 102, 153], Some(128)));
-        for bad in ["rgb(51,\u{a0}102,153)", "rgb(51,102,153\u{3000})", "\u{a0}#336699", "#336699\u{2003}", "rgb(0 0 0 /\u{a0}1)"] {
+        assert_eq!(bytes("\u{c}#336699\u{c}"), ([51, 102, 153], None), "CSS reads a form feed as a line break");
+        assert_eq!(bytes("rgb(51\u{c}102\u{c}153)"), ([51, 102, 153], None));
+        for bad in ["rgb(51,\u{a0}102,153)", "rgb(51,102,153\u{3000})", "\u{a0}#336699", "#336699\u{2003}", "rgb(0 0 0 /\u{a0}1)", "\u{b}#336699"] {
             assert_eq!(parse(bad), None, "{bad:?}");
         }
     }

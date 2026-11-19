@@ -285,6 +285,35 @@ fn a_wheel_click_after_typing_applies_both() {
     assert_eq!(undo_count(h.state()), before + 2);
 }
 
+/// A text typed for one rectangle is dropped when the selection changes to another showing the same
+/// hex: Enter then changes neither of them.
+#[test]
+fn a_text_typed_for_one_object_does_not_go_to_another_with_the_same_hex() {
+    let mut app = app();
+    let a = selected(&app)[0];
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let b = selected(&app)[0];
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let before = undo_count(&app);
+    let mut h = harness(app);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").click();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").type_text("#33669980");
+    h.run_steps(1);
+    h.state_mut().run("select.set", json!({"ids": [b]})).unwrap();
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    for id in [a, b] {
+        assert_eq!(rgb8(&fill_color(h.state(), id)), [255, 0, 0]);
+    }
+    assert_eq!(h.state().session.proxy_opacity(false), Some(1.0));
+    assert_eq!(undo_count(h.state()), before, "nothing was applied");
+}
+
 /// A press on the opacity slider that takes the focus from an edited field applies the text and
 /// keeps the opacity the press set: a gradient stop takes both.
 #[test]
