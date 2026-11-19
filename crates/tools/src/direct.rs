@@ -78,6 +78,8 @@ struct HandleDrag {
     offset: Vec2,
     space: bool,
     independent: bool,
+    /// The opposite handle mirrors this one ([`DirectSelectionTool::mirrors`]).
+    symmetric: bool,
     translated: bool,
 }
 
@@ -948,6 +950,7 @@ impl Tool for DirectSelectionTool {
                                 offset: Vec2::ZERO,
                                 space: false,
                                 independent: false,
+                                symmetric: false,
                                 translated: false,
                             })
                         }
@@ -1607,6 +1610,7 @@ impl DirectSelectionTool {
                 self.guides = guides;
                 drag.handle = q;
                 drag.independent = ev.mods.alt;
+                drag.symmetric = self.mirrors(ev);
             }
         }
         drag.last = p;
@@ -1615,6 +1619,9 @@ impl DirectSelectionTool {
             "id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" },
             "x": drag.handle.x, "y": drag.handle.y, "independent": drag.independent,
         });
+        if drag.symmetric {
+            params["symmetric"] = json!(true);
+        }
         if drag.translated {
             params["at"] = json!([drag.at.x, drag.at.y]);
         }

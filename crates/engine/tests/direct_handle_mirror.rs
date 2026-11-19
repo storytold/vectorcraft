@@ -122,6 +122,29 @@ fn direct_handle_baseline_cmd_added_mid_drag_mirrors_the_opposite() {
     pointer(&mut s, PointerKind::Up, q, Mods { cmd: true, ..Mods::default() });
 }
 
+#[test]
+fn direct_handle_cmd_mirror_holds_through_a_space_translation() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    press_handle(&mut s, Point::new(180.0, 100.0));
+    let q = Point::new(180.0, 160.0);
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    handles(anchor(&s, id), Point::new(20.0, 40.0), q, AnchorKind::Smooth);
+    // Space moves the anchor and both handles; the opposite handle stays mirrored.
+    let moved = Point::new(200.0, 190.0);
+    pointer(&mut s, PointerKind::Drag, moved, Mods { space: true, ..cmd() });
+    let a = anchor(&s, id);
+    near(a.p, Point::new(120.0, 130.0));
+    handles(a, Point::new(40.0, 70.0), Point::new(200.0, 190.0), AnchorKind::Smooth);
+    // Releasing Space without moving keeps the translated, mirrored handles.
+    pointer(&mut s, PointerKind::Drag, moved, cmd());
+    handles(anchor(&s, id), Point::new(40.0, 70.0), Point::new(200.0, 190.0), AnchorKind::Smooth);
+    let next = Point::new(220.0, 190.0);
+    pointer(&mut s, PointerKind::Drag, next, cmd());
+    assert_mirrored(anchor(&s, id), next, AnchorKind::Smooth);
+    pointer(&mut s, PointerKind::Up, next, cmd());
+}
+
 #[derive(Debug, PartialEq)]
 struct Snapshot {
     document: Value,
