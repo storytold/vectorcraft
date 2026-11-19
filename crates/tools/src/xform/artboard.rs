@@ -256,7 +256,8 @@ impl ArtboardTool {
                     && reaches
             };
             let domain = || resize_contact_domain(rect, handle, current, proportional, mods.alt);
-            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, valid) {
+            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, &valid) {
+                let (q, ov) = t.snap_feasible_point(p, cx.snap_tol(), |q| valid(q, q)).unwrap_or((q, ov));
                 self.guides = ov;
                 return q;
             }
@@ -293,7 +294,7 @@ impl ArtboardTool {
     /// every snap slides the move along that line. Whole pixels and the grid slide it by the
     /// shorter of the ways that put its top-left on a whole pixel or a gridline on either axis
     /// ([`slide_along`]); Smart Guides slide it until an edge or the centre lines up
-    /// ([`Targets::snap_rects_along`]). A move of zero length does not snap.
+    /// ([`Targets::snap_rects_along_contact`]). A move of zero length does not snap.
     fn snap_move_along(&mut self, cx: &ToolContext, rect: Rect, d: Vec2, copy: bool) -> Vec2 {
         self.guides.clear();
         let len = d.hypot();
@@ -310,10 +311,10 @@ impl ArtboardTool {
         }
         let Some(t) = (if copy { &self.copy_targets } else { &self.targets }) else { return d };
         let moved = rect + d;
-        let (adj, ov) = if cx.doc.setup.has_bleed() {
-            t.snap_rects_along(&[moved, cx.doc.setup.bleed_rect(moved)], u, cx.snap_tol())
+        let (adj, ov, _) = if cx.doc.setup.has_bleed() {
+            t.snap_rects_along_contact(&[moved, cx.doc.setup.bleed_rect(moved)], u, cx.snap_tol())
         } else {
-            t.snap_rects_along(&[moved], u, cx.snap_tol())
+            t.snap_rects_along_contact(&[moved], u, cx.snap_tol())
         };
         self.guides = ov;
         d + adj

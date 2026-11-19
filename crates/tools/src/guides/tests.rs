@@ -2011,6 +2011,17 @@ fn review_597702_forward_paint_survives_an_unreachable_nearby_anchor() {
         actual.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&actual.1),
         "REGRESSION: adding an unusable nearby anchor cannot let an unrelated forward alignment suppress paint: {actual:?}"
     );
+
+    let near_invalid = Point::new(99.5, 100.5);
+    let near_valid = Point::new(103.0, 100.0);
+    let single = review_597702_ray_document(Some(104.0), &[near_valid]);
+    assert_eq!(review_597942_ray(&single, true, Some(near_valid)).0, near_valid, "CONTROL: the reachable nearby anchor keeps forward priority");
+    let both = review_597702_ray_document(Some(104.0), &[near_invalid, near_valid]);
+    let off = review_597942_ray(&both, false, Some(near_invalid));
+    assert_eq!(off.0, near_valid, "CONTROL: the ordinary forward route finds the farther usable nearby anchor");
+    let on = review_597942_ray(&both, true, Some(near_invalid));
+    assert_eq!(on.0, near_valid, "REGRESSION: an invalid nearest anchor cannot hide another nearby anchor's usable forward alignment");
+    assert!(!review_597185_stroke_label(&on.1), "the reachable legacy anchor, not farther paint, owns the contact");
 }
 
 fn review_597702_bbox_document(center: Option<f64>, anchors: &[Point]) -> Document {
@@ -2222,4 +2233,98 @@ fn review_597702_shift_move_keeps_a_closer_ruler_than_a_painted_contact() {
             && zero.1.is_empty()),
         "REGRESSION: the same moved and zero-displacement ruler contacts must win with both guide-display options off: {hidden_observed:?}"
     );
+}
+
+fn review_597942_ray(d: &Document, on: bool, nearest: Option<Point>) -> (Point, Vec<Overlay>) {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: on,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snapping_tolerance: 4.0,
+        constrain_angle: 0.0,
+        ..cx(d, &selection, &paint)
+    };
+    let targets = Targets::for_drawing(d, &[], None, None).styled(&c).with_stroke_edges(&c, &[], None);
+    let raw = Point::new(101.0, 100.0);
+    assert_eq!(targets.nearest_point(raw, 4.0).map(|(q, _)| q), nearest, "CONTROL: the rejected point really is nearest to this raw pointer");
+    let leave = Leave::segment(&c, Point::new(100.0, 100.0), true);
+    let original = d.clone();
+    let result = targets.snap_from(raw, Some(&leave), 4.0);
+    assert_eq!(d, &original);
+    result
+}
+
+fn review_597942_bounds_move(edge: Option<f64>, ruler: Option<f64>, on: bool, shift: bool, show: bool) -> (Point, Vec<Overlay>) {
+    let (d, selection) = review_597702_move_document(edge.map(|edge| (edge + 10.0, 20.0)), ruler, None);
+    let paint = paint();
+    let c = ToolContext {
+        smart_guides: true,
+        guides: true,
+        snap_to_point: true,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snap_to_glyph: false,
+        snap_to_last_location: false,
+        spacing_guides: false,
+        snap_to_stroke_edges: on,
+        snapping_tolerance: 4.0,
+        alignment_guides: show,
+        anchor_path_labels: show,
+        ..cx(&d, &selection, &paint)
+    };
+    let raw = Point::new(190.0, 150.0);
+    let start = Point::new(60.0, 150.0);
+    let targets = Targets::for_move(&c, &selection.objects);
+    assert!(!targets.has_point_near(raw, 4.0), "CONTROL: the ordinary body grab is not near an anchor");
+    assert!(targets.stroke_contours.nearest(raw, 4.0).is_none(), "CONTROL: the grab cannot contact the paint directly");
+    let snap = crate::select::MoveSnap::new(&c);
+    let original = d.clone();
+    let (delta, guides) = if shift { snap.snap_along(&c, start, raw - start, false) } else { snap.snap(&c, start, raw - start, false) };
+    assert_eq!(d, original, "actual body-move snapping does not mutate the document or selected artwork");
+    (start + delta, guides)
+}
+
+#[test]
+fn review_597942_body_bounds_preserve_the_ordinary_ruler_priority() {
+    for shift in [false, true] {
+        for edge in [None, Some(203.0), Some(1003.0)] {
+            let off = review_597942_bounds_move(edge, Some(191.0), false, shift, true);
+            assert_eq!(off.0, Point::new(191.0, 150.0), "CONTROL: the actual OFF route holds the grab on the shown ruler");
+            if edge != Some(203.0) {
+                let on = review_597942_bounds_move(edge, Some(191.0), true, shift, true);
+                assert_eq!(on.0, off.0, "CONTROL: no eligible paint keeps the ordinary route");
+            }
+        }
+        let paint = review_597942_bounds_move(Some(203.0), None, true, shift, true);
+        assert!(paint.0.distance(Point::new(193.0, 150.0)) < 1e-9, "CONTROL: paint moves the right bounds edge from200 to203: {paint:?}");
+        assert!(review_597185_stroke_label(&paint.1));
+    }
+    let closer = review_597942_bounds_move(Some(201.0), Some(193.0), true, true, true);
+    assert!(closer.0.distance(Point::new(191.0, 150.0)) < 1e-9, "CONTROL: Shift keeps the closer painted bounds contact: {closer:?}");
+    assert!(review_597185_stroke_label(&closer.1));
+    let tie = review_597942_bounds_move(Some(203.0), Some(193.0), true, true, true);
+    assert!(tie.0.distance(Point::new(193.0, 150.0)) < 1e-9, "CONTROL: equal travel keeps the painted point: {tie:?}");
+    assert!(review_597185_stroke_label(&tie.1), "CONTROL: equal travel retains the complete painted contact");
+    let hidden_paint = review_597942_bounds_move(Some(203.0), None, true, true, false);
+    assert!(hidden_paint.0.distance(Point::new(193.0, 150.0)) < 1e-9, "CONTROL: hidden guides keep the painted point: {hidden_paint:?}");
+    assert!(hidden_paint.1.is_empty(), "CONTROL: display switches hide guides without disabling geometry");
+    for shift in [false, true] {
+        for show in [true, false] {
+            let actual = review_597942_bounds_move(Some(203.0), Some(191.0), true, shift, show);
+            assert_eq!(
+                actual.0,
+                Point::new(191.0, 150.0),
+                "REGRESSION: an eligible bounds contact must not hide the ordinary closer held-grab ruler: shift={shift}, show={show}"
+            );
+            assert!(!review_597185_stroke_label(&actual.1));
+            if !show {
+                assert!(actual.1.is_empty());
+            }
+        }
+    }
+    let free = review_597942_bounds_move(Some(201.0), Some(193.0), true, false, true);
+    assert_eq!(free.0, Point::new(193.0, 150.0), "REGRESSION: free movement preserves held-grab ruler priority even when bounds paint is closer");
+    assert!(!review_597185_stroke_label(&free.1));
 }

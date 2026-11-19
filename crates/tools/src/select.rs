@@ -333,6 +333,7 @@ impl MoveSnap {
         // The grabbed anchor landed on a path or a crossing, which a ruler guide does not pull
         // it off.
         let mut on_path = false;
+        let mut bounds_contour = None;
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
@@ -355,7 +356,12 @@ impl MoveSnap {
                 on_path = true;
             } else {
                 let (adj, ov, axes, contact) = t.snap_rects_axes_contact(&[b + d], cx.snap_tol());
-                on_path = contact;
+                let (adj, ov, axes) = if contact {
+                    bounds_contour = Some((d + adj, ov));
+                    t.snap_rects_axes_legacy(&[b + d], cx.snap_tol())
+                } else {
+                    (adj, ov, axes)
+                };
                 d += adj;
                 guides = ov;
                 taken = axes;
@@ -364,8 +370,10 @@ impl MoveSnap {
         // A ruler guide within reach of the grabbed point wins over lining the bounds up; on an
         // axis without one that Smart Guides left free, the bounds line up with the ruler guides
         // (#5746), alongside the Smart Guides.
+        let mut held_by_ruler = false;
         if let Some(t) = self.rulers.as_ref().filter(|_| !on_path) {
             let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.snap_tol(), taken);
+            held_by_ruler = held;
             if adj != Vec2::ZERO {
                 d += adj;
                 if held {
@@ -374,6 +382,10 @@ impl MoveSnap {
                     guides.extend(ov);
                 }
             }
+        }
+        if !held_by_ruler && let Some((painted, overlays)) = bounds_contour {
+            d = painted;
+            guides = overlays;
         }
         if cx.snaps_to_pixel(PixelOp::Moving)
             && let Some(b) = self.bounds
@@ -404,8 +416,7 @@ impl MoveSnap {
             return (Vec2::ZERO, ov);
         }
         let mut guides = vec![];
-        let mut on_contour = false;
-        let mut point_contour = None;
+        let mut painted_contact = None;
         if cx.snap_to_grid
             && let Some(b) = self.bounds
         {
@@ -424,19 +435,24 @@ impl MoveSnap {
             } else if let Some((q, ov)) = t.snap_stroke_along(start + d, u, cx.snap_tol()) {
                 // Compare with the ruler result the ordinary OFF route would choose,
                 // not with a new ruler query after paint has already moved the point.
-                point_contour = Some((q - start, ov, d));
+                painted_contact = Some((q - start, ov, d));
                 let (adj, ov) = t.snap_rects_along(&[b + d], u, cx.snap_tol());
                 d += adj;
                 guides = ov;
             } else {
                 let (adj, ov, contact) = t.snap_rects_along_contact(&[b + d], u, cx.snap_tol());
-                on_contour = contact;
+                let (adj, ov) = if contact {
+                    painted_contact = Some((d + adj, ov, d));
+                    t.snap_rects_along(&[b + d], u, cx.snap_tol())
+                } else {
+                    (adj, ov)
+                };
                 d += adj;
                 guides = ov;
             }
         }
         let mut on_ruler = false;
-        if let Some(t) = self.rulers.as_ref().filter(|_| !on_contour) {
+        if let Some(t) = self.rulers.as_ref() {
             let (q, ov, contact) = t.snap_point_along_contact(start + d, u, cx.snap_tol());
             // Contact belongs to geometry, even at zero travel with lines and labels hidden.
             on_ruler = contact;
@@ -454,7 +470,7 @@ impl MoveSnap {
                 guides = ov;
             }
         }
-        if let Some((painted, overlays, raw)) = point_contour {
+        if let Some((painted, overlays, raw)) = painted_contact {
             let closer_ruler = on_ruler && (d - raw).hypot2() < (painted - raw).hypot2();
             if !closer_ruler {
                 d = painted;

@@ -1276,3 +1276,129 @@ fn review_597368_artboard_collinear_contacts_keep_side_and_coupled_minima() {
         assert!(v["width"].as_f64().unwrap() >= 1.0 && v["height"].as_f64().unwrap() >= 1.0);
     }
 }
+
+fn review_597942_resize_scene(edge: Option<f64>, anchors: &[f64]) -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 20.0, 20.0);
+    if let Some(edge) = edge {
+        review_462530_stroke(&mut d, edge - 10.0, 20.0, -1000.0, 2000.0);
+    }
+    for &x in anchors {
+        let mut path = vectorcraft_geom::BezPath::new();
+        path.move_to((x, 10.0));
+        path.line_to((-50.0, -30.0));
+        path.line_to((-50.0, 50.0));
+        path.close_path();
+        let appearance =
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0);
+        let layer = d.layers[0].id;
+        let node = vectorcraft_doc::Node::path(d.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&path), appearance);
+        d.insert(Some(layer), usize::MAX, node).unwrap();
+    }
+    d
+}
+
+#[test]
+fn review_597942_artboard_resize_keeps_the_next_feasible_anchor_ahead_of_paint() {
+    let start = Point::new(20.0, 20.0);
+    let raw = Point::new(2.0, 10.0);
+    let resize = |d: &vectorcraft_doc::Document, on| review_597569_resize_guides(d, start, raw, Mods::default(), on, (1.0, 4.0));
+    let painted = resize(&review_597942_resize_scene(Some(1.5), &[]), true);
+    review_462630_bounds(&painted.0, Rect::new(0.0, 0.0, 1.5, 10.0));
+    assert!(
+        painted.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")),
+        "CONTROL: genuine paint is eligible for this real resize"
+    );
+    let feasible = resize(&review_597942_resize_scene(Some(1.5), &[4.0]), true);
+    review_462630_bounds(&feasible.0, Rect::new(0.0, 0.0, 4.0, 10.0));
+    assert!(!feasible.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")));
+    for edge in [None, Some(1000.0)] {
+        let d = review_597942_resize_scene(edge, &[0.5, 4.0]);
+        let off = resize(&d, false);
+        let on = resize(&d, true);
+        review_462630_bounds(&off.0, Rect::new(0.0, 0.0, 0.5, 10.0));
+        review_462630_bounds(&on.0, Rect::new(0.0, 0.0, 0.5, 10.0));
+    }
+    let d = review_597942_resize_scene(Some(1.5), &[0.5, 4.0]);
+    review_462630_bounds(&resize(&d, false).0, Rect::new(0.0, 0.0, 0.5, 10.0));
+    let actual = resize(&d, true);
+    review_462630_bounds(&actual.0, Rect::new(0.0, 0.0, 4.0, 10.0));
+    assert!(
+        !actual.1.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")),
+        "REGRESSION: the farther feasible legacy point must win over paint after the nearest point fails the minimum width"
+    );
+}
+
+fn review_597942_shift_board(edge: Option<f64>, bleed: bool, legacy: bool, on: bool) -> (Value, Vec<Overlay>) {
+    let mut d = vectorcraft_doc::Document::new(2000.0, 1200.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+    if bleed {
+        d.setup.bleed = [0.0, 0.0, 0.0, 10.0];
+    }
+    if let Some(edge) = edge {
+        review_462530_stroke(&mut d, edge + 10.0, 20.0, -1000.0, 2000.0);
+    }
+    if legacy {
+        let layer = d.layers[0].id;
+        let appearance =
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0);
+        let left = if bleed { 212.0 } else { 202.0 };
+        let path = vectorcraft_geom::shapes::rectangle(Rect::new(left, 200.0, left + 20.0, 220.0));
+        let node = vectorcraft_doc::Node::path(d.alloc_id(), path, appearance);
+        d.insert(Some(layer), usize::MAX, node).unwrap();
+    }
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: on,
+        snapping_tolerance: 4.0,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        constrain_angle: 0.0,
+        ..cx(&d, &selection, &paint)
+    };
+    let original = d.clone();
+    let mut tool = ArtboardTool::default();
+    let down = tool.pointer(&c, &ev(PointerKind::Down, 50.0, 50.0));
+    assert!(down.is_empty(), "CONTROL: ordinary Down admits an artboard move before Shift");
+    let shift = Mods { shift: true, ..Default::default() };
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, 150.0, 50.0).with_mods(shift));
+    assert!(tool.busy());
+    assert!(actions.iter().any(|a| matches!(a, Action::Begin(label) if label == "Move Artboard")));
+    assert!(
+        actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.move")),
+        "CONTROL: Shift after Down constrains the admitted move, not a new-board draw"
+    );
+    let preview = preview_params(&actions);
+    let guides = tool.overlays(&c);
+    assert_eq!(tool.pointer(&c, &ev(PointerKind::Up, 150.0, 50.0).with_mods(shift)), vec![Action::Commit]);
+    assert!(!tool.busy());
+    assert_eq!(d, original, "the preview query preserves all art, board, bleed and resources");
+    (preview, guides)
+}
+
+#[test]
+fn review_597942_artboard_shift_move_contacts_board_and_bleed_paint() {
+    for bleed in [false, true] {
+        let edge = if bleed { 213.0 } else { 203.0 };
+        for paint in [None, Some(edge), Some(1003.0)] {
+            let off = review_597942_shift_board(paint, bleed, false, false);
+            assert!(near(moved_by(&off.0), (100.0, 0.0)), "CONTROL: OFF retains the ordinary constrained move: {off:?}");
+            if paint != Some(edge) {
+                let on = review_597942_shift_board(paint, bleed, false, true);
+                assert!(near(moved_by(&on.0), (100.0, 0.0)), "CONTROL: no eligible paint keeps the legacy move");
+            }
+        }
+        let legacy = review_597942_shift_board(None, bleed, true, true);
+        assert!(near(moved_by(&legacy.0), (102.0, 0.0)), "CONTROL: an ordinary real target still aligns the moved bounds: {legacy:?}");
+        let actual = review_597942_shift_board(Some(edge), bleed, false, true);
+        assert!(
+            near(moved_by(&actual.0), (103.0, 0.0)),
+            "REGRESSION: the actual constrained board/bleed consumer must retain its eligible painted contact: bleed={bleed}, {actual:?}"
+        );
+        assert!(
+            actual.1.iter().any(|o| matches!(o, Overlay::Label { p, text, .. } if text == "stroke edge" && (p.x-edge).abs() < 1e-6)),
+            "the pre-release guide must identify the real board or bleed paint contact"
+        );
+    }
+}

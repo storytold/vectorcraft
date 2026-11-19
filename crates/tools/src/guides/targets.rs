@@ -1061,6 +1061,11 @@ impl Targets {
         self.nearest_point_with(p, tol, |_| true)
     }
 
+    /// The nearest feasible anchor or centre, with its own label.
+    pub(crate) fn snap_feasible_point(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(Point, Vec<Overlay>)> {
+        self.nearest_point_with(p, tol, valid).map(|(q, kind)| (q, self.label(q, kind.label()).into_iter().collect()))
+    }
+
     fn nearest_point_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(Point, Kind)> {
         within(&self.points, |q| q.0.x, p.x, tol)
             .iter()
@@ -1153,9 +1158,7 @@ impl Targets {
         }
         // Only this nearby point's own alignment may grant it forward priority;
         // an unrelated line cannot make an unreachable point suppress paint.
-        if let Some((point, _)) = self.nearest_point(near, tol)
-            && (!ray || self.slide_with(at, dir, near, tol, true, |from| from == point).is_some())
-        {
+        if self.nearest_point_with(near, tol, |point| !ray || self.slide_with(at, dir, near, tol, true, |from| from == point).is_some()).is_some() {
             return None;
         }
         self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
@@ -1521,7 +1524,7 @@ impl Targets {
         (d, ov, axes, false)
     }
 
-    fn snap_rects_axes_legacy(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
+    pub(crate) fn snap_rects_axes_legacy(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
         let mut taken = aligned;
         if let [r] = rects
