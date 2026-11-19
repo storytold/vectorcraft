@@ -80,7 +80,8 @@ pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCi
 /// the next or previous segment at a corner, the path has no single direction: that is a
 /// [`NoCircle::Corner`]. A segment `sp` lacks is a [`NoCircle::Cusp`]. Segments with no length
 /// between the two are passed over, and a closed subpath with one segment of length meets itself.
-/// The anchor is smooth when it is marked smooth with handles that turn by less than 90°, or when
+/// The anchor is smooth when it is marked smooth, with both handles pulled out and no segment of no
+/// length passed over to reach it, and the path turns there by less than 90°, or when
 /// the two segments leave it within [`SMOOTH_TURN`] of one direction.
 pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
     let n = sp.segment_count();

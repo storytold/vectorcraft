@@ -6733,8 +6733,9 @@ result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an a
 The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
 The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
 at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
-of more than half a degree and the anchor is not marked smooth, or where they turn by 90° or more; segments of no
-length between them are passed over), when the circle would reach past the canvas (4,000,000 pt from the
+of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by
+90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not
+marked smooth), when the circle would reach past the canvas (4,000,000 pt from the
 origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
 
 The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
@@ -6745,8 +6746,8 @@ it touches and, with Measurement Labels on, its radius by the pointer, followed 
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
 Shift held at the press puts the circle on the other side of the path. On a straight segment, at a cusp, at a corner
 anchor, or where the circle would reach past the canvas, the pointer shows "Straight segment", "Cusp", "Corner" or
-"Circle too large", and a click draws nothing. The pointer passes over the circles the tool drew until an edit, Undo
-or Redo is made outside the tool.
+"Circle too large", and a click draws nothing. The pointer passes over the circles the tool drew until another tool
+is chosen or an edit, Undo or Redo is made outside the tool.
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}

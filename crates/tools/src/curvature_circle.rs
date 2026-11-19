@@ -11,8 +11,8 @@
 //! the side the path bends toward; with Shift held at the press, on the other side. On a straight
 //! stretch, at a cusp, at a corner, or where the circle would reach past the canvas, the pointer
 //! shows "Straight segment", "Cusp", "Corner" or "Circle too large" instead, and a click draws
-//! nothing. The pointer passes over the circles the tool drew until an edit, Undo or Redo is made
-//! outside the tool.
+//! nothing. The pointer passes over the circles the tool drew until another tool is chosen or an
+//! edit, Undo or Redo is made outside the tool.
 
 use std::collections::HashSet;
 
