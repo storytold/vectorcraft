@@ -71,8 +71,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   turns has its line where the turn puts it, or, when that would put it between the points, as
   far past the outermost point as before.
   With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
-  tolerance of the level of a parallel line of a visible, unlocked linear dimension already drawn
-  anywhere in the document has its line on that level. This is VectorCraft's own rule. With
+  tolerance of the level of a parallel line of a linear dimension already drawn has its line on
+  that level. The other dimension, and every layer and group it is in, must be visible and
+  unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
+  frontmost back, so in a larger document a dimension past them is not a level. This is
+  VectorCraft's own rule. With
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
@@ -87,6 +90,12 @@ extension lines (weight, type, colour, arrows), and the text (font, size, colour
 alignment). **Position** is **Away from the Line** (the label on the far side of the dimension line
 from the object) or **Between Line and Object**; **Alignment** is **Left**, **Center** or
 **Right** along the line. **Save** keeps them for new dimensions; existing ones don't change.
+
+**Arrow Style** lists **Filled**, **Open**, **Tick** and **None**, then every other built-in
+arrowhead of the Stroke panel, each with a drawn preview before its name. Custom arrowheads are not
+listed. A version that has the arrowhead in the Stroke panel but not in Arrow Style keeps the saved
+arrows of such a dimension until it draws the dimension again, and then draws **Filled** arrows. A
+version without the arrowhead does not open the file.
 
 Scale means **drawing : real size**, independent of zoom. At **1:10** a 1 in line on the page is
 labelled 10 in; at **10:1**, 0.1 in. It scales lengths, not angles or the size of text and arrows.

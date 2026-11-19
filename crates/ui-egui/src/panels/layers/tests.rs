@@ -408,6 +408,50 @@ fn clicking_a_target_circle_targets_the_layer() {
     assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
 }
 
+/// The rows whose target circle shows as targeted (its inner ring drawn), as indexes into the
+/// circles [`frame`] returns.
+fn targeted_rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<usize> {
+    let (circles, _) = frame(app, ctx, vec![], false);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    let rings: Vec<egui::Pos2> = out
+        .shapes
+        .iter()
+        .filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 2.8))
+        .map(|c| c.shape.visual_bounding_rect().center())
+        .collect();
+    circles.iter().enumerate().filter(|(_, c)| rings.iter().any(|r| r.distance(**c) < 0.5)).map(|(i, _)| i).collect()
+}
+
+/// A layer added to the selection from its target circle shows as targeted, as an object added
+/// the same way does (#8646): with nothing targeted, a layer's circle shows its inner ring while
+/// all of its visible, unlocked art is selected, and not while only part of it is.
+#[test]
+fn a_layer_added_from_its_target_circle_shows_as_targeted() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let ctx = egui::Context::default();
+    // Rows top down, as `rows_at_every_depth_are_clickable` lists them.
+    let ids = [layer, sub, g, b, a, c];
+    let row = |id: NodeId| ids.iter().position(|r| *r == id).unwrap();
+    assert_eq!(frame(&mut app, &ctx, vec![], false).0.len(), ids.len());
+    // c, then the sublayer added: its art (the group and a) is selected, nothing is targeted.
+    app.session.execute("layer.target", &json!({"id": c.0})).unwrap();
+    app.session.execute("layer.target", &json!({"id": sub.0, "add": true})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.target, None);
+    let mut want = vec![row(sub), row(g), row(a), row(c), row(layer)];
+    want.sort();
+    // The top layer's art is all selected too, so it shows as targeted; b, inside the selected
+    // group, is not selected itself.
+    assert_eq!(targeted_rows(&mut app, &ctx), want);
+    assert!(!targeted_rows(&mut app, &ctx).contains(&row(b)));
+    // With only part of the sublayer's art selected, neither layer shows as targeted.
+    app.session.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let mut want = vec![row(a), row(c)];
+    want.sort();
+    assert_eq!(targeted_rows(&mut app, &ctx), want);
+}
+
 #[test]
 fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
@@ -763,6 +807,358 @@ fn masks_underline_dashed_and_mask_editing_lists_only_the_mask() {
     assert!(after > before + 1, "a dashed underline: {before} → {after}");
 }
 
+// ---- isolation mode ----
+
+/// The object rows [`list_rows`] lists for the active document, top down, with their depths.
+fn listed_ids(app: &VectorcraftApp) -> Vec<(NodeId, usize)> {
+    let st = app.session.active().unwrap();
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    rows.iter().filter(|r| r.guide.is_none() && !r.spine).map(|r| (r.node.id, r.depth)).collect()
+}
+
+/// In isolation mode the panel lists only the isolated sublayer, group or object, as the top row
+/// with the open rows inside it; the other layers and groups are listed again when it ends.
+#[test]
+fn isolation_lists_only_the_isolated_art_and_exit_lists_every_layer_again() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let top = NodeId(run(&mut app, "layer.new", json!({"top": true, "name": "Top"}))["id"].as_u64().unwrap());
+    let all = vec![(top, 0), (layer, 0), (sub, 1), (g, 2), (b, 3), (a, 2), (c, 1)];
+    assert_eq!(listed_ids(&app), all);
+    run(&mut app, "object.isolate", json!({"id": g.0}));
+    assert_eq!(listed_ids(&app), [(g, 0), (b, 1)], "the group and its art");
+    run(&mut app, "object.exitIsolation", json!({}));
+    assert_eq!(listed_ids(&app), all, "every layer again");
+    run(&mut app, "object.isolate", json!({"id": sub.0}));
+    assert_eq!(listed_ids(&app), [(sub, 0), (g, 1), (b, 2), (a, 1)], "the sublayer and its art");
+    // Isolating an object inside lists that object alone.
+    run(&mut app, "object.isolate", json!({"id": a.0}));
+    assert_eq!(listed_ids(&app), [(a, 0)]);
+    run(&mut app, "object.exitIsolation", json!({}));
+    assert_eq!(listed_ids(&app), all);
+    // A closed isolated group lists its own row alone, and an isolated object that is gone leaves
+    // every layer listed.
+    run(&mut app, "object.isolate", json!({"id": g.0}));
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    assert_eq!(listed_ids(&app), [(g, 0)]);
+    app.session.active_mut().unwrap().isolation = Some(NodeId(999_999));
+    assert_eq!(listed_ids(&app), [(top, 0), (layer, 0), (sub, 1), (g, 2), (a, 2), (c, 1)]);
+}
+
+/// Entering isolation mode opens the isolated row and leaving it lists every row again; a drop
+/// beside the isolated row or into the empty space under it moves nothing out of the isolated art.
+#[test]
+fn isolation_opens_the_isolated_row_and_keeps_drops_inside_it() {
+    let (mut app, [layer, sub, g, _, a, _]) = nested();
+    let ctx = egui::Context::default();
+    let parent = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.parent_of(id);
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    app.session.active_mut().unwrap().layers_open.set(sub, false);
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // Rows: Sub, g, b, a.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4, "the sublayer's row opens");
+    // Rectangle a onto the upper edge of the sublayer's row: not above it, outside the sublayer.
+    let primary = egui::PointerButton::Primary;
+    let dragged = drag_by(&mut app, &ctx, egui::pos2(150.0, circles[3].y), egui::pos2(150.0, circles[0].y - ROW_MEDIUM * 0.4), false, primary);
+    assert!(dragged, "the drag started");
+    assert_eq!(parent(&app, a), Some(sub));
+    // The sublayer into the empty space under the rows: it stays in Layer 1.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let dragged = drag_by(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::pos2(150.0, circles[3].y + 3.0 * ROW_MEDIUM), false, primary);
+    assert!(dragged, "the drag started");
+    assert_eq!(parent(&app, sub), Some(layer));
+    // Rectangle a onto the middle of the group's row: into it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let at = |app: &VectorcraftApp, id: NodeId| circles[listed_ids(app).iter().position(|(n, _)| *n == id).unwrap()];
+    let (from, to) = (at(&app, a), at(&app, g));
+    drag(&mut app, &ctx, egui::pos2(150.0, from.y), egui::pos2(150.0, to.y), false);
+    assert_eq!(parent(&app, a), Some(g));
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6, "every row again");
+}
+
+/// In isolation mode the rows outside the isolated art are no longer highlighted, so Delete and the
+/// trash in the panel act only on rows it lists.
+#[test]
+fn isolation_drops_highlights_outside_the_isolated_art() {
+    let (mut app, [_, sub, _, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    app.session.execute("layer.highlight", &json!({"ids": [c.0, b.0], "mode": "set"})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(rows_of(&app), [b], "the rectangle on Layer 1, outside the sublayer, is let go");
+}
+
+/// In isolation mode Rename and the rows opened around a located object stay inside the isolated
+/// row: an object outside it has no row to rename, and opens no rows.
+#[test]
+fn isolation_keeps_rename_and_locate_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let err = app.run("ui.rename", json!({"id": c.0})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert_eq!(app.run("ui.rename", json!({"id": b.0})).unwrap()["id"], json!(b.0));
+    {
+        let st = app.session.active().unwrap();
+        let listed = |id| listed_when_opened(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default(), id);
+        assert_eq!([layer, sub, g, b, c].map(listed), [false, true, true, true, false]);
+    }
+    let st = app.session.active_mut().unwrap();
+    st.layers_open.set(layer, false);
+    st.layers_open.set(g, false);
+    let doc = st.doc.clone();
+    open_around(&mut app, &doc, &[c]);
+    open_around(&mut app, &doc, &[b]);
+    let open = &app.session.active().unwrap().layers_open;
+    assert!(open.contains(g), "the group inside the sublayer opens");
+    assert!(!open.contains(layer), "the layer around the sublayer stays closed");
+}
+
+/// In isolation mode, with no row highlighted, Delete Selection and the trash do not delete the
+/// current layer when it is outside the isolated art, where the panel does not list it.
+#[test]
+fn isolation_keeps_delete_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // A row left highlighted outside the isolated group before the panel shows again.
+    let st = app.session.active_mut().unwrap();
+    st.layer_rows = vec![c];
+    let current = st.current_layer().unwrap();
+    assert!([layer, sub].contains(&current), "the current layer holds the isolated group");
+    let err = app.run("ui.layerDelete", json!({})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    let doc = &app.session.active().unwrap().doc;
+    assert!([layer, sub, g, b, a, c].iter().all(|id| doc.node(*id).is_some()), "nothing was deleted");
+    app.session.active_mut().unwrap().layer_rows = vec![b];
+    app.run("ui.layerDelete", json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(b).is_none(), "a highlighted row inside the isolated group is deleted");
+    assert!(doc.node(a).is_some() && doc.node(c).is_some());
+}
+
+/// In isolation mode New Layer and New Sublayer are off, and `ui.newLayer` is an error, while the
+/// layer they make would be outside the isolated art; a sublayer of an isolated sublayer is listed.
+#[test]
+fn isolation_keeps_new_layers_to_the_rows_listed() {
+    let (mut app, [_, sub, g, ..]) = nested();
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!([(false, false), (true, false), (false, true)].map(|(s, t)| new_layer_unlisted(st, s, t)), [true; 3]);
+    for p in [json!({}), json!({"sublayer": true})] {
+        let err = app.run("ui.newLayer", p).unwrap_err();
+        assert!(err.contains("exit isolation mode first"), "{err}");
+    }
+    assert!(app.ui.dialog.is_none());
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let st = app.session.active().unwrap();
+    assert!(new_layer_unlisted(st, false, false), "a new layer would go beside the isolated sublayer");
+    assert!(!new_layer_unlisted(st, true, false), "a new sublayer goes inside it");
+    app.run("ui.newLayer", json!({"sublayer": true})).unwrap();
+    assert!(app.ui.dialog.is_some());
+    // Exit Isolation Mode on the sublayer isolates its layer, beside which a new layer would go.
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(new_layer_unlisted(app.session.active().unwrap(), false, true));
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(!new_layer_unlisted(app.session.active().unwrap(), false, true));
+}
+
+/// With Show Layers Only on, an isolated group or object is still listed as the top row, without
+/// the art inside it, and its row can be renamed.
+#[test]
+fn isolation_with_show_layers_only_lists_the_isolated_group_or_object() {
+    let (mut app, [_, sub, g, _, a, _]) = nested();
+    let opts = PanelOptions { layers_only: true, ..Default::default() };
+    let listed = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        list_rows(&st.doc, st.isolation, &st.layers_open, &opts, "", &Filter::default()).iter().map(|r| r.node.id).collect::<Vec<_>>()
+    };
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(listed(&app), [g], "the group's row, without its art");
+    let st = app.session.active().unwrap();
+    assert!(listed_when_opened(&st.doc, st.isolation, &st.layers_open, &opts, "", &Filter::default(), g));
+    app.session.execute("object.isolate", &json!({"id": a.0})).unwrap();
+    assert_eq!(listed(&app), [a]);
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    assert_eq!(listed(&app), [sub], "a sublayer with no sublayers inside lists itself alone");
+}
+
+/// Click the item of the Layers panel menu whose text ends with `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let draw = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().ends_with(label) => Some(t.visual_bounding_rect()),
+            _ => None,
+        })
+    };
+    let Some(r) = draw(app, vec![]) else { panic!("no menu item {label}") };
+    for e in [egui::Event::PointerMoved(r.center()), button(r.center(), true), button(r.center(), false)] {
+        draw(app, vec![e]);
+    }
+}
+
+/// In isolation mode the panel menu's Duplicate Selection copies only the rows the panel lists, Hide
+/// Others is off, and with a group isolated so is Locate Layer, whose layer row is not listed.
+#[test]
+fn isolation_keeps_the_panel_menu_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let top = NodeId(app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // A row left highlighted outside the sublayer before the panel shows again.
+    app.session.active_mut().unwrap().layer_rows = vec![c, b];
+    click_menu_item(&mut app, &ctx, "Duplicate Selection");
+    let count = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().children().unwrap().len();
+    assert_eq!(count(&app, layer), 2, "rectangle c, outside the sublayer, is not copied");
+    assert_eq!(count(&app, g), 2, "rectangle b is copied");
+    click_menu_item(&mut app, &ctx, "Hide Others");
+    assert!(app.session.active().unwrap().doc.node(top).unwrap().visible, "the layer outside the isolated art still shows");
+    app.ui.layers_panel.layers_only = true;
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    app.session.active_mut().unwrap().layer_rows = vec![];
+    click_menu_item(&mut app, &ctx, "Locate Layer");
+    assert!(rows_of(&app).is_empty(), "the sublayer holding the group is not highlighted");
+}
+
+/// OK in Delete Selection's question deletes nothing when isolation mode started while it asked and
+/// a row it asked about is outside the isolated art, and rows given outside it, as rows dropped on
+/// the trash are, are not deleted either.
+#[test]
+fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
+    let (mut app, [_, sub, g, _, a, c]) = nested();
+    let uid = app.session.active().unwrap().uid;
+    app.session.active_mut().unwrap().layer_rows = vec![sub];
+    assert!(app.run("ui.layerDelete", json!({})).unwrap().is_null(), "it asks first");
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let ok = json!({"ids": [sub.0], "doc": uid, "confirmed": true});
+    let err = app.run("ui.layerDelete", ok.clone()).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert!(app.session.active().unwrap().doc.node(sub).is_some(), "nothing was deleted");
+    let err = app.run("ui.layerDelete", json!({"ids": [c.0]})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert!(app.session.active().unwrap().doc.node(c).is_some(), "the rectangle outside the group stays");
+    // OK with no rows given deletes the highlighted rows the panel lists, inside the sublayer.
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    app.session.active_mut().unwrap().layer_rows = vec![a, c];
+    app.run("ui.layerDelete", json!({"doc": uid, "confirmed": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(a).is_none() && doc.node(c).is_some(), "only the row inside the sublayer is deleted");
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
+    app.run("ui.layerDelete", ok).unwrap();
+    assert!(app.session.active().unwrap().doc.node(sub).is_none());
+}
+
+/// A document first shown in isolation mode opens its isolated row, also when the panel showed
+/// another document last; shown again with its isolation mode unchanged, it opens nothing.
+#[test]
+fn isolation_opens_the_isolated_row_of_each_document() {
+    let (mut app, [_, _, g, ..]) = nested();
+    let ctx = egui::Context::default();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert!(app.session.active().unwrap().layers_open.contains(g), "the isolated group's row opens");
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    app.session.execute("document.activate", &json!({"index": 1})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert!(!app.session.active().unwrap().layers_open.contains(g), "a row closed in isolation mode stays closed");
+}
+
+/// In isolation mode an Alt-drag of the isolated row onto itself shows no place to drop and copies
+/// nothing, and a guide dragged since before isolation mode began goes to no layer outside the
+/// isolated art.
+#[test]
+fn isolation_keeps_drops_on_the_isolated_row_inside_it() {
+    let (mut app, [layer, sub, g, ..]) = nested();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 50, "layer": layer.0})).unwrap();
+    let ctx = egui::Context::default();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // Rows: Sub, g, b, a.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let nodes = |app: &VectorcraftApp| {
+        let mut n = 0;
+        app.session.active().unwrap().doc.walk(|_| n += 1);
+        n
+    };
+    let before = nodes(&app);
+    // The boxes drawn around a row that would take the drop, in one frame with Alt held.
+    let boxes = |app: &mut VectorcraftApp, e: egui::Event| {
+        let events = vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT), e];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let accent = Tokens::get(&ctx).accent;
+        out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.width == 2.0 && r.stroke.color == accent)).count()
+    };
+    let (from, to) = (egui::pos2(150.0, circles[0].y - 6.0), egui::pos2(150.0, circles[0].y + 2.0));
+    boxes(&mut app, egui::Event::PointerMoved(from));
+    boxes(&mut app, button(from, true));
+    boxes(&mut app, egui::Event::PointerMoved(from + vec2(0.0, 6.0)));
+    let shown = boxes(&mut app, egui::Event::PointerMoved(to)) + boxes(&mut app, egui::Event::PointerMoved(to + vec2(1.0, 0.0)));
+    assert!(egui::DragAndDrop::has_any_payload(&ctx), "the drag started");
+    assert_eq!(shown, 0, "no box around the isolated row");
+    boxes(&mut app, button(to, false));
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(nodes(&app), before, "nothing was copied");
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
+    // Rows: Layer 1, its guide (no target circle), Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let guide_row = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    frame(&mut app, &ctx, vec![button(guide_row, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(guide_row + vec2(0.0, 6.0))], false);
+    // Over the group's row the guide would go to the sublayer holding it.
+    let over = egui::pos2(150.0, circles[2].y);
+    let shown = boxes(&mut app, egui::Event::PointerMoved(over)) + boxes(&mut app, egui::Event::PointerMoved(over + vec2(1.0, 0.0)));
+    assert!(shown > 0, "a box around the group's row");
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // Rows: g, b.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let over = egui::pos2(150.0, circles[0].y);
+    let shown = boxes(&mut app, egui::Event::PointerMoved(over)) + boxes(&mut app, egui::Event::PointerMoved(over + vec2(1.0, 0.0)));
+    assert!(egui::DragAndDrop::has_any_payload(&ctx), "the guide is still dragged");
+    assert_eq!(shown, 0, "no box around the isolated group's row, outside which its sublayer is");
+    frame(&mut app, &ctx, vec![button(over, false)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].layer, Some(layer), "the guide stays on Layer 1");
+}
+
+/// In isolation mode Alt-clicking or Ctrl/Cmd+Alt-clicking an eye, or Alt-clicking a lock, changes
+/// no layer outside the isolated art.
+#[test]
+fn isolation_keeps_alt_clicks_on_eyes_and_locks_inside_it() {
+    let (mut app, [_, sub, ..]) = nested();
+    let top = NodeId(app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let click = |app: &mut VectorcraftApp, at: egui::Pos2, mods: egui::Modifiers| click_with(app, &ctx, at, mods);
+    let (eye, lock) = (egui::pos2(12.0, circles[0].y), egui::pos2(37.0, circles[0].y));
+    click(&mut app, eye, egui::Modifiers::ALT);
+    click(&mut app, eye, egui::Modifiers::ALT | egui::Modifiers::COMMAND);
+    click(&mut app, lock, egui::Modifiers::ALT);
+    let st = app.session.active().unwrap();
+    let t = st.doc.node(top).unwrap();
+    assert!(t.visible && !t.locked && !matches!(t.kind, NodeKind::Layer { preview: false, .. }), "the layer outside the isolated art is unchanged");
+}
+
 // ---- rows at every depth (layers, sublayers, groups, objects) ----
 
 /// Layer 1 holding rectangle `c` and a sublayer holding rectangle `a` and a group of
@@ -901,7 +1297,8 @@ fn guide_rows_have_their_own_eye_and_lock() {
     };
     let dimmed = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();
-        list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default()).iter().find(|r| r.guide.is_some()).unwrap().dim
+        let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+        rows.iter().find(|r| r.guide.is_some()).unwrap().dim
     };
     click_with(&mut app, &ctx, name, egui::Modifiers::NONE);
     assert_eq!(selected(&app), [guide]);
@@ -1295,7 +1692,7 @@ fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
 /// for a guide's row).
 fn listed(app: &VectorcraftApp, ids: &HashMap<&'static str, NodeId>, query: &str, filter: &Filter) -> Vec<&'static str> {
     let st = app.session.active().unwrap();
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), query, filter);
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), query, filter);
     let name = |r: &Row| match r.guide {
         Some(_) => "ruler guide",
         None => ids.iter().find(|(_, id)| **id == r.node.id).map_or("?", |(name, _)| *name),
@@ -2750,10 +3147,10 @@ fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
     run(&mut app, "select.none", json!({}));
     expand(&mut app, &json!({})).unwrap();
     let st = app.session.active().unwrap();
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let kinds: Vec<(u64, bool)> = rows.iter().map(|r| (r.node.id.0, r.spine)).collect();
     assert_eq!(kinds[1..], [(blend.0, false), (b, false), (a, false), (blend.0, true)], "the spine row comes last in the blend");
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
     assert!(!rows.iter().any(|r| r.spine), "no spine row while searching");
     // Rows top down: the layer, the blend, both keys (with target circles), then the spine.
     let ctx = egui::Context::default();
@@ -2784,7 +3181,7 @@ fn ruler_guide_nodes_get_no_object_row() {
         let g = Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 20.0, artboard: None });
         doc.insert(Some(l), usize::MAX, g).unwrap();
     }
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let ids: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_none()).map(|r| r.node.id).collect();
     assert_eq!(ids, [second, first, rect]);
     // Each guide is a guide row of its layer instead.
@@ -2810,9 +3207,38 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     doc.move_node(first, Some(layer), usize::MAX).unwrap();
     let kids: Vec<NodeId> = doc.layers[0].children().unwrap().iter().map(|c| c.id).collect();
     assert_eq!(kids.last(), Some(&first));
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
+}
+
+#[test]
+fn guide_row_highlight_stays_selected_without_hover() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = NodeId(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2); // Layer, rectangle; guide has no target circle.
+    let guide = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    let ordinary = egui::pos2(150.0, circles[1].y);
+    let highlighted_at = |app: &mut VectorcraftApp, at: egui::Pos2| {
+        // Clear hover so a hover rectangle cannot satisfy selected-fill proof.
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![egui::Event::PointerGone], ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let selected = Tokens::get(&ctx).row_selected;
+        out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.fill == selected && r.rect.contains(at) && r.rect.width() > 200.0))
+    };
+    assert!(!highlighted_at(&mut app, guide), "an unselected guide is not highlighted");
+    click_with(&mut app, &ctx, guide, egui::Modifiers::NONE);
+    assert_eq!(vectorcraft_engine::cmd::guide_indexes(&app.session.active().unwrap().doc, &app.session.active().unwrap().selection.guides), [0]);
+    assert!(highlighted_at(&mut app, guide), "selected guide has the ordinary row fill without hover");
+    click_with(&mut app, &ctx, ordinary, egui::Modifiers::NONE);
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [rect]);
+    assert!(highlighted_at(&mut app, ordinary), "ordinary row painting remains intact");
 }
 
 /// Right-clicking a row that is not highlighted selects it.
@@ -3005,6 +3431,250 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     let (lock_cmd, _, lock_enabled) = super::rows::multi_others_action(doc, &[l1], false);
     assert_eq!(lock_cmd, "layer.unlockAll");
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
+}
+
+/// Right-clicking a guide row presents specialized context menu actions:
+/// Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show.
+#[test]
+fn context_menu_on_guide_row_presents_specialized_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let layer = doc.layers[0].id;
+    assert!(doc.node(NodeId(rect)).unwrap().is_guide(), "node was made a guide");
+
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2, "Layer 1 row and guide row");
+
+    // Secondary-click the guide row (bottom row)
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+
+    // Capture the open context menu shapes
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let labels: Vec<String> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.text().trim().to_string()),
+            _ => None,
+        })
+        .collect();
+
+    assert!(labels.iter().any(|s| s == "Release Guide"), "Release Guide present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Duplicate"), "Duplicate present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Delete Guide"), "Delete Guide present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Lock"), "Lock present in {labels:?}");
+    assert!(labels.iter().any(|s| s == "Hide"), "Hide present in {labels:?}");
+}
+
+/// Clicking "Release Guide" dispatches the command and converts the guide to a path in one undo step.
+#[test]
+fn context_menu_release_guide_dispatches_and_is_one_undo_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+
+    // Secondary-click the guide row
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+
+    // Find "Release Guide" position
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let release_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Release Guide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Release Guide text position");
+
+    let undo_before = app.session.active().unwrap().history.undo.len();
+    click_with(&mut app, &ctx, release_pos, egui::Modifiers::NONE);
+
+    // Verify it is no longer a guide
+    let node = app.session.active().unwrap().doc.node(NodeId(rect)).unwrap();
+    assert!(!node.is_guide(), "node is now a regular path, not a guide");
+    let undo_after = app.session.active().unwrap().history.undo.len();
+    assert_eq!(undo_after, undo_before + 1, "exactly one undo step added");
+
+    // Undo restores the guide
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    let node = app.session.active().unwrap().doc.node(NodeId(rect)).unwrap();
+    assert!(node.is_guide(), "undo restores guide status");
+}
+
+/// Clicking "Duplicate" and "Delete Guide" in a guide row's context menu dispatches duplicate and delete.
+#[test]
+fn context_menu_guide_row_duplicate_and_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+
+    // 1. Right-click guide row and click "Duplicate"
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let dup_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Duplicate" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Duplicate text position");
+    click_with(&mut app, &ctx, dup_pos, egui::Modifiers::NONE);
+
+    // Document now has 2 guides
+    let (circles2, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles2.len(), 3, "Layer and 2 guide rows");
+
+    // 2. Right-click the second guide row and click "Delete Guide"
+    let at2 = egui::pos2(150.0, circles2[2].y);
+    for e in [egui::Event::PointerMoved(at2), button_by(at2, true, right), button_by(at2, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let del_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Delete Guide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Delete Guide text position");
+    click_with(&mut app, &ctx, del_pos, egui::Modifiers::NONE);
+
+    let (circles3, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles3.len(), 2, "Back to layer and 1 guide row");
+}
+
+/// Clicking "Lock"/"Unlock" and "Hide"/"Show" in a guide row's context menu toggles locked and visible.
+#[test]
+fn context_menu_guide_row_lock_and_hide() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    app.session.execute("view.guides.make", &json!({})).unwrap();
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.session.active_mut().unwrap().layers_open.set(layer, true);
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let at = egui::pos2(150.0, circles[1].y);
+    let right = egui::PointerButton::Secondary;
+
+    // 1. Right-click -> menu shows "Lock" -> click "Lock"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let lock_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Lock" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Lock text position");
+    click_with(&mut app, &ctx, lock_pos, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().locked, "guide is locked");
+
+    // 2. Right-click -> menu now shows "Unlock" -> click "Unlock"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let unlock_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Unlock" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Unlock text position");
+    click_with(&mut app, &ctx, unlock_pos, egui::Modifiers::NONE);
+    assert!(!app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().locked, "guide is unlocked");
+
+    // 3. Right-click -> menu shows "Hide" -> click "Hide"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let hide_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Hide" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Hide text position");
+    click_with(&mut app, &ctx, hide_pos, egui::Modifiers::NONE);
+    assert!(!app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().visible, "guide is hidden");
+
+    // 4. Right-click -> menu shows "Show" -> click "Show"
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let show_pos = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().trim() == "Show" => Some(t.pos + egui::vec2(10.0, 5.0)),
+            _ => None,
+        })
+        .expect("Show text position");
+    click_with(&mut app, &ctx, show_pos, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().doc.node(NodeId(rect)).unwrap().visible, "guide is visible again");
 }
 
 /// One headless frame of the panel in a 300 × 600 window, returning every drawn text and its rect.

@@ -9,12 +9,13 @@
 //! **Repeat** objects are live nodes (`NodeKind::Repeat`) holding the source art and the
 //! arrangement; `vectorcraft_doc::pattern` evaluates the instances.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{self, Overlap, PATTERN_EDIT_LAYER, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType, pattern_paint};
-use vectorcraft_doc::swatches::PaintFn;
+use vectorcraft_doc::swatches::{PaintFn, graph_paints, node_paints, override_paints, walk_with_masks};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Point, Rect};
 
@@ -36,6 +37,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?, name? (trimmed; blank: New Pattern N), tileType?: grid|brickByRow|brickByColumn|hexByColumn|hexByRow, brickOffset?: 0..1 (0.5), width?, height?, edit?: bool (true)} make a pattern swatch from the selection and enter pattern editing mode; refused while an opacity mask is edited → {name}",
             can_make_pattern,
             pattern_make
+        ),
+        cmd!(
+            "object.pattern.replaceArt",
+            "Replace Pattern Art",
+            [],
+            None,
+            "{name, ids?} make copies of the selected art the tile art of pattern `name`, as Alt-dragging (Option-dragging on macOS) art onto its swatch in the Swatches panel does; the pattern keeps its name, swatch, tile and options (with Size Tile to Art on, the tile fits the new art), every fill and stroke painted with it draws the new tile, and the art stays on the canvas, selected; one undo step, none when the art matches the tile art already; refused while a pattern is edited, with nothing selected, and for art painted with the pattern itself → {name}",
+            can_replace_pattern_art,
+            pattern_replace_art
         ),
         cmd!(
             "object.pattern.edit",
@@ -196,6 +206,12 @@ fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
 
 fn has_selection_or_ids(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)
+}
+
+/// Replace Pattern Art: a document, and no pattern is being edited.
+fn can_replace_pattern_art(s: &Session) -> std::result::Result<(), String> {
+    has_doc(s)?;
+    if editing(s).is_some() { Err("finish editing the pattern first".into()) } else { Ok(()) }
 }
 
 /// The repeats of the selection: selected ones, and those around a selected object. None while
@@ -410,6 +426,103 @@ pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<Strin
         }
     }
     Ok(pe.pattern)
+}
+
+/// Give pattern `name` fresh-id copies of the selected art (or of `ids`) as its tile art, as one
+/// undo step (`object.pattern.replaceArt`). The pattern keeps its name, swatch, tile and options,
+/// and its tile fits the new art when its Size Tile to Art is on; paints refer to a pattern by
+/// name, so every fill and stroke of it draws the new tile. The art stays where it is, selected as
+/// before. Art that matches the tile art already records nothing.
+fn pattern_replace_art(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.pattern.replaceArt";
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing name"))?.to_string();
+    let roots = roots(s, p, C)?;
+    let d = &s.doc()?.doc;
+    let old = d.pattern(&name).map(|def| def.art.clone()).ok_or_else(|| bad(C, format!("no pattern `{name}`")))?;
+    if roots.is_empty() {
+        return Err(bad(C, "select the art for the pattern tile"));
+    }
+    let src: Vec<Arc<Node>> = roots.iter().filter_map(|id| d.node(*id).cloned()).map(Arc::new).collect();
+    if paints_pattern(d, &src, &name) {
+        return Err(bad(C, format!("art painted with `{name}` can't be its tile")));
+    }
+    // Copies made from the same next id are equal when the art matches the tile art.
+    let fresh = |art: &[Arc<Node>]| copies(&mut Document::clone(d), art);
+    if fresh(&old) == fresh(&src) {
+        return Ok(json!({ "name": name }));
+    }
+    s.edit("Replace Pattern Art", |d, _| {
+        let art: Vec<Arc<Node>> = copies(d, &src).into_iter().map(Arc::new).collect();
+        if let Some(def) = d.pattern_mut(&name) {
+            def.art = art;
+            if def.size_tile_to_art {
+                def.fit_tile_to_art();
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "name": name }))
+}
+
+/// What a piece of art uses by name, for [`paints_pattern`].
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Uses<'a> {
+    Symbol(&'a str),
+    Pattern(&'a str),
+    GraphDesign(&'a str),
+    Brush(&'a str),
+}
+
+/// Does `art` paint pattern `name`, itself or through the symbols (of its instances and of the
+/// inline graphics in its type), patterns, graph designs and brushes it uses? A graph's stored
+/// series and label paints count, since its marks and labels take them each time it is drawn again.
+fn paints_pattern(d: &Document, art: &[Arc<Node>], name: &str) -> bool {
+    let brushes = vectorcraft_brush::library(d);
+    // What was already looked into, and the art left to look at.
+    let mut seen: HashSet<Uses> = HashSet::new();
+    let mut left: Vec<&Node> = art.iter().map(|a| &**a).collect();
+    while let Some(n) = left.pop() {
+        let mut used = vec![];
+        walk_with_masks(n, &mut |c| {
+            match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => used.push(Uses::Symbol(symbol.as_str())),
+                // The symbol of every inline graphic in type counts, overset or not.
+                NodeKind::Text(t) => used.extend(t.runs.iter().filter_map(|r| r.inline.as_ref()).map(|a| Uses::Symbol(a.symbol.as_str()))),
+                _ => {}
+            }
+            for it in &c.appearance.items {
+                if let vectorcraft_doc::AppearanceItem::Stroke(sk) = it
+                    && let Some(b) = &sk.brush
+                {
+                    used.push(Uses::Brush(b.as_str()));
+                }
+            }
+            for p in node_paints(c).chain(override_paints(c)).chain(graph_paints(c)) {
+                if let Paint::Pattern { pattern, .. } = p {
+                    used.push(Uses::Pattern(pattern.as_str()));
+                }
+            }
+            if let Some(g) = c.extras().graph.as_deref() {
+                used.extend(g.series_markers.iter().flatten().map(|m| Uses::GraphDesign(m.as_str())));
+                used.extend(g.series_columns.iter().flatten().map(|c| Uses::GraphDesign(c.design.as_str())));
+            }
+        });
+        for u in used {
+            if u == Uses::Pattern(name) {
+                return true;
+            }
+            if !seen.insert(u) {
+                continue;
+            }
+            match u {
+                Uses::Symbol(symbol) => left.extend(d.symbols.iter().find(|x| x.name == symbol).map(|x| &*x.art)),
+                Uses::Pattern(pattern) => left.extend(d.pattern(pattern).into_iter().flat_map(|x| x.art.iter().map(|a| &**a))),
+                Uses::GraphDesign(design) => left.extend(d.graph_designs.iter().find(|x| x.name == design).map(|x| &*x.art)),
+                Uses::Brush(brush) => left.extend(brushes.iter().filter(|x| x.name == brush).flat_map(|x| x.art())),
+            }
+        }
+    }
+    false
 }
 
 /// Leave pattern editing mode, discarding the changes (`object.pattern.cancel`). An existing

@@ -16,7 +16,7 @@
 //! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
 //! Default (100%, Normal).
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -476,9 +476,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             select_row(app, ui.ctx(), Sel::None);
         }
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-        let mix = mixed(app);
+        let summary = summary(app, ui.ctx());
+        let mix = summary.as_ref().and_then(|s| s.mixed(app));
         let mixed = mix.is_some();
-        let label = tl!(object_label(app));
+        let label = tl!(summary.as_ref().map_or("No Selection", |s| s.label));
         // A linked object names its graphic style ("Rectangle: Sunshine"), and so does new art
         // with nothing selected.
         let style = match app.session.selection_graphic_style() {
@@ -497,7 +498,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Some(n) => n.appearance.fill_paint(),
                 None => app.session.paint.fill.clone(),
             };
-            chip(ui, th, &fill, mix.as_ref().is_some_and(|m| m.fills_differ));
+            chip(ui, th, &fill, mix.is_some_and(|m| m.fills_differ));
             if let Some(n) = node.as_ref().filter(|_| !mixed) {
                 thumbnail_drag(ui, th, n.id);
             }
@@ -505,7 +506,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
         match &node {
             // Objects that differ list what they share, under a note that they differ.
-            Some(n) if let Some(m) = &mix => {
+            Some(n) if let Some(m) = mix => {
                 let (mr, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::hover());
                 let mut job = egui::text::LayoutJob::default();
                 let format = egui::TextFormat { font_id: egui::FontId::proportional(12.0), color: t.text_dim, italics: true, ..Default::default() };
@@ -604,6 +605,44 @@ struct Mixed {
     transparency: bool,
     /// Their topmost fills differ: the object row shows no fill chip.
     fills_differ: bool,
+}
+
+/// The selection's [`object_label`] and [`mixed`] summary for the active document as of one
+/// revision and one list of appearance subjects ([`vectorcraft_doc::Selection::subjects`]), shared by
+/// the Control bar and the Appearance panel ([`summary`]).
+pub(crate) struct Summary {
+    uid: u64,
+    revision: u64,
+    subjects: Vec<NodeId>,
+    /// [`object_label`] of these subjects.
+    pub(crate) label: &'static str,
+    /// [`mixed`] of these subjects, worked out the first time the Appearance panel asks for it.
+    mixed: OnceLock<Option<Mixed>>,
+}
+
+impl Summary {
+    /// [`mixed`] of the subjects this summary was made for.
+    fn mixed<'a>(&'a self, app: &VectorcraftApp) -> Option<&'a Mixed> {
+        self.mixed.get_or_init(|| mixed(app)).as_ref()
+    }
+}
+
+/// The active document's [`Summary`], made again only when the document changes (its id or its
+/// revision) or the appearance subjects do, compared id by id. `None` with no document open.
+pub(crate) fn summary(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Summary>> {
+    let st = app.session.active()?;
+    let subjects = st.selection.subjects();
+    let id = egui::Id::unique("ap-summary");
+    if let Some(s) = ctx.data(|d| d.get_temp::<Arc<Summary>>(id))
+        && s.uid == st.uid
+        && s.revision == st.revision
+        && s.subjects == subjects
+    {
+        return Some(s);
+    }
+    let s = Arc::new(Summary { uid: st.uid, revision: st.revision, subjects: subjects.to_vec(), label: object_label(app), mixed: OnceLock::new() });
+    ctx.data_mut(|d| d.insert_temp(id, s.clone()));
+    Some(s)
 }
 
 /// `params` of an item or effect command the panel runs, with `aligned` when the selected objects'
