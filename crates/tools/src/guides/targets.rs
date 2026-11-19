@@ -1743,6 +1743,31 @@ impl Targets {
         (u * s, ov, true)
     }
 
+    /// The existing open sign region for a free box corner, in local handle space.
+    fn free_corner_contact_domain(to_local: Affine, p: Point, origin: Point, d0: Vec2, (sx, sy): (f64, f64), tol: f64) -> ContactDomain {
+        let to_local = Affine::translate(-origin.to_vec2()) * to_local;
+        let local = to_local * p;
+        let mut bounds = Rect::new(local.x - tol, local.y - tol, local.x + tol, local.y + tol);
+        let mut open = [false; 4];
+        if d0.x * sx > 0.0 && bounds.x0 <= 0.0 {
+            bounds.x0 = 0.0;
+            open[0] = true;
+        } else if d0.x * sx < 0.0 && bounds.x1 >= 0.0 {
+            bounds.x1 = 0.0;
+            open[2] = true;
+        }
+        if d0.y * sy > 0.0 && bounds.y0 <= 0.0 {
+            bounds.y0 = 0.0;
+            open[1] = true;
+        } else if d0.y * sy < 0.0 && bounds.y1 >= 0.0 {
+            bounds.y1 = 0.0;
+            open[3] = true;
+        }
+        let regions =
+            if d0.x != 0.0 && d0.y != 0.0 && bounds.x0 < bounds.x1 && bounds.y0 < bounds.y1 { vec![DomainRect { bounds, open }] } else { vec![] };
+        ContactDomain { to_local, regions }
+    }
+
     /// Direct scale contacts in priority order: anchors/centres, then stroke contours.
     fn scale_contact_candidates(
         &self,
@@ -1810,30 +1835,7 @@ impl Targets {
             } else {
                 // The existing corner solver accepts the current OPEN sign region, with no
                 // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
-                let to_local = Affine::translate(-origin.to_vec2()) * to_local;
-                let local = to_local * p;
-                let mut bounds = Rect::new(local.x - tol, local.y - tol, local.x + tol, local.y + tol);
-                let mut open = [false; 4];
-                if d0.x * sx > 0.0 && bounds.x0 <= 0.0 {
-                    bounds.x0 = 0.0;
-                    open[0] = true;
-                } else if d0.x * sx < 0.0 && bounds.x1 >= 0.0 {
-                    bounds.x1 = 0.0;
-                    open[2] = true;
-                }
-                if d0.y * sy > 0.0 && bounds.y0 <= 0.0 {
-                    bounds.y0 = 0.0;
-                    open[1] = true;
-                } else if d0.y * sy < 0.0 && bounds.y1 >= 0.0 {
-                    bounds.y1 = 0.0;
-                    open[3] = true;
-                }
-                let regions = if d0.x != 0.0 && d0.y != 0.0 && bounds.x0 < bounds.x1 && bounds.y0 < bounds.y1 {
-                    vec![DomainRect { bounds, open }]
-                } else {
-                    vec![]
-                };
-                let domain = ContactDomain { to_local, regions };
+                let domain = Self::free_corner_contact_domain(to_local, p, origin, d0, (sx, sy), tol);
                 self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, valid_contact).map(|q| (q, Kind::StrokeEdge))
             };
             let direct = anchor.into_iter().chain(stroke).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
