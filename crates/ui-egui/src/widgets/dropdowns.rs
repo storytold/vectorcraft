@@ -361,21 +361,61 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
     };
     let mut popup_style = (*ctx.global_style()).clone();
     style.apply(&mut popup_style);
-    let frame = egui::Frame::popup(&popup_style).total_margin().sum().y;
-    let height = (screen.height() - frame).max(ui.spacing().interact_size.y);
+    let margins = egui::Frame::popup(&popup_style).total_margin().sum();
+    let height = (screen.height() - margins.y).max(ui.spacing().interact_size.y);
+    // A list that was wider than the window keeps its scroll bar in view: until it closes, it is no
+    // wider than it measured or than the window, its names cut short and shown in full on hover.
+    // Only a size measured while the list is open counts: egui keeps the last one after it closes.
+    // The width it needs is its rows' width on the last pass before it was narrowed, with its
+    // margins, and the bar's column while the rows scroll.
+    let too_wide_key = id.with("too-wide");
+    let natural_key = id.with("natural-width");
+    let scrolls_key = id.with("scrolls");
+    let open_last_pass = ctx.read_response(id).is_some();
+    if popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
+        // The first measurement is kept: later ones are of the list already narrowed.
+        ctx.data_mut(|d| {
+            if d.get_temp::<f32>(too_wide_key).is_none() {
+                let rows = d.get_temp::<f32>(natural_key).unwrap_or(screen.width());
+                d.insert_temp(too_wide_key, rows);
+            }
+        });
+    }
+    let (measured, scrolls) = ctx.data(|d| (d.get_temp::<f32>(too_wide_key), d.get_temp::<bool>(scrolls_key).unwrap_or(false)));
+    let too_wide = measured.is_some();
     let shown = popup.align(align).align_alternatives(&[]).show(|ui| {
+        if let Some(rows) = measured {
+            let bar = if scrolls { list_scroll_style().allocated_width() } else { 0.0 };
+            ui.set_max_width((rows + bar).min(screen.width() - margins.x).max(0.0));
+        }
         ui.set_min_width(ui.available_width());
         // A popup offers its contents the height it had on its last pass; the list is offered the
         // window's instead.
         ui.set_max_height(height);
         // Labels widen a narrow list rather than wrap, as in egui's combo box.
-        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        ui.style_mut().wrap_mode = Some(if too_wide { egui::TextWrapMode::Truncate } else { egui::TextWrapMode::Extend });
+        let painted = ui.ctx().graphics(|g| g.get(ui.layer_id()).map_or(0, |shapes| shapes.all_entries().len()));
         let shown = egui::ScrollArea::vertical().max_height(height).show(ui, list);
-        ui.data_mut(|d| d.insert_temp(area_key, shown.id));
+        if too_wide {
+            show_shortened_rows(ui, painted);
+        }
+        ui.data_mut(|d| {
+            if !too_wide {
+                d.insert_temp(natural_key, shown.content_size.x);
+            }
+            d.insert_temp(scrolls_key, shown.content_size.y > shown.inner_rect.height());
+            d.insert_temp(area_key, shown.id);
+        });
         shown.inner
     });
     if shown.is_some() {
         ctx.accesskit_node_builder(id, |node| node.set_role(egui::Role::ListBox));
+    } else {
+        ctx.data_mut(|d| {
+            d.remove::<f32>(too_wide_key);
+            d.remove::<f32>(natural_key);
+            d.remove::<bool>(scrolls_key);
+        });
     }
     shown.map(|r| r.inner)
 }

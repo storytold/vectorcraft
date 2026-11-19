@@ -466,7 +466,7 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>)
 /// the name of the one clicked.
 fn preset_list(app: &VectorcraftApp, ui: &mut Ui, shown: &str) -> Option<String> {
     let t = Tokens::get(ui.ctx());
-    ui.set_min_width(200.0);
+    widgets::menu_min_width(ui, 200.0);
     let mut chosen = None;
     // The library of the rows drawn last (`Some(None)`: the saved presets).
     let mut library: Option<Option<&str>> = None;

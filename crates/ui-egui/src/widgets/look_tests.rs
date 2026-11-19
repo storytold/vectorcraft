@@ -1063,6 +1063,150 @@ fn a_click_on_a_dropdown_lists_scroll_bar_scrolls_it_and_leaves_it_open() {
     assert!(list_rect().is_none(), "picking an option closes the list");
 }
 
+// #5941: a drop-down list with an option wider than the window ran past the window's right edge,
+// and its scroll bar with it. The list stays inside the window and its bar shows; the long option's
+// name is cut short.
+#[test]
+fn a_dropdown_list_wider_than_the_window_keeps_its_scroll_bar_in_view() {
+    let mut items: Vec<String> = (0..40).map(|i| format!("Option {i:02}")).collect();
+    items[1] = "Option 01, whose name is much wider than this window".into();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    let short: Vec<&str> = labels.iter().copied().filter(|l| l.len() < 10).collect();
+    let two: Vec<&str> = labels[..2].to_vec();
+    // Which list the field offers: 0 all, 1 the short names, 2 the first two.
+    let offered = std::cell::Cell::new(0);
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let popup = std::cell::RefCell::new(vec![]);
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(16.0);
+        let options = [&labels, &short, &two][offered.get()];
+        field.set(ui.horizontal(|ui| dropdown_names(ui, "wide-list", options[0], options, 160.0)).response.rect);
+        popup.replace(super::top_popup_shapes(ui.ctx()));
+    };
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(220.0, 300.0));
+    let window = std::cell::Cell::new(screen);
+    let mut time = 0.0;
+    // The texts painted on the open list with their clip rects, and the scroll bar's rects.
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(window.get()), events, ..Default::default() }, &mut add);
+        out.textures_delta.clear();
+        let (mut texts, mut bars) = (vec![], vec![]);
+        fn flat(s: &egui::Shape, clip: Rect, texts: &mut Vec<(String, bool)>, bars: &mut Vec<Rect>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, clip, texts, bars)),
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_owned(), t.galley.elided)),
+                egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect.intersect(clip)),
+                _ => {}
+            }
+        }
+        popup.take().iter().for_each(|c| flat(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        (texts, bars)
+    };
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(at), press(true)]);
+    run(vec![press(false)]);
+    run(vec![egui::Event::PointerMoved(pos2(210.0, 290.0))]);
+    let (mut texts, mut bars) = (vec![], vec![]);
+    for _ in 0..6 {
+        (texts, bars) = run(vec![]);
+    }
+    let list_rect = || {
+        ctx.memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+    };
+    let list = list_rect().expect("the list is open");
+    assert!(screen.contains_rect(list), "the list {list:?} is inside the window");
+    assert!(
+        bars.iter().any(|b| b.width() > 0.0 && screen.contains_rect(*b) && list.contains_rect(*b)),
+        "the bar shows in the list {list:?}: {bars:?}"
+    );
+    assert!(texts.iter().any(|(s, elided)| *elided && s.starts_with("Option 01")), "the long name is cut short: {texts:?}");
+    // The window grows while the list is open: the list grows as wide as its names need, and no
+    // wider.
+    window.set(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 300.0)));
+    for _ in 0..6 {
+        (texts, _) = run(vec![]);
+    }
+    let grown = list_rect().expect("the list is still open");
+    assert!(grown.width() < 500.0, "the list {grown:?} stays as wide as its names need");
+    assert!(texts.iter().any(|(s, elided)| !*elided && s == labels[1]), "the long name shows in full: {texts:?}");
+    // Narrowed and widened again, it comes back to the same width.
+    for size in [screen.size(), vec2(1000.0, 300.0)] {
+        window.set(Rect::from_min_size(Pos2::ZERO, size));
+        for _ in 0..6 {
+            run(vec![]);
+        }
+    }
+    let again = list_rect().expect("the list is still open");
+    assert!((again.width() - grown.width()).abs() < 0.5, "the list is as wide as before: {again:?}, {grown:?}");
+    // Closed, the window narrowed again and the long option gone: the list opens as narrow as its
+    // names, not as wide as the window.
+    let escape = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    run(vec![escape(true)]);
+    run(vec![escape(false)]);
+    assert!(list_rect().is_none(), "Escape closes the list");
+    window.set(screen);
+    offered.set(1);
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(at), press(true)]);
+    run(vec![press(false)]);
+    run(vec![egui::Event::PointerMoved(pos2(210.0, 290.0))]);
+    let mut widths = vec![];
+    for _ in 0..4 {
+        run(vec![]);
+        widths.push(list_rect().expect("the list is open").width());
+    }
+    assert!(widths.iter().all(|w| *w < 180.0), "the list of short names stays narrow: {widths:?}");
+    // Opened in a wide window, narrowed and widened again: it comes back to the width it opened at,
+    // the long list that scrolls and a list of two that does not.
+    for (which, count) in [(0, "40"), (2, "2")] {
+        run(vec![escape(true)]);
+        run(vec![escape(false)]);
+        offered.set(which);
+        window.set(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 300.0)));
+        run(vec![]);
+        run(vec![egui::Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        run(vec![egui::Event::PointerMoved(pos2(990.0, 290.0))]);
+        for _ in 0..6 {
+            run(vec![]);
+        }
+        let opened = list_rect().expect("the list is open");
+        for size in [screen.size(), vec2(1000.0, 300.0)] {
+            window.set(Rect::from_min_size(Pos2::ZERO, size));
+            for _ in 0..6 {
+                run(vec![]);
+            }
+        }
+        let restored = list_rect().expect("the list is still open");
+        // Within the half point that egui rounds a popup's position to.
+        assert!((restored.width() - opened.width()).abs() < 0.5, "{count} options: the list is as wide as it opened: {restored:?}, {opened:?}");
+    }
+    // Opened in a narrow window tall enough for every option, then made wide and short: the list
+    // scrolls now, and its bar's column comes on top of the long name, which shows in full.
+    run(vec![escape(true)]);
+    run(vec![escape(false)]);
+    offered.set(0);
+    window.set(Rect::from_min_size(Pos2::ZERO, vec2(220.0, 1400.0)));
+    run(vec![]);
+    run(vec![egui::Event::PointerMoved(at), press(true)]);
+    run(vec![press(false)]);
+    run(vec![egui::Event::PointerMoved(pos2(210.0, 1390.0))]);
+    for _ in 0..6 {
+        run(vec![]);
+    }
+    window.set(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 300.0)));
+    for _ in 0..6 {
+        (texts, _) = run(vec![]);
+    }
+    assert!(texts.iter().any(|(s, elided)| !*elided && s == labels[1]), "the long name shows in full beside the bar: {texts:?}");
+}
+
 /// Enter on text that reads as no number in a range field refuses it as a unit field does: the
 /// field flashes and an open dialog is not confirmed with the old value.
 #[test]

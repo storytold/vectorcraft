@@ -797,6 +797,20 @@ fn text_at(texts: &[(String, Pos2)], s: &str) -> Option<Pos2> {
     texts.iter().find(|(t, _)| t.trim_start() == s).map(|(_, at)| *at)
 }
 
+/// #5941: in a window narrower than the Presets menu's 200 pt rows, the menu stays inside the window,
+/// so its scroll bar shows.
+#[test]
+fn the_presets_menu_stays_inside_a_narrow_window() {
+    let mut app = app(json!({"gradient": {}}));
+    let paint = current(&app).expect("a gradient fill");
+    let mut window = PopupWindow::new(&mut app, 300.0, move |app, ui| presets_row(app, ui, Some(&paint)));
+    window.resize(&mut app, 190.0);
+    let label = window.text("Presets:").expect("the Presets row");
+    window.click(&mut app, egui::pos2(label.right() + 40.0, label.center().y));
+    let popup = window.popup().expect("the menu is open");
+    assert!(popup.left() >= 0.0 && popup.right() <= 190.0, "the menu {popup:?} is inside the window");
+}
+
 /// The Presets menu lists the presets by library (theme) and applies the one chosen to the
 /// gradient behind the active proxy, as one undo step; the menu then shows that preset.
 #[test]
