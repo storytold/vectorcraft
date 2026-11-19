@@ -10426,6 +10426,10 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Leaf Vine	葉藤
+	Blossom Chain	花鏈
+	Pennant Garland	旗幟花環
+	Lantern String	燈籠串
 	Orbit Lines	軌道線
 	Petal Garland	花瓣花環
 	Lattice Braid	格紋編織

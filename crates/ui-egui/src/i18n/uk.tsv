@@ -10419,6 +10419,10 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Leaf Vine	Листяна лоза
+	Blossom Chain	Квітковий ланцюжок
+	Pennant Garland	Гірлянда прапорців
+	Lantern String	Ланцюжок ліхтариків
 	Orbit Lines	Орбітальні лінії
 	Petal Garland	Гірлянда пелюсток
 	Lattice Braid	Ґратчасте плетіння

@@ -9000,6 +9000,10 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Leaf Vine	Lehtiköynnös
+	Blossom Chain	Kukkaketju
+	Pennant Garland	Viiririvistö
+	Lantern String	Lyhtyketju
 	Orbit Lines	Kiertoradan viivat
 	Petal Garland	Terälehtiköynnös
 	Lattice Braid	Ristikkopunos

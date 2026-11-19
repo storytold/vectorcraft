@@ -8602,6 +8602,10 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Leaf Vine	Sulur Daun
+	Blossom Chain	Rangkaian Bunga
+	Pennant Garland	Untaian Panji
+	Lantern String	Rangkaian Lentera
 	Orbit Lines	Garis Orbit
 	Petal Garland	Rangkaian Kelopak
 	Lattice Braid	Anyaman Kisi
