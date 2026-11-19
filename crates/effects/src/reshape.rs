@@ -387,7 +387,7 @@ fn row_effects_of(fx: &[Effect]) -> Vec<Effect> {
 /// of a symbol whose art (in `doc`) holds an instance of `n`'s symbol, at any depth, keeps its
 /// appearance, so the effects never pass round a symbol that holds itself. Without `doc`, no
 /// instance in the art takes them.
-fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
+pub(crate) fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
     let fill = active_fill(n).map_or(vec![], |f| row_effects_of(&f.effects));
     let stroke = active_stroke(n).map_or(vec![], |s| row_effects_of(&s.effects));
@@ -613,30 +613,99 @@ fn traced_opaque_area(bytes: &[u8]) -> Traced {
 /// rule and the fill or stroke that paints it: the paths (or compound paths) that [`reshape`]
 /// makes along its frame or, for those whose first effect is Outline Object, along the outline of
 /// its opaque area ([`opaque_area`]), with each fill's or stroke's geometry effects applied as the
-/// renderer applies them. Empty for anything but an image with such fills or strokes. The swatches
-/// and patterns that live-effect plug-ins painting their pieces name are looked up in `doc`, and
-/// the image's pixels in `doc` when the image does not hold them.
+/// renderer applies them. For a symbol instance whose active fill or stroke has a visible geometry
+/// effect ([`has_item_geometry`]), the shapes that the fills and strokes of the art it draws paint
+/// ([`instance_paint`]). Empty for anything else. The swatches and patterns that live-effect
+/// plug-ins painting their pieces name are looked up in `doc`, and the image's pixels in `doc` when
+/// the image does not hold them.
 pub fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
-        return vec![];
-    }
-    let Some(art) = reshape(doc, n, None) else { return vec![] };
     let mut out = vec![];
-    art.walk(&mut |c| {
-        let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
-        let Some(g) = c.stroke_path() else { return };
-        let ctx = GeomContext { doc, ..GeomContext::of(c) };
-        for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
-            let fx = item.effects();
-            let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
-                crate::apply_geometry_bez(fx, &g, g.bounding_box(), &ctx.item(item))
-            } else {
-                g.clone()
-            };
-            out.push((shape, *rule, item.clone()));
-        }
-    });
+    if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        let mut budget = SYMBOL_ART_MAX_NODES;
+        instance_paint(doc, n, 1, &mut budget, &mut out);
+        return out;
+    }
+    if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
+        return out;
+    }
+    let Some(art) = reshape(doc, n, None) else { return out };
+    art.walk(&mut |c| push_painted(doc, c, &mut out));
     out
+}
+
+/// The shapes that the fills and strokes of path or compound path `c` paint, each with the
+/// geometry effects of that fill or stroke applied ([`image_paint`]); nothing for other objects.
+fn push_painted(doc: Option<&Document>, c: &Node, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
+    let Some(g) = c.stroke_path() else { return };
+    let ctx = GeomContext { doc, ..GeomContext::of(c) };
+    for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
+        let fx = item.effects();
+        let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
+            crate::apply_geometry_bez(fx, &g, g.bounding_box(), &ctx.item(item))
+        } else {
+            g.clone()
+        };
+        out.push((shape, *rule, item.clone()));
+    }
+}
+
+/// The shapes that symbol instance `n`, `depth` instances deep, paints with the geometry effects of
+/// its active fill and stroke ([`has_item_geometry`]): the paths of the art [`reshape`] makes of it,
+/// each with its own geometry effects and those of each fill and stroke applied
+/// ([`crate::bake_type_appearance`], [`push_painted`]), the paths that the own fills and strokes of
+/// the groups and layers in the art paint and the results of their Pathfinder effects
+/// ([`crate::evaluate_container`]), the shapes that the own fills and strokes of the images in the
+/// art paint ([`image_paint`]), and the instances in that art that took those effects, in turn.
+/// Hidden objects, clipping paths, guides, the members of clip groups and the original shapes of
+/// Shaper groups add nothing, and neither does an instance more than
+/// [`vectorcraft_doc::depth::MAX_DEPTH`] deep or whose symbol's art would take the objects measured
+/// so far past `budget`.
+fn instance_paint(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH || !has_item_geometry(n) {
+        return;
+    }
+    let Some(sym) = doc.and_then(|d| d.symbols.iter().find(|s| s.name == *symbol)) else { return };
+    let count = sym.art.count() as u64;
+    if count > *budget {
+        return;
+    }
+    *budget -= count;
+    let Some(art) = reshape(doc, n, Some(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n))) else { return };
+    painted_in(doc, &art, depth, budget, out);
+}
+
+/// [`instance_paint`] of the objects in `n`, art of an instance `depth` instances deep.
+fn painted_in(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    if !n.visible {
+        return;
+    }
+    match &n.kind {
+        NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. } => match crate::bake_type_appearance(doc, n) {
+            // One path for each fill and stroke, its effects applied.
+            Some(pieces) => painted_in(doc, &pieces, depth, budget, out),
+            None => push_painted(doc, n, out),
+        },
+        NodeKind::Path { .. } => {}
+        NodeKind::Image(_) => out.extend(image_paint(doc, n)),
+        NodeKind::SymbolInstance { .. } => instance_paint(doc, n, depth + 1, budget, out),
+        _ if n.clips() => {}
+        _ => {
+            // A Pathfinder effect paints its result, not the members it combines.
+            let evaluated = (crate::has_container_appearance(n) || crate::has_pathfinder(n)).then(|| crate::evaluate_container(doc, n)).flatten();
+            let g = evaluated.as_ref().unwrap_or(n);
+            if g.clips() {
+                return;
+            }
+            // A Shaper group's first member holds its original shapes, which are not drawn. The
+            // group's own fills and strokes can be painted before it, so it is found by its id.
+            let sources = n.extras().shaper.is_some().then(|| n.children().and_then(|c| c.first()).map(|c| c.id)).flatten();
+            for c in g.children().into_iter().flatten().filter(|c| Some(c.id) != sources) {
+                painted_in(doc, c, depth, budget, out);
+            }
+        }
+    }
 }
 
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
@@ -954,6 +1023,74 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
     Some(Node { visible: t.visible, ..o })
 }
 
+/// Clipping path `clip` of a clip group as a clipping path of the region it clips to
+/// ([`crate::clip_outline`]), with its id, name and visibility. For type that paints, the geometry
+/// effects of its fills and strokes reshape what they paint and leave that region as it is.
+/// `None` when it has nothing to clip by.
+pub(crate) fn clip_region_path(clip: &Node) -> Option<Node> {
+    let (bp, rule) = crate::clip_outline(clip)?;
+    let mut p = Node::path(clip.id, PathData::from_bezpath(&bp), Appearance::default());
+    if let NodeKind::Path { rule: r, clipping, .. } = &mut p.kind {
+        (*r, *clipping) = (rule, true);
+    }
+    p.name = clip.name.clone();
+    p.visible = clip.visible;
+    Some(p)
+}
+
+/// Knockout Group for clip group `m` turned into a group around `inner`, a clip group of its
+/// members, and its clipping path's strokes: `inner` takes `m`'s setting, so the clipped art knocks
+/// out as before, and `m` is set Off so the strokes paint over it, as the renderer draws them. A
+/// neutral `m` stays neutral, so both take the setting of the groups around them.
+pub(crate) fn knockout_inside(m: &mut Node, inner: &mut Node) {
+    inner.knockout = m.knockout;
+    if m.knockout != vectorcraft_doc::Knockout::Neutral {
+        m.knockout = vectorcraft_doc::Knockout::Off;
+    }
+}
+
+/// The clip group in `n` when `n` is a group or layer that [`paint_type_clip`] made of a clip
+/// group and its clipping type's strokes: a group that does not clip whose first member is a clip
+/// group with `n`'s id and whose second member has the id of that clip group's clipping path. The
+/// clip group's region is what `n` stands for, as the clip group it was made from: the strokes
+/// paint outside it and add nothing to its outline ([`crate::member_shapes`]) or its bounds
+/// ([`clip_bounds`]).
+pub(crate) fn painted_clip_inner(n: &Node) -> Option<&Node> {
+    if n.clips() || !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) {
+        return None;
+    }
+    let [inner, stroke, ..] = n.children()?.as_slice() else { return None };
+    let clip = inner.children()?.first()?;
+    (inner.clips() && inner.id == n.id && stroke.id == clip.id && !stroke.clips()).then_some(&**inner)
+}
+
+/// The geometric bounds of `n` ([`Node::geometric_bounds`]) with each group or layer in it that
+/// [`painted_clip_inner`] finds measured as its clip group, so the strokes of a clipping type
+/// outside the clip do not widen them.
+pub(crate) fn clip_bounds(n: &Node) -> Option<Rect> {
+    fn holds(n: &Node) -> bool {
+        painted_clip_inner(n).is_some() || n.children().into_iter().flatten().any(|c| holds(c))
+    }
+    fn unwrap(n: &mut Node) {
+        if let Some(inner) = painted_clip_inner(n) {
+            let mut inner = inner.clone();
+            inner.visible = n.visible;
+            *n = inner;
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            if holds(c) {
+                unwrap(Arc::make_mut(c));
+            }
+        }
+    }
+    if !holds(n) {
+        return n.geometric_bounds();
+    }
+    let mut probe = n.clone();
+    unwrap(&mut probe);
+    probe.geometric_bounds()
+}
+
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
 /// its outlines with its visibility and effects ([`clipping_text_outline`]), and its fills and
@@ -981,32 +1118,41 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
 }
 
 /// When `n` is a clip group or clipping layer whose clipping path is type that paints
-/// ([`Node::clip_paint`]), make it the art the canvas draws for it: the type's outlines clip
-/// ([`clipping_text_outline`]), its fills as art ([`as_art`]) paint behind the clipped art inside
-/// the clip, and its strokes as art paint over it, outside the clip, in a group that `n` becomes
-/// (keeping its id, name and transparency) with the clip group inside. The other members stay as
-/// they are. Hidden type paints nothing.
+/// ([`Node::clip_paint`]), make it the art the canvas draws for it: a path of the region the type
+/// clips to clips ([`clip_region_path`]), its fills as art ([`as_art`]) paint behind the clipped
+/// art inside the clip, and its strokes as art paint over it, outside the clip. Each part is the
+/// type's art with only those fills or strokes, their own geometry effects applied. With strokes,
+/// `n` becomes a group (keeping its id, name, visibility and transparency) that holds a clip group
+/// of the clipping path, the fills and the other members, with `n`'s id, then the strokes; a
+/// clipping layer keeps its ruler guides last. [`knockout_inside`] sets the Knockout Group of both,
+/// and [`painted_clip_inner`] finds that clip group. The other members stay as they are. Hidden
+/// type paints nothing.
 pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
-    let Some((first, rest)) = n.children().and_then(|ch| ch.split_first()) else { return };
-    if !n.clips() || !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+    let Some(first) = n.children().and_then(|ch| ch.first()).filter(|_| n.clips()) else { return };
+    if !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
         return;
     }
     let paint = first.clip_paint();
     if paint.fill.is_none() && paint.stroke.is_none() {
         return;
     }
-    let Some(clip) = clipping_text_outline(first) else { return };
+    let Some(clip) = clip_region_path(first) else { return };
     let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
-    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.iter().cloned()).collect();
-    let stroke = art(paint.stroke);
+    let (fill, stroke) = (art(paint.fill), art(paint.stroke));
     let id = n.id;
-    match (&mut n.kind, stroke) {
-        (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }, None) => *children = members,
-        (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }, Some(stroke)) => {
-            *children = vec![Arc::new(Node::new(id, NodeKind::Group { children: members, clip: true })), stroke];
-            *clip = false;
-        }
-        _ => {}
+    let Some(ch) = n.children_mut() else { return };
+    let Some(slot) = ch.first_mut() else { return };
+    *slot = Arc::new(clip);
+    if let Some(fill) = fill {
+        ch.insert(1, fill);
+    }
+    let Some(stroke) = stroke else { return };
+    let guides = ch.split_off(Node::guide_run_start(ch));
+    let mut inner = Node::new(id, NodeKind::Group { children: std::mem::take(ch), clip: true });
+    knockout_inside(n, &mut inner);
+    if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut n.kind {
+        *children = [Arc::new(inner), stroke].into_iter().chain(guides).collect();
+        *clip = false;
     }
 }
 
@@ -1822,7 +1968,7 @@ impl Step<'_> {
         if !groups.is_empty() {
             carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, params, bounds, from, to, seed));
         }
-        let drawn = warped.as_deref().map_or_else(|| art.geometric_bounds(), |w| w.bounds(art));
+        let drawn = warped.as_deref().map_or_else(|| clip_bounds(art), |w| w.bounds(art));
         let whole = (follows && !held).then(|| crate::Carry::of(&e.id, params, bounds, Some(bounds), drawn, seed));
         Ran { kept: !kept_ids.is_empty(), took, masks, short, whole }
     }
@@ -3247,6 +3393,9 @@ fn group_marks(
         NodeKind::Image(_) => (images.map_or_else(|| n.geometric_bounds(), |w| w.image_bounds(n)), false),
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } if !n.extras().type_outlines => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
+            // A clip group whose clipping type's strokes paint around it is measured as that clip
+            // group: the strokes outside the clip do not widen it ([`clip_bounds`]).
+            let clip = *clip || painted_clip_inner(n).is_some();
             let skip = children.len().saturating_sub(n.editing_children().len());
             let (mut bounds, mut held) = (None, false);
             for (i, c) in children.iter().enumerate() {
@@ -3257,7 +3406,7 @@ fn group_marks(
                 }
                 at.pop();
                 // Only members measured in the bounds hold the group's gradients in place.
-                let counts = if *clip { i == 0 } else { i >= skip && (c.visible || !layer) };
+                let counts = if clip { i == 0 } else { i >= skip && (c.visible || !layer) };
                 if counts {
                     bounds = vectorcraft_geom::union_opt(bounds, b);
                     held |= h;
@@ -3356,7 +3505,7 @@ pub(crate) fn follow_boxes(ap: &mut Appearance, from: Rect, to: Rect) {
 
 /// The map that takes box `from` onto box `to` along each axis (along an axis `from` has no extent
 /// on, a move from its center to `to`'s).
-fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
+pub(crate) fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
     let axis = |a0: f64, a1: f64, b0: f64, b1: f64| {
         if (a1 - a0).abs() > 1e-12 {
             let s = (b1 - b0) / (a1 - a0);
@@ -3473,16 +3622,17 @@ impl WarpedImages {
 
     /// The geometric bounds of `art` as it draws after the effects so far: each image this table
     /// lists measured by the pieces the warps and moves it took would cut it into, when the art
-    /// has room for them ([`cut_warped_images`]).
+    /// has room for them ([`cut_warped_images`]). The strokes of clipping type outside its clip
+    /// are left out ([`clip_bounds`]).
     pub(crate) fn bounds(&self, art: &Node) -> Option<Rect> {
         if self.images.is_empty() || !self.fits(art, crate::distort::MAX_COPY_OBJECTS) {
-            return art.geometric_bounds();
+            return clip_bounds(art);
         }
         // The pieces the images would be cut into now: each group of pieces is shown or hidden as
         // its image is, and hidden objects are left out of a layer's bounds.
         let mut probe = art.clone();
         restore_warped_images(&mut probe, self, true);
-        probe.geometric_bounds()
+        clip_bounds(&probe)
     }
 
     /// The geometric bounds of image `n`: when this table lists it, measured by the pieces the
