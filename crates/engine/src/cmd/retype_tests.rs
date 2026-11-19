@@ -851,6 +851,35 @@ fn a_compound_whose_parts_are_not_all_glyphs_stays_whole() {
 }
 
 #[test]
+fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
+    let mut s = session();
+    // Two o's moved onto each other and made into one compound path: the even-odd rule leaves
+    // the overlap unpainted, and two glyphs set side by side would paint it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "oo", "size": 40}));
+    let kids = children_of(&s, g);
+    s.execute("object.move", &json!({"ids": [kids[1]], "dx": -9, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": kids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = match s.execute("type.retype", &json!({})) {
+        Ok(r) => panic!("the overlapping o's became type: {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains("(1 checked)"), "{e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+}
+
+#[test]
+fn glyphs_side_by_side_in_an_even_odd_compound_still_become_type() {
+    let mut s = session();
+    let c = one_compound(&mut s, "oo");
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["oo"]), "{r}");
+}
+
+#[test]
 fn a_compound_whose_glyph_stays_an_outline_keeps_its_other_glyphs_too() {
     let mut s = session();
     // An A (two contours), and far below it a period: a lone one-contour glyph beside other
@@ -896,13 +925,15 @@ fn a_split_takes_a_shorter_run_when_the_longest_leaves_a_group_unmatched() {
         }
     };
     let groups = all_groups(&p);
-    assert_eq!(super::parts(&p, &groups, &find), vec![vec!["A"], vec!["BC"]]);
+    assert_eq!(super::parts(&p, &groups, &find, &|_| true), vec![vec!["A"], vec!["BC"]]);
+    // A split the parts' paint does not allow is dropped.
+    assert!(super::parts(&p, &groups, &find, &|_| false).is_empty());
     // With no way to match every group, nothing.
     let none = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
         let b = path.bounding_box();
         if part && b.x0.round() as i64 == 0 && b.x1.round() as i64 == 140 { vec!["AB"] } else { vec![] }
     };
-    assert!(super::parts(&p, &groups, &none).is_empty());
+    assert!(super::parts(&p, &groups, &none, &|_| true).is_empty());
 }
 
 /// `path`'s contour groups, with no limit on the contours grouped.
@@ -929,7 +960,7 @@ fn exact_matches_of_the_parts_come_before_a_near_match_of_the_whole() {
         }
     };
     let groups = all_groups(&p);
-    assert_eq!(super::parts(&p, &groups, &find), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(super::parts(&p, &groups, &find, &|_| true), vec![vec!["period"], vec!["period"]]);
     // When the parts match only nearly too, the whole near match comes first.
     let near_only = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
         let b = path.bounding_box();
@@ -939,7 +970,7 @@ fn exact_matches_of_the_parts_come_before_a_near_match_of_the_whole() {
             _ => vec![],
         }
     };
-    assert_eq!(super::parts(&p, &groups, &near_only), vec![vec!["dieresis"]]);
+    assert_eq!(super::parts(&p, &groups, &near_only, &|_| true), vec![vec!["dieresis"]]);
 }
 
 #[test]

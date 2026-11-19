@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape matches, or when tolerance is not a number from 0 to 0.05",
+        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a contour narrower than three times the outline tolerance, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
         has_selected_path,
         retype
     )]
@@ -533,13 +533,14 @@ fn split_groups(path: &BezPath, budget: &mut usize) -> Vec<BezPath> {
 /// a path's candidates: its `part` flag is set for a part of a split shape, whose contours Make
 /// Compound Path may have turned the other way round, and its `near` flag allows near matches.
 /// Exact matches come first: the whole shape, then its groups, then the whole shape nearly, then
-/// its groups nearly.
-fn parts<M>(path: &BezPath, groups: &[BezPath], find: &dyn Fn(&BezPath, bool, bool) -> Vec<M>) -> Vec<Vec<M>> {
+/// its groups nearly. A split of several parts is kept only when `together` accepts the paths of
+/// its runs (the parts, set one beside another, paint what the shape paints).
+fn parts<M>(path: &BezPath, groups: &[BezPath], find: &dyn Fn(&BezPath, bool, bool) -> Vec<M>, together: &dyn Fn(&[BezPath]) -> bool) -> Vec<Vec<M>> {
     let whole = find(path, false, false);
     if !whole.is_empty() {
         return vec![whole];
     }
-    let exact = split_parts(groups, &|run| find(run, true, false));
+    let exact = split_parts(groups, &|run| find(run, true, false), together);
     if !exact.is_empty() {
         return exact;
     }
@@ -547,12 +548,13 @@ fn parts<M>(path: &BezPath, groups: &[BezPath], find: &dyn Fn(&BezPath, bool, bo
     if !whole.is_empty() {
         return vec![whole];
     }
-    split_parts(groups, &|run| find(run, true, true))
+    split_parts(groups, &|run| find(run, true, true), together)
 }
 
 /// [`parts`] of a shape split into contour `groups`, each run's candidates from `find`; empty for
-/// no groups and when the groups cannot all be matched.
-fn split_parts<M>(groups: &[BezPath], find: &dyn Fn(&BezPath) -> Vec<M>) -> Vec<Vec<M>> {
+/// no groups, when the groups cannot all be matched and when `together` rejects the runs of a split
+/// of several parts.
+fn split_parts<M>(groups: &[BezPath], find: &dyn Fn(&BezPath) -> Vec<M>, together: &dyn Fn(&[BezPath]) -> bool) -> Vec<Vec<M>> {
     if groups.is_empty() {
         return vec![];
     }
@@ -578,11 +580,16 @@ fn split_parts<M>(groups: &[BezPath], find: &dyn Fn(&BezPath) -> Vec<M>) -> Vec<
         }
     }
     let mut out = vec![];
+    let mut runs = vec![];
     let mut i = 0;
     while i < g {
         let Some(Some((n, cands))) = chosen.get_mut(i).map(Option::take) else { return vec![] };
         out.push(cands);
+        runs.push(groups.get(i..i + n).map(joined).unwrap_or_default());
         i += n;
+    }
+    if out.len() > 1 && !together(&runs) {
+        return vec![];
     }
     out
 }
@@ -714,14 +721,18 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             if exact.is_empty() && near { painted(index.near_matches(path, tolerance), tolerance) } else { exact }
         };
         // Each shape's parts (one, unless it holds several glyphs), each with its candidates.
-        let found: Vec<Vec<Vec<GlyphMatch>>> =
-            pieces
-                .iter()
-                .zip(&groups)
-                .map(|(pc, g)| {
-                    if pc.keeps_outline { vec![] } else { parts(&pc.path, g, &|p, part, near| find(p, part, near, pc.filled.then_some(pc.nonzero))) }
-                })
-                .collect();
+        let found: Vec<Vec<Vec<GlyphMatch>>> = pieces
+            .iter()
+            .zip(&groups)
+            .map(|(pc, g)| {
+                if pc.keeps_outline {
+                    return vec![];
+                }
+                let fill = pc.filled.then_some(pc.nonzero);
+                let together = |runs: &[BezPath]| fill.is_none_or(|nz| vectorcraft_text::retype::parts_paint_alike(&pc.path, runs, nz, tolerance));
+                parts(&pc.path, g, &|p, part, near| find(p, part, near, fill), &together)
+            })
+            .collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];

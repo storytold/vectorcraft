@@ -1120,8 +1120,13 @@ const MAX_FILL_PROBES: usize = 512;
 /// `glyph` (filled by the nonzero rule), whose outlines lie within `tol` of each other, paint the
 /// same area? Each probe lies `1.5 tol` or `3 tol` to a side of the middle of a segment of the shape's
 /// outline; one within `tol` of either outline is skipped, so a region narrower than that is not
-/// probed. `true` when an outline is too large to probe.
+/// probed. `false` when a contour of the shape is narrower than `3 tol` on its shorter side, since
+/// the probes cannot then tell whether the area inside it is painted; `true` when an outline is too
+/// large to probe.
 fn paints_alike(shape: &BezPath, nonzero: bool, glyph: &BezPath, tol: f64) -> bool {
+    if narrow_contour(shape, 3.0 * tol) {
+        return false;
+    }
     let (Some(fs), Some(fg)) = (Flat::new(shape, tol), Flat::new(glyph, tol)) else { return true };
     let step = fs.segs.len().div_ceil(MAX_FILL_PROBES).max(1);
     for (s, e) in fs.segs.iter().step_by(step) {
@@ -1142,6 +1147,81 @@ fn paints_alike(shape: &BezPath, nonzero: bool, glyph: &BezPath, tol: f64) -> bo
                 let painted = if nonzero { w != 0 } else { w.rem_euclid(2) == 1 };
                 if painted != (glyph.winding(q) != 0) {
                     return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Does `path` have a contour no wider than `width` on its shorter side that lies inside another
+/// contour (a counter)?
+fn narrow_contour(path: &BezPath, width: f64) -> bool {
+    let mut all: Vec<BezPath> = vec![];
+    for el in path.elements() {
+        if matches!(el, PathEl::MoveTo(_)) {
+            all.push(BezPath::new());
+        }
+        if let Some(cur) = all.last_mut() {
+            cur.push(*el);
+        }
+    }
+    all.iter().enumerate().any(|(i, c)| {
+        let Some(PathEl::MoveTo(at)) = c.elements().first().copied() else { return false };
+        let bb = c.bounding_box();
+        bb.width().min(bb.height()) <= width && all.iter().enumerate().any(|(j, o)| j != i && o.winding(at) != 0)
+    })
+}
+
+/// Do `parts` (the runs of contours a compound path `shape` is split into, each already checked
+/// by [`RetypeIndex::painted_agrees`] on its own) paint together the area `shape` paints, the
+/// shape filled by the nonzero rule when `nonzero` is set and by the even-odd rule otherwise? Each
+/// part is read by the same rule, and the glyphs that replace them are set one beside another, so
+/// an overlap that the shape's rule cancels would come out painted. Probes lie on both sides of
+/// every part's outline, as in [`RetypeIndex::painted_agrees`]; `tolerance` is the one the parts
+/// were found with (0 for exact matches). `false` when an outline is too large to probe, and when
+/// two parts' boxes overlap in a strip no wider than `3 tol`, which the probes cannot see into.
+pub fn parts_paint_alike(shape: &BezPath, parts: &[BezPath], nonzero: bool, tolerance: f64) -> bool {
+    let bb = shape.bounding_box();
+    let tol = bb.width().hypot(bb.height()) * 0.5 * OUTLINE_TOLERANCE.max(3.0 * tolerance.clamp(0.0, MAX_TOLERANCE));
+    let painted = |p: &BezPath, q: Point| {
+        let w = p.winding(q);
+        if nonzero { w != 0 } else { w.rem_euclid(2) == 1 }
+    };
+    let mut flats = vec![];
+    for p in parts.iter().chain(std::iter::once(shape)) {
+        let Some(f) = Flat::new(p, tol) else { return false };
+        flats.push(f);
+    }
+    // Two parts whose boxes overlap in a strip too thin to probe cannot be told from parts that
+    // overlap in their paint.
+    let boxes: Vec<kurbo::Rect> = parts.iter().map(Shape::bounding_box).collect();
+    for (i, a) in boxes.iter().enumerate() {
+        for b in boxes.iter().skip(i + 1) {
+            let both = a.intersect(*b);
+            if both.area() > 0.0 && both.width().min(both.height()) <= 3.0 * tol {
+                return false;
+            }
+        }
+    }
+    for own in flats.iter().take(parts.len()) {
+        let step = own.segs.len().div_ceil(MAX_FILL_PROBES).max(1);
+        for (s, e) in own.segs.iter().step_by(step) {
+            let d = *e - *s;
+            let len = d.hypot();
+            if len <= 0.0 || !len.is_finite() {
+                continue;
+            }
+            let mid = s.midpoint(*e);
+            for reach in [1.5, 3.0] {
+                let side = kurbo::Vec2::new(-d.y, d.x) * (reach * tol / len);
+                for q in [mid + side, mid - side] {
+                    if flats.iter().any(|f| f.near(q)) {
+                        continue;
+                    }
+                    if painted(shape, q) != parts.iter().any(|o| painted(o, q)) {
+                        return false;
+                    }
                 }
             }
         }
@@ -1865,6 +1945,52 @@ mod tests {
         assert!(found.iter().any(|m| index.painted_agrees(m, &same_way, false, 0.02).is_some()), "even-odd leaves it empty");
         let found = index.all_matches(&ring);
         assert!(found.iter().any(|m| index.painted_agrees(m, &ring, true, 0.0).is_some()), "the glyph's own windings paint a ring");
+    }
+
+    #[test]
+    fn a_counter_too_narrow_to_probe_does_not_count_as_agreeing() {
+        let square = |x0: f64, y0: f64, x1: f64, y1: f64, back: bool| {
+            let p = kurbo::Rect::new(x0, y0, x1, y1).to_path(0.1);
+            if back { p.reverse_subpaths() } else { p }
+        };
+        // A 100 by 100 square with a 10 by 10 counter: the shape's counter runs the way its outer
+        // contour does (filled by the nonzero rule), the glyph's runs the other way (a hole).
+        let mut filled = square(0.0, 0.0, 100.0, 100.0, false);
+        filled.extend(square(45.0, 45.0, 55.0, 55.0, false).iter());
+        let mut holed = square(0.0, 0.0, 100.0, 100.0, false);
+        holed.extend(square(45.0, 45.0, 55.0, 55.0, true).iter());
+        let tol = 100.0_f64.hypot(100.0) * 0.5 * 3.0 * MAX_TOLERANCE;
+        assert!(!paints_alike(&filled, true, &holed, tol), "no probe can see the counter");
+        // A counter wide enough to probe is told apart as before.
+        let mut wide = square(0.0, 0.0, 100.0, 100.0, false);
+        wide.extend(square(10.0, 10.0, 90.0, 90.0, false).iter());
+        let mut wide_hole = square(0.0, 0.0, 100.0, 100.0, false);
+        wide_hole.extend(square(10.0, 10.0, 90.0, 90.0, true).iter());
+        assert!(!paints_alike(&wide, true, &wide_hole, 1.0));
+        assert!(paints_alike(&wide_hole, true, &wide_hole, 1.0));
+    }
+
+    #[test]
+    fn parts_that_overlap_under_the_even_odd_rule_do_not_paint_the_shape() {
+        let square = |x0: f64, y0: f64, x1: f64, y1: f64| kurbo::Rect::new(x0, y0, x1, y1).to_path(0.1);
+        let (a, b) = (square(0.0, 0.0, 60.0, 60.0), square(40.0, 0.0, 100.0, 60.0));
+        let mut both = a.clone();
+        both.extend(b.iter());
+        assert!(!parts_paint_alike(&both, &[a.clone(), b.clone()], false, 0.0), "the overlap is a hole in the shape");
+        assert!(parts_paint_alike(&both, &[a.clone(), b.clone()], true, 0.0), "the nonzero rule paints it");
+        // Windings that cancel under the nonzero rule leave the overlap unpainted too.
+        let mut turned = a.clone();
+        turned.extend(b.reverse_subpaths().iter());
+        assert!(!parts_paint_alike(&turned, &[a.clone(), b.reverse_subpaths()], true, 0.0));
+        // An overlap too thin for the probes to land in is not taken for none.
+        let thin = square(59.9, 0.0, 100.0, 60.0);
+        let mut strip = a.clone();
+        strip.extend(thin.iter());
+        assert!(!parts_paint_alike(&strip, &[a.clone(), thin], false, 0.0));
+        let apart = square(80.0, 0.0, 140.0, 60.0);
+        let mut aside = a.clone();
+        aside.extend(apart.iter());
+        assert!(parts_paint_alike(&aside, &[a, apart], false, 0.0));
     }
 
     #[test]
