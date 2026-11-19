@@ -5787,6 +5787,7 @@ imageTrace	Outline	Contour
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
 @msg	no pattern `{name}`	geen patroon `{name}`
+@msg	art painted with `{name}` can't be its tile	illustratie die met `{name}` is geverfd, kan niet de tegel ervan zijn
 @msg	no perspective grid preset named `{name}`	geen perspectiefrastervoorinstelling met de naam `{name}`
 @msg	no plug-in {0} is installed	er is geen plug-in {0} geïnstalleerd
 @msg	no plug-in {id} is installed	er is geen plug-in {id} geïnstalleerd
@@ -10195,6 +10196,7 @@ breakText	Glyphs	Glyphs
 	Remove Strokes	Contouren verwijderen
 	Place Brush Art	Penseelillustratie plaatsen
 	Replace Brush Art	Penseelillustratie vervangen
+	Replace Pattern Art	Patroonillustratie vervangen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
 	Apply to Strokes	Op contouren toepassen
 	Leave Strokes	Contouren behouden

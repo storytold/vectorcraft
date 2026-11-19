@@ -4883,6 +4883,7 @@ imageTrace	Outline	轮廓
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
+@msg	art painted with `{name}` can't be its tile	使用 `{name}` 上色的图稿不能作为它的拼贴
 @msg	not in pattern editing mode	不在图案编辑模式中
 @msg	finish editing the pattern first	请先完成图案编辑
 @msg	pattern missing	缺少图案
@@ -8170,6 +8171,7 @@ breakText	Glyphs	字形
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
 	Replace Brush Art	替换画笔图稿
+	Replace Pattern Art	替换图案图稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
 	Apply to Strokes	应用于描边
 	Leave Strokes	保留描边

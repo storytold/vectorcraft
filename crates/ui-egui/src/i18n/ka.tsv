@@ -7172,6 +7172,7 @@ font-technology	Variable	ცვლადი
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
 @msg	no pattern `{name}`	პატერნი `{name}` არ არის
+@msg	art painted with `{name}` can't be its tile	`{name}`-ით შეღებილი ნახატი მისი ფილა ვერ იქნება
 @msg	no perspective grid preset named `{name}`	პერსპექტივის ბადის პრესეტი სახელით `{name}` არ არის
 @msg	no plug-in {0} is installed	პლაგინი {0} დაინსტალირებული არ არის
 @msg	no plug-in {id} is installed	პლაგინი {id} დაინსტალირებული არ არის
@@ -10475,6 +10476,7 @@ breakText	Glyphs	გლიფები
 	Remove Strokes	კონტურების მოხსნა
 	Place Brush Art	ფუნჯის ნახატის განთავსება
 	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
+	Replace Pattern Art	პატერნის ნახატის ჩანაცვლება
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
 	Apply to Strokes	კონტურებზე გამოყენება
 	Leave Strokes	კონტურების დატოვება

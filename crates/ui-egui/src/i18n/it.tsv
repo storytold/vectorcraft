@@ -5431,6 +5431,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no native format	nessun formato nativo
 @msg	no pages	nessuna pagina
 @msg	no pattern `{name}`	nessun motivo `{name}`
+@msg	art painted with `{name}` can't be its tile	una grafica dipinta con `{name}` non può esserne la porzione
 @msg	no perspective grid preset named `{name}`	nessun preset di griglia prospettica denominato `{name}`
 @msg	no plug-in {0} is installed	nessun plug-in {0} installato
 @msg	no plug-in {id} is installed	nessun plug-in {id} installato
@@ -7963,6 +7964,7 @@ breakText	Glyphs	Glifi
 	Remove Strokes	Rimuovi tracce
 	Place Brush Art	Inserisci grafica del pennello
 	Replace Brush Art	Sostituisci grafica del pennello
+	Replace Pattern Art	Sostituisci grafica del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
 	Apply to Strokes	Applica alle tracce
 	Leave Strokes	Lascia le tracce
