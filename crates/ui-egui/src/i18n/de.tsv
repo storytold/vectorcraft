@@ -2040,6 +2040,11 @@ file-filter	Templates	Vorlagen
 	Knife	Messer
 	Knockout Group	Aussparungsgruppe
 	Lab	Lab
+	OKLCH Sliders	OKLCH-Regler
+	HSL Sliders	HSL-Regler
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Das größte Chroma, das sRGB bei dieser Helligkeit und diesem Farbton enthält
+	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
 	Lab Spot Colors:	Lab-Volltonfarben:
 	Lab Values	Lab-Werte
 	Landscape	Querformat
@@ -3342,9 +3347,14 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Text in Schriften bearbeiten, die nicht verfügbar sind?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zeigt auf der Arbeitsfläche die Nummer jedes Slices in einem Kästchen oben links im Slice; ist die Option aus, werden die Slice-Umrisse weiterhin angezeigt.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Die Farbe der Umrisse von Benutzer- und Objekt-Slices und ihrer Nummernkästchen; automatische Slices verwenden einen blasseren Ton davon.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	In Absätzen mit eingeschalteter Silbentrennung erhält ein aufgeführtes Wort nur an den darin eingegebenen Bindestrichen einen Trennstrich oder nie, wenn es keine hat, unabhängig von Sprache und Groß- und Kleinschreibung.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	In der Desktop-Version werden die .wasm-Plug-ins dieses Ordners beim Start geladen und wenn OK einen neuen Ordner festlegt, außer im abgesicherten Modus; eines, das Berechtigungen anfordert, erst nachdem Sie sie erteilt haben. Die Webversion lädt keine.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	„Groß“ gibt jedem Lauf eines Filter- oder Befehls-Plug-ins mindestens 250 Millionen Anweisungen bei gleichem Zeitlimit; „Normal“ behält das eigene Budget des Plug-ins. Live-Effekte, Exporter und Importer behalten ihres.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist; Text, der bereits in einem Dokument steht, behält seine Sprache.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist und [Normales Zeichenformat] keine Sprache festlegt; Text, der bereits in einem Dokument steht, behält seine Sprache.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In Absätzen mit eingeschalteter Silbentrennung wird ein aufgeführtes Wort nur an den darin eingegebenen Bindestrichen getrennt oder gar nicht, wenn es keine hat, unabhängig von Sprache und Groß- und Kleinschreibung.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In der Desktop-Version werden die .wasm-Plug-ins in diesem Ordner beim Start geladen und wenn Sie hier mit einem neuen Ordner auf OK klicken, außer im abgesicherten Modus; die Webversion lädt sie nicht.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	„Normal“ behält die eigenen Grenzen jedes Plug-ins; mit „Groß“ darf ein Plug-in-Filter oder -Befehl mindestens 250 Millionen Anweisungen zusätzlich zu denen für seine Eingabe ausführen. Das Zeitlimit bleibt gleich.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Wie viele Anweisungen jeder Lauf eines Objektfilters aus einem Plug-in verwenden darf; „Groß“ erlaubt mehr als „Normal“, bei derselben Grenze von 60 Sekunden. Aufwendige Filter behalten ihr eigenes Budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die erste Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die zweite Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
@@ -3356,13 +3366,15 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Zeigt den Namen jeder Werkzeuggruppe über ihren Werkzeugen in der Werkzeugleiste; ausgeschaltet folgen die Gruppen ohne etwas dazwischen aufeinander.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Ab jetzt öffnen sich Dokumente, die Sie öffnen oder erstellen, als Registerkarten; ausgeschaltet öffnet sich jedes in einem schwebenden Fenster. Bereits geöffnete Dokumente bleiben, wo sie sind.
 	Makes the document tabs taller and their names larger.	Macht die Registerkarten der Dokumente höher und ihre Namen größer.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Ab dem nächsten Start zeichnet das System die Titelleiste des Fensters dort, wo VectorCraft sonst seine eigene zeichnen würde.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Ab dem nächsten Start zeichnet VectorCraft die Titelleiste des Fensters auch dort, wo der Desktop sie zeichnen würde, außer „Systemtitelleiste“ ist eingeschaltet.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Ab dem nächsten Start zeichnet das System die Titelleiste des Fensters dort, wo VectorCraft sonst seine eigene zeichnen würde; unter Linux und den BSDs hat die Variable VECTORCRAFT_TITLEBAR Vorrang.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Ab dem nächsten Start zeichnet VectorCraft die Titelleiste des Fensters auch dort, wo der Desktop sie zeichnen würde, außer „Systemtitelleiste“ ist eingeschaltet oder die Variable VECTORCRAFT_TITLEBAR legt sie fest.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Macht die Benutzeroberfläche größer oder kleiner; Bildmaterial auf der Arbeitsfläche behält bei gleichem Zoom seine Größe.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Die Werkzeugzeiger, die VectorCraft zeichnet, wachsen und schrumpfen mit der „Skalierung der Benutzeroberfläche“; ausgeschaltet behalten sie ihre Größe.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Die Sprache der Benutzeroberfläche; „Auto“ verwendet die Sprache des Systems. Der Dialog wechselt die Sprache, sobald Sie eine wählen.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	„Animierter Zoom“ funktioniert nur, solange dies eingeschaltet ist; ausgeschaltet ist „Animierter Zoom“ abgeblendet und das Zoomen wird nicht animiert.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Der Zoom mit dem Mausrad gleitet weich, und das Zoom-Werkzeug zoomt, während Sie seitwärts ziehen oder es gedrückt halten; ausgeschaltet zoomt es auf den Bereich, über den Sie ziehen.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Ab dem nächsten Start zeigt die Desktop-Version die Zeichenfläche über diese Art von Grafikprozessor an; das Bildmaterial wird in jedem Fall auf der CPU gezeichnet. „Automatisch“ bevorzugt unter Windows und macOS den integrierten. Die Webversion verwendet sie nicht.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Ab dem nächsten Start zeigt das Fenster jedes Bild, ohne auf die Bildwiederholung des Bildschirms zu warten, wo der Grafiktreiber es zulässt, höchstens 240 Bilder pro Sekunde.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Ab dem nächsten Start zeichnet die Desktop-Version mit dieser Art von Grafikprozessor; „Automatisch“ bevorzugt den, der den Bildschirm ansteuert. Die Webversion verwendet sie nicht.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Ab dem nächsten Start zeigt das Fenster Bilder, ohne auf die Bildwiederholung des Bildschirms zu warten, höchstens 240 pro Sekunde; aus, gibt der Bildschirm den Takt vor. Ein beim Start festgelegter Darstellungsmodus hat Vorrang.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Die Höchstzahl der Rückgängig-Schritte, die jedes Dokument behält; eine kleinere Zahl entfernt beim Klick auf OK die ältesten Schritte. Schritte können auch früher entfallen, wenn sie zu viel Speicher belegen.
@@ -3381,6 +3393,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„Zuletzt geöffnete Dateien“ und der Startbildschirm listen höchstens so viele zuletzt verwendete Dateien; 0 listet keine, und VectorCraft merkt sich weiterhin bis zu 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Beim Öffnen eines Dokuments behält ein verknüpftes EPS-Bild, das seine gespeicherte Vorschau zeigt, diese, statt die EPS-Datei neu zu lesen; geänderte Dateien folgen weiterhin „Verknüpfungen aktualisieren“.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In der Pixelvorschau werden Bilder geglättet gezeichnet; ausgeschaltet zeigen ihre Pixel harte Kanten. Außerhalb der Pixelvorschau werden Bilder immer geglättet.
+	PDF Text	PDF-Text
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Der Text einer PDF, die Sie öffnen oder einbetten, kommt als bearbeitbarer Text oder als Pfade, die auf einem Computer ohne ihre Schriften gleich aussehen.
+	Linked pages show the file's own text.	Verknüpfte Seiten zeigen den Text der Datei selbst.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Ändert sich eine verknüpfte Datei, liest „Automatisch“ sie neu, „Bei Änderung fragen“ fragt Sie zuerst, und „Manuell“ lässt sie unverändert und zeigt einen Hinweis in der Statusleiste.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	In der Desktop-Version der Ordner, in dem „Neu aus Vorlage…“ und „Als Vorlage speichern…“ beginnen; leer lassen für VectorCraft Templates in Ihrem Dokumentordner.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„Original bearbeiten“ öffnet eine verknüpfte Datei im Standardprogramm des Systems für ihren Typ; ausgeschaltet öffnet sich ein verknüpftes Rasterbild in PhotoCraft, sofern es installiert ist.
@@ -3395,7 +3410,6 @@ digits	Malayalam	Malayalam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	„Alle Schwarztöne als tiefes Schwarz ausgeben“ zeichnet reines CMYK-Schwarz in RGB- und Graustufen-Rasterexporten und bei „Als Bitmap drucken“ als RGB-Schwarz; Vektorexporte, CMYK-JPEG, -TIFF und -PSD und anderes Drucken ändert es nicht.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Auf einem Touchscreen wird zum Touch-Arbeitsbereich gewechselt; beim Ausschalten oder wenn kein Touchscreen mehr erkannt wird, kehrt es zum vorherigen Arbeitsbereich zurück.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Tippen mit zwei Fingern auf die Arbeitsfläche macht rückgängig oder wechselt im Touch-Arbeitsbereich zwischen Auswahl- und Zeichenwerkzeugen, Tippen mit drei Fingern wiederholt; beides wirkt nicht im Präsentationsmodus.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist und [Normales Zeichenformat] keine Sprache festlegt; Text, der bereits in einem Dokument steht, behält seine Sprache.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In Absätzen mit Silbentrennung wird ein aufgeführtes Wort nur an seinen eingegebenen Bindestrichen getrennt, ohne solche gar nicht, unabhängig von Groß- und Kleinschreibung; koreanische Wörter erhalten keinen Trennstrich, Wörter indischer Sprachen keine Trennung in einer Zeichengruppe.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
@@ -5074,6 +5088,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
 @msg	`view` must be wheel or box	`view` muss wheel oder box sein
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` muss hue, saturation, brightness, red, green oder blue sein
+@msg	`sliders` must be none, oklch or hsl	`sliders` muss none, oklch oder hsl sein
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen
@@ -5485,6 +5501,10 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	diese Nachzeichnung würde mehr als {max} Ankerpunkte erzeugen, mehr als das Dokument flüssig darstellen kann: Erhöhen Sie „Rauschen“, verringern Sie „Pfade“ oder „Farben“ oder wählen Sie eine Vorgabe mit geringerer Genauigkeit
 @msg	select an envelope	wählen Sie eine Hülle aus
 @msg	select an image	wählen Sie ein Bild aus
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	Objekt {_1} ist ein Bild, das mit Perspektivisch verzerren oder Frei verzerren verändert wurde; dieser Befehl funktioniert damit nicht
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	Bild {_1} kann so nicht verzerrt werden: seine Ecken würden keine konvexe Form bilden
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	Bild {_1} kann so nicht verzerrt werden: seine Ecken würden den Horizont der Verzerrung überschreiten
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	Bild {_1} kann so nicht verzerrt werden: seine Ecken lägen für eine perspektivische Abbildung zu nah beieinander
 @msg	`background` must be edges, corners or colors	`background` muss edges, corners oder colors sein
 @msg	`match` must be distance or channels	`match` muss distance oder channels sein
 @msg	`{key}` must be from 0 to 100	`{key}` muss von 0 bis 100 sein
@@ -10394,6 +10414,11 @@ breakText	Glyphs	Glyphen
 	Filigree Arrow	Filigranpfeil
 	Petal Sweep	Blütenblattschwung
 	Twin Curl	Doppelschnörkel
+	Orbit Lines	Orbitlinien
+	Petal Garland	Blütengirlande
+	Lattice Braid	Gittergeflecht
+	Facet Sweep	Facettenstrich
+	Artistic Brushes	Künstlerische Pinsel
 	Paint	Farbe
 	Flat Sweep	Flacher Schwung
 	Dry Drag	Trockener Zug

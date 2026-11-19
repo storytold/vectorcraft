@@ -27,8 +27,8 @@ pub use blend::{
     reference_point_named,
 };
 pub use buttons::{
-    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
-    primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
+    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_hint, menu_item_name, paint_icon_button,
+    primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{
     button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
@@ -42,7 +42,7 @@ pub use color::{
     color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture, ring_markers, ring_square,
     segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
     PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
     ghost_row, row_click,

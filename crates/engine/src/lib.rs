@@ -329,6 +329,9 @@ pub struct Session {
     /// The id and persistent options of the tool when the press under way began, which a dropped
     /// press puts back ([`Session::drop_tool_press`]).
     pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// An option of the active tool was set during the press under way, which stored all of its
+    /// options, so a dropped press stores the options it puts back.
+    pub(crate) press_options_stored: bool,
     /// The engine saves the selection and active layer before a Type press and restores them if it drops.
     pub(crate) press_type_selection: Option<(Selection, Option<NodeId>)>,
     /// The freeform gradient point selected once the tool took the press under way, which a
