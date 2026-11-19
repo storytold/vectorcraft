@@ -16,8 +16,14 @@ fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, zoom: f
         let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
         format!("{color}/{}", if outline { tl!("Outline") } else { tl!("Preview") })
     };
+    format!("{} @ {} ({mode})", view_tab_name(d, number), zoom_label(zoom, display_print_size).replace('%', " %"))
+}
+
+/// The start of [`view_tab_title`], which an inactive document tab shows alone (#8582): "Name*",
+/// or for a view of a document with more than one view, "Name:2*".
+fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>) -> String {
     let number = number.map(|n| format!(":{n}")).unwrap_or_default();
-    format!("{}{number}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom, display_print_size).replace('%', " %"))
+    format!("{}{number}{}", d.title(), if d.is_dirty() { "*" } else { "" })
 }
 
 /// The title of window `w`, a view of document `d`: with the view's zoom and Outline or Preview,
@@ -177,13 +183,14 @@ fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> O
     Some(xresp)
 }
 
-/// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
-/// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
-/// right end, which lists every open document, and the active tab is always in view (#746). The
-/// first tab that doesn't fit whole fills the room left before the » button with its title
-/// shortened, when that room holds some of the title (#8584). When the active tab is among the last
-/// ones and the tabs from it to the end leave room, the tab before them fills that room instead. An
-/// active tab wider than the whole strip is shortened to it.
+/// Document tab strip: the active tab's title is "Name* @ 66.67 % (RGB/Preview)", and each other
+/// tab shows "Name*" alone, with the whole title in its tooltip (#8582). User Interface › Large
+/// Tabs makes the tabs taller, with larger titles. Tabs that don't fit are reached from a » button
+/// at the strip's right end, which lists every open document, and the active tab is always in view
+/// (#746). The first tab that doesn't fit whole fills the room left before the » button with its
+/// title shortened, when that room holds some of the title (#8584). When the active tab is among
+/// the last ones and the tabs from it to the end leave room, the tab before them fills that room
+/// instead. An active tab wider than the whole strip is shortened to it.
 /// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
 /// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
@@ -205,18 +212,24 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
     let shown = crate::doc_windows::tab_window(app).filter(|_| app.ui.home.is_none());
-    // The windows under the tabs, with their titles; `active` is the position of the highlighted one.
-    let tabs: Vec<(crate::doc_windows::Win, String, std::sync::Arc<egui::Galley>)> = crate::doc_windows::docked_windows(app)
+    // The windows under the tabs, with the text each tab shows, its whole title and the text laid
+    // out; `active` is the position of the highlighted one. An inactive tab shows the name alone,
+    // without the zoom and the mode in parentheses (color mode and view, or the opacity mask being
+    // edited) (#8582), and its tooltip shows the whole title.
+    type Tab = (crate::doc_windows::Win, String, String, std::sync::Arc<egui::Galley>);
+    let tabs: Vec<Tab> = crate::doc_windows::docked_windows(app)
         .into_iter()
         .filter_map(|w| Some((w, app.session.documents().get(w.0)?)))
         .map(|(w, d)| {
             let title = window_tab_title(app, w, d);
-            let color = if Some(w) == shown { t.text_strong } else { t.text_dim };
-            (w, title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
+            let (text, color) =
+                if Some(w) == shown { (title.clone(), t.text_strong) } else { (view_tab_name(d, crate::doc_windows::label(app, w)), t.text_dim) };
+            let galley = ui.painter().layout_no_wrap(text.clone(), theme::semibold(title_size), color);
+            (w, text, title, galley)
         })
         .collect();
-    let active = tabs.iter().position(|(w, _, _)| Some(*w) == shown);
-    let widths: Vec<f32> = tabs.iter().map(|(_, _, g)| g.size().x + TAB_PADDING).collect();
+    let active = tabs.iter().position(|(w, ..)| Some(*w) == shown);
+    let widths: Vec<f32> = tabs.iter().map(|(.., g)| g.size().x + TAB_PADDING).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
     let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
@@ -230,7 +243,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     // the drag just ended), for moving it along the strip.
     let mut slots: Vec<(usize, egui::Rect)> = vec![];
     let mut dragged = None;
-    for (k, ((win, title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+    for (k, ((win, text, title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
         // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
         // long as some of the title fits (#8584); its tooltip shows the whole title. The active
         // tab always shows, shortened to the strip when it is wider than the whole strip. The
@@ -245,7 +258,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
                 break;
             }
             let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
-            let (galley, fits) = shortened_title(ui.ctx(), title, theme::semibold(title_size), color, left - TAB_PADDING);
+            let (galley, fits) = shortened_title(ui.ctx(), text, theme::semibold(title_size), color, left - TAB_PADDING);
             (galley, left.max(0.0), true, fits)
         } else {
             (galley.clone(), *w, false, true)
@@ -254,7 +267,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let i = win.0;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
-        let resp = if shortened { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };
+        let resp = if shortened || text != title { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };
         slots.push((i, r));
         if resp.dragged() || resp.drag_stopped() {
             dragged = Some((i, resp.drag_stopped()));

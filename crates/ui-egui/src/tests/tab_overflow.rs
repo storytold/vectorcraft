@@ -53,9 +53,9 @@ fn click(at: Pos2, pressed: bool) -> Event {
 #[test]
 fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    // Three tabs about 240 pt wide fit whole; the fourth, with a longer name, doesn't.
+    // The active tab and two inactive ones fit whole; the fourth, with a much longer name, doesn't.
     for i in 0..8 {
-        let name = if i == 3 { format!("Tab test {i} with a much longer name") } else { format!("Tab test {i}") };
+        let name = if i == 3 { format!("Tab test {i} {}", "with a much longer name ".repeat(4)) } else { format!("Tab test {i}") };
         app.run("file.new", json!({"width": 100, "height": 100, "name": name})).unwrap();
     }
     app.session.set_active(0);
@@ -85,14 +85,49 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
     );
 }
 
+/// An inactive tab shows the document's name alone, without the zoom and the color mode and view,
+/// so more tabs fit in the strip (#8582): in a 1000 pt window, 7 tabs fit whole where 3 did with
+/// whole titles. The active tab keeps its whole title, and an inactive tab's tooltip shows it.
+#[test]
+fn inactive_tabs_show_the_name_alone_so_more_tabs_fit() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for i in 0..12 {
+        app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Tab test {i}")})).unwrap();
+    }
+    // The second document has unsaved changes, which its tab still marks.
+    app.session.set_active(1);
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.session.set_active(0);
+    app.sync_views();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame(&mut app, &ctx, 0.0, vec![]);
+    let mut tabs: Vec<(String, egui::Rect)> = texts.into_iter().filter(|(t, _)| t.starts_with("Tab test")).collect();
+    tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+    let whole = tabs.iter().filter(|(t, _)| !t.ends_with('…')).count();
+    assert_eq!(whole, 7, "7 tabs fit whole: {tabs:?}");
+    assert!(tabs.first().is_some_and(|(t, _)| t == "Tab test 0 @ 100 % (RGB/Preview)"), "the active tab keeps its whole title: {tabs:?}");
+    assert!(tabs.get(1).is_some_and(|(t, _)| t == "Tab test 1*"), "an inactive tab shows the name and the unsaved mark: {tabs:?}");
+    assert!(tabs.iter().skip(2).all(|(t, _)| !t.contains('@') && !t.contains("RGB")), "inactive tabs show no zoom or mode: {tabs:?}");
+    // The whole title shows in an inactive tab's tooltip.
+    let r = tabs.get(2).map(|(_, r)| *r).unwrap_or_else(|| panic!("{tabs:?}"));
+    let mut texts = frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(r.center())]);
+    for i in 1..20 {
+        texts = frame(&mut app, &ctx, 1.0 + f64::from(i) * 0.1, vec![]);
+    }
+    assert!(texts.iter().any(|(t, _)| t == "Tab test 2 @ 100 % (RGB/Preview)"), "the tooltip shows the whole title: {texts:?}");
+}
+
 /// With the last document active, the tabs from it to the end leave room before the » button, and
 /// the tab before them fills that room with its title shortened instead of the strip ending short
 /// of the » button (#8584).
 #[test]
 fn with_the_last_document_active_the_tab_before_the_shown_ones_fills_the_room() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The last three tabs fit whole; the one before them, with a much longer name, doesn't.
     for i in 0..8 {
-        app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Tab test {i}")})).unwrap();
+        let name = if i <= 4 { format!("Tab test {i} {}", "with a much longer name ".repeat(4)) } else { format!("Tab test {i}") };
+        app.run("file.new", json!({"width": 100, "height": 100, "name": name})).unwrap();
     }
     app.session.set_active(7);
     app.sync_views();
