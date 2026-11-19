@@ -68,6 +68,16 @@ fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
                 }
             }
         }
+        if let Some(extras) = n.extras_if_any() {
+            for entry in &mut extras.symbol_overrides {
+                if let Some(fill) = &mut entry.fill {
+                    paint_refs(fill, f);
+                }
+                if let Some(stroke) = &mut entry.stroke {
+                    paint_refs(stroke, f);
+                }
+            }
+        }
         match &mut n.kind {
             NodeKind::Text(t) => {
                 for r in &mut t.runs {

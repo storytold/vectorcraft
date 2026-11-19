@@ -240,12 +240,16 @@ pub(super) fn plan_import(
     let mut incoming = Vec::new();
     for font in source {
         let existing = CompositeFont::named(&target.composite_fonts, &font.name);
-        let reused = existing.filter(|other| other.parts == font.parts && other.custom == font.custom);
+        let mut reused = existing.filter(|other| other.parts == font.parts && other.custom == font.custom);
+        let needs_alias = reused.is_none() && (target_taken.contains(&font.name.to_lowercase()) || db.has_installed_family(&font.name));
+        if needs_alias {
+            // A repeat import may already have installed the same definition under an alias.
+            // A free incoming name and an equal original-name match keep their existing rules.
+            reused = target.composite_fonts.iter().find(|other| other.parts == font.parts && other.custom == font.custom);
+        }
         let name = match reused {
             Some(other) => other.name.clone(),
-            None if target_taken.contains(&font.name.to_lowercase()) || db.has_installed_family(&font.name) => {
-                composite_alias(&font.name, &reserved, alias_context)?
-            }
+            None if needs_alias => composite_alias(&font.name, &reserved, alias_context)?,
             None => font.name.clone(),
         };
         reserved.insert(name.to_lowercase());

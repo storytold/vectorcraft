@@ -995,17 +995,18 @@ fn read_queue(doc: u64, p: Value, queued: Vec<Value>) -> Result<QueueRead> {
                 Art::Dcs(a) => a.img.blob = super::links::readable(a.img.blob.clone(), false, true)?,
                 _ => {}
             }
-            Ok(l)
+            let (w, h) = (l.natural.width(), l.natural.height());
+            let name = l.name.clone();
+            let mut file = json!({ "name": name, "format": l.format.id, "width": w, "height": h });
+            if let Some(px) = thumbnail {
+                file["thumbnailBase64"] = json!(thumbnail_png(l, px)?);
+            }
+            Ok((name, w, h, file))
         });
         match checked {
-            Ok(l) => {
-                let (w, h) = (l.natural.width(), l.natural.height());
-                let mut f = json!({ "name": l.name, "format": l.format.id, "width": w, "height": h });
-                entries.push(json!({ "params": q, "name": l.name, "width": w, "height": h }));
-                if let Some(px) = thumbnail {
-                    f["thumbnailBase64"] = json!(thumbnail_png(l, px)?);
-                }
-                files.push(f);
+            Ok((name, w, h, file)) => {
+                entries.push(json!({ "params": q, "name": name, "width": w, "height": h }));
+                files.push(file);
             }
             Err(e) => {
                 let name = str_param(&q, "path").or(str_param(&q, "name")).map(fileio::file_name).unwrap_or_default();

@@ -3,13 +3,13 @@
 //! The ordered panel records remain authoritative. Clipboard resource placement may rename
 //! patterns, images and other definitions, but must not merge or number the panel's swatches.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::json;
 use vectorcraft_brush::Brush;
 use vectorcraft_color::cms::{self, ColorSettings};
-use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
+use vectorcraft_color::{Color, Gradient, GradientPaint, Paint, Swatch, SwatchGroup};
 use vectorcraft_doc::{Appearance, CompositeFont, Document, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_text::FontDb;
@@ -276,15 +276,30 @@ pub(crate) fn capture(s: &Session) -> Result<String> {
     Ok(vectorcraft_format::base64_encode(&bytes))
 }
 
+fn linked_palette_colors(d: &Document, palette: &Palette) -> BTreeMap<String, Color> {
+    let mut first: BTreeMap<&str, &Swatch> = BTreeMap::new();
+    for w in d.swatches_iter() {
+        // An ineligible first record still shadows a later global solid of the same name.
+        first.entry(w.name.as_str()).or_insert(w);
+    }
+    palette
+        .iter()
+        .filter_map(|requested| {
+            let w = first.get(requested.name.as_str()).copied().filter(|w| w.global)?;
+            let Paint::Solid { color, swatch: None, .. } = &w.paint else { return None };
+            Some((requested.name.clone(), d.linked_color(*color, w.spot)))
+        })
+        .collect()
+}
+
 /// Refresh existing profile resources against their replacement palette, while keeping the
 /// palette's own raw Color values separate for final restoration.
 fn refresh_references(d: &mut Document, palette: &Palette) -> Result<()> {
-    let mut colors: BTreeMap<String, Color> = palette.iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+    let mut colors = linked_palette_colors(d, palette);
     let registration = vectorcraft_color::swatch::REGISTRATION;
     if let Some(color) = d.global_color(registration) {
         colors.insert(registration.into(), color);
     }
-    let gradients: BTreeSet<String> = palette.iter().filter(|w| matches!(w.paint, Paint::Gradient(_))).map(|w| w.name.clone()).collect();
     let mut color_link = |color: &mut Color, link: &mut Option<String>, tint: &mut f32| {
         let Some(name) = link.as_deref() else { return false };
         match colors.get(name) {
@@ -300,10 +315,32 @@ fn refresh_references(d: &mut Document, palette: &Palette) -> Result<()> {
             }
         }
     };
+    let mut gradients: BTreeMap<String, Option<Gradient>> = BTreeMap::new();
+    for swatch in palette.iter() {
+        // The first named row shadows later rows even when it is not a gradient.
+        gradients.entry(swatch.name.clone()).or_insert_with(|| {
+            let Paint::Gradient(gradient) = &swatch.paint else { return None };
+            let mut expected = Paint::Gradient(Box::new(GradientPaint::new(gradient.gradient.clone())));
+            // Cached linked-stop colors must use the same document context as the art.
+            expected.map_links(&mut color_link);
+            match expected {
+                Paint::Gradient(gradient) => Some(gradient.gradient),
+                _ => None,
+            }
+        });
+    }
     let mut gradient_source = |paint: &Paint| {
         let mut next = paint.clone();
         if let Paint::Gradient(g) = &mut next
-            && g.swatch.as_ref().is_some_and(|name| !gradients.contains(name))
+            && g.swatch.as_ref().is_some_and(|name| {
+                let Some(Some(expected)) = gradients.get(name) else { return true };
+                let actual = &g.gradient;
+                actual.kind != expected.kind
+                    || actual.stops != expected.stops
+                    || actual.dither != expected.dither
+                    || actual.method != expected.method
+                    || actual.painted_spread() != expected.painted_spread()
+            })
         {
             g.swatch = None;
             Some(next)

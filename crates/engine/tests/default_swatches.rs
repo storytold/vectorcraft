@@ -1511,4 +1511,90 @@ fn default_swatches_review_linked_color_lookup_preserves_first_match_contract() 
     let registration = vectorcraft_color::swatch::REGISTRATION;
     assert!(d.swatches_iter().all(|w| w.name != registration));
     assert!(d.global_color(registration).is_some(), "Registration has a separate built-in lookup");
+
+    for use_lab in [false, true] {
+        review_lookup_capture_and_apply(&d, use_lab);
+    }
+}
+
+fn review_lookup_add_pattern(d: &mut Document, name: &str) {
+    let cached = Color::rgb8(17, 41, 83);
+    let mut paints: Vec<Paint> = ["RGB original", "Brand 40%", "Brand ramp", "Brand", vectorcraft_color::swatch::REGISTRATION]
+        .map(|name| Paint::Solid { color: cached, swatch: Some(name.into()), tint: 0.35 })
+        .into();
+    paints.push(Paint::solid(Color::rgb8(121, 39, 217)));
+    let art = paints.into_iter().map(|paint| Arc::new(rectangle(d, paint))).collect();
+    d.patterns.push(PatternDef::new(name, art));
+    d.swatches.push(Swatch { name: name.into(), paint: Paint::Pattern { pattern: name.into(), xf: Affine::IDENTITY }, global: false, spot: false });
+}
+
+fn review_lookup_assert_pattern(d: &Document, name: &str, brand: Color, registration: Color) {
+    let pattern = d.pattern(name).unwrap();
+    let paints: Vec<&Paint> = pattern.art.iter().map(|node| &node.appearance.fill().unwrap().paint).collect();
+    assert_eq!(paints.len(), 6, "the complete lookup witness is retained");
+    for (name, paint) in ["RGB original", "Brand 40%", "Brand ramp"].into_iter().zip(&paints) {
+        let Paint::Solid { color, swatch, .. } = paint else { panic!("{name} lost its solid cached paint") };
+        assert_eq!(*color, Color::rgb8(17, 41, 83), "{name}: unlinking retains the cached color");
+        assert!(swatch.is_none(), "{name}: an ineligible first record blocks the later global duplicate");
+    }
+    assert_eq!(paints.get(3).copied(), Some(&linked(brand, "Brand", 0.35)), "the eligible spot base follows the document lookup and tint");
+    assert_eq!(
+        paints.get(4).copied(),
+        Some(&linked(registration, vectorcraft_color::swatch::REGISTRATION, 0.35)),
+        "Registration follows its separate built-in lookup"
+    );
+    assert_eq!(paints.get(5).copied(), Some(&Paint::solid(Color::rgb8(121, 39, 217))), "ordinary unlinked paint stays unchanged");
+}
+
+fn review_lookup_capture(d: &Document, use_lab: bool) -> Session {
+    let mut d = d.clone();
+    d.spot_use_lab = use_lab;
+    review_lookup_add_pattern(&mut d, "Lookup witness");
+    let mut source = Session::new();
+    source.add_document(d, None);
+    let before = source.doc().unwrap().doc.clone();
+    let brand = before.global_color("Brand").unwrap();
+    let registration = before.global_color(vectorcraft_color::swatch::REGISTRATION).unwrap();
+    assert_ne!(brand.tinted(0.35), Color::rgb8(17, 41, 83), "CONTROL: capture must refresh the stale spot color");
+    source.execute("swatch.defaults.save", &json!({})).unwrap();
+    assert_eq!(source.doc().unwrap().doc, before, "capture leaves the original raw palette and resources intact");
+    let prefs = source.prefs.to_json();
+    let bytes = vectorcraft_format::base64_decode(prefs["defaultSwatches"]["data"].as_str().unwrap()).unwrap();
+    let captured = vectorcraft_format::load_file(&bytes).unwrap().doc;
+    assert_eq!(captured.swatches, before.swatches, "capture preserves every raw swatch, including duplicate names");
+    assert_eq!(captured.swatch_groups, before.swatch_groups, "capture preserves raw grouped values and order");
+    assert_eq!(captured.spot_use_lab, use_lab);
+    review_lookup_assert_pattern(&captured, "Lookup witness", brand, registration);
+    source
+}
+
+fn review_lookup_capture_and_apply(d: &Document, use_lab: bool) {
+    let source = review_lookup_capture(d, use_lab);
+    let before = source.doc().unwrap().doc.clone();
+    let dir = TestDirectory::new();
+    let mut profile = customized_profile();
+    profile.spot_use_lab = use_lab;
+    profile.swatches.extend(["RGB original", "Brand 40%", "Brand ramp"].map(|name| Swatch {
+        name: name.into(),
+        paint: Paint::solid(Color::rgb8(67, 101, 149)),
+        global: true,
+        spot: false,
+    }));
+    review_lookup_add_pattern(&mut profile, "Profile lookup witness");
+    for name in ["RGB original", "Brand 40%", "Brand ramp"] {
+        assert!(profile.global_color(name).is_some(), "CONTROL: profile links exist before its palette is replaced");
+    }
+    save_profile(&dir.0, &profile);
+    let mut target = restarted(&source);
+    target.attach_new_doc_profiles(dir.0.clone());
+    let result = target.execute("file.new", &json!({"profile": "Print", "colorMode": "rgb"})).unwrap();
+    assert_eq!(result["profile"], "Print", "CONTROL: the native category and its resource paints participate");
+    let actual = &target.doc().unwrap().doc;
+    assert_eq!(actual.spot_use_lab, use_lab);
+    assert_eq!(actual.swatches, before.swatches, "apply restores the original raw palette after refreshing its resources");
+    assert_eq!(actual.swatch_groups, before.swatch_groups);
+    let brand = actual.global_color("Brand").unwrap();
+    let registration = actual.global_color(vectorcraft_color::swatch::REGISTRATION).unwrap();
+    review_lookup_assert_pattern(actual, "Lookup witness", brand, registration);
+    review_lookup_assert_pattern(actual, "Profile lookup witness", brand, registration);
 }
