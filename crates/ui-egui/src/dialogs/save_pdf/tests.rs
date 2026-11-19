@@ -94,6 +94,19 @@ fn save_summary_writes_the_summary_as_text() {
     assert_eq!(app.ui.status, "Saved /tmp/Ünïcode (1) summary.txt");
 }
 
+/// A text option whose value holds CRLF or CR line breaks is written with LF line breaks, so the
+/// file has one kind of line ending.
+#[test]
+fn save_summary_writes_line_breaks_in_values_as_lf() {
+    let (mut app, written, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.outputCondition", json!("first\r\nsecond\rthird"));
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(!text.contains('\r'), "LF line endings: {text:?}");
+    assert!(text.contains("first\nsecond\nthird\n"), "{text:?}");
+}
+
 /// With every option as the preset has it and nothing to warn about, the file holds the lines
 /// that say so, in the interface language.
 #[test]

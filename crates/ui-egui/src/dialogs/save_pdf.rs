@@ -1084,7 +1084,8 @@ fn unchanged_line(d: &Dialog) -> String {
 
 /// The Summary of `document.pdfSettings`'s reply `v` as text, line for line as the section shows
 /// it in the interface language: Options and each changed option (or the line saying none
-/// changed), a blank line, then Warnings and each warning (or "None."). Lines end in LF.
+/// changed), a blank line, then Warnings and each warning (or "None."). Lines end in LF, including
+/// line breaks inside an option's value.
 fn summary_text(d: &Dialog, v: &Value) -> String {
     let lang = crate::i18n::current();
     let mut lines = vec![tl!("Options").to_string()];
@@ -1100,7 +1101,7 @@ fn summary_text(d: &Dialog, v: &Value) -> String {
         lines.push(tl!("None.").to_string());
     }
     lines.extend(warnings.iter().map(|w| warning_line(lang, w.as_str().unwrap_or_default())));
-    let mut text = lines.join("\n");
+    let mut text = lines.join("\n").replace("\r\n", "\n").replace('\r', "\n");
     text.push('\n');
     text
 }
