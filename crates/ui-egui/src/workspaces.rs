@@ -38,6 +38,8 @@ pub struct Workspace {
     pub rulers: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Compact main Tools spacing (built-in and older workspaces: regular).
+    pub toolbar_compact: bool,
     pub toolbar_advanced: bool,
     pub task_bar: bool,
     pub dock: bool,
@@ -203,6 +205,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
         toolbar_double: ui.toolbar_double,
+        toolbar_compact: ui.toolbar_compact,
         toolbar_advanced: ui.toolbar_advanced,
         task_bar: ui.task_bar,
         dock: ui.dock,
@@ -241,6 +244,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
     ui.toolbar_double = w.toolbar_double;
+    ui.toolbar_compact = w.toolbar_compact;
     ui.toolbar_advanced = w.toolbar_advanced;
     ui.task_bar = w.task_bar;
     ui.dock = w.dock;

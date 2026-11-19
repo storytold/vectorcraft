@@ -573,6 +573,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     (
+        "window.toolbarCompact",
+        "Compact Tools",
+        "",
+        "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
+    ),
+    (
         "window.toolsBesideCanvas",
         "Keep Tools Beside the Canvas",
         "",

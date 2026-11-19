@@ -473,6 +473,9 @@ pub struct UiState {
     pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Smaller cells and panel width for the main Tools panel, independent of its column count.
+    #[serde(default)]
+    pub toolbar_compact: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
@@ -1236,6 +1239,7 @@ impl Default for UiState {
             control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
+            toolbar_compact: false,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),

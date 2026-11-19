@@ -757,6 +757,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   were made in, and Window › Toolbars › Manage Toolbars renames, copies and deletes them; they dock in lanes along
   the window's left and right edges (`window.toolbar.dock`, `window.toolbar.float`).
   Inside the estimate below.
+- **Done (#7234):** Window > Toolbars > Compact Tools offers denser spacing and a narrower main Tools panel in one or two columns, docked or floating. The choice is remembered for Basic, Advanced and edited layouts without changing the selected tool, usual icon size or footer controls. The existing layout remains the default; named custom toolbars and tool flyouts retain their spacing. The G7 estimate is unchanged.
 - **Done (#1753):** a saved workspace keeps the width of the dock column.
 - **Done (#4135):** floating panels open in OS windows of their own on the desktop, so they can sit on another monitor; on the web and on Wayland they float inside the window.
 - **Done:** View › New View… and Edit Views… ([public source](https://helpx.adobe.com/illustrator/using/viewing-artwork.html)): a document keeps up to 25 named views (zoom, centre and rotation), saved with the file; every one is listed by name at the bottom of the View menu (`view.goto1`–`view.goto25`), and choosing one changes the current window to it. Edit Views… lists them to rename or delete, applied together on OK as one undo step (`view.saved.edit {edits}`); a file's views are checked when it opens. Estimate unchanged.

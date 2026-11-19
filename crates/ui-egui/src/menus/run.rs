@@ -576,6 +576,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
+            let on = on.unwrap_or(!app.ui.toolbar_compact);
+            app.ui.toolbar_compact = on;
+            json!(on)
+        }),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
                 Ok(t) => t,

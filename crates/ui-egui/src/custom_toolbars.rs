@@ -686,14 +686,16 @@ pub fn sync(ui: &UiState) {
     }
 }
 
-/// Window › Toolbars: Advanced, Double Column and Keep Tools Beside the Canvas, the toolbars made
-/// with New Toolbar (each checked while it shows), New Toolbar… and Manage Toolbars….
+/// Window › Toolbars: Advanced, Double Column, Compact Tools and Keep Tools Beside the Canvas,
+/// the toolbars made with New Toolbar (each checked while it shows), New Toolbar… and Manage
+/// Toolbars….
 pub fn menu_items() -> Vec<crate::menus::Item> {
     use crate::menus::Item;
     let c = |label: &'static str, id: &'static str| Item::Cmd(label, id, Value::Null);
     let mut v = vec![
         c("Advanced", "window.toolbarAdvanced"),
         c("Double Column", "window.toolbarColumns"),
+        c("Compact Tools", "window.toolbarCompact"),
         c("Keep Tools Beside the Canvas", "window.toolsBesideCanvas"),
         Item::Sep,
     ];
