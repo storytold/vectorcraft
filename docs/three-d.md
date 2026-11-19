@@ -559,6 +559,49 @@ These rules are VectorCraft's own:
   in the layers, in the art of symbols, patterns, graph designs, brushes and opacity masks, and in graphic
   styles, and Select All Unused in the Symbols panel counts a symbol a graphic uses as used, a graphic in a graphic style included.
 
+## Map Art
+
+The Extrude & Bevel (Classic) and Revolve (Classic) dialogs have a **Map Art…** button on their Object tab. It
+shows Map Art in place of the tabs until **Done**, and the dialog's Preview, OK and Cancel apply to the maps with the
+other settings ([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=189),
+[the same section in the 2010 help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=274)).
+Rotate (Classic) and the other 3D effects take no map. The command is `threeD.mapArt` ([mcp.md](mcp.md#map-art)).
+
+- **Surface**: the first, previous, next and last buttons and a number field pick the surface, with the count beside
+  them. A light gray mark shows that the surface faces the viewer and a dark gray mark that it is hidden. With Preview
+  on, the surface is outlined in red on the artboard.
+- **Symbol**: None or one of the document's symbols. Each surface keeps one symbol.
+- The surface is shown laid out flat with the box of the mapped art on it. A drag inside the box moves the art, a
+  drag of a side or corner handle scales it about its center, and a drag just outside the box turns it. X, Y,
+  Horizontal Scale, Vertical Scale and Rotation give the same values as numbers.
+- **Scale to Fit** centers the art and scales it to fill the surface. **Clear** removes the surface's map, as None
+  does, and **Clear All** removes every map.
+- **Shade Artwork** gives the mapped art the tone and highlight of the face it lies on. **Invisible Geometry**
+  draws the mapped art and leaves out the solid's faces.
+
+Extrude & Bevel (Classic) numbers its surfaces through the object's solids in the order they are built (the top fill's
+solid, then each stroke's): each solid's front cap and back cap, then each side wall from corner to corner of the
+outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number,
+and a solid whose bevel is as deep as the solid has no walls.
+A side wall is laid out at its own length, which a bevel added around the shape makes longer than the outline. A bevel
+is laid out at the length of the wall below it, so mapped art on a bevel is stretched or squeezed along its edge
+nearer the cap. Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
+the side of the member with the longest profile, and Invisible Geometry leaves out every member's faces. The numbering
+is VectorCraft's own.
+
+- A map's X and Y place the center of the art from the center of the surface laid out flat, so a map follows the
+  center when the surface changes size. A map past the object's surface count draws nothing and stays in the effect.
+- Mapped art is drawn on the parts of its surface that face the viewer, clipped to the surface, and over a wall, a
+  bevel or Revolve's side it bends with the facets. The Wireframe surface draws no mapped art.
+- The canvas, exports, printing and **Object › Expand Appearance** draw the mapped art the same way. Renaming a symbol
+  renames it in the maps, copying the object to another document brings the symbols its maps use, and Select All
+  Unused counts a symbol a map uses as used.
+- A map's art follows the rules and limits of a graphic's art ([Graphics](#graphics)). An object takes up to 64 maps,
+  and its maps share the 400,000 path elements of one 3D effect's graphics; past that limit the object draws without
+  its mapped art. The art of the maps on walls, bevels and Revolve's side, at each map's scale and with its curves cut
+  into straight pieces, may also take at most 400,000 points together, and commands refuse art past it. The limits and the shading of the mapped art are
+  VectorCraft's own.
+
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
@@ -634,7 +677,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   the faces are shaded with it is VectorCraft's own. The Black Overprint shading color keeps each face's paint and
   draws the shading over it as overprinting black, without the highlight. The shading is on the black plate in
   Separations Preview and PDF output. Their Rotation tab has the track cube
-  ([Track cube](#track-cube)). Map art, Turntable and 3D export are separate, unbuilt items.
+  ([Track cube](#track-cube)). Extrude & Bevel (Classic) and Revolve (Classic) take Map Art
+  ([Map Art](#map-art)). Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

@@ -109,8 +109,8 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
-/// and CMYK color management policies, Load Profile… and Gamut Check, and the profile the active
-/// document is assigned.
+/// and CMYK color management policies, the Ask boxes of Profile Mismatches and Missing Profiles,
+/// Load Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));
@@ -148,6 +148,22 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && let Some(p) = choices.get(i)
             {
                 run(app, "edit.colorSettings", json!({ key: p.id() }));
+            }
+        });
+    }
+    // Profile Mismatches and Missing Profiles: what opening and pasting ask about.
+    let asks: [(&str, &str, &str, bool); 3] = [
+        ("askMismatchOpen", tl!("Profile Mismatches:"), tl!("Ask When Opening"), st.ask_mismatch_open),
+        ("askMismatchPaste", "", tl!("Ask When Pasting"), st.ask_mismatch_paste),
+        ("askMissingOpen", tl!("Missing Profiles:"), tl!("Ask When Opening"), st.ask_missing_open),
+    ];
+    for (key, heading, label, on) in asks {
+        if !heading.is_empty() {
+            ui.label(heading);
+        }
+        ui.push_id(key, |ui| {
+            if widgets::check(ui, label, on, true) {
+                run(app, "edit.colorSettings", json!({ key: !on }));
             }
         });
     }

@@ -131,11 +131,19 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 }
 
 /// Open a document through the engine loader with the `document.open` options in `p` →
-/// `document.open`'s result.
+/// `document.open`'s result, or `{dialog}` when Edit › Color Settings asks about its profile first
+/// ([`dialogs::profile_mismatch::open_or_ask`]): the document then opens, and goes on the recent
+/// files, once the question is answered.
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
-    let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
-    opened(app, &r);
-    Ok(r)
+    let update_links = app.session.prefs.update_links == "automatically";
+    let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
+    let file = fileio::read_for_open_asking(name, bytes, path.clone(), p, update_links, low_res_proxy_eps, true).map_err(|e| e.to_string())?;
+    dialogs::profile_mismatch::open_or_ask(app, file, path, false)
+}
+
+/// Did an open answer that it asks a question first (`{dialog}`), so the file isn't open yet?
+pub(crate) fn asks_first(r: &Value) -> bool {
+    r.get("dialog").is_some()
 }
 
 /// A document just opened (`r`: `document.open`'s result): the views follow, the status bar says
@@ -402,9 +410,8 @@ pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool
                 Err(back) => bytes = back,
             }
         }
-        let r = open_document(app, &path, &bytes, Some(path.clone()), &o)?;
-        note_recent(app, &path);
-        Ok(r)
+        // The open notes it on the recent files, after any question it asks first.
+        open_document(app, &path, &bytes, Some(path.clone()), &o)
     });
     if let Err(e) = &opened {
         report_open_error(app, &fileio::file_name(&path), e);
@@ -570,7 +577,10 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         }
     }
     let r = open_bytes_with(app, path, &bytes, Some(path.to_string()), p)?;
-    note_recent(app, path);
+    // A document that asks a question first goes on the recent files once it opens.
+    if !asks_first(&r) {
+        note_recent(app, path);
+    }
     Ok(r)
 }
 

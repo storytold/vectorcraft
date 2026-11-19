@@ -58,6 +58,12 @@ fn view_param(cmd: &str, p: &Value) -> Result<Option<TraceView>> {
     v.as_str().and_then(TraceView::from_id).map(Some).ok_or_else(|| bad(cmd, format!("view must be one of {}", ids())))
 }
 
+/// The `split` param (the Split view's divider, 0 to 1), if given.
+fn split_param(cmd: &str, p: &Value) -> Result<Option<f64>> {
+    let Some(v) = p.get("split").filter(|v| !v.is_null()) else { return Ok(None) };
+    v.as_f64().filter(|f| (0.0..=1.0).contains(f)).map(Some).ok_or_else(|| bad(cmd, "split must be a number from 0 to 1"))
+}
+
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]): a name and its settings.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1026,9 +1032,14 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         let mut g = Node::group(gid, children);
         g.name = if expand { None } else { Some(TRACE_NAME.into()) };
         if !expand {
-            // Tracing again keeps the object's view unless another is asked for.
+            // Tracing again keeps the object's view unless another is asked for, and the Split
+            // view's divider.
             let view = view.unwrap_or_else(|| src.trace_view());
-            g.extras_mut().trace = Some(Box::new(json!({ "preset": preset_label, "params": params_json, "view": view.id() })));
+            let mut t = json!({ "preset": preset_label, "params": params_json, "view": view.id() });
+            if let Some(split) = src.extras().trace.as_deref().and_then(|t| t.get("split")).filter(|v| !v.is_null()) {
+                t["split"] = split.clone();
+            }
+            g.extras_mut().trace = Some(Box::new(t));
         }
         let (par, idx, _) = d.position(target).ok_or(EngineError::NoNode(target))?;
         d.remove(target)?;
@@ -1127,23 +1138,37 @@ fn trace_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 pub(super) fn trace_set_view(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "imageTrace.setView";
     let view = view_param(C, p)?.ok_or_else(|| bad(C, "view is required"))?;
+    let split = split_param(C, p)?;
     let targets = trace_targets(s, p)?;
     let d = &s.doc()?.doc;
-    if targets.iter().all(|g| d.node(*g).is_some_and(|n| n.trace_view() == view)) {
-        return Ok(json!({ "ids": ids_json(&targets), "view": view.id() }));
+    let result = |d: &vectorcraft_doc::Document| {
+        let mut r = json!({ "ids": ids_json(&targets), "view": view.id() });
+        if view == TraceView::Split
+            && let Some(n) = targets.first().and_then(|g| d.node(*g))
+        {
+            r["split"] = json!(split.unwrap_or_else(|| n.trace_split()));
+        }
+        r
+    };
+    if targets.iter().all(|g| d.node(*g).is_some_and(|n| n.trace_view() == view && split.is_none_or(|f| n.trace_split() == f))) {
+        return Ok(result(d));
     }
     s.edit("Image Trace View", |d, _| {
         for g in &targets {
             let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
+            if n.extras_if_any().and_then(|e| e.trace.as_deref()).is_none_or(|t| !t.is_object()) {
+                n.extras_mut().trace = Some(Box::new(json!({ "preset": "Custom" })));
+            }
             if let Some(t) = n.extras_if_any().and_then(|e| e.trace.as_deref_mut()).and_then(Value::as_object_mut) {
                 t.insert("view".into(), json!(view.id()));
-            } else {
-                n.extras_mut().trace = Some(Box::new(json!({ "preset": "Custom", "view": view.id() })));
+                if let Some(f) = split {
+                    t.insert("split".into(), json!(f));
+                }
             }
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids_json(&targets), "view": view.id() }))
+    Ok(result(&s.doc()?.doc))
 }
 
 pub(super) fn trace_release(s: &mut Session, p: &Value) -> Result<Value> {
