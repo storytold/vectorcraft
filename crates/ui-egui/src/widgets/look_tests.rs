@@ -971,6 +971,67 @@ fn a_dropdown_list_shows_every_option_when_the_window_has_room() {
     }
 }
 
+// #5941: a drop-down list stops above the bottom bars, as other menus do (#2086). In a 700 pt window
+// whose bars start at 640 pt, the list opens below a field near the top, and from a field in the
+// middle it moves up over the field until it ends at the bars; each time every option shows whole.
+#[test]
+fn a_dropdown_list_stops_above_the_bottom_bars() {
+    let items: Vec<String> = (0..20).map(|i| format!("Option {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    let floor = 640.0;
+    for above in [16.0, 300.0] {
+        let case = format!("field {above} pt down");
+        let ctx = themed(Default::default());
+        let field = std::cell::Cell::new(Rect::NOTHING);
+        let popup = std::cell::RefCell::new(vec![]);
+        let mut add = |ui: &mut Ui| {
+            set_menu_floor(ui.ctx(), floor);
+            ui.add_space(above);
+            field.set(ui.horizontal(|ui| dropdown_names(ui, "floor-list", labels[0], &labels, 160.0)).response.rect);
+            popup.replace(super::top_popup_shapes(ui.ctx()));
+        };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 700.0));
+        let mut run = |time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() }, &mut add);
+            out.textures_delta.clear();
+            popup.take()
+        };
+        run(0.0, vec![]);
+        let at = field.get().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(0.1, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(0.2, vec![press(false)]);
+        run(0.3, vec![egui::Event::PointerMoved(pos2(390.0, 2.0))]);
+        let mut clipped = vec![];
+        for i in 4..10 {
+            clipped = run(f64::from(i) * 0.1, vec![]);
+        }
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the list is open");
+        assert!(list.top() >= 0.0 && list.bottom() <= floor + 0.5, "{case}: the list {list:?} ends above the bars at {floor}");
+        let mut texts = vec![];
+        fn flat(s: &egui::Shape, clip: Rect, out: &mut Vec<(String, Rect, Rect)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, clip, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_owned(), t.visual_bounding_rect(), clip)),
+                _ => {}
+            }
+        }
+        clipped.iter().for_each(|c| flat(&c.shape, c.clip_rect, &mut texts));
+        let whole: Vec<&str> = labels
+            .iter()
+            .copied()
+            .filter(|name| {
+                texts.iter().any(|(s, r, clip)| s == name && list.contains_rect(*r) && r.top() >= clip.top() && r.bottom() <= clip.bottom())
+            })
+            .collect();
+        assert_eq!(whole, labels, "{case}: every option shows whole in {list:?}");
+    }
+}
+
 // #5941: a click on the scroll bar's track of an open drop-down list scrolls it and leaves it open,
 // so an option it scrolled into view can be picked. A list closed by that click would open again
 // with its current option in view.
@@ -1205,6 +1266,61 @@ fn a_dropdown_list_wider_than_the_window_keeps_its_scroll_bar_in_view() {
         (texts, _) = run(vec![]);
     }
     assert!(texts.iter().any(|(s, elided)| !*elided && s == labels[1]), "the long name shows in full beside the bar: {texts:?}");
+}
+
+// #5941: in a drop-down list narrowed to the window, an option whose name is cut short shows the
+// full name in a tooltip while the pointer rests on it.
+#[test]
+fn a_dropdown_option_cut_short_shows_its_full_name_on_hover() {
+    let mut items: Vec<String> = (0..10).map(|i| format!("Option {i:02}")).collect();
+    items[1] = "Option 01, whose name is much wider than this window".into();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(16.0);
+        field.set(ui.horizontal(|ui| dropdown_names(ui, "hover-list", labels[0], &labels, 160.0)).response.rect);
+    };
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(220.0, 300.0));
+    let mut time = 0.0;
+    // Every text painted, on any layer, with its rect and whether it was cut short.
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() }, &mut add);
+        out.textures_delta.clear();
+        let mut texts = vec![];
+        fn flat(s: &egui::Shape, out: &mut Vec<(String, Rect, bool)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_owned(), t.visual_bounding_rect(), t.galley.elided)),
+                _ => {}
+            }
+        }
+        out.shapes.iter().for_each(|c| flat(&c.shape, &mut texts));
+        texts
+    };
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(at), press(true)]);
+    run(vec![press(false)]);
+    run(vec![egui::Event::PointerMoved(pos2(210.0, 290.0))]);
+    let mut texts = vec![];
+    for _ in 0..6 {
+        texts = run(vec![]);
+    }
+    let full = |texts: &[(String, Rect, bool)]| texts.iter().any(|(s, _, elided)| !*elided && s == labels[1]);
+    assert!(!full(&texts), "the long name is not shown in full before the hover: {texts:?}");
+    let row = texts
+        .iter()
+        .find(|(s, _, elided)| *elided && s.starts_with("Option 01"))
+        .map(|(_, r, _)| r.center())
+        .unwrap_or_else(|| panic!("the long name is cut short: {texts:?}"));
+    run(vec![egui::Event::PointerMoved(row)]);
+    for _ in 0..10 {
+        texts = run(vec![]);
+    }
+    assert!(full(&texts), "the full name shows on hover: {texts:?}");
 }
 
 /// Enter on text that reads as no number in a range field refuses it as a unit field does: the

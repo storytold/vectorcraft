@@ -320,8 +320,9 @@ fn combo_button<'a>(ui: &mut Ui, button_id: egui::Id, current: impl egui::IntoAt
 
 /// The list of [`combo_atoms_named`] while it is open, drawn by `list` in a popup of its own that
 /// opens from `button` and takes the whole list whenever the window has room for it (#5941): below
-/// the button when it fits there, above it when it fits there instead, and otherwise shifted from
-/// below into the window, over the button. A list taller than the window scrolls. A click closes
+/// the button when it fits there, above it when it fits there instead, and otherwise moved up from
+/// below, over the button, until it ends at the bottom bars. It stays above the bottom bars
+/// ([`menu_floor`]), and a list taller than the room above them scrolls. A click closes
 /// the list, except a click on its scroll bar, which scrolls it. Returns what `list` returned, or
 /// `None` while the list is closed.
 fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) -> Option<R> {
@@ -339,30 +340,31 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
     let close = if on_bar { egui::PopupCloseBehavior::IgnoreClicks } else { egui::PopupCloseBehavior::CloseOnClick };
     let popup = egui::Popup::menu(button).id(id).width(button.rect.width()).style(style.clone()).close_behavior(close);
     let screen = ctx.content_rect();
+    // The list stops above the bottom bars, as other menus do (#2086).
+    let floor = menu_floor(ctx).min(screen.bottom());
     // The room on each side of the rect the popup opens from: the part of the button in view.
     let anchor = popup.get_anchor_rect().unwrap_or(button.rect);
-    let below = screen.bottom() - anchor.bottom();
+    let below = floor - anchor.bottom();
     let above = anchor.top() - screen.top();
     // The list's size from its last pass: egui lays a popup out unseen on the pass it opens, so the
     // list is measured before it is placed. A right-to-left layout lines the list up with the
     // button's right edge, as egui's menus do.
-    let rtl = ctx.global_style().right_to_left;
-    let align = match popup.get_expected_size() {
-        Some(size) if size.y > below && size.y <= above => {
-            if rtl {
-                egui::RectAlign::TOP_END
-            } else {
-                egui::RectAlign::TOP_START
-            }
+    let rtl = ui.style().right_to_left;
+    let expected = popup.get_expected_size();
+    let (align, popup) = match expected {
+        Some(size) if size.y > below && size.y <= above => (if rtl { egui::RectAlign::TOP_END } else { egui::RectAlign::TOP_START }, popup),
+        // A list too tall for either side moves up from below until it ends at the floor.
+        Some(size) if size.y > below => {
+            let top = (floor - size.y).max(screen.top());
+            let from = Rect::from_min_max(egui::pos2(anchor.left(), top), egui::pos2(anchor.right(), top));
+            (if rtl { egui::RectAlign::BOTTOM_END } else { egui::RectAlign::BOTTOM_START }, popup.anchor(from))
         }
-        // egui keeps a popup inside the window, so a list too tall for either side moves up.
-        _ if rtl => egui::RectAlign::BOTTOM_END,
-        _ => egui::RectAlign::BOTTOM_START,
+        _ => (if rtl { egui::RectAlign::BOTTOM_END } else { egui::RectAlign::BOTTOM_START }, popup),
     };
     let mut popup_style = (*ctx.global_style()).clone();
     style.apply(&mut popup_style);
     let margins = egui::Frame::popup(&popup_style).total_margin().sum();
-    let height = (screen.height() - margins.y).max(ui.spacing().interact_size.y);
+    let height = (floor - screen.top() - margins.y).max(ui.spacing().interact_size.y);
     // A list that was wider than the window keeps its scroll bar in view: until it closes, it is no
     // wider than it measured or than the window, its names cut short and shown in full on hover.
     // Only a size measured while the list is open counts: egui keeps the last one after it closes.

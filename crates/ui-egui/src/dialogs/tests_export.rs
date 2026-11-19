@@ -359,7 +359,7 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
 
 /// #5941: the Format list stopped at the room on one side of its field, so a window with room for
 /// every format still cut the list short. In windows of 1280×900 and 1000×856 the list shows every
-/// built-in format whole, the greyed-out DWG row after them included, inside the window, without a
+/// built-in format whole, the grayed-out DWG row after them included, inside the window, without a
 /// scroll bar. A plug-in format that another test adds or removes meanwhile is not counted.
 #[test]
 fn the_format_list_shows_every_format_when_the_window_has_room() {
