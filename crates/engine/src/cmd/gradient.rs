@@ -63,7 +63,7 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
     // No document is needed for the default paint's gradient, so this does not use `refuse_symbol_part`.
     // While the Live Paint Bucket is active the proxies show the default paint, whose stops can be
     // selected with a part picked.
-    if s.tool_id() != super::paint::LIVE_PAINT_BUCKET && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
+    if !s.bucket_paints() && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
         return Err(super::brushsym::part_only());
     }
     let index = match p.get("index") {
@@ -111,7 +111,7 @@ impl StopOwner {
             part: st.is_some_and(|d| d.selection.symbol_part.is_some()),
             fill: s.fill_active,
             item: s.appearance_item(),
-            bucket: s.tool_id() == super::paint::LIVE_PAINT_BUCKET,
+            bucket: s.bucket_paints(),
         }
     }
 }
@@ -804,7 +804,7 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
             let skipped = super::paint::live_paint_parts_skipped(&s.doc()?.doc, &roots, !stroke);
             leaf_targets(s, &roots)?.into_iter().filter(|id| !skipped.contains(id)).collect()
         }
-        _ => item.targets(s, p)?,
+        _ => item.targets_for(s, p, !stroke)?,
     };
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));

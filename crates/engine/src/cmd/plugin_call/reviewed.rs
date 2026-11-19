@@ -153,6 +153,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "color.gamutCheck",
     "color.harmony",
     "color.plates",
+    "color.used",
     "dataset.capture",
     "dataset.delete",
     "dataset.list",
@@ -747,5 +748,7 @@ pub(super) const DENIED: &[&str] = &[
     "stroke.arrowheads.edit",
     "stroke.arrowheads.list",
     "text.similarFonts",
+    "threeD.bevels.edit",
+    "threeD.bevels.list",
     "type.compositeFonts.set",
 ];

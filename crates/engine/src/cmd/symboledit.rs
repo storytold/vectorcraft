@@ -424,6 +424,19 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
     }
 }
 
+/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects after
+/// its art changed from `old` outside symbol editing (a graph in it drawn again): a change to an
+/// object that is no longer there is dropped ([`follow_objects`]).
+pub(crate) fn follow_art_change(d: &mut Document, name: &str, old: &Arc<Node>) {
+    let Some(new) = d.symbols.iter().find(|s| s.name == name).map(|s| s.art.clone()) else { return };
+    let parts = |art: &Arc<Node>| match (&art.kind, art.children()) {
+        (NodeKind::Group { .. }, Some(ch)) => (ch.to_vec(), true),
+        _ => (vec![art.clone()], false),
+    };
+    let (old, new) = (parts(old), parts(&new));
+    follow_objects(d, name, (&old.0, old.1), (&new.0, new.1));
+}
+
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
 /// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes the art
 /// still draws ([`fit_parts`]). That covers the instances on the layers and in the art of the

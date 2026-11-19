@@ -127,6 +127,25 @@ fn c_flips_and_brackets_size_the_last_sharp_arc() {
     assert!(!s.tool_claims_key(ToolKey::Letter('c'), view()));
 }
 
+/// The drawing end (where the Quick Pen toolbar sits beside) is the path's last point with the
+/// direction it arrives in: none before the first click, no direction for one point, and none
+/// once Escape ends the path.
+#[test]
+fn the_drawing_end_is_the_last_point_and_its_direction() {
+    let mut s = session();
+    quick_pen(&mut s);
+    assert_eq!(s.tool_drawing_end(view()), None);
+    click(&mut s, 100.0, 100.0);
+    assert_eq!(s.tool_drawing_end(view()), Some((pt(100.0, 100.0), None)));
+    click(&mut s, 100.0, 200.0);
+    let (p, dir) = s.tool_drawing_end(view()).unwrap();
+    assert_eq!(p, pt(100.0, 200.0));
+    let dir = dir.unwrap();
+    assert!(dir.x.abs() < 1e-9 && dir.y > 0.99, "arrives heading down: {dir:?}");
+    key(&mut s, ToolKey::Escape);
+    assert_eq!(s.tool_drawing_end(view()), None);
+}
+
 /// Alt tapped during a drag draws the piece with the next action: a continuous arc becomes a
 /// sharp-corner arc with a corner where it starts, and the path goes on drawing after it.
 #[test]
@@ -181,6 +200,251 @@ fn escape_ends_the_path_and_a_drag_places_the_piece() {
     assert!(!s.tool_ends_on_escape(view()));
     click(&mut s, 500.0, 500.0);
     assert_eq!(paths(&s).len(), 2);
+}
+
+/// The piece a press draws ends where the press is let go, past the last drag too, and a press let
+/// go a drag's distance away with no drag in between places it there as well.
+#[test]
+fn the_piece_ends_where_the_press_is_let_go() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 120.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 150.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(250.0, 150.0));
+    let undo = undo_steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(340.0, 100.0));
+    assert_eq!(undo_steps(&s), undo + 1);
+}
+
+/// C and `[` `]` during a drag change the sharp-corner arc being dragged, within the press's one
+/// undo step.
+#[test]
+fn c_and_brackets_during_a_drag_change_the_arc_being_dragged() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), v).unwrap();
+    assert!(s.tool_claims_key(ToolKey::Letter('c'), view()));
+    key(&mut s, ToolKey::Letter('c'));
+    assert!(only_path(&s).anchors.get(1).unwrap().p.distance(pt(200.0, 400.0)) < 1e-9, "flipped while dragging");
+    key(&mut s, ToolKey::BracketLeft);
+    assert_eq!(s.tool_options()["turn"], 165.0);
+    // A 165° arc is two segments, and its middle point lies the arc's sagitta below the chord
+    // (a 180° arc's lies 100 below).
+    let half = 82.5f64.to_radians();
+    let mid_165 = pt(200.0, 300.0 + 100.0 / half.sin() * (1.0 - half.cos()));
+    assert_eq!(only_path(&s).anchors.len(), 3);
+    assert!(only_path(&s).anchors.get(1).unwrap().p.distance(mid_165) < 1e-6, "the dragged arc is 165°");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), v).unwrap();
+    let sp = only_path(&s);
+    assert_eq!(sp.anchors.len(), 3);
+    assert!(sp.anchors.get(1).unwrap().p.distance(mid_165) < 1e-6, "the flip and the size stay after the release");
+    assert_eq!(undo_steps(&s), undo + 1);
+}
+
+/// An edit made by another command during a drag ends the path: the next drag does not draw over
+/// the edit, the piece stays as last shown, and the next click starts a new path.
+#[test]
+fn an_edit_during_a_drag_ends_the_path() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let id = paths(&s)[0].0;
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 250.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 260.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(90.0, 90.0), pt(200.0, 100.0), pt(200.0, 200.0)], "the edit and the piece as last shown");
+    click(&mut s, 400.0, 400.0);
+    assert_eq!(paths(&s).len(), 2, "a new path");
+}
+
+/// With Real-time Drawing off, a sharp-corner arc let go past the last drag is placed where it was
+/// let go, and C then flips that arc.
+#[test]
+fn a_deferred_arc_let_go_past_the_last_drag_flips() {
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 270.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), v).unwrap();
+    let sp = only_path(&s);
+    assert_eq!(sp.anchors.len(), 3);
+    assert_eq!(sp.anchors.last().unwrap().p, pt(300.0, 300.0));
+    let mid = sp.anchors.get(1).unwrap().p;
+    key(&mut s, ToolKey::Letter('c'));
+    let flipped = only_path(&s);
+    assert_eq!(flipped.anchors.len(), 3);
+    assert!(flipped.anchors.get(1).unwrap().p.distance(pt(200.0, 600.0 - mid.y)) < 1e-9, "flipped across the chord");
+}
+
+/// An edit made by another command to the path's look during a drag ends the path too.
+#[test]
+fn a_look_edit_during_a_drag_ends_the_path() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let id = paths(&s)[0].0;
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#00ff00"})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 260.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0)], "the piece as last shown");
+    click(&mut s, 400.0, 400.0);
+    assert_eq!(paths(&s).len(), 2, "a new path");
+}
+
+/// An edit made by another command to another object during a drag stays and ends the path: the
+/// press previews no more, its piece stays as last shown, and the next click starts a new path.
+#[test]
+fn an_edit_to_another_object_during_a_drag_stays() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 500, "y": 400, "width": 50, "height": 50})).unwrap();
+    let rect = s.doc().unwrap().selection.objects[0];
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    let edited = s.doc().unwrap().doc.node(rect).unwrap().clone();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 260.0), v).unwrap();
+    assert_eq!(*s.doc().unwrap().doc.node(rect).unwrap(), edited, "the other object's edit stays");
+    let pen = paths(&s).into_iter().find(|(id, _)| *id != rect).unwrap().1;
+    let ends: Vec<Point> = pen.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0)], "the piece as last shown");
+    click(&mut s, 400.0, 400.0);
+    assert_eq!(paths(&s).len(), 3, "a new path");
+}
+
+/// With Real-time Drawing off, a drag during which another command edits the path adds no piece,
+/// and the edit stays.
+#[test]
+fn an_edit_during_a_deferred_drag_stays() {
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let id = paths(&s)[0].0;
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 250.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 260.0, 260.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(90.0, 90.0), pt(200.0, 100.0)], "the edit, and no piece");
+}
+
+/// An edit made by another command to another object during a click stays, and the path goes on:
+/// a click previews its piece only when the press begins.
+#[test]
+fn an_edit_to_another_object_during_a_click_stays() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 500, "y": 400, "width": 50, "height": 50})).unwrap();
+    let rect = s.doc().unwrap().selection.objects[0];
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    let edited = s.doc().unwrap().doc.node(rect).unwrap().clone();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+    assert_eq!(*s.doc().unwrap().doc.node(rect).unwrap(), edited, "the other object's edit stays");
+    click(&mut s, 300.0, 200.0);
+    let all = paths(&s);
+    assert_eq!(all.len(), 2, "no new path");
+    let pen = all.into_iter().find(|(id, _)| *id != rect).unwrap().1;
+    let ends: Vec<Point> = pen.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0), pt(300.0, 200.0)]);
+}
+
+/// An edit made by another command during a click (a press let go where it went down) ends the
+/// path too: the next click starts a new path instead of drawing over the edit.
+#[test]
+fn an_edit_during_a_click_ends_the_path() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let id = paths(&s)[0].0;
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 180.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 180.0), v).unwrap();
+    click(&mut s, 400.0, 400.0);
+    assert_eq!(paths(&s).len(), 2, "a new path");
+    let ends: Vec<Point> = paths(&s)[0].1.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(90.0, 90.0), pt(200.0, 100.0), pt(200.0, 180.0)], "the edit stays");
+}
+
+/// With Align New Objects to Pixel Grid on, the path the tool draws is pixel-aligned: its points
+/// move onto the grid, and the next click and drag still go on drawing the same path.
+#[test]
+fn a_pixel_aligned_path_goes_on_drawing() {
+    let mut s = session();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let ends = |s: &Session| only_path(s).anchors.iter().map(|a| a.p).collect::<Vec<Point>>();
+    let two = ends(&s);
+    assert_eq!(two.len(), 2);
+    assert_eq!(two[0].y, two[1].y, "a level line");
+    press(&mut s, &[(300.0, 150.0), (310.0, 170.0), (320.0, 200.0)]);
+    let three = ends(&s);
+    assert_eq!(three.len(), 3, "one path of three points");
+    assert_eq!(three[..2], two[..], "the points before the piece stay as they were");
+    assert!(three[2].distance(pt(320.0, 200.0)) <= 1.0, "the drag's piece ends near where it was let go: {:?}", three[2]);
+    click(&mut s, 400.0, 100.0);
+    let four = ends(&s);
+    assert_eq!(four.len(), 4);
+    assert_eq!(four[..3], three[..]);
+}
+
+/// A dropped press takes back only its own piece, and with Real-time Drawing off a drag places its
+/// piece on the release: in both cases the next click goes on drawing the same path.
+#[test]
+fn a_dropped_press_and_a_deferred_drag_keep_the_path() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 150.0), v).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(only_path(&s).anchors.len(), 2, "the dropped piece is gone");
+    click(&mut s, 300.0, 200.0);
+    assert_eq!(only_path(&s).anchors.len(), 3, "the path goes on");
+    s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    press(&mut s, &[(400.0, 200.0), (420.0, 250.0), (450.0, 300.0)]);
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(450.0, 300.0));
+    click(&mut s, 500.0, 100.0);
+    assert_eq!(only_path(&s).anchors.len(), 5, "the path goes on after the deferred piece");
 }
 
 /// An anchor moved by another command ends the path being drawn: C does not flip the old arc back

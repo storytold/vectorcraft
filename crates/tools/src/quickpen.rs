@@ -7,7 +7,8 @@
 //! sharp-corner arc (it turns through the arc size, 180° by default, and meets the path before it
 //! at a corner). Alt (Option) pressed and let go on its own switches to the next action. C flips
 //! the last sharp-corner arc to the other side of its chord, and [ and ] make the arc size 15°
-//! smaller or larger, for the last sharp-corner arc and the ones after it. A click on the first
+//! smaller or larger, for the last sharp-corner arc and the ones after it; during a drag they
+//! change the arc being dragged. A dragged piece ends where the press is let go. A click on the first
 //! point closes the path, a click on an end of an open path goes on drawing from it, and Escape
 //! or Enter ends the path. The path's points show as circles, without handles, and a preview
 //! shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step.
@@ -20,9 +21,10 @@
 //! path or starts one.
 
 use std::f64::consts::{FRAC_PI_2, PI};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{MAX_COORD, NodeId, NodeKind};
+use vectorcraft_doc::{Document, MAX_COORD, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
 use crate::draw2::FEEDBACK;
@@ -51,6 +53,11 @@ pub const LENGTH_HANDLE_PX: f64 = 20.0;
 /// A continuous arc whose end lies within this angle (radians) of straight ahead, or of straight
 /// behind, is drawn as a line: no circle runs there in the path's direction.
 const STRAIGHT: f64 = 1e-6;
+/// The notice the tool asks for after each of its own edits, to see the path as the document then
+/// has it.
+const DRAWN: &str = "drawn";
+/// The notice after a press's piece is committed.
+const PLACED: &str = "placed";
 
 /// What the next click adds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -226,51 +233,75 @@ pub fn build(base: &SubPath, pieces: &[Piece], closed: bool) -> SubPath {
     sp
 }
 
-/// The path being drawn: subpath `si` of `id`, whose points were `base` before the tool drew on
-/// (both none until the engine made a new path), then `pieces`. A new path starts at `start`.
-#[derive(Clone, Debug, PartialEq)]
+/// The path being drawn: subpath `si` of `id` (none until the engine made a new path, which starts
+/// at `start`), and the `pieces` the tool added to it, each after the number of points in `kept`
+/// the subpath had before it. `seen` is the path object as the document had it after the tool's
+/// last edit, pixel alignment and other changes the engine makes after each edit included, and
+/// `before_press` as it was when the press under way began. A piece is drawn again on the points
+/// the document holds before it, so the points before it stay as they are.
+#[derive(Clone, Debug, Default, PartialEq)]
 struct Drawing {
     id: Option<NodeId>,
     si: usize,
-    base: Option<SubPath>,
     start: Option<Point>,
     pieces: Vec<Piece>,
+    kept: Vec<usize>,
+    seen: Option<Arc<Node>>,
+    before_press: Option<Arc<Node>>,
+    /// The document's revision ([`ToolContext::revision`]) after the tool's last edit.
+    revision: (u64, u64),
+}
+
+/// The node `id` as the document shares it, found through the document's index.
+fn shared_node(doc: &Document, id: NodeId) -> Option<&Arc<Node>> {
+    let path = doc.index_path(id)?;
+    let (first, rest) = path.split_first()?;
+    let mut cur = doc.layers.get(*first)?;
+    for &i in rest {
+        cur = cur.children()?.get(i)?;
+    }
+    Some(cur)
+}
+
+/// Is `now` the node `then` was: the same shared node, or one equal to it?
+fn same_node(now: &Node, then: &Arc<Node>) -> bool {
+    std::ptr::eq(now, Arc::as_ptr(then)) || *now == **then
 }
 
 impl Drawing {
-    /// The subpath as the tool drew it.
-    fn drawn(&self) -> Option<SubPath> {
-        Some(build(self.base.as_ref()?, &self.pieces, false))
+    fn push(&mut self, piece: Piece, kept: usize) {
+        self.pieces.push(piece);
+        self.kept.push(kept);
     }
 
-    /// The last piece as drawn in `drawn` (the path [`Self::drawn`] builds): the points from where
-    /// it starts to the end of the path.
-    fn last_tail(&self, drawn: &SubPath) -> Option<SubPath> {
-        let (_, rest) = self.pieces.split_last()?;
-        let from = build(self.base.as_ref()?, rest, false).anchors.len().checked_sub(1)?;
-        Some(SubPath::new(drawn.anchors.get_range(from..)?, false))
+    fn pop(&mut self) {
+        self.pieces.pop();
+        self.kept.pop();
     }
 
-    /// Splits `changed`, the drawn path with its start changed, into a base and the most pieces at
-    /// its end that build it again point for point, so the pieces a drag did not touch stay pieces
-    /// (C and `[` `]` go on changing the last one). None when no piece builds it again.
-    fn rebase(&self, changed: &SubPath) -> Option<(SubPath, Vec<Piece>)> {
-        let base = self.base.as_ref()?;
-        let m = changed.anchors.len();
-        let total = build(base, &self.pieces, false).anchors.len();
-        for k in 0..self.pieces.len() {
-            let (before, kept) = self.pieces.split_at(k);
-            let added = total.checked_sub(build(base, before, false).anchors.len())?;
-            let Some(keep) = m.checked_sub(added) else { continue };
-            if keep == 0 {
-                continue;
-            }
-            let new_base = SubPath::new(changed.anchors.get_range(..keep)?, false);
-            if build(&new_base, kept, false).anchors == changed.anchors {
-                return Some((new_base, kept.to_vec()));
-            }
+    /// The last piece as `sp`, the subpath being drawn, holds it: the points from where it starts to
+    /// the end of the path.
+    fn last_tail(&self, sp: &SubPath) -> Option<SubPath> {
+        let from = self.kept.last()?.checked_sub(1)?;
+        Some(SubPath::new(sp.anchors.get_range(from..)?, false))
+    }
+
+    /// After the start of the path changed to a different number of points (`delta` more): keeps
+    /// the pieces that start at or after point `fixed` (counted before the change), which now start
+    /// `delta` points later, and forgets the others.
+    fn after_start_change(&mut self, fixed: usize, delta: isize) {
+        let first = self.kept.iter().position(|k| k.saturating_sub(1) >= fixed).unwrap_or(self.kept.len());
+        self.pieces.drain(..first);
+        self.kept.drain(..first);
+        for k in &mut self.kept {
+            *k = k.saturating_add_signed(delta).max(1);
         }
-        None
+    }
+
+    /// Forgets every piece: the path as the document holds it is all the drawing goes on from.
+    fn clear_pieces(&mut self) {
+        self.pieces.clear();
+        self.kept.clear();
     }
 }
 
@@ -295,7 +326,7 @@ struct LengthHandle {
 
 /// A length handle being dragged: the handle as the press found it, the length the drag has set,
 /// whether the press has moved far enough to drag, and whether the drag began an undo step.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct LengthDrag {
     handle: LengthHandle,
     press: Point,
@@ -305,6 +336,9 @@ struct LengthDrag {
     /// The last piece of the path being drawn as it was before the drag, when the handle is at the
     /// end of that piece: the drag changes the piece, so C and [ ] still shape it afterwards.
     last: Option<Piece>,
+    /// The subpath as the press found it, and its last piece as that subpath held it.
+    before: SubPath,
+    tail: Option<SubPath>,
 }
 
 pub struct QuickPenTool {
@@ -338,30 +372,41 @@ fn point_tol(cx: &ToolContext) -> f64 {
     cx.tol(5.0).max(cx.point_tol())
 }
 
+/// Asks to see the path once the actions before it are applied.
+fn drawn() -> Action {
+    Action::Notify(DRAWN.into())
+}
+
 impl QuickPenTool {
-    /// The subpath being drawn, while it is selected, editable, open and still exactly what the tool
-    /// drew: an edit made outside the tool (a point moved, the path it went on from changed) ends
-    /// the drawing, so the next piece does not undo it.
+    /// The subpath being drawn, while it is selected, editable, open and its path still exactly as
+    /// the tool's last edit left it: an edit made to the path outside the tool (a point moved, its
+    /// look changed, the path it went on from changed), also during a press, ends the drawing, so
+    /// the next piece does not undo it.
     fn active<'a>(&self, cx: &'a ToolContext) -> Option<(NodeId, &'a SubPath)> {
         let dr = self.drawing.as_ref()?;
         let id = dr.id?;
         if !selected_alone(cx, id) || !cx.doc.is_editable(id) {
             return None;
         }
-        let sp = cx.doc.node(id)?.path_data()?.subpaths.get(dr.si)?;
-        (!sp.closed && dr.drawn()?.anchors == sp.anchors).then_some((id, sp))
+        let node = cx.doc.node(id)?;
+        if !same_node(node, dr.seen.as_ref()?) {
+            return None;
+        }
+        let sp = node.path_data()?.subpaths.get(dr.si)?;
+        (!sp.closed).then_some((id, sp))
     }
 
-    /// `path.quickPen`'s params for the path being drawn, closed when `closed`.
+    /// `path.quickPen`'s params for the path being drawn: its last piece on the points before it,
+    /// closed when `closed`.
     fn params(&self, closed: bool) -> Value {
         let Some(dr) = &self.drawing else { return json!({}) };
-        let pieces: Vec<Value> = dr.pieces.iter().map(Piece::to_json).collect();
+        let pieces: Vec<Value> = dr.pieces.last().map(Piece::to_json).into_iter().collect();
         let mut v = json!({"pieces": pieces});
         match (dr.id, dr.start) {
             (Some(id), _) => {
                 v["id"] = json!(id.0);
                 v["subpath"] = json!(dr.si);
-                v["keep"] = json!(dr.base.as_ref().map_or(1, |b| b.anchors.len().max(1)));
+                v["keep"] = json!(dr.kept.last().copied().unwrap_or(1).max(1));
             }
             (None, Some(s)) => v["start"] = json!([s.x, s.y]),
             (None, None) => {}
@@ -372,13 +417,55 @@ impl QuickPenTool {
         v
     }
 
-    /// The last piece, while it is a sharp-corner arc and no press is under way.
+    /// The last piece, while it is a sharp-corner arc: the one drawn last while no press is under
+    /// way, or the one a press is drawing.
     fn last_sharp_arc(&self, cx: &ToolContext) -> Option<Piece> {
-        if self.press.is_some() {
-            return None;
+        match self.press {
+            Some(pr) if !pr.begun => return None,
+            Some(_) => self.held(cx).then_some(())?,
+            None => self.active(cx).map(|_| ())?,
         }
-        self.active(cx)?;
         self.drawing.as_ref()?.pieces.last().copied().filter(|p| p.stroke == Stroke::SharpArc)
+    }
+
+    /// During a press: is the path being drawn still active, and the document as the tool's last
+    /// preview left it? A preview starts again from the document as the press found it, so after
+    /// an edit made outside the tool the press previews no more.
+    fn held(&self, cx: &ToolContext) -> bool {
+        self.active(cx).is_some() && self.drawing.as_ref().is_some_and(|dr| dr.revision == cx.revision)
+    }
+
+    /// Moves the end of the piece a press draws to `p` (snapped) and previews it. An edit made
+    /// outside the tool since the last preview ends the drawing instead: the press then commits
+    /// the document as it is.
+    fn drag_to(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        if !self.held(cx) {
+            self.drawing = None;
+            self.snap.clear();
+            return vec![];
+        }
+        // The snapping leaves from the point before the piece being dragged, as the press found it.
+        let from = self.drawing.as_ref().and_then(|dr| {
+            let sp = dr.before_press.as_ref()?.path_data()?.subpaths.get(dr.si)?;
+            sp.anchors.get(dr.kept.last()?.checked_sub(1)?).map(|a| Leave::segment(cx, a.p, false).without_contact())
+        });
+        let q = self.snap.drag(cx, p, from.as_ref());
+        let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) else { return vec![] };
+        if last.to == q {
+            return vec![];
+        }
+        last.to = q;
+        vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()]
+    }
+
+    /// Draws the path again after its last piece changed: a preview while a press draws that
+    /// piece, else a step of its own.
+    fn redraw(&self) -> Vec<Action> {
+        if self.press.is_some_and(|pr| pr.begun) {
+            vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()]
+        } else {
+            vec![Action::Exec(COMMAND.into(), self.params(false)), drawn()]
+        }
     }
 
     fn piece_to(&self, to: Point) -> Piece {
@@ -399,9 +486,15 @@ impl QuickPenTool {
         }
         // A press on a length handle waits to see whether it drags; one let go without dragging is
         // the click `click` makes.
-        if let Some(handle) = self.length_handle_at(cx, p) {
+        if let Some(handle) = self.length_handle_at(cx, p)
+            && let Some(before) = cx.doc.node(handle.id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(handle.si)).cloned()
+        {
             let last = self.drawn_last_piece(cx, &handle);
-            self.length = Some(LengthDrag { handle, press: p, length: handle.piece.length, dragged: false, begun: false, last });
+            let tail = last.and(self.drawing.as_ref()).and_then(|dr| dr.last_tail(&before));
+            if let Some(dr) = self.drawing.as_mut().filter(|dr| dr.id == Some(handle.id)) {
+                dr.before_press = shared_node(cx.doc, handle.id).cloned();
+            }
+            self.length = Some(LengthDrag { handle, press: p, length: handle.piece.length, dragged: false, begun: false, last, before, tail });
             return vec![];
         }
         self.click(cx, p)
@@ -416,9 +509,9 @@ impl QuickPenTool {
                 _ => return vec![],
             };
             if sp.anchors.len() >= 2 && p.distance(first) <= tol && p.distance(first) <= p.distance(last) {
-                let piece = self.piece_to(first);
+                let (piece, kept) = (self.piece_to(first), sp.anchors.len());
                 if let Some(dr) = self.drawing.as_mut() {
-                    dr.pieces.push(piece);
+                    dr.push(piece, kept);
                 }
                 let out = vec![Action::Exec(COMMAND.into(), self.params(true))];
                 self.drawing = None;
@@ -429,27 +522,25 @@ impl QuickPenTool {
             }
             let from = self.leave(cx).map(|l| l.1);
             let q = self.snap.press(cx, p, &[id], from.as_ref());
-            let piece = self.piece_to(q);
+            let (piece, kept) = (self.piece_to(q), sp.anchors.len());
             if let Some(dr) = self.drawing.as_mut() {
-                dr.pieces.push(piece);
+                dr.push(piece, kept);
+                dr.before_press = shared_node(cx.doc, id).cloned();
             }
             self.press = Some(Press { at: p, dragged: false, begun: true });
-            return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false))];
+            return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
         if let Some((id, si, at_first)) = open_end_at(cx, p, tol, None)
             && cx.doc.is_editable(id)
-            && let Some(sp) = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si))
         {
-            // From its start, `continue_from` reverses the path first.
-            let mut base = sp.clone();
-            if at_first {
-                base.reverse();
-            }
-            self.drawing = Some(Drawing { id: Some(id), si, base: Some(base), start: None, pieces: vec![] });
-            return continue_from(cx, id, si, at_first);
+            // From its start, `continue_from` reverses the path first; the tool then sees it.
+            self.drawing = Some(Drawing { id: Some(id), si, ..Drawing::default() });
+            let mut out = continue_from(cx, id, si, at_first);
+            out.push(drawn());
+            return out;
         }
         let q = self.snap.press(cx, p, &[], None);
-        self.drawing = Some(Drawing { id: None, si: 0, base: None, start: Some(q), pieces: vec![] });
+        self.drawing = Some(Drawing { start: Some(q), ..Drawing::default() });
         vec![Action::Exec(COMMAND.into(), self.params(false)), Action::Notify("created".into())]
     }
 
@@ -522,13 +613,13 @@ impl QuickPenTool {
     /// The last piece of the path being drawn, when `handle` is at its end and the piece is the
     /// line or arc there.
     fn drawn_last_piece(&self, cx: &ToolContext, handle: &LengthHandle) -> Option<Piece> {
-        let (id, _) = self.active(cx)?;
+        let (id, sp) = self.active(cx)?;
         let dr = self.drawing.as_ref()?;
         if handle.at_start || id != handle.id || dr.si != handle.si {
             return None;
         }
-        let (last, rest) = dr.pieces.split_last()?;
-        let from = build(dr.base.as_ref()?, rest, false).anchors.last()?.p;
+        let last = dr.pieces.last()?;
+        let from = sp.anchors.get(dr.kept.last()?.checked_sub(1)?)?.p;
         let same = match handle.piece.shape {
             length::EndShape::Line => last.stroke == Stroke::Line,
             length::EndShape::Arc { .. } => last.stroke != Stroke::Line,
@@ -557,10 +648,16 @@ impl QuickPenTool {
         if !drag.dragged {
             let mut out = self.click(cx, drag.press);
             if self.press.take().is_some_and(|pr| pr.begun) {
-                out.push(Action::Commit);
+                out.extend([Action::Commit, Action::Notify(PLACED.into())]);
+            }
+            if let Some(dr) = self.drawing.as_mut() {
+                dr.before_press = None;
             }
             self.snap.clear();
             return out;
+        }
+        if let Some(dr) = self.drawing.as_mut() {
+            dr.before_press = None;
         }
         if !drag.begun {
             return vec![];
@@ -573,17 +670,18 @@ impl QuickPenTool {
             && let Some(dr) = self.drawing.as_mut()
             && dr.id == Some(drag.handle.id)
             && dr.si == drag.handle.si
-            && let Some(drawn) = dr.drawn()
         {
-            match length::with_length(&drawn, drag.handle.at_start, drag.length) {
-                Some(changed) => {
-                    let (base, pieces) = dr.rebase(&changed).unwrap_or((changed, vec![]));
-                    (dr.base, dr.pieces) = (Some(base), pieces);
-                }
-                None => self.drawing = None,
+            // The pieces that start at or after the fixed end of a changed start still draw as they
+            // did, on the points the document holds before them; every other piece is forgotten.
+            let new_len = length::with_length(&drag.before, drag.handle.at_start, drag.length).map(|sp| sp.anchors.len());
+            let fixed = drag.before.anchors.iter().position(|a| a.p.distance(drag.handle.piece.fixed) <= 1e-9);
+            match (drag.handle.at_start, new_len, fixed) {
+                (true, Some(new_len), Some(fixed)) => dr.after_start_change(fixed, new_len as isize - drag.before.anchors.len() as isize),
+                (_, None, _) => self.drawing = None,
+                _ => dr.clear_pieces(),
             }
         }
-        vec![Action::Commit]
+        vec![Action::Commit, drawn()]
     }
 }
 
@@ -611,28 +709,23 @@ impl Tool for QuickPenTool {
                 self.press_down(cx, p)
             }
             PointerKind::Drag if self.length.is_some() => {
-                let Some(mut drag) = self.length else { return vec![] };
+                let Some(mut drag) = self.length.clone() else { return vec![] };
                 if !drag.dragged && p.distance(drag.press) < cx.tol(DRAG_PX) {
                     return vec![];
                 }
                 drag.dragged = true;
-                self.length = Some(drag);
+                self.length = Some(drag.clone());
                 // The end follows the pointer, as far behind it as the press was.
                 let piece = drag.handle.piece;
                 let mut length = piece.length_dragged(drag.press, p, drag.length);
                 // The last piece drawn goes on being a piece of the drawing, drawn again to its new
                 // end; an arc piece keeps an arc size of at least 1°.
                 let mut redrawn = None;
-                let before = self.drawing.as_ref().and_then(|dr| {
-                    let mut dr = dr.clone();
-                    *dr.pieces.last_mut()? = drag.last?;
-                    dr.last_tail(&dr.drawn()?)
-                });
-                let changed = if let (Some(last), Some(drawn)) = (drag.last, before) {
+                let changed = if let (Some(last), Some(tail)) = (drag.last, drag.tail.as_ref()) {
                     if let length::EndShape::Arc { radius, .. } = piece.shape {
                         length = length.max(MIN_TURN.to_radians() * radius);
                     }
-                    let changed = length::with_length(&drawn, false, length);
+                    let changed = length::with_length(tail, false, length);
                     redrawn = changed.as_ref().and_then(|sp| sp.anchors.last().map(|a| a.p)).map(|to| {
                         let turn = match piece.shape {
                             length::EndShape::Arc { radius, .. } => (length / radius).to_degrees().clamp(MIN_TURN, MAX_TURN),
@@ -642,9 +735,7 @@ impl Tool for QuickPenTool {
                     });
                     changed
                 } else {
-                    let h = &drag.handle;
-                    let sp = cx.doc.node(h.id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(h.si));
-                    sp.and_then(|sp| length::with_length(sp, h.at_start, length))
+                    length::with_length(&drag.before, drag.handle.at_start, length)
                 };
                 // A length that would take the path past the canvas is not taken: the end stays
                 // where the drag last put it.
@@ -657,7 +748,6 @@ impl Tool for QuickPenTool {
                     out.push(Action::Begin("Quick Pen".into()));
                 }
                 drag.length = length;
-                self.length = Some(drag);
                 match redrawn {
                     Some(pc) => {
                         if let Some(l) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
@@ -667,6 +757,9 @@ impl Tool for QuickPenTool {
                     }
                     None => out.push(Action::Preview(LENGTH_COMMAND.into(), Self::length_params(&drag))),
                 }
+                // The drawing sees the path as the preview left it.
+                out.push(drawn());
+                self.length = Some(drag);
                 out
             }
             PointerKind::Drag => {
@@ -676,45 +769,76 @@ impl Tool for QuickPenTool {
                 }
                 pr.dragged = true;
                 self.press = Some(pr);
-                // The snapping leaves from the point before the piece being dragged.
-                let from = self.drawing.as_ref().and_then(|dr| {
-                    let sp = build(dr.base.as_ref()?, dr.pieces.split_last().map_or(&[][..], |(_, rest)| rest), false);
-                    sp.anchors.last().map(|a| Leave::segment(cx, a.p, false).without_contact())
-                });
-                let q = self.snap.drag(cx, p, from.as_ref());
-                if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
-                    last.to = q;
+                if !pr.begun {
+                    return vec![];
                 }
-                vec![Action::Preview(COMMAND.into(), self.params(false))]
+                self.drag_to(cx, p)
             }
             PointerKind::Up => {
-                self.snap.clear();
                 if self.length.is_some() {
+                    self.snap.clear();
                     return self.end_length_drag(cx);
                 }
-                match self.press.take() {
-                    Some(pr) if pr.begun => vec![Action::Commit],
+                let out = match self.press {
+                    // The piece ends where the press is let go, also past the last drag.
+                    Some(pr) if pr.begun => {
+                        let mut out = vec![];
+                        if pr.dragged || p.distance(pr.at) >= cx.tol(DRAG_PX) {
+                            out = self.drag_to(cx, p);
+                        } else if self.active(cx).is_none() {
+                            // An edit made outside the tool during the press ends the path.
+                            self.drawing = None;
+                        }
+                        // With Real-time Drawing off, the commit applies the piece.
+                        out.extend([Action::Commit, Action::Notify(PLACED.into())]);
+                        out
+                    }
                     _ => vec![],
+                };
+                if let Some(dr) = self.drawing.as_mut() {
+                    dr.before_press = None;
                 }
+                self.press = None;
+                self.snap.clear();
+                out
             }
             PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
 
     fn notify(&mut self, cx: &ToolContext, what: &str) {
+        let Some(dr) = self.drawing.as_mut() else { return };
         if what == "created"
             && let [id] = cx.selection.objects.as_slice()
-            && let Some(base) = cx.doc.node(*id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.first())
-            && let Some(dr) = self.drawing.as_mut()
+            && let Some(node) = shared_node(cx.doc, *id).filter(|n| n.path_data().is_some_and(|pd| !pd.subpaths.is_empty()))
             && dr.id.is_none()
         {
-            (dr.id, dr.si, dr.base, dr.start) = (Some(*id), 0, Some(base.clone()), None);
+            (dr.id, dr.si, dr.start, dr.seen) = (Some(*id), 0, None, Some(node.clone()));
+        } else if (what == DRAWN || what == PLACED)
+            && let Some(id) = dr.id
+        {
+            dr.seen = shared_node(cx.doc, id).cloned();
+            dr.revision = cx.revision;
+            // Once committed, a piece that added no point to the path (the command refused it) is
+            // not kept for C and [ ] to change.
+            let points = dr.seen.as_ref().and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(dr.si)).map(|sp| sp.anchors.len());
+            if what == PLACED
+                && let (Some(points), Some(&kept)) = (points, dr.kept.last())
+                && points <= kept
+            {
+                dr.pop();
+            }
         }
     }
 
     /// A path being drawn: Escape ends it.
     fn ends_on_escape(&self, cx: &ToolContext) -> bool {
         self.active(cx).is_some()
+    }
+
+    fn drawing_end(&self, cx: &ToolContext) -> Option<(Point, Option<Vec2>)> {
+        let (_, sp) = self.active(cx)?;
+        Some((sp.anchors.last()?.p, arrival(sp)))
     }
 
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
@@ -727,16 +851,31 @@ impl Tool for QuickPenTool {
     }
 
     /// A dropped press does not end the path being drawn: the piece it added goes.
-    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    /// The drawing goes on only when the path is back as it was before the press.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.snap.clear();
         if let Some(drag) = self.length.take() {
             self.restore_last_piece(&drag);
+            if let Some(dr) = self.drawing.as_mut() {
+                let before = dr.before_press.take();
+                if drag.begun {
+                    match (dr.id.and_then(|id| cx.doc.node(id)), before) {
+                        (Some(now), Some(before)) if same_node(now, &before) => dr.seen = Some(before),
+                        _ => self.drawing = None,
+                    }
+                }
+            }
         }
         if self.press.take().is_some_and(|pr| pr.begun)
             && let Some(dr) = self.drawing.as_mut()
         {
-            dr.pieces.pop();
+            dr.pop();
+            let now = dr.id.and_then(|id| cx.doc.node(id));
+            match (now, dr.before_press.take()) {
+                (Some(now), Some(before)) if same_node(now, &before) => dr.seen = Some(before),
+                _ => self.drawing = None,
+            }
         }
-        self.snap.clear();
         vec![]
     }
 
@@ -745,11 +884,18 @@ impl Tool for QuickPenTool {
             // Escape during a length drag takes the drag back and leaves the path being drawn; Enter
             // does nothing until the drag ends.
             ToolKey::Escape if self.length.is_some() => match self.length.take() {
-                Some(drag) if drag.begun => {
+                Some(drag) => {
+                    if let Some(dr) = self.drawing.as_mut() {
+                        dr.before_press = None;
+                    }
+                    if !drag.begun {
+                        return vec![];
+                    }
                     self.restore_last_piece(&drag);
-                    vec![Action::Cancel]
+                    // The drawing sees the path as the cancel leaves it.
+                    vec![Action::Cancel, drawn()]
                 }
-                _ => vec![],
+                None => vec![],
             },
             ToolKey::Enter if self.length.is_some() => vec![],
             ToolKey::Escape | ToolKey::Enter => self.end(),
@@ -760,7 +906,7 @@ impl Tool for QuickPenTool {
                 if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
                     last.flip = !last.flip;
                 }
-                vec![Action::Exec(COMMAND.into(), self.params(false))]
+                self.redraw()
             }
             ToolKey::BracketLeft | ToolKey::BracketRight => {
                 let by = if key == ToolKey::BracketLeft { -TURN_STEP } else { TURN_STEP };
@@ -776,17 +922,17 @@ impl Tool for QuickPenTool {
                 if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
                     last.turn = turn;
                 }
-                vec![Action::Exec(COMMAND.into(), self.params(false))]
+                self.redraw()
             }
             ToolKey::AltTap => {
                 self.action = self.action.next();
                 // A drag under way draws its piece with the new action.
-                if self.press.is_some_and(|pr| pr.begun) {
+                if self.press.is_some_and(|pr| pr.begun) && self.held(cx) {
                     let (action, turn) = (self.action, self.turn);
                     if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
                         (last.stroke, last.turn, last.flip) = (action, turn, false);
                     }
-                    return vec![Action::Preview(COMMAND.into(), self.params(false))];
+                    return vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()];
                 }
                 vec![]
             }
