@@ -326,14 +326,15 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
     let (gx, gy) = (dx, dy);
     let (dx, dy) = along_constrain_angle(dx, dy, s.prefs.constrain_angle);
-    if !s.doc()?.selection.anchors.is_empty() {
+    let objects = transforms_objects(p);
+    if objects && !s.doc()?.selection.anchors.is_empty() {
         // When the anchors move by 0, the document and its undo history stay as they are.
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
         return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
     }
-    if s.doc()?.selection.is_empty() {
+    if objects && s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
         // When guides move by 0 without a copy, the document and its undo history stay as they are.
         if gx == 0.0 && gy == 0.0 && !copy {
@@ -342,6 +343,21 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         return crate::cmd::docmenu::guide_move(s, &json!({ "dx": gx, "dy": gy, "copy": copy }));
     }
     let ids = selected_roots_to_transform(s)?;
+    if !objects && !bool_or(p, "copy", false) {
+        // Pattern-only nudges of art without a pattern change nothing, including undo history.
+        if !bool_or(p, "patterns", s.prefs.transform_pattern_tiles) {
+            return ok();
+        }
+        let st = s.doc()?;
+        let paths = st.doc.index_paths(ids.iter().copied());
+        let mut uses_patterns = false;
+        for node in ids.iter().filter_map(|id| paths.get(id)).filter_map(|path| st.doc.node_at(path)) {
+            node.walk(&mut |n| uses_patterns |= vectorcraft_doc::pattern::uses_pattern(n, None));
+        }
+        if !uses_patterns {
+            return ok();
+        }
+    }
     apply_transform_moving_guides(s, "Move", ids, Affine::translate((dx, dy)), p, true, Some(Vec2::new(gx, gy)))
 }
 
@@ -369,13 +385,20 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.scale")?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let sx = f64_req(p, "sx", "object.scale")? / 100.0;
-    let sy = f64_or(p, "sy", sx * 100.0) / 100.0;
-    if sx == 0.0 || sy == 0.0 {
-        return Err(bad("object.scale", "scale must be non-zero"));
-    }
+    let sx = f64_req(p, "sx", "object.scale")?;
+    let (sx, sy) = scale_factors(sx, f64_or(p, "sy", sx)).map_err(|e| bad("object.scale", e))?;
     let frame = basis_frame(s, p, "object.scale", &ids)?;
     apply_transform(s, "Scale", ids, about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), p, true)
+}
+
+/// The factors `object.scale` applies for `sx` and `sy` in percent, or the error it returns when
+/// either factor is 0.
+pub fn scale_factors(sx: f64, sy: f64) -> std::result::Result<(f64, f64), String> {
+    let (sx, sy) = (sx / 100.0, sy / 100.0);
+    if sx == 0.0 || sy == 0.0 {
+        return Err("scale must be non-zero".into());
+    }
+    Ok((sx, sy))
 }
 
 /// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
@@ -402,16 +425,7 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     // A named axis is the bounding box's own (see [`basis_frame`]); an angle is a line on the page.
-    let named = match p.get("axis") {
-        Some(Value::String(a)) if a == "horizontal" => Some(Affine::scale_non_uniform(1.0, -1.0)),
-        Some(Value::Number(_)) => None,
-        None | Some(Value::Null) => Some(Affine::scale_non_uniform(-1.0, 1.0)),
-        Some(Value::String(a)) if a == "vertical" => Some(Affine::scale_non_uniform(-1.0, 1.0)),
-        Some(v) => {
-            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
-            return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
-        }
-    };
+    let named = reflect_axis(p.get("axis")).map_err(|e| bad("object.reflect", e))?;
     let m = match named {
         Some(m) => basis_frame(s, p, "object.reflect", &ids)?.conjugate(m),
         None => {
@@ -423,12 +437,47 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
 }
 
+/// The reflection `object.reflect` applies for its `axis` param: the matrix for a named axis
+/// (`"vertical"`, the default, or `"horizontal"`), in the bounding box's frame; `None` for an angle,
+/// which is a line on the page; or the error for any other value.
+pub fn reflect_axis(axis: Option<&Value>) -> std::result::Result<Option<Affine>, String> {
+    match axis {
+        Some(Value::String(a)) if a == "horizontal" => Ok(Some(Affine::scale_non_uniform(1.0, -1.0))),
+        Some(Value::Number(_)) => Ok(None),
+        None | Some(Value::Null) => Ok(Some(Affine::scale_non_uniform(-1.0, 1.0))),
+        Some(Value::String(a)) if a == "vertical" => Ok(Some(Affine::scale_non_uniform(-1.0, 1.0))),
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            Err(format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`"))
+        }
+    }
+}
+
+/// Angles closer than this many degrees to ±90 or ±270, or to 0 or ±180, count as those angles. It
+/// is far above the rounding error of an angle up to 359° and below any angle a field shows.
+const SHEAR_ANGLE_TOLERANCE: f64 = 1e-9;
+
+/// The slant `object.shear` applies for `angle` in degrees: its tangent, and 0 for 0 and ±180. An
+/// angle outside -359 to 359, or ±90 or ±270, is an error.
+pub fn shear_tangent(angle: f64) -> std::result::Result<f64, String> {
+    if !(-359.0..=359.0).contains(&angle) {
+        return Err(format!("`angle` must be from -359 to 359 degrees, not {angle}"));
+    }
+    // ±90 and ±270 slant an edge onto the shear axis: their tangent is unbounded.
+    let flat = angle.rem_euclid(180.0);
+    if (flat - 90.0).abs() < SHEAR_ANGLE_TOLERANCE {
+        return Err(format!("`angle` cannot be {angle}: ±90 and ±270 degrees have no shear"));
+    }
+    // 0 and ±180 have no slant, but the tangent of ±180° in radians is about 1e-16, not 0.
+    Ok(if flat < SHEAR_ANGLE_TOLERANCE || 180.0 - flat < SHEAR_ANGLE_TOLERANCE { 0.0 } else { angle.to_radians().tan() })
+}
+
 pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], "object.shear")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.shear")?;
+    let t = shear_tangent(f64_or(p, "angle", 0.0)).map_err(|e| bad("object.shear", e))?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
     let horizontal = Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]);
     // A named axis, or a line on the page at an angle in degrees, counter-clockwise from horizontal.
     let m = match p.get("axis") {

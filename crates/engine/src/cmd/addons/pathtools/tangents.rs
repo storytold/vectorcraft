@@ -1,7 +1,8 @@
 //! Common Tangents (`addon.pathtools.commonTangents`): the straight lines that touch two selected
 //! convex closed paths (ellipses at any rotation and scale, and convex Bézier paths) without
 //! crossing into either, added as separate open paths, with the line joining their centers if
-//! asked. The geometry is `vectorcraft_pathops::addons::pathtools::common_tangents`.
+//! asked. One of the two may be a point (a path of one anchor) instead: the lines then run from it
+//! to where they touch the path. The geometry is `vectorcraft_pathops::addons::pathtools::common_tangents`.
 
 #[cfg(test)]
 mod tests;
@@ -30,19 +31,24 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         "Common Tangents",
         ["Object", "Plug-ins", "Path Precision Tools"],
         None,
-        "{tangents?: \"external\" (both paths on the same side of each line) | \"internal\" (the lines that run between them) | \"all\" (\"all\"), centerline?: bool (false: true also adds the line joining the two centers, an ellipse's center or a path's center of area), ids?: [id, id] (default: the selection)} add the common tangent lines of two convex closed paths as separate open paths, each from where it touches the first path to where it touches the second (the whole stretch where a straight side lies along it), stroked with the current stroke color and weight (black when the stroke is None) and unfilled, directly above the upper of the two, as one undo step; the new lines are selected. An ellipse drawn with the Ellipse tool, turned or scaled, is measured as an exact ellipse; any other path must be closed, have one outline, bend the same way all around and have at most 10000 segments. Separate paths have two external and two internal tangents; overlapping paths only external ones; one path inside the other has none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point where they touch and as long as the narrower path is wide along it; paths that meet at a corner or along a shared stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when the gap between them is less than a billionth of the larger of their sizes and the distance between their centers. When there is no tangent of the kind asked for, nothing changes and the result has a `warning` → {ids, external, internal, centerline (its id or null), warning?}",
+        "{tangents?: \"external\" (both paths on the same side of each line) | \"internal\" (the lines that run between them) | \"all\" (\"all\"), centerline?: bool (false: true also adds the line joining the two centers, an ellipse's center or a path's center of area), ids?: [id, id] (default: the selection)} add the common tangent lines of two convex closed paths as separate open paths, each from where it touches the first path to where it touches the second (the whole stretch where a straight side lies along it), stroked with the current stroke color and weight (black when the stroke is None) and unfilled, directly above the upper of the two, as one undo step; the new lines are selected. An ellipse drawn with the Ellipse tool, turned or scaled, is measured as an exact ellipse; any other path must be closed, have one outline, bend the same way all around and have at most 10000 segments. Separate paths have two external and two internal tangents; overlapping paths only external ones; one path inside the other has none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point where they touch and as long as the narrower path is wide along it; paths that meet at a corner or along a shared stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when the gap between them is at most a billionth of the larger of their sizes and the distance between their centers. One of the two may be a point (a path of one anchor): the lines then run from the point to where they touch the path, two when the point lies outside it (one that lies along a straight side covers the whole side), one when the point lies on its outline, that is, at most the touching tolerance from it, with the point's distance from the path's center in place of the distance between centers (centered on the point and as long as the path is wide along it, or the whole straight side the point lies on), none when it lies inside; every `tangents` value gives the same lines, counted as internal when `tangents` is \"internal\" and as external otherwise, and the centerline runs from the point to the path's center; two points are refused. When there is no tangent of the kind asked for, nothing changes and the result has a `warning` → {ids, external, internal, centerline (its id or null), warning?}",
         has_selection,
         common_tangents
     )]
 }
 
-/// The outline of path `id` as the geometry takes it: an exact ellipse for a whole live ellipse,
-/// else the path's one closed convex subpath.
+/// The outline of path `id` as the geometry takes it: a point for a path of one anchor, an exact
+/// ellipse for a whole live ellipse, else the path's one closed convex subpath.
 fn outline_of(d: &Document, id: NodeId) -> Result<pt::Outline> {
     const C: &str = COMMON_TANGENTS;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Path { path, live, .. } = &n.kind else { return Err(bad(C, "select two closed paths")) };
     let [sp] = path.subpaths.as_slice() else { return Err(bad(C, "select two closed paths")) };
+    if sp.anchors.len() == 1
+        && let Some(only) = sp.anchors.first()
+    {
+        return pt::Outline::point(only.p).map_err(refusal);
+    }
     if let Some(LiveShape::Ellipse { w, h, pie, xf }) = live.as_deref() {
         let span = (pie.1 - pie.0).rem_euclid(360.0);
         if span < 1e-9 || 360.0 - span < 1e-9 {
@@ -74,17 +80,36 @@ fn common_tangents(s: &mut Session, p: &Value) -> Result<Value> {
     let ordered = d.paint_order(roots.iter().copied());
     let [first, second] = ordered.as_slice() else { return Err(bad(C, "select two closed paths")) };
     let (a, b) = (outline_of(d, *first)?, outline_of(d, *second)?);
+    if a.is_point() && b.is_point() {
+        return Err(bad(C, "select two closed paths"));
+    }
+    // A point goes first, so that each line runs from it to where it touches the path.
+    let point = a.is_point() || b.is_point();
+    let (a, b) = if b.is_point() { (b, a) } else { (a, b) };
     let all = pt::common_tangents(&a, &b).map_err(|_| bad(C, "the two paths have the same outline"))?;
     let external = all.iter().filter(|t| t.kind == pt::TangentKind::External).count();
-    let keep = |t: &&pt::Tangent| match kinds {
-        "external" => t.kind == pt::TangentKind::External,
-        "internal" => t.kind == pt::TangentKind::Internal,
-        _ => true,
+    // A point's external and internal tangents are the same lines: every kind keeps them.
+    let keep = |t: &&pt::Tangent| {
+        point
+            || match kinds {
+                "external" => t.kind == pt::TangentKind::External,
+                "internal" => t.kind == pt::TangentKind::Internal,
+                _ => true,
+            }
     };
     let kept: Vec<&pt::Tangent> = all.iter().filter(keep).collect();
     let count = |kind: pt::TangentKind| kept.iter().filter(|t| t.kind == kind).count();
-    let (external_kept, internal_kept) = (count(pt::TangentKind::External), count(pt::TangentKind::Internal));
+    let (external_kept, internal_kept) = match (point, kinds) {
+        (true, "internal") => (0, kept.len()),
+        (true, _) => (kept.len(), 0),
+        _ => (count(pt::TangentKind::External), count(pt::TangentKind::Internal)),
+    };
     let lines: Vec<(Point, Point)> = kept.iter().map(|t| (t.from, t.to)).collect();
+    if lines.is_empty() && point {
+        // Written as `EngineError::Other` so that the i18n message scan finds it.
+        let warning = EngineError::Other("The point lies inside the path, so it has no tangents".into());
+        return Ok(json!({ "ids": [], "external": 0, "internal": 0, "centerline": null, "warning": warning.to_string() }));
+    }
     if lines.is_empty() {
         // Written as `EngineError::Other` so that the i18n message scan finds them. Exactly one
         // external tangent means one path lies inside the other and touches it there; paths that

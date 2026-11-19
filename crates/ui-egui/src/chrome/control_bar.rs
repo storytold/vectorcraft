@@ -78,6 +78,48 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
+/// The selected paths' eligible corners, as document lengths, beside the anchor controls.
+/// Explicit partial selections with no corners contribute no target (unlike `picked`'s fallback).
+fn corner_radius(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, reserve: f32) {
+    let Some(st) = app.session.active() else { return };
+    let mut items = Vec::new();
+    let mut radius: Option<f64> = None;
+    let mut mixed = false;
+    for &id in &st.selection.objects {
+        let Some(lc) = st.doc.node(id).and_then(vectorcraft_doc::LiveCorners::of) else { continue };
+        let corners = st.selection.partial(id).map_or_else(|| lc.all(), |anchors| lc.corners_of(anchors));
+        if corners.is_empty() {
+            continue;
+        }
+        for &k in &corners {
+            // Keep absolute requested radii, even when their drawing is fitted smaller. Relative
+            // storage is a fraction, but the field and setLiveShape both consume document lengths.
+            let value = if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) };
+            if let Some(first) = radius {
+                mixed |= (first - value).abs() >= 1e-9;
+            } else {
+                radius = Some(value);
+            }
+        }
+        items.push(json!({"id": id, "corners": corners}));
+    }
+    if items.is_empty() {
+        return;
+    }
+    let label = tl!("Corner Radius:");
+    let text = egui::RichText::new(label).size(12.0).color(t.text);
+    if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), INLINE_FIELD_WIDTH]) + reserve {
+        return;
+    }
+    widgets::field_label(ui, text);
+    let shown = if mixed { None } else { radius };
+    let unit = app.session.general_unit();
+    if let Some(radius) = widgets::num_field_named(ui, "cb-corner-radius", Some(label), shown, unit, INLINE_FIELD_WIDTH) {
+        // App::run reports any command failure in the status bar, as the other inline fields do.
+        app.run("object.setLiveShape", json!({"items": items, "radius": radius.max(0.0)})).ok();
+    }
+}
+
 /// The id of the Control bar's isolation button.
 pub(super) const ISOLATION_BUTTON: &str = "cb-isolation";
 
@@ -969,6 +1011,19 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The Control bar's object label, `label`, while the bar has room for it. For one selected image
+/// (`image`: Linked File or Embedded) it is an underlined link, and a click opens the Links panel on
+/// the image with its Link Info.
+fn object_label(app: &mut VectorcraftApp, ui: &mut Ui, label: egui::RichText, image: bool) {
+    if ui.available_width() < widgets::text_width(ui, label.clone()) {
+        left_out(ui);
+    } else if !image {
+        ui.label(label);
+    } else if ui.link(label.underline()).clicked() {
+        crate::panels::links::show_selected_image(app, ui.ctx());
+    }
+}
+
 /// The Control bar's gripper, controls and panel menu, in the bar `bar`. A `floating` bar clips its
 /// controls to the room left of the panel menu button, and always shows the button.
 fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, dock_room: egui::Rect, floating: bool) {
@@ -997,34 +1052,26 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             snapping_menu(app, ui);
         }
         let Some(st) = app.session.active() else { return };
-        let sel = st.selection.objects.clone();
+        let count = st.selection.objects.len();
         let units = app.session.general_unit();
-        let first = sel.first().and_then(|id| st.doc.node(*id));
+        let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
         let anchors = anchor_controls(app);
-        let label = match first {
-            _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
-            Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
-                tl!("Anchor Point")
-            }
-            Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
+        // The label, and whether it names one selected image.
+        let (label, image) = match first {
+            _ if app.session.tool_id() == "artboard" => (tl!("Artboard"), false),
+            Some(_) if count == 1 && anchors != AnchorControls::None => (tl!("Anchor Point"), false),
+            Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if count == 1 => {
                 if im.link.is_some() {
-                    tl!("Linked File")
+                    (tl!("Linked File"), true)
                 } else {
-                    tl!("Embedded")
+                    (tl!("Embedded"), true)
                 }
             }
-            Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => {
-                tl!("Image Tracing")
-            }
-            _ => tl!(crate::panels::appearance::object_label(app)),
+            Some(n) if count == 1 && crate::panels::image_trace::is_trace(n) => (tl!("Image Tracing"), false),
+            _ => (tl!(crate::panels::appearance::summary(app, ui.ctx()).map_or("No Selection", |s| s.label)), false),
         };
         let has_first = first.is_some();
-        let label = egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text);
-        if ui.available_width() >= widgets::text_width(ui, label.clone()) {
-            ui.label(label);
-        } else {
-            left_out(ui);
-        }
+        object_label(app, ui, egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text), image);
         // With the Artboard tool in use, the bar shows the active artboard's controls in place
         // of the object controls.
         let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
@@ -1035,6 +1082,8 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         }
         if anchors != AnchorControls::None && group_on(app, "anchors") {
             anchor_buttons(app, ui, anchors);
+            let reserve = transform_reserve(app, ui, count > 0);
+            corner_radius(app, ui, t, reserve);
         }
         let object_options = group_on(app, "objectOptions");
         if object_options {
@@ -1043,7 +1092,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if ui.available_width() >= 6.0 {
             ui.add_space(6.0);
         }
-        let reserve = transform_reserve(app, ui, !sel.is_empty());
+        let reserve = transform_reserve(app, ui, count > 0);
         // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
         // and leaves Fill and Stroke out while the Image Options group is off too. These groups,
         // the tool options, the envelope's and the symbol instances' each show a control only while
@@ -1064,11 +1113,11 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if !image && group_on(app, "fillStroke") {
             fill_and_stroke(app, ui, reserve);
         }
-        opacity_and_style(app, ui, t, opacity, !sel.is_empty(), reserve);
+        opacity_and_style(app, ui, t, opacity, count > 0, reserve);
         // The Character group shows whole, with the Transform link's room left after it, or not at
         // all; left out, it leaves out the groups between it and the link too.
         let room = !group_on(app, "character") || crate::panels::character::control_bar(app, ui, reserve);
-        if !groups_before_transform(app, ui, sel.len(), room) {
+        if !groups_before_transform(app, ui, count, room) {
             // With the Transform group off, its link and X/Y/W/H fields take no room.
             trailing_select_similar(app, ui);
             erase_trailing(ui);

@@ -55,6 +55,7 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            back_to_bucket: false,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
@@ -68,6 +69,7 @@ impl Session {
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
+            shape_drawn: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -98,6 +100,8 @@ impl Session {
             scripts_dir: None,
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
+            proof_setup_dir: None,
+            proof_setup_saves: 0,
             script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
@@ -135,6 +139,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_options_stored: false,
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
@@ -150,6 +155,7 @@ impl Session {
             global_edit_options: Default::default(),
             select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),
@@ -205,8 +211,7 @@ impl Session {
         let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let _ = self.apply_actions(acts);
+        let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
         // the rest of the batch; anything else in progress (a drag) is cancelled.
         if self.batch_stash.is_none() {

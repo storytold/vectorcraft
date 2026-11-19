@@ -1255,6 +1255,50 @@ fn an_envelopes_image_pieces_draw_one_copy_of_its_samples() {
     }
 }
 
+/// An image changed by Perspective Distort is written as the pieces of its mesh, placed so that
+/// its pixel rectangle's corners land on its corners: read back, each corner of the quad is a
+/// corner of one of the pieces' images.
+#[test]
+fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
+    let mut d = png_doc();
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    for level in Level::ALL {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let back = import::import(&out.bytes).unwrap().document;
+        let (mut seen, mut pieces) = ([false; 4], 0);
+        back.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                pieces += 1;
+                let (w, h) = (f64::from(im.width), f64::from(im.height));
+                for p in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)] {
+                    let at = im.xf * Point::new(p.0, p.1);
+                    for (i, c) in q.iter().enumerate() {
+                        seen[i] |= at.distance(*c) < 0.01;
+                    }
+                }
+            }
+        });
+        assert!(pieces > 2, "{level:?}: {pieces}");
+        assert_eq!(seen, [true; 4], "{level:?}");
+        // The pieces are clipped by the quad: a clipping path with its bounds and its area.
+        let mut quad_clips = 0;
+        back.walk(|n| {
+            if let NodeKind::Group { children, clip: true } = &n.kind
+                && let Some(p) = children.first().and_then(|c| c.path_data())
+                && let Some(b) = p.bounds()
+            {
+                let area: f64 = p.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+                if [b.x0 - 10.0, b.y0 - 10.0, b.x1 - 90.0, b.y1 - 90.0].iter().all(|v| v.abs() < 0.01) && (area - 4000.0).abs() < 1.0 {
+                    quad_clips += 1;
+                }
+            }
+        });
+        assert!(quad_clips >= 1, "{level:?}: no clipping path on the quad");
+    }
+}
+
 #[test]
 fn each_ink_of_a_colorized_image_placed_twice_is_written_once() {
     let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };

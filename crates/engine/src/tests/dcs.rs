@@ -1002,6 +1002,27 @@ fn dcs_transparency_counts_a_transparent_dcs_image_over_another() {
     assert!(marked(b), "the opaque image it overlaps");
 }
 
+/// Replace measures a DCS file's clipping group by its bounds, not by its plates' image, so a
+/// distorted plate image does not stop an image replacing the group.
+#[test]
+fn replace_is_not_refused_for_a_dcs_group_whose_image_is_distorted() {
+    let dir = temp_dir("replace-distorted");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let group = r["ids"][0].clone();
+    let image = image_of(&s, &group).id;
+    let b = s.doc().unwrap().doc.node(image).unwrap().geometric_bounds().unwrap();
+    let (x0, y0, x1, y1) = (b.x0, b.y0, b.x1, b.y1);
+    let corners = json!([[x0 + 4.0, y0], [x1 - 4.0, y0], [x1, y1], [x0, y1]]);
+    s.execute("object.distort", &json!({ "ids": [image.0], "corners": corners })).unwrap();
+    assert!(s.doc().unwrap().doc.node(image).unwrap().is_distorted_image());
+    s.execute("select.set", &json!({ "ids": [group] })).unwrap();
+    let png = crate::tests_links::png(2, 2, [0, 0, 255]);
+    let out = s.execute("file.place", &json!({"replace": true, "name": "b.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+    assert!(out.is_ok(), "{out:?}");
+}
+
 #[test]
 fn dcs_transparency_counts_characters_with_a_transparent_gradient() {
     use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};

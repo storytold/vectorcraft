@@ -96,7 +96,24 @@ fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
         Some(folder) => d.folder(folder),
         None => d,
     };
-    if pick.name.is_empty() { d } else { d.file_name(&pick.name) }
+    if pick.name.is_empty() {
+        return d;
+    }
+    // Windows' save dialog changes the extension when a different file type is chosen only when
+    // the suggested name has no explicit extension. rfd supplies the first filter's extension to
+    // that dialog, so leave the suffix to Windows for saves that offer several formats (#5451).
+    // A remaining dot in the stem would look like another explicit extension to Windows.
+    #[cfg(windows)]
+    if matches!(request, PickRequest::Save(_))
+        && pick.filters.len() > 1
+        && let Some(ext) = std::path::Path::new(&pick.name).extension().and_then(|e| e.to_str())
+        && pick.filters.iter().any(|(_, exts)| exts.iter().any(|e| e.eq_ignore_ascii_case(ext)))
+        && let Some(stem) = std::path::Path::new(&pick.name).file_stem().and_then(|s| s.to_str())
+        && !stem.contains('.')
+    {
+        return d.file_name(stem);
+    }
+    d.file_name(&pick.name)
 }
 
 #[cfg(test)]
@@ -442,6 +459,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         open_file: Some(Box::new(open_file)),
         // Edit Original of a raster image with Use System Defaults for Edit Original off (#5236).
         open_in_photocraft: Some(Box::new(open_in_photocraft)),
+        check_application: Some(Box::new(|p| check_app(std::path::Path::new(p)))),
+        open_in_application: Some(Box::new(open_in_application)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         pick_folder_at: Some(Box::new(move |start: &str| pick_now(PickRequest::FolderAt(start.to_string()), &p7).into_iter().next())),
         // Sample Color from Screen: the system's color sampler.
@@ -490,15 +509,32 @@ fn open_in_photocraft(path: &str) -> Result<bool, String> {
     explorer_safe(path)?;
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
     let Some(app) = find_photocraft(home.as_deref(), std::env::var_os("PATH").as_deref()) else { return Ok(false) };
+    launch_application(&app, path)
+}
+
+/// A missing chosen editor falls back; invalid applications and failed launches remain errors.
+fn open_in_application(app: &str, path: &str) -> Result<bool, String> {
+    explorer_safe(path)?;
+    let app = std::path::Path::new(app);
+    match std::fs::metadata(app) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(format!("cannot inspect {}: {e}", app.display())),
+        Ok(_) => {}
+    }
+    check_app(app)?;
+    launch_application(app, path)
+}
+
+fn launch_application(app: &std::path::Path, path: &str) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     let mut c = {
         let mut c = std::process::Command::new("open");
-        c.arg("-a").arg(&app).arg(path);
+        c.arg("-a").arg(app).arg(path);
         c
     };
     #[cfg(not(target_os = "macos"))]
     let mut c = {
-        let mut c = std::process::Command::new(&app);
+        let mut c = std::process::Command::new(app);
         c.arg(path);
         c
     };
@@ -671,6 +707,17 @@ mod open_with_tests {
         tempfile::Builder::new().prefix(&format!("vc-open-with-{name}-")).tempdir().unwrap()
     }
 
+    #[test]
+    fn chosen_editor_only_falls_back_when_missing() {
+        let dir = scratch("chosen");
+        let missing = dir.path().join("Missing.exe");
+        assert!(!super::open_in_application(&missing.to_string_lossy(), "image with spaces.png").unwrap());
+        let doc = dir.path().join("notes.txt");
+        std::fs::write(&doc, "not an application").unwrap();
+        assert!(super::open_in_application(&doc.to_string_lossy(), "image.png").is_err());
+        assert!(super::open_in_application(&dir.path().to_string_lossy(), "image.png").is_err());
+    }
+
     /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing
     /// path.
     #[test]
@@ -796,7 +843,7 @@ mod dialog_tests {
 
     /// The file types a dialog was given, by label.
     #[derive(Default)]
-    struct Filters(Vec<(String, Vec<String>)>);
+    struct Filters(Vec<(String, Vec<String>)>, Option<String>);
 
     impl DialogSettings for Filters {
         fn parent(self, _window: &winit::window::Window) -> Self {
@@ -812,7 +859,8 @@ mod dialog_tests {
         fn folder(self, _folder: &str) -> Self {
             self
         }
-        fn file_name(self, _name: &str) -> Self {
+        fn file_name(mut self, name: &str) -> Self {
+            self.1 = Some(name.to_string());
             self
         }
     }
@@ -868,5 +916,25 @@ mod dialog_tests {
         let placed = dialog_for(Filters::default(), &PickRequest::OpenMany).0;
         let first = fileio::place_filters().next().map(|(_, exts)| open_extensions(exts, CASE_SENSITIVE_FILTERS));
         assert_eq!(placed.first().map(|(_, exts)| exts.clone()), first);
+    }
+
+    /// A format selected after the Windows Save As dialog opens can replace the suffix of the
+    /// suggested name. Single-format saves and open dialogs keep the supplied name verbatim.
+    #[cfg(windows)]
+    #[test]
+    fn save_dialog_with_several_formats_leaves_the_extension_to_windows() {
+        let filters = vec![FilePick::filter("VectorCraft", &["vectorcraft"]), FilePick::filter("PDF-compatible .ai", &["ai"])];
+        let pick = FilePick { name: "Poster.vectorcraft".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick.clone())).1.as_deref(), Some("Poster"));
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Open(pick)).1.as_deref(), Some("Poster.vectorcraft"));
+
+        let pick = FilePick { name: "Poster.AI".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster"));
+        let pick = FilePick { name: "Poster.design".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster.design"));
+        let pick = FilePick { name: "draft.v1.vectorcraft".into(), filters: filters.clone(), ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("draft.v1.vectorcraft"));
+        let pick = FilePick { name: "Poster.vectorcraft".into(), filters: vec![filters[0].clone()], ..Default::default() };
+        assert_eq!(dialog_for(Filters::default(), &PickRequest::Save(pick)).1.as_deref(), Some("Poster.vectorcraft"));
     }
 }

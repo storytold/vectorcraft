@@ -518,10 +518,10 @@ impl Filters {
 
 /// The families the type in `doc` is set in, lowercase and by the name the menu lists them under
 /// ([`vectorcraft_text::FontDb::canonical`]): the runs of every text object in the layers, symbols,
-/// patterns and graph designs, hidden, locked and masked ones included, with a composite font named
-/// as such. A pattern being edited is read from its editing layer only. Each run's family is looked
-/// up with its style, so a family and style split from a PostScript name (`Honoka`, `Mincho`) find
-/// the installed font of that name. Styles no type uses are left out.
+/// patterns, graph designs and stored scatter brushes, hidden, locked and masked ones included, with
+/// a composite font named as such. A pattern being edited is read from its editing layer only. Each
+/// run's family is looked up with its style, so a family and style split from a PostScript name
+/// (`Honoka`, `Mincho`) find the installed font of that name. Styles no type uses are left out.
 fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Document) -> HashSet<String> {
     // Each family and style once, so a document with many runs in a few fonts looks each one up
     // once.
@@ -548,6 +548,14 @@ fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Docum
     let designs = doc.graph_designs.iter().map(|g| &*g.art);
     for n in doc.layers.iter().map(|l| &**l).chain(doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(designs) {
         vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
+    }
+    // A scatter brush draws copies of its art's type along a stroke; art and pattern brushes drop
+    // type when they bend their art. Malformed library entries are skipped.
+    let brushes = doc.unknown.get(vectorcraft_brush::DOC_KEY).map(vectorcraft_brush::parse_library).unwrap_or_default();
+    for b in &brushes {
+        if let vectorcraft_brush::BrushKind::Scatter(s) = &b.kind {
+            vectorcraft_doc::swatches::walk_with_masks(&s.art, &mut add);
+        }
     }
     named.iter().flat_map(|(f, styles)| styles.iter().map(move |s| db.canonical(f, s).0.to_lowercase())).collect()
 }
@@ -1866,6 +1874,17 @@ pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white
     }
 }
 
+/// A sample of `family` in `style` drawn in `slot`: `text` set in it (a generic sample when it is
+/// `None` or the font lacks its characters), filling the slot's height (the Retype panel's rows).
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn styled_sample(ui: &Ui, slot: egui::Rect, family: &str, style: &str, text: Option<&str>, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text);
+    let area = sample_area(ui, slot, ink, PAPER_INSET);
+    if let Some(tex) = sample_texture(ui.ctx(), family, Some(style), text, area.height()) {
+        paint_sample(ui, area, &tex, ink);
+    }
+}
+
 /// What a sample is drawn on with Show samples on white.
 pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
 
@@ -1985,6 +2004,23 @@ fn sample_texture(ctx: &egui::Context, family: &str, style: Option<&str>, sample
                 let tex = img.map(texture);
                 s.ready.insert(key, tex.clone());
                 return tex;
+            }
+            if s.pending.len() >= MAX_PENDING {
+                // Finished samples join the ready ones, so samples nobody asks for again (their
+                // text or size changed) do not keep new ones from starting.
+                let mut done = vec![];
+                for (k, rx) in &s.pending {
+                    match rx.try_recv() {
+                        Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                        Ok(img) => done.push((k.clone(), img)),
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => done.push((k.clone(), None)),
+                    }
+                }
+                for (k, img) in done {
+                    s.pending.remove(&k);
+                    let tex = img.map(|img| ctx.load_texture(format!("font-sample-{}-{}", k.0, k.3), img, egui::TextureOptions::LINEAR));
+                    s.ready.insert(k, tex);
+                }
             }
             if s.pending.len() >= MAX_PENDING || !s.take_budget(ctx) {
                 return None;

@@ -346,3 +346,279 @@ fn glyphs_filled_and_stroked_one_by_one_stay_one_run() {
         assert_eq!(type_runs(content), [vec![("ABC".to_string(), true, true)]], "{content}");
     }
 }
+
+/// Fill and stroke rendering of a `TJ` whose kerning starts a new line part way through: the
+/// reader fills every glyph of the operator before it strokes them, and each part comes in as
+/// type filled and stroked, in the order drawn, not as each part filled and then each part
+/// stroked over it (#8543). So too a `TJ` that jumps back to start a line before it and one whose
+/// kerning starts two new lines. In a span with replacement text (`ActualText`) it stays one type
+/// object, on the first glyph's line and in its style, filled and stroked; small kerning keeps
+/// one line as before.
+#[test]
+fn a_tj_whose_kerning_starts_a_new_line_is_filled_and_stroked() {
+    // Each type object as its text, and whether all of it is filled and all of it stroked.
+    let objects = |content: &str| -> Vec<(String, bool, bool)> {
+        type_runs(content)
+            .into_iter()
+            .map(|runs| (runs.iter().map(|r| r.0.as_str()).collect(), runs.iter().all(|r| r.1), runs.iter().all(|r| r.2)))
+            .collect()
+    };
+    let both = |text: &str| (text.to_string(), true, true);
+    for mode in ["2", "6"] {
+        let cases = [
+            ("/F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ", vec![both("AB"), both("CD")]),
+            ("/F1 24 Tf 20 80 Td [(AB) -3500 (CD) -3500 (EF)] TJ", vec![both("AB"), both("CD"), both("EF")]),
+            ("/F1 24 Tf 200 80 Td [(AB) 6000 (CD)] TJ", vec![both("AB"), both("CD")]),
+            ("/F1 48 Tf 20 80 Td [(AB) -100 (CD)] TJ", vec![both("ABCD")]),
+            // In a span with replacement text, which places all of its text with the first glyph.
+            ("/F1 48 Tf 20 80 Td /Span << /ActualText (ABCD) >> BDC [(AB) -3500 (CD)] TJ EMC", vec![both("ABCD")]),
+        ];
+        for (show, want) in cases {
+            let content = format!("BT {mode} Tr {show} 0 Tr ET");
+            assert_eq!(objects(&content), want, "{content}: {:?}", type_runs(&content));
+        }
+    }
+}
+
+/// Stroke rendering (modes 1 and 5) of a `TJ` whose kerning starts a new line stays stroke only,
+/// one type object per line (#8543).
+#[test]
+fn a_stroked_tj_whose_kerning_starts_a_new_line_stays_stroke_only() {
+    for mode in ["1", "5"] {
+        let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ 0 Tr ET");
+        let want = [vec![("AB".to_string(), false, true)], vec![("CD".to_string(), false, true)]];
+        assert_eq!(type_runs(&content), want, "{content}");
+    }
+}
+
+/// Translucent type filled and stroked by a `TJ` whose kerning starts a new line stays a filled
+/// object and a stroked one for each part, in the order the file draws them (#8015, #8543).
+#[test]
+fn a_translucent_tj_whose_kerning_starts_a_new_line_stays_fill_and_stroke_apart() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /ExtGState << /G << /ca 0.5 /CA 0.5 >> >>";
+    let content = "/G gs 0 0 0 RG 1 1 0.8 rg 3 w BT 2 Tr /F1 48 Tf 20 80 Td [(AB) -3500 (CD)] TJ 0 Tr ET";
+    let bytes = pdf(&[PdfPage { resources: resources.into(), ..PdfPage::new(300.0, 200.0, content) }], None);
+    let d = import(&bytes).unwrap();
+    let mut types = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let st = t.first_style();
+            types.push((t.plain_text(), n.opacity < 1.0, !st.fill.is_none(), !st.stroke.is_none()));
+        }
+    });
+    let part = |text: &str, fill: bool| (text.to_string(), true, fill, !fill);
+    assert_eq!(types, [part("AB", true), part("CD", true), part("AB", false), part("CD", false)], "{content}");
+}
+
+/// Fill and stroke rendering of a `TJ` whose kerning goes back to draw a glyph again where it
+/// drew one before, on a line of its own: the reader strokes the glyphs in the order it filled
+/// them, so each copy is filled and stroked, whether the copy drawn last ends the operator (the
+/// open line) or a line after it does (a finished one), and however often it comes back
+/// (#8543). A glyph filled and stroked by an operator of its own where one filled before stands
+/// still strokes only the one filled last (#8015).
+#[test]
+fn a_tj_that_draws_a_glyph_again_where_it_drew_one_strokes_each_copy() {
+    let both = |text: &str| vec![(text.to_string(), true, true)];
+    // Helvetica at 48 points: A and B are 667 units wide, so 4834 back after B (3500 on from A)
+    // draws A again where the first A stands.
+    for mode in ["2", "6"] {
+        let cases = [
+            ("[(A) -3500 (B) 4834 (A)] TJ", vec![both("A"), both("B"), both("A")]),
+            ("[(A) -3500 (B) 4834 (A) -6000 (C)] TJ", vec![both("A"), both("B"), both("A"), both("C")]),
+            ("[(A) -3500 (B) 4834 (A) -3500 (B)] TJ", vec![both("A"), both("B"), both("A"), both("B")]),
+            ("[(A) -3500 (B) 4834 (A) -3500 (B) 4834 (A)] TJ", vec![both("A"), both("B"), both("A"), both("B"), both("A")]),
+        ];
+        for (show, want) in cases {
+            let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td {show} 0 Tr ET");
+            assert_eq!(type_runs(&content), want, "{content}");
+        }
+    }
+    let content = "BT 0 Tr /F1 48 Tf 20 80 Td [(A) -3500 (B) 4834] TJ 2 Tr (A) Tj 0 Tr ET";
+    let want = [vec![("A".to_string(), true, false)], vec![("B".to_string(), true, false)], both("A")];
+    assert_eq!(type_runs(content), want, "{content}");
+}
+
+/// A stroke pass longer than the importer holds at once ([`MAX_HELD`] strokes) is matched to its
+/// own operator's glyphs, in the order filled: an `A` filled by an operator of its own, then `A`
+/// and 4,096 `B`s filled and stroked from the same place, strokes the second `A`, not the first
+/// (#8543).
+#[test]
+fn a_long_stroke_pass_strokes_its_own_glyphs_not_one_filled_before() {
+    let bs = "B".repeat(4096);
+    let content = format!("BT /F1 2 Tf 1 0 0 1 20 80 Tm 0 Tr (A) Tj 1 0 0 1 20 80 Tm 2 Tr (A{bs}) Tj 0 Tr ET");
+    let looks: Vec<Vec<(String, bool, bool)>> = type_runs(&content);
+    let want = [vec![("A".to_string(), true, false)], vec![(format!("A{bs}"), true, true)]];
+    assert!(looks == want, "{:?}", looks.iter().map(|t| t.iter().map(|r| (r.0.len(), r.1, r.2)).collect::<Vec<_>>()).collect::<Vec<_>>());
+}
+
+/// Stroked type of its own (a stroke over no glyph filled) ends the stroke pass of the glyphs
+/// filled before it: an `A` filled, a `B` filled on a line of its own, a `C` stroked after the
+/// `B`, then a stroke over the `A` is type of its own, drawn last, not a stroke joined to the
+/// `A` drawn under the `B` and `C` (#8543).
+#[test]
+fn a_stroke_after_stroked_type_of_its_own_does_not_join_a_glyph_filled_before() {
+    let content = "BT /F1 48 Tf 1 0 0 1 20 80 Tm 0 Tr (A) Tj 1 0 0 1 20 140 Tm (B) Tj 1 Tr (C) Tj 1 0 0 1 20 80 Tm (A) Tj 0 Tr ET";
+    let run = |text: &str, fill: bool, stroke: bool| (text.to_string(), fill, stroke);
+    let want = [vec![run("A", true, false)], vec![run("B", true, false), run("C", false, true)], vec![run("A", false, true)]];
+    assert_eq!(type_runs(content), want, "{content}");
+}
+
+/// A stroke in an ActualText span goes over a glyph that span filled, not one an earlier span
+/// filled at the same place: each span's replacement text comes in (#8543).
+#[test]
+fn a_stroke_in_an_actual_text_span_does_not_take_an_earlier_spans_glyph() {
+    let content = "BT /F1 48 Tf 0 Tr /Span << /ActualText (First) >> BDC 1 0 0 1 20 80 Tm (A) Tj EMC 1 0 0 1 20 140 Tm (B) Tj \
+                   /Span << /ActualText (Second) >> BDC 1 Tr 1 0 0 1 20 80 Tm (A) Tj EMC 0 Tr ET";
+    let run = |text: &str, fill: bool, stroke: bool| vec![(text.to_string(), fill, stroke)];
+    assert_eq!(type_runs(content), [run("First", true, false), run("B", true, false), run("Second", false, true)], "{content}");
+}
+
+/// Fill and stroke rendering of a `TJ` that draws a glyph again where it drew one, in an
+/// ActualText span: the strokes go over the glyphs in the order filled, so the replacement text,
+/// on the first glyph's line and in its style, is filled and stroked, not left to the copy drawn
+/// last, which shows no text (#8543).
+#[test]
+fn a_tj_that_draws_a_glyph_again_in_an_actual_text_span_strokes_the_replacement() {
+    for mode in ["2", "6"] {
+        for show in ["[(A) 667 (A)] TJ", "[(A) -500 (B) 1834 (A)] TJ", "[(A) -3500 (B) 4834 (A)] TJ"] {
+            let content = format!("BT {mode} Tr /F1 48 Tf 20 80 Td /Span << /ActualText (ABA) >> BDC {show} EMC 0 Tr ET");
+            assert_eq!(type_runs(&content), [vec![("ABA".to_string(), true, true)]], "{content}");
+        }
+    }
+}
+
+/// The lines of type one operator's fill pass finishes are kept for its stroke pass up to 64 at
+/// a time: a `TJ` whose kerning starts 65 lines comes in as 65 type objects filled and stroked,
+/// and one that starts 66 as a filled object and a stroked one for each part, the fills first,
+/// as the file draws them (#8543).
+#[test]
+fn a_tj_over_more_lines_than_are_kept_comes_in_as_fill_and_stroke_apart() {
+    let content = |n: usize| format!("BT 2 Tr /F1 4 Tf 20 80 Td [{}] TJ 0 Tr ET", vec!["(A)"; n].join(" -3500 "));
+    let both = vec![("A".to_string(), true, true)];
+    assert_eq!(type_runs(&content(65)), vec![both; 65]);
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 66).chain(std::iter::repeat_n(stroke, 66)).collect();
+    assert_eq!(type_runs(&content(66)), want);
+}
+
+/// A `TJ` over more lines than are kept whose last part draws its first glyph again at the first
+/// glyph's origin still comes in as a filled object and a stroked one for each part: the stroke
+/// over the first glyph, whose line was finished, doesn't take the last part's fill (#8543).
+#[test]
+fn a_tj_over_more_lines_than_are_kept_that_ends_where_it_began_stays_fill_and_stroke_apart() {
+    // Helvetica's A is 667 units wide: 65 As and 64 kerns of 3,500 back to the first A's origin.
+    let parts = vec!["(A)"; 65].join(" -3500 ");
+    let content = format!("BT 2 Tr /F1 4 Tf 20 80 Td [{parts} 267355 (A)] TJ 0 Tr ET");
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 66).chain(std::iter::repeat_n(stroke, 66)).collect();
+    assert_eq!(type_runs(&content), want);
+}
+
+/// Type filled and stroked right after a `TJ` over more lines than are kept is filled and
+/// stroked as before, whether the `TJ` was filled and stroked or filled only (#8543).
+#[test]
+fn type_after_a_tj_over_more_lines_than_are_kept_is_filled_and_stroked() {
+    let parts = vec!["(A)"; 66].join(" -3500 ");
+    for mode in ["2", "0"] {
+        let content = format!("BT /F1 4 Tf 20 80 Td {mode} Tr [{parts}] TJ 2 Tr /F1 48 Tf 1 0 0 1 40 150 Tm (B) Tj 0 Tr ET");
+        let types = type_runs(&content);
+        assert_eq!(types.len(), if mode == "2" { 133 } else { 67 }, "{content}");
+        assert_eq!(types.last(), Some(&vec![("B".to_string(), true, true)]), "{content}");
+    }
+}
+
+/// The start and end of an ActualText span end the stroke pass of the glyphs filled before them,
+/// for the stroke over the glyph filled last too: a stroke after the span over the glyph its
+/// replacement text came with, or over a glyph filled before an empty span, is type of its own,
+/// and the glyph keeps its fill only (#8543).
+#[test]
+fn a_stroke_after_an_actual_text_span_does_not_take_a_glyph_filled_before_it() {
+    let run = |text: &str, fill: bool, stroke: bool| vec![(text.to_string(), fill, stroke)];
+    let cases = [
+        "/Span << /ActualText (A) >> BDC 1 0 0 1 20 80 Tm (A) Tj EMC 1 Tr 1 0 0 1 20 80 Tm (A) Tj",
+        "1 0 0 1 20 80 Tm (A) Tj /Span << /ActualText (B) >> BDC EMC 1 Tr 1 0 0 1 20 80 Tm (A) Tj",
+    ];
+    for show in cases {
+        let content = format!("BT /F1 48 Tf 0 Tr {show} 0 Tr ET");
+        assert_eq!(type_runs(&content), [run("A", true, false), run("A", false, true)], "{content}");
+    }
+}
+
+/// A glyph stroked twice where it was drawn, by stroke rendering or by fill and stroke rendering
+/// then stroke rendering, is one type object, as before: a stroke over the glyph drawn last
+/// restyles it when nothing ended its stroke pass (#7741, #8015).
+#[test]
+fn a_glyph_stroked_again_where_it_was_drawn_stays_one_type_object() {
+    for (show, fill) in [("1 Tr (A) Tj", false), ("2 Tr (A) Tj", true)] {
+        let content = format!("BT /F1 48 Tf {show} 1 Tr 1 0 0 1 20 80 Tm (A) Tj 0 Tr ET").replace("Tf ", "Tf 1 0 0 1 20 80 Tm ");
+        assert_eq!(type_runs(&content), [vec![("A".to_string(), fill, true)]], "{content}");
+    }
+}
+
+/// A stroke pass longer than the importer holds at once ([`MAX_HELD`] strokes) goes over its own
+/// operator's glyphs, filled right before it, also when an operator before it filled the same
+/// glyphs at the same places: `A` and 4,095 `B`s filled, then `A` and 4,096 `B`s filled and
+/// stroked from the same place strokes the second operator's glyphs, not the first one's (#8543).
+#[test]
+fn a_long_stroke_pass_does_not_take_the_same_glyphs_filled_by_an_operator_before() {
+    let (before, now) = ("B".repeat(4095), "B".repeat(4096));
+    let content = format!("BT /F1 2 Tf 1 0 0 1 20 80 Tm 0 Tr (A{before}) Tj 1 0 0 1 20 80 Tm 2 Tr (A{now}) Tj 0 Tr ET");
+    let looks: Vec<Vec<(String, bool, bool)>> = type_runs(&content);
+    let want = [vec![(format!("A{before}"), true, false)], vec![(format!("A{now}"), true, true)]];
+    assert!(looks == want, "{:?}", looks.iter().map(|t| t.iter().map(|r| (r.0.len(), r.1, r.2)).collect::<Vec<_>>()).collect::<Vec<_>>());
+}
+
+/// A page drawing `first`, then `lines` lines of type filled only, each of `glyphs` `A`s, then
+/// `Title` filled and stroked by one `Tj` (mode 2) at 40, 150 in 24-point type, after `between`.
+fn dense_then_title(first: &str, lines: usize, glyphs: usize, between: &str) -> String {
+    let line = format!("({}) Tj 0 -1 Td", "A".repeat(glyphs));
+    let dense = vec![line; lines].join(" ");
+    let title = "/F1 24 Tf 1 0 0 1 40 150 Tm (Title) Tj";
+    format!("BT 0 Tr {first} /F1 1 Tf 1 0 0 1 10 190 Tm {dense} ET {between} BT 2 Tr {title} 0 Tr ET").replace("{title}", title)
+}
+
+/// Type filled and stroked after a page of type filled only, more lines than a fill pass keeps
+/// for its stroke pass, comes in as one type object filled and stroked, with or without a path
+/// drawn between them: neither the lines finished past the 64 kept nor more than 4,096 glyphs'
+/// worth of them make the title's first stroke the start of a stroke pass over them (#8549).
+#[test]
+fn type_filled_and_stroked_after_a_dense_page_of_filled_type_is_filled_and_stroked() {
+    let title = vec![("Title".to_string(), true, true)];
+    for (lines, glyphs) in [(150, 50), (70, 1)] {
+        for between in ["", "0 0 m 10 10 l S"] {
+            let types = type_runs(&dense_then_title("", lines, glyphs, between));
+            assert_eq!(types.len(), lines + 1, "{lines} lines of {glyphs}, {between:?}");
+            assert_eq!(types.last(), Some(&title), "{lines} lines of {glyphs}, {between:?}");
+        }
+    }
+}
+
+/// Type filled and stroked where a glyph filled only stood, on a line finished past the 64 kept,
+/// comes in as one type object filled and stroked when a path is drawn between them: nothing is
+/// drawn between an operator's fill pass and its stroke pass, so the path ends the stroke pass
+/// of every glyph filled before it (#8549).
+#[test]
+fn type_filled_and_stroked_over_a_finished_glyph_after_a_path_is_filled_and_stroked() {
+    let content = dense_then_title("{title}", 70, 1, "0 0 m 10 10 l S");
+    let types = type_runs(&content);
+    assert_eq!(types.len(), 72, "{content}");
+    assert_eq!(types.first(), Some(&vec![("Title".to_string(), true, false)]), "{content}");
+    assert_eq!(types.last(), Some(&vec![("Title".to_string(), true, true)]), "{content}");
+}
+
+/// A `TJ` over more lines than are kept, with a glyph kept as an outline after the lines it
+/// finished past the 64 kept, whose last part draws its first glyph again at the first glyph's
+/// origin, still comes in as a filled object and a stroked one for each part: the glyph after
+/// the outline starts a line in the middle of the fill pass, which keeps the glyphs of the lines
+/// finished, so the stroke over the first glyph doesn't take the last part's fill (#8549).
+#[test]
+fn an_outline_glyph_in_a_tj_over_more_lines_than_are_kept_leaves_fill_and_stroke_apart() {
+    // Helvetica's A is 667 units wide and code 1 draws no character (kept as an outline) and
+    // advances none: 66 As and 65 kerns of 3,500 back to the first A's origin.
+    let parts = vec!["(A)"; 66].join(" -3500 ");
+    let content = format!("BT 2 Tr /F1 4 Tf 20 80 Td [{parts} (\\001) 271522 (A)] TJ 0 Tr ET");
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 67).chain(std::iter::repeat_n(stroke, 67)).collect();
+    assert_eq!(type_runs(&content), want);
+}
