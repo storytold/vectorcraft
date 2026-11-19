@@ -2555,6 +2555,8 @@ shape	Open	Açık
 	PDF/A files carry their own output intent.	PDF/A dosyaları kendi çıktı amaçlarını taşır.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a dosyaları CMYK'dir: her renk hedefe dönüştürülür (boş: çıktı hedefinin CMYK profili), etiketsiz.
 	Pen Tool	Kalem Aracı
+	Quick Pen Tool	Hızlı Kalem Aracı
+	Quick Pen	Hızlı Kalem
 	Pencil	Kalem
 	Pencil Tool	Kurşun Kalem Aracı
 	per slice	dilim başına
@@ -5157,6 +5159,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no such saved selection	böyle kayıtlı bir seçim yok
 @msg	no such segment	öyle bir bölüm yok
 @msg	no such subpath	böyle bir alt yol yok
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` en fazla 10000 parçadan oluşan bir liste olmalıdır
+@msg	give either `start` for a new path or `id`, not both	yeni bir yol için `start` ya da `id` verin, ikisini birden değil
+@msg	`subpath` and `keep` need `id`	`subpath` ve `keep` için `id` gerekir
 @msg	no such user library	böyle bir kullanıcı kütüphanesi yok
 @msg	no such view	öyle bir görüş yok
 @msg	no such width point	böyle bir genişlik noktası yok

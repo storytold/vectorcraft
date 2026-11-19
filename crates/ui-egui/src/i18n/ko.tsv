@@ -2914,6 +2914,8 @@ antiAlias	Sharp	날카롭게
 	Pattern Editing	패턴 편집
 	Pattern options are available in pattern editing mode.	패턴 옵션은 패턴 편집 모드에서 사용할 수 있습니다.
 	Pen Tool	펜 도구
+	Quick Pen Tool	빠른 펜 도구
+	Quick Pen	빠른 펜
 	Pencil	연필
 	Pencil Tool	연필 도구
 	Percent:	퍼센트:
@@ -4953,6 +4955,9 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`link` places a handle: give `handle`	`link`는 핸들을 배치합니다. `handle`을 지정하십시오
 @msg	no such spine segment	해당 스파인 세그먼트가 없습니다
 @msg	no such subpath	해당 하위 패스가 없습니다
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces`는 최대 10000개 조각의 목록이어야 합니다
+@msg	give either `start` for a new path or `id`, not both	새 패스의 `start`와 `id` 중 하나만 지정하세요
+@msg	`subpath` and `keep` need `id`	`subpath`와 `keep`에는 `id`가 필요합니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
 @msg	object {id} is not a selected top-level object	개체 {id}은(는) 선택된 최상위 개체가 아닙니다
 @msg	nothing to redo	다시 실행할 항목이 없습니다

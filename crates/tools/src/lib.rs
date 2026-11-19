@@ -36,6 +36,7 @@ pub mod pen;
 pub mod pie;
 pub mod place;
 pub mod printtiling;
+pub mod quickpen;
 pub mod repeat_grid;
 pub mod repeat_radial;
 pub mod rulerguide;
@@ -388,6 +389,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         circle::ID => Box::new(circle::CircleTool::default()),
         curvature_circle::ID => Box::new(curvature_circle::CurvatureCircleTool::default()),
+        quickpen::ID => Box::new(quickpen::QuickPenTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
         other => symbolism::create(other)

@@ -2148,6 +2148,8 @@ font-technology	Variable	Μεταβλητές
 	Paths	Διαδρομές
 	Pattern	Μοτίβο
 	Pen Tool	Πένα (Pen Tool)
+	Quick Pen Tool	Εργαλείο γρήγορης πένας
+	Quick Pen	Γρήγορη πένα
 	Pencil	Μολύβι
 	Pencil Tool	Μολύβι (Pencil Tool)
 	Percent:	Ποσοστό:
@@ -5402,6 +5404,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`link` places a handle: give `handle`	το `link` τοποθετεί μια λαβή: δώστε `handle`
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
+@msg	`pieces` must be a list of at most 10000 pieces	το `pieces` πρέπει να είναι λίστα με έως 10000 τμήματα
+@msg	give either `start` for a new path or `id`, not both	δώστε είτε `start` για νέα διαδρομή είτε `id`, όχι και τα δύο
+@msg	`subpath` and `keep` need `id`	τα `subpath` και `keep` απαιτούν `id`
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
 @msg	no such view	δεν υπάρχει τέτοια προβολή
 @msg	no such width point	δεν υπάρχει τέτοιο σημείο πλάτους

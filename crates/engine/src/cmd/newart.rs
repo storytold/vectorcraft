@@ -228,9 +228,11 @@ impl Session {
         if !self.prefs.new_art_basic {
             return;
         }
-        let has_paint = self
-            .proxy_source(false)
-            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
+        // A Live Paint group with edges and no faces shows only a stroke.
+        let has_paint = [false, true].into_iter().any(|stroke| {
+            self.proxy_source(stroke)
+                .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some())
+        });
         if !has_paint {
             return;
         }
