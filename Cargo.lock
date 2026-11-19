@@ -1010,6 +1010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-cms"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=e7873217287876f76a045550369c90a541693c33#e7873217287876f76a045550369c90a541693c33"
+dependencies = [
+ "md-5",
+ "rayon",
+]
+
+[[package]]
 name = "craft-codepage"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=64b181977a0488e4d1e167bc5cc8cfededc2ed4b#64b181977a0488e4d1e167bc5cc8cfededc2ed4b"
@@ -6728,6 +6737,7 @@ dependencies = [
 name = "vectorcraft-color"
 version = "0.24.1"
 dependencies = [
+ "craft-cms",
  "kurbo 0.13.1",
  "moxcms",
  "proptest",
