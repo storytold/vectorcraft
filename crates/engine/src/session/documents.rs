@@ -68,6 +68,7 @@ impl Session {
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
+            shape_drawn: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,

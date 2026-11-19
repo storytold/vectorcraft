@@ -121,10 +121,24 @@ pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Ev
 /// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
 /// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
 /// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`].
+/// commands with no field focused) goes to [`invoke`]. With text selected in a label (a Document
+/// Info value), Copy and Cut copy that text, as their keys do ([`crate::shortcuts::leave_to_labels`]).
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
+    let label_event = match id {
+        "edit.copy" => Some(("edit.copy", egui::Event::Copy)),
+        "edit.cut" => Some(("edit.cut", egui::Event::Cut)),
+        _ => None,
+    };
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
+        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(app, ctx, id)) => {
+            if let Some((_, e)) = label_event {
+                ctx.input_mut(|i| i.events.push(e));
+            }
+            // The labels' text replaces the formats of an earlier Copy or Cut not written yet, even
+            // in a frame whose keys are not this window's.
+            app.drop_unwritten_formats();
+        }
         None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
@@ -308,6 +322,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
     if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Kinsoku Shori Settings…: the document's custom Kinsoku sets, to edit before OK sets them.
+    if id == crate::dialogs::kinsoku_sets::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::kinsoku_sets::open(app) {
             app.status(e);
         }
         return true;

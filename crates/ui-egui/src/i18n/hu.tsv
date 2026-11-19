@@ -662,6 +662,9 @@ font-technology	Variable	Változó
 	Choose…	Kiválasztás…
 	Circle	Kör
 	Circle Tool	Kör eszköz
+	Curvature Circle Tool	Simulókör eszköz
+	Cusp	Csúcspont
+	Straight segment	Egyenes szakasz
 	Circle too large	A kör túl nagy
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
@@ -724,6 +727,25 @@ font-technology	Variable	Változó
 	Preserve Embedded Profiles	Beágyazott profilok megtartása
 	Convert to Working Space	Konvertálás a munkaszíntérbe
 	Preserve Numbers	Számértékek megtartása
+	Profile Mismatches:	Profileltérések:
+	Ask When Opening	Kérdezzen megnyitáskor
+	Ask When Pasting	Kérdezzen beillesztéskor
+	Missing Profiles:	Hiányzó profilok:
+	Embedded Profile Mismatch	Eltérő beágyazott profil
+	Missing Profile	Hiányzó profil
+	Paste Profile Mismatch	Profileltérés beillesztéskor
+	“{name}” is not tagged with a {model} profile.	„{name}” nem rendelkezik {model}-profillal.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” {model}-profilja „{profile}”, amely nem a(z) „{working}” {model}-munkaszíntér.
+	Use the embedded profile	A beágyazott profil használata
+	Convert the colors to the working space	A színek konvertálása a munkaszíntérbe
+	Discard the embedded profile	A beágyazott profil elvetése
+	Leave as is	Változatlanul hagyás
+	Assign the working space	A munkaszíntér hozzárendelése
+	Assign profile:	Profil hozzárendelése:
+	Preserve the color numbers	A színértékek megtartása
+	Convert to keep the colors' appearance	Konvertálás a színek megjelenésének megtartásával
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` csak a(z) `{key}`: "assign" értékkel használható
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	A beillesztett színek olyan dokumentumból származnak, amelynek {model}-profilja „{from}”; ennek a dokumentumnak „{to}”.
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
@@ -788,6 +810,9 @@ font-technology	Variable	Változó
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Harmony	Harmónia megjelenítése
+	Harmony Rule	Harmóniaszabály
+	Harmony color	Harmóniaszín
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -1319,6 +1344,12 @@ font-technology	Variable	Változó
 	Duplication	Kettőzés
 	Dutch	Holland
 	DWG (use DXF)	DWG (használd a DXF-et)
+	PSD Import Options	PSD-importálás beállításai
+	Place PSD	PSD elhelyezése
+	Convert Layers to Objects	Rétegek átalakítása objektumokká
+	Import Hidden Layers	Rejtett rétegek importálása
+	Flatten Layers to a Single Image	Rétegek egyetlen képpé simítása
+	Import Slices	Szeletek importálása
 	DXF Import Options	DXF-importálás beállításai
 	DXF Info	DXF-adatok
 	DXF Options	DXF-beállítások
@@ -1579,6 +1610,15 @@ font-technology	Variable	Változó
 	Shading Color	Árnyékolás színe
 	Black Overprint	Felülnyomó fekete
 	Draw Hidden Faces	Rejtett lapok rajzolása
+	Map Art…	Grafika leképezése…
+	Map Art	Grafika leképezése
+	First Surface	Első felület
+	Previous Surface	Előző felület
+	Next Surface	Következő felület
+	Last Surface	Utolsó felület
+	Scale to Fit	Méretezés a felülethez
+	Shade Artwork	Grafika árnyékolása
+	Invisible Geometry	Láthatatlan geometria
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
 	This system has no screen color sampler	Ezen a rendszeren nincs képernyős színmintavevő
@@ -1676,6 +1716,20 @@ digits	Malayalam	Malajálam
 	Find Fonts	Betűtípusok keresése
 	Find Fonts in Folder…	Betűtípusok keresése mappában…
 	Find Font…	Betűtípus keresése…
+	Retype	Újragépelés
+	Find Matching Fonts	Egyező betűtípusok keresése
+	Find more font matches	További egyező betűtípusok keresése
+	Type your text to preview	Írja be az előnézet szövegét
+	Select outlined text, then Find Matching Fonts.	Jelöljön ki körvonalakká alakított szöveget, majd válassza az Egyező betűtípusok keresése parancsot.
+	No font matches the selected shapes.	Egyik betűtípus sem egyezik a kijelölt alakzatokkal.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Az első 2048 utáni, illetve 16 csoportnál mélyebben lévő alakzatok összehasonlítása elmaradt.
+	Reset Retype Panel	Újragépelés panel visszaállítása
+	List Matching Fonts	Egyező betűtípusok listázása
+	Retype Preview	Újragépelés panel előnézete
+@msg	`count` must be a whole number from 1 to 96	`count`: 1 és 96 közötti egész szám kell
+@msg	`size` must be small, medium or large	`size`: small, medium vagy large kell
+@msg	`text` must be a string of at most 100 characters	`text`: legfeljebb 100 karakteres karakterlánc kell
+@msg	Retype: select outlined text (paths or compound paths)	Újragépelés: jelöljön ki körvonalakká alakított szöveget (útvonalakat vagy összetett útvonalakat)
 	Find in Folder…	Keresés mappában…
 	Find Next	Következő keresése
 	Find Objects	Objektumok keresése
@@ -2083,6 +2137,8 @@ file-filter	Templates	Sablonok
 	Hide Bounding Box	Befoglaló keret elrejtése
 	Hide Code	Kód elrejtése
 	Hide Corner Widget	Sarokfogantyú elrejtése
+	Hide Shape Widgets	Alakzatfogantyúk elrejtése
+	Show Shape Widgets	Alakzatfogantyúk megjelenítése
 	Hide Corner Widget for angles greater than	Sarokfogantyú elrejtése, ha a szög nagyobb, mint
 	Hide Edges	Élek elrejtése
 	Hide Gradient Annotator	Színátmenet-jelölő elrejtése
@@ -2441,6 +2497,15 @@ file-filter	Templates	Sablonok
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet
 	Kinsoku Shori Type	Kinsoku Shori típusa
+	Kinsoku Shori Settings…	Kinsoku Shori beállításai…
+	Kinsoku Shori Settings	Kinsoku Shori beállításai
+	Kinsoku Sets	Kinsoku-készletek
+	Kinsoku Set Base	Kinsoku-készlet alapja
+	Based on:	Alapja:
+	Cannot Start Line	Nem kezdhet sort
+	Cannot End Line	Nem zárhat sort
+	Hanging Punctuation	Függő írásjelek
+	Inseparable Characters	Elválaszthatatlan karakterek
 	Kite	Deltoid
 	Knife	Kés
 	Knockout Group	Kiütő csoport
@@ -3140,6 +3205,8 @@ file-filter	Templates	Sablonok
 	Overprint and Transparency Flattener Options	Felülnyomás és átlátszóság-lapítás beállításai
 	Custom…	Egyéni…
 	Custom Transparency Flattener Options	Egyéni átlátszóság-lapítási beállítások
+	The PDF preset keeps the flattener preset but not the Custom… settings.	A PDF-előbeállítás megtartja a lapítási előbeállítást, de az Egyéni… beállításokat nem.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	A PDF 1.3-fájlok a raszterizált területeket a saját régióikra vágják, és a Felülnyomás beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Az EPS-ben nincs alfa-átlátszóság, és a Felülnyomások beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	Overprint Black…	Fekete felülnyomása…
 	Overprint Fill	Kitöltés felülnyomása
@@ -3251,6 +3318,8 @@ file-filter	Templates	Sablonok
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	A PDF/X-1a-fájlok CMYK-sok: minden szín a célprofilra alakul (üresen hagyva a kimeneti cél CMYK-profiljára), profilcímke nélkül.
 	Pen	Toll
 	Pen Tool	Toll
+	Quick Pen Tool	Gyorstoll
+	Quick Pen	Gyorstoll
 	Pencil	Ceruza
 	Pencil Tool	Ceruza
 	Pentagram	Pentagram
@@ -3739,6 +3808,9 @@ mark-style	Japanese	Japán
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
 	Color Theme Picker	Színtéma-választó
+	Undo Changes	Módosítások visszavonása
+	Redo Changes	Módosítások újra
+@msg	Recolor Artwork is not open	A Grafika átszínezése nincs megnyitva
 	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
 	Prominent Colors	Domináns színek
 	Save All Colors	Összes szín mentése
@@ -3809,6 +3881,7 @@ mark-style	Japanese	Japán
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Egy élő téglalap tulajdonságai egyetlen Sarokkerekítés sugara mezőt mutatnak mind a négy sarokhoz; kikapcsolva minden saroknak saját mezője van.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mit alakítanak át az Átalakítás panel módosításai: az objektumot, a mintázatcsempéit vagy mindkettőt; az Alapértelmezett a Mintázatcsempék átalakítása beállítást követi.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Ha egy szimbólumpéldány van kijelölve, az Átalakítás panel a szimbólum regisztrációs pontját használja referenciapontként.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Téglalap, ellipszis, sokszög, csillag vagy vonal rajzolása megnyitja az Átalakítás panelt, ha zárva van.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Elsötétíti a vásznat a rajztáblákon kívül, amíg a Rajztábla eszköz aktív.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Ha A rajztáblán kívüli terület elhalványítása be van kapcsolva, a rajztáblákon kívüli terület sötét marad, miközben a Rajztábla eszközzel húz.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hány pixelnyire kell a mutatónak egy objektumhoz, horgonyponthoz vagy fogantyúhoz lennie, hogy egy kattintás kijelölje.
@@ -3884,6 +3957,55 @@ mark-style	Japanese	Japán
 	Edit type set in fonts that aren't available?	Szerkeszti a nem elérhető betűtípusokkal szedett szöveget?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Az új szöveg ezt a nyelvet kapja, amíg a Dokumentumbeállítás nyelve Angol: amerikai; a dokumentumban már meglévő szöveg megtartja a saját nyelvét.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél válik el, vagy sehol, ha nincs benne, nyelvétől és kis- vagy nagybetűitől függetlenül.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Az asztali változatban a mappa .wasm bővítményei indításkor töltődnek be, és amikor itt új mappával az OK gombra kattint, kivéve csökkentett módban; a webes változat nem tölti be őket.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Az első munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	A második munkalemez-választás: Startup, None vagy egy mappa elérési útja; a VectorCraft tárolja, de munkalemezeket még nem használ.
+	How light or dark the interface is.	Milyen világos vagy sötét a felület.
+	The set of colors the interface is drawn in.	A színek, amelyekkel a felület rajzolódik.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	A bekapcsolt, kiválasztott vagy fókuszban lévő vezérlők színe; a menü halvány, amíg a Színsémának saját kiemelőszíne van.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	A rajztáblák körüli vászon színe; az Igazítás a felület fényességéhez a Fényességből veszi. A Vázlat nézet mindig fehéren mutatja.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Az ikonjáról megnyitott panel bezárul, ha megnyomja az Esc billentyűt vagy kívülre kattint; kikapcsolva nyitva marad, amíg egy ikonra nem kattint.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Az eszköztárban minden eszközcsoport nevét az eszközei fölött mutatja; kikapcsolva a csoportok egymás után következnek, semmi sincs köztük.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Mostantól a megnyitott vagy létrehozott dokumentumok lapfülön nyílnak meg; kikapcsolva mindegyik lebegő ablakban nyílik meg. A már megnyitott dokumentumok a helyükön maradnak.
+	Makes the document tabs taller and their names larger.	Magasabbá teszi a dokumentumok lapfüleit, a nevüket pedig nagyobbá.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	A következő indítástól a rendszer rajzolja az ablak címsorát ott, ahol a VectorCraft egyébként a sajátját rajzolná.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	A következő indítástól a VectorCraft rajzolja az ablak címsorát ott is, ahol az asztali környezet rajzolná, hacsak nincs bekapcsolva a Rendszer címsora.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Nagyobbá vagy kisebbé teszi a felületet; a vásznon lévő grafika azonos nagyításnál megtartja a méretét.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	A VectorCraft által rajzolt eszközmutatók a Felület méretezésével együtt nőnek és kisebbednek; kikapcsolva megtartják a méretüket.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	A felület nyelve; az Automatikus a rendszer nyelvét használja. A párbeszédablak azonnal nyelvet vált, amint választ egyet.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Az Animált nagyítás csak akkor működik, ha ez be van kapcsolva; kikapcsolva az Animált nagyítás halvány, és a nagyítás nem animált.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	A görgős nagyítás simán úszik be, a Nagyító pedig akkor nagyít, amikor oldalra húz vagy lenyomva tartja; kikapcsolva a Nagyító arra a területre nagyít, amelyen áthúz.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A következő indítástól az asztali változat ilyen típusú grafikus processzorral rajzol; az Automatikus a kijelzőt meghajtót részesíti előnyben. A webes változat nem használja.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	A dokumentumonként megőrzött visszavonási lépések legnagyobb száma; kisebb szám az OK gombra kattintáskor törli a legrégebbi lépéseket. A lépések korábban is törlődhetnek, ha túl sok memóriát foglalnak.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Húzás közben mutatja a grafika változását; kikapcsolva körvonalak követik a húzást, és a grafika elengedéskor változik. A vonalzó segédvonala húzás közben mindig mozog.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hány munkaszál rajzolja a grafikát; a -1 eggyel kevesebbet használ, mint ahány magot a VectorCraft használhat, legfeljebb 8-at, a 0 egyet sem. A webes változat soha nem használ egyet sem.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	A következő indítástól Wayland asztalon az X11 (XWayland) az XWaylanden át nyitja meg az ablakot; a többi lehetőség csak akkor, ha toll van csatlakoztatva.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	A következő indítástól az asztali verzió a kijelző frissítésére való várakozás nélkül jeleníti meg a képkockákat, legfeljebb 240-et másodpercenként; kikapcsolva a kijelző diktálja az ütemüket.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	A nagyobb keret az objektumszűrők minden futtatásának alap utasításszámát ötszörösére emeli, a bemeneti bájtonkénti többletet pedig változatlanul hagyja; a nehéz szűrők, az élő effektusok, az exportálók és az importálók megtartják saját korlátaikat.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	A vásznon lévő grafikát és rajztáblákat a kijelző színprofiljára alakítja, ahol ezt a rendszer még nem teszi meg; kikapcsolva a vászon sRGB-ben jelenik meg.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	Az asztali változatban a fájlba mentés a háttérben íródik ki, miközben tovább szerkeszt; kikapcsolva megvárja, amíg kiíródik.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	Az asztali változatban a fájlokba exportálás és a csomagok a háttérben íródnak ki, miközben tovább szerkeszt, kivéve a 3D-exportokat; kikapcsolva megvárja őket.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Néhány percenként helyreállítási másolatot készít minden dokumentumról, amelyben az előző másolata óta mentetlen változások vannak; kikapcsolva nem készülnek időzített másolatok.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Hány perc telik el két helyreállítási másolat között, amíg a Helyreállítási adatok automatikus mentése be van kapcsolva.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	Az asztali változatban a mappa, ahol a helyreállítási másolatok vannak; hagyja üresen a VectorCraft saját mappájához. A webes változat a böngészőben tárolja őket.
+	No timed recovery copies are made of documents with more than 20,000 objects.	A 20 000-nél több objektumot tartalmazó dokumentumokról nem készülnek időzített helyreállítási másolatok.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	A Legutóbbi fájlok megnyitása és a Kezdőképernyő legfeljebb ennyi legutóbbi fájlt sorol fel; 0 esetén egyet sem, és a VectorCraft ekkor is megjegyez legfeljebb 30-at.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Dokumentum megnyitásakor a mentett előnézetét mutató csatolt EPS-kép megtartja azt, ahelyett hogy újra beolvasná az EPS-fájlt; a módosult fájlokra továbbra is a Csatolások frissítése érvényes.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Pixeles előnézetben a képek simítva jelennek meg; kikapcsolva a képpontjaik éles szélűek. A Pixeles előnézeten kívül a képek mindig simítottak.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Ha egy csatolt fájl megváltozik, az Automatikusan újra beolvassa, a Kérdés módosításkor előbb rákérdez, a Kézzel pedig változatlanul hagyja, és megjegyzést mutat az állapotsoron.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Az asztali változatban a mappa, amelyből az Új sablonból… és a Mentés sablonként… indul; hagyja üresen a dokumentumok mappájában lévő VectorCraft Templates mappához.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Az Eredeti szerkesztése a csatolt fájlt a rendszer adott típushoz tartozó alapértelmezett alkalmazásában nyitja meg; kikapcsolva a csatolt raszterkép a PhotoCraftban nyílik meg, ha telepítve van.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	A VectorCraft egy régebbi verziójával mentett fájl a neve után [Converted] jelöléssel nyílik meg, és a Mentés megkérdezi, hova mentse; kikapcsolva a Mentés felülírja a fájlt.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	A VectorCraft-fájlok és -sablonok tömörítve, így kisebb méretben mentődnek, hacsak a mentés mást nem ad meg; a tömörített fájlokat meg nem nyitó verziókhoz készülő mentések tömörítetlenek maradnak.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	A Másolás és a Kivágás a grafika SVG-kódját is átadja más alkalmazásoknak; asztali gépen a kód nem másolódik szövegként, ha a grafika 1 MiB-nál több képet ágyaz be.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windowson a Másolás és a Kivágás a grafika PDF-jét is átadja más alkalmazásoknak; a többi platform még nem másol PDF-et.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	A VectorCraft menti ezt a választást, de a Másolás és a Kivágás még nem használ régi vektoros vágólapformátumot.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Útvonalak megtartása vagy Megjelenés és felülnyomások megtartása a régi vektoros vágólaphoz; a VectorCraft menti a választást, de még nem használja.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	A Formázás megtartása megőrzi a VectorCraft szövegobjektumából másolt szöveg stílusait, amikor szövegobjektumba illesztik; a Csak a szöveg megtartása a beillesztés helyének stílusát adja neki.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Az új szöveg ezt a nyelvet kapja, amíg a Dokumentumbeállítás nyelve Angol: amerikai, és a [Normál karakterstílus] nem állít be nyelvet; a dokumentumban már meglévő szöveg megtartja a saját nyelvét.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél válik el, vagy sehol, ha nincs benne, kis- vagy nagybetűitől függetlenül; a koreai szavak nem kapnak kötőjelet, az indiai nyelvű szavak pedig nem válnak el egy karaktercsoporton belül.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -4016,6 +4138,7 @@ mark-style	Japanese	Japán
 	Save Document Preset	Dokumentum-előbeállítás mentése
 	Preset {number}	Előbeállítás {number}
 	Save Preset…	Előbeállítás mentése…
+	Save Summary…	Összegzés mentése…
 	Save Print Preset	Nyomtatási előbeállítás mentése
 	Save Recovery Data	Helyreállítási adatok mentése
 	Save Save for Web Preset	Webes mentési előbeállítás mentése
@@ -4363,6 +4486,7 @@ mark-style	Japanese	Japán
 	Show Modified	Módosultak megjelenítése
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
+	Show on Shape Creation	Megjelenítés alakzat létrehozásakor
 	Show Recent Colors	Legutóbbi színek megjelenítése
 	Toggle RGB Percent	RGB százalékos megjelenítésének váltása
 	Show Original Path	Eredeti útvonal megjelenítése
@@ -4392,6 +4516,7 @@ mark-style	Japanese	Japán
 	Show Tile Edge	Csempeszél megjelenítése
 	Show Tints/Shades	Világosabb/sötétebb árnyalatok
 	Show Tool Group Labels	Eszközcsoportok címkéinek megjelenítése
+	Show Tool Cards	Eszközkártyák megjelenítése
 	Show Tool Tips	Elemleírások megjelenítése
 	Show Transparency Grid	Átlátszósági rács megjelenítése
 	Show Video Rulers	Videovonalzók megjelenítése
@@ -4504,6 +4629,8 @@ mark-style	Japanese	Japán
 	Sort by Status	Rendezés állapot szerint
 	Source code on GitHub	Forráskód a GitHubon
 	Source Image	Forráskép
+	Split View	Osztott nézet
+	Divider	Elválasztó
 	Source Sans 3	Source Sans 3
 	Space After Paragraph	Térköz a bekezdés után
 	Space Before Paragraph	Térköz a bekezdés előtt
@@ -4681,6 +4808,17 @@ mark-style	Japanese	Japán
 	Symbol Libraries	Szimbólumkönyvtárak
 	Symbol Screener Tool	Szimbólumhalványító
 	Symbol Scruncher Tool	Szimbólumtömörítő
+	Tool:	Eszköz:
+	Symbol Set Density	Szimbólumkészlet sűrűsége
+	Symbol Sprayer Options	Szimbólumszóró beállításai
+	Scrunch:	Tömörítés:
+	Spin:	Forgatás:
+	Screen:	Halványítás:
+	Stain:	Színezés:
+	Symbol Sizer Options	Szimbólumméretező beállításai
+	Proportional Resizing	Arányos átméretezés
+	Resizing Affects Density	Az átméretezés befolyásolja a sűrűséget
+	Show Brush Size and Intensity	Ecsetméret és erősség megjelenítése
 	Symbol Set Density:	Szimbólumkészlet sűrűsége:
 	Symbol Shifter Tool	Szimbólumtoló
 	Symbol Sizer Tool	Szimbólumméretező
@@ -5008,6 +5146,8 @@ mark-style	Japanese	Japán
 	Unembed…	Beágyazás megszüntetése…
 	Ungroup	Csoportbontás
 	Ungroup Color Group	Színcsoport bontása
+	Color Group Options	Színcsoport beállításai
+	Color Group Options…	Színcsoport beállításai…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5394,6 +5534,7 @@ imageTrace	Outline	Körvonal
 @msg	a freeform gradient keeps at least one point	a szabad formájú színátmenetben legalább egy pont marad
 @msg	a gradient needs at least two stops	a színátmenethez legalább két színátmenet-pont kell
 @msg	a graphic style named `{to}` already exists	már van ilyen nevű grafikai stílus: `{to}`
+@msg	a swatch or color group named `{name}` already exists	már van ilyen nevű színminta vagy színcsoport: `{name}`
 @msg	a key object sits on that point	ezen a ponton kulcsobjektum van
 @msg	a layer couldn't be read	egy réteg nem olvasható
 @msg	a page is missing	hiányzik egy oldal
@@ -5786,6 +5927,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	give corners of the path: anchors where its sides meet at an angle	add meg az útvonal sarkait: azokat a horgonypontokat, ahol az oldalai szögben találkoznak
 @msg	give horizontal or vertical	add meg a horizontal vagy a vertical értéket
 @msg	give only one of onto, below and above	az onto, below és above közül csak egyet adj meg
+@msg	give only one of `index`, `indices` and `t`	az `index`, `indices` és `t` közül csak egyet adj meg
 @msg	give the path `id` and the width point `index`	add meg az útvonal `id` és a szélességi pont `index` értékét
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	a színátmenet nincs megadva a fájlban: „{name}”; helyette egyszínű kitöltés áll
 @msg	group must be true or false	a group értéke true vagy false lehet
@@ -5897,6 +6039,11 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no anchor points selected	nincs kijelölt horgonypont
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
+@msg	the path is straight there, so no circle matches its curvature	az útvonal ott egyenes, így egyetlen kör sem illeszkedik a görbületéhez
+@msg	the path has a cusp there, so it has no single curvature	az útvonalnak ott csúcspontja van, így nincs egyértelmű görbülete
+@msg	the path has a corner there, so it has no single curvature	az útvonalnak ott sarka van, így nincs egyértelmű görbülete
+@msg	a guide has no curvature circle	a segédvonalnak nincs görbületi köre
+@msg	the circle that matches the path there would reach past the canvas	az útvonalhoz ott illeszkedő kör túlnyúlna a vásznon
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
@@ -6007,6 +6154,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`link` places a handle: give `handle`	`link` fogantyút helyez el: adja meg a `handle` értéket
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces`: legfeljebb 10000 darabból álló lista kell
+@msg	give either `start` for a new path or `id`, not both	adja meg vagy a `start` értéket egy új útvonalhoz, vagy az `id` értéket, de ne mindkettőt
+@msg	`subpath` and `keep` need `id`	a `subpath` és a `keep` mellé `id` kell
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont
@@ -6336,8 +6486,29 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
 @msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	a CDR {version} rajzai nem nyithatók meg; a VectorCraft ezeket a verziókat olvassa: 1–27
+@msg	this CDR drawing can't be read ({why})	ez a CDR-rajz nem olvasható ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	kimaradtak a CDR szövegei, bitképei, összemosásai, kontúrjai, ecsetvonásai és egyéb objektumai, amelyeket a VectorCraft még nem olvas
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	kimaradtak a CDR színátmenetes, mintázatos, textúrás és PostScript-kitöltései
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	a CDR olyan színmodelljeiben megadott színek, amelyeket a VectorCraft nem olvas, feketeként nyíltak meg
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	a CDR könyvtári színei, amelyeket a rajz csak számként tárol, fekete direktszínként nyíltak meg
+@msg	CDR outline arrowheads were left out	kimaradtak a CDR körvonalainak nyílhegyei
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	a CDR burkolók nem lettek alkalmazva, és az alattuk lévő alakzatok megtartják a körvonalukat
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	a CDR lencsék és objektumátlátszóság nem lettek alkalmazva, és az objektumok, amelyeken vannak, átlátszatlanul jelennek meg
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	kimaradtak a rajz túl mélyen egymásba ágyazott vagy az importálási korlátokon túli részei
+@msg	damaged parts of the drawing were left out	kimaradtak a rajz sérült részei
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CDR-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik
+@msg	this CMX file can't be read ({why})	ez a CMX-fájl nem olvasható ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	kimaradtak a CMX szövegei, képei, téglalapjai, ellipszisei, vágógörbéi és egyéb objektumai, amelyeket a VectorCraft még nem olvas
+@msg	CMX fills other than uniform colors were left out	kimaradtak a CMX kitöltései, amelyek nem egyszínűek
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	a CMX olyan színmodelljeiben megadott színek, amelyeket a VectorCraft nem olvas, feketeként nyíltak meg
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	a CMX könyvtári színei, amelyeket a fájl csak számként tárol, fekete direktszínként nyíltak meg
+@msg	CMX outline arrowheads were left out	kimaradtak a CMX körvonalainak nyílhegyei
+@msg	CMX lenses were not applied	a CMX lencsék nem lettek alkalmazva
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CMX-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
+@msg	the Save PDF dialog is not open	a PDF mentése párbeszédablak nincs megnyitva
 @msg	the scale is not a usable number	a méretarány nem használható szám
 @msg	the search couldn't start: try again in a moment	a keresés nem indult el: próbáld újra egy kicsit később
 @msg	the selected stroke's profile is already listed as {_1}	a kijelölt körvonal profilja már szerepel a listán: {_1}
@@ -6446,6 +6617,49 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	the PSD file's layer groups are nested too deeply	a PSD-fájl rétegcsoportjai túl mélyen vannak egymásba ágyazva
 @msg	a layer of the PSD file is too large to read	a PSD-fájl egyik rétege túl nagy a beolvasáshoz
 @msg	the PSD file's layers take more memory to read than allowed	a PSD-fájl rétegeinek beolvasása több memóriát igényel a megengedettnél
+@msg	the file is no longer loaded	a fájl már nincs betöltve
+@msg	the layers can't be read ({e}): the file was placed as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként lett elhelyezve
+@msg	1 type layer came in as pixels: the text isn't editable	1 szövegréteg képpontokként érkezett: a szöveg nem szerkeszthető
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} szövegréteg képpontokként érkezett: a szöveg nem szerkeszthető
+@msg	1 adjustment layer was not applied	1 korrekciós réteg nem lett alkalmazva
+@msg	{n} adjustment layers were not applied	{n} korrekciós réteg nem lett alkalmazva
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 kitöltőréteg nem lett megrajzolva (színátmenetes vagy mintás kitöltés, nem olvasható szín, vagy képpontokat nem tároló alakzat)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} kitöltőréteg nem lett megrajzolva (színátmenetes vagy mintás kitöltés, nem olvasható szín, vagy képpontokat nem tároló alakzat)
+@msg	the layer effects of 1 layer weren't drawn	1 réteg rétegeffektusai nem lettek megrajzolva
+@msg	the layer effects of {n} layers weren't drawn	{n} réteg rétegeffektusai nem lettek megrajzolva
+@msg	the vector masks of 1 layer weren't applied	1 réteg vektoros maszkjai nem lettek alkalmazva
+@msg	the vector masks of {n} layers weren't applied	{n} réteg vektoros maszkjai nem lettek alkalmazva
+@msg	the knockout of 1 layer wasn't applied	1 réteg kiütése nem lett alkalmazva
+@msg	the knockout of {n} layers wasn't applied	{n} réteg kiütése nem lett alkalmazva
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 réteg kimaradt (rejtett rétegek és a hozzájuk vágott rétegek)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} réteg kimaradt (rejtett rétegek és a hozzájuk vágott rétegek)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	kimaradt 1 réteg, amely egy meg nem rajzolt kitöltőréteghez van vágva
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	kimaradt {n} réteg, amely meg nem rajzolt kitöltőrétegekhez van vágva
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	a VectorCraftban nem létező keverési módú rétegek ({modes}) egyesítve lettek az alattuk lévő rétegekkel
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 réteg a VectorCraftban nem létező keverési módban Normál módban érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} réteg a VectorCraftban nem létező keverési módokban Normál módban érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 alatta lévő réteghez vágott réteg vágás nélkül érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} alatta lévő réteghez vágott réteg vágás nélkül érkezett: az egyesítéshez több memória kell a megengedettnél
+@msg	hiddenLayers applies to a PSD file placed with layers: true	a hiddenLayers a layers: true beállítással elhelyezett PSD-fájlra vonatkozik
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: a csatolt PSD-fájl a lapos képeként kerül elhelyezésre; adja meg a link: false beállítást, hogy a szeleteivel együtt legyen beágyazva
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: a csatolt PSD-fájl a lapos képeként kerül elhelyezésre; hagyja el a link beállítást, vagy adja meg: link: false
+@msg	the slices can't be read ({e}) and were left out	a szeletek nem olvashatók ({e}), ezért kimaradtak
+@msg	1 slice lies outside the canvas or has no size and was left out	1 szelet a vásznon kívül esik vagy nincs mérete, ezért kimaradt
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} szelet a vásznon kívül esik vagy nincs mérete, ezért kimaradt
+@msg	1 slice would lie outside the canvas and was left out	1 szelet a vásznon kívül esne, ezért kimaradt
+@msg	{n} slices would lie outside the canvas and were left out	{n} szelet a vásznon kívül esne, ezért kimaradt
+@msg	the slices' descriptor holds too many values	a szeletek leírója túl sok értéket tartalmaz
+@msg	the slices' descriptor has a version other than 16	a szeletek leírójának verziója nem 16
+@msg	the slices are stored in version {v}, which isn't read	a szeletek {v} verzióban vannak tárolva, amely nem olvasható
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	a fájlban {count} szelet van, több a beolvasott {MAX_SLICES} darabnál
+@msg	the slices' descriptor has no list of slices	a szeletek leírójában nincs szeletlista
+@msg	the slices' descriptor lists something other than a slice	a szeletek leírója szeleten kívül mást is felsorol
+@msg	a slice in the slices' descriptor has no bounds	a szeletek leírójában egy szeletnek nincsenek határai
+@msg	a slice's bounds in the slices' descriptor aren't numbers	a szeletek leírójában egy szelet határai nem számok
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	a szeletek egyik szövege hosszabb a beolvasott {MAX_TEXT} karakternél
+@msg	the slices' descriptor nests too deep	a szeletek leírója túl mélyen van egymásba ágyazva
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	a szeletek leírójában ismeretlen fajtájú hivatkozás van ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	a szeletek leírójában ismeretlen típusú érték van ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	a rétegek nem olvashatók ({e}): a fájl az egyesített képeként nyílt meg
 @msg	zone must be a string	a zone értéke szöveg lehet
 @msg	zone must be tab, center, left, right, top or bottom	a zone értéke tab, center, left, right, top vagy bottom lehet
@@ -7266,6 +7480,10 @@ axis	Y Axis	Y tengely
 	Create New Action	Új művelet létrehozása
 	Play Action	Művelet lejátszása
 	Action Set:	Műveletkészlet:
+	Choose Align To at playback	Igazítási cél választása lejátszáskor
+	Align steps use the key object, key anchor or key guide when one is set.	Az igazítási lépések a kulcsobjektumot, a kulcs-horgonypontot vagy a kulcssegédvonalat használják, ha van ilyen.
+	With one whole object selected and no key, they use the artboard.	Egy teljes egészében kijelölt objektummal és kulcs nélkül a rajztáblát használják.
+	Otherwise they use the selection.	Egyébként a kijelölést használják.
 	Function Key:	Funkcióbillentyű:
 	Record	Felvétel
 	Create New Set	Új készlet létrehozása
@@ -7298,6 +7516,7 @@ axis	Y Axis	Y tengely
 	Inventory Icons	Leltári ikonok
 	Skill Icons	Képességikonok
 	Weather Icons	Időjárás-ikonok
+	Media Controls	Médiavezérlők
 	Attack	Támadás
 	Defend	Védelem
 	Heal	Gyógyítás
@@ -7671,6 +7890,10 @@ axis	Y Axis	Y tengely
 	Rain	Eső
 	Thunder	Mennydörgés
 	Snow	Hó
+	Play	Lejátszás
+	Pause	Szünet
+	Skip Next	Ugrás a következőre
+	Shuffle	Véletlen sorrend
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -8129,6 +8352,8 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Érintőkör…
 	Tangent Circle	Érintőkör
+	Tangent Circle Tool	Érintőkör eszköz
+	No tangent circle here	Itt nincs érintőkör
 	Circle:	Kör:
 @msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
 @msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
@@ -8144,6 +8369,16 @@ breakText	Glyphs	Glifák
 @msg	`circle` is past the last circle found ({found})	a `circle` az utolsó talált kör után van ({found})
 @msg	object {value} is not a path or compound path	a(z) {value} objektum nem útvonal és nem összetett útvonal
 @msg	these shapes are too small to measure	ezek az alakzatok túl kicsik a méréshez
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Befoglaló téglalap hozzáadása
+	Add Bounding Circle	Befoglaló kör hozzáadása
+	Add Bounding Rectangle…	Befoglaló téglalap hozzáadása…
+	Add Bounding Circle…	Befoglaló kör hozzáadása…
+	One per Object	Objektumonként egy
+@msg	nothing to enclose	nincs mit körülvenni
+@msg	`offset` must be 0 or more	`offset`: 0 vagy nagyobb érték kell
+@msg	the shape would have no size	az alakzatnak nem lenne mérete
+@msg	the shape would reach past the edge of the canvas	az alakzat túlnyúlna a vászon szélén
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -10412,6 +10647,39 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Az elemleírás helyett kártyán mutatja, mit csinál az eszköztár egy eszköze és a billentyűi; ehhez az Elemleírások megjelenítése szükséges.
+	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.
+	Selects anchor points and path segments to reshape a path.	Horgonypontokat és útvonalszakaszokat jelöl ki egy útvonal alakjának módosításához.
+	Draws paths point by point, with straight segments and smooth curves.	Pontról pontra rajzol útvonalakat egyenes szakaszokkal és sima görbékkel.
+	Draws smooth curves through the points you click.	Sima görbéket rajzol a kattintott pontokon keresztül.
+	Adds text at a point, or in a frame you drag.	Szöveget ad hozzá egy pontban vagy egy kihúzott keretben.
+	Draws rectangles and squares.	Téglalapokat és négyzeteket rajzol.
+	Draws rectangles with rounded corners.	Lekerekített sarkú téglalapokat rajzol.
+	Draws ellipses and circles.	Ellipsziseket és köröket rajzol.
+	Draws polygons with sides of equal length.	Egyenlő hosszúságú oldalú sokszögeket rajzol.
+	Draws stars.	Csillagokat rajzol.
+	Turns objects around a reference point.	Objektumokat forgat egy referenciapont körül.
+	Flips objects across an axis through a reference point.	Objektumokat tükröz egy referenciaponton átmenő tengelyre.
+	Resizes objects from a reference point.	Objektumokat méretez át egy referenciaponttól.
+	Slants objects from a reference point.	Objektumokat dönt meg egy referenciaponttól.
+	Moves the view of the document.	A dokumentum nézetét mozgatja.
+	Magnifies or reduces the view.	Nagyítja vagy kicsinyíti a nézetet.
+	Copies the color and other attributes of one object to the selection.	Egy objektum színét és egyéb jellemzőit másolja a kijelölésre.
+	Sets the direction and length of a gradient.	Beállítja egy színátmenet irányát és hosszát.
+	Creates, selects and resizes artboards.	Rajztáblákat hoz létre, jelöl ki és méretez át.
+	Changes the width of a stroke along its length.	Egy körvonal szélességét módosítja a hossza mentén.
+	Bends art by dragging pins placed on it.	A rajzot a rá helyezett tűk húzásával hajlítja.
+	Pushes the outlines of paths in the direction you drag.	Az útvonalak körvonalát a húzás irányába tolja.
+	Twists the outlines of paths into swirls.	Az útvonalak körvonalát örvényekké csavarja.
+	Pulls the outlines of paths in toward the brush.	Az útvonalak körvonalát az ecset felé húzza.
+	Pushes the outlines of paths out from the brush.	Az útvonalak körvonalát kifelé tolja az ecsettől.
+	Adds curved details along the outlines of paths.	Ívelt részleteket ad az útvonalak körvonala mentén.
+	Adds spiky details along the outlines of paths.	Tüskés részleteket ad az útvonalak körvonala mentén.
+	Adds wrinkles along the outlines of paths.	Ráncokat ad az útvonalak körvonala mentén.
+	Moves, copies and resizes objects on the perspective grid.	Objektumokat mozgat, másol és méretez át a perspektivikus rácson.
+	Makes a series of steps between two or more objects.	Lépések sorozatát hozza létre két vagy több objektum között.
+	Places dimension lines that show measured lengths.	Méretvonalakat helyez el, amelyek mért hosszakat mutatnak.
 	Tap	Rövid lenyomás
 	Clear Hold	Nyomva tartás törlése
 	Hold Shortcuts	Nyomva tartásos billentyűparancsok
@@ -10442,7 +10710,23 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Image Brush	Képecsetek
+	Soft Bloom	Lágy virágzás
+	Halftone Field	Féltónusmező
+	Solar Grain	Napszemcse
+	Color Flecks	Színes pettyek
+	Paper Cutouts	Papírkivágások
+	Coral Layers	Korallrétegek
+	Mint Layers	Mentás rétegek
+	Midnight Layers	Éjféli rétegek
+	Sunflower Sheet	Napraforgólap
+	Rose Layers	Rózsaszín rétegek
+	Monochrome Stack	Monokróm köteg
 	Dashed Arrow	Szaggatott nyíl
+	Fine Stipple	Finom pontozás
+	Dense Stipple	Sűrű pontozás
+	Soft Stipple	Lágy pontozás
+	Bold Stipple	Erős pontozás
 	Pressure Sensitive	Nyomásérzékeny
 	Flex Ribbon	Rugalmas szalag
 	Pulse Stroke	Lüktető vonás
@@ -10458,3 +10742,7 @@ breakText	Glyphs	Glifák
 @msg	Other blanks not shown: {count}	További kiterítékek nincsenek megjelenítve: {count}
 @msg	A joint does not close by {gap} pt.	Egy illesztés {gap} pt-tal nem záródik.
 @msg	Two panels pass through each other.	Két panel áthatol egymáson.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Eredeti szerkesztése ezzel:
+file-filter	Applications	Alkalmazások

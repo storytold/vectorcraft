@@ -648,6 +648,9 @@ pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Sc
         s.spacing.interact_size = egui::vec2(24.0, 24.0);
         s.spacing.menu_margin = egui::Margin::same(6);
         s.spacing.slider_width = 120.0;
+        // Every scroll area shows its bar while it has more to show, in a column of its own,
+        // not only while the pointer is over it (#5941).
+        s.spacing.scroll = crate::widgets::list_scroll_style();
         s.text_styles = [
             (TextStyle::Small, FontId::proportional(11.0)),
             (TextStyle::Body, FontId::proportional(13.0)),

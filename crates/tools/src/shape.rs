@@ -113,8 +113,7 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
-    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
-    /// ellipse.
+    /// The anchors an ellipse has (the Ellipse dialog opens on it); 4 is a live ellipse.
     pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
@@ -180,6 +179,7 @@ fn circle_through_points(points: &[Point]) -> (String, Value) {
 struct DragOptions {
     sides: u32,
     points: u32,
+    anchors: u32,
     corner_radius: f64,
     star_ratio: f64,
 }
@@ -286,13 +286,14 @@ impl ShapeTool {
     }
 
     fn drag_options(&self) -> DragOptions {
-        DragOptions { sides: self.sides, points: self.points, corner_radius: self.corner_radius, star_ratio: self.star_ratio }
+        DragOptions { sides: self.sides, points: self.points, anchors: self.anchors, corner_radius: self.corner_radius, star_ratio: self.star_ratio }
     }
 
     /// Put back the options a canceled drag changed.
     fn restore_drag_options(&mut self, o: DragOptions) {
         self.sides = o.sides;
         self.points = o.points;
+        self.anchors = o.anchors;
         self.corner_radius = o.corner_radius;
         self.star_ratio = o.star_ratio;
     }
@@ -492,7 +493,11 @@ impl ShapeTool {
             PointerKind::Up => match self.widget.take() {
                 Some(WidgetDrag::Corner(c)) => c.finish(),
                 Some(WidgetDrag::Pie(d)) => d.finish(),
-                Some(WidgetDrag::Sides(d)) => d.finish(),
+                Some(WidgetDrag::Sides(mut d)) => {
+                    let mut out = d.drag(cx, ev.pos);
+                    out.extend(d.finish());
+                    out
+                }
                 None => vec![],
             },
             _ => vec![],
@@ -603,6 +608,8 @@ impl ShapeTool {
                 let mut v = box_params(start, p, m, base);
                 if self.id == "roundedRectangle" {
                     v["radius"] = json!(self.corner_radius);
+                } else if self.id == "ellipse" && self.anchors != 4 {
+                    v["anchors"] = json!(self.anchors);
                 }
                 (cmd.into(), v)
             }
@@ -887,6 +894,14 @@ impl Tool for ShapeTool {
                 self.points = self.points.saturating_sub(1).max(3);
                 true
             }
+            ("ellipse", ToolKey::Up) => {
+                self.anchors = self.anchors.saturating_add(1).min(1000);
+                true
+            }
+            ("ellipse", ToolKey::Down) => {
+                self.anchors = self.anchors.saturating_sub(1).max(2);
+                true
+            }
             ("roundedRectangle", ToolKey::Up) => {
                 self.corner_radius = (self.corner_radius + 1.0).min(MAX_CORNER_RADIUS);
                 true
@@ -898,7 +913,9 @@ impl Tool for ShapeTool {
             _ => false,
         };
         if changed {
-            let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
+            // A count-only key keeps the corner a tangent-snapped circle already showed.
+            let p = self.tangent_corner.map_or(self.last, |d| s + d);
+            let (c, v) = self.command_at(s, p, self.mods, cx.constrain_angle);
             vec![self.preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
@@ -1099,6 +1116,7 @@ impl Tool for ShapeTool {
             match key {
                 "sides" => b.sides = self.sides,
                 "points" => b.points = self.points,
+                "anchors" => b.anchors = self.anchors,
                 "cornerRadius" => b.corner_radius = self.corner_radius,
                 "starRatio" => b.star_ratio = self.star_ratio,
                 _ => {}
