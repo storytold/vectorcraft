@@ -10426,6 +10426,11 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Paint	Pittura
+	Flat Sweep	Passata piatta
+	Dry Drag	Trascinamento secco
+	Loaded Stroke	Tratto carico
+	Fan Sweep	Passata a ventaglio
 	Engraving	Incisione
 	Fine Hatching	Tratteggio fine
 	Dense Hatching	Tratteggio fitto

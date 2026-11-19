@@ -10389,6 +10389,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Paint	페인트
+	Flat Sweep	평평한 붓질
+	Dry Drag	마른 붓질
+	Loaded Stroke	두터운 붓질
+	Fan Sweep	부채꼴 붓질
 	Engraving	판화
 	Fine Hatching	가는 해칭
 	Dense Hatching	촘촘한 해칭

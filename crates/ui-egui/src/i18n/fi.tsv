@@ -8982,6 +8982,11 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Paint	Maalaus
+	Flat Sweep	Tasainen veto
+	Dry Drag	Kuiva veto
+	Loaded Stroke	Runsas siveltimenveto
+	Fan Sweep	Viuhkaveto
 	Engraving	Kaiverrus
 	Fine Hatching	Hieno viivoitus
 	Dense Hatching	Tiheä viivoitus
