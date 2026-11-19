@@ -45,6 +45,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-rounded-rect" => "dc-rounded-rect",
         "tool-ellipse" => "dc-ellipse",
         "tool-circle" => "dc-circle-points",
+        "tool-curvature-circle" => "dc-curvature-circle",
         "tool-polygon" => "dc-polygon",
         "tool-star" => "star",
         "tool-flare" => "dc-flare",
