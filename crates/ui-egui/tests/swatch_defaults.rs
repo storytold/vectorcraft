@@ -326,7 +326,11 @@ fn review_597971_action_observation(outer: bool, partial: bool) -> (Value, Value
     assert!(!dst.join("b.vectorcraft").exists(), "a failed open does not produce an output file");
     assert_eq!(std::fs::read(src.join("a.vectorcraft")).unwrap(), source_bytes, "Folder destination preserves the input");
     assert_eq!(review_597971_original_document(&app), original, "opened source closes back to the unchanged original document");
-    assert_eq!(app.session.prefs.default_swatches, stock.session.prefs.default_swatches, "the real batch changed the live preference to Factory");
+    assert_eq!(
+        app.session.prefs.default_swatches,
+        Some(vectorcraft_engine::SavedSwatchDefaults::Factory),
+        "the real batch changed the live preference to Factory"
+    );
     let first_save = app.take_prefs_changed();
     let second_save = app.take_prefs_changed();
     let next_palette = review_597971_next_palette(&app);

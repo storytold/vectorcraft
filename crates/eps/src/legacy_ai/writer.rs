@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DEEP_DISTORTED, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
 
 #[cfg(test)]
 thread_local! {
@@ -322,14 +322,23 @@ impl<'a> Writer<'a> {
                 self.lock(locked);
                 self.text(t);
             }
-            NodeKind::Image(im) => {
+            // A distorted image too deep for its pieces is written at the placement nearest its
+            // corners.
+            NodeKind::Image(im) if !n.is_distorted_image() || self.nest >= MAX_NEST => {
                 self.lock(locked);
                 let shown = self.doc.shown_image(n, im);
                 let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
-                self.image(blob, im.width, im.height, im.xf, colorize);
+                let xf = match vectorcraft_doc::image_quad::nearest_affine(n) {
+                    Some(near) => {
+                        self.warn(DEEP_DISTORTED);
+                        near
+                    }
+                    None => im.xf,
+                };
+                self.image(blob, im.width, im.height, xf, colorize);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
@@ -348,7 +357,8 @@ impl<'a> Writer<'a> {
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);

@@ -591,6 +591,7 @@ font-technology	Variable	Değişken
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tekerlek Görünümü
 	Box View	Kutu Görünümü
+	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
@@ -3149,6 +3150,10 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Mevcut olmayan yazı tiplerindeki metin düzenlensin mi?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Tuvalde her dilimin numarasını sol üst köşesindeki bir kutuda gösterir; kapalıyken dilimlerin dış çizgileri görünmeye devam eder.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kullanıcı ve nesne dilimlerinin dış çizgilerinin ve numara kutularının rengi; otomatik dilimler bu rengin daha soluk bir tonunu kullanır.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden tirelenir, tire yoksa hiç tirelenmez; dili ve büyük/küçük harf durumu fark etmez.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Masaüstü sürümünde bu klasördeki .wasm eklentileri başlangıçta ve Tamam yeni bir klasör ayarladığında yüklenir, Güvenli Mod hariç; izin isteyen bir eklenti ancak siz izinleri verdikten sonra yüklenir. Web sürümü hiçbirini yüklemez.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Büyük, bir filtre veya komut eklentisinin her çalışmasına aynı süre sınırıyla en az 250 milyon talimat verir; Normal eklentinin kendi bütçesini korur. Canlı efektler, dışa aktarıcılar ve içe aktarıcılar kendi bütçelerini korur.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu ve [Normal Karakter Stili] bir dil belirlemediği sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden bölünür, tire yoksa hiç bölünmez; dili ve büyük/küçük harf durumu fark etmez.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Masaüstü sürümünde bu klasördeki .wasm eklentileri başlangıçta ve burada yeni bir klasörle Tamam'a tıkladığınızda yüklenir, Güvenli Mod hariç; web sürümü bunları yüklemez.
@@ -3164,8 +3169,8 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Araç çubuğunda her araç grubunun adını araçlarının üstünde gösterir; kapalıyken gruplar arada hiçbir şey olmadan birbirini izler.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Bundan sonra açtığınız veya oluşturduğunuz belgeler sekme olarak açılır; kapalıyken her biri kayan bir pencerede açılır. Zaten açık olan belgeler yerinde kalır.
 	Makes the document tabs taller and their names larger.	Belge sekmelerini daha yüksek, adlarını daha büyük yapar.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Bir sonraki başlatmadan itibaren sistem, VectorCraft'ın aksi halde kendi başlık çubuğunu çizeceği yerde pencerenin başlık çubuğunu çizer.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Bir sonraki başlatmadan itibaren VectorCraft, masaüstünün çizeceği yerlerde bile pencerenin başlık çubuğunu çizer; Sistem Başlık Çubuğu açıksa çizmez.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Bir sonraki başlatmadan itibaren sistem, VectorCraft'ın aksi halde kendi başlık çubuğunu çizeceği yerde pencerenin başlık çubuğunu çizer; Linux ve BSD'lerde VECTORCRAFT_TITLEBAR değişkeni önceliklidir.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Bir sonraki başlatmadan itibaren VectorCraft, masaüstünün çizeceği yerlerde bile pencerenin başlık çubuğunu çizer; Sistem Başlık Çubuğu açıksa veya VECTORCRAFT_TITLEBAR değişkeni onu seçiyorsa çizmez.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Arayüzü büyütür veya küçültür; kanvastaki çizim aynı yakınlaştırmada boyutunu korur.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft'ın çizdiği araç işaretçileri Kullanıcı Arayüzü Ölçeklendirme ile büyüyüp küçülür; kapalıyken boyutlarını korur.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Arayüzün dili; Otomatik, sistemin dilini kullanır. İletişim kutusu, bir dil seçer seçmez o dile geçer.
@@ -3191,6 +3196,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Son Dosyaları Aç ve Ana Sayfa ekranı en fazla bu kadar son dosyayı listeler; 0 hiçbirini listelemez ve VectorCraft yine de 30'a kadarını hatırlar.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bir belge açılırken, kayıtlı önizlemesini gösteren bağlı bir EPS görüntüsü EPS dosyasını yeniden okumak yerine bu önizlemeyi korur; değişen dosyalar yine Bağlantıları Güncelle ayarını izler.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Piksel Önizlemesi'nde görüntüler yumuşatılarak çizilir; kapalıyken pikselleri keskin kenarlı görünür. Piksel Önizlemesi dışında görüntüler her zaman yumuşatılır.
+	PDF Text	PDF metni
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Açtığınız veya gömdüğünüz bir PDF'nin metni düzenlenebilir metin olarak ya da yazı tipleri olmayan bir bilgisayarda aynı görünen ana hatlar olarak gelir.
+	Linked pages show the file's own text.	Bağlı sayfalar dosyanın kendi metnini gösterir.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Bağlı bir dosya değiştiğinde Otomatik olarak onu yeniden okur, Değiştirildiğinde Sor önce size sorar, Manuel olarak ise onu olduğu gibi bırakıp durum çubuğunda bir not gösterir.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Masaüstü sürümünde Şablondan yeni… ve Şablon Olarak Kaydet… komutlarının başladığı klasör; belgeler klasörünüzdeki VectorCraft Templates için boş bırakın.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Orijinali Düzenle, bağlı bir dosyayı sistemin o tür için varsayılan uygulamasında açar; kapalıyken bağlı bir raster görüntü, kuruluysa PhotoCraft'ta açılır.
@@ -3470,6 +3478,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Type to search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri aramak için yazın
+	Clear Recent Commands	Son Komutları Temizle
 	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
@@ -5329,6 +5338,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	{_1} nesnesi Perspektif Deformasyonu veya Serbest Deformasyon ile değiştirilmiş bir görüntüdür ve bu komut onunla çalışmaz
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri dışbükey bir şekil oluşturmaz
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri deformasyonun ufkunu geçer
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri perspektif eşleme için birbirine çok yakın olur
 @msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
 @msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
 @msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır
@@ -10715,6 +10728,10 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Leaf Vine	Yapraklı sarmaşık
+	Blossom Chain	Çiçek zinciri
+	Pennant Garland	Bayrak süsü
+	Lantern String	Fener dizisi
 	Orbit Lines	Yörünge Çizgileri
 	Petal Garland	Taç Yaprağı Çelengi
 	Lattice Braid	Kafes Örgü

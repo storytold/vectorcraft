@@ -891,6 +891,9 @@ pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
+/// The Pathfinder Options a new Pathfinder effect takes (`effect.apply`).
+pub use effectcmd::pathfinder_effect_options;
+
 /// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
 pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;

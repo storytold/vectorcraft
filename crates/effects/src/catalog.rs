@@ -111,6 +111,8 @@ fn lengths_of(id: &str) -> Lengths {
         "sketch.tornEdges" => always(&["smoothness"]),
         "sketch.waterPaper" => always(&["fiberLength"]),
         TRAP => always(&["thickness", "precision"]),
+        // The Pathfinder Options' refit tolerance.
+        id if crate::takes_pathfinder_options(id) => always(&["precision"]),
         RASTERIZE => always(&["addAround"]),
         // The points one unit of the filter measures.
         crate::SVG_FILTER => always(&["scale"]),
@@ -832,15 +834,11 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
     }
     for (id, label, _) in PATHFINDER_EFFECTS {
         if id == "pathfinder.softMix" {
-            v.push(g(
-                id,
-                label,
-                PATHFINDER,
-                "{mixingRate?: 1..100 % (50)} blend overlapping fills in CMYK bottom to top (groups and layers: live Pathfinder over the members)",
-                json!({"mixingRate": 50.0}),
-            ));
+            v.push(g(id, label, PATHFINDER, crate::group::SOFT_MIX_PARAMS_DOC, json!({"mixingRate": 50.0})));
         } else {
-            v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
+            // No dialog defaults, so the Effect menu applies it directly; effect.apply fills its
+            // Pathfinder Options in.
+            v.push(g(id, label, PATHFINDER, crate::group::PATHFINDER_PARAMS_DOC, json!({})));
         }
     }
     v.extend(crate::addons::color::catalog());

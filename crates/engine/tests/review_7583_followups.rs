@@ -56,10 +56,18 @@ impl TestDirectory {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
         std::fs::create_dir_all(&base).unwrap();
-        let name = format!("vc-review-7583-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
-        let path = base.join(name);
-        std::fs::create_dir(&path).expect("CONTROL: create this test's unique directory");
-        Self(path)
+        // An interrupted earlier process may leave the same PID/counter name behind.
+        // Only retry collisions; never remove a directory this attempt did not create.
+        for _ in 0..64 {
+            let name = format!("vc-review-7583-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
+            let path = base.join(name);
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => panic!("CONTROL: create this test's unique directory: {error}"),
+            }
+        }
+        panic!("CONTROL: no unused test directory after 64 attempts")
     }
 }
 
@@ -1264,6 +1272,24 @@ mod review_597585_adoption_options {
         users.remove(0)
     }
 
+    /// Read the expectation from the original native file, before capture or alias adoption.
+    fn review597585_native_instance_xf(d: &Document) -> Affine {
+        assert_eq!(d.artboards.len(), 1, "CONTROL: one native source frame");
+        assert_eq!(d.artboards[0].rect, Rect::new(0.0, 0.0, 80.0, 60.0));
+        let mut users = Vec::new();
+        for layer in &d.layers {
+            layer.walk(&mut |node| {
+                if let NodeKind::SymbolInstance { symbol, xf } = &node.kind {
+                    users.push((symbol.clone(), *xf));
+                }
+            });
+        }
+        assert_eq!(users.len(), 1, "CONTROL: one independently loaded source instance");
+        let (name, xf) = users.remove(0);
+        assert_eq!(name, SYMBOL);
+        xf
+    }
+
     #[test]
     fn review_597585_adoption_native_symbol_options_and_slice_coordinates_survive_restart() {
         let _context = FixtureContext::hold();
@@ -1275,10 +1301,12 @@ mod review_597585_adoption_options {
                 let native = review597585_options_source(sliced);
                 let loaded = write_native(&directory.0.join(format!("options-source-{sliced}-{collision}.vectorcraft")), &native);
                 let expected = review597585_options(&loaded, SYMBOL);
+                let expected_xf = review597585_native_instance_xf(&loaded);
                 assert_eq!(expected.nine_slice.is_some(), sliced, "CONTROL: source read retains guide policy");
                 assert!(expected.pixel_aligned);
                 assert_eq!(expected.size, sliced.then_some((8.0, 6.0)), "CONTROL: non-default stored size survives native reading");
                 let mut outer = Document::new(80.0, 60.0);
+                assert_eq!(outer.artboards[0].rect, loaded.artboards[0].rect, "CONTROL: placement has no source-to-target frame offset");
                 outer.swatches.clear();
                 outer.swatch_groups.clear();
                 let existing = if collision {
@@ -1313,6 +1341,10 @@ mod review_597585_adoption_options {
                     }
                     let (name, xf) = review597585_options_user(&d);
                     assert_eq!(name == SYMBOL, !collision, "CONTROL: collision determines actual adopted name");
+                    // Native source and destination both span (0,0)..(80,60): default Place
+                    // has no offset. Pattern Make retains raw art coordinates, not a rendered
+                    // tile-origin shift. Both stored instance transforms share that frame.
+                    assert_eq!(xf, expected_xf, "CONTROL: capture/restart preserves the independently loaded native instance transform");
                     let adopted = d.symbols.iter().find(|s| s.name == name).unwrap();
                     let source = loaded.symbols.iter().find(|s| s.name == SYMBOL).unwrap();
                     let mut source_art = source.art.as_ref().clone();
@@ -1327,10 +1359,11 @@ mod review_597585_adoption_options {
                         assert_eq!(actual, expected, "CONTROL: ordinary unsliced options retain existing behavior");
                         assert!(loaded.symbol_slice_map(SYMBOL, xf).is_none() && d.symbol_slice_map(&name, xf).is_none());
                     } else {
-                        let source_map = loaded.symbol_slice_map(SYMBOL, xf).expect("CONTROL: actual source instance has a nondegenerate9-slice map");
+                        let source_map =
+                            loaded.symbol_slice_map(SYMBOL, expected_xf).expect("CONTROL: actual source instance has a nondegenerate9-slice map");
                         let probes = [Point::new(1.0, 1.0), Point::new(7.0, 5.0), Point::new(4.0, 3.0)];
                         assert!(
-                            probes.iter().any(|p| source_map.map_point(*p).distance(xf * *p) > 0.1),
+                            probes.iter().any(|p| source_map.map_point(*p).distance(expected_xf * *p) > 0.1),
                             "CONTROL: these coordinates distinguish sliced corners from ordinary scaling"
                         );
                         let target_map = d.symbol_slice_map(&name, xf);
