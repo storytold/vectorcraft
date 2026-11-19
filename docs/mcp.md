@@ -825,6 +825,35 @@ from −100 to 100 and is 50 when left out with `lengthX` and `lengthY`, or 100 
 `` `baseAlong` must be one of x, y ``), as is a `slope` outside its range; the arc is not drawn and no undo step is
 added.
 
+`shape.threePointArc {start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: "start"|"end"}` draws an
+open circular arc from `start` to `end` and selects it. With `through`, the arc passes through that point. With
+`toward`, the arc leaves `start` heading toward that point, so the line from `start` to the point is the arc's tangent
+there. With `at: "end"`, the line from `end` to the point is the tangent at `end` instead. `at` is `"start"` when left
+out, and `at` with `through` is an error. The arc has no fill and the current stroke (black when the stroke is none),
+its ends are exactly the two points (it is not pixel-aligned), and it has a smooth anchor at the `through` point and
+further smooth anchors so that no curve of the path turns more than a quarter turn. The result is
+`{id, cx, cy, radius, sweep}`: the circle's center and radius, and the arc's turn in degrees, positive clockwise on the
+page. One undo removes the arc. The command returns an error and draws nothing when two of the points are the same,
+when the third point lies on the line through the ends, when the arc would reach past the canvas, when a point is not
+`[x, y]`, when both or neither of `through` and `toward` are given, when `at` is anything but `"start"` or `"end"`, and
+when `at` is given with `through`.
+
+The Three-Point Arc tool, in the Line Segment tool's group after the Arc tool, runs this command. A drag from one end to
+the other, or a click on each, places the ends; Shift keeps the second end at 45° steps from the first (from General ›
+Constrain Angle). A click on a third point, or a press dragged to it, then draws the arc through it. With the tool's
+`direction` option on, the third point gives the direction the arc leaves the first end in; with `mods.alt`, the
+direction is at the second end, and Shift keeps the direction at 45° steps. Three-Point Arc Tool Options (`tool.options`,
+or a double-click on the tool) sets `direction` with its Third Point Sets Direction box, and
+`]` (with or without Shift) switches it while the ends are placed; the option is saved with the preferences. Until the
+third point is placed, the tool shows the arc as a dashed outline, its center as a small cross, the direction line in
+direction mode and, with Measurement Labels on, the radius. Where no arc fits, the tool shows "Arc too large" by the
+pointer (nothing while the pointer is on an end), and a click there draws nothing and keeps the ends. Escape, and an
+edit, Undo or Redo made outside the tool, remove the ends.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.threePointArc","params":{"start":[0,0],"end":[80,0],"through":[40,-40]}}}
+```
+
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
 the pointer. With `mods.alt` alone, dragging outward adds whole winds of four segments and dragging inward removes
@@ -8158,7 +8187,7 @@ snap the pointer as drawing tools do, so dragging a corner onto another object's
 Every point a drawing tool places snaps the same way, through one snapper (#506): the Pen's and Curvature tool's
 anchors, the shape tools' start and dragged corner or radius (`rectangle`,
 `roundedRectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, `arc`, `spiral`, `rectangularGrid`, `polarGrid`), the
-Type tool's click and frame, and a new artboard's corners. The Pencil ignores Smart Guides and Snap to Point and
+Three-Point Arc tool's ends and third point, the Type tool's click and frame, and a new artboard's corners. The Pencil ignores Smart Guides and Snap to Point and
 shows no Smart Guides: its strokes and straight lines follow the hand (Snap to Grid and Snap to Pixel still move
 their ends). The point lands on another object's anchor, centre or
 path ("anchor", "center", "path"), else lines up with the anchors, edges and centres of the art and the artboards (a
@@ -10003,7 +10032,11 @@ images and point type in the font the file names. Type keeps the file's characte
 kerning off. On a single left to right line, an advance that tracking can't give (wider than its range, or a tab)
 starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between and on to the end
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
-split as a single line is. An EMF that
+split as a single line is. A character cell runs from the font's OS/2
+`usWinAscent` above the baseline to its `usWinDescent` below it: top and bottom aligned text has the top or the
+bottom of its cells at the reference point. Text drawn in the opaque background mode, which a file is in until it
+sets the mode to transparent, gets one filled rectangle of the background color behind the character cells of each
+line, as far as its advances reach (NULs' included), placed before the type. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
 A file, or a metafile image inside it, cut short by one of the reader's limits adds one warning without a count.
 Each of these adds one warning, with a count: images and pattern brushes whose bitmap can't be read, which are left

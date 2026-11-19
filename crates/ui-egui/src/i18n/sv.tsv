@@ -227,6 +227,10 @@ font-technology	Variable	Variabla
 	Arc	Båge
 	Arc Lower…	Nedre båge…
 	Arc Tool	Bågverktyg
+	Three-Point Arc Tool	Verktyg för trepunktsbåge
+	Three-Point Arc	Trepunktsbåge
+	Arc too large	Bågen är för stor
+	Third Point Sets Direction	Tredje punkten anger riktningen
 	Arc Upper…	Övre båge…
 	Arch…	Valv…
 	Arc…	Båge…
@@ -5260,6 +5264,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	a guide has no curvature circle	en stödlinje har ingen krökningscirkel
 @msg	the circle that matches the path there would reach past the canvas	cirkeln som matchar banan där skulle nå utanför arbetsytan
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	`at` must be "start" or "end"	`at` måste vara "start" eller "end"
+@msg	give exactly one of `through` and `toward`	ange exakt en av `through` och `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ingen båge passar de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	give `at` only with `toward`	ange `at` endast tillsammans med `toward`
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
 @msg	no artboard {i} (0-based; the document has {_1})	ingen rityta {i} (räknat från 0; dokumentet har {_1})
@@ -10831,6 +10839,11 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Paint	Färg
+	Flat Sweep	Platt penseldrag
+	Dry Drag	Torrt drag
+	Loaded Stroke	Fylligt penseldrag
+	Fan Sweep	Solfjädersdrag
 	Engraving	Gravyr
 	Fine Hatching	Fin skraffering
 	Dense Hatching	Tät skraffering

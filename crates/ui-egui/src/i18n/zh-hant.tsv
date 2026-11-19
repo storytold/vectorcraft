@@ -198,6 +198,10 @@ font-technology	Variable	可變
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三點弧形工具
+	Three-Point Arc	三點弧形
+	Arc too large	弧形過大
+	Third Point Sets Direction	第三點指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -2221,6 +2225,10 @@ file-filter	Templates	範本
 @msg	a guide has no curvature circle	參考線沒有曲率圓
 @msg	the circle that matches the path there would reach past the canvas	在該處與路徑曲率相符的圓會超出畫布
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
+@msg	`at` must be "start" or "end"	`at` 必須是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 與 `toward` 必須且只能指定一個
+@msg	no arc fits these points: two are the same or all three lie on one line	沒有弧形符合這些點：有兩點相同，或三點共線
+@msg	give `at` only with `toward`	`at` 只能與 `toward` 一起指定
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
@@ -10396,6 +10404,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Paint	繪畫
+	Flat Sweep	平刷
+	Dry Drag	乾拖
+	Loaded Stroke	厚塗筆觸
+	Fan Sweep	扇形筆觸
 	Engraving	雕刻
 	Fine Hatching	細線排線
 	Dense Hatching	密集排線
