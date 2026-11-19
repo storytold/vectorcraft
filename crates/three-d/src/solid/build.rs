@@ -7,8 +7,8 @@ use super::rings::{
 };
 use super::side;
 use super::{
-    Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
-    eye_distance, perspective_scale,
+    Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, MapCell, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve,
+    SolidSurface, SurfaceKind, V3, View, eye_distance, perspective_scale,
 };
 use crate::shadow::Projection;
 
@@ -102,6 +102,16 @@ pub(super) struct Builder<'a> {
     /// The faces kept for the mesh passed [`MAX_SOLID_FACES`] while the facets were built too: the
     /// mesh is too complex, and `mesh` keeps no more faces.
     pub(super) lost: bool,
+    /// The cells the facets of the next band carry ([`Builder::curved_band`]).
+    pub(super) cells: Option<BandCells>,
+}
+
+/// The cells of one band's facets: for each edge of the ring, its numbered surface and where the
+/// edge starts and ends along it (`None` for an edge of no length), and where the band's two rings
+/// lie across the surface.
+pub(super) struct BandCells {
+    edges: Vec<Option<(usize, f64, f64)>>,
+    across: (f64, f64),
 }
 
 /// Where a face goes in the order the facets are drawn, back to front.
@@ -123,7 +133,16 @@ pub(super) enum Order {
 impl<'a> Builder<'a> {
     /// A builder for one solid seen by `camera`, keeping what `keep` asks for.
     pub(super) fn new(camera: &'a Camera, closed: bool, hidden: bool, keep: Keep) -> Self {
-        Self { camera, closed, hidden, facets: vec![], mesh: (keep != Keep::Facets).then(Vec::new), draw: keep != Keep::Faces, lost: false }
+        Self {
+            camera,
+            closed,
+            hidden,
+            facets: vec![],
+            mesh: (keep != Keep::Facets).then(Vec::new),
+            draw: keep != Keep::Faces,
+            lost: false,
+            cells: None,
+        }
     }
 
     /// Add a face of view-space contours with outward normal `n` (view space), drawn in `order`.
@@ -214,6 +233,7 @@ impl<'a> Builder<'a> {
             end: None,
             surface: None,
             plane,
+            cell: None,
             #[cfg(test)]
             view,
         });
@@ -300,6 +320,12 @@ impl<'a> Builder<'a> {
                     && let Some(f) = self.facets.last_mut()
                 {
                     f.side = true;
+                    // An edge drawn in one piece carries its place on its numbered surface.
+                    let cell = self.cells.as_ref().filter(|_| pieces == 1).and_then(|c| Some((c.edges.get(i).copied().flatten()?, c.across)));
+                    if let (Some(((surface, u0, u1), (v0, v1))), Some(page)) = (cell, f.contours.first()) {
+                        let uv = vec![Point::new(u0, v0), Point::new(u1, v0), Point::new(u1, v1), Point::new(u0, v1)];
+                        f.cell = Some(Box::new(MapCell { surface, page: page.clone(), uv }));
+                    }
                     if let Some(s) = side.as_ref()
                         && let (Some([x0, x1]), Some(page)) = (s.x.get(i).copied(), f.contours.first())
                     {
@@ -534,6 +560,16 @@ struct Step {
     face: f64,
 }
 
+/// How far the walls are inset (negative: outset). With the bevel inside, the cap is inset by its
+/// width and the wall is the outline; outside, the cap is the outline and the wall is outset by
+/// the width.
+fn wall_inset(o: &Extrude) -> f64 {
+    match o.bevel.filter(|b| b.width > 0.0 || b.height > 0.0) {
+        Some(b) if !b.inside => -b.width,
+        _ => 0.0,
+    }
+}
+
 /// The outline's steps from the front cap's edge to the back cap's edge.
 fn steps(o: &Extrude) -> Vec<Step> {
     let d = o.depth.max(1e-6);
@@ -563,12 +599,7 @@ fn steps(o: &Extrude) -> Vec<Step> {
         }
         pts
     };
-    // With the bevel inside, the cap is inset by its width and the wall is the outline; outside,
-    // the cap is the outline and the wall is outset by the width.
-    let wall = match bevel {
-        Some(b) if !b.inside => -b.width,
-        _ => 0.0,
-    };
+    let wall = wall_inset(o);
     // A twist turns a bevel's steps too: each step between two samples is cut into steps that
     // turn no further than 6°, as the walls' slices do at most.
     let refine = |pts: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
@@ -694,6 +725,8 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         })
         .collect();
     let mut budget = Budget::default();
+    // The numbered surfaces of the sides, for a solid whose walls stay flat.
+    let layout = (o.map_surfaces && o.twist == 0.0 && o.taper == 1.0).then(|| (sides(&traced, wall_inset(&o)), band_spans(&steps, o.depth)));
     // With graphics on the side, the longest contour's pieces carry where they lie on it unrolled.
     let unrolled = o
         .map_surface
@@ -708,6 +741,17 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
+            b.cells = layout.as_ref().and_then(|(sides, spans)| {
+                let (bevel, v0, v1) = spans.get(k).copied().flatten()?;
+                // Without a wall span the walls are not numbered, and the bevels follow the caps.
+                let walls = has_walls(spans);
+                if !bevel && !walls {
+                    return None;
+                }
+                let base = caps + if bevel && walls { sides.lengths.len() } else { 0 };
+                let edges = sides.edges.get(r)?.iter().map(|e| e.map(|(section, u0, u1)| (base + section, u0, u1))).collect();
+                Some(BandCells { edges, across: (v0, v1) })
+            });
             // A band between two front bevel steps borders the front, one reaching a back bevel
             // step the back; the rest are walls.
             let face = if s1.face < 0.0 {
@@ -725,6 +769,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves, side)?;
         }
     }
+    b.cells = None;
     if o.cap {
         // A cap turned toward the viewer covers the walls it overlaps, even those nearer than its
         // center: twisted walls, and the walls of a fill inside the solid of its stroke.
@@ -741,6 +786,152 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         }
     }
     Ok(b.finish())
+}
+
+/// The turn of the outline, in degrees, past which the side wall on one side of a point is another
+/// numbered surface than the wall on its other side.
+const CORNER: f64 = 20.0;
+
+/// How the sides of a solid's rings divide into numbered surfaces: for each ring, each edge's
+/// surface (counted through the rings in order) and where the edge starts and ends along it, and
+/// each surface's length. A surface runs from one corner of its ring to the next, and a ring with
+/// no corner is one surface from its first point. The edges of one curve of the outline are never
+/// parted. An edge of no length belongs to no surface. An edge starts farther along its surface
+/// than it ends: the surface is measured from its left edge as it is seen from outside the solid.
+/// Lengths are measured on the ring moved to the walls' inset `wall`, so a wall set out by a bevel
+/// is laid out at its own length, and a bevel band at the length of the wall below it.
+struct Sides {
+    edges: Vec<Vec<Option<(usize, f64, f64)>>>,
+    lengths: Vec<f64>,
+}
+
+fn sides(rings: &[Ring], wall: f64) -> Sides {
+    let mut out = Sides { edges: vec![], lengths: vec![] };
+    for ring in rings {
+        let n = ring.points.len();
+        let point = |i: usize| ring.points.get(i % n.max(1)).copied().unwrap_or_default();
+        let at_wall = inset(&ring.points, wall);
+        let wall_point = |i: usize| at_wall.get(i % n.max(1)).copied().unwrap_or_default();
+        // An edge of the outline with no length (a corner cut square) stays off every surface.
+        let length = |i: usize| if point(i).distance(point(i + 1)) > 1e-9 { wall_point(i).distance(wall_point(i + 1)) } else { 0.0 };
+        let direction = |i: usize| {
+            let d = point(i + 1) - point(i);
+            let l = d.hypot();
+            (l > 1e-9).then(|| d / l)
+        };
+        let curve = |i: usize| ring.spans.get(i % n.max(1)).copied().flatten().map(|s| s.curve);
+        // Point `i` is a corner when the edge that leaves it turns from the last edge with a
+        // length before it, and the two do not follow one curve.
+        let corner = |i: usize| {
+            let Some(leaving) = direction(i) else { return false };
+            let Some(before) = (1..n).map(|k| i + n - k).find(|e| direction(*e).is_some()) else { return false };
+            let one_curve = matches!((curve(before), curve(i)), (Some(a), Some(b)) if a == b);
+            !one_curve && direction(before).is_some_and(|d| d.dot(leaving) < CORNER.to_radians().cos())
+        };
+        let start = (0..n).find(|i| corner(*i)).unwrap_or(0);
+        let mut edges = vec![None; n];
+        let mut along = 0.0;
+        out.lengths.push(0.0);
+        for k in 0..n {
+            let i = (start + k) % n;
+            if k > 0 && corner(i) {
+                out.lengths.push(0.0);
+                along = 0.0;
+            }
+            let l = length(i);
+            if let Some(slot) = edges.get_mut(i).filter(|_| l > 1e-9) {
+                *slot = Some((out.lengths.len() - 1, along, along + l));
+            }
+            along += l;
+            if let Some(total) = out.lengths.last_mut() {
+                *total = along;
+            }
+        }
+        // A ring runs from right to left as its side is seen from outside the solid, so each edge
+        // is placed from its surface's far end.
+        for (surface, from, to) in edges.iter_mut().flatten() {
+            let length = out.lengths.get(*surface).copied().unwrap_or(0.0);
+            (*from, *to) = (length - *from, length - *to);
+        }
+        out.edges.push(edges);
+    }
+    out
+}
+
+/// Where the band between each two neighboring steps lies across its numbered surface: whether it
+/// is part of the front bevel (else of the wall), and the distances of its two rings from the
+/// surface's edge nearer the front. `None` for a band of a back bevel.
+fn band_spans(steps: &[Step], depth: f64) -> Vec<Option<(bool, f64, f64)>> {
+    let (mut bevel_at, mut wall_at) = (0.0, 0.0);
+    steps
+        .windows(2)
+        .map(|pair| {
+            let [s0, s1] = pair else { return None };
+            if s1.face < 0.0 {
+                return None;
+            }
+            let across = (s1.inset - s0.inset).hypot((s1.t - s0.t) * depth);
+            let bevel = s0.face > 0.0 && s1.face > 0.0;
+            let at = if bevel { &mut bevel_at } else { &mut wall_at };
+            let from = *at;
+            *at += across;
+            Some((bevel, from, *at))
+        })
+        .collect()
+}
+
+/// Whether the bands of `spans` ([`band_spans`]) hold a wall with some width across it: a bevel as
+/// deep as the solid leaves none.
+fn has_walls(spans: &[Option<(bool, f64, f64)>]) -> bool {
+    spans.iter().flatten().any(|(bevel, from, to)| !bevel && to > from)
+}
+
+/// The numbered surfaces of the solid [`extrude`] builds from `path`, in order: the front and back
+/// caps of a solid with caps, then each side wall, ring by ring from each ring's first corner, then
+/// the bevel above each wall in the same order. A plane (no depth) has its front only, and a solid
+/// with a twist or a taper has only its caps. A solid whose bevel is as deep as the solid has no
+/// walls. The facets of a solid built with
+/// [`Extrude::map_surfaces`] carry these indexes ([`MapCell`]).
+pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude) -> Result<Vec<SolidSurface>, String> {
+    check_bounds(bounds)?;
+    let o = options.sanitized();
+    let end =
+        |face: PlanarFace, b: Rect| SolidSurface { kind: SurfaceKind::End(face), width: b.width(), height: b.height(), center: Some(b.center()) };
+    if o.depth <= 0.0 {
+        return Ok(path.bounds().map(|b| end(PlanarFace::Front, b)).into_iter().collect());
+    }
+    let steps = steps(&o);
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
+    let size = bounds.width().max(bounds.height());
+    let most = curve_pieces(path, size, bands, caps)?;
+    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
+    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
+    let edges = traced.iter().map(|r| r.points.len()).fold(0usize, usize::saturating_add);
+    if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
+    let mut out = vec![];
+    if o.cap {
+        for (step, face) in [(steps.first(), PlanarFace::Front), (steps.last(), PlanarFace::Back)] {
+            let Some(step) = step else { continue };
+            let mut points = traced.iter().flat_map(|r| inset(&r.points, step.inset));
+            let Some(first) = points.next() else { continue };
+            out.push(end(face, points.fold(Rect::from_points(first, first), |b, p| b.union_pt(p))));
+        }
+    }
+    if o.twist != 0.0 || o.taper != 1.0 {
+        return Ok(out);
+    }
+    let sides = sides(&traced, wall_inset(&o));
+    let spans = band_spans(&steps, o.depth);
+    let across = |bevel: bool| spans.iter().flatten().filter(|s| s.0 == bevel).map(|s| s.2).fold(0.0, f64::max);
+    let walls = has_walls(&spans).then_some((SurfaceKind::Wall, false));
+    let kinds = walls.into_iter().chain(spans.iter().flatten().any(|s| s.0).then_some((SurfaceKind::Bevel, true)));
+    for (kind, bevel) in kinds {
+        out.extend(sides.lengths.iter().map(|l| SolidSurface { kind, width: *l, height: across(bevel), center: None }));
+    }
+    Ok(out)
 }
 
 /// The size of Extrude & Bevel's side unrolled flat ([`super::side`]), for a solid of `path` built
