@@ -802,9 +802,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
 /// (Save Document gives the file back when the document has no file yet; File › Save takes a key
 /// instead), the undo group's begin and end, and the commands that need a point, a value or a name
-/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush, Map Art). New Symbol is left out
-/// because the Symbols panel runs it through the Symbol Options dialog.
-const NEEDS_A_PARAM: [&str; 76] = [
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush, Map Art, Quick Pen). New
+/// Symbol is left out because the Symbols panel runs it through the Symbol Options dialog.
+const NEEDS_A_PARAM: [&str; 77] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -867,6 +867,7 @@ const NEEDS_A_PARAM: [&str; 76] = [
     "paint.setFill",
     "paint.setGradientGeom",
     "paint.setStroke",
+    "path.quickPen",
     "perspective.grid.define",
     "perspective.grid.set",
     "perspective.plane.move",
@@ -991,9 +992,10 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
 /// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`.
+/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
+/// front.
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens

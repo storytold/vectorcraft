@@ -6,6 +6,15 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// A one-shot Image Trace Ignore Color sampler, bound to the unchanged selected source.
+#[derive(Clone, Debug)]
+pub struct TraceIgnoreSampler {
+    pub doc: u64,
+    pub target: vectorcraft_doc::NodeId,
+    pub revision: u64,
+    pub back: String,
+}
+
 /// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
 #[derive(Clone, Debug)]
 pub struct BrushKeyColorPick {
@@ -493,6 +502,10 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Contextual Task Bar's actions (`canvas::TASK_BAR_ACTIONS`) that More Options › Bar
+    /// Actions has off (`window.taskBar.actions`); none: the bar shows every action it offers.
+    #[serde(deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
+    pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
     /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
     /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
     #[serde(default)]
@@ -638,6 +651,11 @@ pub struct UiState {
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
+    /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
+    /// so that the palette starts at its first row the next time it is drawn, even when it closed
+    /// and opened again before then. Not saved.
+    #[serde(skip)]
+    pub palette_toggled: bool,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
     /// the app always starts in Normal Screen Mode, with its menus and panels (#472: a saved
     /// Presentation Mode came back on restart with no way out).
@@ -749,6 +767,10 @@ pub struct UiState {
     /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
     #[serde(default)]
     pub recent_commands: Vec<String>,
+    /// How many times each command was picked in Help › Search Commands, which ranks the commands
+    /// picked most often first among results that match as well.
+    #[serde(default, deserialize_with = "crate::palette::deserialize_command_uses")]
+    pub command_uses: crate::palette::CommandUses,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -812,7 +834,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
+    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
+    /// out-of-gamut shading and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
@@ -855,6 +878,11 @@ pub struct UiState {
     /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,
+    /// The proof view the Proof Setup dialog found, and the view its preview shows on the canvas,
+    /// while the preview shows. When another dialog takes its place, [`crate::dialogs::settle`]
+    /// puts the first view back, unless the view has changed from the preview since.
+    #[serde(skip)]
+    pub proof_preview: Option<(Value, vectorcraft_render::proof::ProofView)>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -928,6 +956,9 @@ pub struct UiState {
     /// panel's eye button is held down ([`vectorcraft_render::RenderOptions::trace_source`]).
     #[serde(skip)]
     pub trace_hold_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// Ignore Color's one-shot canvas sampler; independent of the eye button's press lifetime.
+    #[serde(skip)]
+    pub trace_ignore_sampler: Option<TraceIgnoreSampler>,
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
@@ -1253,6 +1284,7 @@ impl Default for UiState {
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            task_bar_hidden_actions: Default::default(),
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
@@ -1297,6 +1329,7 @@ impl Default for UiState {
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
+            palette_toggled: false,
             screen_mode: 0,
             tiled: false,
             tile_layout: crate::canvas::TileLayout::Grid,
@@ -1326,6 +1359,7 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             recent_commands: vec![],
+            command_uses: Default::default(),
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             original_editor: Default::default(),
@@ -1353,6 +1387,7 @@ impl Default for UiState {
             pending_fonts: vec![],
             fonts_dialog: None,
             stopped_plugin: None,
+            proof_preview: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,
@@ -1372,6 +1407,7 @@ impl Default for UiState {
             psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
+            trace_ignore_sampler: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             attributes_panel: Default::default(),

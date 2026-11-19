@@ -20,6 +20,7 @@ pub const SYMBOLISM: &[&str] =
 
 const ROWS: &[Row] = &[
     (&["dimension"], None, &["mode", "style"]),
+    (&[crate::quickpen::ID], None, &["action", "turn"]),
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
@@ -44,9 +45,13 @@ const ROWS: &[Row] = &[
             "affectsDensity",
         ],
     ),
+    // The graphic style the Symbol Styler and the Symbol Sprayer's User Defined Style apply, set
+    // from the Graphic Styles panel.
+    (&["symbolSprayer", "symbolStyler"], Some("symbolismStyle"), &["style"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),
+    (&[crate::three_point_arc::ID], None, &["direction"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
     // The grids' Tool Options: the dividers and switches the drag uses, the Default Size and
     // Reference Point a click's dialog opens with.

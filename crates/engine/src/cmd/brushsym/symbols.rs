@@ -118,6 +118,20 @@ fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
     v
 }
 
+/// The symbol instances in `nodes` and inside them, each once, in the order a walk of each node in
+/// turn first reaches them.
+fn instances_in<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Vec<NodeId> {
+    let (mut v, mut seen) = (vec![], std::collections::HashSet::new());
+    for n in nodes {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::SymbolInstance { .. }) && seen.insert(c.id) {
+                v.push(c.id);
+            }
+        });
+    }
+    v
+}
+
 /// The symbols an instance in `n` (its opacity masks included) places, pushed onto `out`.
 fn art_symbols(n: &Node, out: &mut Vec<String>) {
     vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
@@ -917,11 +931,12 @@ fn samples(p: &Value, cmd: &str) -> Result<Vec<(Point, f64)>> {
     let a = p.get("points").and_then(Value::as_array).ok_or_else(|| bad(cmd, "missing points [[x,y]…]"))?;
     let mut v = Vec::with_capacity(a.len());
     for q in a {
-        let (Some(x), Some(y)) = (q.get(0).and_then(Value::as_f64), q.get(1).and_then(Value::as_f64)) else { continue };
+        // The pressure is checked first: a point skipped for its coordinates still has a bad one refused.
         let pressure = match q.get(2) {
             None | Some(Value::Null) => 1.0,
             Some(f) => f.as_f64().filter(|f| f.is_finite()).ok_or_else(|| bad(cmd, format!("a point's pressure must be a number, not {f}")))?,
         };
+        let (Some(x), Some(y)) = (q.get(0).and_then(Value::as_f64), q.get(1).and_then(Value::as_f64)) else { continue };
         v.push((Point::new(x, y), pressure.clamp(0.0, 1.0)));
     }
     if v.is_empty() || v.iter().any(|(q, _)| !q.x.is_finite() || !q.y.is_finite()) {
@@ -930,13 +945,15 @@ fn samples(p: &Value, cmd: &str) -> Result<Vec<(Point, f64)>> {
     Ok(v)
 }
 
-/// The fill of the graphic style `p` names with `style`, else of the document's first style after
-/// the default one.
+/// The fill of the graphic style `p` names with `style`, else (no name, or one the document has no
+/// style for, such as the Symbol Styler's style from another document) of the document's first
+/// style after the default one.
 fn style_paint(d: &Document, p: &Value) -> Option<Paint> {
-    match str_param(p, "style") {
-        Some(n) => d.graphic_styles.iter().find(|g| g.name == n).map(|g| g.appearance.fill_paint()),
-        None => d.graphic_styles.get(1).or(d.graphic_styles.first()).map(|g| g.appearance.fill_paint()),
-    }
+    str_param(p, "style")
+        .and_then(|n| d.graphic_styles.iter().find(|g| g.name == n))
+        .or(d.graphic_styles.get(1))
+        .or(d.graphic_styles.first())
+        .map(|g| g.appearance.fill_paint())
 }
 
 /// Deterministic per-point jitter in [-1, 1]² (so previews re-applied on the snapshot agree).
@@ -976,7 +993,7 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let style = style_paint(&st.doc, p);
     // Style: User Defined uses the style `style` names, so one the document does not have is an error.
-    if let Some(n) = str_param(p, "style").filter(|_| !modes.style && style.is_none()) {
+    if let Some(n) = str_param(p, "style").filter(|n| !modes.style && !st.doc.graphic_styles.iter().any(|g| g.name == *n)) {
         return Err(bad(C, format!("unknown graphic style `{n}`")));
     }
     let size = natural_size(&st.doc, &name);
@@ -1129,6 +1146,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let use_pressure = switch_or(p, "usePressure", false, C)?;
     let proportional = switch_or(p, "proportional", true, C)?;
     let affects_density = switch_or(p, "affectsDensity", false, C)?;
+    let shift = switch_or(p, "shift", false, C)?;
     // The Symbol Shifter has no Method.
     let method = if tool == "shift" { method_param(p, C).map(|_| Method::UserDefined)? } else { method_param(p, C)? };
     // Refused while an object of a dynamic instance's art is selected: the instance stays as it is.
@@ -1141,20 +1159,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let style_paint = style_paint(&st.doc, p);
     let candidates: Vec<NodeId> = {
         let d = &st.doc;
-        let mut v = vec![];
-        if st.selection.is_empty() {
-            v = instances_of(d, None);
-        } else {
-            for id in &st.selection.objects {
-                if let Some(n) = d.node(*id) {
-                    n.walk(&mut |c| {
-                        if matches!(c.kind, NodeKind::SymbolInstance { .. }) && !v.contains(&c.id) {
-                            v.push(c.id);
-                        }
-                    });
-                }
-            }
-        }
+        let mut v =
+            if st.selection.is_empty() { instances_of(d, None) } else { instances_in(st.selection.objects.iter().filter_map(|id| d.node(*id))) };
         let editable = d.editable();
         v.retain(|id| editable(*id));
         v
@@ -1172,12 +1178,39 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     // for the whole stroke (and for every preview of it).
     let first = pts.first().map_or(Point::ZERO, |(q, _)| *q);
     let share = |id: NodeId| if method == Method::Random { jitter(id.0 as usize, first).0 + 1.0 } else { 1.0 };
+    // Shift with the Symbol Shifter: the instances under the brush come one place forward among
+    // their siblings (with `alt`, go one place backward), once for the whole stroke.
+    if tool == "shift" && shift {
+        let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
+            let under: std::collections::HashSet<NodeId> = candidates
+                .iter()
+                .copied()
+                .filter(|id| {
+                    d.node(*id).and_then(instance_center).is_some_and(|c| {
+                        pts.iter().any(|(q, pressure)| (if use_pressure { *pressure } else { intensity }) > 0.0 && c.distance(*q) < radius)
+                    })
+                })
+                .collect();
+            let moved = restack(d, &under, alt)?;
+            Ok((moved, moved > 0))
+        })?;
+        return Ok(json!({ "count": count }));
+    }
+    // Shift with the Symbol Stainer or the Symbol Styler: the paint an instance's stain or style
+    // moves toward, and the share of the brush's strength it moves by. Shift with the Symbol Sizer
+    // keeps the instances where they are, Resizing Affects Density included.
+    let recolor = match tool.as_str() {
+        "stain" if shift => Some((Paint::solid(color), 0.15)),
+        "style" if shift => Some((style_paint.clone().unwrap_or(Paint::solid(color)), 1.0)),
+        _ => None,
+    };
+    let spread = affects_density && !shift;
     // No undo step when no instance changes (none under the brush, or Average with each at the mean).
     let count = crate::cmd::colorcmds::edit_if_changed(s, label, |orig, d| {
         let mut touched = std::collections::BTreeSet::new();
         let mut sides = Sides::new();
         for (j, (q, pressure)) in pts.iter().enumerate() {
-            let delta = if j > 0 { *q - pts[j - 1].0 } else { Vec2::ZERO };
+            let delta = j.checked_sub(1).and_then(|i| pts.get(i)).map_or(Vec2::ZERO, |(prev, _)| *q - *prev);
             // Use Pressure Pen: the pen's pressure at the point is the intensity there.
             let strength = if use_pressure { *pressure } else { intensity };
             // Average: the mean of the instances under the brush, as they are at this point.
@@ -1196,6 +1229,14 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 let w = strength * (1.0 - dist / radius).max(0.0);
                 if w <= 0.0 {
+                    continue;
+                }
+                // Shift with the Symbol Stainer or the Symbol Styler: the instance keeps the amount
+                // of its stain or style, and its paint moves toward the color or the style. An
+                // instance without one, or without a size, is left as it is.
+                if let Some((to, step)) = &recolor {
+                    let fill = d.node(*id).and_then(|n| look(d, n, &mut sides)).and_then(|l| l.fill);
+                    touched.extend(recolor_keeping_amount(d, *id, fill, to, step * w).then_some(*id));
                     continue;
                 }
                 // Average needs the instance's own values, so it leaves an instance without a size
@@ -1261,8 +1302,9 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         };
                         n.transform(about(Affine::scale_non_uniform(kx, ky)), false);
                         // Resizing Affects Density: instances move away from the brush's center as
-                        // they grow and toward it as they shrink.
-                        if affects_density {
+                        // they grow and toward it as they shrink. Shift keeps the instances where
+                        // they are, so the set's density stays as it was.
+                        if spread {
                             n.transform(Affine::translate((c - *q) * ((kx * ky).sqrt() - 1.0)), false);
                         }
                     }
@@ -1280,9 +1322,10 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     "stain" | "style" => {
                         let paint = if tool == "style" { style_paint.clone().unwrap_or(Paint::solid(color)) } else { Paint::solid(color) };
                         let (paint, o) = match &avg {
-                            // Toward the mean amount, keeping the stain or style the instance has.
+                            // Toward the mean amount, keeping the stain or style the instance has
+                            // (one at no opacity is none).
                             Some((t, look)) => {
-                                let (own, cur) = look.fill.clone().map_or((None, 0.0), |(p, o)| (Some(p), o));
+                                let (own, cur) = look.fill.clone().filter(|(_, o)| *o > 0.0).map_or((None, 0.0), |(p, o)| (Some(p), o));
                                 (own.or(t.paint.clone()).unwrap_or(paint), (cur + (t.amount - cur) * w.min(1.0)) as f32)
                             }
                             // Alt with the Symbol Styler removes the instance's appearance.
@@ -1292,11 +1335,11 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                             }
                             None => {
                                 let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
+                                // The style goes on gradually, by the brush's strength there: in
+                                // full at the center at full intensity or pressure.
                                 let step = match (tool.as_str(), method) {
-                                    // Random: the instance's share of the style, scaled by the
-                                    // brush strength there.
-                                    ("style", Method::Random) => (share / 2.0 * w.min(1.0)) as f32,
-                                    ("style", _) => 1.0,
+                                    ("style", Method::Random) => (w * share / 2.0) as f32,
+                                    ("style", _) => w as f32,
                                     _ => (0.15 * w * share) as f32,
                                 };
                                 (paint, if alt { cur - step } else { cur + step })
@@ -1324,9 +1367,108 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        // An instance the stroke moved away and back again is not counted.
+        // An instance the stroke moved away and back again, or reached but left as it was (at a
+        // limit already), is not counted.
         touched.retain(|id| d.node(*id) != orig.node(*id));
         Ok((touched.len(), !touched.is_empty()))
     })?;
     Ok(json!({ "count": count }))
+}
+
+/// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)
+/// toward `to` by `t`. The fill keeps its amount and everything else it has, and the instance's
+/// other appearance items stay as they are. A paint with no form between it and `to` (a solid
+/// color and a pattern, say) takes `to` at once, so repeated strokes below half strength still
+/// reach it. An instance without a stain or style, or one whose paint does not change, is left as
+/// it is. Returns whether it changed.
+fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64)>, to: &Paint, t: f64) -> bool {
+    use vectorcraft_doc::blend::lerp_paint;
+    let Some((own, _)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
+    let t = t.clamp(0.0, 1.0) as f32;
+    let mut paint = lerp_paint(&own, to, t);
+    // `lerp_paint` switches such a pair halfway, so just below half it still gives `own`.
+    if paint == own && t > 0.0 && lerp_paint(&own, to, 0.49) == own {
+        paint = to.clone();
+    }
+    if paint == own {
+        return false;
+    }
+    let Some(f) = d.node_mut(id).and_then(|n| n.appearance.fill_mut()) else { return false };
+    f.paint = paint;
+    true
+}
+
+/// Bring each of `ids` one place forward among its siblings past a sibling that is not one of them
+/// (`back`: one place backward). Ones already in front of (behind) every other sibling stay, and
+/// so do the clipping path of a clip group and the ruler guides above a layer's art. Returns how
+/// many moved.
+fn restack(d: &mut Document, ids: &std::collections::HashSet<NodeId>, back: bool) -> Result<usize> {
+    let parents: std::collections::BTreeSet<Option<NodeId>> = ids.iter().map(|id| d.parent_of(*id)).collect();
+    let mut moved = 0;
+    for par in parents {
+        let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));
+        let ch = d.children_mut(par)?;
+        let len = Node::guide_run_start(ch);
+        if len <= floor + 1 {
+            continue;
+        }
+        let picked = |n: &Arc<Node>| ids.contains(&n.id);
+        if back {
+            for i in floor + 1..len {
+                if picked(&ch[i]) && !picked(&ch[i - 1]) {
+                    ch.swap(i - 1, i);
+                    moved += 1;
+                }
+            }
+        } else {
+            for i in (floor..len - 1).rev() {
+                if picked(&ch[i]) && !picked(&ch[i + 1]) {
+                    ch.swap(i, i + 1);
+                    moved += 1;
+                }
+            }
+        }
+    }
+    Ok(moved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn instance(id: u64) -> Arc<Node> {
+        Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY }))
+    }
+
+    /// The instances come out in the order a search of the list built so far gives: nested
+    /// groups, a group listed twice, a member listed after its group and one listed before it.
+    #[test]
+    fn instances_in_matches_searching_the_list_so_far() {
+        let groups: Vec<Node> = (0..40u64)
+            .map(|g| {
+                let base = g * 100;
+                let mut children: Vec<Arc<Node>> = (0..40).map(|i| instance(base + i)).collect();
+                let inner = (40..50).map(|i| instance(base + i)).collect();
+                children.insert(20, Arc::new(Node::group(NodeId(base + 90), inner)));
+                children.push(Arc::new(Node::group(NodeId(base + 91), vec![])));
+                Node::group(NodeId(base + 99), children)
+            })
+            .collect();
+        let early = Node::new(NodeId(1_245), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let late = Node::new(NodeId(305), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+        let nodes: Vec<&Node> = std::iter::once(&early).chain(&groups).chain([&groups[0], &late, &groups[7]]).collect();
+        let mut searched = vec![];
+        for n in &nodes {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) && !searched.contains(&c.id) {
+                    searched.push(c.id);
+                }
+            });
+        }
+        let found = instances_in(nodes.iter().copied());
+        assert_eq!(found, searched);
+        assert_eq!(found.len(), 2_000);
+        assert_eq!(found[0], NodeId(1_245));
+        assert!(instances_in([]).is_empty());
+    }
 }

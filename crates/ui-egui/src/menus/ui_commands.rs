@@ -689,6 +689,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.taskBar.reset", "Reset Bar Position", "", "{} unpin the Contextual Task Bar and put it back under the selection"),
     (
+        "window.taskBar.actions",
+        "Bar Actions",
+        "",
+        "{action: \"imageTrace\"|\"cropImage\"|\"removeBackground\"|\"removeAnchorPoints\"|\"join\"|\"cutPath\"|\"convertToCorner\"|\"convertToSmooth\"|\"group\"|\"makeClippingMask\"|\"unite\"|\"expand\"|\"editClippingPath\"|\"releaseClippingMask\"|\"ungroup\"|\"isolate\"|\"editPath\"|\"releaseCompoundPath\"|\"createOutlines\"|\"convertToPointType\"|\"convertToAreaType\"|\"typeOnPathOptions\"|\"centerOnTop\"|\"centerOnBottom\"|\"dynamicText\"|\"offsetPath\"|\"simplify\"|\"smooth\"|\"duplicate\"|\"drawPencil\"|\"placeImage\"|\"fidelity\"|\"smoothToolOptions\"|\"resizeArtboard\"|\"duplicateArtboards\"|\"rearrangeArtboards\"|\"exportArtboards\"|\"fill\"|\"stroke\"|\"recolor\"|\"lock\"|\"shapeProperties\", visible?: bool} show (true), hide (false) or toggle (omitted or null) one of the Contextual Task Bar's actions or chips, as the bar's More Options › Bar Actions does; an action that is off stays out of the bar and out of More Options, and turning one off changes only the bar; `join` is both Connect and Join; every action starts on; kept with the preferences and with the workspace; another action, or a `visible` that is not true, false or null, is an error and changes nothing; returns {action, visible}",
+    ),
+    (
+        "window.taskBar.resetActions",
+        "Reset Bar Actions",
+        "",
+        "{} show every Contextual Task Bar action and chip that Bar Actions turned off, as the bar's More Options › Reset Bar Actions does; returns the ids shown again",
+    ),
+    (
         "window.dock",
         "Panels",
         "Tab",
@@ -838,7 +850,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "retype.find",
         "Find Matching Fonts",
         "",
-        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does (more false, omitted or null: a new search), or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more other than true, false or null, is an error and leaves the list as it was; returns what retype.list returns",
     ),
     (
         "retype.list",
@@ -1002,6 +1014,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     (
+        "help.clearRecentCommands",
+        "Clear Recent Commands",
+        "",
+        "{} empty the recent picks of Help › Search Commands (the list an empty search shows and the Recent Commands list), the saved list and the pick counts that rank the results; a pick of it is not kept as a recent pick or counted. Not enabled while no picks or counts are saved",
+    ),
+    (
         "help.discover",
         "VectorCraft Help…",
         "F1",
@@ -1158,6 +1176,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Saturate…",
         "",
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
+    ),
+    (
+        "ui.proofSetupDialog",
+        "Customize…",
+        "",
+        "{} open View › Proof Setup › Customize (dialog `proofSetup`, fields `device` (\"workingCmyk\", \"cmyk:<profile>\" or \"rgb:<profile>\": any CMYK or RGB profile), `preserveNumbers`, `intent` (used while preserveNumbers is off), `simulatePaper` and `simulateBlack` (CMYK devices only), `preview` (on): Preview shows the proof on the canvas, OK runs view.proofSetup with these and proof: true, Cancel puts the earlier proof view back; on the desktop only, Save… writes these to a picked proof setup file with view.proofSetup.save and Load… fills them from one with view.proofSetup.read, both starting in the Proof Setups folder (Load… once a save has made it), whose setups View › Proof Setup lists below Customize…)",
     ),
     (
         "ui.indexedColorDialog",
@@ -1556,7 +1580,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorWheel",
         "Color Wheel Options",
         "",
-        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, harmony?: bool, harmonyRule?: complementary|splitComplementary|leftComplement|rightComplement|analogous|analogous2|triad|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast3|pentagram, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); harmony shows a marker on the wheel's ring for each other color of harmonyRule (the Color Guide's rule of that id; a rule's label is taken too), as Show Harmony and Harmony Rule do, and a click on a marker applies its color; vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, harmony, harmonyRule, vision}",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, sliders?: none|oklch|hsl, gamut?: bool, harmony?: bool, harmonyRule?: complementary|splitComplementary|leftComplement|rightComplement|analogous|analogous2|triad|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast3|pentagram, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, pick the box's channel, as Box Channel does, and show no slider rows under the wheel or the box (none), OKLCH Sliders (oklch) or HSL Sliders (hsl), as the menu items of those names do: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); OKLCH Sliders edit lightness 0 to 100 %, chroma 0 to 100 % of 0.4 and hue 0 to 360°, CSS Color 4's OKLCH of the display sRGB, and a color outside sRGB keeps L and H and takes the largest chroma that fits; HSL Sliders edit hue 0 to 360°, saturation 0 to 100 % and lightness 0 to 100 %, CSS Color 4's HSL of the display sRGB; gamut true grays out the parts of the wheel's square and the box's field whose colors the CMYK space cannot print (the out-of-gamut warning's test, as color.gamutCheck answers it), as Show Out-of-Gamut Colors does, and false shows them again; the shading is approximate: each cell of a 16 by 16 grid over the square or the field is grayed out or not by the color at its center, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot print; harmony shows a marker on the wheel's ring for each other color of harmonyRule (the Color Guide's rule of that id; a rule's label is taken too), as Show Harmony and Harmony Rule do, and a click on a marker applies its color; vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, oklch is an error while the working RGB space is not sRGB, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, sliders, gamut, harmony, harmonyRule, vision}",
     ),
     (
         "ui.savePdfDialog",
