@@ -271,6 +271,7 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
             .as_deref()
             .map_or(0, |m| ALLOC + size_of::<crate::color_mask::ColorMask>() + m.key.capacity() + m.from.capacity() + m.colors.capacity() * 3);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
+        b += e.flare.as_ref().map_or(0, |f| ALLOC + size_of::<crate::flare::FlareSpec>() + json_bytes(&f.params));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         if e.intertwine_tiers.capacity() > 0 {
             b += ALLOC + e.intertwine_tiers.capacity() * size_of::<PathData>() + e.intertwine_tiers.iter().map(path_bytes).sum::<usize>();
