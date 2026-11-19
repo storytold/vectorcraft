@@ -37,7 +37,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
     (
         "Shapes",
         &[
-            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
+            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "threePointArc", "spiral", "rectangularGrid", "polarGrid", "flare"],
             &["ellipse", "circle", "curvatureCircle"],
             &["polygon"],
             &["shaper"],
@@ -438,7 +438,7 @@ pub(crate) fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> 
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
 /// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
-/// ([`crate::dialogs::shapes::open_options`]). The Type on a Path and Vertical Type on a Path
+/// ([`crate::dialogs::shapes::open_options`]) and the Circle tool's ([`crate::dialogs::circle_options::open`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
@@ -475,6 +475,11 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
+        // The Circle tool: what it shows while a circle is drawn, where its anchors go and how
+        // the third point is placed.
+        vectorcraft_tools::circle::ID => Ok(crate::dialogs::circle_options::open(app)),
+        // The Three-Point Arc tool: whether the third point gives a direction.
+        vectorcraft_tools::three_point_arc::ID => Ok(crate::dialogs::three_point_arc_options::open(app)),
         // The Flare tool: its options, which draw the next flare (OK draws none); with flares
         // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),

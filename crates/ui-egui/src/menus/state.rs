@@ -95,6 +95,12 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
+        "window.taskBar.actions" => p
+            .get("action")
+            .and_then(Value::as_str)
+            .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
+        "window.quickPenToolbar" => app.ui.quick_pen_bar,
+        "window.quickPenToolbar.pin" => app.ui.quick_pen_bar_place.pinned,
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -110,6 +116,13 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        // Customize… is checked while the proof simulates a profile it chose.
+        "ui.proofSetupDialog" => {
+            matches!(
+                vectorcraft_render::proof::view().setup.target,
+                vectorcraft_color::cms::ProofTarget::Cmyk(_) | vectorcraft_color::cms::ProofTarget::Rgb(_)
+            )
+        }
         "perspective.grid.snap" => perspective_grid(app).is_some_and(|g| g.snap),
         "perspective.grid.lockStation" => perspective_grid(app).is_some_and(|g| g.lock_station),
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
@@ -205,22 +218,39 @@ pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
 /// Can command `id` run now? An engine command asks the engine, a UI command the app's state;
 /// none that would act on text an input method is still composing.
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    why_off(app, id).is_none()
+}
+
+/// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
+/// engine's reason when the engine's check of an engine command fails. The engine's check runs at
+/// most once.
+pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
-        return false;
+        return Some(None);
     }
     if SUBJECT_COMMANDS.contains(&id) {
-        return has_subject(app);
+        return (!has_subject(app)).then_some(None);
     }
     // The Artboard tool's canvas menu measured this when it opened.
     if id == "artboard.deleteEmpty"
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
-        return facts.any_empty;
+        return (!facts.any_empty).then_some(None);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
-        // The system clipboard's contents can be pasted with an empty internal clipboard.
-        return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
+        return match (c.enabled)(&app.session) {
+            Ok(()) => None,
+            // The system clipboard's contents can be pasted into an open document with an empty
+            // internal clipboard.
+            Err(_) if app.system_paste && app.session.active().is_some() && id.starts_with("edit.paste") => None,
+            Err(why) => Some(Some(why)),
+        };
     }
+    (!ui_enabled(app, id)).then_some(None)
+}
+
+/// Can UI command `id` run now?
+fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
@@ -262,6 +292,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
+        "help.clearRecentCommands" => !app.ui.recent_commands.is_empty() || !app.ui.command_uses.is_empty(),
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.recent_fonts().len()) && app.session.active().is_some()
         }
@@ -334,10 +365,15 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
         "ui.epsOptionsDialog" | "ui.hpglOptionsDialog" => app.session.active().is_some(),
-        "file.saveForWeb" | "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some(),
+        "file.saveForWeb" => app.session.active().is_some(),
+        // A browser preview opens a file, and the web build has none to open.
+        "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some() && !crate::io::is_web(app),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        // Trim View hides the guides and the grid while it is on, so their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),

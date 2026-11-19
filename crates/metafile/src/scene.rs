@@ -31,6 +31,7 @@ const BLENDING: &str = "blending modes are left out";
 const MASKS: &str = "opacity masks are left out";
 const RASTER_FX: &str = "raster effects (shadows, glows, blurs, feathering) are left out";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const FLAT_GRADIENTS: &str = "gradients are written as one colour, the average of their stops";
 const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
 const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
@@ -134,6 +135,9 @@ pub(crate) struct Scene<'a> {
     /// Pattern tiles being written that may be merged: their parts aren't left out off the page,
     /// so each tile draws the same parts (the fill's clip still trims them).
     whole_tiles: bool,
+    /// While the pieces of a distorted image are written: the box of the clips around the current
+    /// object (`Some(None)` before the first), to which each piece's image is cropped.
+    crop: Option<Option<Rect>>,
 }
 
 impl<'a> Scene<'a> {
@@ -151,6 +155,7 @@ impl<'a> Scene<'a> {
             nest: 0,
             tiles_left: MAX_TILES,
             whole_tiles: false,
+            crop: None,
         }
     }
 
@@ -213,7 +218,24 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // A format that clips writes a distorted image as the pieces of its mesh; one that
+                // doesn't, at the affine placement nearest its corners.
+                // Each piece stores only the pixels inside its clips.
+                Some(_) if self.clips => {
+                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                    let outer = self.crop.replace(None);
+                    for c in g.children().into_iter().flatten() {
+                        self.node(c, false);
+                    }
+                    self.crop = outer;
+                }
+                Some(xf) => {
+                    self.warn(DISTORTED_IMAGES);
+                    self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() });
+                }
+                None => self.image(&self.doc.shown_image(n, im)),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
@@ -261,13 +283,19 @@ impl<'a> Scene<'a> {
             None
         };
         let clipped = outline.is_some();
+        let outer_crop = self.crop;
         if let Some((path, rule)) = outline {
+            if let Some(c) = self.crop {
+                let b = path.bounding_box();
+                self.crop = Some(Some(c.map_or(b, |c| c.intersect(b))));
+            }
             self.ops.push(Op::Clip { path, rule });
         }
         if let Some(f) = &paint.fill {
             self.node(f, false);
         }
         rest.iter().for_each(|c| self.node(c, false));
+        self.crop = outer_crop;
         if clipped {
             self.ops.push(Op::Unclip);
         }
@@ -478,6 +506,13 @@ impl<'a> Scene<'a> {
         let Some(img) = self.decoded(im) else { return };
         let (dw, dh) = (f64::from(img.width), f64::from(img.height));
         let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width.max(1)) / dw, f64::from(im.height.max(1)) / dh);
+        let (img, xf) = match self.crop.flatten() {
+            Some(c) => match cropped(&img, xf, c) {
+                Some((part, x0, y0)) => (Arc::new(part), xf * Affine::translate((f64::from(x0), f64::from(y0)))),
+                None => return,
+            },
+            None => (img, xf),
+        };
         self.ops.push(Op::Image { image: img, xf, opacity: self.opacity.clamp(0.0, 1.0) });
     }
 
@@ -501,6 +536,37 @@ impl<'a> Scene<'a> {
         self.images.insert(key.to_string(), img.clone());
         img
     }
+}
+
+/// The pixels of `img`, drawn by `xf`, that `clip` (a box in the document) shows, with one pixel
+/// more on each side: the part and its top left pixel. The whole image when `xf` cannot be
+/// inverted; `None` when `clip` shows none of it.
+fn cropped(img: &Rgba, xf: Affine, clip: Rect) -> Option<(Rgba, u32, u32)> {
+    if xf.determinant().abs() < 1e-12 || !xf.determinant().is_finite() {
+        return Some((img.clone(), 0, 0));
+    }
+    let inv = xf.inverse();
+    let corners =
+        [Point::new(clip.x0, clip.y0), Point::new(clip.x1, clip.y0), Point::new(clip.x1, clip.y1), Point::new(clip.x0, clip.y1)].map(|p| inv * p);
+    let (w, h) = (f64::from(img.width), f64::from(img.height));
+    let lo = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::INFINITY, f64::min);
+    let hi = |f: fn(&Point) -> f64| corners.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+    let (x0, y0) = ((lo(|p| p.x).floor() - 1.0).max(0.0), (lo(|p| p.y).floor() - 1.0).max(0.0));
+    let (x1, y1) = ((hi(|p| p.x).ceil() + 1.0).min(w), (hi(|p| p.y).ceil() + 1.0).min(h));
+    if !(x0 < x1 && y0 < y1) {
+        return None;
+    }
+    let (x0, y0, x1, y1) = (x0 as u32, y0 as u32, x1 as u32, y1 as u32);
+    if (x0, y0, x1, y1) == (0, 0, img.width, img.height) {
+        return Some((img.clone(), 0, 0));
+    }
+    let row = img.width as usize * 4;
+    let mut pixels = Vec::with_capacity((x1 - x0) as usize * (y1 - y0) as usize * 4);
+    for y in y0..y1 {
+        let start = y as usize * row + x0 as usize * 4;
+        pixels.extend_from_slice(img.pixels.get(start..start + (x1 - x0) as usize * 4)?);
+    }
+    Some((Rgba { width: x1 - x0, height: y1 - y0, pixels }, x0, y0))
 }
 
 /// Do the instances of `def` stay apart? A grid or brick tiling places its tiles side by side, so

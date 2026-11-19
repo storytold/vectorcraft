@@ -11,7 +11,7 @@ use vectorcraft_geom::PathData;
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::appearance::{ItemTarget, edit_items, item_target};
-use super::paint::{live_paint_parts, live_paint_parts_skipped, painted};
+use super::paint::{live_paint_covered, live_paint_parts_skipped, painted};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ok, str_param};
 use crate::DocState;
 use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
@@ -250,10 +250,15 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     } else if item == ItemTarget::Top {
         own_stroke_or_leaves(s, p)?
     } else {
-        item.targets(s, p)?
+        item.targets_for(s, p, false)?
     };
     // A Live Paint group without edges was still selected or given: the options do not go to new art.
-    let live_paint = !bucket && item == ItemTarget::Top && !live_paint_parts_skipped(&s.doc()?.doc, &super::targets(s, p)?, false).is_empty();
+    let live_paint = !bucket
+        && if item == ItemTarget::Top {
+            !live_paint_parts_skipped(&s.doc()?.doc, &super::targets(s, p)?, false).is_empty()
+        } else {
+            !super::appearance::contents_skipped(s, p, false)?.is_empty()
+        };
     let new_art = bucket || (no_targets(&ids, p) && !live_paint);
     let given = !ids.is_empty() || live_paint;
     // The art of a graph design in a series keeps the design's stroke.
@@ -445,7 +450,7 @@ impl Session {
     /// selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
-        if self.tool_id() == super::paint::LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return Some(self.new_art_stroke());
         }
         if let Some(part) = st.selected_symbol_part() {
@@ -453,12 +458,15 @@ impl Session {
         }
         let Some(first) = st.selection.objects.first() else { return Some(self.new_art_stroke()) };
         let first = st.doc.node(*first)?;
+        // Only an active Appearance row is shown here: it is a row of the first selected object.
         if let Some(i) = first.appearance.item_of_kind(self.appearance_item(), false) {
             return first.appearance.stroke_at(Some(i)).cloned();
         }
         // A Live Paint group without edges shows the next selected object's stroke; any other object
-        // without a painted object shows none.
-        for id in &st.selection.objects {
+        // without a painted object shows none. A face or edge selected with its Live Paint group counts
+        // with the group, wherever it is in the selection.
+        let covered = live_paint_covered(&st.doc, &st.selection.objects);
+        for id in st.selection.objects.iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
             painted(n, true, true, &mut nodes);
@@ -532,7 +540,7 @@ impl DocState {
         } else {
             let selected: Vec<&Node> = self.selection.objects.iter().filter_map(|id| self.doc.node(*id)).collect();
             // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
-            let covered: std::collections::HashSet<vectorcraft_doc::NodeId> = selected.iter().flat_map(|n| live_paint_parts(n)).collect();
+            let covered = live_paint_covered(&self.doc, &self.selection.objects);
             for n in selected.into_iter().filter(|n| !covered.contains(&n.id)) {
                 painted(n, true, true, &mut nodes);
             }
