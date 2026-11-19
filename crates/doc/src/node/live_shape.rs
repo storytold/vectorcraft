@@ -144,9 +144,35 @@ impl LiveShape {
     /// from straight up (the Rotate field's sense). None for other shapes.
     pub fn polygon_angle(&self) -> Option<f64> {
         let LiveShape::Polygon { .. } = self else { return None };
-        // No −0° or 360° from rounding: a polygon drawn upright reads 0°.
+        self.shape_angle()
+    }
+    /// A rectangle's, ellipse's or polygon's angle (Rectangle, Ellipse and Polygon Angle): the
+    /// counterclockwise degrees in [0, 360) it is turned by (the Rotate field's sense). A rectangle or
+    /// ellipse drawn level reads 0°, as does a polygon drawn with its first vertex straight up. None for
+    /// other shapes.
+    pub fn shape_angle(&self) -> Option<f64> {
+        let (LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }) = self else { return None };
+        // No −0° or 360° from rounding: a shape drawn level reads 0°.
         let a = (-self.angle_deg()).rem_euclid(360.0);
         Some(if a > 360.0 - 1e-9 { 0.0 } else { a + 0.0 })
+    }
+    /// Turn a rectangle, ellipse or polygon about its center to `angle` (degrees, as
+    /// [`LiveShape::shape_angle`]), keeping its size, corners and pie. Nothing changes for other
+    /// shapes or an angle that isn't finite.
+    pub fn set_shape_angle(&mut self, angle: f64) {
+        let Some(now) = self.shape_angle() else { return };
+        if !angle.is_finite() {
+            return;
+        }
+        // Brought into [0, 360) first: `now - angle` loses `now` for a very large angle.
+        let angle = angle.rem_euclid(360.0);
+        let (xf, local) = match self {
+            LiveShape::Rectangle { w, h, xf, .. } | LiveShape::Ellipse { w, h, xf, .. } => (xf, Point::new(*w / 2.0, *h / 2.0)),
+            LiveShape::Polygon { xf, .. } => (xf, Point::ZERO),
+            LiveShape::Line { .. } | LiveShape::Path { .. } => return,
+        };
+        let center = *xf * local;
+        *xf = Affine::rotate_about((now - angle).to_radians(), center) * *xf;
     }
     /// Whether a polygon's sides are all as long: `xf` scales it evenly and doesn't shear it. True
     /// for other shapes.
@@ -171,12 +197,8 @@ impl LiveShape {
     }
     /// Turn a polygon about its centre to `angle` (degrees, as [`LiveShape::polygon_angle`]).
     pub fn set_polygon_angle(&mut self, angle: f64) {
-        let Some(now) = self.polygon_angle() else { return };
-        if let LiveShape::Polygon { xf, .. } = self
-            && angle.is_finite()
-        {
-            let centre = *xf * Point::ZERO;
-            *xf = Affine::rotate_about((now - angle).to_radians(), centre) * *xf;
+        if let LiveShape::Polygon { .. } = self {
+            self.set_shape_angle(angle);
         }
     }
     /// A line's length in the document, from its first end to its second. None for other shapes.
