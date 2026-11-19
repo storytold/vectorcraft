@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
+            "{id?: id, spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends (or of the blend `id` alone; a hidden or locked one is an error); easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (each blend keeps its own value for every option omitted; out of range is an error and changes nothing; no undo step when nothing changes); with no blend selected and no `id`, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Spine Point",
             [],
             None,
-            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
+            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool, link?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`; `link` makes the point smooth with the other handle in line at its own length, a retracted one pulled out to the moved handle's length where a segment leaves the point on its side; `link` needs `handle` and cannot go with `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
         ),

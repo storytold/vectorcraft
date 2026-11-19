@@ -162,7 +162,7 @@ pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
     if d.symbols.is_sorted_by_key(key) {
         return ok();
     }
-    let current = current_symbol(d).or_else(|| symbol_names(d).into_iter().next());
+    let current = current_symbol(d);
     s.edit("Sort by Name", |d, _| {
         if let Some(name) = current {
             d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
@@ -173,12 +173,15 @@ pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
-fn symbol_names(d: &Document) -> Vec<String> {
-    d.symbols.iter().map(|s| s.name.clone()).collect()
-}
-
-fn current_symbol(d: &Document) -> Option<String> {
-    d.unknown.get(CURRENT_SYMBOL).and_then(Value::as_str).filter(|n| d.symbols.iter().any(|s| s.name == *n)).map(str::to_string)
+/// The Symbols panel's current symbol, as `symbol.list` answers it: the stored current symbol
+/// while `d` has a symbol of that name, else the first symbol; `None` when `d` has no symbols.
+pub fn current_symbol(d: &Document) -> Option<String> {
+    d.unknown
+        .get(CURRENT_SYMBOL)
+        .and_then(Value::as_str)
+        .filter(|n| d.symbols.iter().any(|s| s.name == *n))
+        .or_else(|| d.symbols.first().map(|s| s.name.as_str()))
+        .map(str::to_string)
 }
 
 pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
@@ -200,7 +203,7 @@ pub(super) fn symbol_list(s: &mut Session, _: &Value) -> Result<Value> {
             })
         })
         .collect();
-    Ok(json!({ "symbols": list, "current": current_symbol(d).or_else(|| symbol_names(d).into_iter().next()) }))
+    Ok(json!({ "symbols": list, "current": current_symbol(d) }))
 }
 
 /// Store `art` ([`normalize`]d, of natural size `size`) as symbol `name`, which becomes the
@@ -250,6 +253,9 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
     let nine = nine_slice_param(p, C, None)?.flatten();
     let dynamic = type_param(p, C)?.unwrap_or(false);
     let pixel = pixel_grid_param(p, C)?.unwrap_or(false);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
+    let iso = s.doc()?.isolation;
     // Keep the art where it was: the geometric centre stays at `c`, whatever the registration is.
     let place = place_xf(c + reg.offset_from_center(size.0, size.1), size, reg);
     let id = s.edit("New Symbol", |d, sel| {
@@ -261,13 +267,20 @@ pub(super) fn symbol_new(s: &mut Session, p: &Value) -> Result<Value> {
         d.set_symbol_export_type(&name, export);
         d.set_symbol_nine_slice(&name, nine);
         d.set_symbol_pixel_aligned(&name, pixel);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
         let id = instance_in_place(d, &ids, &name, place)?;
         sel.set([id]);
-        Ok(id)
+        Ok(Some(id))
     })?;
     Ok(json!({
         "name": name,
-        "id": id.0,
+        "id": id.map(|i| i.0),
         "registration": reg.0,
         "exportType": export.id(),
         "nineSlice": nine.map_or(Value::Null, SymbolNineSlice::to_value),
@@ -398,9 +411,7 @@ fn resolve_symbol(d: &Document, p: &Value, cmd: &str) -> Result<String> {
     match str_param(p, "name") {
         Some(n) if d.symbols.iter().any(|s| s.name == n) => Ok(n.to_string()),
         Some(n) => Err(bad(cmd, format!("no symbol named `{n}`"))),
-        None => {
-            current_symbol(d).or_else(|| symbol_names(d).into_iter().next()).ok_or_else(|| EngineError::Other("the document has no symbols".into()))
-        }
+        None => current_symbol(d).ok_or_else(|| EngineError::Other("the document has no symbols".into())),
     }
 }
 
@@ -611,6 +622,8 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Redefining the symbol being edited leaves symbol editing mode in the same step.
     let session = s.doc()?.doc.symbol_edit.clone().filter(|e| e.symbol == name);
+    // `keepArt` leaves the art as ordinary art instead of replacing it with an instance.
+    let keep_art = switch_or(p, "keepArt", false, C)?;
     if session.is_some() {
         crate::cmd::settle_interaction(s)?;
         s.end_text_edit();
@@ -624,10 +637,20 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    // Nor can art that holds an instance of it, directly or through the symbols it nests.
+    if crate::cmd::symboledit::holds_symbol(&s.doc()?.doc, &art, &name, &mut Default::default()) {
+        return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+    }
     crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let old = natural_size(&s.doc()?.doc, &name);
     let editing = session.is_some();
+    // The isolation the kept art is selected in: the one from before symbol editing mode when
+    // the step leaves it.
+    let iso = match &session {
+        Some(se) => se.back_isolation,
+        None => s.doc()?.isolation,
+    };
     let id = s.edit("Redefine Symbol", |d, sel| {
         if editing {
             crate::cmd::symboledit::finish(d, sel);
@@ -646,15 +669,22 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Each instance keeps its appearance changes to the objects the new art still has.
         fit_overrides(d, &instances);
+        if keep_art {
+            // The art stays where it is and stays selected, apart from art that is hidden or
+            // locked, in a hidden or locked group or layer, or on a locked artboard.
+            let locks = d.locked_artboards();
+            sel.set(ids.iter().copied().filter(|i| crate::cmd::select::is_selectable(d, iso, &locks, *i)));
+            return Ok(None);
+        }
         let reg = d.symbol_registration(&name);
         let id = instance_in_place(d, &ids, &name, place_xf(c + reg.offset_from_center(size.0, size.1), size, reg))?;
         sel.set([id]);
-        Ok(id)
+        Ok(Some(id))
     })?;
     if let Some(se) = &session {
         crate::cmd::symboledit::leave_editing(s, se)?;
     }
-    Ok(json!({ "name": name, "id": id.0 }))
+    Ok(json!({ "name": name, "id": id.map(|i| i.0) }))
 }
 
 /// How many levels of nested instances Delete Symbol expands before it gives up.

@@ -58,6 +58,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-cap-square", include_bytes!("../../../assets/icons/dc-cap-square.svg")),
     ("dc-center-hide", include_bytes!("../../../assets/icons/dc-center-hide.svg")),
     ("dc-center-show", include_bytes!("../../../assets/icons/dc-center-show.svg")),
+    ("dc-circle-points", include_bytes!("../../../assets/icons/dc-circle-points.svg")),
     ("dc-clear", include_bytes!("../../../assets/icons/dc-clear.svg")),
     ("dc-color-guide", include_bytes!("../../../assets/icons/dc-color-guide.svg")),
     ("dc-contour", include_bytes!("../../../assets/icons/dc-contour.svg")),
