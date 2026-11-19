@@ -3421,6 +3421,9 @@ mark-style	Japanese	日本式
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	最近使用したファイルを開くとホーム画面に表示する最近のファイルの最大数です。0 では表示しませんが、VectorCraft は最大 30 個まで覚えています。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	ドキュメントを開くとき、保存済みのプレビューを表示しているリンクされた EPS 画像は、EPS ファイルを読み直さずにそのプレビューを保ちます。変更されたファイルには引き続きリンクを更新の設定が適用されます。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	ピクセルプレビューで画像を滑らかに描画します。オフの場合、ピクセルの端がはっきり表示されます。ピクセルプレビュー以外では画像は常に滑らかです。
+	PDF Text	PDF のテキスト
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開く PDF や埋め込む PDF のテキストを、編集可能なテキストとして、またはフォントのないコンピューターでも同じに見えるアウトラインとして読み込みます。
+	Linked pages show the file's own text.	リンクしたページにはファイル自体のテキストが表示されます。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	リンクされたファイルが変更されたとき、自動では読み直し、変更時に確認では先に確認し、手動ではそのままにしてステータスバーにメモを表示します。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	デスクトップ版で、テンプレートから新規…とテンプレートとして保存…が最初に開くフォルダーです。空欄にすると書類フォルダー内の VectorCraft Templates を使います。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	オリジナルを編集で、リンクされたファイルを種類に応じたシステムの既定のアプリで開きます。オフの場合、リンクされたラスター画像はインストールされていれば PhotoCraft で開きます。

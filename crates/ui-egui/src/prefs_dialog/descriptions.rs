@@ -338,6 +338,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
     ),
     (
+        "pdfTextAs",
+        "The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.",
+    ),
+    (
         "templatesFolder",
         "On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.",
     ),

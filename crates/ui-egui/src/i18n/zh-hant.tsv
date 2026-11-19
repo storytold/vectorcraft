@@ -4726,6 +4726,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	「開啟最近使用的檔案」和首頁畫面最多列出這麼多最近的檔案；設為 0 時不列出，但 VectorCraft 仍會記住最多 30 個。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	開啟文件時，顯示已儲存預視的連結 EPS 影像會保留該預視，而不重新讀取 EPS 檔案；已變更的檔案仍依「更新連結」處理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素預視中，影像以平滑方式繪製；關閉此選項時，像素邊緣清晰銳利。像素預視以外，影像一律平滑顯示。
+	PDF Text	PDF 文字
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開啟或嵌入的 PDF 中的文字會以可編輯文字匯入，或以外框匯入，在沒有其字體的電腦上看起來也相同。
+	Linked pages show the file's own text.	連結的頁面顯示檔案本身的文字。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	連結的檔案變更時，「自動」會重新讀取，「修改時詢問」會先詢問您，「手動」則保持不變並在狀態列顯示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，「從範本新增…」和「另存範本…」開啟時所在的資料夾；留空則使用文件資料夾中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	「編輯原稿」以系統中該類型的預設應用程式開啟連結的檔案；關閉此選項時，若已安裝 PhotoCraft，連結的點陣影像會在 PhotoCraft 中開啟。

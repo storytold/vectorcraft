@@ -2689,7 +2689,7 @@ fn keyboard_focus_on_a_performance_row_shows_its_description() {
     }
 }
 
-/// The pointer over each of the 14 File Handling rows, from Enable Background Save to Use
+/// The pointer over each of the 15 File Handling rows, from Enable Background Save to Use
 /// Compression, shows that row's sentence and no other row's.
 #[test]
 fn hovering_a_file_handling_row_shows_its_description() {
@@ -2713,6 +2713,7 @@ fn hovering_a_file_handling_row_shows_its_description() {
         ("Use Low Resolution Proxy for Linked EPS", "lowResProxyEps"),
         ("Display Bitmaps as Anti-aliased Images in Pixel Preview", "antiAliasedBitmaps"),
         ("Update Links:", "updateLinks"),
+        ("PDF Text:", "pdfTextAs"),
         ("Templates Folder:", "templatesFolder"),
         ("Use System Defaults for Edit Original", "editOriginalSystemDefaults"),
         ("Mark Older Files as [Converted] When Opened", "appendConverted"),

@@ -1565,7 +1565,12 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
 every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
 its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
-(its embedded fonts, installed or not). Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
+(its embedded fonts, installed or not). In the app, the Import PDF and Place PDF dialogs' Text choice (Editable or
+Outlines) sends `textAs`; for a PDF it starts from the `pdfTextAs` preference and OK keeps the choice there (a
+`.ai` or `.ait` file starts from Editable). Outlines clears
+Import PDF pages as links, and a linked place dims the choice: a linked page shows the file's own text. A PDF that opens
+or is placed embedded without the dialog (one page, or Show Import Options off) takes `pdfTextAs` when its params
+give no `textAs`; a `.ai` or `.ait` file, and an open with `linkPages`, open as their params say. Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
 edge, font and leading) come back as one area type object, left aligned or justified, where laying it out breaks the
 lines where the file does; a stroke written as each glyph's outline stroked is the type object's stroke; glyphs set
 apart by gaps wider than a space keep their places. Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
@@ -7913,6 +7918,8 @@ Printing / Exporting, `accurate` by default) does the same for RGB raster export
 Print as Bitmap: `rich` draws pure CMYK black as RGB black in the pixels; CMYK ink exports and the document's
 colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
+`pdfTextAs` (Preferences › File Handling › PDF Text, `text` by default; `text` or `outlines`): what the text of a PDF
+opened or placed embedded from the app becomes when the open or place gives no `textAs` (see `document.open`).
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
 
