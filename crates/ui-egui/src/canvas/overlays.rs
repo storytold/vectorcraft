@@ -216,15 +216,16 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon, Direct
-    // Selection on any path).
+    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon while Show
+    // Shape Widgets is on, Direct Selection on any path).
+    let shape_widgets = app.ui.view.shape_widgets;
     if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
             &st.doc,
             &st.selection,
             xf.zoom,
             tool == "directSelection",
-            app.ui.view.corner_widgets,
+            app.ui.view.corner_widgets && (tool == "directSelection" || shape_widgets),
             app.session.prefs.hide_corner_widget_above,
         )
     {
@@ -256,16 +257,21 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
         // A live polygon's side widget: a diamond beside the middle of the box's right side, drawn
-        // only while the box is drawn (the box hides during a turn and during a drag of the widget).
-        if !drawing_boxed && let Some(w) = vectorcraft_tools::sidewidget::SideWidget::of(&st.doc, &st.selection, &b, xf.zoom) {
+        // only while the box and the shape widgets are drawn (the box hides during a turn and during
+        // a drag of the widget).
+        if !drawing_boxed
+            && shape_widgets
+            && let Some(w) = vectorcraft_tools::sidewidget::SideWidget::of(&st.doc, &st.selection, &b, xf.zoom)
+        {
             let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::sidewidget::RADIUS_PX);
             let diamond = vec![c + vec2(0.0, -r), c + vec2(r, 0.0), c + vec2(0.0, r), c + vec2(-r, 0.0)];
             p.add(Shape::convex_polygon(diamond, Color32::WHITE, Stroke::new(1.0, color)));
         }
     }
-    // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
-    // by a line to the outline's point at its angle. They stay while one is dragged.
-    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box {
+    // Pie widgets (Selection tool, with View › Show Bounding Box and Show Shape Widgets, on live
+    // ellipses): each joined by a line to the outline's point at its angle. They stay while one is
+    // dragged.
+    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box && shape_widgets {
         for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
             let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
             p.line_segment([on, c], Stroke::new(1.0, color));

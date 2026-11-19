@@ -1155,9 +1155,11 @@ impl Tool for SelectionTool {
                 self.state = State::Sides(d);
                 out
             }
-            (PointerKind::Up, State::Sides(d)) => {
+            (PointerKind::Up, State::Sides(mut d)) => {
                 self.state = State::Idle;
-                d.finish()
+                let mut out = d.drag(cx, p);
+                out.extend(d.finish());
+                out
             }
             (PointerKind::Drag, State::BlendWidget(mut d)) => {
                 let out = d.drag(cx, p);
