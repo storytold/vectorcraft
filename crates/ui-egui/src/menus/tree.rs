@@ -96,7 +96,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Paste without Formatting", "edit.pasteWithoutFormatting"),
                 c("Clear", "edit.clear"),
                 Sep,
-                cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
+                cp("Find and Replace…", "edit.findReplace", crate::dialogs::find_replace::menu_params()),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
                 sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)]),
                 // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
@@ -165,6 +165,11 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                        Sep,
+                        // The Align panel's Align To choices, checked as the panel shows them.
+                        c("Align to Selection", "align.toSelection"),
+                        c("Align to Key Object", "align.toKeyObject"),
+                        c("Align to Artboard", "align.toArtboard"),
                     ],
                 ),
                 // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
@@ -453,6 +458,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Find Font…", "type.findFont"),
                 c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
+                c("Kinsoku Shori Settings…", crate::dialogs::kinsoku_sets::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -473,6 +479,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 Sep,
                 c("Create Outlines", "type.createOutlines"),
+                c("Retype", "type.retype"),
                 c("Scale Text Attributes", "type.scaleTextAttributes"),
                 c("Optical Margin Alignment", "type.opticalMarginAlignment"),
                 Sep,
@@ -708,6 +715,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
+                panel("Production Preflight", crate::panels::preflight::ID),
+                panel("Retype", crate::panels::retype::ID),
                 panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),

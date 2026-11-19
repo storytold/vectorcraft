@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::hash::Hash;
+
 use super::{Paint, Rect, Response, Stroke, StrokeKind, Tokens, Ui, Vec2};
 
 /// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
@@ -17,7 +20,8 @@ pub enum PanelDrag {
     /// replaces the style it is dropped on with it (`graphicStyle.redefine`).
     Appearance(vectorcraft_doc::NodeId),
     /// A Graphic Styles panel style: art it is dropped on takes it (`graphicStyle.apply` with its
-    /// `ids`); the panel moves it to where it is dropped.
+    /// `ids`); the panel moves it to where it is dropped, or with Alt held replaces the style it is
+    /// dropped on with its look (`graphicStyle.redefine` with `from`).
     GraphicStyle(String),
     /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
     /// makes a style of the first object (`graphicStyle.new`), or with Alt held replaces the style
@@ -158,10 +162,11 @@ pub fn row_click<K: Copy + PartialEq>(order: &[K], highlighted: &[K], anchor: Op
 /// Apply `click` to the `highlighted` rows, kept in highlight order as `layer.highlight` keeps the
 /// Layers panel's: a toggled row is appended (or taken off, even the last one), a range replaces the
 /// rows or adds those not there yet, top-down.
-pub fn apply_row_click<K: Copy + PartialEq>(highlighted: &mut Vec<K>, click: &RowClick<K>) {
+pub fn apply_row_click<K: Copy + Eq + Hash>(highlighted: &mut Vec<K>, click: &RowClick<K>) {
     let add = |rows: &mut Vec<K>, add: &[K]| {
+        let mut held: HashSet<K> = rows.iter().copied().collect();
         for k in add {
-            if !rows.contains(k) {
+            if held.insert(*k) {
                 rows.push(*k);
             }
         }
@@ -290,5 +295,30 @@ mod row_click_tests {
         // A range replaces the rows, or adds the ones not there yet, top-down.
         assert_eq!(applied(vec![50], RowClick::Range(vec![20, 30])), [20, 30]);
         assert_eq!(applied(vec![30, 50], RowClick::AddRange(vec![20, 30, 40])), [30, 50, 20, 40]);
+    }
+
+    /// A large range gives the rows a search of the highlighted rows for each id gives, in the same
+    /// order, with repeated ids and rows already highlighted kept once.
+    #[test]
+    fn a_large_range_applies_as_a_search_of_the_rows_for_each_id_does() {
+        let searched = |mut rows: Vec<u32>, range: &[u32]| {
+            for k in range {
+                if !rows.contains(k) {
+                    rows.push(*k);
+                }
+            }
+            rows
+        };
+        let mut range: Vec<u32> = (0..5_000).collect();
+        range.extend([7, 4_999, 0]);
+        let before = vec![4_000, 9_000, 2, 9_000];
+        let mut added = before.clone();
+        apply_row_click(&mut added, &RowClick::AddRange(range.clone()));
+        assert_eq!(added, searched(before.clone(), &range));
+        assert_eq!(added.len(), 5_002, "the 5,000 ids, the row outside the range and its repeat");
+        let mut set = before;
+        apply_row_click(&mut set, &RowClick::Range(range.clone()));
+        assert_eq!(set, searched(Vec::new(), &range));
+        assert_eq!(set.len(), 5_000);
     }
 }

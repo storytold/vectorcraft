@@ -3431,6 +3431,133 @@ fn many_gradient_definitions_take_distinct_names_in_order() {
     assert_eq!(text, program(&doc));
 }
 
+/// The program written from `doc`, with the gradient and pattern definitions found by comparing
+/// each in turn (`scanned`) or through their indexes.
+fn program_scanned(doc: &Document, scanned: bool) -> Vec<u8> {
+    writer::SCANNED_DEFINITIONS.with(|s| s.set(scanned));
+    let out = export_ai_editing(doc, &opts());
+    writer::SCANNED_DEFINITIONS.with(|s| s.set(false));
+    out.unwrap().program
+}
+
+/// [`gradients_and_patterns`] with more rectangles, each filled with a gradient: `distinct` with
+/// gradients of their own; `reused` with one of `ramps` gradients in turn; one for each of
+/// `swatches` new gradient swatches, linked to it, with the swatch's gradient for every other one
+/// and another gradient for the rest; one with the gradient of an object whose style isn't written
+/// (an even-odd fill with a drop shadow), after that object; and two whose gradients
+/// differ only in the sign of a zero offset.
+fn many_gradients(distinct: u16, reused: u16, ramps: u16, swatches: u16) -> Document {
+    let mut doc = gradients_and_patterns();
+    let two = |a: Color, b: Color| ramp(GradientKind::Linear, &[(0.0, a, 1.0, 0.5), (1.0, b, 1.0, 0.5)]);
+    let shade = |i: u16, n: u16| f32::from(i) / f32::from(n.max(1));
+    let swatch_gradient = |i: u16| two(Color::gray(shade(i, swatches)), Color::rgb(1.0, 0.0, 0.0));
+    let more = (0..swatches)
+        .map(|i| Swatch { name: format!("Ramp {i}"), paint: gradient_paint(swatch_gradient(i), None, None), global: false, spot: false })
+        .collect();
+    swatches_plus(&mut doc, more);
+    let mut paints = vec![];
+    for i in 0..distinct {
+        paints.push(gradient_paint(two(Color::rgb(shade(i, distinct), 0.5, 0.0), Color::rgb(0.0, 0.0, 1.0)), None, None));
+    }
+    for i in 0..reused {
+        paints.push(gradient_paint(two(Color::rgb(0.0, shade(i % ramps.max(1), ramps), 0.5), Color::WHITE), None, None));
+    }
+    for i in 0..swatches {
+        let g = if i % 2 == 0 { swatch_gradient(i) } else { two(Color::gray(shade(i, swatches)), Color::rgb(0.0, 1.0, 0.0)) };
+        paints.push(gradient_paint(g, None, Some(&format!("Ramp {i}"))));
+    }
+    // The reader wouldn't read an even-odd fill with the style, so the style isn't written.
+    let unstyled = two(Color::WHITE, Color::BLACK);
+    let ap = Appearance {
+        items: vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(unstyled.clone(), None, None)))],
+        effects: vec![fx("stylize.dropShadow", serde_json::json!({}))],
+        contents_index: None,
+    };
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    if let NodeKind::Path { rule, .. } = &mut n.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    put(&mut doc, n);
+    paints.push(gradient_paint(unstyled, None, None));
+    let zero = |o: f32| ramp(GradientKind::Linear, &[(o, Color::rgb(0.2, 0.3, 0.4), 1.0, 0.5), (1.0, Color::BLACK, 1.0, 0.5)]);
+    paints.extend([gradient_paint(zero(0.0), None, None), gradient_paint(zero(-0.0), None, None)]);
+    for (i, p) in (0u16..).zip(paints) {
+        let (x, y) = (f64::from(i % 60) * 5.0, f64::from(i / 60 % 40) * 5.0);
+        let n = painted(&mut doc, shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), vec![AppearanceItem::Fill(FillLayer::new(p))]);
+        put(&mut doc, n);
+    }
+    doc
+}
+
+/// Gradient and pattern definitions found through their indexes are those found by comparing each
+/// in turn: the program is the same, byte for byte. A swatch's definition serves a paint linked to
+/// it only with the swatch's gradient; a gradient defined for a style that isn't written leaves its
+/// name free; gradients that differ only in the sign of a zero share a definition.
+#[test]
+fn indexed_definitions_write_the_same_program() {
+    let doc = many_gradients(300, 300, 7, 6);
+    let (indexed, scanned) = (program_scanned(&doc, false), program_scanned(&doc, true));
+    let differ = indexed.iter().zip(&scanned).position(|(a, b)| a != b);
+    assert!(indexed == scanned, "the programs differ from byte {differ:?} ({} and {} bytes)", indexed.len(), scanned.len());
+    let text = String::from_utf8(indexed).unwrap();
+    let names: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("%AI5_BeginGradient: ")).collect();
+    // `gradients_and_patterns`'s 5, then 300 + 7 + 6 swatches' + 3 others linked to swatches + 1
+    // after the style + 1 for both signs of zero.
+    assert_eq!(names.len(), 5 + 300 + 7 + 6 + 3 + 1 + 1, "{names:?}");
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len(), "{names:?}");
+    assert_eq!(text.matches("%AI3_BeginPattern: (Dots)").count(), 1);
+}
+
+/// A gradient paint is matched with the definitions of the same gradient, not with each
+/// definition: 1,000 gradients of their own and 1,000 paints of 10 others take a few comparisons
+/// each, where comparing each definition in turn takes hundreds of thousands.
+#[test]
+fn gradient_definitions_are_found_without_comparing_each() {
+    let doc = many_gradients(1000, 1000, 10, 0);
+    let comparisons = |scanned: bool| {
+        writer::GRADIENT_COMPARISONS.with(|c| c.set(0));
+        program_scanned(&doc, scanned);
+        writer::GRADIENT_COMPARISONS.with(std::cell::Cell::get)
+    };
+    let (indexed, scanned) = (comparisons(false), comparisons(true));
+    assert!(indexed <= 2 * 2010, "{indexed} comparisons through the index");
+    assert!(scanned > 100 * indexed, "{scanned} comparisons scanning, {indexed} through the index");
+}
+
+/// The time to write 5,000 rectangles with gradients of their own, 5,000 with 50 others and 20
+/// gradient swatches, with the definitions found by comparing each in turn and through their
+/// indexes: the median of 7 runs of each, alternating, with the programs compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture gradient_definitions_timing`.
+#[test]
+#[ignore = "timing"]
+fn gradient_definitions_timing() {
+    let doc = many_gradients(5000, 5000, 50, 20);
+    let mut times = [vec![], vec![]];
+    let mut programs: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [true, false].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let program = program_scanned(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            programs[k].get_or_insert(program);
+        }
+    }
+    assert_eq!(programs[0], programs[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("median of 7 runs ({how}):");
+    println!("| definitions found | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["by comparing each", "through the indexes"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
+}
+
 /// A hard edge: a linear gradient whose stops all lie at one place is written from its last stop,
 /// and reads back with each stop on its side.
 #[test]
@@ -10509,8 +10636,9 @@ fn a_brushs_mask_art_isnt_written_as_a_styled_object_with_its_id() {
 }
 
 /// Settings the other tests don't use come back: a Calligraphic brush varying with tilt and bearing,
-/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, and brushes whose
-/// modes aren't given (the reader gives them, the same ones).
+/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, a Calligraphic
+/// and a Scatter brush whose size follows an airbrush pen's finger wheel, and brushes whose modes
+/// aren't given (the reader gives them, the same ones).
 #[test]
 fn more_brush_settings_are_read_back() {
     use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
@@ -10535,8 +10663,20 @@ fn more_brush_settings_are_read_back() {
     let lib = vec![
         Brush { name: "Tilted".into(), kind: BrushKind::Calligraphic(tilted.clone()) },
         Brush { name: "Still".into(), kind: BrushKind::Scatter(scatter.clone()) },
-        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted }) },
-        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter }) },
+        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted.clone() }) },
+        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter.clone() }) },
+        Brush {
+            name: "Wheel nib".into(),
+            kind: BrushKind::Calligraphic(Calligraphic { modes: Some([Variation::Fixed, Variation::Fixed, Variation::StylusWheel]), ..tilted }),
+        },
+        Brush {
+            name: "Wheel spray".into(),
+            kind: BrushKind::Scatter(Scatter {
+                size: (40.0, 160.0),
+                modes: Some([Variation::StylusWheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]),
+                ..scatter
+            }),
+        },
     ];
     let mut doc = Document::new(300.0, 200.0);
     vectorcraft_brush::store(&mut doc, &lib);

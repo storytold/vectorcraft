@@ -6,6 +6,14 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
+#[derive(Clone, Debug)]
+pub struct BrushKeyColorPick {
+    pub doc: u64,
+    pub back: String,
+    pub press: Option<Point>,
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -219,6 +227,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("colorThemes", "Color Themes", "sun"),
     (crate::panels::color_wheel::ID, "Color Wheel", "circle"),
     (crate::panels::links::ID, "Links", "link"),
+    (crate::panels::preflight::ID, "Production Preflight", "dc-list-view"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
@@ -226,6 +235,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::panels::discover::ID, "VectorCraft Help…", "search"),
+    (crate::panels::retype::ID, "Retype", "type"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
@@ -273,6 +283,10 @@ pub struct ViewFlags {
     pub trim_view: bool,
     /// View → Hide/Show Corner Widget (live corner widgets on rectangles).
     pub corner_widgets: bool,
+    /// The Control bar's Hide/Show Shape Widgets with a shape tool: selected live shapes' corner, pie
+    /// and side widgets with the Selection tool and the shape tools.
+    #[serde(default = "yes")]
+    pub shape_widgets: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
     /// View → Snap to Glyph.
@@ -313,6 +327,7 @@ impl Default for ViewFlags {
             edges: true,
             trim_view: false,
             corner_widgets: true,
+            shape_widgets: true,
             snap_to_pixel: false,
             snap_to_glyph: false,
             text_threads: true,
@@ -393,6 +408,10 @@ pub struct UiState {
     #[serde(rename = "language", skip_serializing)]
     pub legacy_language: Option<String>,
     pub brightness: Brightness,
+    /// The Print dialog's opt-in direct-PDF transport. UI-only and not serialized: the control
+    /// channel cannot enable a print that bypasses the printer driver.
+    #[serde(skip)]
+    pub print_direct_pdf: bool,
     pub dock_tab: DockTab,
     /// Tab order in the dock's tabbed group when it differs from [`DockTab::ALL`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -431,6 +450,9 @@ pub struct UiState {
     pub learn: crate::panels::learn::View,
     #[serde(skip)]
     pub discover: crate::panels::discover::View,
+    /// The Retype panel's list of matching fonts and its sample settings, kept while the app runs.
+    #[serde(skip)]
+    pub retype: crate::panels::retype::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -459,6 +481,9 @@ pub struct UiState {
     pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Smaller cells and panel width for the main Tools panel, independent of its column count.
+    #[serde(default)]
+    pub toolbar_compact: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
@@ -575,6 +600,8 @@ pub struct UiState {
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    #[serde(skip)]
+    pub brush_key_color_pick: Option<BrushKeyColorPick>,
     /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
     /// the order they came.
     #[serde(skip)]
@@ -599,6 +626,11 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The last Find and Replace search ([`crate::dialogs::find_replace`]): the dialog's Find and
+    /// Replace With text, its options and the place the search reached, which Edit › Find Next
+    /// goes on from while the dialog is closed. Not saved.
+    #[serde(skip)]
+    pub last_find: Option<serde_json::Value>,
     /// The notes of the last open that gave any, or of the last save or export, with the status
     /// text that names the first of them: hovering that text lists them when there are several.
     /// Not saved.
@@ -686,6 +718,12 @@ pub struct UiState {
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
     pub shortcut_overrides: craft_keymap::Overrides,
+    /// Hold shortcuts: command id, `tool:<id>` or `panel:<id>` → a character key, alone or with
+    /// Shift ("X", "Shift+X", "."). Holding the key for the Hold Shortcut Delay runs the entry; a
+    /// quick press runs the key's own shortcut when it is let go. Kept apart from
+    /// `shortcut_overrides`, so earlier versions read the settings without them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shortcut_holds: std::collections::BTreeMap<String, String>,
     /// Name of the shortcut set (preset or "Custom").
     #[serde(default = "default_shortcut_set", deserialize_with = "crate::shortcut_editor::deserialize_set_name")]
     pub shortcut_set: String,
@@ -717,6 +755,9 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Native-picker-only raster editor; never exposed as an engine preference or dialog field.
+    #[serde(default)]
+    pub original_editor: crate::OriginalEditorChoice,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -771,8 +812,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, and the box's channel (`ui.colorWheel`,
-    /// [`crate::panels::color_wheel::deserialize_settings`]).
+    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
+    /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
@@ -828,6 +869,9 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
+    #[serde(default)]
+    pub hpgl_options: Value,
     /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
     /// dialog opens on them (#1152).
     #[serde(default)]
@@ -842,6 +886,10 @@ pub struct UiState {
     /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
     #[serde(default)]
     pub recolor_preserve: Value,
+    /// The open Recolor Artwork dialog's own history of color edits (Undo Changes and Redo
+    /// Changes), empty again each time the dialog opens.
+    #[serde(skip)]
+    pub recolor_history: crate::dialogs::recolor::History,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -887,6 +935,9 @@ pub struct UiState {
     /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
+    /// Attributes panel › Panel Options… (how many recent URLs the URL menu lists).
+    #[serde(default)]
+    pub attributes_panel: crate::panels::attributes::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
     /// Search All text does.
     #[serde(skip)]
@@ -1175,6 +1226,7 @@ impl Default for UiState {
         Self {
             legacy_language: None,
             brightness: Brightness::MediumDark,
+            print_direct_pdf: false,
             dock_tab: DockTab::Properties,
             dock_tab_order: Vec::new(),
             dock_collapsed: false,
@@ -1186,6 +1238,7 @@ impl Default for UiState {
             constrain_pie_angle: false,
             learn: Default::default(),
             discover: Default::default(),
+            retype: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),
@@ -1196,6 +1249,7 @@ impl Default for UiState {
             control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
+            toolbar_compact: false,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
@@ -1230,6 +1284,7 @@ impl Default for UiState {
             tab_hid: None,
             view: ViewFlags::default(),
             dialog: None,
+            brush_key_color_pick: None,
             told: vec![],
             answering_control: false,
             flyout: None,
@@ -1238,6 +1293,7 @@ impl Default for UiState {
             status: String::new(),
             status_sets: 0,
             replace_font_warning: None,
+            last_find: None,
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
@@ -1261,6 +1317,7 @@ impl Default for UiState {
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),
+            shortcut_holds: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),
             touch_workspace_restore: None,
@@ -1271,6 +1328,7 @@ impl Default for UiState {
             recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            original_editor: Default::default(),
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
@@ -1299,10 +1357,12 @@ impl Default for UiState {
             links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            hpgl_options: Value::Null,
             offset_path: Value::Null,
             smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
+            recolor_history: Default::default(),
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
@@ -1314,6 +1374,7 @@ impl Default for UiState {
             trace_hold_source: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
+            attributes_panel: Default::default(),
             layers_filter: Default::default(),
             swatches_view: Default::default(),
             graphic_styles_view: Default::default(),
