@@ -1148,10 +1148,18 @@ fn opaque_backgrounds_reach_as_far_as_the_advances() {
     let b = layer[0].geometric_bounds().unwrap();
     assert!(xs.len() == 3, "{xs:?} {end}");
     assert!((b.x0 - xs[0]).abs() < 0.01 && (b.x1 - end).abs() < 0.01, "{b:?} {xs:?} {end}");
-    // On more than one line, each line is aligned without its trailing spaces, and so are its
-    // cells: right aligned at 40 mm, neither passes it.
+    // Layout aligns a line without its trailing spaces: right aligned at 40 mm, the space after
+    // the "i" runs on past it. On more than one line, the cells also run across the trailing
+    // spaces, as far as on one line.
+    assert!(end > 41.0 * mm, "{end}");
     let b = aligned(2, 26, 4000, arial(), "Hi \nHi", &[])[0].geometric_bounds().unwrap();
-    assert!((b.x1 - 40.0 * mm).abs() < 0.01, "{b:?}");
+    assert!((b.x1 - end).abs() < 0.01, "{b:?} {end}");
+    // Leading NULs on a line of their own fill their cells across their advances, before the
+    // next line: from 10 to 30 mm.
+    let layer = opaque(arial(), "\0\nA", &[2000, 0, 1000]);
+    let first = layer[0].geometric_bounds().unwrap();
+    assert!((first.x0 - 10.0 * mm).abs() < 0.01 && (first.x1 - 30.0 * mm).abs() < 0.01, "{first:?}");
+    assert!(matches!(layer[1].kind, NodeKind::Path { .. }) && matches!(layer[2].kind, NodeKind::Text(_)), "{layer:?}");
     // NULs whose advances go forward and back again still fill as far as they reach.
     let layer = opaque(arial(), "\0\0", &[1000, -1000]);
     assert_eq!(layer.len(), 1);

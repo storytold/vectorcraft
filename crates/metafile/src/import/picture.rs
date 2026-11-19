@@ -773,12 +773,10 @@ impl Mapper {
     /// a new piece after each cluster that tracking can't space by its advance.
     fn line(&mut self, line: &Line, chars: &[char], adv: Advances, down: f64, out: &mut TextOut) {
         let Advances { dx, reach, lead } = adv;
-        if chars.is_empty() {
-            return;
-        }
         // The line's cells, one rectangle behind every piece, run as far each way as its
         // advances reach (an advance may be negative), from where the leading NULs' advances
-        // start, which the alignment puts where it puts a line as long as its advances.
+        // start, which the alignment puts where it puts a line as long as its advances. A line
+        // of leading NULs alone fills the cells across their advances.
         let start = aligned(lead.by, dx.iter().sum(), line.align);
         let (mut lo, mut hi, mut pos) = (lead.reach.0 - lead.by, lead.reach.1 - lead.by, 0.0f64);
         for (d, r) in dx.iter().zip(reach) {
@@ -790,7 +788,7 @@ impl Mapper {
         let blank = |cs: &[char]| cs.iter().all(|c| c.is_whitespace());
         // A piece's type draws when it shows: blanks only when underlined or struck through.
         let draws = |cs: &[char]| line.shows && (!blank(cs) || line.decorated);
-        if !draws(chars) {
+        if chars.is_empty() || !draws(chars) {
             return;
         }
         let db = vectorcraft_text::FontDb::global();
@@ -957,26 +955,30 @@ fn cell_rect(x0: f64, x1: f64, y: f64, cell: (f64, f64)) -> BezPath {
 
 /// The character cells of `laid` (the type `s` laid out on more than one line), `cell.0` above
 /// and `cell.1` below each baseline (points), as one rectangle a line: across the line as layout
-/// places it (its trailing blanks are left out of the width layout aligns), or for a line of
-/// blanks alone as wide as their advances, where `align` puts a line that long.
+/// places it and across its glyphs' advances, its trailing blanks included (layout leaves them
+/// out of the width it aligns), or for a line of blanks alone as wide as their advances, where
+/// `align` puts a line that long.
 fn cells(laid: &vectorcraft_text::TextLayout, s: &str, cell: (f64, f64), align: &HAlign) -> BezPath {
-    // Each line's baseline, the sum of its glyphs' advances and whether they are all blanks.
-    // Glyphs come line by line.
-    let mut lines: Vec<(usize, f64, f64, bool)> = Vec::new();
+    // Each line's baseline, the sum of its glyphs' advances, how far before and after the
+    // reference point they reach, and whether they are all blanks. Glyphs come line by line.
+    type Row = (usize, f64, f64, (f64, f64), bool);
+    let mut lines: Vec<Row> = Vec::new();
     for g in &laid.glyphs {
         let blank = s.get(g.byte..).and_then(|r| r.chars().next()).is_none_or(char::is_whitespace);
+        let (from, to) = (g.origin.x.min(g.origin.x + g.advance), g.origin.x.max(g.origin.x + g.advance));
         match lines.last_mut() {
-            Some((line, _, width, all)) if *line == g.line => {
+            Some((line, _, width, reach, all)) if *line == g.line => {
                 *width += g.advance;
+                *reach = (reach.0.min(from), reach.1.max(to));
                 *all &= blank;
             }
-            _ => lines.push((g.line, g.origin.y, g.advance, blank)),
+            _ => lines.push((g.line, g.origin.y, g.advance, (from, to), blank)),
         }
     }
     let mut bp = BezPath::new();
-    for (line, y, width, blank) in lines {
+    for (line, y, width, reach, blank) in lines {
         let (x0, x1) = match laid.lines.get(line) {
-            Some(l) if !blank => (l.x0, l.x1),
+            Some(l) if !blank => (l.x0.min(reach.0), l.x1.max(reach.1)),
             _ => {
                 let x0 = aligned(0.0, width, align);
                 (x0, x0 + width)
