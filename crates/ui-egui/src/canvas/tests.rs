@@ -4464,6 +4464,48 @@ fn without_a_worker_a_heavy_canvas() {
     assert_eq!(app.canvas.key.as_ref().map(|k| k.cx), Some(app.view().unwrap().center.x), "rendered at once");
 }
 
+/// With the web build's setting (`waits_for_still`, no render worker), a heavy document's view
+/// that stops moving while a drag goes on editing the document renders whole once the view has
+/// been still for STILL_SECS: each edit is drawn into the frame shown and does not start the wait
+/// again.
+#[test]
+fn without_a_worker_edits_while_the_view_is_still_do_not_hold_off_the_render() {
+    keeping_color_settings(edits_while_the_view_is_still);
+}
+
+fn edits_while_the_view_is_still() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // no worker, as in the web build
+    app.canvas.waits_for_still = true;
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    frame(&mut app); // the first frame fits the view to the artboard
+    frame(&mut app);
+    app.canvas.last_ms = 50.0;
+    // The view moves once (a drag at an edge of the canvas scrolls it) and then stays still.
+    app.view_mut().unwrap().center.y += 10.0;
+    frame(&mut app);
+    let shown = app.canvas.key.clone().unwrap();
+    assert_ne!(shown.cy, app.view().unwrap().center.y, "waiting");
+    // The drag edits the document on every frame, at 60 fps (egui's input time without a clock).
+    let mut frames = 0;
+    while app.canvas.key.as_ref().is_none_or(|k| k.cy != app.view().unwrap().center.y) && frames < 60 {
+        frames += 1;
+        let x = 110 + (frames % 10) * 5;
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 60, "width": 4, "height": 4})).unwrap();
+        frame(&mut app);
+        let k = app.canvas.key.as_ref().unwrap();
+        assert_eq!(k.revision, app.session.active().unwrap().revision, "each edit is drawn");
+    }
+    assert!((11..=13).contains(&frames), "rendered whole about STILL_SECS after the view stopped: {frames} frames");
+}
+
 /// [`still_wait`] waits while only the view changes on a slow canvas: each change starts
 /// STILL_SECS again. It does not wait for a light document, a still view, a clock that went
 /// back, an edit, a switch into Pixel Preview or a canvas with no frame shown.
