@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, link?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); link and independent cannot both be true; both default false",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, link?: bool, at?: [x,y]} move a direction handle; independent moves only that side and makes the anchor a corner; link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); link and independent cannot both be true; both default false; with link false, at moves the anchor and both handles before placing the chosen handle",
             has_doc,
             set_handle
         ),
@@ -461,10 +461,15 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         return link_handle(s, p, id, si, ai, out, pos);
     }
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
+    let at = match p.get("at").filter(|v| !v.is_null()) {
+        None => None,
+        Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad("path.setHandle", "`at` must be [x, y]"))?),
+    };
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
     // other handle of a smooth anchor, which need not give back the same value.
     if let Some(a) = anchor_of(s, id, si, ai)?
+        && at.is_none_or(|to| to == a.p)
         && (if out { a.h_out } else { a.h_in }) == pos
         && !(independent && a.kind != AnchorKind::Corner)
     {
@@ -473,7 +478,32 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-        a.set_handle(out, pos, independent);
+        let old_point = a.p;
+        let old_handle = if out { a.h_out } else { a.h_in };
+        if let Some(to) = at {
+            a.translate(to - a.p);
+        }
+        let handle = if out { a.h_out } else { a.h_in };
+        let kind_changes = independent && a.kind != AnchorKind::Corner;
+        // Ordinary decimal moves can round `at - old_point` differently from the handle's
+        // translation. Within that calculation's roundoff, place the selected point exactly
+        // without realigning the other stored Smooth handle. Real edits still use set_handle.
+        let translation_roundoff = at.is_some_and(|to| {
+            let matches = |actual: f64, requested: f64, owner: f64, old: f64, new: f64| {
+                let scale = owner.abs().max(old.abs()).max(new.abs()).max(requested.abs()).max(1.0);
+                (actual - requested).abs() <= 4.0 * f64::EPSILON * scale
+            };
+            to != old_point && matches(handle.x, pos.x, old_point.x, old_handle.x, to.x) && matches(handle.y, pos.y, old_point.y, old_handle.y, to.y)
+        });
+        if !kind_changes && (handle == pos || translation_roundoff) {
+            if out {
+                a.h_out = pos;
+            } else {
+                a.h_in = pos;
+            }
+        } else {
+            a.set_handle(out, pos, independent);
+        }
         Ok(())
     })?;
     ok()
@@ -499,7 +529,7 @@ fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out
         sp.anchors.get(ai).is_some_and(|a| {
             let mut linked = *a;
             linked.link_handle(out, pos, sp.has_segment(ai, !out));
-            linked == *a
+            linked == *a || ((if out { a.has_in() } else { a.has_out() }) && linked_already(a, out, pos))
         })
     });
     if unchanged {
@@ -513,6 +543,78 @@ fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out
         Ok(())
     })?;
     ok()
+}
+
+/// Whether a smooth anchor `a` already has its `out` (or incoming) handle at `pos` and its other
+/// handle exactly where [`Anchor::link_handle`] puts it for that handle at some positive length.
+/// Turning the other handle again from its stored end measures its length anew, which can round
+/// the end differently in the last bit; a handle that passes this test only gets that rounding,
+/// and any other handle is turned. `p + u * len` here is the same arithmetic as in
+/// `Anchor::link_handle`, `dir / l` included.
+fn linked_already(a: &Anchor, out: bool, pos: Point) -> bool {
+    let (moved, other) = if out { (a.h_out, a.h_in) } else { (a.h_in, a.h_out) };
+    let dir = a.p - pos;
+    let l = dir.x.hypot(dir.y);
+    if a.kind != AnchorKind::Smooth || moved != pos || !(l > 0.0 && l.is_finite()) {
+        return false;
+    }
+    let u = dir / l;
+    // The lengths that give each stored coordinate exactly; the smallest length both ranges hold
+    // is checked against the whole end.
+    let (mut lo, mut hi) = (0.0_f64, f64::INFINITY);
+    for (p, o, u) in [(a.p.x, other.x, u.x), (a.p.y, other.y, u.y)] {
+        if u == 0.0 {
+            if o != p {
+                return false;
+            }
+            continue;
+        }
+        let Some((first, last)) = lengths_onto(p, u, o) else {
+            return false;
+        };
+        (lo, hi) = (lo.max(first), hi.min(last));
+    }
+    lo <= hi && lo > 0.0 && lo.is_finite() && a.p + u * lo == other
+}
+
+/// The lengths `len` for which `p + u * len` rounds to exactly `o`, as their smallest and largest,
+/// for a `u` other than 0. The rounded sum moves the same way as `len`, so a range around the
+/// unrounded answer is widened until it brackets `o` and then halved down to each end.
+fn lengths_onto(p: f64, u: f64, o: f64) -> Option<(f64, f64)> {
+    let s = u.signum();
+    let below = |len: f64| s * (p + u * len) < s * o;
+    let above = |len: f64| s * (p + u * len) > s * o;
+    let c = (o - p) / u;
+    let mut d = (o.abs() + p.abs()).max(f64::MIN_POSITIVE) * f64::EPSILON / u.abs();
+    let mut bracket = None;
+    for _ in 0..64 {
+        if below(c - d) && above(c + d) {
+            bracket = Some((c - d, c + d));
+            break;
+        }
+        d *= 2.0;
+    }
+    let (lo, hi) = bracket?;
+    let first = halve(lo, hi, |len| !below(len)).1;
+    let last = halve(lo, hi, above).0;
+    (first <= last).then_some((first, last))
+}
+
+/// Narrows `lo..hi`, where `pred` is false at `lo` and true at `hi` and changes once between
+/// them, to two neighboring values with the same property.
+fn halve(mut lo: f64, mut hi: f64, pred: impl Fn(f64) -> bool) -> (f64, f64) {
+    for _ in 0..2200 {
+        let m = lo + (hi - lo) / 2.0;
+        if m <= lo || m >= hi {
+            break;
+        }
+        if pred(m) {
+            hi = m;
+        } else {
+            lo = m;
+        }
+    }
+    (lo, hi)
 }
 
 /// `path.moveAnchor`: one anchor to (x, y), its handles keeping their offsets (the Anchor Point

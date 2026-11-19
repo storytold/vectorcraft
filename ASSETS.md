@@ -135,6 +135,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-contour.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a solid rounded square inside four corner arcs, its offset outline); not derived from any other application's icon | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-crystallize.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-cube.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-curvature-circle.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (an arch with the circle that touches it at its top, and that circle's center) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dash-align.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dash-exact.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dimension.svg` | Osama Amin | Original work, drawn for VectorCraft: a dimension line with arrowheads between two extension lines | MIT OR Apache-2.0 |  |
@@ -220,6 +221,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-polygon.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-pucker.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-puppet.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-quick-pen.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a line and a half circle with a dot at each point) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rearrange.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-cut.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-grid.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |

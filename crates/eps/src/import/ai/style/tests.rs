@@ -1558,8 +1558,10 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     };
     let stroke = "0 R\n0 1 1 0 K\n1 J 2 j 3 w 4 M [2 1]0 d\n";
     let Some(Ok(items)) = one(&format!("0 O\n0 0 1 0 k\n{stroke}1 1 Xd\n")) else { panic!("{:?}", one(stroke)) };
-    let [StyleItem::Fill(fill), StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None }] =
-        items.as_slice()
+    let [
+        StyleItem::Fill(fill),
+        StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None, arrows: _ },
+    ] = items.as_slice()
     else {
         panic!("{items:?}")
     };
@@ -1599,4 +1601,31 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     ] {
         assert_eq!(one(&paint), Some(Err(())), "{paint}");
     }
+}
+
+/// A `/SymbolArt` entry cut short (no `; (key)` after it) leaves what follows to be read: here the
+/// next style.
+#[test]
+fn a_symbol_entry_cut_short_leaves_the_next_style_read() {
+    let stroke = "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                  /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n";
+    let text = format!(
+        "/KnownStyle :\n(Cut) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{stroke}/GObjRef : (W) /SymbolArt\n\
+         /KnownStyle :\n(Next) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{stroke}; /Dict ;\n /Part ,\n;\n"
+    );
+    let styles = art_styles(text.as_bytes());
+    assert!(styles.contains_key("Cut") && styles.contains_key("Next"), "{:?}", styles.keys().collect::<Vec<_>>());
+    assert!(matches!(styles["Next"].items.as_slice(), [StyleItem::Stroke { arrows: None, .. }]), "{:?}", styles["Next"].items);
+}
+
+/// A comment line inside a `/SymbolArt` entry is skipped: the entry is still read.
+#[test]
+fn a_comment_inside_a_symbol_entry_is_skipped() {
+    let text = "/KnownStyle :\n(Arrowed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /GObjRef : (W) /SymbolArt\n%a comment\n; (BSArrowEndSymbol) ,\n\
+                /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = art_styles(text.as_bytes());
+    let [StyleItem::Stroke { arrows: Some(arrows), .. }] = styles["Arrowed"].items.as_slice() else { panic!("{:?}", styles["Arrowed"].items) };
+    assert_eq!(arrows.end, Some(("W".to_string(), 100.0)));
 }
