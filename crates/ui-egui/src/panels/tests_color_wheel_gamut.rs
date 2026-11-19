@@ -156,17 +156,23 @@ fn with_the_setting_off_no_grid_is_computed() {
 #[test]
 fn ui_color_wheel_sets_gamut() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let with = |v: serde_json::Value| {
+        let mut v = v;
+        let rest = json!({"harmony": false, "harmonyRule": "complementary", "vision": false});
+        v.as_object_mut().unwrap().extend(rest.as_object().unwrap().clone());
+        v
+    };
     app.run("ui.colorWheel", json!({"view": "box"})).unwrap();
-    assert_eq!(app.run("ui.colorWheel", json!({"gamut": true})).unwrap(), json!({"view": "box", "channel": "hue", "gamut": true}));
+    assert_eq!(app.run("ui.colorWheel", json!({"gamut": true})).unwrap(), with(json!({"view": "box", "channel": "hue", "gamut": true})));
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "gamut": "yes"})).unwrap_err();
     assert_eq!(e, "`gamut` must be true or false");
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, gamut: true, ..Default::default() }, "an error changes nothing");
     assert_eq!(app.run("ui.colorWheel", json!({"gamut": null})).unwrap()["gamut"], json!(true), "null keeps the value");
     app.run("ui.colorWheel", json!({"channel": "red"})).unwrap();
     let got = app.run("ui.colorWheel", json!({"view": "wheel", "channel": null, "gamut": null})).unwrap();
-    assert_eq!(got, json!({"view": "wheel", "channel": "red", "gamut": true}), "null keeps a value while the other keys apply");
+    assert_eq!(got, with(json!({"view": "wheel", "channel": "red", "gamut": true})), "null keeps a value while the other keys apply");
     let got = app.run("ui.colorWheel", json!({"view": null, "gamut": false})).unwrap();
-    assert_eq!(got, json!({"view": "wheel", "channel": "red", "gamut": false}), "a null view keeps the view while gamut applies");
+    assert_eq!(got, with(json!({"view": "wheel", "channel": "red", "gamut": false})), "a null view keeps the view while gamut applies");
     for code in ["de", "fr", "ja", "zh-hans"] {
         let lang = crate::i18n::Lang::from_code(code).expect("registered");
         let shown = crate::i18n::message(lang, &e);
@@ -187,7 +193,7 @@ fn the_gamut_setting_is_kept_and_read_leniently() {
     let mut odd = saved;
     odd["color_wheel"] = json!({"view": "box", "channel": "red", "gamut": "yes"});
     let back: crate::UiState = serde_json::from_value(odd).unwrap();
-    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::Red, gamut: false, vision: false });
+    assert_eq!(back.color_wheel, Settings { view: View::Box, channel: Channel::Red, gamut: false, ..Default::default() });
 }
 
 /// The panel menu's Show Out-of-Gamut Colors is checked while the setting is on, and switches it.
