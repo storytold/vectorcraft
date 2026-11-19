@@ -459,6 +459,23 @@ fn policies_parse_and_default_in_saved_settings() {
     assert_eq!((saved["rgbPolicy"].as_str(), saved["cmykPolicy"].as_str()), (Some("preserveEmbedded"), Some("preserveNumbers")));
 }
 
+/// The three Ask boxes are off by default and in settings saved before they existed, and save
+/// under their own keys.
+#[test]
+fn ask_boxes_default_off_and_save() {
+    let old: ColorSettings =
+        serde_json::from_str(r#"{"rgb": "sRGB IEC61966-2.1", "cmyk": "Device CMYK (uncalibrated)", "intent": "perceptual", "bpc": false}"#).unwrap();
+    assert!(!old.ask_mismatch_open && !old.ask_mismatch_paste && !old.ask_missing_open);
+    let st = ColorSettings::default();
+    assert!(!st.ask_mismatch_open && !st.ask_mismatch_paste && !st.ask_missing_open);
+    let saved = serde_json::to_value(ColorSettings { ask_mismatch_paste: true, ..Default::default() }).unwrap();
+    assert_eq!(saved["askMismatchOpen"], false);
+    assert_eq!(saved["askMismatchPaste"], true);
+    assert_eq!(saved["askMissingOpen"], false);
+    let back: ColorSettings = serde_json::from_value(saved).unwrap();
+    assert!(back.ask_mismatch_paste);
+}
+
 /// Convert to Working Space keeps a color's appearance: an RGB color of a wide space converts into
 /// sRGB, and a CMYK color of one CMYK space into another, with numbers that look the same. Grey and
 /// Lab colors stay as they are.
@@ -476,5 +493,50 @@ fn convert_into_keeps_the_appearance() {
     assert!(delta_e2000(wide.lab(&ink), working.lab(&moved)) < 3.0, "{ink:?} → {moved:?}");
     for c in [Color::Gray { k: 0.3 }, Color::Lab { l: 50.0, a: 10.0, b: -20.0 }] {
         assert_eq!(wide.convert_into(&working, &c, Intent::RelativeColorimetric), c);
+    }
+}
+
+/// With black-point compensation on, Generic CMYK displays its press black as black, so dark inks
+/// converted out of it keep that appearance: into Device CMYK, and into another document whose
+/// CMYK space is also Generic CMYK.
+#[test]
+fn convert_into_keeps_compensated_dark_inks() {
+    let generic = cms();
+    let device = Cms::new(&ColorSettings { cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    for ink in [
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+    ] {
+        for dest in [&device, &other_generic] {
+            let moved = generic.convert_into(dest, &ink, Intent::RelativeColorimetric);
+            assert!(matches!(moved, Color::Cmyk { .. }), "{ink:?} → {moved:?}");
+            let d = delta_e2000(generic.lab(&ink), dest.lab(&moved));
+            assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
+        }
+    }
+}
+
+/// Absolute Colorimetric converts CMYK out of Generic CMYK from the inks' absolute Lab (paper color
+/// included, no black-point compensation): into another document whose CMYK space is also Generic
+/// CMYK, the paper, dark inks and mid tones keep their absolute appearance.
+#[test]
+fn absolute_cmyk_conversion_keeps_the_absolute_appearance() {
+    let generic = cms();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    let absolute = |c: &Cms, ink: &Color| match (&c.cmyk, ink) {
+        (CmykSpace::Generic(g), Color::Cmyk { c, m, y, k }) => g.to_lab_abs([*c, *m, *y, *k]),
+        _ => panic!("Generic CMYK inks expected, not {ink:?}"),
+    };
+    for ink in [
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 0.0 },
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+        Color::Cmyk { c: 0.4, m: 0.1, y: 0.6, k: 0.1 },
+    ] {
+        let moved = generic.convert_into(&other_generic, &ink, Intent::AbsoluteColorimetric);
+        let d = delta_e2000(absolute(&generic, &ink), absolute(&other_generic, &moved));
+        assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
     }
 }
