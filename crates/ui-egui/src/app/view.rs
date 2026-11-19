@@ -132,6 +132,7 @@ impl VectorcraftApp {
             snap_to_point: self.ui.view.snap_to_point,
             snap_to_glyph: self.ui.view.snap_to_glyph,
             corner_widgets: self.ui.view.corner_widgets && self.ui.view.edges,
+            shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
         }
