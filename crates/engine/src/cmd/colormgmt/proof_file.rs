@@ -159,6 +159,11 @@ pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let mut setup = proof::view().setup;
     setup_params(p, &mut setup, C)?;
     check_device(&setup.target).map_err(|e| bad(C, e))?;
+    // A file `view.proofSetup.load` would refuse is not written (a device with a very long name).
+    let bytes = encode(&setup);
+    if bytes.len() > MAX_FILE {
+        return Err(bad(C, format!("{path}: larger than {MAX_FILE} bytes")));
+    }
     if named
         && let Some(dir) = std::path::Path::new(&path).parent()
         && !dir.is_dir()
@@ -166,7 +171,7 @@ pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
         crate::file_access::check_write(&path).map_err(EngineError::Other)?;
         std::fs::create_dir_all(dir).map_err(|e| bad(C, format!("{}: {e}", dir.display())))?;
     }
-    fileio::write_file(&path, &encode(&setup))?;
+    fileio::write_file(&path, &bytes)?;
     s.proof_setup_saves += 1;
     let mut r = setup_json(&setup);
     r.insert("path".into(), json!(path));

@@ -767,7 +767,8 @@ fn a_saved_proof_setup_loads_back() {
     assert_eq!(vectorcraft_render::proof::view().setup, ProofSetup { simulate_paper: true, ..want });
 }
 
-/// Saving refuses a target that is not a device, bad params and a bad name; loading refuses a file
+/// Saving refuses a target that is not a device, bad params, a bad name and a file larger than
+/// loading reads; loading refuses a file
 /// that is too large, not a proof setup, newer, or whose device is a profile that is not loaded,
 /// and the proof view stays as it was.
 #[test]
@@ -791,6 +792,13 @@ fn proof_setup_files_refuse_what_they_cannot_use() {
         refused(&mut s, "view.proofSetup.save", json!({"name": bad_name}), "`name`");
     }
     refused(&mut s, "view.proofSetup.save", json!({"name": "x".repeat(101)}), "longer than 100 characters");
+    // A device whose name makes the file larger than load reads is refused, and nothing is written.
+    let long = "Long Profile Name ".repeat(4000);
+    cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(long.clone())).unwrap();
+    let refusal = s.execute("view.proofSetup.save", &json!({"path": path, "target": format!("rgb:{long}")}));
+    cms::unregister_icc(&long);
+    assert!(refusal.unwrap_err().to_string().contains("larger than 65536 bytes"), "a setup load can't read is refused");
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
     let before = vectorcraft_render::proof::view();
     let write = |n: &str, text: &str| {
         let p = file(n);
