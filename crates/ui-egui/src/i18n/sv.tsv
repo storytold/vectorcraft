@@ -3304,6 +3304,10 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Redigera text i typsnitt som inte är tillgängliga?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	I stycken med Avstava på får ett listat ord avstavningsstreck bara vid bindestrecken som skrivits in i det, eller aldrig om det saknar sådana, oavsett språk och skiftläge.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när OK anger en ny mapp, utom i felsäkert läge; en plugin som begär behörigheter läses in först när du har gett dem. Webbversionen läser inte in någon.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Stor ger varje körning av en filter- eller kommandoplugin minst 250 miljoner instruktioner med samma tidsgräns; Normal behåller pluginens egen budget. Liveeffekter, exportörer och importörer behåller sin.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA; text som redan finns i ett dokument behåller sitt eget språk.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA och [Normal teckenstil] inte anger något språk; text som redan finns i ett dokument behåller sitt eget språk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett språk och skiftläge.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när du klickar på OK med en ny mapp här, utom i felsäkert läge; webbversionen läser inte in dem.
@@ -3319,8 +3323,8 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Visar varje verktygsgrupps namn ovanför dess verktyg i verktygsfältet; avstängt följer grupperna på varandra utan något emellan.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Från och med nu öppnas dokument som du öppnar eller skapar som flikar; avstängt öppnas vart och ett i ett flytande fönster. Dokument som redan är öppna stannar där de är.
 	Makes the document tabs taller and their names larger.	Gör dokumentflikarna högre och deras namn större.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Från nästa start ritar systemet fönstrets namnlist där VectorCraft annars skulle rita sin egen; på Linux och BSD-systemen har variabeln VECTORCRAFT_TITLEBAR företräde.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Från nästa start ritar VectorCraft fönstrets namnlist även där skrivbordsmiljön skulle rita den, om inte Systemets namnlist är på eller variabeln VECTORCRAFT_TITLEBAR väljer den.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Gör gränssnittet större eller mindre; bilder på arbetsytan behåller sin storlek vid samma zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Verktygspekarna som VectorCraft ritar växer och krymper med Gränssnittsskalning; avstängt behåller de sin storlek.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Gränssnittets språk; Auto använder systemets språk. Dialogrutan byter språk så fort du väljer ett.
@@ -3346,6 +3350,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Öppna senaste filer och startskärmen listar högst så här många senaste filer; 0 listar inga, och VectorCraft minns ändå upp till 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	När ett dokument öppnas behåller en länkad EPS-bild som visar sin sparade förhandsvisning den i stället för att läsa EPS-filen igen; ändrade filer följer fortfarande Uppdatera länkar.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	I Pixelförhandsgranskning ritas bilder utjämnade; avstängt visar deras pixlar skarpa kanter. Utanför Pixelförhandsgranskning utjämnas bilder alltid.
+	PDF Text	PDF-text
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Texten i en PDF som du öppnar eller bäddar in kommer in som redigerbar text eller som konturlinjer som ser likadana ut på en dator utan dess teckensnitt.
+	Linked pages show the file's own text.	Länkade sidor visar filens egen text.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	När en länkad fil ändras läser Automatiskt in den igen, Fråga vid ändring frågar dig först, och Manuellt låter den vara och visar en notis i statusfältet.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	I skrivbordsversionen mappen som Ny från mall… och Spara som mall… börjar i; lämna tom för VectorCraft Templates i din dokumentmapp.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigera original öppnar en länkad fil i systemets standardapp för dess typ; avstängt öppnas en länkad rasterbild i PhotoCraft om det är installerat.
@@ -5484,6 +5491,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objekt {_1} är en bild som ändrats med Perspektivförvrängning eller Fri förvrängning, och det här kommandot fungerar inte på den
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	bild {_1} kan inte förvrängas så: dess hörn skulle inte bilda en konvex form
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	bild {_1} kan inte förvrängas så: dess hörn skulle korsa förvrängningens horisont
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	bild {_1} kan inte förvrängas så: dess hörn skulle ligga för nära varandra för en perspektivavbildning
 @msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
 @msg	`match` must be distance or channels	`match` måste vara distance eller channels
 @msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
@@ -10851,6 +10862,10 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Leaf Vine	Bladranka
+	Blossom Chain	Blomkedja
+	Pennant Garland	Vimpelgirlang
+	Lantern String	Lyktgirlang
 	Orbit Lines	Banlinjer
 	Petal Garland	Kronbladsgirlang
 	Lattice Braid	Gallerfläta

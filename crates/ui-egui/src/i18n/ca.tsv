@@ -4137,6 +4137,10 @@ digits	Malayalam	Malaiàlam
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra al llenç el número de cada tall en un requadre a la seva cantonada superior esquerra; si està desactivat, els contorns dels talls continuen visibles.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color dels contorns dels talls d’usuari i d’objecte i dels requadres amb el seu número; els talls automàtics fan servir un to més apagat d’aquest color.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA i [Estil de caràcter normal] no en defineixi cap; el text que ja és en un document conserva el seu idioma.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	En els paràgrafs amb Particiona activat, una paraula de la llista només rep guionet de partició als guionets que s’hi han escrit, o mai si no en té, sigui quin sigui el seu idioma o l’ús de majúscules.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	A la versió d’escriptori, els complements .wasm d’aquesta carpeta es carreguen en iniciar i quan D’acord estableix una carpeta nova, excepte en Mode segur; un que demana permisos només es carrega després que els concediu. La versió web no en carrega cap.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Gran dona a cada execució d’un complement de filtre o d’ordre almenys 250 milions d’instruccions, amb el mateix límit de temps; Normal manté el pressupost propi del complement. Els efectes en viu, els exportadors i els importadors mantenen el seu.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA; el text que ja és en un document conserva el seu idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	En els paràgrafs amb Particiona activat, una paraula de la llista es parteix només als guionets que s’hi han escrit, o enlloc si no en té, sigui quin sigui el seu idioma o l’ús de majúscules.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	A la versió d’escriptori, els complements .wasm d’aquesta carpeta es carreguen en iniciar i quan feu clic a D’acord amb una carpeta nova aquí, excepte en Mode segur; la versió web no els carrega.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal manté els límits propis de cada complement; amb Gran, un filtre o una ordre d’un complement pot executar com a mínim 250 milions d’instruccions a més de les de la seva entrada. El límit de temps no canvia.
@@ -4151,8 +4155,8 @@ digits	Malayalam	Malaiàlam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Mostra el nom de cada grup d’eines damunt de les seves eines a la barra d’eines; desactivat, els grups se succeeixen sense res entre ells.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	A partir d’ara, els documents que obriu o creeu s’obren com a pestanyes; desactivat, cadascun s’obre en una finestra flotant. Els documents ja oberts es queden on són.
 	Makes the document tabs taller and their names larger.	Fa les pestanyes dels documents més altes i els seus noms més grans.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	A partir del pròxim inici, el sistema dibuixa la barra de títol de la finestra on VectorCraft, si no, dibuixaria la seva.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	A partir del pròxim inici, VectorCraft dibuixa la barra de títol de la finestra fins i tot on l’escriptori la dibuixaria, tret que Barra de títol del sistema estigui activada.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	A partir del pròxim inici, el sistema dibuixa la barra de títol de la finestra on VectorCraft, si no, dibuixaria la seva; a Linux i als BSD, la variable VECTORCRAFT_TITLEBAR té prioritat.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	A partir del pròxim inici, VectorCraft dibuixa la barra de títol de la finestra fins i tot on l’escriptori la dibuixaria, tret que Barra de títol del sistema estigui activada o la variable VECTORCRAFT_TITLEBAR la triï.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Fa la interfície més gran o més petita; l’art del llenç conserva la mida amb el mateix zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Els punters d’eina que dibuixa VectorCraft creixen i s’encongeixen amb l’Escalat de la interfície; desactivat, conserven la mida.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	La llengua de la interfície; Automàtic fa servir la llengua del sistema. El diàleg canvia de llengua tan bon punt en trieu una.
@@ -4178,6 +4182,9 @@ digits	Malayalam	Malaiàlam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Obre fitxers recents i la pantalla d’Inici mostren com a màxim aquest nombre de fitxers recents; 0 no en mostra cap, i VectorCraft continua recordant-ne fins a 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	En obrir un document, una imatge EPS enllaçada que mostra la seva previsualització desada la conserva en lloc de tornar a llegir el fitxer EPS; els fitxers modificats segueixen Actualitza els enllaços.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	A Previsualització de píxels, les imatges es dibuixen suavitzades; desactivat, els seus píxels mostren vores dures. Fora de Previsualització de píxels, les imatges sempre se suavitzen.
+	PDF Text	Text del PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	El text d’un PDF que obriu o incrusteu entra com a text editable o com a contorns que es veuen igual en un ordinador sense les seves fonts.
+	Linked pages show the file's own text.	Les pàgines enllaçades mostren el text propi del fitxer.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Quan un fitxer enllaçat canvia, Automàticament el torna a llegir, Pregunta quan es modifiqui us ho pregunta abans, i Manualment el deixa com està i mostra un avís a la barra d’estat.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	A la versió d’escriptori, la carpeta on comencen Nou a partir d’una plantilla… i Desa com a plantilla…; deixeu-la buida per a VectorCraft Templates a la vostra carpeta de documents.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edita l’original obre un fitxer enllaçat amb l’aplicació per defecte del sistema per al seu tipus; desactivat, una imatge ràster enllaçada s’obre a PhotoCraft si està instal·lat.
@@ -7145,6 +7152,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l'objecte {_1} és una imatge modificada amb Distorsió de perspectiva o Distorsió lliure, amb la qual aquesta ordre no funciona
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	la imatge {_1} no es pot distorsionar així: les seves cantonades no formarien una forma convexa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	la imatge {_1} no es pot distorsionar així: les seves cantonades creuarien l'horitzó de la distorsió
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	la imatge {_1} no es pot distorsionar així: les seves cantonades estarien massa juntes per a una projecció en perspectiva
 @msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
 @msg	`match` must be distance or channels	`match` ha de ser distance o channels
 @msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
@@ -8934,6 +8945,10 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Leaf Vine	Enfiladissa de fulles
+	Blossom Chain	Cadena de flors
+	Pennant Garland	Garlanda de banderins
+	Lantern String	Filera de fanalets
 	Orbit Lines	Línies orbitals
 	Petal Garland	Garlanda de pètals
 	Lattice Braid	Trena reticular

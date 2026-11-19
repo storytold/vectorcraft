@@ -4767,6 +4767,10 @@ arrowhead	Feather	पंख
 	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची के शब्द पर हाइफ़न केवल उसमें टाइप किए गए हाइफ़न पर लगता है, या कोई न हो तो कभी नहीं, उसकी भाषा या केस चाहे जो हो।
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और ठीक है से नया फ़ोल्डर सेट होने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; अनुमतियाँ माँगने वाला प्लग-इन आपके उन्हें देने के बाद ही लोड होता है। वेब संस्करण कोई लोड नहीं करता।
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	बड़ा फ़िल्टर या कमांड प्लग-इन के हर रन को उसी समय सीमा के साथ कम से कम 25 करोड़ निर्देश देता है; सामान्य प्लग-इन का अपना बजट रखता है। लाइव इफ़ेक्ट, एक्सपोर्टर और इंपोर्टर अपना बजट रखते हैं।
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसकी भाषा या केस चाहे जो हो।
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और यहाँ नया फ़ोल्डर देकर ठीक है पर क्लिक करने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; वेब संस्करण उन्हें लोड नहीं करता।
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	सामान्य हर प्लग-इन की अपनी सीमाएँ रखता है; बड़ा के साथ, प्लग-इन फ़िल्टर या कमांड अपने इनपुट के निर्देशों के अलावा कम से कम 250 मिलियन निर्देश चला सकता है। समय सीमा वही रहती है।
@@ -4781,8 +4785,8 @@ arrowhead	Feather	पंख
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	टूलबार में हर टूल ग्रुप का नाम उसके टूल्स के ऊपर दिखाता है; बंद होने पर, ग्रुप बिना किसी अंतर के एक के बाद एक आते हैं।
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	अब से आप जो डॉक्यूमेंट ओपन करते या बनाते हैं, वे टैब के रूप में खुलते हैं; बंद होने पर, हर एक फ़्लोटिंग विंडो में खुलता है। पहले से खुले डॉक्यूमेंट जहाँ हैं वहीं रहते हैं।
 	Makes the document tabs taller and their names larger.	डॉक्यूमेंट टैब को ऊँचा और उनके नाम बड़े बनाता है।
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है।
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो।
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है; Linux और BSD पर VECTORCRAFT_TITLEBAR वेरिएबल को प्राथमिकता मिलती है।
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो या VECTORCRAFT_TITLEBAR वेरिएबल उसे न चुने।
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	इंटरफ़ेस को बड़ा या छोटा करता है; उसी ज़ूम पर कैनवास का आर्टवर्क अपना आकार बनाए रखता है।
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft जो टूल पॉइंटर बनाता है, वे यूआई स्केलिंग के साथ बड़े और छोटे होते हैं; बंद होने पर, वे अपना आकार बनाए रखते हैं।
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	इंटरफ़ेस की भाषा; स्वचालित सिस्टम की भाषा इस्तेमाल करता है। आप कोई भाषा चुनते ही डायलॉग उस भाषा में बदल जाता है।
@@ -4808,6 +4812,9 @@ arrowhead	Feather	पंख
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	रीसेंट फ़ाइल्स मेनू व होम स्क्रीन अधिकतम इतनी हाल की फ़ाइलें दिखाते हैं; 0 कोई नहीं दिखाता, फिर भी VectorCraft 30 तक याद रखता है।
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	डॉक्यूमेंट खुलने पर, अपना सेव किया प्रीव्यू दिखाने वाली लिंक की गई EPS इमेज EPS फ़ाइल को फिर से पढ़ने के बजाय वही प्रीव्यू रखती है; बदली हुई फ़ाइलें फिर भी अद्यतन लिंक के अनुसार चलती हैं।
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	पिक्सेल प्रीव्यू में, इमेज स्मूद बनाई जाती हैं; बंद होने पर, उनके पिक्सेल के किनारे तीखे दिखते हैं। पिक्सेल प्रीव्यू के बाहर, इमेज हमेशा स्मूद होती हैं।
+	PDF Text	PDF टेक्स्ट
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	आप जो PDF खोलते या एम्बेड करते हैं, उसका टेक्स्ट संपादन योग्य टेक्स्ट के रूप में आता है, या रूपरेखा के रूप में, जो उसके फ़ॉन्ट के बिना वाले कंप्यूटर पर भी वैसी ही दिखती है।
+	Linked pages show the file's own text.	लिंक किए गए पृष्ठ फ़ाइल का अपना टेक्स्ट दिखाते हैं।
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	जब कोई लिंक की गई फ़ाइल बदलती है, अपने-आप उसे फिर से पढ़ता है, बदलाव होने पर पूछें पहले आपसे पूछता है, व मैन्युअल उसे वैसे ही छोड़कर स्टेटस बार में एक नोट दिखाता है।
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	डेस्कटॉप संस्करण में, वह फ़ोल्डर जिसमें टेम्पलेट से नया… व टेम्पलेट के रूप में सेव करें… शुरू होते हैं; अपने डॉक्यूमेंट फ़ोल्डर में VectorCraft Templates के लिए इसे खाली छोड़ें।
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	मूल एडिट करें लिंक की गई फ़ाइल को उसके प्रकार के लिए सिस्टम के डिफ़ॉल्ट ऐप में खोलता है; बंद होने पर, लिंक की गई रास्टर इमेज PhotoCraft इंस्टॉल होने पर उसमें खुलती है।
@@ -8906,6 +8913,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ऑब्जेक्ट {_1} पर्सपेक्टिव या फ़्री डिस्टॉर्ट से बदली गई इमेज है, जिस पर यह कमांड काम नहीं करता
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने उत्तल आकार नहीं बनाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने डिस्टॉर्ट के क्षितिज को पार कर जाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने पर्सपेक्टिव मैपिंग के लिए एक-दूसरे के बहुत पास होंगे
 @msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
 @msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
 @msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
@@ -10364,6 +10375,10 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Leaf Vine	पत्तों की बेल
+	Blossom Chain	फूलों की शृंखला
+	Pennant Garland	झंडियों की माला
+	Lantern String	लालटेन की शृंखला
 	Orbit Lines	कक्षीय रेखाएँ
 	Petal Garland	पंखुड़ी माला
 	Lattice Braid	जाली चोटी
