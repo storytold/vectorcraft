@@ -80,6 +80,13 @@ enum Click {
     Run(&'static str, serde_json::Value),
 }
 
+/// Is a drag under way (past the drag threshold) that began on the canvas `canvas` outside the
+/// toolbar's last place `bar`? A stroke, a Space or middle-button pan and a drag from a path's first
+/// point all are; a drag of the toolbar's handle is not.
+fn canvas_drag(dragging: bool, press: Option<Pos2>, canvas: egui::Rect, bar: Option<egui::Rect>) -> bool {
+    dragging && press.is_some_and(|p| canvas.contains(p) && !bar.is_some_and(|b| b.contains(p)))
+}
+
 /// The Quick Pen toolbar, while the Quick Pen tool is active, Window › Quick Pen Toolbar is on and
 /// no press is dragging on the canvas. Selecting the tool turns Window › Quick Pen Toolbar on
 /// ([`VectorcraftApp::try_select_tool`]).
@@ -87,7 +94,15 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     if !app.ui.quick_pen_bar || app.session.tool_id() != quickpen::ID {
         return;
     }
-    if app.session.tool_busy() && ui.input(|i| i.pointer.is_decidedly_dragging()) {
+    let (dragging, press, down) = ui.input(|i| (i.pointer.is_decidedly_dragging(), i.pointer.press_origin(), i.pointer.any_down()));
+    // The handle's drag moves the toolbar away from where the press began.
+    let handle_id = bar_id().with("handle");
+    if !down {
+        ui.ctx().data_mut(|d| d.insert_temp(handle_id, false));
+    }
+    let on_handle = ui.ctx().data(|d| d.get_temp::<bool>(handle_id)).unwrap_or(false);
+    let shown = app.ui.quick_pen_bar_place.shown_at.zip(egui::AreaState::load(ui.ctx(), bar_id()).and_then(|s| s.size));
+    if canvas_drag(dragging && !on_handle, press, xf.rect, shown.map(|(at, size)| egui::Rect::from_min_size(xf.rect.min + at, size))) {
         return;
     }
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
@@ -147,6 +162,7 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     let active = grip.hovered() || grip.dragged();
                     ui.painter().rect_filled(g.shrink2(vec2(0.5, 4.0)), CornerRadius::same(2), if active { t.text_dim } else { t.button_border });
                     if grip.dragged() {
+                        ui.ctx().data_mut(|d| d.insert_temp(handle_id, true));
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
                         moved = grip.drag_delta();
                     } else if grip.hovered() {
@@ -231,6 +247,20 @@ mod tests {
         let at = keep_in(beside(end, Some(vec2(-1.0, 1.0)), size, narrow), size, narrow);
         assert_eq!(at, pos2(28.0, 324.0));
         assert!(!egui::Rect::from_min_size(at, size).contains(end));
+    }
+
+    /// Any drag that began on the canvas hides the toolbar, whether or not the tool has a press
+    /// (a pan does not); a drag that began on the toolbar, and no drag, do not.
+    #[test]
+    fn a_drag_that_began_on_the_canvas_hides_the_toolbar() {
+        let canvas = egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(800.0, 600.0));
+        let bar = Some(egui::Rect::from_min_size(pos2(300.0, 500.0), vec2(180.0, 40.0)));
+        assert!(canvas_drag(true, Some(pos2(100.0, 100.0)), canvas, bar), "a pan or stroke on the canvas");
+        assert!(canvas_drag(true, Some(pos2(100.0, 100.0)), canvas, None), "no toolbar shown yet");
+        assert!(!canvas_drag(false, Some(pos2(100.0, 100.0)), canvas, bar), "a click, not a drag");
+        assert!(!canvas_drag(true, Some(pos2(310.0, 510.0)), canvas, bar), "the toolbar's own drag");
+        assert!(!canvas_drag(true, Some(pos2(900.0, 100.0)), canvas, bar), "a drag in another panel");
+        assert!(!canvas_drag(true, None, canvas, bar));
     }
 
     /// A drag's offset moves the toolbar from its place, unless that would put it over the point

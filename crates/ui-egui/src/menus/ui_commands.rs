@@ -717,7 +717,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.quickPen.flipArc",
         "Flip Arc",
         "",
-        "{} flip the last sharp-corner arc of the path the Quick Pen tool is drawing to the other side of its chord, as C and the toolbar's Flip Arc button do, as one undo step; returns false, changing nothing, when the Quick Pen tool is not active, no path is being drawn or the last piece is not a sharp-corner arc",
+        "{} flip the last sharp-corner arc of the path the Quick Pen tool is drawing to the other side of its chord, as C and the toolbar's Flip Arc button do, as one undo step; first finishes any pending tool edit (which can change the document), then returns false, changing nothing more, when the Quick Pen tool is not active, no path is being drawn or the last piece is not a sharp-corner arc",
     ),
     (
         "window.dock",

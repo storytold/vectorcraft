@@ -173,6 +173,26 @@ fn the_toolbar_hides_while_a_press_drags_on_the_canvas() {
     assert!(bar(&ctx).is_some(), "shown after the drag");
 }
 
+/// A middle-button drag on the canvas (a pan), which the tool takes no press from, hides the toolbar
+/// too, and it shows again when the button is let go.
+#[test]
+fn the_toolbar_hides_while_the_canvas_pans() {
+    let mut app = app();
+    let ctx = context();
+    settle(&mut app, &ctx);
+    assert!(bar(&ctx).is_some());
+    let (a, b) = (screen(&app, 100.0, 100.0), screen(&app, 200.0, 140.0));
+    let press = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Middle, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a), press(a, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a + (b - a) / 2.0)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(b)]);
+    assert!(!app.session.tool_busy(), "the tool has no press under way");
+    assert!(bar(&ctx).is_none(), "hidden mid-pan");
+    frame(&mut app, &ctx, vec![press(b, false)]);
+    settle(&mut app, &ctx);
+    assert!(bar(&ctx).is_some(), "shown after the pan");
+}
+
 /// On a canvas narrower than the toolbar, its controls wrap onto more rows, so every button lies
 /// on the canvas.
 #[test]
@@ -248,6 +268,26 @@ fn the_toolbar_follows_the_drawing_and_flips_the_last_arc() {
 
 fn pos2_of(x: f32, y: f32) -> Pos2 {
     Pos2::new(x, y)
+}
+
+/// The toolbar stays shown while its handle is dragged farther than the toolbar's height, when the
+/// press is no longer on it.
+#[test]
+fn the_toolbar_stays_while_its_handle_drags_far() {
+    let mut app = app();
+    let ctx = context();
+    settle(&mut app, &ctx);
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    let grip = pos2_of(bar(&ctx).unwrap().left() + 10.0, bar(&ctx).unwrap().center().y);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(grip)]);
+    frame(&mut app, &ctx, vec![button(grip, true)]);
+    for k in 1..=6 {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(grip + vec2(-20.0, -30.0) * k as f32)]);
+        assert!(bar(&ctx).is_some(), "shown at step {k}");
+    }
+    frame(&mut app, &ctx, vec![button(grip + vec2(-120.0, -180.0), false)]);
+    settle(&mut app, &ctx);
+    assert!(bar(&ctx).is_some());
 }
 
 /// The handle drags the toolbar, which keeps that offset as it follows the drawing, but not in its

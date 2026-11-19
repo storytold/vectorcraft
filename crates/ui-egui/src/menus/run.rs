@@ -689,11 +689,14 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "tool.quickPen.flipArc" => {
-            // C's flip, for the toolbar's Flip Arc button: false, with nothing changed, while the
-            // last piece of the path being drawn is not a sharp-corner arc. Input held for an edit
-            // first, so the key is made now rather than held.
-            let r = app.session.finish_tool_edit();
-            crate::canvas::apply_requests(app, r);
+            // C's flip, for the toolbar's Flip Arc button: false, with nothing changed beyond the
+            // edit finished first, while the last piece of the path being drawn is not a sharp-corner
+            // arc. Input held for an edit is finished first, so the key is made now rather than
+            // held; when that fails the error is returned and the flip is not made.
+            match app.session.finish_tool_edit() {
+                Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+                Err(e) => return Some(Err(e.to_string())),
+            }
             let view = app.view_info();
             let key = vectorcraft_tools::ToolKey::Letter('c');
             if app.session.tool_id() != vectorcraft_tools::quickpen::ID || !app.session.tool_claims_key(key, view) {

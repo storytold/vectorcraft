@@ -7125,8 +7125,9 @@ size of 180°, its 15° steps, the side an arc bulges to and Enter ending the pa
 tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
 
 Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
-Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which returns false and changes nothing
-when the Quick Pen tool is not active or the last piece is not a sharp-corner arc), and More Options (…) has Hide
+Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which first finishes any pending tool edit,
+which can change the document, then returns false and changes nothing more when the Quick Pen tool is not active
+or the last piece is not a sharp-corner arc), and More Options (…) has Hide
 Toolbar (`window.quickPenToolbar`, which toggles; the toolbar stays hidden until the tool is selected again) and Reset
 Toolbar Position (`window.quickPenToolbar.reset`), as the help page describes.
 The handle at its left end drags it. While a path is being drawn, the toolbar sits beside the path's last point, 24
