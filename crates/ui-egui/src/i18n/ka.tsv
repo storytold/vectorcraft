@@ -6540,6 +6540,8 @@ font-technology	Variable	ცვლადი
 	Edit type set in fonts that aren't available?	დავარედაქტიროთ მიუწვდომელი შრიფტებით აწყობილი ტექსტი?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	გადატანის ჩართვისას სიის სიტყვა მხოლოდ აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ არ აქვს, რეგისტრის მიუხედავად; კორეულ სიტყვებს დეფისი არ ემატება, ინდური ენების სიტყვები კი სიმბოლოთა ჯგუფის შიგნით არ გადაიტანება.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
