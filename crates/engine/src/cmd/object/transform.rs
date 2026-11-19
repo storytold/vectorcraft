@@ -326,14 +326,15 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
     let (gx, gy) = (dx, dy);
     let (dx, dy) = along_constrain_angle(dx, dy, s.prefs.constrain_angle);
-    if !s.doc()?.selection.anchors.is_empty() {
+    let objects = transforms_objects(p);
+    if objects && !s.doc()?.selection.anchors.is_empty() {
         // When the anchors move by 0, the document and its undo history stay as they are.
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
         return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
     }
-    if s.doc()?.selection.is_empty() {
+    if objects && s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
         // When guides move by 0 without a copy, the document and its undo history stay as they are.
         if gx == 0.0 && gy == 0.0 && !copy {
@@ -342,6 +343,21 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         return crate::cmd::docmenu::guide_move(s, &json!({ "dx": gx, "dy": gy, "copy": copy }));
     }
     let ids = selected_roots_to_transform(s)?;
+    if !objects && !bool_or(p, "copy", false) {
+        // Pattern-only nudges of art without a pattern change nothing, including undo history.
+        if !bool_or(p, "patterns", s.prefs.transform_pattern_tiles) {
+            return ok();
+        }
+        let st = s.doc()?;
+        let paths = st.doc.index_paths(ids.iter().copied());
+        let mut uses_patterns = false;
+        for node in ids.iter().filter_map(|id| paths.get(id)).filter_map(|path| st.doc.node_at(path)) {
+            node.walk(&mut |n| uses_patterns |= vectorcraft_doc::pattern::uses_pattern(n, None));
+        }
+        if !uses_patterns {
+            return ok();
+        }
+    }
     apply_transform_moving_guides(s, "Move", ids, Affine::translate((dx, dy)), p, true, Some(Vec2::new(gx, gy)))
 }
 

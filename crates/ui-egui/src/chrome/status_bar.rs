@@ -209,7 +209,8 @@ pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
             (text, Some(next))
         }
         StatusBarShow::Undos => {
-            let text = st.map(|d| format!("{}: {}  {}: {}", tl!("Undos"), d.history.undo.len(), tl!("Redos"), d.history.redo.len()));
+            let (undos, redos) = (crate::i18n::colon(tl!("Undos")), crate::i18n::colon(tl!("Redos")));
+            let text = st.map(|d| format!("{undos} {}  {redos} {}", d.history.undo.len(), d.history.redo.len()));
             (text.unwrap_or_default(), None)
         }
         StatusBarShow::ColorProfile => (st.map(|d| color_profile_name(&d.doc)).unwrap_or_default(), None),
@@ -277,7 +278,7 @@ pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> e
 }
 
 /// Show `text` on hover in a tooltip that wraps to fit inside the window.
-fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
+pub(super) fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
     let text = text.into();
     response.on_hover_ui(|ui| {
         let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;

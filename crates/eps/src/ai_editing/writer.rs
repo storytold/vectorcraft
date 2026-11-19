@@ -48,8 +48,9 @@ pub(super) use paints::{
     GRADIENT_COMPARISONS, GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, SCANNED_DEFINITIONS, STOP_LINKS,
     SWATCH_PLACEMENT, free_gradient_name,
 };
+pub(crate) use symbols::{DYNAMIC_KEY, OVERRIDES_KEY, hex_decode};
 #[cfg(test)]
-pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
+pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_CHANGES, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
 pub(super) use texts::{FONT_RESOLVES, RESOLVE_EACH_RUN, TYPE_ATTRIBUTES};
 #[cfg(test)]
@@ -66,7 +67,9 @@ pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fil
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
-pub(super) const LIVE: &str = "repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const LIVE: &str =
+    "repeats, placed documents, intertwines and distorted images are written as their art in the editing data for other apps";
+pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort more than 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
@@ -286,6 +289,7 @@ pub(super) struct Writer<'a> {
     symbol_scales: HashMap<String, f64>,
     /// The entries a symbol's dictionary adds to its art's dictionary, and the art's id.
     root_entries: Option<(vectorcraft_doc::NodeId, String)>,
+    instance_entries: Option<(vectorcraft_doc::NodeId, String)>,
     /// The objects that may be written with an art style, as they were before baking, by id
     /// ([`styles::styled_objects`]).
     pub(super) styled: HashMap<NodeId, Arc<Node>>,
@@ -405,6 +409,7 @@ impl<'a> Writer<'a> {
             inner_scale: 1.0,
             symbol_scales: HashMap::new(),
             root_entries: None,
+            instance_entries: None,
             styled: HashMap::new(),
             symbol_styled: HashMap::new(),
             pattern_styled: HashMap::new(),
@@ -799,6 +804,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
+            NodeKind::Image(im) if n.is_distorted_image() => self.distorted_image(n, im, xy),
             NodeKind::Image(im) => {
                 // An opacity mask that clips shows the image within what its art paints only (its
                 // effects and its symbol instances' art included, as the renderer measures it).
@@ -818,7 +824,7 @@ impl<'a> Writer<'a> {
                     mask_window = self.windowed.take();
                 }
             }
-            NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
+            NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(n, symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
                     return;
@@ -944,6 +950,18 @@ impl<'a> Writer<'a> {
         self.warn(GRAPHS);
     }
 
+    /// Distorted image `n` (`im`), of transparency `xy`: the mesh of its pieces while the art may
+    /// nest further, else one image at the placement nearest its corners, with a warning.
+    fn distorted_image(&mut self, n: &Node, im: &vectorcraft_doc::ImageObject, xy: Xy) {
+        if self.nest < MAX_NEST {
+            return self.drawn_art(n, xy, Some(LIVE), true);
+        }
+        let Some(near) = vectorcraft_doc::image_quad::nearest_affine(n) else { return };
+        self.warn(DEEP_DISTORTED);
+        self.windowed = None;
+        self.image(&vectorcraft_doc::ImageObject { xf: near, ..self.doc.shown_image(n, im).into_owned() }, xy);
+    }
+
     /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.
     /// With `bounds`, `n`'s text wrap options go on the rectangle of its bounds, the group's first
     /// member ([`Self::wrap_on_bounds`]); without it, in the group's dictionary.
@@ -1015,6 +1033,10 @@ impl<'a> Writer<'a> {
         let entries = match &self.root_entries {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
+        };
+        let entries = match &self.instance_entries {
+            Some((id, _)) if *id == n.id => entries.or_else(|| self.instance_entries.take().map(|(_, e)| e)),
+            _ => entries,
         };
         let role = match &self.blend_role {
             Some((id, _)) if *id == n.id => self.blend_role.take().map(|(_, e)| e),

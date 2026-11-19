@@ -134,6 +134,174 @@ fn colors_with_nothing_selected_leave_out_what_select_all_leaves_out() {
 }
 
 #[test]
+fn used_colors_list_the_most_used_first_with_their_colors() {
+    let mut s = session();
+    let reds: Vec<NodeId> = (0..3).map(|_| rect(&mut s, json!("#ff0000"))).collect();
+    let blue = rect(&mut s, json!({"c": 100, "m": 100, "y": 0, "k": 0}));
+    run(&mut s, "select.set", json!({"ids": []}));
+    let r = run(&mut s, "color.used", json!({}));
+    assert_eq!(r["selection"], false, "{r}");
+    let colors = r["colors"].as_array().unwrap();
+    assert_eq!(colors.len(), 2, "{r}");
+    assert_eq!((colors[0]["key"].as_str(), colors[0]["hex"].as_str(), colors[0]["count"].as_u64()), (Some("rgb 255 0 0"), Some("#ff0000"), Some(3)));
+    assert_eq!(colors[1]["count"], 1);
+    let first = run(&mut s, "color.used", json!({"limit": 1}));
+    assert_eq!(first["colors"], json!([colors[0]]), "`limit` keeps the most used");
+    assert_eq!((r["uses"].clone(), first["uses"].clone()), (json!(4), json!(4)), "`uses` counts every color");
+    // `color` is the color in its own model, which the paint commands take back.
+    assert_eq!(colors[1]["color"]["model"], "cmyk", "{r}");
+    assert!(close(color_value(&colors[1]["color"]).unwrap(), fill(&s, blue)));
+    // The selection's colors while something is selected; `selection: false` reads all the art.
+    run(&mut s, "select.set", json!({"ids": [blue.0]}));
+    let r = run(&mut s, "color.used", json!({}));
+    assert_eq!((r["selection"].clone(), r["colors"].as_array().unwrap().len()), (json!(true), 1), "{r}");
+    let all = run(&mut s, "color.used", json!({"selection": false}));
+    assert_eq!((all["selection"].clone(), all["colors"][0]["count"].clone()), (json!(false), json!(3)), "{all}");
+    assert_eq!(s.doc().unwrap().selection.objects, [blue], "the selection is left as it was");
+    // A hidden object's color is left out with nothing selected, as Select All leaves it out.
+    run(&mut s, "object.hide", json!({"ids": [reds[0].0]}));
+    assert_eq!(run(&mut s, "color.used", json!({"selection": false}))["colors"][0]["count"], 2);
+    let e = s.execute("color.used", &json!({"selection": "no"})).unwrap_err().to_string();
+    assert!(e.contains("`selection` must be true or false"), "{e}");
+    assert!(s.execute("color.used", &json!({"ids": [blue.0]})).is_err(), "an unknown key is refused");
+}
+
+#[test]
+fn used_colors_name_the_swatch_and_tint_a_color_is_linked_to() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    let tinted = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [tinted.0], "swatch": "Ink", "tint": 40}));
+    run(&mut s, "select.set", json!({"ids": []}));
+    let r = run(&mut s, "color.used", json!({}));
+    let c = &r["colors"][0];
+    assert_eq!(c["swatch"].as_str(), Some("Ink"), "{r}");
+    assert!((c["tint"].as_f64().unwrap() - 40.0).abs() < 1e-4, "{r}");
+    // recolor.colors keeps its own fields.
+    assert_eq!(run(&mut s, "recolor.colors", json!({}))["colors"][0].get("tint"), None);
+    // A swatch of paper white looks the same at every tint; the tint comes from the paint.
+    run(&mut s, "swatch.new", json!({"name": "Paper", "color": {"c": 0, "m": 0, "y": 0, "k": 0}, "spot": true}));
+    let paper = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [paper.0], "swatch": "Paper", "tint": 33.333}));
+    run(&mut s, "select.set", json!({"ids": [paper.0]}));
+    let c = run(&mut s, "color.used", json!({}))["colors"][0].clone();
+    assert_eq!(c["swatch"].as_str(), Some("Paper"), "{c}");
+    // The tint is the paint's own, unrounded.
+    let vectorcraft_color::Paint::Solid { tint, .. } = s.doc().unwrap().doc.node(paper).unwrap().appearance.fill_paint() else {
+        panic!("a solid fill")
+    };
+    assert_eq!((c["tint"].as_f64().unwrap() / 100.0) as f32, tint, "{c}");
+    assert!((tint - 0.33333).abs() < 1e-5);
+    // A pattern's tile keeps its tint as well.
+    run(&mut s, "select.set", json!({"ids": [paper.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Sheet", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let filled = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [filled.0], "swatch": "Sheet"}));
+    run(&mut s, "select.set", json!({"ids": [filled.0]}));
+    let c = run(&mut s, "color.used", json!({}))["colors"][0].clone();
+    assert_eq!(c["swatch"].as_str(), Some("Paper"), "{c}");
+    assert_eq!((c["tint"].as_f64().unwrap() / 100.0) as f32, tint, "{c}");
+}
+
+#[test]
+fn used_colors_read_the_tiles_of_patterns_used_inside_pattern_tiles() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    run(&mut s, "select.set", json!({"ids": [red.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Inner", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let middle = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [middle.0], "swatch": "Inner"}));
+    run(&mut s, "select.set", json!({"ids": [middle.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Outer", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let square = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [square.0], "swatch": "Outer"}));
+    // The inner tile's square is stroked with the outer pattern, so the two patterns use each other.
+    let outer = s.doc().unwrap().doc.node(square).unwrap().appearance.fill_paint().clone();
+    let st = s.doc_mut().unwrap();
+    let doc = std::sync::Arc::make_mut(&mut st.doc);
+    let tile = doc.pattern_mut("Inner").unwrap().art.first_mut().unwrap();
+    std::sync::Arc::make_mut(tile).appearance.set_stroke(outer);
+    run(&mut s, "select.set", json!({"ids": [square.0]}));
+    let r = run(&mut s, "color.used", json!({}));
+    let colors = r["colors"].as_array().unwrap();
+    assert_eq!(colors.iter().map(|c| (c["hex"].as_str(), c["count"].as_u64())).collect::<Vec<_>>(), [(Some("#ff0000"), Some(1))], "{r}");
+}
+
+#[test]
+fn used_colors_give_no_swatch_for_a_stop_that_mixes_its_ink_with_process_inks() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    let shape = rect(&mut s, json!("#000000"));
+    let mixed = Color::Cmyk { c: 0.3, m: 0.5, y: 0.3, k: 0.0 };
+    let stop = |color, plates| GradientStop { swatch: Some("Ink".into()), tint: 0.5, plates, ..GradientStop::new(0.0, color) };
+    let mut end = stop(Color::Cmyk { c: 0.0, m: 0.5, y: 0.3, k: 0.0 }, None);
+    end.offset = 1.0;
+    let g = Gradient::new(GradientKind::Linear, vec![stop(mixed, Some([0.3, 0.0, 0.0, 0.0])), end]);
+    let st = s.doc_mut().unwrap();
+    std::sync::Arc::make_mut(&mut st.doc).node_mut(shape).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(g))));
+    let r = run(&mut s, "color.used", json!({}));
+    let entry = |key: &str| r["colors"].as_array().unwrap().iter().find(|c| c["key"] == key).cloned().unwrap();
+    let mix = entry("cmyk 30 50 30 0");
+    assert_eq!((mix.get("swatch"), mix.get("tint")), (None, None), "{r}");
+    assert_eq!(entry("cmyk 0 50 30 0")["swatch"], "Ink", "{r}");
+    // recolor.colors keeps the swatch it lists.
+    let listed = run(&mut s, "recolor.colors", json!({}));
+    assert!(listed["colors"].as_array().unwrap().iter().all(|c| c["swatch"] == "Ink"), "{listed}");
+}
+
+#[test]
+fn used_colors_take_the_swatch_of_a_plain_use_painted_after_a_mixed_stop_of_the_same_color() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    let shape = rect(&mut s, json!("#000000"));
+    let plain = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [plain.0], "swatch": "Ink", "tint": 50}));
+    let ink = fill(&s, plain);
+    // The stop below the plain fill has the same color, and process plates that add nothing.
+    let stop = GradientStop { swatch: Some("Ink".into()), tint: 0.5, plates: Some([0.0; 4]), ..GradientStop::new(0.0, ink) };
+    let mut end = stop.clone();
+    end.offset = 1.0;
+    let g = Gradient::new(GradientKind::Linear, vec![stop, end]);
+    let st = s.doc_mut().unwrap();
+    std::sync::Arc::make_mut(&mut st.doc).node_mut(shape).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(g))));
+    run(&mut s, "select.set", json!({"ids": []}));
+    let r = run(&mut s, "color.used", json!({}));
+    let c = r["colors"].as_array().unwrap().iter().find(|c| c["count"] == 3).cloned().unwrap();
+    assert_eq!((c["swatch"].as_str(), c["tint"].as_f64()), (Some("Ink"), Some(50.0)), "{r}");
+}
+
+#[test]
+fn recolor_colors_keeps_the_swatch_of_the_first_linked_use_when_a_mixed_stop_comes_first() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Other", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    let shape = rect(&mut s, json!("#000000"));
+    let plain = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [plain.0], "swatch": "Other", "tint": 50}));
+    let ink = fill(&s, plain);
+    // The stop below the plain fill has the same color, linked to another swatch, with process
+    // plates that add nothing.
+    let stop = GradientStop { swatch: Some("Ink".into()), tint: 0.5, plates: Some([0.0; 4]), ..GradientStop::new(0.0, ink) };
+    let mut end = stop.clone();
+    end.offset = 1.0;
+    let g = Gradient::new(GradientKind::Linear, vec![stop, end]);
+    let st = s.doc_mut().unwrap();
+    std::sync::Arc::make_mut(&mut st.doc).node_mut(shape).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(g))));
+    run(&mut s, "select.set", json!({"ids": []}));
+    let three = |r: &Value| r["colors"].as_array().unwrap().iter().find(|c| c["count"] == 3).cloned().unwrap();
+    let used = run(&mut s, "color.used", json!({}));
+    assert_eq!(three(&used)["swatch"], "Other", "{used}");
+    let listed = run(&mut s, "recolor.colors", json!({}));
+    assert_eq!(three(&listed)["swatch"], "Ink", "recolor.colors names the first linked use: {listed}");
+}
+
+#[test]
 fn colors_with_nothing_selected_leave_out_hidden_and_locked_objects_in_groups() {
     let mut s = session();
     rect(&mut s, json!("#ff0000"));
@@ -836,6 +1004,21 @@ fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_p
     assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
 }
 
+/// "keep" in `groupColors` leaves the group's swatch at its place as it is, without Global Adjust,
+/// and past the group's swatches it adds none.
+#[test]
+fn keep_in_group_colors_leaves_that_swatch_as_it_is() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let p = json!({"map": [], "group": "Brand", "groupColors": ["keep", "#00ff00", "keep"], "globalAdjust": {"brightness": -50}});
+    run(&mut s, "recolor.apply", p);
+    let g = &s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches;
+    let g: Vec<String> = g.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(g.len(), 2, "{g:?}");
+    assert_eq!(g[0], "#2878f0", "the kept swatch takes no Global Adjust");
+    assert_ne!(g[1], "#00ff00", "the other new color takes it");
+}
+
 /// A gradient or pattern swatch of the group keeps its place and its paint when `recolor.apply`
 /// rewrites the group: the group's colors, from the rows or from `groupColors`, go to its color
 /// swatches in order.
@@ -1405,6 +1588,26 @@ fn theme_picker_marquee_takes_the_area_and_picks_add_up() {
     let mut got = pick_theme(&mut s, json!({"picks": [over]}));
     got.sort();
     assert_eq!(got, ["rgb 0 255 0", "rgb 255 255 0"]);
+}
+
+/// A distorted image is read where its pixels are drawn, between its corners.
+#[test]
+fn theme_picker_reads_a_distorted_image_where_it_is_drawn() {
+    let mut s = session();
+    let (id, b) = halves_image(&mut s, 64, 32, [255, 0, 0, 255], [0, 0, 255, 255]);
+    let (x, y0, y1) = (b.x1 + 20.0, b.y0, b.y1);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.distort", json!({"corners": [[x + 40.0, y0], [x + 60.0, y0], [x + 100.0, y1], [x, y1]]}));
+    // The lower left of the trapezoid, outside the rectangle the image was placed in: red.
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [x + 2.0, y1 - 4.0, x + 20.0, y1 - 1.0]}]})), ["rgb 255 0 0"]);
+    // Where the image was: nothing.
+    assert!(pick_theme(&mut s, json!({"picks": [{"rect": [b.x0 + 1.0, b.y0 + 1.0, b.x1 - 1.0, b.y1 - 1.0]}]})).is_empty());
+    // A marquee reaching past the horizon its sides meet at (a quarter of its height above its
+    // top) still reads every pixel it covers.
+    let h = y1 - y0;
+    let mut both = pick_theme(&mut s, json!({"picks": [{"rect": [x - 10.0, y0 - h, x + 110.0, y1 + 1.0]}]}));
+    both.sort();
+    assert_eq!(both, ["rgb 0 0 255", "rgb 255 0 0"]);
 }
 
 /// Pixels less than half opaque are left out, and so is an image whose pixels can't be read.

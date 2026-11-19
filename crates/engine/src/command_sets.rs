@@ -24,6 +24,11 @@ pub const ON_ACTIVE_ARTBOARD: [&str; 8] = [
 /// `indices` instead.
 pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitToSelection"];
 
+/// The commands that the Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment
+/// tools and their dialogs, and the Shaper tool for a shape it recognizes, run to draw a shape
+/// ([`crate::Session::take_shape_drawn`]).
+pub const DRAWS_SHAPE: [&str; 5] = ["shape.rectangle", "shape.ellipse", "shape.polygon", "shape.star", "shape.line"];
+
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
 /// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the artboards the
@@ -100,6 +105,7 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "symbol.selectInstances",
     "view.guides.lock",
     "view.proofSetup",
+    "view.proofSetup.load",
     "view.proofColors",
     "view.overprintPreview",
     "view.separationsPreview",
