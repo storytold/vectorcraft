@@ -9,7 +9,7 @@
 //! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
-//! `path`).
+//! `path`), `hueJitter` (°).
 //! Art: `width` (%), `widthMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation`),
 //! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
@@ -187,6 +187,7 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
                 f.insert(mode_key(key), json!(mode.id()));
             }
             f.insert("rotationRelativeTo".into(), json!(if s.rotation_relative_to_path { "path" } else { "page" }));
+            f.insert("hueJitter".into(), json!(s.hue_jitter));
         }
         BrushKind::Art(a) => {
             let (mode, start, end) = match a.scale {
@@ -268,6 +269,7 @@ pub(super) fn params(d: &Dialog) -> Value {
                 p[*key] = json!([clamped(d, &min_key(key), range), clamped(d, &max_key(key), range)]);
             }
             p["modes"] = json!(SCATTER.map(|(key, _)| scatter_mode(d, key).id()));
+            p["hue_jitter"] = json!(clamped(d, "hueJitter", Scatter::HUE_JITTER_RANGE));
             p
         }
         "art" => {
@@ -457,6 +459,9 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(4.0);
     let relative = [("page", tl!("Page")), ("path", tl!("Path"))];
     super::form::choice(ui, d, "rotationRelativeTo", tl!("Rotation relative to:"), (LABEL_W, 104.0), &relative);
+    ui.add_space(4.0);
+    // Each copy turns its colors' hue by its own amount up to this many degrees either way.
+    widgets::label_row(ui, tl!("Hue Jitter:"), LABEL_W, |ui| number(ui, d, "hueJitter", Scatter::HUE_JITTER_RANGE, "°", true));
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
@@ -472,6 +477,13 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("widthMode".into(), json!(m.id()));
         }
     });
+    // A path sets its own width, flips, overlap and colorization, not how the art scales or runs.
+    if d.bool(super::brush_options::OBJECT) {
+        flips(ui, d);
+        ui.add_space(4.0);
+        super::form::check(ui, d, "overlap", tl!("Overlap"));
+        return;
+    }
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -532,8 +544,11 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
-    tiles(ui, d);
-    ui.add_space(6.0);
+    // The tiles belong to the brush; a path sets its own scale, spacing, flips, fit and colorization.
+    if !d.bool(super::brush_options::OBJECT) {
+        tiles(ui, d);
+        ui.add_space(6.0);
+    }
     flips(ui, d);
     widgets::section_header(ui, tl!("Fit"));
     let fits = [("stretch", tl!("Stretch to fit")), ("addSpace", tl!("Add space to fit")), ("approximate", tl!("Approximate path"))];

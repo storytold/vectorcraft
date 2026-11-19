@@ -25,6 +25,7 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         ("Trim at Crossings Tool", "trimAtCrossings"),
     ] {
         let e = under(label).expect(label);
+        assert_eq!(vectorcraft_tools::tool_info(tool).map(|t| t.label), Some(label), "the toolbar's label");
         assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));
         menus::invoke(&mut app, "tool.select", e.params.clone());
         assert_eq!(app.session.tool_id(), tool);
@@ -327,4 +328,46 @@ fn common_tangents_previews_cancels_and_runs_on_ok() {
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!((steps(&app), count(&app)), (n, nodes));
     assert!(app.ui.status.contains("inside the other"), "{}", app.ui.status);
+}
+
+/// Common Tangents… on a point and an ellipse: every Tangents choice previews the same two lines
+/// from the point, OK keeps them as one step, and a point inside the ellipse changes nothing and
+/// says why.
+#[test]
+fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
+    let mut app = app();
+    let oval = app.run("shape.ellipse", json!({"x": 180.0, "y": 120.0, "width": 80.0, "height": 60.0})).unwrap()["id"].as_u64().unwrap();
+    let point =
+        |app: &mut VectorcraftApp, x: f64, y: f64| app.run("path.create", json!({"anchors": [{"x": x, "y": y}]})).unwrap()["id"].as_u64().unwrap();
+    let dot = point(&mut app, 40.0, 150.0);
+    app.run("select.set", json!({"ids": [oval, dot]})).unwrap();
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
+    let (n, nodes) = (steps(&app), count(&app));
+    let open = |app: &mut VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Common Tangents…").unwrap();
+        assert!(item.enabled);
+        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        menus::invoke(app, &cmd, p);
+    };
+
+    open(&mut app);
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    for (_, kind) in super::TANGENT_KINDS {
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "tangents".into(), json!(kind));
+        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert_eq!(count(&app), nodes + 2, "{kind}: the two lines from the point");
+    }
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 2), "one undo step");
+
+    // A point inside the ellipse: nothing changes, and a message says why.
+    let inside = point(&mut app, 220.0, 150.0);
+    app.run("select.set", json!({"ids": [oval, inside]})).unwrap();
+    let (n, nodes) = (steps(&app), count(&app));
+    open(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((steps(&app), count(&app)), (n, nodes));
+    assert!(app.ui.status.contains("The point lies inside the path"), "{}", app.ui.status);
 }

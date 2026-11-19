@@ -8,6 +8,7 @@
 //! change; [`Document::map_paints`] replaces whole paints of any kind in the same places.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use vectorcraft_color::swatch::REGISTRATION;
@@ -186,8 +187,9 @@ impl Document {
     /// [`Document::map_solid_paints`] limited to the art in the subtrees of `ids` (each paint
     /// visited once even when an id is inside another).
     pub fn map_solid_paints_in(&mut self, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let listed: HashSet<NodeId> = ids.iter().copied().collect();
         let roots: Vec<NodeId> =
-            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| listed.contains(p)))).collect();
         let mut n = 0;
         let mut g = relink(f);
         for id in roots {
@@ -340,18 +342,39 @@ fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: 
 /// and gradient stops (with their link), a dynamic symbol instance's own paints
 /// ([`override_paints`]), then mesh points (unlinked), in paint order.
 pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
-    n.walk(&mut |m| {
+    let _ = try_node_colors::<()>(n, &mut |c, s| {
+        f(c, s);
+        ControlFlow::Continue(())
+    });
+}
+
+/// Whether the subtree of `n` holds any color [`node_colors`] visits. It stops at the first one.
+pub fn node_has_colors(n: &Node) -> bool {
+    try_node_colors(n, &mut |_, _| ControlFlow::Break(())).is_break()
+}
+
+/// [`node_colors`] that ends at the first color for which `f` returns [`ControlFlow::Break`]: no
+/// paint or node after it is visited.
+fn try_node_colors<B>(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>) -> ControlFlow<B>) -> ControlFlow<B> {
+    n.try_walk(&mut |m| {
         for p in node_paints(m).chain(override_paints(m)) {
             match p {
-                Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
-                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
+                Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref())?,
+                Paint::Gradient(g) => {
+                    for s in &g.gradient.stops {
+                        f(&s.color, s.swatch.as_deref())?;
+                    }
+                }
                 _ => {}
             }
         }
         if let NodeKind::Mesh(mesh) = &m.kind {
-            mesh.points.iter().for_each(|p| f(&p.color, None));
+            for p in &mesh.points {
+                f(&p.color, None)?;
+            }
         }
-    });
+        ControlFlow::Continue(())
+    })
 }
 
 fn item_paint(it: &AppearanceItem) -> &Paint {
@@ -820,5 +843,288 @@ mod tests {
         let mut colors = vec![];
         node_colors(d.node(b).unwrap(), &mut |c, s| colors.push((*c, s.map(str::to_string))));
         assert_eq!(colors, [(Color::rgb(1.0, 0.0, 0.0), None)]);
+    }
+
+    /// [`Document::map_solid_paints_in`] with each ancestor searched for in `ids` rather than looked up in a set.
+    fn map_solid_paints_in_by_search(d: &mut Document, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let roots: Vec<NodeId> =
+            ids.iter().copied().filter(|id| !d.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+        let mut n = 0;
+        let mut g = relink(f);
+        for id in roots {
+            let Some(node) = d.node(id) else { continue };
+            if let Some((new, count)) = map_node(node, &mut g)
+                && let Some(slot) = d.node_mut(id)
+            {
+                *slot = new;
+                n += count;
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn mapping_within_ids_matches_a_search_of_the_ids() {
+        // Two layers: the first holds group `outer` (group `inner` with two rectangles, and a
+        // rectangle) and a rectangle; the second holds a rectangle. Each rectangle has its own color.
+        let mut d = Document::new(100.0, 100.0);
+        let first = d.layers[0].id;
+        let second = d.alloc_id();
+        d.insert(None, usize::MAX, Node::layer(second, "Second", crate::LayerColor::Preset(1))).unwrap();
+        let rect = |d: &mut Document, i: u8| {
+            let id = d.alloc_id();
+            let r = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+            let color = Color::rgb(f32::from(i) / 8.0, 0.0, 0.0);
+            (id, Arc::new(Node::path(id, r, Appearance::basic(Paint::solid(color), Paint::solid(color), 1.0))))
+        };
+        let (r1, n1) = rect(&mut d, 1);
+        let (r2, n2) = rect(&mut d, 2);
+        let (r3, n3) = rect(&mut d, 3);
+        let (r4, n4) = rect(&mut d, 4);
+        let (r5, n5) = rect(&mut d, 5);
+        let (inner, outer) = (d.alloc_id(), d.alloc_id());
+        let outer_node = Node::group(outer, vec![Arc::new(Node::group(inner, vec![n1, n2])), n3]);
+        d.insert(Some(first), usize::MAX, outer_node).unwrap();
+        d.insert(Some(first), usize::MAX, Arc::unwrap_or_clone(n4)).unwrap();
+        d.insert(Some(second), usize::MAX, Arc::unwrap_or_clone(n5)).unwrap();
+        let missing = NodeId(u64::MAX);
+        let all = [first, second, outer, inner, r1, r2, r3, r4, r5, missing];
+        // Every list of up to three of them: nested ids in both orders, duplicates, a missing id and none.
+        let mut lists: Vec<Vec<NodeId>> = vec![vec![]];
+        let mut shorter: Vec<Vec<NodeId>> = vec![vec![]];
+        for _ in 0..3 {
+            shorter = shorter.iter().flat_map(|l| all.map(|id| [l.as_slice(), &[id]].concat())).collect();
+            lists.extend(shorter.iter().cloned());
+        }
+        assert_eq!(lists.len(), 1 + 10 + 100 + 1000);
+        for ids in &lists {
+            // A callback that changes every paint it visits, so a paint visited twice counts twice.
+            let run = |map: &dyn Fn(&mut Document, &[NodeId], &mut LinkFn) -> usize| {
+                let mut d = d.clone();
+                let mut visits = vec![];
+                let n = map(&mut d, ids, &mut |c, s, t| {
+                    visits.push((*c, s.clone(), *t));
+                    *s = Some(format!("{}", visits.len()));
+                    *t *= 0.5;
+                    true
+                });
+                (n, visits, d.layers)
+            };
+            let by_set = run(&|d, ids, f| d.map_solid_paints_in(ids, f));
+            let by_search = run(&|d, ids, f| map_solid_paints_in_by_search(d, ids, f));
+            assert_eq!(by_set, by_search, "{ids:?}");
+        }
+    }
+
+    /// The colors [`node_colors`] visits, in its order, by a [`Node::walk`] that reads the whole subtree.
+    fn full_walk(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
+        n.walk(&mut |m| {
+            for p in node_paints(m).chain(override_paints(m)) {
+                match p {
+                    Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
+                    Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
+                    _ => {}
+                }
+            }
+            if let NodeKind::Mesh(mesh) = &m.kind {
+                mesh.points.iter().for_each(|p| f(&p.color, None));
+            }
+        });
+    }
+
+    /// Whether [`full_walk`] finds a color in `n`.
+    fn full_walk_has_colors(n: &Node) -> bool {
+        let mut found = false;
+        full_walk(n, &mut |_, _| found = true);
+        found
+    }
+
+    /// The colors of `n` by [`full_walk`], in order.
+    fn full_walk_colors(n: &Node) -> Vec<(Color, Option<String>)> {
+        let mut out = vec![];
+        full_walk(n, &mut |c, s| out.push((*c, s.map(str::to_string))));
+        out
+    }
+
+    fn square(id: u64, fill: Paint, stroke: Paint) -> Node {
+        Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, stroke, 1.0))
+    }
+
+    fn holder(id: u64, kind: fn(Vec<Arc<Node>>) -> NodeKind, children: Vec<Node>) -> Node {
+        Node::new(NodeId(id), kind(children.into_iter().map(Arc::new).collect()))
+    }
+
+    /// One node of each kind of paint [`node_colors`] reads or skips, with whether it shows a color.
+    fn color_cases() -> Vec<(&'static str, Node, bool)> {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let gradient = |stops: usize| {
+            let mut g = vectorcraft_color::Gradient::default();
+            g.stops.truncate(stops);
+            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(g)))
+        };
+        let pattern = Paint::Pattern { pattern: "Dots".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+        let area = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        let mesh = crate::GradientMesh::for_path_with(&area, 2, 2, &|_| (Color::BLACK, 1.0)).unwrap();
+        let mut empty_mesh = mesh.clone();
+        empty_mesh.points.clear();
+        let text = |fill: Paint| {
+            let style = crate::CharStyle { fill, stroke: Paint::None, ..Default::default() };
+            let mut n =
+                Node::new(NodeId(20), NodeKind::Text(Box::new(crate::TextObject::point(vectorcraft_geom::Point::new(0.0, 0.0), "Hi", style))));
+            n.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+            n
+        };
+        let image = |colorize: Option<Paint>| {
+            let im = crate::ImageObject {
+                key: "k".into(),
+                width: 2,
+                height: 2,
+                xf: vectorcraft_geom::Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let mut n = Node::new(NodeId(21), NodeKind::Image(Box::new(im)));
+            n.appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+            n.extras_mut().colorize = colorize.map(Box::new);
+            n
+        };
+        let overridden = |fill: Option<Paint>| {
+            let mut n = square(22, Paint::None, Paint::None);
+            n.extras_mut().symbol_overrides = vec![crate::SymbolOverride { path: vec![0], fill, ..Default::default() }];
+            n
+        };
+        let masked = {
+            let mut n = square(23, Paint::None, Paint::None);
+            n.extras_mut().mask = Some(Box::new(crate::OpacityMask::new(square(24, red.clone(), Paint::None), true)));
+            n
+        };
+        let group = |children| NodeKind::Group { children, clip: false };
+        let clip = |children| NodeKind::Group { children, clip: true };
+        let compound = |children| NodeKind::Compound { children, rule: Default::default() };
+        let blend = |children| NodeKind::Blend { children, spec: Default::default() };
+        let blank = |id| square(id, Paint::None, Paint::None);
+        vec![
+            ("no paint", blank(1), false),
+            ("solid fill", square(2, red.clone(), Paint::None), true),
+            ("solid stroke", square(3, Paint::None, red.clone()), true),
+            ("pattern only", square(4, pattern.clone(), pattern.clone()), false),
+            ("gradient without stops", square(5, gradient(0), Paint::None), false),
+            ("gradient with stops", square(6, gradient(2), Paint::None), true),
+            ("mesh with points", Node::new(NodeId(7), NodeKind::Mesh(mesh)), true),
+            ("mesh without points", Node::new(NodeId(8), NodeKind::Mesh(empty_mesh)), false),
+            ("text run fill", text(red.clone()), true),
+            ("text without paint", text(Paint::None), false),
+            ("image colorize", image(Some(red.clone())), true),
+            ("image without colorize", image(None), false),
+            ("image with a pattern colorize", image(Some(pattern.clone())), false),
+            ("symbol override fill", overridden(Some(red.clone())), true),
+            ("symbol override without paint", overridden(None), false),
+            ("color only in the opacity mask", masked, false),
+            ("group, color first", holder(30, group, vec![square(31, red.clone(), Paint::None), blank(32), blank(33)]), true),
+            ("group, color last", holder(34, group, vec![blank(35), blank(36), square(37, red.clone(), Paint::None)]), true),
+            ("group without color", holder(38, group, vec![blank(39), blank(40)]), false),
+            ("clip group", holder(41, clip, vec![blank(42), square(43, red.clone(), Paint::None)]), true),
+            ("compound shape", holder(44, compound, vec![blank(45), square(46, gradient(3), Paint::None)]), true),
+            ("blend", holder(47, blend, vec![blank(48), blank(49)]), false),
+            (
+                "nested groups, color deepest",
+                holder(50, group, vec![blank(51), holder(52, group, vec![holder(53, group, vec![blank(54), square(55, red.clone(), Paint::None)])])]),
+                true,
+            ),
+        ]
+    }
+
+    #[test]
+    fn has_colors_matches_the_full_walk() {
+        for (label, n, expected) in color_cases() {
+            let all = full_walk_colors(&n);
+            assert_eq!(node_has_colors(&n), full_walk_has_colors(&n), "{label}");
+            assert_eq!(full_walk_has_colors(&n), !all.is_empty(), "{label}");
+            assert_eq!(node_has_colors(&n), expected, "{label}");
+            let mut listed = vec![];
+            node_colors(&n, &mut |c, s| listed.push((*c, s.map(str::to_string))));
+            assert_eq!(listed, all, "{label}: node_colors lists the same colors in the same order");
+        }
+    }
+
+    #[test]
+    fn has_colors_stops_at_the_first_color() {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let mut stops = vectorcraft_color::Gradient::default();
+        stops.stops.push(stops.stops[0].clone());
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(stops)));
+        let mut later = vec![square(2, gradient, red.clone())];
+        later.extend((3..100).map(|id| square(id, red.clone(), red.clone())));
+        let n = holder(1, |children| NodeKind::Group { children, clip: false }, later);
+        let (mut colors, mut nodes) = (0, 0);
+        let flow = try_node_colors(&n, &mut |_, _| {
+            colors += 1;
+            ControlFlow::Break(())
+        });
+        assert!(flow.is_break());
+        assert_eq!(colors, 1, "the first gradient stop ends the walk: no later stop, stroke or object is read");
+        let flow = n.try_walk(&mut |m| {
+            nodes += 1;
+            if node_paints(m).next().is_some() { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+        });
+        assert!(flow.is_break());
+        assert_eq!(nodes, 2, "the group, then its first member: none of the 97 after it");
+    }
+
+    /// Times [`node_has_colors`] against the full walk it replaces on one group of 100,000 paths, alternating the two in
+    /// one process: `cargo test --release -p vectorcraft-doc --lib -- --ignored --nocapture has_colors_timing`.
+    #[test]
+    #[ignore = "a timing, not a check"]
+    fn has_colors_timing() {
+        /// This thread's CPU time in nanoseconds on Linux; the elapsed time since `start` elsewhere.
+        fn clock(start: std::time::Instant) -> u128 {
+            let cpu = std::fs::read_to_string("/proc/thread-self/schedstat").ok();
+            cpu.and_then(|s| s.split_whitespace().next()?.parse().ok()).unwrap_or_else(|| start.elapsed().as_nanos())
+        }
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let count = 100_000u64;
+        let group = |colored: &dyn Fn(u64) -> bool| {
+            let children =
+                (0..count).map(|i| if colored(i) { square(i + 1, red.clone(), Paint::None) } else { square(i + 1, Paint::None, Paint::None) });
+            holder(0, |children| NodeKind::Group { children, clip: false }, children.collect())
+        };
+        let cases = [
+            ("every path filled", group(&|_| true)),
+            ("only the last path filled", group(&|i| i == count - 1)),
+            ("no path filled", group(&|_| false)),
+        ];
+        let start = std::time::Instant::now();
+        println!("clock: {}", if std::fs::metadata("/proc/thread-self/schedstat").is_ok() { "thread CPU time" } else { "wall clock" });
+        // The time per call of `f` on `n`: batches of calls double until one takes at least 100 ms.
+        let per_call = |f: fn(&Node) -> bool, n: &Node| {
+            let mut calls = 1u32;
+            loop {
+                let t = clock(start);
+                for _ in 0..calls {
+                    std::hint::black_box(f(std::hint::black_box(n)));
+                }
+                let spent = clock(start) - t;
+                if spent >= 100_000_000 || calls >= 1 << 30 {
+                    return (spent as f64 / f64::from(calls), calls);
+                }
+                calls *= 2;
+            }
+        };
+        for (label, n) in &cases {
+            assert_eq!(full_walk_has_colors(n), node_has_colors(n), "{label}");
+            let (mut old, mut new) = (vec![], vec![]);
+            for _ in 0..7 {
+                old.push(per_call(full_walk_has_colors, n));
+                new.push(per_call(node_has_colors, n));
+            }
+            old.sort_by(|a, b| a.0.total_cmp(&b.0));
+            new.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let (o, nw) = (old[3], new[3]);
+            println!(
+                "{label}: full walk {:.1} ns per call ({} calls), node_has_colors {:.1} ns per call ({} calls), median of 7 runs",
+                o.0, o.1, nw.0, nw.1
+            );
+        }
     }
 }

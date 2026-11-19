@@ -17,10 +17,12 @@ mod limits;
 mod links;
 mod liquify;
 mod livepaint;
+mod move_offsets;
 mod pen;
 mod persp;
 mod place;
 mod protocol;
+mod shapewidgets;
 mod svg;
 
 fn server() -> Server {
@@ -321,6 +323,7 @@ fn headless_command_list_includes_ui_commands() {
         "app.quit",
         "window.arrange.tile",
         "align.horizontalLeft",
+        "align.toKeyObject",
         "ui.action.play",
     ];
     for (n, id) in want.iter().enumerate() {
@@ -1555,6 +1558,30 @@ fn headless_backend_methods() {
         let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
         assert_eq!(selected["tool"], tool.id);
     }
+    // The Trim at Crossings Tool is listed once, in the Scissors tool's group after the Knife.
+    let trim = vectorcraft_tools::addons::trim::ID;
+    let with_trim: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == trim)).collect();
+    assert_eq!(with_trim.len(), 1, "{trim} is in one group");
+    let ids: Vec<_> = with_trim[0].iter().map(|entry| entry["id"].clone()).collect();
+    let knife = ids.iter().position(|id| *id == "knife").expect("the Knife in the same group");
+    assert!(ids.contains(&json!("scissors")), "the Scissors tool's group: {ids:?}");
+    assert_eq!(ids.get(knife + 1), Some(&json!(trim)));
+    assert_eq!(ids.iter().filter(|id| **id == trim).count(), 1);
+    let entry = with_trim[0].iter().find(|entry| entry["id"] == trim).unwrap();
+    assert_eq!(entry["label"], "Trim at Crossings Tool");
+    assert!(entry["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": trim})).unwrap()["tool"], trim);
+    // The Enclosing Lasso Tool is listed once, in the Lasso tool's group after the Lasso.
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let with_enclosing: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == enclosing)).collect();
+    assert_eq!(with_enclosing.len(), 1, "{enclosing} is in one group");
+    let ids: Vec<_> = with_enclosing[0].iter().map(|entry| entry["id"].clone()).collect();
+    assert_eq!(ids, [json!("lasso"), json!(enclosing)]);
+    assert_eq!(with_enclosing[0][1]["label"], "Enclosing Lasso Tool");
+    assert!(with_enclosing[0][1]["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": enclosing})).unwrap()["tool"], enclosing);
     let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
     assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());
@@ -1608,6 +1635,93 @@ fn id_of(result: &Value) -> u64 {
 fn doc_json(s: &mut Server) -> Value {
     let r = call(s, 900, "run_command", json!({"command": "document.json"}));
     serde_json::from_str(&text_of(&r)).unwrap()
+}
+
+#[test]
+fn transform_refused_by_a_later_operation_changes_nothing() {
+    let mut s = server();
+    let count = |s: &mut Server| -> u64 {
+        let r = call(s, 90, "inspect_document", json!({}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["objects"].as_u64().unwrap()
+    };
+    let base = count(&mut s);
+    let r = id_of(&call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 50})));
+    let before = doc_json(&mut s);
+    for (id, args, says) in [
+        (2, json!({"ids": [r], "scale": 50, "shear": 90}), "object.shear"),
+        (3, json!({"ids": [r], "dx": 10, "rotate": 30, "shear": -270}), "object.shear"),
+        (4, json!({"ids": [r], "scale": 50, "shear": 400}), "object.shear"),
+        (5, json!({"ids": [r], "scale": 50, "reflect": "diagonal"}), "object.reflect"),
+        (6, json!({"ids": [r], "dx": 10, "rotate": 30, "scaleX": 0}), "object.scale"),
+    ] {
+        let t = call(&mut s, id, "transform", args.clone());
+        assert_eq!(t["isError"], true, "{args}: {t}");
+        assert!(text_of(&t).contains(says), "{args}: {t}");
+        assert_eq!(doc_json(&mut s), before, "{args}");
+    }
+    // No undo step was recorded: one undo removes the rectangle.
+    assert_eq!(call(&mut s, 7, "undo", json!({}))["isError"], false);
+    assert_eq!(count(&mut s), base, "one undo removes the rectangle");
+}
+
+#[test]
+fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10 L30 25 Z"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40 L60 55 Z"})));
+    let before = inspect(&mut s, 3);
+    let cases = [
+        ("object.reflect", json!({"dx": 10, "reflect": 42, "copy": true})),
+        ("object.reflect", json!({"dx": 10, "reflect": true})),
+        ("copy", json!({"dx": 10, "copy": "yes"})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": "center", "copy": true})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5]})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5, "a"]})),
+    ];
+    for (index, (says, mut args)) in cases.into_iter().enumerate() {
+        args["ids"] = json!([first]);
+        let request_id = 4 + index as u64 * 2;
+        let rejected = call(&mut s, request_id, "transform", args.clone());
+        assert_eq!(rejected["isError"], true, "{args}: {rejected}");
+        assert!(text_of(&rejected).contains(says), "{args}: {rejected}");
+        // The document, the selection and the undo history are as they were.
+        assert_eq!(inspect(&mut s, request_id + 1), before, "{args}");
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let applied = call(&mut s, 20, "transform", json!({"ids": [second], "dx": 10, "reflect": null, "copy": null, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move"]));
+    let applied = call(&mut s, 21, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    // The schema allows null for every argument but `ids`.
+    let tools = tool_definitions();
+    let props = &tools.iter().find(|t| t["name"] == "transform").unwrap()["inputSchema"]["properties"];
+    for key in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear", "reflect", "copy", "origin"] {
+        assert!(props[key]["anyOf"].as_array().is_some_and(|a| a.contains(&json!({"type": "null"}))), "{key}: {}", props[key]);
+    }
+}
+
+#[test]
+fn add_text_rejects_invalid_path_effects_before_editing() {
+    let mut s = server();
+    let path = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M40 400 C150 300 250 500 360 400 Z"})));
+    let before = call(&mut s, 2, "doc_inspect", json!({}));
+    for (args, message) in [
+        (json!({"text": "Type", "path": path, "pathEffect": "not-an-effect"}), "not-an-effect"),
+        (json!({"text": "Type", "path": path, "pathEffect": 42}), "must be a string"),
+        (json!({"text": "Type", "path": path, "mode": "area", "pathEffect": "skew"}), "requires type on a path"),
+        (json!({"text": "Type", "x": 10, "y": 20, "pathEffect": "skew"}), "requires type on a path"),
+    ] {
+        let reply = call(&mut s, 3, "add_text", args);
+        assert_eq!(reply["isError"], true, "{reply}");
+        assert!(text_of(&reply).contains(message), "{reply}");
+        assert_eq!(call(&mut s, 4, "doc_inspect", json!({})), before, "path, selection and history must stay intact");
+    }
+    let made = call(&mut s, 5, "add_text", json!({"text": "Type", "path": path, "pathEffect": "skew"}));
+    assert_eq!(made["isError"], false, "{made}");
+    assert!(doc_json(&mut s).to_string().contains("\"pathEffect\":\"skew\""));
 }
 
 #[test]
@@ -1867,6 +1981,30 @@ fn e_during_a_marquee_gesture_selects_only_the_objects_inside() {
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"], json!([a]), "{r}");
     let r = call(&mut s, 6, "press_key", json!({"key": "e"}));
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool.select", "{r}");
+}
+
+/// `run_command tool.selectLastSelection` headless: the Selection tool before any selection tool
+/// is chosen, then the selection tool chosen last; Magic Wand doesn't count. `list_commands`
+/// lists it as a command the headless backend runs.
+#[test]
+fn select_last_selection_tool_runs_headless() {
+    let mut s = server();
+    let mut id = 0;
+    let mut run = |s: &mut Server, command: &str, params: Value| {
+        id += 1;
+        let r = call(s, id, "run_command", json!({"command": command, "params": params}));
+        assert_eq!(r["isError"], false, "{command}: {r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()
+    };
+    run(&mut s, "tool.select", json!({"tool": "pen"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "selection"}));
+    run(&mut s, "tool.select", json!({"tool": "groupSelection"}));
+    run(&mut s, "tool.select", json!({"tool": "magicWand"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "groupSelection"}));
+    let r = call(&mut s, 99, "list_commands", json!({"filter": "selectLastSelection"}));
+    let v: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    let listed = v["commands"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned().unwrap_or_default();
+    assert_eq!((listed["host"].clone(), listed["label"].clone()), (json!(true), json!("Select Last Selection Tool")), "{v}");
 }
 
 /// `press_key {key: "c"}` and `{key: "f"}` while an arc is being dragged go to the Arc tool, and
@@ -2160,4 +2298,56 @@ fn add_text_reports_overflow_and_takes_a_fit() {
     assert!(auto["id"].is_u64() && auto.get("overflow").is_none(), "{auto}");
     let point = made(&call(&mut s, 3, "add_text", json!({"text": "NEON DRIVE", "x": 0, "y": 300, "size": 60})));
     assert!(point.get("overflow").is_none(), "{point}");
+}
+
+#[test]
+fn transform_rejects_nonnumeric_steps_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10 L30 25 Z"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40 L60 55 Z"})));
+    let before = inspect(&mut s, 3);
+    assert_eq!(before["selection"], json!([second]));
+
+    let cases = [
+        ("rotate", json!({"dx": 10, "rotate": "bad"})),
+        ("scale", json!({"dx": 10, "scale": "bad"})),
+        ("scaleX", json!({"dx": 10, "scaleX": "bad", "scaleY": 150})),
+        ("scaleY", json!({"dx": 10, "scaleX": 150, "scaleY": "bad"})),
+        ("shear", json!({"dx": 10, "shear": "bad"})),
+    ];
+    for (index, (field, mut args)) in cases.into_iter().enumerate() {
+        args["ids"] = json!([first]);
+        let request_id = 4 + index as u64 * 2;
+        let rejected = call(&mut s, request_id, "transform", args);
+        assert_eq!(rejected["isError"], true, "{field}: {rejected}");
+        assert!(text_of(&rejected).contains(field), "{field}: {rejected}");
+        assert_eq!(inspect(&mut s, request_id + 1), before, "{field}");
+    }
+
+    let applied = call(&mut s, 14, "transform", json!({"ids": [first], "dx": 10, "rotate": null, "scale": 150, "scaleX": 125}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move", "scale"]));
+    let after = inspect(&mut s, 15);
+    assert_ne!(after, before);
+    assert_eq!(after["objects"], before["objects"]);
+    assert_eq!(after["selection"], json!([first]));
+    let bounds = &after["selectionBounds"];
+    assert!((bounds["width"].as_f64().unwrap() - 25.0).abs() < 1e-6, "{bounds}");
+    assert!((bounds["height"].as_f64().unwrap() - 22.5).abs() < 1e-6, "{bounds}");
+    assert!(after["history"].as_array().unwrap().contains(&json!("Move")));
+    assert!(after["history"].as_array().unwrap().contains(&json!("Scale")));
+
+    let applied = call(&mut s, 16, "transform", json!({"ids": [second], "dx": 10, "rotate": 90, "origin": [0, 0]}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move", "rotate"]));
+    let after = inspect(&mut s, 17);
+    assert_eq!(after["selection"], json!([second]));
+    let bounds = &after["selectionBounds"];
+    for (field, expected) in [("x", 40.0), ("y", -70.0), ("width", 15.0), ("height", 20.0)] {
+        assert!((bounds[field].as_f64().unwrap() - expected).abs() < 1e-6, "{field}: {bounds}");
+    }
+    assert!(after["history"].as_array().unwrap().ends_with(&[json!("Move"), json!("Rotate")]));
 }
