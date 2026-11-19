@@ -3,7 +3,7 @@
 //! C (CSS reads 100% as 0.4) and hue H in degrees from the positive `a` axis. The conversions take
 //! and give gamma-encoded sRGB through the Oklab matrices of [`crate::libraries`].
 
-use crate::libraries::{oklab_to_srgb, srgb_to_oklab};
+use crate::libraries::{oklab_to_linear_srgb, oklab_to_srgb, srgb_to_oklab};
 
 /// The chroma CSS reads as 100%.
 pub const CHROMA_FULL: f64 = 0.4;
@@ -41,65 +41,75 @@ pub fn max_chroma(l: f64, h: f64) -> f64 {
     largest_fitting_chroma(l, h, f64::INFINITY)
 }
 
-/// The primary and secondary colors of sRGB: the corners of its cube next to black.
-const PRIMARIES: [[f32; 3]; 6] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]];
-
 /// The largest chroma no more than `limit` that sRGB holds at lightness `l` and hue `h°`: 0 at or
 /// outside black and white.
+///
+/// The chromas sRGB holds along the ray can come in several stretches: at the lightness and hue of
+/// blue the ray leaves sRGB at a chroma of about 0.266 and comes back at blue itself, about 0.313,
+/// and near black the gamut slack opens stretches of its own. Each linear sRGB channel is a cubic
+/// in the chroma, so every stretch ends where a channel's cubic meets a bound of the gamut. The
+/// search finds each such chroma between the cubic's turning points and takes the largest one that
+/// fits.
 fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
     if !(l > 0.0 && l < 1.0) || !h.is_finite() {
         return 0.0;
     }
-    let fits = |c: f64| in_srgb(oklch_to_srgb(l, c, h));
-    // An edge of the chromas sRGB holds, searched no higher than `limit`, so `lo` always fits.
-    let (mut lo, mut hi) = (0.0, limit.min(0.5));
-    for _ in 0..40 {
-        let mid = (lo + hi) / 2.0;
-        if fits(mid) { lo = mid } else { hi = mid }
+    let top = limit.min(0.5);
+    if top <= 0.0 {
+        return 0.0;
     }
-    // Past that edge the ray can come back into sRGB near a line from black to a primary or
-    // secondary color. Such a line is straight in Oklab, so it keeps that color's hue and its
-    // chroma grows with its lightness. At the lightness and hue of blue, for example, the ray leaves
-    // sRGB at a chroma of about 0.266 and meets blue itself at about 0.313; at L 0.44 and a hue
-    // 0.01° past blue's, a second stretch runs from about 0.3042 to 0.3048. Each such stretch ends
-    // at or just below the line's chroma, so the search walks down from there in small steps to the
-    // first chroma that fits and then finds the stretch's end between it and the step above.
-    let past = PRIMARIES.iter().filter_map(|rgb| {
-        let [pl, a, b] = srgb_to_oklab(*rgb);
-        let edge = l / pl * a.hypot(b);
-        let off = (h - b.atan2(a).to_degrees()).rem_euclid(360.0);
-        if l > pl || edge <= lo || off.min(360.0 - off) > NEAR_PRIMARY_HUE {
-            return None;
-        }
-        let start = edge.min(limit);
-        let mut c = start;
-        while c > lo && start - c <= PAST_WALK {
-            if fits(c) {
-                let (mut inside, mut outside) = (c, (c + PAST_STEP).min(start));
-                if outside > inside && !fits(outside) {
-                    for _ in 0..20 {
-                        let mid = (inside + outside) / 2.0;
-                        if fits(mid) { inside = mid } else { outside = mid }
-                    }
-                } else {
-                    inside = outside;
+    let fits = |c: f64| in_srgb(oklch_to_srgb(l, c, h));
+    if fits(top) {
+        return top;
+    }
+    let (sin, cos) = h.to_radians().sin_cos();
+    let lin = |c: f64| oklab_to_linear_srgb(l, c * cos, c * sin);
+    // The linear channels at chromas 0, s, 2s and 3s give each cubic's coefficients in t = c / s.
+    let s = top / 3.0;
+    let y = [lin(0.0), lin(s), lin(2.0 * s), lin(3.0 * s)];
+    let bounds = [-GAMUT_SLACK / 12.92, ((1.0 + GAMUT_SLACK + 0.055) / 1.055).powf(2.4)];
+    let mut ends = vec![0.0];
+    for ch in 0..3 {
+        let [y0, y1, y2, y3] = [y[0][ch], y[1][ch], y[2][ch], y[3][ch]];
+        let (d1, d2, d3) = (y1 - y0, y2 - 2.0 * y1 + y0, y3 - 3.0 * y2 + 3.0 * y1 - y0);
+        let k = [y0, d1 - d2 / 2.0 + d3 / 3.0, d2 / 2.0 - d3 / 2.0, d3 / 6.0];
+        let p = |t: f64| ((k[3] * t + k[2]) * t + k[1]) * t + k[0];
+        // The cubic rises or falls on each stretch between its turning points.
+        let mut cuts = vec![0.0, 3.0];
+        cuts.extend(turning_points(3.0 * k[3], 2.0 * k[2], k[1]).into_iter().filter(|t| *t > 0.0 && *t < 3.0));
+        cuts.sort_by(f64::total_cmp);
+        ends.extend(cuts.iter().map(|t| t * s));
+        for w in cuts.windows(2) {
+            for bound in bounds {
+                let (mut a, mut b) = (w[0], w[1]);
+                let fa = p(a) - bound;
+                if fa * (p(b) - bound) > 0.0 {
+                    continue;
                 }
-                return Some(inside);
+                for _ in 0..60 {
+                    let mid = (a + b) / 2.0;
+                    if (p(mid) - bound) * fa > 0.0 { a = mid } else { b = mid }
+                }
+                ends.extend([a * s, b * s]);
             }
-            c -= PAST_STEP;
         }
-        None
-    });
-    past.fold(lo.min(limit), f64::max)
+    }
+    ends.sort_by(|a, b| b.total_cmp(a));
+    ends.into_iter().flat_map(|c| [c, c - 1e-9]).find(|c| (0.0..=top).contains(c) && fits(*c)).unwrap_or(0.0)
 }
 
-/// How near a primary or secondary color's hue, in degrees, the ray must pass for
-/// [`largest_fitting_chroma`] to look past the first edge.
-const NEAR_PRIMARY_HUE: f64 = 2.0;
-/// The step of that walk.
-const PAST_STEP: f64 = 2e-4;
-/// How far below the line's chroma that walk goes.
-const PAST_WALK: f64 = 0.06;
+/// The real roots of `a t² + b t + c`.
+fn turning_points(a: f64, b: f64, c: f64) -> Vec<f64> {
+    if a.abs() < 1e-15 {
+        return if b.abs() < 1e-15 { Vec::new() } else { vec![-c / b] };
+    }
+    let disc = b * b - 4.0 * a * c;
+    if disc < 0.0 {
+        return Vec::new();
+    }
+    let r = disc.sqrt();
+    vec![(-b - r) / (2.0 * a), (-b + r) / (2.0 * a)]
+}
 
 /// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, h°)`, and whether its chroma was lowered:
 /// a color outside sRGB keeps its lightness and hue and takes the largest chroma below it that
@@ -227,6 +237,21 @@ mod tests {
         // Small values near 0 keep the straight part of the curve.
         let [l, _, _] = to_oklch([-0.01; 3]);
         assert!((l - (-0.01_f64 / 12.92).cbrt()).abs() < 1e-4, "{l}");
+    }
+
+    /// The largest chroma fits and is at least the largest one a scan in steps of 0.0005 finds, at
+    /// every hue and at lightnesses near black too, where the ray can come back into sRGB away from
+    /// any primary color's hue (L 0.02 and H 242° fit up to about 0.022 after leaving near 0.012).
+    #[test]
+    fn the_largest_chroma_is_never_below_a_scan_of_the_ray() {
+        let scan = |l: f64, h: f64| (0..=1000).map(|i| f64::from(i) * 0.0005).filter(|c| in_srgb(oklch_to_srgb(l, *c, h))).fold(0.0, f64::max);
+        assert!(max_chroma(0.02, 242.0) > 0.02, "{}", max_chroma(0.02, 242.0));
+        for l in [0.005, 0.02, 0.05, 0.1, 0.3, 0.44, 0.6, 0.8, 0.95, 0.99] {
+            for h in (0..72).map(|i| f64::from(i) * 5.0 + 2.0) {
+                let max = max_chroma(l, h);
+                assert!(in_srgb(oklch_to_srgb(l, max, h)) && max >= scan(l, h), "L {l} H {h}: {max} < {}", scan(l, h));
+            }
+        }
     }
 
     #[test]

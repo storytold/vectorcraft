@@ -103,16 +103,20 @@ pub fn builtin_library(id: &str) -> Option<Arc<SwatchLibrary>> {
 /// −0.0031308 is encoded with the curve's sign turned, as CSS Color 4's extended sRGB does
 /// (<https://www.w3.org/TR/css-color-4/#color-conversion-code>).
 pub(crate) fn oklab_to_srgb(l: f64, a: f64, b: f64) -> [f64; 3] {
+    oklab_to_linear_srgb(l, a, b).map(|v| if v.abs() <= 0.003_130_8 { 12.92 * v } else { v.signum() * (1.055 * v.abs().powf(1.0 / 2.4) - 0.055) })
+}
+
+/// Linear sRGB of OKLab `(l, a, b)`, unclamped.
+pub(crate) fn oklab_to_linear_srgb(l: f64, a: f64, b: f64) -> [f64; 3] {
     let l_ = l + 0.396_337_777_4 * a + 0.215_803_757_3 * b;
     let m_ = l - 0.105_561_345_8 * a - 0.063_854_172_8 * b;
     let s_ = l - 0.089_484_177_5 * a - 1.291_485_548_0 * b;
     let (l3, m3, s3) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_);
-    let lin = [
+    [
         4.076_741_662_1 * l3 - 3.307_711_591_3 * m3 + 0.230_969_929_2 * s3,
         -1.268_438_004_6 * l3 + 2.609_757_401_1 * m3 - 0.341_319_396_5 * s3,
         -0.004_196_086_3 * l3 - 0.703_418_614_7 * m3 + 1.707_614_701_0 * s3,
-    ];
-    lin.map(|v| if v.abs() <= 0.003_130_8 { 12.92 * v } else { v.signum() * (1.055 * v.abs().powf(1.0 / 2.4) - 0.055) })
+    ]
 }
 
 /// OKLab `[l, a, b]` of a colour's display RGB.
