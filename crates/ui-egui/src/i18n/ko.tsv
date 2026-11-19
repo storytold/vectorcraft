@@ -861,6 +861,7 @@ digits	Malayalam	말라얄람어
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	휠 보기
 	Box View	상자 보기
+	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
@@ -3259,6 +3260,11 @@ mark-style	Japanese	일본식
 	Edit Arrowheads	화살촉 편집
 	Edit Arrowheads…	화살촉 편집…
 	Reload Arrowheads	화살촉 다시 불러오기
+	Bevels	베벨 목록
+	Edit Bevels	베벨 편집
+	Edit Bevels…	베벨 편집…
+	{name} (document)	{name}(문서)
+	Reload Bevels	베벨 다시 불러오기
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Undo Changes	변경 내용 실행 취소
@@ -3600,6 +3606,7 @@ mark-style	Japanese	일본식
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
 	Type to search commands, tools, panels and effects	입력하여 명령, 도구, 패널 및 효과 검색
+	Clear Recent Commands	최근 명령 목록 지우기
 	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
@@ -6440,7 +6447,10 @@ lighting	Light	광원
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
-@msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel은 none, {_1} 중 하나 또는 {BEVEL_PROFILE}을(를) 함께 지정한 custom이어야 합니다
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom에는 베벨의 포인트인 {BEVEL_PROFILE}이(가) 필요합니다
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME}은(는) 문자열이어야 합니다
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}은(는) 2개에서 {most}개의 [x, y] 포인트여야 하며, 각 값은 0과 1 사이의 비율이고 [0, 0](끝면의 가장자리)에서 [1, 1](옆면 벽)까지여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}은(는) 심볼 “{symbol}”의 인스턴스로 입체를 만들 수 없습니다. 심볼의 아트를 사용할 수 없습니다
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: 클리핑 패스가 너무 복잡하여 아트를 자를 수 없습니다
@@ -10411,6 +10421,10 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Leaf Vine	잎 덩굴
+	Blossom Chain	꽃사슬
+	Pennant Garland	깃발 장식
+	Lantern String	등불 줄
 	Orbit Lines	궤도 선
 	Petal Garland	꽃잎 화환
 	Lattice Braid	격자 땋기
