@@ -276,6 +276,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Add Used Colors"), true, false) {
         app.run("swatch.addUsedColors", json!({})).ok();
     }
+    // The selected art's new colors, as global swatches its paints link to.
+    let art_selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
+    if menu_item(ui, tl!("Add Selected Colors"), art_selected, false) {
+        app.run("swatch.addUsedColors", json!({"selection": true, "global": true})).ok();
+    }
     ui.separator();
     if menu_item(ui, tl!("Sort by Name"), true, false) {
         app.run("swatch.sortByName", json!({})).ok();

@@ -1175,6 +1175,7 @@ impl Clipboard {
             char_styles: pick(Res::CharStyle, &src.char_styles),
             para_styles: pick(Res::ParaStyle, &src.para_styles),
             brushes,
+            set_densities: src.set_densities_of(&nodes),
             nodes,
             ..Default::default()
         }
