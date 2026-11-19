@@ -1392,7 +1392,8 @@ impl Clipboard {
         for a in self.brushes.iter().flat_map(Brush::art) {
             node_filters(a, &mut found);
         }
-        for g in &self.graph_designs {
+        // A design the document has under the same name stays its own, so its art here is not pasted.
+        for g in self.graph_designs.iter().filter(|g| !d.graph_designs.iter().any(|x| x.name == g.name)) {
             node_filters(&g.art, &mut found);
         }
         for g in &self.graphic_styles {
