@@ -282,7 +282,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "gpuPreference",
-        "From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.",
+        "From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.",
     ),
     (
         "lowLatencyDrawing",
@@ -339,6 +339,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "updateLinks",
         "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
+    ),
+    (
+        "pdfTextAs",
+        "The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.",
     ),
     (
         "templatesFolder",

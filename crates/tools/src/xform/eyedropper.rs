@@ -479,10 +479,15 @@ fn renumber(doc: &mut Document, n: &mut Node) {
 /// as that pixel).
 fn image_color_at(s: &Sampler, n: &Node, p: Point) -> Option<Color> {
     let NodeKind::Image(im) = &n.kind else { return None };
-    if im.xf.determinant().abs() < 1e-12 {
-        return None;
-    }
-    let px = im.xf.inverse() * p;
+    // A distorted image's pixel under `p` is found through its projective map.
+    let px = if n.is_distorted_image() {
+        n.image_map()?.inverse()?.apply(p)?
+    } else {
+        if im.xf.determinant().abs() < 1e-12 {
+            return None;
+        }
+        im.xf.inverse() * p
+    };
     let blob = s.doc.images.get(&im.key)?;
     let object = (im.width, im.height);
     if let Some(inks) = blob.sample_cmyk_object(px.x, px.y, object, s.raster_sample) {
@@ -1050,6 +1055,12 @@ mod tests {
         assert_eq!(sampled_hex(&EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &click)), "#00ff00");
         d.node_mut(l).unwrap().visible = false;
         assert!(EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &click).is_empty());
+        // Distorted with its left and right swapped, the blue pixel is drawn at the left.
+        d.node_mut(l).unwrap().visible = true;
+        let q = [(30.0, 0.0), (0.0, 0.0), (0.0, 10.0), (40.0, 10.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+        d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+        let left = PointerEvent::new(PointerKind::Down, 4.0, 5.0);
+        assert_eq!(sampled_hex(&EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &left)), "#0000ff");
     }
 
     /// #2276: a CMYK image gives its ink amounts as they are, not the RGB its decoder shows.
