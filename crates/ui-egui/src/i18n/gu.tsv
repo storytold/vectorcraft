@@ -5634,6 +5634,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Paint	રંગકામ
+	Flat Sweep	સપાટ લસરકો
+	Dry Drag	સૂકો ઘસારો
+	Loaded Stroke	ઘાટો પીંછીનો ઘસારો
+	Fan Sweep	પંખા જેવો લસરકો
 @msg	`at` must be "start" or "end"	`at` "start" અથવા "end" હોવું જોઈએ
 @msg	give exactly one of `through` and `toward`	`through` અને `toward` માંથી બરાબર એક આપો
 @msg	no arc fits these points: two are the same or all three lie on one line	આ પૉઇન્ટ્સમાં કોઈ આર્ક બેસતો નથી: બે એકસરખા છે અથવા ત્રણેય એક જ રેખા પર છે
