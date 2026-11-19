@@ -4492,7 +4492,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	當文件設定的語言為英文：美國且[正常字元樣式]未設定語言時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處加上斷字連字號，沒有連字號則從不斷字，與語言和大小寫無關。
 	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及透過「確定」設定新資料夾時載入，安全模式除外；要求權限的增效模組只在您授予權限後載入。網頁版不載入任何增效模組。
 	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	「大」為濾鏡或指令增效模組的每次執行提供至少 2.5 億個指令，時間限制不變；「正常」保留增效模組自己的預算。即時效果、轉存器和匯入器保留各自的預算。

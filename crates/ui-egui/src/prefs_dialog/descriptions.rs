@@ -224,7 +224,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Hyphenation
     (
         "hyphenationLanguage",
-        "New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.",
+        "New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.",
     ),
     (
         "hyphenationExceptions",
