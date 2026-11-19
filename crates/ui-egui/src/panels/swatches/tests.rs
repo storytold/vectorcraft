@@ -1421,6 +1421,15 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     menu_frame(app, ctx, vec![button(false)]);
 }
 
+/// Whether the panel menu's item `label` is enabled, as the accessibility tree reports it.
+fn menu_item_enabled(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> bool {
+    ctx.enable_accesskit();
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    footer_button(&out, label).1
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.
@@ -1583,10 +1592,12 @@ fn add_selected_colors_adds_the_selection_colors_as_global_swatches() {
     let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
     app.run("select.set", json!({"ids": []})).unwrap();
     let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    assert!(!menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "off with nothing selected");
     click_menu_item(&mut app, &ctx, "Add Selected Colors");
     assert_eq!(app.session.active().unwrap().doc, before, "off with nothing selected");
     assert_eq!(undo(&app), steps);
     app.run("select.set", json!({"ids": [picked]})).unwrap();
+    assert!(menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "on with art selected");
     let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
     click_menu_item(&mut app, &ctx, "Add Selected Colors");
     let doc = &app.session.active().unwrap().doc;

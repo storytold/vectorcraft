@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Used Colors",
             ["Window", "Swatches"],
             None,
-            "{selection?: false (only the selected art's colours; default: all the art's), global?: false (the new swatches are global and the matching unlinked colours in that art link to them)} add a swatch for each colour used (fills, strokes, text, gradient stops, mesh points) that no solid swatch has yet, as one undo step (none when there is no new color; the Swatches panel menu's Add Selected Colors sends selection and global) → {added: [names], linked}",
+            "{selection?: false (only the selected art's colours; default: all the art's), global?: false (the new swatches are global and the matching unlinked colours in that art link to them)} add a swatch for each colour used (fills, strokes, text, gradient stops, mesh points) that no solid swatch has yet, as one undo step (none when there is no new color; the Swatches panel menu's Add Selected Colors sends selection and global; with Global Edit on, the other members keep their colors) → {added: [names], linked}",
             has_doc,
             swatch_add_used
         ),
@@ -1048,12 +1048,17 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(ids)
     };
+    // Typing in progress is its own undo step and is in the document the colors are read from.
+    super::variablecmds::settle_typing(s)?;
     // With no new color there is nothing to add or link, so no edit and no undo step.
     let st = s.doc()?;
     if new_used_colors(&st.doc, &used_ids(&st.doc, &st.selection)?).is_empty() {
         return Ok(json!({"added": [], "linked": 0}));
     }
-    let (added, linked) = s.edit("Add Used Colors", |d, sel| {
+    // Linking a paint to its new swatch keeps its color, so Global Edit gives the link to no other
+    // member: a member whose color differs keeps it.
+    let global_edit = s.doc_mut()?.global_edit.take();
+    let edited = s.edit("Add Used Colors", |d, sel| {
         let ids = used_ids(&*d, &*sel)?;
         let colors = new_used_colors(d, &ids);
         let mut free = d.free_swatch_names();
@@ -1065,7 +1070,9 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let linked = if global { link_colors(d, &ids, &links) } else { 0 };
         Ok((links.into_iter().map(|(_, n)| n).collect::<Vec<_>>(), linked))
-    })?;
+    });
+    s.doc_mut()?.global_edit = global_edit;
+    let (added, linked) = edited?;
     Ok(json!({"added": added, "linked": linked}))
 }
 
