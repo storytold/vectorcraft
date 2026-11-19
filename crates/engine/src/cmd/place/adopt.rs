@@ -83,6 +83,9 @@ fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
                 for r in &mut t.runs {
                     paint_refs(&mut r.style.fill, f);
                     paint_refs(&mut r.style.stroke, f);
+                    if let Some(inline) = &mut r.inline {
+                        f(Ref::Symbol(&mut inline.symbol));
+                    }
                 }
             }
             NodeKind::Image(im) => f(Ref::Image(&mut im.key)),

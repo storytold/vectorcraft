@@ -136,6 +136,7 @@ fn capsule(source: &Document, palette: &Palette) -> Result<Document> {
         d.set_symbol_registration(&name, options.registration);
         d.set_symbol_export_type(&name, options.export_type);
         d.set_symbol_nine_slice(&name, options.nine_slice);
+        d.set_symbol_pixel_aligned(&name, options.pixel_aligned);
     }
     vectorcraft_brush::store(&mut d, &copy.brushes);
     palette.install(&mut d);

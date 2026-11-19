@@ -1599,3 +1599,153 @@ fn review_lookup_capture_and_apply(d: &Document, use_lab: bool) {
     review_lookup_assert_pattern(actual, pattern, brand, registration);
     review_lookup_assert_pattern(actual, "Profile lookup witness", brand, registration);
 }
+
+mod review_5970498365 {
+    use super::*;
+    use vectorcraft_doc::{CharStyle, InlineArt, TextObject, TextRun};
+
+    fn symbol_palette(inline: bool, pixel_aligned: bool) -> Document {
+        let mut d = raw_palette();
+        let badge = rectangle(&mut d, Paint::solid(Color::rgb8(29, 71, 113)));
+        d.symbols.push(Symbol { name: "Badge".into(), art: Arc::new(badge), dynamic: false });
+        d.set_symbol_pixel_aligned("Badge", pixel_aligned);
+        let kind = if inline {
+            let mut text = TextObject::point(Point::new(7.0, 13.0), "", CharStyle::default());
+            let art = InlineArt { symbol: "Badge".into(), scale: 1.25, baseline_shift: 2.5, bounds: None };
+            text.runs = vec![TextRun::inline(art, CharStyle::default())];
+            NodeKind::Text(Box::new(text))
+        } else {
+            NodeKind::SymbolInstance { symbol: "Badge".into(), xf: Affine::translate((7.0, 13.0)) }
+        };
+        let tile = Node::new(d.alloc_id(), kind);
+        d.patterns.push(PatternDef::new("Review tile", vec![Arc::new(tile)]));
+        d.swatches.push(Swatch {
+            name: "Review tile".into(),
+            paint: Paint::Pattern { pattern: "Review tile".into(), xf: Affine::translate((3.0, 5.0)) },
+            global: false,
+            spot: false,
+        });
+        d.fix_next_id();
+        d
+    }
+
+    fn tile_reference(d: &Document) -> (&str, &Node) {
+        let Paint::Pattern { pattern, .. } = &d.swatch("Review tile").unwrap().paint else { panic!("pattern swatch lost") };
+        let tile = d.pattern(pattern).expect("the palette pattern must resolve");
+        assert_eq!(tile.art.len(), 1);
+        let art = tile.art[0].as_ref();
+        let name = match &art.kind {
+            NodeKind::Text(text) => {
+                assert_eq!(text.runs.len(), 1);
+                &text.runs[0].inline.as_ref().expect("inline graphic run must survive").symbol
+            }
+            NodeKind::SymbolInstance { symbol, .. } => symbol,
+            _ => panic!("tile changed its stored art kind"),
+        };
+        (name, art)
+    }
+
+    fn assert_symbol_palette(d: &Document, saved: &Document, collision: bool) {
+        assert_palette(d, saved);
+        let (name, art) = tile_reference(d);
+        assert_eq!(name == "Badge", !collision, "only an actual name collision should remap the symbol");
+        let held = d.symbols.iter().find(|s| s.name == name).expect("the pattern's symbol reference must resolve");
+        let original = saved.symbols.iter().find(|s| s.name == "Badge").unwrap();
+        assert_eq!(held.dynamic, original.dynamic);
+        let mut expected = original.art.as_ref().clone();
+        expected.id = held.art.id;
+        assert_eq!(serde_json::to_value(held.art.as_ref()).unwrap(), serde_json::to_value(&expected).unwrap(), "symbol payload survives");
+        assert_eq!(d.symbol_pixel_aligned(name), saved.symbol_pixel_aligned("Badge"));
+        let mut expected = saved.pattern("Review tile").unwrap().art[0].as_ref().clone();
+        expected.id = art.id;
+        match &mut expected.kind {
+            NodeKind::Text(text) => text.runs[0].inline.as_mut().unwrap().symbol = name.to_string(),
+            NodeKind::SymbolInstance { symbol, .. } => *symbol = name.to_string(),
+            _ => panic!("source fixture lost its stored art kind"),
+        }
+        assert_eq!(
+            serde_json::to_value(art).unwrap(),
+            serde_json::to_value(&expected).unwrap(),
+            "only the verified resource name and allocated node ID may differ; stored text, placement and paint remain exact"
+        );
+    }
+
+    #[test]
+    fn default_swatches_review_inline_symbol_capsule_and_collision_remap() {
+        let _cms = color_context();
+        let mut source = Session::new();
+        source.add_document(symbol_palette(true, false), None);
+        let original = source.doc().unwrap().doc.clone();
+        let selection = source.doc().unwrap().selection.clone();
+        let history = source.doc().unwrap().history.undo.len();
+        source.execute("swatch.defaults.save", &json!({})).unwrap();
+        assert_eq!(source.doc().unwrap().doc, original);
+        assert_eq!(source.doc().unwrap().selection, selection);
+        assert_eq!(source.doc().unwrap().history.undo.len(), history);
+        let values = source.prefs.to_json();
+        let bytes = vectorcraft_format::base64_decode(values["defaultSwatches"]["data"].as_str().unwrap()).unwrap();
+        let capsule = vectorcraft_format::load_file(&bytes).unwrap().doc;
+        assert_symbol_palette(&capsule, &original, false);
+
+        let mut plain = restarted(&source);
+        plain.execute("file.new", &json!({"profile": null})).unwrap();
+        assert_symbol_palette(&plain.doc().unwrap().doc, &original, false);
+
+        let dir = TestDirectory::new();
+        let mut profile = Document::new(50.0, 50.0);
+        profile.ruler_origin = Point::new(9.0, 11.0);
+        let badge = rectangle(&mut profile, Paint::solid(Color::rgb8(255, 0, 0)));
+        profile.symbols.push(Symbol { name: "Badge".into(), art: Arc::new(badge), dynamic: false });
+        let mut user = TextObject::point(Point::new(2.0, 4.0), "", CharStyle::default());
+        user.runs = vec![TextRun::inline(InlineArt::new("Badge"), CharStyle::default())];
+        let user = Node::new(profile.alloc_id(), NodeKind::Text(Box::new(user)));
+        profile.symbols.push(Symbol { name: "Profile user".into(), art: Arc::new(user), dynamic: false });
+        profile.fix_next_id();
+        save_profile(&dir.0, &profile);
+        let mut customized = restarted(&source);
+        customized.attach_new_doc_profiles(dir.0.clone());
+        customized.execute("file.new", &json!({"profile": "Print"})).unwrap();
+        let doc = &customized.doc().unwrap().doc;
+        assert_symbol_palette(doc, &original, true);
+        assert_eq!(doc.ruler_origin, profile.ruler_origin);
+        for name in ["Badge", "Profile user"] {
+            let actual = doc.symbols.iter().find(|s| s.name == name).unwrap();
+            let saved = profile.symbols.iter().find(|s| s.name == name).unwrap();
+            let mut expected = saved.art.as_ref().clone();
+            expected.id = actual.art.id;
+            assert_eq!(actual.dynamic, saved.dynamic);
+            assert_eq!(
+                serde_json::to_value(actual.art.as_ref()).unwrap(),
+                serde_json::to_value(&expected).unwrap(),
+                "existing profile art must not relink"
+            );
+        }
+        assert_eq!(source.doc().unwrap().doc, original);
+    }
+
+    #[test]
+    fn default_swatches_review_symbol_pixel_alignment_round_trip() {
+        let _cms = color_context();
+        // The disabled standalone-symbol control precedes the enabled regression. Inline-resource
+        // discovery is not needed by either case, so it cannot mask a lost pixel-alignment option.
+        for aligned in [false, true] {
+            let mut source = Session::new();
+            source.add_document(symbol_palette(false, aligned), None);
+            let original = source.doc().unwrap().doc.clone();
+            let selection = source.doc().unwrap().selection.clone();
+            let history = source.doc().unwrap().history.undo.len();
+            source.execute("swatch.defaults.save", &json!({})).unwrap();
+            assert_eq!(source.doc().unwrap().doc, original);
+            assert_eq!(source.doc().unwrap().selection, selection);
+            assert_eq!(source.doc().unwrap().history.undo.len(), history);
+            let values = source.prefs.to_json();
+            let bytes = vectorcraft_format::base64_decode(values["defaultSwatches"]["data"].as_str().unwrap()).unwrap();
+            let capsule = vectorcraft_format::load_file(&bytes).unwrap().doc;
+            assert_symbol_palette(&capsule, &original, false);
+            let mut fresh = restarted(&source);
+            fresh.execute("file.new", &json!({"profile": null})).unwrap();
+            assert_symbol_palette(&fresh.doc().unwrap().doc, &original, false);
+            assert_eq!(source.doc().unwrap().doc, original);
+        }
+    }
+}
