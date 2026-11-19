@@ -704,9 +704,12 @@ fn action_id(cmd: &str, params: &serde_json::Value) -> Option<&'static str> {
 }
 
 /// The name More Options › Bar Actions lists for the bar's item `label`: without a field's colon
-/// (a full-width one too), the space some languages put before it, or a final ellipsis.
+/// (a full-width one too), the space some languages put before it, or a final ellipsis (`…` or
+/// `...`).
 pub(crate) fn bar_action_name(label: &str) -> &str {
-    label.trim_end().trim_end_matches([':', '：', '…']).trim_end()
+    let label = label.trim_end();
+    let label = label.strip_suffix("...").unwrap_or(label);
+    label.trim_end_matches([':', '：', '…']).trim_end()
 }
 
 /// Reads the Contextual Task Bar's actions and chips that are off, as kept in the preferences. Ids

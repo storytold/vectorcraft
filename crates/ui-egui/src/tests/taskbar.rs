@@ -1677,7 +1677,13 @@ fn bar_action_ids_are_distinct() {
 fn bar_actions_refuse_bad_params() {
     let mut app = app();
     show_action(&mut app, "group", false);
-    for p in [json!({"action": "teleport"}), json!({}), json!({"action": 3}), json!({"action": "unite", "visible": "yes"})] {
+    for p in [
+        json!({"action": "teleport"}),
+        json!({}),
+        json!({"action": 3}),
+        json!({"action": "unite", "visible": "yes"}),
+        json!({"action": "unite", "visible": null}),
+    ] {
         assert!(app.run("window.taskBar.actions", p.clone()).is_err(), "{p}");
     }
     let err = app.run("window.taskBar.actions", json!({"action": "teleport"})).unwrap_err();
@@ -2021,4 +2027,6 @@ fn bar_actions_list_names_without_a_colon_or_an_ellipsis() {
         assert_eq!(canvas::bar_action_name(label), name, "{code}: {label:?}");
     }
     assert_eq!(canvas::bar_action_name("Duplicate"), "Duplicate");
+    assert_eq!(canvas::bar_action_name("Tool Options..."), "Tool Options");
+    assert_eq!(canvas::bar_action_name("Offset Path."), "Offset Path.");
 }
