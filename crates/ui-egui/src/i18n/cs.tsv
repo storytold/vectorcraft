@@ -3108,6 +3108,10 @@ digits	Malayalam	Malajálamské
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:
 	Preserve CMYK Numbers	Zachovat hodnoty CMYK
+	Preserve RGB Numbers	Zachovat hodnoty RGB
+	Device to Simulate:	Simulované zařízení:
+	Simulate Paper Color	Simulovat barvu papíru
+	Simulate Black Ink	Simulovat černou barvu
 	Previous page	Předchozí stránka
 	Print Layers:	Tisknout vrstvy:
 	Print Preset:	Přednastavení tisku:
@@ -3185,6 +3189,10 @@ digits	Malayalam	Malajálamské
 	Add Color Tool	Nástroj Přidat barvu
 	Remove Color Tool	Nástroj Odstranit barvu
 	Remove Color	Odstranit barvu
+	Set As Base Color	Nastavit jako základní barvu
+	Select Shade	Vybrat odstín
+	Add New Color	Přidat novou barvu
+	Set Current Color As Base Color	Nastavit aktuální barvu jako základní
 	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
@@ -5713,6 +5721,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no native format	chybí nativní formát
 @msg	no pages	žádné stránky
 @msg	no pattern `{name}`	vzorek `{name}` neexistuje
+@msg	art painted with `{name}` can't be its tile	kresba vybarvená vzorkem `{name}` nemůže být jeho dlaždicí
 @msg	no perspective grid preset named `{name}`	přednastavení perspektivní mřížky s názvem `{name}` neexistuje
 @msg	no plug-in {0} is installed	zásuvný modul {0} není nainstalován
 @msg	no plug-in {id} is installed	zásuvný modul {id} není nainstalován
@@ -6504,6 +6513,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Arrow	Šipka
 	Arrow (open)	Šipka (otevřená)
 	Barbed	S protihroty
+arrowhead	Feather	Pírko
 	Half Arrow (left)	Poloviční šipka (vlevo)
 	Half Arrow (right)	Poloviční šipka (vpravo)
 	Concave	Vkleslá
@@ -6531,6 +6541,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Kite	Deltoid
 	Triangle to Bar	Trojúhelník k příčce
 	Oval	Ovál
+	Line Arrow	Čárová šipka
 # Colour harmony rules (Color Guide, Recolor Artwork, Color Themes)
 	Complementary	Komplementární
 	Complementary 2	Komplementární 2
@@ -8299,6 +8310,7 @@ breakText	Glyphs	Glyfy
 	Remove Strokes	Odebrat tahy
 	Place Brush Art	Umístit kresbu štětce
 	Replace Brush Art	Nahradit kresbu štětce
+	Replace Pattern Art	Nahradit kresbu vzorku
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
 	Apply to Strokes	Použít na tahy
 	Leave Strokes	Ponechat tahy
@@ -10721,6 +10733,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Engraving	Rytina
+	Fine Hatching	Jemné šrafování
+	Dense Hatching	Husté šrafování
+	Tapered Hatching	Zúžené šrafování
+	Broken Hatching	Přerušované šrafování
 	Image Brush	Obrazové štětce
 	Soft Bloom	Jemný květ
 	Halftone Field	Polotónové pole

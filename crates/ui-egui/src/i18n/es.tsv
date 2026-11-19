@@ -1707,6 +1707,10 @@ font-technology	Variable	Variables
 	Add Color Tool	Herramienta Añadir color
 	Remove Color Tool	Herramienta Eliminar color
 	Remove Color	Eliminar color
+	Set As Base Color	Establecer como color base
+	Select Shade	Seleccionar matiz
+	Add New Color	Añadir nuevo color
+	Set Current Color As Base Color	Establecer el color actual como color base
 	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
@@ -2866,6 +2870,10 @@ font-technology	Variable	Variables
 	Preserve Alpha Transparency	Conservar transparencia alfa
 	Preserve Appearance and Overprints	Conservar apariencia y sobreimpresiones
 	Preserve CMYK Numbers	Conservar valores CMYK
+	Preserve RGB Numbers	Conservar valores RGB
+	Device to Simulate:	Dispositivo que simular:
+	Simulate Paper Color	Simular color del papel
+	Simulate Black Ink	Simular tinta negra
 	Preserve Editing Capabilities	Conservar capacidades de edición
 	Preserve editing capabilities	Conservar capacidades de edición
 	Preserve Lightness	Conservar luminosidad
@@ -5401,6 +5409,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no native format	no hay formato nativo
 @msg	no pages	no hay páginas
 @msg	no pattern `{name}`	no existe el motivo `{name}`
+@msg	art painted with `{name}` can't be its tile	una ilustración pintada con `{name}` no puede ser su azulejo
 @msg	no perspective grid preset named `{name}`	no hay ningún preajuste de cuadrícula de perspectiva llamado `{name}`
 @msg	no plug-in {0} is installed	no hay ningún plugin {0} instalado
 @msg	no plug-in {id} is installed	no hay ningún plugin {id} instalado
@@ -6457,6 +6466,8 @@ effect	Regular	Regular
 	Arrow	Flecha
 	Arrow (open)	Flecha (abierta)
 	Barbed	Con púas
+arrowhead	Feather	Emplumado
+arrowhead	Target	Diana
 	Half Arrow (left)	Media flecha (izquierda)
 	Half Arrow (right)	Media flecha (derecha)
 	Concave	Cóncava
@@ -6484,6 +6495,7 @@ effect	Regular	Regular
 	Kite	Cometa
 	Triangle to Bar	Triángulo a barra
 	Oval	Óvalo
+	Line Arrow	Flecha de líneas
 	Complementary	Complementario
 	Complementary 2	Complementario 2
 	Split Complementary	Complementario dividido
@@ -8275,6 +8287,7 @@ breakText	Glyphs	Glifos
 	Remove Strokes	Quitar trazos
 	Place Brush Art	Colocar ilustración del pincel
 	Replace Brush Art	Reemplazar ilustración del pincel
+	Replace Pattern Art	Reemplazar ilustración del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
 	Apply to Strokes	Aplicar a los trazos
 	Leave Strokes	Dejar los trazos
@@ -10613,6 +10626,11 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Engraving	Grabado
+	Fine Hatching	Rayado fino
+	Dense Hatching	Rayado denso
+	Tapered Hatching	Rayado afilado
+	Broken Hatching	Rayado discontinuo
 	Image Brush	Pinceles de imagen
 	Soft Bloom	Flor suave
 	Halftone Field	Campo de semitonos

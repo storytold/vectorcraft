@@ -1617,6 +1617,10 @@ font-technology	Variable	Değişken
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır
+	Set As Base Color	Temel renk olarak ayarla
+	Select Shade	Ton seç
+	Add New Color	Yeni renk ekle
+	Set Current Color As Base Color	Geçerli rengi temel renk olarak ayarla
 	Find the selected colors in the artwork	Seçili renkleri resimde bul
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
@@ -1925,6 +1929,7 @@ font-technology	Variable	Değişken
 	Limit to Library:	Kütüphaneyle Sınırlama:
 	Limit:	Sınır:
 	Line	Hat
+	Line Arrow	Çizgi Ok
 	Line Art and Text Resolution:	Çizgi Sanatı ve Metin Çözünürlüğü:
 	Line Breaks	Satır Sonları
 	Line Color	Çizgi Rengi
@@ -2635,6 +2640,10 @@ shape	Open	Açık
 	Preserve Alpha Transparency	Alfa Şeffaflığını Koruyun
 	Preserve Appearance and Overprints	Görünümü ve Üst Baskıları Koru
 	Preserve CMYK Numbers	CMYK Numaralarını Koru
+	Preserve RGB Numbers	RGB Numaralarını Koru
+	Device to Simulate:	Simüle Edilecek Aygıt:
+	Simulate Paper Color	Kağıt Rengini Simüle Et
+	Simulate Black Ink	Siyah Mürekkebi Simüle Et
 	Preserve Editing Capabilities	Düzenleme Yeteneklerini Koruyun
 	Preserve editing capabilities	Düzenleme yeteneklerini koruyun
 	Preserve Lightness	Hafifliği Koruyun
@@ -5110,6 +5119,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no native format	yerel format yok
 @msg	no pages	sayfa yok
 @msg	no pattern `{name}`	`{name}` deseni yok
+@msg	art painted with `{name}` can't be its tile	`{name}` ile boyanmış resim onun döşemesi olamaz
 @msg	no perspective grid preset named `{name}`	`{name}` adında perspektif ızgarası ön ayarı yok
 @msg	no plug-in {0} is installed	{0} eklentisi kurulu değil
 @msg	no plug-in {id} is installed	{id} eklentisi kurulu değil
@@ -6253,6 +6263,7 @@ lighting	Light	Işık
 	B5	B5
 	Bar	Bar
 	Barbed	Dikenli
+arrowhead	Feather	Tüy
 	Baseline (Standard)	Temel (Standart)
 	Baseline Optimized	Temel Optimize Edilmiş
 	Basic	Temel
@@ -10189,6 +10200,7 @@ breakText	Glyphs	Glifler
 	Remove Strokes	Konturları Kaldır
 	Place Brush Art	Fırça Çizimini Yerleştir
 	Replace Brush Art	Fırça Çizimini Değiştir
+	Replace Pattern Art	Desen Çizimini Değiştir
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
 	Apply to Strokes	Konturlara Uygula
 	Leave Strokes	Konturları Bırak
@@ -10679,6 +10691,11 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Engraving	Gravür
+	Fine Hatching	İnce tarama
+	Dense Hatching	Yoğun tarama
+	Tapered Hatching	İncelen tarama
+	Broken Hatching	Kesikli tarama
 	Image Brush	Görsel Fırçaları
 	Soft Bloom	Yumuşak Çiçek
 	Halftone Field	Yarı Ton Alanı

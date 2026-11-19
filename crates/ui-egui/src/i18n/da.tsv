@@ -5632,6 +5632,10 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Placér siderne igen med placeringen
 	Placement:	Placering:
 	Preserve CMYK Numbers	Bevar CMYK-tal
+	Preserve RGB Numbers	Bevar RGB-tal
+	Device to Simulate:	Enhed, der simuleres:
+	Simulate Paper Color	Simulér papirfarve
+	Simulate Black Ink	Simulér sort blæk
 	Previous page	Forrige side
 	Print Layers:	Udskriv lag:
 	Print Preset:	Udskriftsforudindstilling:
@@ -5709,6 +5713,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve
+	Set As Base Color	Angiv som grundfarve
+	Select Shade	Vælg nuance
+	Add New Color	Tilføj ny farve
+	Set Current Color As Base Color	Angiv aktuel farve som grundfarve
 	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
@@ -7907,6 +7915,7 @@ imageTrace	Outline	Kontur
 @msg	no native format	intet indbygget format
 @msg	no pages	ingen sider
 @msg	no pattern `{name}`	intet mønster `{name}`
+@msg	art painted with `{name}` can't be its tile	grafik malet med `{name}` kan ikke være dens flise
 @msg	no perspective grid preset named `{name}`	ingen perspektivgitterforudindstilling med navnet `{name}`
 @msg	no plug-in {0} is installed	plug-in'et {0} er ikke installeret
 @msg	no plug-in {id} is installed	plug-in'et {id} er ikke installeret
@@ -8580,6 +8589,7 @@ imageTrace	Outline	Kontur
 	Arrow	Pil
 	Arrow (open)	Pil (åben)
 	Barbed	Modhager
+arrowhead	Feather	Fjer
 	Half Arrow (left)	Halvpil (venstre)
 	Half Arrow (right)	Halvpil (højre)
 	Concave	Konkav
@@ -8607,6 +8617,7 @@ imageTrace	Outline	Kontur
 	Kite	Drage
 	Triangle to Bar	Trekant til bjælke
 	Oval	Oval
+	Line Arrow	Stregpil
 	Complementary	Komplementær
 	Complementary 2	Komplementær 2
 	Split Complementary	Delt komplementær
@@ -10355,6 +10366,7 @@ breakText	Glyphs	Glyffer
 	Remove Strokes	Fjern streger
 	Place Brush Art	Placér penselgrafik
 	Replace Brush Art	Erstat penselgrafik
+	Replace Pattern Art	Erstat mønstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Streger bruger denne pensel. Anvend den nye grafik på stregerne, eller lad dem være, som de er, og tilføj en kopi af penslen med den nye grafik?
 	Apply to Strokes	Anvend på streger
 	Leave Strokes	Bevar streger
@@ -10783,6 +10795,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Engraving	Gravering
+	Fine Hatching	Fin skravering
+	Dense Hatching	Tæt skravering
+	Tapered Hatching	Tilspidset skravering
+	Broken Hatching	Afbrudt skravering
 	Image Brush	Billedpensler
 	Soft Bloom	Blød blomstring
 	Halftone Field	Halvtonefelt
