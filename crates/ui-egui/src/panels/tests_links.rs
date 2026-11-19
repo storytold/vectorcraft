@@ -242,6 +242,30 @@ fn opening_the_panel_on_the_selected_image_reads_the_list_again() {
     assert_eq!(drawn(&mut app, 2.1), 2, "the missing image's row and its Link Info are drawn");
 }
 
+/// The Show filter is set back to Show All from the rows the panel draws, not from the files as
+/// they were when the panel was asked to open: a missing image restored before the list is drawn
+/// still gets its row.
+#[test]
+fn opening_the_panel_on_the_selected_image_decides_the_filter_from_the_drawn_rows() {
+    let dir = Folder::new("show-selected-drawn");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "linked.png").count()
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    let bytes = std::fs::read(dir.0.join("linked.png")).unwrap();
+    std::fs::remove_file(dir.0.join("linked.png")).unwrap();
+    super::links::show_selected_image(&mut app, &ctx);
+    std::fs::write(dir.0.join("linked.png"), bytes).unwrap();
+    assert_eq!(drawn(&mut app, 2.0), 2, "the restored image's row and its Link Info are drawn");
+    assert_eq!(super::pstate::<Option<u64>>(&ctx, "links-scroll-to"), None, "the scroll request is used on the row");
+}
+
 /// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
 /// two-second recheck, another first selected image and an edit each store a new cache.
 #[test]

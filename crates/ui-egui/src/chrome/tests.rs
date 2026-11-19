@@ -4173,12 +4173,22 @@ fn the_linked_file_and_embedded_labels_open_the_links_panel() {
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
     let linked = app.run("file.place", json!({"path": path, "link": true})).unwrap()["ids"].clone();
     let embedded = app.run("file.place", json!({"path": path, "link": false})).unwrap()["ids"].clone();
+    // The default layout floats Links: dock it beside Layers so that both passes reach a docked panel.
+    app.run("window.panel", json!({"panel": links})).unwrap();
+    app.run("window.panel.dock", json!({"panel": links, "onto": "layers"})).unwrap();
+    // Whether Links floats, and whether its dock column is collapsed to icons.
+    let placed = |app: &crate::VectorcraftApp| {
+        let layout = crate::panel_docking::layout_of(&app.ui);
+        (layout.floating.iter().any(|w| w.panels().any(|p| p == links)), crate::panel_docking::in_iconic_column(&layout, links))
+    };
     for collapsed in [false, true] {
         app.run("window.collapseDock", json!({ "collapsed": collapsed })).unwrap();
         app.run("select.set", json!({ "ids": linked })).unwrap();
         assert!(click(&mut app, "Linked File"), "collapsed {collapsed}, status: {}", app.ui.status);
+        assert_eq!(placed(&app), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
         app.run("select.set", json!({ "ids": embedded })).unwrap();
         assert!(click(&mut app, "Embedded"), "collapsed {collapsed}, status: {}", app.ui.status);
+        assert_eq!(placed(&app), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
         app.run("select.set", json!({ "ids": [id] })).unwrap();
         let name = crate::panels::appearance::object_label(&app);
         assert!(!click(&mut app, name), "collapsed {collapsed}: a rectangle's label opens nothing");
