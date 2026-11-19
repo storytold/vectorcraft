@@ -20,6 +20,22 @@ fn settings() -> MutexGuard<'static, ()> {
     SETTINGS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The working Color Settings as a test found them, put back when it ends (a failing one too)
+/// before the next test takes its turn.
+struct Restored(cms::ColorSettings, #[allow(dead_code)] MutexGuard<'static, ()>);
+
+impl Drop for Restored {
+    fn drop(&mut self) {
+        let _ = cms::set_active(&self.0);
+    }
+}
+
+/// [`settings`], with the working Color Settings put back afterwards.
+fn restored_settings() -> Restored {
+    let g = settings();
+    Restored(cms::working_settings(), g)
+}
+
 #[test]
 fn color_settings_lists_profiles_and_validates() {
     let _g = settings();
@@ -929,8 +945,7 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
 /// proofs the same way. Without it the proof starts from the drawn pixels, which are the same.
 #[test]
 fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
-    let _g = settings();
-    let old = cms::active_settings();
+    let _g = restored_settings();
     let mut s = session();
     s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
     let k50 = json!({"c": 0, "m": 0, "y": 0, "k": 50});
@@ -968,7 +983,6 @@ fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
     let tint = cms::active().proof_srgb([1.0; 3], &paper).map(|v| (v * 255.0).round() as i32);
     let opts = RenderOptions { proof: Some(paper), background: Some([255, 255, 255, 255]), ..Default::default() };
     let bare = pixel(&Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels, 50, 115);
-    cms::set_active(&old).unwrap();
     assert_eq!(a, b, "the two builds show as one gray in Device CMYK");
     assert_eq!(pa, pb, "proofed from the pixels, they stay one gray");
     assert!(ca != cb, "proofed from their inks, they print differently: {ca:?} vs {cb:?}");
@@ -982,8 +996,7 @@ fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
 /// mask covers the same in a pattern's tile as outside one.
 #[test]
 fn preserve_cmyk_numbers_leaves_mask_images_in_pattern_tiles_as_they_are() {
-    let _g = settings();
-    let old = cms::active_settings();
+    let _g = restored_settings();
     let mut s = session();
     // A K100 square masked by a blue image, the same at (0, 0) and as a pattern's tile.
     let masked = |s: &mut Session, x: f64| {
@@ -1003,6 +1016,9 @@ fn preserve_cmyk_numbers_leaves_mask_images_in_pattern_tiles_as_they_are() {
     exec(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "Masked Tile", "edit": false}));
     let band = rect(&mut s, 0.0, 100.0, 200.0, 40.0);
     exec(&mut s, "paint.setFill", json!({"ids": [band.0], "swatch": "Masked Tile"}));
+    // An unmasked K100 square, for the color the masked one covers the page with.
+    let solid = rect(&mut s, 100.0, 0.0, 20.0, 20.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [solid.0], "color": {"c": 0, "m": 0, "y": 0, "k": 100}}));
     let proof = vectorcraft_render::proof::ProofSetup {
         target: vectorcraft_render::proof::ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
         preserve_numbers: true,
@@ -1010,18 +1026,25 @@ fn preserve_cmyk_numbers_leaves_mask_images_in_pattern_tiles_as_they_are() {
     };
     let doc = s.doc().unwrap().doc.clone();
     let pixel = |px: &[u8], x: usize, y: usize| [px[(y * 200 + x) * 4], px[(y * 200 + x) * 4 + 1], px[(y * 200 + x) * 4 + 2]];
+    // The masked square, the middle of a tile (the tiles start at the art's left and top edges,
+    // every 20 points), the unmasked square and the bare page.
     let shown = |proof: Option<vectorcraft_render::proof::ProofSetup>| {
         let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
         let px = Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels;
-        // The middle of a tile: the tiles start at the art's left and top edges, every 20 points.
-        (pixel(&px, 10, 10), pixel(&px, 50, 130))
+        (pixel(&px, 10, 10), pixel(&px, 50, 130), pixel(&px, 110, 10), pixel(&px, 190, 60))
     };
-    let (plain, plain_tile) = shown(None);
-    let (proofed, proofed_tile) = shown(Some(proof));
-    cms::set_active(&old).unwrap();
+    let (plain, plain_tile, plain_k, plain_page) = shown(None);
+    let (proofed, proofed_tile, proofed_k, proofed_page) = shown(Some(proof));
     let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(a, b)| (i32::from(*a) - i32::from(b)).abs() <= 2);
     assert!(plain != [255; 3] && near(plain, plain_tile), "the tile shows the masked square: {plain:?} vs {plain_tile:?}");
     assert!(near(proofed, proofed_tile), "the tile's mask covers as the square's does: {proofed:?} vs {proofed_tile:?}");
+    // The proof changes the ink's color but not how much of the page the mask lets it cover.
+    let channel = |v: [u8; 3], i: usize| f32::from(v[i]);
+    let cover = (0..3).map(|i| (channel(plain_page, i) - channel(plain, i)) / (channel(plain_page, i) - channel(plain_k, i))).sum::<f32>() / 3.0;
+    assert!(cover > 0.02 && cover < 0.98, "the mask covers part of the square: {cover}");
+    let want: [u8; 3] =
+        std::array::from_fn(|i| (channel(proofed_page, i) + cover * (channel(proofed_k, i) - channel(proofed_page, i))).round() as u8);
+    assert!(near(proofed, want), "the proofed square keeps the mask's coverage: {proofed:?} vs {want:?}");
 }
 
 /// Edit › Color Settings' color management policies decide what opening a document tagged with

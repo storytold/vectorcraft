@@ -43,22 +43,21 @@ const LABEL_W: f32 = 140.0;
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Proof Setup").into(), body, confirm, min_width: 420.0, ..DialogSpec::FORM };
 
-/// Open the dialog on the current proof setup.
+/// Open the dialog on the current proof setup. While it is open, it stays as it is, so Cancel
+/// still puts back the view it found first.
 pub fn open(app: &mut VectorcraftApp) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
+        return;
+    }
+    // A preview whose dialog another one replaced is undone before this dialog takes the view.
+    restore_replaced(app);
     let v = proof::view();
     let s = &v.setup;
     let device = match &s.target {
         ProofTarget::WorkingCmyk | ProofTarget::Cmyk(_) | ProofTarget::Rgb(_) => s.target.id(),
         _ => WORKING.to_string(),
     };
-    let before = json!({
-        "target": s.target.id(),
-        "intent": s.intent.id(),
-        "simulatePaper": s.simulate_paper,
-        "preserveNumbers": s.preserve_numbers,
-        "simulateBlack": s.simulate_black,
-        "proof": v.proof_colors,
-    });
+    let before = snapshot(&v);
     app.ui.dialog = Some(Dialog::new(
         KIND,
         json!({
@@ -71,6 +70,19 @@ pub fn open(app: &mut VectorcraftApp) {
             BEFORE: before,
         }),
     ));
+}
+
+/// The parts of the proof view `v` that Cancel puts back, as the dialog keeps them in `BEFORE`.
+fn snapshot(v: &proof::ProofView) -> Value {
+    let s = &v.setup;
+    json!({
+        "target": s.target.id(),
+        "intent": s.intent.id(),
+        "simulatePaper": s.simulate_paper,
+        "preserveNumbers": s.preserve_numbers,
+        "simulateBlack": s.simulate_black,
+        "proof": v.proof_colors,
+    })
 }
 
 /// The devices to simulate, as (`device` value, name shown): the working CMYK space, then every
@@ -162,32 +174,92 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// While Preview is on, the canvas shows the dialog's settings, sent again whenever they change;
 /// turned off, the earlier proof view comes back.
 fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
+    // Back from under another dialog that undid its preview, the dialog starts from the view the
+    // canvas shows now and previews again.
+    if d.fields.contains_key(PREVIEWED) && app.ui.proof_preview.is_none() {
+        d.fields.remove(PREVIEWED);
+    }
     if d.bool("preview") {
         let p = params(d);
         if d.fields.get(PREVIEWED) != Some(&p) {
+            // A preview that starts while the canvas shows no preview of this dialog (none yet, or a
+            // proof setup a command set since) takes the view the canvas shows now as the one to
+            // put back.
+            let v = proof::view();
+            let start = match &app.ui.proof_preview {
+                Some((_, previewed)) if dialog_part(&v) == dialog_part(previewed) => None,
+                _ => Some(snapshot(&v)),
+            };
             match app.run(CMD, p.clone()) {
                 Ok(_) => {
+                    if let Some(before) = start {
+                        d.fields.insert(BEFORE.into(), before);
+                    }
                     d.fields.insert(PREVIEWED.into(), p);
+                    app.ui.proof_preview = d.fields.get(BEFORE).map(|b| (b.clone(), proof::view()));
                 }
                 Err(e) => app.ui.status = e,
             }
         }
     } else if d.fields.remove(PREVIEWED).is_some() {
-        restore(app, d);
+        restore(app);
     }
 }
 
-/// Put back the proof view the dialog found.
-fn restore(app: &mut VectorcraftApp, d: &Dialog) {
-    if let Some(before) = d.fields.get(BEFORE).cloned()
-        && let Err(e) = app.run(CMD, before)
+/// Put back the proof view the dialog found before its preview. A proof setup set since the
+/// preview (by `view.proofSetup`, for example) stays.
+fn restore(app: &mut VectorcraftApp) {
+    if let Some((before, previewed)) = app.ui.proof_preview.take()
+        && dialog_part(&proof::view()) == dialog_part(&previewed)
     {
-        app.ui.status = e;
+        set_view(app, &before);
+    }
+}
+
+/// When another dialog has taken the place of a previewing Proof Setup dialog, put back the proof
+/// view that dialog found.
+pub(super) fn restore_replaced(app: &mut VectorcraftApp) {
+    if !app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
+        restore(app);
+    }
+}
+
+/// The parts of a proof view the dialog sets: the device, the intent, the three options and Proof
+/// Colors.
+fn dialog_part(v: &proof::ProofView) -> (&ProofTarget, Intent, bool, bool, bool, bool) {
+    let s = &v.setup;
+    (&s.target, s.intent, s.simulate_paper, s.preserve_numbers, s.simulate_black, v.proof_colors)
+}
+
+/// Set the proof view `before` holds and redraw the documents. The view is set directly, not
+/// through `view.proofSetup`, which refuses a device profile removed since it was set.
+fn set_view(app: &mut VectorcraftApp, before: &Value) {
+    let text = |k: &str| before.get(k).and_then(Value::as_str).unwrap_or_default();
+    let on = |k: &str| before.get(k).and_then(Value::as_bool).unwrap_or_default();
+    let (Some(target), Some(intent)) = (ProofTarget::parse(text("target")), Intent::parse(text("intent"))) else { return };
+    let mut v = proof::view();
+    let was = v.clone();
+    v.setup.target = target;
+    v.setup.intent = intent;
+    v.setup.simulate_paper = on("simulatePaper");
+    v.setup.preserve_numbers = on("preserveNumbers");
+    v.setup.simulate_black = on("simulateBlack");
+    v.proof_colors = on("proof");
+    if v == was {
+        return;
+    }
+    proof::set_view(v);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    for uid in uids {
+        if let Some(d) = app.session.document_mut(uid) {
+            d.revision += 1;
+        }
     }
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let r = app.run(CMD, params(d))?;
+    app.ui.proof_preview = None;
     app.ui.dialog = None;
     Ok(r)
 }
@@ -195,7 +267,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 /// Cancel: after a preview, the earlier proof view comes back.
 pub(super) fn cancel(app: &mut VectorcraftApp, d: &Dialog) {
     if d.fields.contains_key(PREVIEWED) {
-        restore(app, d);
+        restore(app);
     }
 }
 
@@ -510,6 +582,205 @@ mod tests {
         super::super::cancel(&mut app);
         assert!(app.ui.dialog.is_none());
         assert_eq!(proof::view(), before, "Cancel puts the view back");
+    }
+
+    /// Cancel and Preview off put back a proof view whose device profile was removed after it was
+    /// set, and redraw the documents.
+    #[test]
+    fn cancel_puts_back_a_view_whose_profile_was_removed() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let name = "Proof Setup Removed RGB";
+        cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(name.into())).unwrap();
+        app.run("view.proofSetup", json!({"target": format!("rgb:{name}"), "proof": true})).unwrap();
+        app.run("color.removeProfile", json!({"name": name})).unwrap();
+        let before = proof::view();
+        assert_eq!(before.setup.target, ProofTarget::Rgb(name.into()), "removing the profile leaves it the device");
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(WORKING));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::WorkingCmyk, "the preview shows the working CMYK");
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view(), before, "Preview off puts the view back");
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        frame(&mut app, &ctx);
+        let revision = app.session.doc().unwrap().revision;
+        super::super::cancel(&mut app);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(proof::view(), before, "Cancel puts the view back");
+        assert!(app.session.doc().unwrap().revision > revision, "the document redraws");
+    }
+
+    /// Run again while the dialog is open, Proof Setup keeps the dialog as it is, so Cancel still
+    /// puts back the view it found the first time.
+    #[test]
+    fn running_proof_setup_again_keeps_the_open_dialog() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("device"), rgb, "the open dialog stays as it is");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), before, "Cancel puts back the view the first run found");
+    }
+
+    /// When another dialog (Saturate) takes the place of a previewing Proof Setup dialog, the proof
+    /// view the dialog found comes back, and a later Proof Setup starts from that view.
+    #[test]
+    fn another_dialog_in_its_place_puts_the_view_back() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()), "the preview shows");
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("ui.saturateDialog", json!({})).unwrap();
+        frame(&mut app, &ctx);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, super::super::saturate::KIND);
+        assert_eq!(proof::view(), before, "the preview is undone");
+        super::super::cancel(&mut app);
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("device"), WORKING, "the next Proof Setup starts from the view it found");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), before);
+    }
+
+    /// Opened again before a frame has drawn the dialog that replaced a previewing Proof Setup
+    /// dialog, Proof Setup starts from the view the first dialog found, and Cancel keeps it.
+    #[test]
+    fn reopened_before_a_frame_starts_from_the_view_it_found() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()), "the preview shows");
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("ui.saturateDialog", json!({})).unwrap();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        assert_eq!(proof::view(), before, "the preview is undone");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("device"), WORKING);
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), before, "Cancel keeps the view the first dialog found");
+    }
+
+    /// A proof view set after another dialog replaced a previewing Proof Setup dialog, before a
+    /// frame, stays: the preview is not put back over it.
+    #[test]
+    fn a_view_set_after_the_replacement_stays() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("ui.saturateDialog", json!({})).unwrap();
+        app.run("view.proofSetup", json!({"target": "protanopia", "proof": true})).unwrap();
+        let set = proof::view();
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view(), set, "the view set after the replacement stays");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), set);
+    }
+
+    /// Overprint Preview turned on during the preview stays on when another dialog replaces the
+    /// dialog, and the proof setup the dialog found comes back.
+    #[test]
+    fn overprint_set_during_the_preview_stays_after_the_replacement() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        app.run("view.overprintPreview", json!({"on": true})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("ui.saturateDialog", json!({})).unwrap();
+        frame(&mut app, &ctx);
+        let v = proof::view();
+        assert!(v.overprint, "Overprint Preview stays on");
+        assert_eq!((v.setup, v.proof_colors), (before.setup, before.proof_colors), "the proof setup comes back");
+        super::super::cancel(&mut app);
+    }
+
+    /// Back from under a dialog opened over it (here Saturate, as a file-replacement question is),
+    /// which undid the preview, the dialog previews its settings again, and Cancel puts back the
+    /// view it found.
+    #[test]
+    fn back_from_under_another_dialog_it_previews_again() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        let before = proof::view();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        let under = app.ui.dialog.clone().unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("ui.saturateDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert(super::super::PARENT.into(), serde_json::to_value(under).unwrap());
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view(), before, "the preview is undone while the other dialog shows");
+        super::super::cancel(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND, "Proof Setup comes back");
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()), "the preview shows again");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), before, "Cancel puts back the view it found");
+    }
+
+    /// A proof setup set by a command while the dialog previews stays when Preview is turned off
+    /// and when the dialog is canceled.
+    #[test]
+    fn a_view_set_while_the_dialog_previews_stays() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        app.run("view.proofSetup", json!({"target": "protanopia", "proof": true})).unwrap();
+        let set = proof::view();
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view(), set, "Preview off keeps the view the command set");
+        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()), "the preview shows again");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), set, "Cancel puts back the view the command set");
+    }
+
+    /// After a command sets a proof setup while the dialog previews, a changed setting previews
+    /// again, and Cancel puts back the proof setup the command set.
+    #[test]
+    fn a_changed_setting_after_a_command_keeps_the_commands_view_for_cancel() {
+        let _v = DefaultView::new();
+        let (mut app, ctx) = app();
+        app.run("ui.proofSetupDialog", json!({})).unwrap();
+        let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+        app.ui.dialog.as_mut().unwrap().fields.insert("device".into(), json!(rgb));
+        frame(&mut app, &ctx);
+        app.run("view.proofSetup", json!({"target": "protanopia", "proof": true})).unwrap();
+        let set = proof::view();
+        app.ui.dialog.as_mut().unwrap().fields.insert("intent".into(), json!("perceptual"));
+        frame(&mut app, &ctx);
+        assert_eq!(proof::view().setup.intent, Intent::Perceptual, "the changed setting previews");
+        super::super::cancel(&mut app);
+        assert_eq!(proof::view(), set, "Cancel puts back the view the command set");
     }
 
     /// A device the dialog can't use (a profile that is not loaded) is refused, and the dialog

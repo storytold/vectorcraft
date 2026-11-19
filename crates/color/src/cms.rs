@@ -446,6 +446,15 @@ impl Cms {
             CmykSpace::Generic(g) => g.to_srgb(cmyk, absolute, bpc),
             CmykSpace::Device => naive_cmyk_to_rgb(cmyk),
             CmykSpace::Icc(p) => {
+                // With black-point compensation the profile's black maps onto sRGB black, as
+                // `cmyk_to_srgb` shows the working space.
+                if bpc
+                    && !absolute
+                    && let Some(srgb) = builtin_rgb_cache(SRGB)
+                    && let Some(v) = p.to_rgb_of(&srgb, &cmyk, Intent::RelativeColorimetric, true)
+                {
+                    return v;
+                }
                 let i = if absolute { Intent::AbsoluteColorimetric } else { Intent::RelativeColorimetric };
                 p.to_srgb(&cmyk, i).unwrap_or_else(|| naive_cmyk_to_rgb(cmyk))
             }
