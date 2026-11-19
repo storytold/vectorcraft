@@ -89,7 +89,8 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
 /// thumbnail size and DCS option keep their settings.
 pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let first = selected_images(app).first().copied();
-    set_pstate(ctx, "links-scroll-to", first);
+    let request = app.session.active().map(|st| st.uid).zip(first);
+    set_pstate(ctx, "links-scroll-to", request);
     // The list drawn next is read after this request, so a row a file change has just brought
     // into the Show filter is there to scroll to.
     let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
@@ -602,9 +603,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
-    // A Show filter that leaves out the row `show_selected_image` asks for goes back to Show All,
-    // decided from the rows this frame draws and scrolls through.
-    let scroll_to: Option<u64> = pstate(ui.ctx(), "links-scroll-to");
+    // The row that `show_selected_image` asks for, used by this draw only and only in the document
+    // it was asked in. A Show filter that leaves the row out goes back to Show All, decided from the
+    // rows this frame draws and scrolls through.
+    let request: Option<(u64, u64)> = pstate(ui.ctx(), "links-scroll-to");
+    if request.is_some() {
+        set_pstate::<Option<(u64, u64)>>(ui.ctx(), "links-scroll-to", None);
+    }
+    let uid = app.session.active().map(|st| st.uid);
+    let scroll_to = request.filter(|(doc, _)| Some(*doc) == uid).map(|(_, id)| id);
     let listed = |cache: &Cache, id: u64| cache.list["links"].as_array().is_some_and(|rows| rows.iter().any(|r| r["id"].as_u64() == Some(id)));
     if scroll_to.filter(|id| o.show != "all" && !listed(&cache, *id)).is_some() {
         set_options(ui.ctx(), |o| o.show = "all");
@@ -629,10 +636,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             };
             super::empty_state(ui, "link", tl!("No images"), detail);
             return;
-        }
-        // The row that `show_selected_image` asks the list to scroll to, once.
-        if scroll_to.is_some() {
-            set_pstate::<Option<u64>>(ui.ctx(), "links-scroll-to", None);
         }
         egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
             let h = o.thumb.max(16.0) + 6.0;

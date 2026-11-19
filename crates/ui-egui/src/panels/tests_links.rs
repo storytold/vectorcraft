@@ -263,7 +263,29 @@ fn opening_the_panel_on_the_selected_image_decides_the_filter_from_the_drawn_row
     super::links::show_selected_image(&mut app, &ctx);
     std::fs::write(dir.0.join("linked.png"), bytes).unwrap();
     assert_eq!(drawn(&mut app, 2.0), 2, "the restored image's row and its Link Info are drawn");
-    assert_eq!(super::pstate::<Option<u64>>(&ctx, "links-scroll-to"), None, "the scroll request is used on the row");
+    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the scroll request is used on the row");
+}
+
+/// A request to show the selected image applies only in the document it was made in: drawn for
+/// another document, the panel keeps its Show filter and drops the request.
+#[test]
+fn opening_the_panel_on_the_selected_image_leaves_another_document_alone() {
+    let dir = Folder::new("show-selected-other-doc");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let text = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    super::links::show_selected_image(&mut app, &ctx);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let other = text(&mut app, 2.0);
+    assert!(other.contains("Nothing matches the Show filter."), "the other document keeps Show Missing: {other}");
+    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the request is dropped");
 }
 
 /// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
