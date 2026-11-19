@@ -24,7 +24,8 @@ pub struct Action {
     pub id: u64,
     pub name: String,
     /// Use the live selection's reference for Align during playback; stored step params stay as recorded.
-    #[serde(default, rename = "automaticAlignTo", skip_serializing_if = "files::is_false")]
+    /// A saved value that is not true or false loads as false.
+    #[serde(default, rename = "automaticAlignTo", skip_serializing_if = "files::is_false", deserialize_with = "deserialize_automatic_align_to")]
     pub automatic_align_to: bool,
     pub steps: Vec<(String, Value)>,
     /// Step indexes omitted from playback. A sidecar keeps existing recorded command pairs and
@@ -300,6 +301,12 @@ fn deserialize_key<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Func
 fn deserialize_color<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     let v = <Value as serde::Deserialize>::deserialize(d)?;
     Ok(v.as_str().filter(|c| COLORS.iter().any(|(id, _)| id == c)).map(str::to_string))
+}
+
+/// Serde reader for [`Action::automatic_align_to`]: a value that is not true or false is false.
+fn deserialize_automatic_align_to<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or(false))
 }
 
 /// The color that params `p` give: `color`, one of [`COLORS`], or null or `""` for none.
@@ -5791,6 +5798,21 @@ mod tests {
             crate::keymap::lookup(&crate::keymap::keymap_with(&ui.shortcut_overrides), &shift_f12.chord().unwrap()).is_some(),
             "the command keeps its shortcut"
         );
+    }
+
+    /// A saved `automaticAlignTo` that is not true or false loads as false, and the rest of the
+    /// preferences still load.
+    #[test]
+    fn loaded_preferences_read_a_damaged_automatic_align_to_as_off() {
+        let app = app_with_sets();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        saved["action_sets"][0]["actions"][0]["automaticAlignTo"] = json!(true);
+        saved["action_sets"][0]["actions"][1]["automaticAlignTo"] = Value::Null;
+        saved["action_sets"][0]["actions"][2]["automaticAlignTo"] = json!("yes");
+        let ui = serde_json::from_value::<crate::UiState>(saved).unwrap();
+        let on = ui.action_sets[0].actions.iter().map(|a| a.automatic_align_to).collect::<Vec<_>>();
+        assert_eq!(on[..3], [true, false, false]);
+        assert_eq!(ui.action_sets.len(), app.ui.action_sets.len());
     }
 
     /// A document with one rectangle selected and the set "Moves" with one action that moves it
