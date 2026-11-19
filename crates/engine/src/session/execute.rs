@@ -1,6 +1,6 @@
 use super::{
-    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd, find_command,
-    given_ids, guard, strip_replay_only, waits_for_tool_edit,
+    CommandSpec, DRAWS_SHAPE, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd,
+    find_command, given_ids, guard, strip_replay_only, waits_for_tool_edit,
 };
 
 /// A command's result `r` with the warnings of the previews that settling an interaction applied
@@ -242,6 +242,7 @@ impl Session {
         let journaled = spec.journal || (self.depth == 0 && std::mem::take(&mut self.journal_query));
         if journaled && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
             let p = self.noted(params);
+            self.note_shape_drawn(id, &p);
             self.journal.push((id.to_string(), p));
         }
         if self.depth == 0 {
@@ -311,6 +312,32 @@ impl Session {
     /// Whether saved steps are playing ([`Session::set_replaying`]).
     pub fn replaying(&self) -> bool {
         self.replaying
+    }
+
+    /// Note that journal entry `id` with `params` drew a shape ([`DRAWS_SHAPE`], also on the active
+    /// perspective plane as `perspective.draw` naming one, and as a step of `command.batch`), unless
+    /// saved steps are playing or a script runs.
+    pub(crate) fn note_shape_drawn(&mut self, id: &str, params: &Value) {
+        let shape = |id: &str| DRAWS_SHAPE.contains(&id);
+        let draws = |id: &str, params: Option<&Value>| {
+            shape(id) || (id == "perspective.draw" && params.and_then(|p| p.get("command")).and_then(Value::as_str).is_some_and(shape))
+        };
+        let in_batch = || {
+            params.get("commands").and_then(Value::as_array).is_some_and(|steps| {
+                steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(|c| draws(c, step.get("params"))))
+            })
+        };
+        if !self.replaying && !self.script_in_run && (draws(id, Some(params)) || (id == "command.batch" && in_batch())) {
+            self.shape_drawn = true;
+        }
+    }
+
+    /// Whether a shape was drawn since the last call: a drag of a shape tool that was committed, OK
+    /// in its dialog, or a [`DRAWS_SHAPE`] command (alone or as a batch step). Saved steps that play
+    /// ([`Session::replay`]) and a script's commands do not count. A frontend that shows the
+    /// Transform panel after a new shape asks this.
+    pub fn take_shape_drawn(&mut self) -> bool {
+        std::mem::take(&mut self.shape_drawn)
     }
 
     /// The journal from entry `start` on, as an action records it: without the params that only

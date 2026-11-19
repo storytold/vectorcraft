@@ -76,17 +76,10 @@ pub(crate) fn shown_options(fields: &Map<String, Value>, current: &Result<Flatte
 
 /// [`options_editor`] on the option fields of a dialog: `o` and `unread` from [`shown_options`].
 /// Each option whose control was set is written into `fields`, also when it equals the value shown,
-/// so that it replaces a value of the wrong type; the other fields stay as they were entered. With
-/// `fixed_preserve`, the two Preserve switches show but can't be changed.
-pub(crate) fn fields_editor(
-    ui: &mut egui::Ui,
-    id: &str,
-    fields: &mut Map<String, Value>,
-    o: &mut FlattenOptions,
-    unread: &[String],
-    fixed_preserve: bool,
-) {
-    let set = editor(ui, id, o, true, fixed_preserve, unread);
+/// so that it replaces a value of the wrong type; the other fields stay as they were entered. The
+/// switches of the options named in `fixed` show but can't be changed.
+pub(crate) fn fields_editor(ui: &mut egui::Ui, id: &str, fields: &mut Map<String, Value>, o: &mut FlattenOptions, unread: &[String], fixed: &[&str]) {
+    let set = editor(ui, id, o, true, fixed, unread);
     let Ok(Value::Object(m)) = serde_json::to_value(&*o) else { return };
     for k in set {
         if let Some(v) = m.get(k) {
@@ -150,7 +143,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(10.0);
     // Values refused stay as entered, so that changing another option keeps them.
     let (mut o, unread) = shown_options(&d.fields, &current);
-    fields_editor(ui, "flatten-dialog", &mut d.fields, &mut o, &unread, false);
+    fields_editor(ui, "flatten-dialog", &mut d.fields, &mut o, &unread, &[]);
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
     }
@@ -227,15 +220,15 @@ const FIELD: f32 = 56.0;
 /// when one changed.
 pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool) -> bool {
     let before = o.clone();
-    editor(ui, id, o, enabled, false, &[]);
+    editor(ui, id, o, enabled, &[], &[]);
     *o != before
 }
 
-/// The option controls, with the value fields of the options named in `unread` blank. With
-/// `fixed_preserve`, Preserve Alpha Transparency and Preserve Overprints and Spot Colors show but
-/// can't be changed (the file format or another control sets them). Returns the keys of the
-/// options whose controls were set, also to the value they showed.
-fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fixed_preserve: bool, unread: &[String]) -> Vec<&'static str> {
+/// The option controls, with the value fields of the options named in `unread` blank. The
+/// switches of the options named in `fixed` show but can't be changed (the file format or another
+/// control sets them). Returns the keys of the options whose controls were set, also to the value
+/// they showed.
+fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fixed: &[&str], unread: &[String]) -> Vec<&'static str> {
     let t = Tokens::get(ui.ctx());
     let mut set = Vec::new();
     let field_value = |key: &str, v: f64| (!unread.iter().any(|k| k == key)).then_some(v);
@@ -289,16 +282,16 @@ fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fi
             }
         });
         ui.add_space(4.0);
-        let switches: [(&str, &mut bool, bool, &'static str); 6] = [
-            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines, false, "textToOutlines"),
-            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines, false, "strokesToOutlines"),
-            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions, false, "clipComplexRegions"),
-            (tl!("Anti-alias Rasters"), &mut o.anti_alias, false, "antiAlias"),
-            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha, fixed_preserve, "preserveAlpha"),
-            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints, fixed_preserve, "preserveOverprints"),
+        let switches: [(&str, &mut bool, &'static str); 6] = [
+            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines, "textToOutlines"),
+            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines, "strokesToOutlines"),
+            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions, "clipComplexRegions"),
+            (tl!("Anti-alias Rasters"), &mut o.anti_alias, "antiAlias"),
+            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha, "preserveAlpha"),
+            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints, "preserveOverprints"),
         ];
-        for (label, v, fixed, key) in switches {
-            if widgets::check(ui, label, *v, enabled && !fixed) {
+        for (label, v, key) in switches {
+            if widgets::check(ui, label, *v, enabled && !fixed.contains(&key)) {
                 *v = !*v;
                 set.push(key);
             }
