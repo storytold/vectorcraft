@@ -994,7 +994,7 @@ mod review_597185_domain_after {
     use vectorcraft_geom::kurbo::{CubicBez, QuadBez};
 
     fn contour(seg: PathSeg) -> Contours {
-        Contours { contours: vec![Contour { bounds: seg.bounding_box(), segments: vec![seg] }], segments: 1, exhausted: false }
+        Contours { contours: vec![Contour { bounds: Shape::bounding_box(&seg), segments: vec![seg] }], segments: 1, exhausted: false }
     }
 
     fn domain(bounds: Rect, open: [bool; 4]) -> ContactDomain {
