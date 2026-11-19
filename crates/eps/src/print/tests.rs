@@ -288,6 +288,29 @@ fn an_overprinting_gradient_with_a_hard_stop_at_an_end_keeps_the_ink_below_on_a_
     assert_keeps_the_ink_below_of(&cases, true);
 }
 
+#[test]
+fn an_overprinting_diamond_gradient_without_a_frame_keeps_the_ink_below_on_a_postscript_plate() {
+    // A vector of no length: the diamond is its color at 1 everywhere. With two stops at 1, that is
+    // the first of them, which ends the stretch before it, not the last stop.
+    let (inked, none) = (Color::cmyk(0.6, 0.3, 0.0, 0.0), Color::cmyk(0.0, 0.3, 0.0, 0.0));
+    let c = Point::new(100.0, 50.0);
+    let flat = GradientGeom { start: c, end: c, aspect: 0.7, focal: None };
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let cases = [
+        ("none last", [(0.0, inked), (1.0, inked), (1.0, none)]),
+        ("cyan last", [(0.0, none), (1.0, none), (1.0, inked)]),
+        ("none throughout", [(0.0, none), (0.5, none), (1.0, none)]),
+        ("cyan throughout", [(0.0, inked), (0.5, inked), (1.0, inked)]),
+    ];
+    let cases: Vec<_> = cases
+        .iter()
+        .map(|(name, stops)| {
+            (*name, overprinting(gradient(GradientKind::Diamond, stops, flat, GradientSpread::Pad), Paint::None), cyan.clone(), "Cyan")
+        })
+        .collect();
+    assert_keeps_the_ink_below(&cases);
+}
+
 /// [`keeps_the_ink_below`] for each of `cases` (a name, the art, the paint under it and the ink
 /// of the plate) at Level 3 and Level 2, with every case that fails named.
 fn assert_keeps_the_ink_below(cases: &[(&str, Node, Paint, &str)]) {
