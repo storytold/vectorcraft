@@ -10944,6 +10944,34 @@ hidden state and stay live on the group; none of them is copied onto the glyph p
 glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
+`type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
+an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
+glyph it is closest to when its leftover distance from that glyph, relative to the shape's size, is at most the
+tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
+and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
+and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
+a near match. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
+at a leftover distance of 0.05. A compound path that holds several
+glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
+inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the
+remaining groups can still all be matched, so an i's stem and dot become one i. A group whose contours run the other
+way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
+first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
+compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
+`unmatched`. Glyphs fused into one contour are not split, and a compound path of more than 256 groups or 512 contours
+is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
+matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
+most 50 million point comparisons per shape and 2 billion per command; past them, the glyphs not yet compared are left
+out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in
+selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
+limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
+are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
+in proportion are indexed.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{"tolerance":0.02}}}
+```
+
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
 Appearance describes) take an outlined frame of threaded text out of its thread with the text it shows, and the other
 frames keep the text they hold. When the thread's last frame is outlined, the text it has no room for, which its
@@ -12101,7 +12129,8 @@ on an open path that are not drawn because they fall before the path's start can
 
 `type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
-first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+first, by the matching `type.retype` uses, and it counts only exact matches of whole shapes: it does not split a
+compound path into glyphs or take near matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
 fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
 name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is

@@ -8,13 +8,22 @@
 //! best similarity transform (a Procrustes fit) leaves a tiny leftover distance, and the whole
 //! outline, turned onto the shape, must then lie on it. That holds for outlines made from a font
 //! the app has (Create Outlines' output, and other apps' that keep each glyph's contours whole and
-//! in the font's order). Near matches (other versions of a font, hinted or simplified outlines,
-//! faux styles, glyphs merged into one path) are left unmatched; fuzzy identification is phase 2.
+//! in the font's order).
+//!
+//! Near matches ([`RetypeIndex::near_matches`]) take a tolerance: the shape and the glyph are
+//! both read at equal steps of length from any start and in either direction, their contours paired
+//! by length, so outlines built another way (a simplified outline, a curve split in two, contours
+//! in another order or direction) still fit, and [`GlyphMatch::score`] says how closely.
+//! [`clusters`] splits a path holding several glyphs (a word outlined as one compound path) into
+//! the contour groups that can each be a glyph. Glyphs fused into one contour are not split.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use kurbo::{Affine, BezPath, CubicBez, Line, ParamCurve, ParamCurveArclen, ParamCurveNearest, PathEl, PathSeg, Point, QuadBez, Shape};
+use kurbo::{
+    Affine, BezPath, CubicBez, Line, ParamCurve, ParamCurveArclen, ParamCurveArea, ParamCurveNearest, PathEl, PathSeg, Point, QuadBez, Shape,
+};
 
 use crate::{FontDb, FontFace};
 
@@ -42,10 +51,38 @@ const OUTLINE_TOLERANCE: f64 = 5e-3;
 const MAX_OUTLINE_POINTS: usize = 8192;
 /// Points along an outline past which the whole-outline check gives up (and so rejects).
 const MAX_CHECKED_POINTS: usize = 65_536;
-/// The most glyphs one shape is reported to be ([`RetypeIndex::matches`]).
+/// The most glyphs one shape is reported to be ([`RetypeIndex::matches`]), and the most of one face
+/// [`RetypeIndex::near_matches`] reports.
 pub const MAX_CANDIDATES: usize = 16;
 /// How far apart two shapes' spread-to-length ratios may be and still be compared.
 const INVARIANT_SLACK: f64 = 0.02;
+/// The largest tolerance [`RetypeIndex::near_matches`] takes, and the leftover distance at which
+/// [`GlyphMatch::score`] reaches 0.
+pub const MAX_TOLERANCE: f64 = 0.05;
+/// Points sampled along each contour of a shape for near matching, per point of a glyph's.
+const NEAR_OVERSAMPLE: usize = 4;
+/// Shapes (and glyphs) with more contours than this are not near matched.
+const MAX_NEAR_CONTOURS: usize = 8;
+/// How far apart two shapes' spread-to-length ratios may be and still be near matched.
+const NEAR_INVARIANT_SLACK: f64 = 0.1;
+/// How far apart two shapes' area-to-squared-length ratios may be and still be near matched.
+const NEAR_COMPACT_SLACK: f64 = 0.15;
+/// Glyphs drawn to check whether they could near match a shape, at most.
+const MAX_NEAR_CHECKS: usize = 262_144;
+/// Glyphs indexed for near matching, at most.
+const MAX_NEAR_GLYPHS: usize = 32_768;
+/// Near keys [`RetypeIndex::build_near`] looks glyphs up by, at most: past them, the rest are left
+/// out.
+pub const MAX_NEAR_KEYS: usize = 1024;
+/// Point comparisons near matching makes in all, over every shape of one index: past them, shapes
+/// are not near matched.
+const NEAR_WORK: u64 = 2_000_000_000;
+/// Point comparisons near matching makes for one shape, at most.
+const NEAR_SHAPE_WORK: u64 = 50_000_000;
+/// Glyphs one shape is near matched against, at most: those closest to it in proportion.
+const NEAR_FITS: usize = 256;
+/// Contours [`clusters`] reads, at most: past it, none.
+const MAX_CLUSTER_CONTOURS: usize = 1024;
 
 /// One glyph an outlined shape matched.
 #[derive(Clone)]
@@ -62,6 +99,9 @@ pub struct GlyphMatch {
     pub origin: Point,
     /// The leftover distance, relative to the shape's spread.
     pub residual: f64,
+    /// Whether the shape is exactly the glyph ([`RetypeIndex::matches`]) rather than nearly
+    /// ([`RetypeIndex::near_matches`]).
+    pub exact: bool,
     /// How many contours the glyph has.
     pub contours: usize,
     /// Other poses the glyph fits the shape in equally (a glyph that looks the same turned).
@@ -80,6 +120,18 @@ pub struct Pose {
 }
 
 impl GlyphMatch {
+    /// How closely the glyph fits the shape: 1 for an exact match, and for a near one from 1 down
+    /// to 0 at a leftover distance of [`MAX_TOLERANCE`] or more.
+    pub fn score(&self) -> f64 {
+        if self.exact {
+            return 1.0;
+        }
+        if !self.residual.is_finite() {
+            return 0.0;
+        }
+        (1.0 - self.residual / MAX_TOLERANCE).clamp(0.0, 1.0)
+    }
+
     /// This match in each pose it fits: its own first, then [`Self::alts`].
     pub fn poses(&self) -> impl Iterator<Item = GlyphMatch> + '_ {
         let own = Pose { scale: self.scale, angle: self.angle, origin: self.origin };
@@ -102,6 +154,8 @@ struct Signature {
     spread: f64,
     /// `spread` / the total contour length: unchanged by scale, turn and move.
     invariant: f64,
+    /// Each contour's length.
+    lens: Vec<f64>,
 }
 
 struct Entry {
@@ -120,6 +174,8 @@ pub struct RetypeIndex {
     entries: Vec<Entry>,
     /// Entry indices by contour count, sorted by invariant.
     buckets: HashMap<usize, Vec<usize>>,
+    /// The point comparisons [`Self::near_matches`] may still make, over every shape.
+    near_work: AtomicU64,
 }
 
 impl RetypeIndex {
@@ -128,6 +184,32 @@ impl RetypeIndex {
     /// they are not sampled. Outlines are read past the shared outline cache, which keeps the
     /// canvas's glyphs.
     pub fn build(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>, keys: &BTreeSet<u64>) -> Self {
+        Self::build_near(db, faces, keys, &[])
+    }
+
+    /// [`Self::build`], also indexing for [`Self::near_matches`] the glyphs that could near match
+    /// a shape with one of the [`near_key`]s in `near` (the first [`MAX_NEAR_KEYS`]): the same
+    /// number of contours (at most 8) and a close area-to-length ratio. At most 262,144 glyphs are
+    /// drawn to check that, and at most 32,768 indexed for it, each face taking an equal share of
+    /// both; of a face's glyphs, those closest in that ratio are indexed.
+    pub fn build_near(db: &FontDb, faces: impl IntoIterator<Item = Arc<FontFace>>, keys: &BTreeSet<u64>, near: &[NearKey]) -> Self {
+        Self::build_near_within(db, faces, keys, near, MAX_NEAR_GLYPHS)
+    }
+
+    /// [`Self::build_near`] indexing at most `near_glyphs` glyphs for near matching.
+    fn build_near_within(
+        db: &FontDb,
+        faces: impl IntoIterator<Item = Arc<FontFace>>,
+        keys: &BTreeSet<u64>,
+        near: &[NearKey],
+        near_glyphs: usize,
+    ) -> Self {
+        let near: Vec<NearKey> = near
+            .iter()
+            .copied()
+            .filter(|k| k.contours <= MAX_NEAR_CONTOURS && k.compact.is_finite() && k.compact > 0.0)
+            .take(MAX_NEAR_KEYS)
+            .collect();
         let mut kept: Vec<Arc<FontFace>> = vec![];
         for f in faces {
             if kept.len() >= MAX_FACES {
@@ -137,17 +219,50 @@ impl RetypeIndex {
                 kept.push(f);
             }
         }
+        // Each face gets an equal share of the near checks and entries, so a face with many glyphs
+        // (a CJK face) does not use them up before the faces after it.
+        let share = |cap: usize| cap / kept.len().max(1);
         let mut entries = vec![];
         'faces: for (fi, face) in kept.iter().enumerate() {
-            for &(gid, ch, key) in face_keys(db, face).iter() {
+            let mut face_checks = 0usize;
+            // The face's glyphs that could near match, with how far their key is from the closest
+            // wanted one: the closest share of them are indexed, whatever their glyph order.
+            let keep = share(near_glyphs);
+            let mut close: Vec<(f64, u32, char, BezPath)> = vec![];
+            let trim = |close: &mut Vec<(f64, u32, char, BezPath)>| {
+                close.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+                close.truncate(keep);
+            };
+            for &(gid, ch, key, count) in face_keys(db, face).iter() {
                 // The budget holds inside a face too: no glyph is sampled past it.
                 if entries.len() >= MAX_GLYPHS {
                     break 'faces;
                 }
-                if !keys.contains(&key) {
+                if keys.contains(&key) {
+                    let outline = db.outline_uncached(face, gid);
+                    if let Some(sig) = signatures(&outline, false).into_iter().next() {
+                        entries.push(Entry { face: fi, gid, ch, sig, outline });
+                    }
                     continue;
                 }
+                let count = usize::from(count);
+                if keep == 0 || face_checks >= share(MAX_NEAR_CHECKS) || !near.iter().any(|k| k.contours == count) {
+                    continue;
+                }
+                face_checks += 1;
                 let outline = db.outline_uncached(face, gid);
+                let Some(g) = near_key(&outline) else { continue };
+                let Some(d) = near.iter().filter(|k| k.close_to(&g)).map(|k| k.apart(&g)).min_by(f64::total_cmp) else { continue };
+                close.push((d, gid, ch, outline));
+                if close.len() >= keep.saturating_mul(2) {
+                    trim(&mut close);
+                }
+            }
+            trim(&mut close);
+            for (_, gid, ch, outline) in close {
+                if entries.len() >= MAX_GLYPHS {
+                    break 'faces;
+                }
                 if let Some(sig) = signatures(&outline, false).into_iter().next() {
                     entries.push(Entry { face: fi, gid, ch, sig, outline });
                 }
@@ -163,7 +278,7 @@ impl RetypeIndex {
                 x.total_cmp(&y)
             });
         }
-        RetypeIndex { faces: kept, entries, buckets }
+        RetypeIndex { faces: kept, entries, buckets, near_work: AtomicU64::new(NEAR_WORK) }
     }
 
     /// The faces indexed.
@@ -195,7 +310,23 @@ impl RetypeIndex {
     /// Every glyph `shape` fits exactly, in every face, in the order of [`RetypeIndex::matches`],
     /// which returns the first [`MAX_CANDIDATES`] of them.
     pub fn all_matches(&self, shape: &BezPath) -> Vec<GlyphMatch> {
-        let variants = signatures(shape, true);
+        self.matches_read(shape, shape)
+    }
+
+    /// [`Self::all_matches`], and when the shape fits no glyph as it is, its contours read the
+    /// other way round: for a part of a compound path, which Make Compound Path may have turned so
+    /// it cuts a hole in the paths behind it.
+    pub fn matches_either_way(&self, shape: &BezPath) -> Vec<GlyphMatch> {
+        let found = self.matches_read(shape, shape);
+        if !found.is_empty() {
+            return found;
+        }
+        self.matches_read(shape, &shape.reverse_subpaths())
+    }
+
+    /// [`Self::all_matches`] of `shape`, its contours read as in `reading` (the same outline).
+    fn matches_read(&self, shape: &BezPath, reading: &BezPath) -> Vec<GlyphMatch> {
+        let variants = signatures(reading, true);
         let Some(first) = variants.first() else { return vec![] };
         let Some(list) = self.buckets.get(&first.contours) else { return vec![] };
         let lo = first.invariant * (1.0 - INVARIANT_SLACK);
@@ -246,6 +377,7 @@ impl RetypeIndex {
                 angle: pose.angle,
                 origin: pose.origin,
                 residual,
+                exact: true,
                 contours: e.sig.contours,
                 alts: rest.iter().map(|(p, _)| *p).collect(),
             };
@@ -257,6 +389,441 @@ impl RetypeIndex {
         });
         out.into_iter().map(|(_, m)| m).collect()
     }
+
+    /// The glyphs `shape` (in document space) nearly is: every glyph of the index with as many
+    /// contours whose best fit leaves a leftover distance of at most `tolerance` (relative to the
+    /// shape's spread, at most [`MAX_TOLERANCE`]) and whose whole outline, turned onto the shape,
+    /// lies within three times the tolerance of it (at least 0.5%). The shape and the glyph are
+    /// read from any start, in either direction, with their contours paired by length, so the
+    /// shape need not be built as the glyph is. Upright ones first, then the closest; the other
+    /// turns a glyph fits in (at most 7) are kept in [`GlyphMatch::alts`]; at most
+    /// [`MAX_CANDIDATES`] for each face. Empty for a tolerance of 0 or less, and for shapes of more
+    /// than 8 contours. A shape is compared with at most the 256 glyphs closest to it in proportion
+    /// (the spread-to-length ratio, and the share of the length each contour has), closest first,
+    /// in at most 50 million point comparisons, and the index's calls make at most 2 billion in
+    /// all; once they are spent, the glyphs not yet compared are left out.
+    pub fn near_matches(&self, shape: &BezPath, tolerance: f64) -> Vec<GlyphMatch> {
+        // NaN too.
+        if tolerance.is_nan() || tolerance <= 0.0 {
+            return vec![];
+        }
+        let tolerance = tolerance.min(MAX_TOLERANCE);
+        let Some(s) = near_signature(shape) else { return vec![] };
+        let Some(list) = self.buckets.get(&s.contours) else { return vec![] };
+        let lo = s.invariant * (1.0 - NEAR_INVARIANT_SLACK);
+        let hi = s.invariant * (1.0 + NEAR_INVARIANT_SLACK);
+        let start = list.partition_point(|i| self.entries.get(*i).is_some_and(|e| e.sig.invariant < lo));
+        let tol = s.spread * OUTLINE_TOLERANCE.max(3.0 * tolerance);
+        let mut shape_flat: Option<Option<Flat>> = None;
+        let mut out: Vec<(usize, GlyphMatch)> = vec![];
+        // The glyphs closest to the shape in proportion, at most NEAR_FITS, closest first: their
+        // spread-to-length ratio, and the share of the length each contour has, longest first.
+        let shares = |sig: &Signature| {
+            let total: f64 = sig.lens.iter().sum();
+            let mut v: Vec<f64> = sig.lens.iter().map(|l| l / total).collect();
+            v.sort_by(|a, b| b.total_cmp(a));
+            v
+        };
+        let own = shares(&s);
+        let apart = |e: &Entry| {
+            let d = (e.sig.invariant - s.invariant).abs() / s.invariant + shares(&e.sig).iter().zip(&own).map(|(a, b)| (a - b).abs()).sum::<f64>();
+            if d.is_finite() { d } else { f64::INFINITY }
+        };
+        let mut near: Vec<(f64, &Entry)> =
+            list.iter().skip(start).filter_map(|i| self.entries.get(*i)).take_while(|e| e.sig.invariant <= hi).map(|e| (apart(e), e)).collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        near.truncate(NEAR_FITS);
+        let total = self.near_work.load(Ordering::Relaxed);
+        let mut work = total.min(NEAR_SHAPE_WORK);
+        let given = work;
+        for (_, e) in near {
+            if work == 0 {
+                break;
+            }
+            let Some(face) = self.faces.get(e.face) else { continue };
+            let fits = near_fit(&e.sig, &s, tolerance, &mut work);
+            let flat = shape_flat.get_or_insert_with(|| Flat::new(shape, tol));
+            let Some(flat) = flat.as_ref() else { break };
+            // Every turn the glyph fits the shape at, nearest upright first: the first is its
+            // pose, the others its alternatives (a glyph that looks alike turned).
+            let mut poses =
+                fits.into_iter().filter(|f| f.1 <= tolerance).filter_map(|(z, r)| Some((near_pose(e, &s, z, flat, tol)?, r))).take(MAX_NEAR_POSES);
+            let Some((pose, residual)) = poses.next() else { continue };
+            let m = GlyphMatch {
+                face: face.clone(),
+                gid: e.gid,
+                ch: e.ch,
+                scale: pose.scale,
+                angle: pose.angle,
+                origin: pose.origin,
+                residual,
+                exact: false,
+                contours: e.sig.contours,
+                alts: poses.map(|(p, _)| p).collect(),
+            };
+            out.push((e.face, m));
+        }
+        self.near_work.store(total.saturating_sub(given - work), Ordering::Relaxed);
+        let upright = |m: &GlyphMatch| wrapped(m.angle).abs() >= 1e-3;
+        out.sort_by(|a, b| {
+            upright(&a.1).cmp(&upright(&b.1)).then(a.1.residual.total_cmp(&b.1.residual)).then(a.0.cmp(&b.0)).then(a.1.ch.cmp(&b.1.ch))
+        });
+        keep_per_face(&mut out);
+        out.into_iter().map(|(_, m)| m).collect()
+    }
+}
+
+/// Turns of one glyph [`RetypeIndex::near_matches`] keeps, at most: its pose and its alternatives.
+const MAX_NEAR_POSES: usize = 8;
+
+/// `out` (each match with its face's index) without the matches past the first
+/// [`MAX_CANDIDATES`] of each face, so faces drawn alike (copies of one font under other names)
+/// do not crowd out the glyphs of the faces after them.
+fn keep_per_face(out: &mut Vec<(usize, GlyphMatch)>) {
+    let mut seen: HashMap<usize, usize> = HashMap::new();
+    out.retain(|(face, _)| {
+        let n = seen.entry(*face).or_default();
+        *n += 1;
+        *n <= MAX_CANDIDATES
+    });
+}
+
+/// Entry `e`'s pose on near-matching shape `s` at scaled turn `z`, when its whole outline, so
+/// placed, lies within `tol` of the shape's (`flat`).
+fn near_pose(e: &Entry, s: &Signature, z: (f64, f64), flat: &Flat, tol: f64) -> Option<Pose> {
+    let gc = mul(z, e.sig.centre);
+    let origin = Point::new(s.centre.x - gc.x, s.centre.y - gc.y);
+    let onto = Affine::new([z.0, z.1, -z.1, z.0, origin.x, origin.y]);
+    Flat::new(&(onto * e.outline.clone()), tol).is_some_and(|g| g.agrees(flat)).then(|| Pose { scale: z.0.hypot(z.1), angle: z.1.atan2(z.0), origin })
+}
+
+/// What near matching compares first: a shape's number of contours and its area over its squared
+/// length, both unchanged by scale, turn and move, and close for outlines drawn alike.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NearKey {
+    pub contours: usize,
+    pub compact: f64,
+}
+
+impl NearKey {
+    /// Could shapes with these keys near match?
+    fn close_to(&self, other: &NearKey) -> bool {
+        self.contours == other.contours && self.apart(other) <= NEAR_COMPACT_SLACK
+    }
+
+    /// How far apart the two keys' area-to-squared-length ratios are, relative to the larger.
+    fn apart(&self, other: &NearKey) -> f64 {
+        (self.compact - other.compact).abs() / self.compact.max(other.compact)
+    }
+}
+
+/// `path`'s [`NearKey`]; `None` past the size caps, for an empty shape or one of more than 8
+/// contours.
+pub fn near_key(path: &BezPath) -> Option<NearKey> {
+    let (cs, _, _) = measured(path)?;
+    if cs.is_empty() || cs.len() > MAX_NEAR_CONTOURS {
+        return None;
+    }
+    let (mut area, mut len) = (0.0, 0.0);
+    for (c, lens) in &cs {
+        area += c.iter().map(|s| s.signed_area()).sum::<f64>().abs();
+        len += lens.iter().sum::<f64>();
+    }
+    let compact = area / (len * len);
+    (compact.is_finite() && compact > 0.0).then_some(NearKey { contours: cs.len(), compact })
+}
+
+/// `path` read for near matching: points at equal steps of length along each contour from where
+/// it starts, [`NEAR_OVERSAMPLE`] times as many as a glyph's. `None` for more than 8 contours.
+fn near_signature(path: &BezPath) -> Option<Signature> {
+    let (cs, _, accuracy) = measured(path)?;
+    if cs.is_empty() || cs.len() > MAX_NEAR_CONTOURS {
+        return None;
+    }
+    let starts = vec![vec![0usize]; cs.len()];
+    let pick = vec![0usize; cs.len()];
+    sample(&cs, &starts, &pick, accuracy, SAMPLES * NEAR_OVERSAMPLE)
+}
+
+/// The scaled turn that best takes glyph `g`'s points onto near-matching shape `s`'s (read by
+/// [`near_signature`]), whatever contour each starts at, in either direction and order, and the
+/// leftover distance relative to the shape's spread. The longest contours are paired first and give
+/// the turns to try (spread over the circle when that pair fits about as well at many). Under each
+/// turn, every glyph contour takes the shape contour, start and direction closest to it, and the
+/// turn is fitted again over them all, for up to [`REFITS`] rounds. The turns that fit about
+/// equally well (a glyph that looks alike turned) and within `limit` are kept, the one nearest
+/// upright first ([`fits_within`]). Each point comparison is taken from `work`; none when it runs
+/// out before the first turn is fitted, and the turns fitted so far when it runs out after.
+fn near_fit(g: &Signature, s: &Signature, limit: f64, work: &mut u64) -> Vec<((f64, f64), f64)> {
+    fits_within(near_turns(g, s, work).unwrap_or_default(), limit)
+}
+
+/// The turns [`near_fit`] fits, each with its leftover distance.
+fn near_turns(g: &Signature, s: &Signature, work: &mut u64) -> Option<Vec<((f64, f64), f64)>> {
+    let nc = g.contours;
+    let m = SAMPLES * NEAR_OVERSAMPLE;
+    if nc == 0 || s.contours != nc || g.pts.len() != nc * SAMPLES || s.pts.len() != nc * m || g.lens.len() != nc || s.lens.len() != nc {
+        return None;
+    }
+    // Comparisons the longest pair's every start and direction take, and one round of pairing
+    // every contour and fitting the turn.
+    let first_cost = (4 * m * SAMPLES) as u64;
+    let round_cost = ((nc * (nc + 1) * m + 20 * nc) * SAMPLES) as u64;
+    let Some(left) = work.checked_sub(first_cost) else {
+        *work = 0;
+        return None;
+    };
+    *work = left;
+    let by_len = |lens: &[f64]| {
+        let mut o: Vec<usize> = (0..lens.len()).collect();
+        o.sort_by(|a, b| lens.get(*b).copied().unwrap_or(0.0).total_cmp(&lens.get(*a).copied().unwrap_or(0.0)));
+        o
+    };
+    let (go, so) = (by_len(&g.lens), by_len(&s.lens));
+    let (&ga, &sa) = (go.first()?, so.first()?);
+    let gpts = |c: usize| g.pts.get(c * SAMPLES..(c + 1) * SAMPLES);
+    let spts = |c: usize| s.pts.get(c * m..(c + 1) * m);
+    // The point of shape contour `b` matched to glyph sample j, from start k (in samples, and
+    // between two samples read on the line joining them), forward or back.
+    let at = |b: &[Point], k: f64, j: usize, back: bool| {
+        let step = (j * NEAR_OVERSAMPLE) as f64;
+        let x = (if back { k - step } else { k + step }).rem_euclid(m as f64);
+        let i = (x.floor() as usize).min(m - 1);
+        let (p, q) = (b.get(i).copied().unwrap_or(Point::ZERO), b.get((i + 1) % m).copied().unwrap_or(Point::ZERO));
+        p.lerp(q, x - i as f64)
+    };
+    // The fit of glyph contour `a` onto shape contour `b` from start k: Σ b·conj(a) and Σ|a|².
+    let sums = |a: &[Point], b: &[Point], k: f64, back: bool| {
+        let (mut re, mut im, mut aa) = (0.0, 0.0, 0.0);
+        for (j, p) in a.iter().enumerate() {
+            let q = at(b, k, j, back);
+            re += q.x * p.x + q.y * p.y;
+            im += q.y * p.x - q.x * p.y;
+            aa += p.x * p.x + p.y * p.y;
+        }
+        (re, im, aa)
+    };
+    let sse = |a: &[Point], b: &[Point], k: f64, back: bool, z: (f64, f64)| {
+        a.iter().enumerate().map(|(j, p)| at(b, k, j, back).distance_squared(mul(z, *p))).sum::<f64>()
+    };
+    // Every start and direction of the longest pair, with its own best turn.
+    let (a0, b0) = (gpts(ga)?, spts(sa)?);
+    let mut firsts: Vec<(f64, (f64, f64))> = vec![];
+    for back in [false, true] {
+        for k in 0..m {
+            let (re, im, aa) = sums(a0, b0, k as f64, back);
+            if aa <= 0.0 || !aa.is_finite() {
+                return None;
+            }
+            let z = (re / aa, im / aa);
+            firsts.push((sse(a0, b0, k as f64, back, z), z));
+        }
+    }
+    firsts.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let best = firsts.first()?.0;
+    // The turns that fit the longest pair about as well as the best. A longest contour that is
+    // nearly round fits at every angle, and only the other contours tell the turns apart, so
+    // besides the turns nearest upright, the best in each of TURN_BINS equal ranges of angle is
+    // tried, at most MAX_TURNS of them, evenly by angle.
+    const TURN_BINS: usize = 64;
+    const MAX_TURNS: usize = 24;
+    let window = best * 1.5 + 1e-12 * s.spread * s.spread;
+    let mut bins: Vec<Option<(f64, (f64, f64))>> = vec![None; TURN_BINS];
+    for &(e, z) in firsts.iter().take_while(|(e, _)| *e <= window) {
+        let ang = z.1.atan2(z.0);
+        if !ang.is_finite() {
+            continue;
+        }
+        let b = (((ang + std::f64::consts::PI) / std::f64::consts::TAU * TURN_BINS as f64) as usize).min(TURN_BINS - 1);
+        if let Some(slot) = bins.get_mut(b)
+            && slot.is_none_or(|(old, _)| e < old)
+        {
+            *slot = Some((e, z));
+        }
+    }
+    // First the best turn and up to five others nearest upright, told apart by their angle, then
+    // the spread ones.
+    let mut turns: Vec<(f64, f64)> = firsts.first().map(|f| f.1).into_iter().collect();
+    let mut upright: Vec<(f64, f64)> = firsts.iter().take_while(|(e, _)| *e <= window).map(|(_, z)| *z).collect();
+    upright.sort_by(|a, b| wrapped(a.1.atan2(a.0)).abs().total_cmp(&wrapped(b.1.atan2(b.0)).abs()));
+    for z in upright {
+        if turns.len() >= 6 {
+            break;
+        }
+        let ang = z.1.atan2(z.0);
+        if turns.iter().all(|t| wrapped(t.1.atan2(t.0) - ang).abs() > 0.05) {
+            turns.push(z);
+        }
+    }
+    // One contour: every start of it was tried above, and its own fit is final.
+    if nc > 1 {
+        let spread: Vec<(f64, f64)> = bins.into_iter().flatten().map(|(_, z)| z).collect();
+        let step = spread.len().div_ceil(MAX_TURNS).max(1);
+        turns.extend(spread.into_iter().step_by(step));
+    }
+    let rounds = if nc > 1 { REFITS } else { 1 };
+    let n = (nc * SAMPLES) as f64;
+    // Each glyph contour, longest first, takes the shape contour, start and direction that fit it
+    // best under turn `z`; then the turn is fitted over every pair. The new turn and the leftover
+    // distance; `None` inside for a fit with nothing to go on, and `None` for malformed readings.
+    let pair_and_fit = |z: (f64, f64)| -> Option<Option<((f64, f64), f64)>> {
+        let mut free: Vec<usize> = so.clone();
+        let mut pairs: Vec<(usize, usize, f64, bool)> = vec![];
+        for &gc in &go {
+            let a = gpts(gc)?;
+            let mut pick: Option<(f64, usize, f64, bool)> = None;
+            for (fi, &sc) in free.iter().enumerate() {
+                let b = spts(sc)?;
+                for back in [false, true] {
+                    for k in 0..m {
+                        let e = sse(a, b, k as f64, back, z);
+                        if pick.is_none_or(|p| e < p.0) {
+                            pick = Some((e, fi, k as f64, back));
+                        }
+                    }
+                }
+            }
+            let (mut e, fi, mut k, back) = pick?;
+            let sc = free.remove(fi);
+            // The start between samples: the shape's samples need not fall where the glyph's do.
+            let b = spts(sc)?;
+            let k0 = k;
+            for d in 1..16 {
+                let kd = k0 - 0.5 + d as f64 / 16.0;
+                let ed = sse(a, b, kd, back, z);
+                if ed < e {
+                    (e, k) = (ed, kd);
+                }
+            }
+            pairs.push((gc, sc, k, back));
+        }
+        let (mut re, mut im, mut aa) = (0.0, 0.0, 0.0);
+        for &(gc, sc, k, back) in &pairs {
+            let (r, i, a) = sums(gpts(gc)?, spts(sc)?, k, back);
+            re += r;
+            im += i;
+            aa += a;
+        }
+        if aa <= 0.0 || !aa.is_finite() {
+            return Some(None);
+        }
+        let z = (re / aa, im / aa);
+        let mut total = 0.0;
+        for &(gc, sc, k, back) in &pairs {
+            total += sse(gpts(gc)?, spts(sc)?, k, back, z);
+        }
+        let rel = (total / n).sqrt() / s.spread;
+        Some(rel.is_finite().then_some((z, rel)))
+    };
+    let mut results: Vec<((f64, f64), f64)> = vec![];
+    'turns: for z0 in turns {
+        // Each glyph contour is paired under the turn, the turn is fitted again over the pairs,
+        // and the contours are paired again under the new turn, until it settles: a turn that
+        // starts a little off (a round longest contour) moves onto the one the other contours set.
+        let mut z = z0;
+        let mut fitted: Option<((f64, f64), f64)> = None;
+        for _ in 0..rounds {
+            let Some(left) = work.checked_sub(round_cost) else {
+                *work = 0;
+                results.extend(fitted);
+                break 'turns;
+            };
+            *work = left;
+            let Some((nz, rel)) = pair_and_fit(z)? else { break };
+            let settled = (nz.0 - z.0).hypot(nz.1 - z.1) <= 1e-6 * z.0.hypot(z.1);
+            if fitted.is_none_or(|f| rel <= f.1) {
+                fitted = Some((nz, rel));
+            }
+            z = nz;
+            if settled {
+                break;
+            }
+        }
+        results.extend(fitted);
+    }
+    Some(results)
+}
+
+/// Of fitted turns and their leftover distances, those that fit about as well as the best (within
+/// 1.5 times its distance) and within `limit`, nearest upright first, one per turn (turns less
+/// than 0.001 apart are one); the best one alone when none is within `limit`.
+fn fits_within(results: Vec<((f64, f64), f64)>, limit: f64) -> Vec<((f64, f64), f64)> {
+    let best = results.iter().map(|r| r.1).fold(f64::INFINITY, f64::min);
+    let cap = (best * 1.5 + 1e-9).min(limit.max(best));
+    let turn = |r: &((f64, f64), f64)| r.0.1.atan2(r.0.0);
+    let mut kept: Vec<((f64, f64), f64)> = results.into_iter().filter(|r| r.1 <= cap).collect();
+    kept.sort_by(|a, b| wrapped(turn(a)).abs().total_cmp(&wrapped(turn(b)).abs()).then(a.1.total_cmp(&b.1)));
+    let mut out: Vec<((f64, f64), f64)> = vec![];
+    for r in kept {
+        if out.iter().all(|o| wrapped(turn(o) - turn(&r)).abs() >= 1e-3) {
+            out.push(r);
+        }
+    }
+    out
+}
+
+/// Rounds of pairing and fitting [`near_fit`] gives each turn, at most.
+const REFITS: usize = 4;
+
+/// `path`'s contours in groups that can each be one glyph: a contour with the contours that lie
+/// inside it (a letter's counters, and what lies inside those), in the order the outer contours
+/// come. A path of several glyphs (a word outlined as one compound path) gives one group per glyph
+/// part (an i gives two: its stem and its dot). Empty past 1,024 contours.
+pub fn clusters(path: &BezPath) -> Vec<BezPath> {
+    let mut subs: Vec<BezPath> = vec![];
+    for el in path.elements() {
+        match el {
+            PathEl::MoveTo(_) => {
+                if subs.len() >= MAX_CLUSTER_CONTOURS {
+                    return vec![];
+                }
+                subs.push(BezPath::new());
+                if let Some(s) = subs.last_mut() {
+                    s.push(*el);
+                }
+            }
+            _ => match subs.last_mut() {
+                Some(s) => s.push(*el),
+                None => return vec![],
+            },
+        }
+    }
+    let boxes: Vec<kurbo::Rect> = subs.iter().map(Shape::bounding_box).collect();
+    let starts: Vec<Option<Point>> = subs.iter().map(|s| s.elements().first().and_then(|e| e.end_point())).collect();
+    // Each contour's container: the smallest contour around it.
+    let parent: Vec<Option<usize>> = (0..subs.len())
+        .map(|i| {
+            let (Some(bi), Some(Some(p))) = (boxes.get(i), starts.get(i)) else { return None };
+            (0..subs.len())
+                .filter(|&j| j != i)
+                .filter_map(|j| Some((j, boxes.get(j)?, subs.get(j)?)))
+                .filter(|(_, bj, sj)| {
+                    bj.area() > bi.area() && bj.x0 <= bi.x0 && bj.y0 <= bi.y0 && bj.x1 >= bi.x1 && bj.y1 >= bi.y1 && sj.winding(*p) != 0
+                })
+                .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
+                .map(|(j, _, _)| j)
+        })
+        .collect();
+    let root = |mut i: usize| {
+        // Containers are strictly larger, so the chain ends; the bound keeps it so.
+        for _ in 0..subs.len() {
+            match parent.get(i).copied().flatten() {
+                Some(p) => i = p,
+                None => break,
+            }
+        }
+        i
+    };
+    let mut groups: Vec<(usize, BezPath)> = vec![];
+    for (i, s) in subs.iter().enumerate() {
+        let r = root(i);
+        match groups.iter_mut().find(|(g, _)| *g == r) {
+            Some((_, p)) => p.extend(s.iter()),
+            None => groups.push((r, s.clone())),
+        }
+    }
+    groups.sort_by_key(|(r, _)| *r);
+    groups.into_iter().map(|(_, p)| p).collect()
 }
 
 /// `a` wrapped into −π..π.
@@ -264,11 +831,11 @@ fn wrapped(a: f64) -> f64 {
     (a + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
 
-/// A face's glyphs as the index looks them up: (glyph, character, [`shape_key`]), one per glyph
-/// under the lowest character that maps to it.
-type FaceKeys = Arc<Vec<(u32, char, u64)>>;
+/// A face's glyphs as the index looks them up: (glyph, character, [`shape_key`], contours), one per
+/// glyph under the lowest character that maps to it.
+type FaceKeys = Arc<Vec<(u32, char, u64, u16)>>;
 
-/// How many glyph keys [`face_keys`] keeps in all (16 bytes each).
+/// How many glyph keys [`face_keys`] keeps in all (24 bytes each).
 const KEPT_KEYS: usize = 1 << 20;
 
 /// The faces' keys [`face_keys`] keeps, for the database generation they were read in.
@@ -306,7 +873,14 @@ fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
     }
     let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
     gids.sort_unstable();
-    let keys: FaceKeys = Arc::new(gids.into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect());
+    let keys: FaceKeys = Arc::new(
+        gids.into_iter()
+            .filter_map(|(gid, ch)| {
+                let (key, count) = key_and_count(&db.outline_uncached(face, gid))?;
+                Some((gid, ch, key, u16::try_from(count).ok()?))
+            })
+            .collect(),
+    );
     let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
     if k.generation != generation {
         return keys;
@@ -580,6 +1154,11 @@ fn contours(path: &BezPath) -> Option<Vec<Vec<PathSeg>>> {
 /// each of its contours has, in order, as [`contours`] reads them, hashed. Glyphs whose key no
 /// selected shape has are not sampled. `None` past the size caps or for an empty shape.
 pub fn shape_key(path: &BezPath) -> Option<u64> {
+    key_and_count(path).map(|(k, _)| k)
+}
+
+/// [`shape_key`] and the number of contours it counts.
+fn key_and_count(path: &BezPath) -> Option<(u64, usize)> {
     let cs = contours(path)?;
     if cs.is_empty() {
         return None;
@@ -592,32 +1171,14 @@ pub fn shape_key(path: &BezPath) -> Option<u64> {
             h = h.wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
-    Some(h)
+    Some((h, cs.len()))
 }
 
 /// `path` read for matching: one reading per choice of starting corners (the corner of each contour
 /// farthest from the centre of all the shape's corners; every tied corner when `all_ties`, else the
 /// first), at most [`MAX_VARIANTS`] tried. Empty for a shape with nothing to match.
 fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
-    let bounds = path.bounding_box();
-    let size = bounds.width().hypot(bounds.height());
-    if !size.is_finite() || size <= 0.0 {
-        return vec![];
-    }
-    let accuracy = size * 1e-6;
-    let Some(cs) = contours(path) else { return vec![] };
-    // Each contour with length, with its segments' lengths.
-    let cs: Vec<(Vec<PathSeg>, Vec<f64>)> = cs
-        .into_iter()
-        .map(|c| {
-            let lens: Vec<f64> = c.iter().map(|s| s.arclen(accuracy)).collect();
-            (c, lens)
-        })
-        .filter(|(_, lens)| {
-            let len: f64 = lens.iter().sum();
-            len.is_finite() && len > size * 1e-9
-        })
-        .collect();
+    let Some((cs, size, accuracy)) = measured(path) else { return vec![] };
     let corners: Vec<Point> = cs.iter().flat_map(|(c, _)| c.iter().map(|s| s.start())).collect();
     if corners.is_empty() {
         return vec![];
@@ -644,7 +1205,7 @@ fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
             break;
         }
         tried += 1;
-        if let Some(sig) = sample(&cs, &starts, &pick, accuracy) {
+        if let Some(sig) = sample(&cs, &starts, &pick, accuracy, SAMPLES) {
             out.push(sig);
         }
         // The next choice of tied corners (a counter in mixed radix).
@@ -662,19 +1223,47 @@ fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
     out
 }
 
-/// One reading of the contours `cs`, contour `i` starting at segment `starts[i][pick[i]]`.
-fn sample(cs: &[(Vec<PathSeg>, Vec<f64>)], starts: &[Vec<usize>], pick: &[usize], accuracy: f64) -> Option<Signature> {
-    let mut pts = Vec::with_capacity(cs.len() * SAMPLES);
+/// `path`'s contours as [`contours`] reads them, each with its segments' lengths, leaving out
+/// contours of no length, the shape's size (its bounding box's diagonal) and the accuracy lengths
+/// are measured to (a millionth of the size). `None` past the size caps and for a shape of no size.
+#[allow(clippy::type_complexity)]
+fn measured(path: &BezPath) -> Option<(Vec<(Vec<PathSeg>, Vec<f64>)>, f64, f64)> {
+    let bounds = path.bounding_box();
+    let size = bounds.width().hypot(bounds.height());
+    if !size.is_finite() || size <= 0.0 {
+        return None;
+    }
+    let accuracy = size * 1e-6;
+    let cs = contours(path)?
+        .into_iter()
+        .map(|c| {
+            let lens: Vec<f64> = c.iter().map(|s| s.arclen(accuracy)).collect();
+            (c, lens)
+        })
+        .filter(|(_, lens)| {
+            let len: f64 = lens.iter().sum();
+            len.is_finite() && len > size * 1e-9
+        })
+        .collect();
+    Some((cs, size, accuracy))
+}
+
+/// One reading of the contours `cs`, contour `i` starting at segment `starts[i][pick[i]]`, `n`
+/// points along each.
+fn sample(cs: &[(Vec<PathSeg>, Vec<f64>)], starts: &[Vec<usize>], pick: &[usize], accuracy: f64, n: usize) -> Option<Signature> {
+    let mut pts = Vec::with_capacity(cs.len() * n);
+    let mut lens_out = Vec::with_capacity(cs.len());
     let mut total = 0.0;
     for (((c, lens), s), p) in cs.iter().zip(starts).zip(pick) {
         let from = *s.get(*p)?;
         let m = c.len();
         let len: f64 = lens.iter().sum();
         total += len;
+        lens_out.push(len);
         let (mut k, mut before) = (0usize, 0.0);
         let at_k = |k: usize| (from + k) % m;
-        for j in 0..SAMPLES {
-            let at = len * j as f64 / SAMPLES as f64;
+        for j in 0..n {
+            let at = len * j as f64 / n as f64;
             while k + 1 < m && before + lens.get(at_k(k)).copied().unwrap_or(0.0) < at {
                 before += lens.get(at_k(k)).copied().unwrap_or(0.0);
                 k += 1;
@@ -696,7 +1285,7 @@ fn sample(cs: &[(Vec<PathSeg>, Vec<f64>)], starts: &[Vec<usize>], pick: &[usize]
     if !spread.is_finite() || spread <= 0.0 || !total.is_finite() || total <= 0.0 {
         return None;
     }
-    Some(Signature { contours: cs.len(), pts, centre, spread, invariant: spread / total })
+    Some(Signature { contours: cs.len(), pts, centre, spread, invariant: spread / total, lens: lens_out })
 }
 
 /// The first reading of `path` (for tests).
@@ -897,6 +1486,236 @@ mod tests {
         let t0 = std::time::Instant::now();
         assert!(signatures(&p, true).is_empty());
         assert!(t0.elapsed() < std::time::Duration::from_secs(5), "{:?}", t0.elapsed());
+    }
+
+    /// `p` flattened into lines `tol` from its curves, each contour started at its second point and
+    /// run backwards: a simplified outline built nothing like the original.
+    fn simplified(p: &BezPath, tol: f64) -> BezPath {
+        let mut contours: Vec<Vec<Point>> = vec![];
+        kurbo::flatten(p.iter(), tol, |el| match el {
+            PathEl::MoveTo(q) => contours.push(vec![q]),
+            PathEl::LineTo(q) => {
+                if let Some(c) = contours.last_mut() {
+                    c.push(q);
+                }
+            }
+            _ => {}
+        });
+        let mut out = BezPath::new();
+        for mut c in contours {
+            c.rotate_left(1);
+            c.reverse();
+            out.move_to(c[0]);
+            for q in &c[1..] {
+                out.line_to(*q);
+            }
+            out.close_path();
+        }
+        out
+    }
+
+    fn near_residual(glyph: &BezPath, shape: &BezPath) -> f64 {
+        near_fit_all(&signature(glyph).unwrap(), &near_signature(shape).unwrap()).map_or(f64::INFINITY, |(_, r)| r)
+    }
+
+    /// [`near_fit`]'s first fit, with no limit on its work.
+    fn near_fit_all(g: &Signature, s: &Signature) -> Option<((f64, f64), f64)> {
+        let mut work = u64::MAX;
+        near_fit(g, s, MAX_TOLERANCE, &mut work).into_iter().next()
+    }
+
+    /// [`fits_within`]'s first fit.
+    fn nearest_upright(results: Vec<((f64, f64), f64)>, limit: f64) -> Option<((f64, f64), f64)> {
+        fits_within(results, limit).into_iter().next()
+    }
+
+    #[test]
+    fn a_simplified_outline_near_matches_and_another_shape_does_not() {
+        let xf = Affine::translate((300.0, 200.0)) * Affine::rotate(0.4) * Affine::scale(0.024);
+        let shape = xf * simplified(&letter(), 2.0);
+        assert_ne!(shape_key(&shape), shape_key(&letter()), "built another way: the exact index never samples it");
+        assert!(best_fit(&letter(), &shape) > TOLERANCE, "no exact match");
+        let r = near_residual(&letter(), &shape);
+        assert!(r < 0.005, "near match {r}");
+        let (z, _) = near_fit_all(&signature(&letter()).unwrap(), &near_signature(&shape).unwrap()).unwrap();
+        // With too little work left, no fit, and nothing left after.
+        let mut work = 1000;
+        assert!(near_fit(&signature(&letter()).unwrap(), &near_signature(&shape).unwrap(), MAX_TOLERANCE, &mut work).is_empty());
+        assert_eq!(work, 0);
+        assert!((z.0.hypot(z.1) - 0.024).abs() < 0.024 * 0.01 && (z.1.atan2(z.0) - 0.4).abs() < 0.01, "{z:?}");
+        let (a, b) = (near_key(&letter()).unwrap(), near_key(&shape).unwrap());
+        assert!(a.close_to(&b), "{a:?} {b:?}");
+        // The exact reading of the letter itself near matches it too, with next to nothing left over.
+        assert!(near_residual(&letter(), &letter()) < 1e-3);
+        // A box is not near a circle.
+        let mut o = BezPath::new();
+        o.extend(kurbo::Circle::new((200.0, -350.0), 300.0).path_elements(0.1));
+        let mut box_ = BezPath::new();
+        box_.extend(kurbo::Rect::new(0.0, -700.0, 600.0, 0.0).path_elements(0.1));
+        assert!(near_residual(&o, &box_) > MAX_TOLERANCE);
+        assert!(!near_key(&o).unwrap().close_to(&near_key(&box_).unwrap()));
+    }
+
+    #[test]
+    fn a_turned_round_glyph_near_matches_upright() {
+        // A circle fits at every turn: the turn kept is the upright one.
+        let mut o = BezPath::new();
+        o.extend(kurbo::Circle::new((0.0, 0.0), 300.0).path_elements(0.1));
+        let (z, r) = near_fit_all(&signature(&o).unwrap(), &near_signature(&simplified(&o, 1.0)).unwrap()).unwrap();
+        assert!(r < 0.005, "{r}");
+        assert!(z.1.atan2(z.0).abs() < 0.06, "{z:?}");
+    }
+
+    #[test]
+    fn the_upright_turn_is_kept_only_within_the_limit() {
+        let turned = |a: f64, r: f64| ((a.cos(), a.sin()), r);
+        // The best fit is turned a quarter round; an upright one fits nearly as well.
+        let fits = || vec![turned(std::f64::consts::FRAC_PI_2, 0.010), turned(0.0, 0.014)];
+        let angle = |f: Option<((f64, f64), f64)>| f.map(|((c, s), _)| s.atan2(c));
+        assert_eq!(angle(nearest_upright(fits(), 0.02)), Some(0.0), "both within the limit: the upright one");
+        let kept = nearest_upright(fits(), 0.012).unwrap();
+        assert!((kept.1 - 0.010).abs() < 1e-12, "only the best is within the limit: the best {kept:?}");
+        let kept = nearest_upright(fits(), 0.005).unwrap();
+        assert!((kept.1 - 0.010).abs() < 1e-12, "none within the limit: the best {kept:?}");
+        assert!(nearest_upright(vec![], 0.05).is_none());
+        // Every turn within the limit is kept, upright first, once each.
+        let all = fits_within(
+            vec![turned(std::f64::consts::PI, 0.011), turned(std::f64::consts::FRAC_PI_2, 0.010), turned(0.0, 0.014), turned(1e-4, 0.0141)],
+            0.02,
+        );
+        let angles: Vec<f64> = all.iter().map(|((c, s), _)| s.atan2(*c)).collect();
+        assert_eq!(angles.len(), 3, "{angles:?}");
+        assert!(angles[0] == 0.0 && (angles[1] - std::f64::consts::FRAC_PI_2).abs() < 1e-12, "{angles:?}");
+    }
+
+    #[test]
+    fn a_curve_split_in_two_still_near_matches() {
+        // letter() with its cubic split at its middle: exactly another shape, nearly the same.
+        let (a, b) = kurbo::CubicBez::new((0.0, -700.0), (300.0, -700.0), (450.0, -600.0), (450.0, -480.0)).subdivide();
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        p.line_to((0.0, -700.0));
+        p.curve_to(a.p1, a.p2, a.p3);
+        p.curve_to(b.p1, b.p2, b.p3);
+        p.quad_to((450.0, -300.0), (120.0, -300.0));
+        p.line_to((120.0, 0.0));
+        p.close_path();
+        p.move_to((120.0, -600.0));
+        p.line_to((120.0, -400.0));
+        p.quad_to((330.0, -400.0), (330.0, -500.0));
+        p.quad_to((330.0, -600.0), (120.0, -600.0));
+        p.close_path();
+        assert_ne!(shape_key(&p), shape_key(&letter()));
+        let shape = Affine::translate((40.0, 90.0)) * Affine::scale(0.03) * p;
+        assert!(near_residual(&letter(), &shape) < 0.005);
+    }
+
+    #[test]
+    fn contours_in_another_order_still_near_match() {
+        // letter() with its counter first, simplified.
+        let l = letter();
+        let els = l.elements();
+        let second = els.iter().rposition(|e| matches!(e, PathEl::MoveTo(_))).unwrap();
+        let mut back = BezPath::new();
+        back.extend(els[second..].iter().copied());
+        back.extend(els[..second].iter().copied());
+        let shape = Affine::translate((40.0, 90.0)) * Affine::rotate(0.3) * Affine::scale(0.03) * simplified(&back, 2.0);
+        assert!(near_residual(&letter(), &shape) < 0.005);
+    }
+
+    #[test]
+    fn copies_of_a_font_do_not_crowd_out_the_faces_after_them() {
+        use crate::test_fonts::{HEIGHT_FAMILY, HEIGHT_OUTSIDE_FAMILY, HEIGHTLESS_FAMILY, NUMBERLESS_FAMILY};
+        // Source Sans 3 Regular and four copies of it under other names: each face has several
+        // glyphs drawn as the period (. · ∙ ․), more than MAX_CANDIDATES in all.
+        let db = FontDb::with_font_dirs(vec![]);
+        for bytes in [
+            crate::test_fonts::height_font(true),
+            crate::test_fonts::height_font(false),
+            crate::test_fonts::height_outside_font(),
+            crate::test_fonts::numberless_font(),
+        ] {
+            db.add_font(bytes.unwrap());
+        }
+        let faces: Vec<Arc<FontFace>> = ["Source Sans 3", HEIGHT_FAMILY, HEIGHTLESS_FAMILY, HEIGHT_OUTSIDE_FAMILY, NUMBERLESS_FAMILY]
+            .iter()
+            .map(|f| db.face(f, "Regular").unwrap())
+            .collect();
+        let gid = faces[0].mapped_chars().iter().find(|(c, _)| *c == '.').map(|(_, g)| *g).unwrap();
+        let period = Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * db.outline_uncached(&faces[0], gid);
+        let has_every_period = |found: &[GlyphMatch]| faces.iter().all(|f| found.iter().any(|m| m.ch == '.' && m.face.id() == f.id()));
+        let keys: BTreeSet<u64> = shape_key(&period).into_iter().collect();
+        let index = RetypeIndex::build(&db, faces.clone(), &keys);
+        // The parts of a split compound path are looked up in every face, as whole shapes are.
+        let found = index.matches_either_way(&period);
+        assert!(found.len() > MAX_CANDIDATES && has_every_period(&found), "exact: {} matches", found.len());
+        let simple = simplified(&period, 0.05);
+        let index = RetypeIndex::build_near(&db, faces.clone(), &BTreeSet::new(), &[near_key(&simple).unwrap()]);
+        let found = index.near_matches(&simple, 0.02);
+        assert!(found.len() > MAX_CANDIDATES && has_every_period(&found), "near: {} matches", found.len());
+    }
+
+    #[test]
+    fn a_face_past_its_near_share_keeps_the_glyphs_closest_to_the_shapes() {
+        // One glyph of the face is indexed for near matching: the one closest to a simplified o,
+        // whatever comes before the o in glyph order.
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let gid = face.mapped_chars().iter().find(|(c, _)| *c == 'o').map(|(_, g)| *g).unwrap();
+        let shape = Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * simplified(&db.outline_uncached(&face, gid), 4.0);
+        let key = near_key(&shape).unwrap();
+        let index = RetypeIndex::build_near_within(db, [face], &BTreeSet::new(), &[key], 1);
+        assert_eq!(index.len(), 1);
+        let found: Vec<char> = index.near_matches(&shape, 0.02).iter().map(|m| m.ch).collect();
+        // The Latin o or the Greek omicron, drawn the same.
+        assert!(found.iter().any(|c| matches!(c, 'o' | 'ο')), "{found:?}");
+    }
+
+    #[test]
+    fn a_round_glyph_with_an_off_centre_counter_near_matches_at_its_turn() {
+        // A round outer contour fits the shape at every turn; only the counter, off the centre,
+        // tells the turn, which is far from upright.
+        let polygon = |cx: f64, cy: f64, r: f64, n: usize, back: bool| {
+            let mut p = BezPath::new();
+            for i in 0..n {
+                let a = std::f64::consts::TAU * i as f64 / n as f64 * if back { -1.0 } else { 1.0 };
+                let q = Point::new(cx + r * a.cos(), cy + r * a.sin());
+                if i == 0 { p.move_to(q) } else { p.line_to(q) }
+            }
+            p.close_path();
+            p
+        };
+        // The outer contour has 720 corners: as round as the samples can tell.
+        let mut g = polygon(0.0, 0.0, 300.0, 720, false);
+        g.extend(polygon(120.0, 40.0, 80.0, 24, true).iter());
+        let xf = Affine::translate((500.0, 400.0)) * Affine::rotate(2.0) * Affine::scale(0.05);
+        let shape = xf * simplified(&g, 1.0);
+        let (z, r) = near_fit_all(&signature(&g).unwrap(), &near_signature(&shape).unwrap()).unwrap();
+        assert!(r < 0.01, "{r}");
+        assert!(wrapped(z.1.atan2(z.0) - 2.0).abs() < 0.02, "{z:?}");
+    }
+
+    #[test]
+    fn clusters_split_a_word_into_its_glyph_parts() {
+        let mut word = letter();
+        word.extend((Affine::translate((600.0, 0.0)) * letter()).iter());
+        // An i: a stem and a dot beside it.
+        word.extend(kurbo::Rect::new(1200.0, -500.0, 1260.0, 0.0).path_elements(0.1));
+        word.extend(kurbo::Circle::new((1230.0, -600.0), 40.0).path_elements(0.1));
+        let parts = clusters(&word);
+        assert_eq!(parts.len(), 4, "two letters (each with its counter), a stem and a dot");
+        assert_eq!(shape_key(&parts[0]), shape_key(&letter()));
+        assert_eq!(shape_key(&parts[1]), shape_key(&letter()));
+        assert_eq!(parts[2].elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count(), 1);
+        // A counter written before its outer contour still goes with it, in the outer's place.
+        let mut back = BezPath::new();
+        let l = letter();
+        let els = l.elements();
+        let second = els.iter().rposition(|e| matches!(e, PathEl::MoveTo(_))).unwrap();
+        back.extend(els[second..].iter().copied());
+        back.extend(els[..second].iter().copied());
+        assert_eq!(clusters(&back).len(), 1);
+        assert!(clusters(&BezPath::new()).is_empty());
     }
 
     #[test]
