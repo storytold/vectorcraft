@@ -82,8 +82,11 @@ impl TraceDivider {
         }
         let unit = v / length;
         let along = (p - a).dot(unit).clamp(0.0, length);
-        // A bounding-box handle under the pointer keeps its own drag.
-        ((a + unit * along).distance(p) <= cx.tol(HIT_PX) && !crate::select::bbox_handle_at(cx, p)).then_some(d)
+        // A bounding-box handle or a shown center point under the pointer keeps its own drag.
+        ((a + unit * along).distance(p) <= cx.tol(HIT_PX)
+            && !crate::select::bbox_handle_at(cx, p)
+            && crate::select::hit_center(cx, p, cx.point_tol()).is_none())
+        .then_some(d)
     }
 }
 
@@ -233,6 +236,27 @@ mod tests {
             assert!(matches!(drag.clone().finish()[..], [Action::Commit]));
             assert!(matches!(drag.cancel()[..], [Action::Cancel]));
         }
+    }
+
+    /// With Show Center on, a press on the center point where the divider crosses it moves the
+    /// object; the rest of the divider still takes a press.
+    #[test]
+    fn the_center_point_keeps_its_drag_on_the_divider() {
+        use vectorcraft_doc::{Appearance, LiveShape};
+        let paint = paint();
+        let mut selection = Selection::default();
+        let (mut doc, id) = traced(Affine::translate((10.0, 20.0)), "split", 0.5);
+        let xf = Affine::translate((10.0, 20.0));
+        let shape = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        let path = Node::path(doc.alloc_id(), shape.to_path(), Appearance::default_art());
+        doc.insert(Some(id), 1, path).unwrap();
+        doc.node_mut(id).unwrap().edit_attrs(|a| a.show_center = Some(true));
+        selection.set([id]);
+        let c = cx(&doc, &selection, &paint);
+        assert_eq!(crate::select::hit_center(&c, Point::new(60.0, 45.0), c.point_tol()).map(|(i, _)| i), Some(id));
+        assert_eq!(cursor(&c, Point::new(60.0, 45.0)), None, "the center point");
+        assert!(SplitDrag::hit(&c, Point::new(60.0, 45.0), Mods::default()).is_none(), "the center point");
+        assert_eq!(cursor(&c, Point::new(60.0, 33.0)), Some(Cursor::ResizeH));
     }
 
     /// Switching away from the Selection tool during a divider drag cancels it, as Escape does:
