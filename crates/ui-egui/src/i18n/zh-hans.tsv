@@ -89,6 +89,7 @@
 	Add to Selection	添加到选区
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
+	Add Selected Colors	添加所选颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
 	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
@@ -183,6 +184,10 @@ antiAlias	Sharp	锐利
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三点弧形工具
+	Three-Point Arc	三点弧形
+	Arc too large	弧形过大
+	Third Point Sets Direction	第三点指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -4849,6 +4854,10 @@ imageTrace	Outline	轮廓
 @msg	a guide has no curvature circle	参考线没有曲率圆
 @msg	the circle that matches the path there would reach past the canvas	在该处与路径曲率相符的圆会超出画布
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
+@msg	`at` must be "start" or "end"	`at` 必须是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 和 `toward` 必须且只能指定一个
+@msg	no arc fits these points: two are the same or all three lie on one line	没有弧形符合这些点：有两点相同，或三点共线
+@msg	give `at` only with `toward`	`at` 只能与 `toward` 一起指定
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
