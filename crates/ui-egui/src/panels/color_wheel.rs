@@ -581,7 +581,13 @@ fn replaced(app: &VectorcraftApp, tgt: &Target, behind: bool) -> Option<Color> {
 /// then displayed as the sRGB `shown`: `lch` while `c` still displays as `shown` (a chroma past the
 /// gamut and the hue of a gray stay), else `c`'s own.
 pub(crate) fn remembered_oklch(cms: &Cms, c: &Color, shown: [f32; 3], lch: [f64; 3]) -> [f64; 3] {
-    if cms.display_rgb(c) == shown { lch } else { oklab::to_oklch(cms.display_rgb(c)) }
+    if cms.display_rgb(c) == shown { lch } else { oklab::to_oklch(clipped_rgb(cms, c)) }
+}
+
+/// The display sRGB of `c` through `cms` clipped to sRGB: the color the slider rows show and edit
+/// for a color outside sRGB.
+fn clipped_rgb(cms: &Cms, c: &Color) -> [f32; 3] {
+    cms.display_rgb(c).map(|v| v.clamp(0.0, 1.0))
 }
 
 /// The color a track shows at OKLCH `lch`: the color itself inside sRGB, and outside it dimmed.
@@ -621,7 +627,7 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
     let enabled = color.is_some() && cms.rgb_is_srgb();
     let lch = match (color, recall::<[f64; 3]>(app, ui, OKLCH_MEMORY, tgt, color, cms)) {
         (Some(c), Some((shown, lch))) => remembered_oklch(cms, &c, shown, lch),
-        (Some(c), _) => oklab::to_oklch(cms.display_rgb(&c)),
+        (Some(c), _) => oklab::to_oklch(clipped_rgb(cms, &c)),
         (None, _) => [0.0; 3],
     };
     // Each row: its letter, its screen-reader name, the end of its range and the field's suffix.
@@ -707,7 +713,7 @@ const TRACK_SAMPLES: usize = 128;
 /// then displayed as the sRGB `shown`: `hsl` while `c` still displays as `shown` (the hue of a gray
 /// and the saturation of black and white stay), else `c`'s own.
 pub(crate) fn remembered_hsl(cms: &Cms, c: &Color, shown: [f32; 3], hsl: [f32; 3]) -> [f32; 3] {
-    if cms.display_rgb(c) == shown { hsl } else { rgb_to_hsl(cms.display_rgb(c)) }
+    if cms.display_rgb(c) == shown { hsl } else { rgb_to_hsl(clipped_rgb(cms, c)) }
 }
 
 /// The color a track shows at HSL `hsl`.
@@ -725,7 +731,7 @@ pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: O
     let enabled = color.is_some();
     let hsl = match (color, recall::<[f32; 3]>(app, ui, HSL_MEMORY, tgt, color, cms)) {
         (Some(c), Some((shown, hsl))) => remembered_hsl(cms, &c, shown, hsl),
-        (Some(c), _) => rgb_to_hsl(cms.display_rgb(&c)),
+        (Some(c), _) => rgb_to_hsl(clipped_rgb(cms, &c)),
         (None, _) => [0.0; 3],
     };
     // Each row: its letter, its screen-reader name, the end of its range and the field's suffix. The

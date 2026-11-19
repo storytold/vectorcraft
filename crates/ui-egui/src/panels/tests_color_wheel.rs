@@ -1095,6 +1095,24 @@ fn a_hue_on_a_gray_color_leaves_its_paint_gray() {
     }
 }
 
+/// For a fill outside sRGB, the HSL and OKLCH rows show the components of its display color
+/// clipped to sRGB, the color the panel shows, not of the unclipped one.
+#[test]
+fn the_rows_show_a_color_outside_srgb_clipped_to_srgb() {
+    let rgb = json!([1.6, 0.2, -0.4]);
+    let raw = cms::active().display_rgb(&fill(&app(rgb.clone())));
+    let clipped = raw.map(|v| v.clamp(0.0, 1.0));
+    assert_ne!(raw, clipped, "the fill lies outside sRGB");
+    let want_hsl = (f64::from(vectorcraft_color::rgb_to_hsl(clipped)[2]) * 100.0).round();
+    assert_ne!(want_hsl, (f64::from(vectorcraft_color::rgb_to_hsl(raw)[2]) * 100.0).round(), "the unclipped lightness differs");
+    let h = hsl_harness(app(rgb.clone()));
+    assert_eq!(oklch_slider(&h, "HSL Lightness").accesskit_node().numeric_value(), Some(want_hsl));
+    let want_l = (vectorcraft_color::oklab::to_oklch(clipped)[0] * 100.0).round();
+    assert_ne!(want_l, (vectorcraft_color::oklab::to_oklch(raw)[0] * 100.0).round(), "the unclipped OKLCH lightness differs");
+    let h = oklch_harness(app(rgb));
+    assert_eq!(oklch_slider(&h, "Lightness").accesskit_node().numeric_value(), Some(want_l));
+}
+
 /// The hue given to a gray is dropped once the panel shows another color, so the same gray applied
 /// again later shows its own hue, 0°.
 #[test]
