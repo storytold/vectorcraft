@@ -5474,6 +5474,90 @@ fn layers_drag_into_a_nested_live_paint_group_makes_the_outer_group_again() {
     assert_eq!(faces(&node(&s, outer)).len(), cut, "the outer group is made after the inner one");
 }
 
+/// A Live Paint group's sources group can't be dragged out of the group, which would leave faces
+/// and edges with no paths: the move is refused and changes nothing. A reorder within the group,
+/// and a copy dragged out, are allowed.
+#[test]
+fn layers_drag_keeps_the_sources_group_in_its_live_paint_group() {
+    use vectorcraft_tools::builder::{faces, is_live_paint, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    let src = sources(&node(&s, g)).unwrap().id;
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("layer.move", &json!({"ids": [src.0], "target": layer.0})).unwrap_err().to_string();
+    assert!(err.contains("sources group stays in the group"), "{err}");
+    let err = s.execute("node.move", &json!({"id": src.0, "parent": layer.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("sources group stays in the group"), "{err}");
+    assert!(s.doc().unwrap().doc == before.0, "nothing moved");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1);
+    s.execute("node.move", &json!({"id": src.0, "parent": g.0, "index": 99})).unwrap();
+    let n = node(&s, g);
+    assert!(is_live_paint(&n));
+    assert_eq!(sources(&n).unwrap().id, src);
+    assert_eq!(faces(&n).len(), 3);
+    s.execute("layer.move", &json!({"ids": [src.0], "target": layer.0, "copy": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(src), Some(g), "a copy leaves the sources group where it is");
+}
+
+/// A shown path dragged into a hidden group among a Live Paint group's paths stops cutting its
+/// faces, and dragged back out of it cuts them again.
+#[test]
+fn layers_drag_into_a_hidden_group_among_the_sources_makes_the_faces_again() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let first_source = |s: &Session| sources(&node(s, g)).unwrap().children().unwrap()[0].id;
+    let a = line_to_right_face(&mut s, 30.0);
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [a.0], "target": target.0, "place": "above"})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 5);
+    let b = line_to_right_face(&mut s, 70.0);
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let hidden = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.hide", &json!({"ids": [hidden.0]})).unwrap();
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [hidden.0], "target": target.0, "place": "above"})).unwrap();
+    let src = sources(&node(&s, g)).unwrap().id;
+    assert_eq!(s.doc().unwrap().doc.parent_of(hidden), Some(src));
+    assert_eq!(faces(&node(&s, g)).len(), 5, "a hidden group cuts nothing");
+    s.execute("layer.move", &json!({"ids": [a.0], "target": hidden.0, "place": "inside"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(hidden));
+    assert_eq!(faces(&node(&s, g)).len(), 3, "the path in the hidden group no longer cuts the faces");
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [a.0], "target": target.0, "place": "above"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sources(&node(&s, g)).unwrap().id));
+    assert_eq!(faces(&node(&s, g)).len(), 5, "back among the shown paths, it cuts them again");
+}
+
+/// A Live Paint group with no paths dragged into another one with none joins it: the drop is one
+/// "Merge Live Paint" step, and the group stays a Live Paint group with no faces or edges.
+#[test]
+fn layers_drag_of_an_empty_live_paint_group_into_another_joins_it() {
+    use vectorcraft_tools::builder::{edges, faces, is_live_paint, sources};
+    let mut s = session();
+    let empty = |s: &mut Session| {
+        let g = live(s);
+        let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+        for p in sources(&node(s, g)).unwrap().children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>() {
+            s.execute("layer.move", &json!({"ids": [p.0], "target": layer.0})).unwrap();
+        }
+        assert!(faces(&node(s, g)).is_empty());
+        g
+    };
+    let (g, h) = (empty(&mut s), empty(&mut s));
+    let r = s.execute("layer.move", &json!({"ids": [h.0], "target": g.0, "place": "inside"})).unwrap();
+    assert_eq!(r["ids"], json!([g.0]));
+    assert_eq!(undo_label(&s).as_deref(), Some("Merge Live Paint"));
+    let n = node(&s, g);
+    assert!(is_live_paint(&n));
+    assert!(sources(&n).unwrap().children().unwrap().is_empty());
+    assert!(faces(&n).is_empty() && edges(&n).is_empty());
+    assert!(s.doc().unwrap().doc.node(h).is_none(), "the dropped group joined");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(h).is_some());
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {
@@ -8615,6 +8699,54 @@ fn image_trace_view_is_stored_kept_and_validated() {
     assert!(s.execute("imageTrace.make", &json!({"view": 3})).is_err());
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     assert!(s.execute("imageTrace.setView", &json!({"id": a.0, "view": "outlines"})).is_err());
+}
+
+/// The Split view's divider is set with the view, kept when omitted, when tracing again and through
+/// save and open, adds no undo step when unchanged and one when changed, and is checked. On screen
+/// the source image shows left of it and the result right of it; exports draw the result.
+#[test]
+fn image_trace_split_view_keeps_and_validates_its_divider() {
+    let mut s = session();
+    let g = disc_on_blue(&mut s);
+    // The image covers 50 to 250 across; the disc 90 to 210, so the divider moves over the disc.
+    let r = s.execute("imageTrace.setView", &json!({"view": "split"})).unwrap();
+    assert_eq!((r["view"].as_str(), r["split"].as_f64()), (Some("split"), Some(0.5)));
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("imageTrace.setView", &json!({"view": "split", "split": 0.25})).unwrap();
+    assert_eq!(r["split"].as_f64(), Some(0.25));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert_eq!(node(&s, g).trace_split(), 0.25);
+    for same in [json!({"view": "split", "split": 0.25}), json!({"view": "split"})] {
+        let r = s.execute("imageTrace.setView", &same).unwrap();
+        assert_eq!(r["split"].as_f64(), Some(0.25), "{same}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "{same}: no undo step");
+    }
+    // Pixels at y = 60 (above the disc): the image's blue left of x = 100, white right of it.
+    let blue = |p: [u8; 4]| p[0] < 200 && p[2] > 245;
+    let white = |p: [u8; 4]| p[0] > 245 && p[1] > 245 && p[2] > 245;
+    let screen = render_doc(&s, true);
+    assert!(blue(screen.pixel(60, 60)) && blue(screen.pixel(95, 60)), "{:?}", screen.pixel(95, 60));
+    assert!(white(screen.pixel(105, 60)) && white(screen.pixel(240, 60)), "{:?}", screen.pixel(105, 60));
+    let export = render_doc(&s, false);
+    assert!(white(export.pixel(60, 60)), "exports draw the tracing result");
+    // Another view keeps the divider for when Split is chosen again.
+    s.execute("imageTrace.setView", &json!({"view": "outlines"})).unwrap();
+    assert_eq!(node(&s, g).trace_split(), 0.25);
+    s.execute("imageTrace.setView", &json!({"view": "split"})).unwrap();
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": {"ignoreWhite": true, "noise": 30}})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!((node(&s, g).trace_view(), node(&s, g).trace_split()), (vectorcraft_doc::TraceView::Split, 0.25), "tracing again");
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!((back.node(g).unwrap().trace_view(), back.node(g).unwrap().trace_split()), (vectorcraft_doc::TraceView::Split, 0.25));
+    // Bad dividers are refused and change nothing.
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-0.1), json!(1.01), json!("0.5"), json!(true), json!([0.5])] {
+        assert!(s.execute("imageTrace.setView", &json!({"view": "split", "split": bad})).is_err(), "{bad}");
+    }
+    assert_eq!((s.doc().unwrap().history.undo.len(), node(&s, g).trace_split()), (steps, 0.25));
+    for edge in [0.0, 1.0] {
+        s.execute("imageTrace.setView", &json!({"view": "split", "split": edge})).unwrap();
+        assert_eq!(node(&s, g).trace_split(), edge);
+    }
 }
 
 #[test]
