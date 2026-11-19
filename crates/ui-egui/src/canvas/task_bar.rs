@@ -650,10 +650,11 @@ impl Chip {
 /// (`window.taskBar.actions {action, visible?}`): each action's id, the command its button runs and
 /// the `tool` that command names, if any. An action that is off stays out of the bar, and More
 /// Options does not list it either; turning one off changes only the bar. Every action starts on.
-pub(crate) const TASK_BAR_ACTIONS: [(&str, &str, Option<&str>); 37] = [
+pub(crate) const TASK_BAR_ACTIONS: [(&str, &str, Option<&str>); 38] = [
     ("imageTrace", TASK_BAR_IMAGE_TRACE, None),
     ("cropImage", "ui.cropImage", None),
     ("removeBackground", crate::addons::image::REMOVE_BACKGROUND, None),
+    ("conceptToVector", crate::panels::concept_vector::OPEN, None),
     ("removeAnchorPoints", "path.removeAnchors", None),
     ("join", "path.join", None),
     ("cutPath", "path.cutAtAnchors", None),
