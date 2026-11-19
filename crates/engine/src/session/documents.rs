@@ -99,6 +99,8 @@ impl Session {
             scripts_dir: None,
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
+            proof_setup_dir: None,
+            proof_setup_saves: 0,
             script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,

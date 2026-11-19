@@ -585,6 +585,106 @@ fn a_polygon_takes_its_angle_radius_side_length_and_equal_sides() {
     }
 }
 
+/// Rectangle Angle and Ellipse Angle: `rectangleAngle` and `ellipseAngle` turn each selected live
+/// rectangle or ellipse about its own center, keeping its size, corners and pie, as one undo step.
+/// The angle it already has records no step, each key leaves the other kind as it is, and a value
+/// that is not a number is an error.
+#[test]
+fn a_rectangle_and_an_ellipse_take_their_angle() {
+    let (mut s, rect) = session();
+    run(&mut s, json!({"radius": 8}));
+    let ellipse = NodeId(s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap());
+    run(&mut s, json!({"pieStart": 30, "pieEnd": 120}));
+    let live = |s: &Session, id: NodeId| {
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        (n.live_shape().unwrap().clone(), n.geometric_bounds().unwrap())
+    };
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let angle = |s: &Session, id: NodeId| live(s, id).0.shape_angle().unwrap();
+    // The ellipse's center: the middle of its untransformed box, wherever its pie leaves the path.
+    let ellipse_center = |s: &Session| match live(s, ellipse).0 {
+        LiveShape::Ellipse { w, h, xf, .. } => xf * vectorcraft_geom::Point::new(w / 2.0, h / 2.0),
+        l => panic!("{l:?}"),
+    };
+    let center = ellipse_center(&s);
+
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    let n = steps(&s);
+    run(&mut s, json!({"rectangleAngle": 90}));
+    let (l, b) = live(&s, rect);
+    assert!(close(angle(&s, rect), 90.0), "{l:?}");
+    // 100 × 60 at (10, 10) turned about (60, 40): 60 wide, 100 tall, same center.
+    assert!(close(b.width(), 60.0) && close(b.height(), 100.0) && close(b.center().x, 60.0) && close(b.center().y, 40.0), "{b:?}");
+    let LiveShape::Rectangle { w, h, radii, .. } = &l else { panic!("{l:?}") };
+    assert!(close(*w, 100.0) && close(*h, 60.0) && *radii == [8.0; 4], "{w} {h} {radii:?}");
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    for same in [json!({"rectangleAngle": 90}), json!({"rectangleAngle": 450}), json!({"rectangleAngle": -270}), json!({"ellipseAngle": 10})] {
+        run(&mut s, same.clone());
+        assert_eq!(steps(&s), n + 1, "{same} records no undo step");
+    }
+    // A turn the field gives back rounded is the angle the shape has: typing it again records no step.
+    run(&mut s, json!({"rectangleAngle": 33.3}));
+    let now = angle(&s, rect);
+    run(&mut s, json!({"rectangleAngle": now}));
+    run(&mut s, json!({"rectangleAngle": 33.3}));
+    assert_eq!(steps(&s), n + 2);
+    for bad in [json!({"rectangleAngle": "left"}), json!({"ellipseAngle": "up"}), json!({"rectangleAngle": true})] {
+        assert!(s.execute("object.setLiveShape", &bad).is_err(), "{bad}");
+        assert_eq!(steps(&s), n + 2, "{bad} changes nothing");
+    }
+
+    // The ellipse turns about its center and keeps its pie.
+    s.execute("select.set", &json!({"ids": [ellipse.0]})).unwrap();
+    run(&mut s, json!({"ellipseAngle": 90}));
+    let (l, b) = live(&s, ellipse);
+    assert!(close(angle(&s, ellipse), 90.0), "{l:?}");
+    let LiveShape::Ellipse { pie, .. } = &l else { panic!("{l:?}") };
+    assert_eq!(*pie, (30.0, 120.0));
+    let now = ellipse_center(&s);
+    assert!(close(now.x, center.x) && close(now.y, center.y), "{center:?} → {now:?}");
+    assert!(b.width() < b.height(), "120 × 80 turned a quarter turn: {b:?}");
+
+    // Both selected: each key turns its own kind only, each about its own center.
+    s.execute("select.set", &json!({"ids": [rect.0, ellipse.0]})).unwrap();
+    run(&mut s, json!({"rectangleAngle": 45}));
+    assert!(close(angle(&s, rect), 45.0) && close(angle(&s, ellipse), 90.0));
+    let b = live(&s, rect).1;
+    assert!(close(b.center().x, 60.0) && close(b.center().y, 40.0), "{b:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(close(angle(&s, rect), 33.3));
+
+    // A reflected rectangle takes the angle too, about its center.
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let before = live(&s, rect).1.center();
+    run(&mut s, json!({"rectangleAngle": 20}));
+    let after = live(&s, rect).1.center();
+    assert!(close(angle(&s, rect), 20.0) && close(before.x, after.x) && close(before.y, after.y), "{before:?} → {after:?}");
+}
+
+/// A shape named in `ids` that a turn would take past the coordinate limit (±4,000,000 pt) is an
+/// error that changes nothing, whether or not it is selected.
+#[test]
+fn a_turn_past_the_coordinate_limit_is_an_error() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mut add = |cmd: &str, p: Value| s.execute(cmd, &p).unwrap()["id"].as_u64().unwrap();
+    // Each reaches within 10 pt of the limit and past it when turned.
+    let rect = add("shape.rectangle", json!({"x": 3_999_890, "y": 100, "width": 100, "height": 100}));
+    let ellipse = add("shape.ellipse", json!({"x": 3_999_950, "y": 100, "width": 40, "height": 100}));
+    let polygon = add("shape.polygon", json!({"cx": 3_999_955, "cy": 200, "radius": 50, "sides": 6}));
+    for (id, key, angle) in [(rect, "rectangleAngle", 45), (ellipse, "ellipseAngle", 90), (polygon, "polygonAngle", 90)] {
+        for selected in [false, true] {
+            s.execute("select.set", &json!({"ids": if selected { vec![id] } else { vec![] }})).unwrap();
+            let (doc, steps) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let e = s.execute("object.setLiveShape", &json!({"ids": [id], key: angle})).unwrap_err();
+            assert!(e.to_string().contains("out of range"), "{key}, selected {selected}: {e}");
+            assert!(*s.doc().unwrap().doc == *doc && s.doc().unwrap().history.undo.len() == steps, "{key}, selected {selected}: changed");
+        }
+    }
+}
+
 /// A live line's Line Properties: Line Length keeps its first end in place, Line Angle (degrees
 /// counterclockwise, any finite value brought into 0 to 360) turns it about its midpoint, the
 /// length applies before the angle, every selected line takes them in one undo step, and a value
