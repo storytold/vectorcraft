@@ -34,6 +34,14 @@ pub(super) fn selected_group(app: &VectorcraftApp, sel: &[String]) -> Option<Str
     sel.iter().find(|n| d.swatch_groups.iter().any(|g| g.name == **n)).cloned()
 }
 
+/// The selected color group when it is the whole selection (Color Group Options).
+pub(super) fn sole_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
+    match sel {
+        [_] => selected_group(app, sel),
+        _ => None,
+    }
+}
+
 /// Edit or Apply Color Group: Recolor Artwork on colour group `group` (and the selected art).
 pub(super) fn edit_group(app: &mut VectorcraftApp, group: &str) {
     app.run("ui.recolorDialog", json!({ "group": group })).ok();
@@ -252,6 +260,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Some(g) = group
     {
         app.run("swatch.ungroup", json!({ "name": g })).ok();
+    }
+    let sole = sole_group(app, &selected);
+    if menu_item(ui, tl!("Color Group Options…"), sole.is_some(), false)
+        && let Some(g) = sole
+    {
+        app.run("ui.colorGroupOptions", json!({ "group": g })).ok();
     }
     if menu_item(ui, tl!("Select All Unused"), true, false)
         && let Ok(r) = app.run("swatch.unused", json!({}))
