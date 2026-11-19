@@ -783,3 +783,131 @@ fn resizing_an_artboard_proportionally_contacts_a_sloping_stroke() {
     assert!(((x + y - 180.0) / std::f64::consts::SQRT_2 - 5.0).abs() < 1e-8, "the final proportional corner contacts the outline");
     assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, 194.5, 30.0).with_mods(shift)).as_slice(), [Action::Commit]));
 }
+
+fn review_462530_stroke(d: &mut vectorcraft_doc::Document, x: f64, width: f64, y0: f64, y1: f64) -> vectorcraft_doc::NodeId {
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    appearance.set_fill(vectorcraft_color::Paint::None);
+    appearance.stroke_mut().unwrap().width = width;
+    d.insert(Some(layer), 0, vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::line(Point::new(x, y0), Point::new(x, y1)), appearance))
+        .unwrap();
+    id
+}
+
+fn review_462530_resize(d: &vectorcraft_doc::Document, start: Point, end: Point) -> Value {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: true,
+        snapping_tolerance: 4.0,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        ..cx(d, &selection, &paint)
+    };
+    let mut tool = ArtboardTool::default();
+    tool.pointer(&c, &ev(PointerKind::Down, start.x, start.y));
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, end.x, end.y));
+    assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.setProps")), "CONTROL: a handle resize must preview");
+    preview_params(&actions)
+}
+
+#[test]
+fn review_4625303998_mirrored_bleed_uses_the_actual_asymmetric_side() {
+    let scene = |left, right, edge: f64| {
+        let mut d = vectorcraft_doc::Document::new(800.0, 600.0);
+        d.artboards[0].rect = Rect::new(300.0, 100.0, 400.0, 200.0);
+        d.setup.bleed = [3.0, 11.0, left, right];
+        let x = if edge < 400.0 { 330.0 } else { 430.0 };
+        review_462530_stroke(&mut d, x, 2.0 * (edge - x), 80.0, 220.0);
+        d
+    };
+    // Original left-side offset remains the ordinary unmirrored control.
+    let d = scene(2.0, 7.0, 347.0);
+    let v = review_462530_resize(&d, Point::new(300.0, 150.0), Point::new(350.0, 150.0));
+    assert!((v["x"].as_f64().unwrap() - 349.0).abs() < 1e-8, "CONTROL: unmirrored left bleed contacts 347: {v}");
+    for left in [2.0, 0.0] {
+        let d = scene(left, 7.0, 458.0);
+        let v = review_462530_resize(&d, Point::new(300.0, 150.0), Point::new(450.0, 150.0));
+        let right = v["x"].as_f64().unwrap() + v["width"].as_f64().unwrap();
+        assert!((v["x"].as_f64().unwrap() - 400.0).abs() < 1e-8, "CONTROL: crossing keeps the opposite edge fixed");
+        assert!((right - 451.0).abs() < 1e-8, "REGRESSION: final right bleed is 7, even when original left bleed is {left}: {v}");
+        assert!((right + 7.0 - 458.0).abs() < 1e-8, "REGRESSION: the final bleed point must meet the contour");
+    }
+    // A contact near the old left offset must not guide the final right side.
+    let d = scene(5.0, 7.0, 444.0);
+    let v = review_462530_resize(&d, Point::new(300.0, 150.0), Point::new(450.0, 150.0));
+    assert!((v["x"].as_f64().unwrap() + v["width"].as_f64().unwrap() - 450.0).abs() < 1e-8, "REGRESSION: reject the stale-side contact: {v}");
+}
+
+#[test]
+fn review_4625304007_artboard_tries_the_next_valid_stroke_contact() {
+    let scene = |invalid, valid| {
+        let mut d = vectorcraft_doc::Document::new(800.0, 600.0);
+        d.artboards[0].rect = Rect::new(300.0, 100.0, 400.0, 200.0);
+        if invalid {
+            review_462530_stroke(&mut d, 290.0, 21.8, 80.0, 220.0); // right edge300.9: width0.9
+        }
+        if valid {
+            review_462530_stroke(&mut d, 310.0, 15.0, 80.0, 220.0); // left edge302.5: width2.5
+        }
+        d
+    };
+    let resize = |d: &vectorcraft_doc::Document| review_462530_resize(d, Point::new(400.0, 150.0), Point::new(301.2, 150.0));
+    let v = resize(&scene(false, true));
+    assert!((v["width"].as_f64().unwrap() - 2.5).abs() < 1e-8, "CONTROL: the farther contact is reachable and valid: {v}");
+    let v = resize(&scene(true, false));
+    assert!((v["width"].as_f64().unwrap() - 1.2).abs() < 1e-8, "CONTROL: with no valid stroke contact legacy fallback retains raw width: {v}");
+    let v = resize(&scene(true, true));
+    assert!((v["width"].as_f64().unwrap() - 2.5).abs() < 1e-8, "REGRESSION: a closer undersized contact must not hide the next valid one: {v}");
+}
+
+fn review_462530_move(selected: &[usize], move_art: bool, copy: bool) -> Value {
+    let mut d = vectorcraft_doc::Document::new(800.0, 600.0);
+    d.artboards[0].rect = Rect::new(100.0, 100.0, 303.0, 200.0);
+    let mut peer = d.artboards[0].clone();
+    peer.rect = Rect::new(300.0, 100.0, 500.0, 200.0);
+    peer.name = "Peer".into();
+    d.artboards.push(peer);
+    let target = review_462530_stroke(&mut d, 350.0, 90.0, 120.0, 180.0); // left edge305
+    assert!(!d.art_moving_with(0, false).contains(&target), "CONTROL: target art is not owned by the dragged board");
+    assert!(d.art_moving_with(1, false).contains(&target), "CONTROL: peer artwork really moves with board1");
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        zoom: 2.0,
+        smart_guides: true,
+        snap_to_stroke_edges: true,
+        snapping_tolerance: 4.0,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        ..cx(&d, &selection, &paint)
+    };
+    let mut tool = ArtboardTool::default();
+    tool.set_option("selected", &json!(selected));
+    tool.set_option("moveArt", &json!(move_art));
+    let mods = Mods { alt: copy, ..Mods::default() };
+    tool.pointer(&c, &ev(PointerKind::Down, 200.0, 170.0).with_mods(mods));
+    // At2x, 1.6pt is3.2px: beyond the normal3px drag threshold, without crossing the target contour.
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, 201.6, 170.0).with_mods(mods));
+    assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.move")), "CONTROL: a real board move must preview");
+    let v = preview_params(&actions);
+    assert_eq!(v["copy"], copy);
+    assert_eq!(v["moveArt"], move_art);
+    if selected.len() > 1 {
+        assert_eq!(v["indices"], json!(selected), "CONTROL: preview carries the exact selected move set");
+    }
+    v
+}
+
+#[test]
+fn review_4625304019_moving_peer_art_is_excluded_but_original_copies_remain_targets() {
+    for (selected, move_art, copy) in [(&[0][..], true, false), (&[0, 1][..], false, false), (&[0, 1][..], true, true)] {
+        let v = review_462530_move(selected, move_art, copy);
+        assert!((v["dx"].as_f64().unwrap() - 2.0).abs() < 1e-8, "CONTROL: stationary artwork or original-copy targets remain eligible: {v}");
+    }
+    let v = review_462530_move(&[0, 1], true, false);
+    assert!(
+        (v["dx"].as_f64().unwrap() - 1.6).abs() < 1e-8,
+        "REGRESSION: all moving peer artwork must be excluded; no stationary contour holds the raw delta: {v}"
+    );
+}

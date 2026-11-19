@@ -851,6 +851,7 @@ fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl 
 struct PreparedContainer {
     m: Node,
     guides: Vec<Arc<Node>>,
+    geometry: bool,
     paint: bool,
     carry: crate::Carry,
 }
@@ -904,7 +905,7 @@ fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContain
     }
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
-    Some(PreparedContainer { m, guides, paint, carry })
+    Some(PreparedContainer { m, guides, geometry: pathfinder || !fx.is_empty(), paint, carry })
 }
 
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
@@ -924,7 +925,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if let Some(t) = crate::reshape::copied_container_raster_at(n) {
         return Some(copied_container(doc, n, t));
     }
-    let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
+    let PreparedContainer { mut m, guides, geometry, paint, .. } = prepare_container(doc, n)?;
     if paint {
         // A clip group whose clipping type paints strokes is now a group of a clip group and those
         // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
@@ -960,7 +961,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if let Some(ch) = m.children_mut() {
         ch.extend(guides);
     }
-    if pathfinder || !fx.is_empty() {
+    if geometry {
         crate::bake::query_geometry(n, &mut m);
     }
     Some(m)

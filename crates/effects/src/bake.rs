@@ -132,7 +132,7 @@ pub fn stroke_paint_view(doc: &Document) -> Document {
     for layer in &mut view.layers {
         mark(Arc::make_mut(layer), 0);
     }
-    bake_document_placing_symbols(&view, true, WrittenLayers { hidden: true, non_printing: true }).unwrap_or(view)
+    bake_document_placing_symbols(&view, true, WrittenLayers { hidden: true, non_printing: true, hidden_objects: false }).unwrap_or(view)
 }
 
 /// A leaf's item geometry and Carry, before a caller creates the final band or

@@ -124,7 +124,7 @@ fn paintbrush_sends_pen_tilt_and_rotation() {
         let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
         v["points"].clone()
     };
-    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r, wheel: None });
     assert_eq!(
         stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
         json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
@@ -134,6 +134,12 @@ fn paintbrush_sends_pen_tilt_and_rotation() {
     // A pose that reads nothing is a mouse's.
     assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
     assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    // An airbrush pen's finger wheel comes seventh, and a point without it sends null.
+    let wheel = |w: f32| Some(PenPose { wheel: Some(w), ..PenPose::default() });
+    assert_eq!(
+        stroke("paintbrush", 1.0, [wheel(0.0), wheel(0.25), None]),
+        json!([[0.0, 0.0, null, null, null, null, 0.0], [40.0, 0.0, null, null, null, null, 0.25], [80.0, 0.0, null, null, null, null, null]])
+    );
 }
 
 #[test]
@@ -3059,8 +3065,10 @@ fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
         Some(vectorcraft_geom::Shape::bounding_box(path))
     };
     let mut tool = GestureTool::new("paintbrush");
-    let at =
-        |rotation| PointerEvent { pen: Some(PenPose { tilt: Some([30.0, 0.0]), rotation }), ..PointerEvent::new(PointerKind::Move, 100.0, 50.0) };
+    let at = |rotation| PointerEvent {
+        pen: Some(PenPose { tilt: Some([30.0, 0.0]), rotation, wheel: None }),
+        ..PointerEvent::new(PointerKind::Move, 100.0, 50.0)
+    };
     assert!(bounds(&tool, &view).is_none());
     tool.pointer(&view, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
     assert!(bounds(&tool, &view).is_none(), "mouse");
@@ -3193,7 +3201,7 @@ fn the_eraser_tip_follows_its_variation_modes() {
             assert_eq!(t.check_option(k, &json!(mode.id())), Ok(()), "{k} {mode:?}");
         }
     }
-    let modes = "must be one of `fixed`, `random`, `pressure`, `tilt`, `bearing`, `rotation`";
+    let modes = "must be one of `fixed`, `random`, `pressure`, `tilt`, `bearing`, `rotation`, `stylusWheel`";
     assert_eq!(t.check_option("angleMode", &json!("wheel")), Err(format!("`angleMode` {modes}")));
     assert_eq!(t.check_option("angleVariation", &json!(181)), Err("`angleVariation` must be a number from 0 to 180".into()));
     assert_eq!(t.check_option("roundnessVariation", &json!(500)), Err("`roundnessVariation` must be a number from 0 to 100".into()));
@@ -3208,7 +3216,7 @@ fn the_eraser_tip_follows_its_variation_modes() {
     near(tip(&t), (90.0, 47.5, 110.0, 52.5));
     // Erasing with the barrel turned half way round and the pen upright, the tip stands upright and
     // is 28 by 7 pt; Random leaves the roundness as set.
-    let pen = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(180.0) });
+    let pen = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(180.0), wheel: None });
     t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
     t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
     near(tip(&t), (196.5, 36.0, 203.5, 64.0));
@@ -3245,6 +3253,43 @@ fn the_eraser_tip_follows_its_variation_modes() {
     assert_eq!(b.options()["sizeMode"], json!("pressure"));
 }
 
+/// An Eraser value on Stylus Wheel follows the wheel the pen recorded, in the tip outline while it
+/// erases and in the points the release sends; a pen that gives no wheel reads half way, the value
+/// itself.
+#[test]
+fn the_eraser_tip_follows_the_stylus_wheel() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => vectorcraft_geom::Shape::bounding_box(path),
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("stylusWheel")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    assert_eq!(t.options()["angleMode"], json!("stylusWheel"));
+    // The wheel at the far end of its travel turns the 20 by 5 pt tip upright.
+    let wheel = |w: Option<f32>| Some(PenPose { tilt: None, rotation: None, wheel: w });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (197.5, 40.0, 202.5, 60.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!((c.as_str(), &v["angleMode"]), ("path.eraseRegion", &json!("stylusWheel")));
+    assert_eq!(v["points"], json!([[100.0, 50.0, null, null, null, null, 1.0], [200.0, 50.0, null, null, null, null, 1.0]]));
+    // A pen without a wheel keeps the tip lying level.
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+}
+
 /// The Eraser's tip outline follows a pen turned in place, which adds no stroke point, and the
 /// release erases with that reading; and its size passes 1296 pt as `path.eraseRegion` sweeps it.
 #[test]
@@ -3264,8 +3309,8 @@ fn the_eraser_tip_turns_in_place_and_passes_a_nib_size() {
     for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("rotation")), ("angleVariation", json!(90))] {
         t.set_option(k, &v);
     }
-    let level = Some(PenPose { tilt: None, rotation: Some(0.0) });
-    let turned = Some(PenPose { tilt: None, rotation: Some(180.0) });
+    let level = Some(PenPose { tilt: None, rotation: Some(0.0), wheel: None });
+    let turned = Some(PenPose { tilt: None, rotation: Some(180.0), wheel: None });
     t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
     t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
     near(tip(&t), (190.0, 47.5, 210.0, 52.5));
@@ -3290,8 +3335,8 @@ fn the_eraser_tip_turns_in_place_and_passes_a_nib_size() {
     // With Angle on Bearing, a pen that leaned only at the last point and stands up there again
     // leaves no bearing: the tip lies level, as set.
     t.set_option("angleMode", &json!("bearing"));
-    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
-    let leaning = Some(PenPose { tilt: Some([0.0, 45.0]), rotation: None });
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None, wheel: None });
+    let leaning = Some(PenPose { tilt: Some([0.0, 45.0]), rotation: None, wheel: None });
     t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
     t.pointer(&cx, &PointerEvent { pen: leaning, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
     assert!(tip(&t).height() > 6.0, "{:?}", tip(&t));
@@ -3303,7 +3348,7 @@ fn the_eraser_tip_turns_in_place_and_passes_a_nib_size() {
     for (k, v) in [("size", json!(1000)), ("sizeMode", json!("tilt")), ("sizeVariation", json!(1000))] {
         t.set_option(k, &v);
     }
-    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None, wheel: None });
     t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
     t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
     near(tip(&t), (-800.0, -950.0, 1200.0, 1050.0));
@@ -3339,9 +3384,9 @@ fn the_eraser_drag_area_follows_its_variation_modes() {
             t.set_option(k, v);
         }
     };
-    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
-    let turned = Some(PenPose { tilt: None, rotation: Some(180.0) });
-    let level = Some(PenPose { tilt: None, rotation: Some(0.0) });
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None, wheel: None });
+    let turned = Some(PenPose { tilt: None, rotation: Some(180.0), wheel: None });
+    let level = Some(PenPose { tilt: None, rotation: Some(0.0), wheel: None });
     let press = |t: &mut GestureTool, pen: Option<PenPose>, kind: PointerKind, x: f64| {
         t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(kind, x, 150.0) });
     };
@@ -3380,7 +3425,7 @@ fn the_eraser_drag_area_follows_its_variation_modes() {
     // lying flat the tip is 25% round and stands upright.
     let mut t = GestureTool::new("eraser");
     set(&mut t, &[("size", json!(20)), ("angle", json!(90)), ("roundnessMode", json!("tilt")), ("roundnessVariation", json!(75))]);
-    let flat = Some(PenPose { tilt: Some([90.0, 0.0]), rotation: None });
+    let flat = Some(PenPose { tilt: Some([90.0, 0.0]), rotation: None, wheel: None });
     press(&mut t, flat, PointerKind::Down, 50.0);
     press(&mut t, flat, PointerKind::Drag, 150.0);
     near(bounds(&t), (47.5, 140.0, 152.5, 160.0));
@@ -3430,8 +3475,8 @@ fn the_eraser_drag_area_matches_the_release_when_pressure_or_a_mode_starts_durin
     let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
         assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
     };
-    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
-    let leaning = Some(PenPose { tilt: Some([45.0, 0.0]), rotation: None });
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None, wheel: None });
+    let leaning = Some(PenPose { tilt: Some([45.0, 0.0]), rotation: None, wheel: None });
     let press = |t: &mut GestureTool, pen: Option<PenPose>, pressure: f32, kind: PointerKind, x: f64| {
         t.pointer(&cx, &PointerEvent { pen, pressure, ..PointerEvent::new(kind, x, 150.0) });
     };
@@ -3521,14 +3566,14 @@ fn the_eraser_drag_area_gives_the_first_lean_to_the_points_before_it() {
         let mut shown = vec![];
         for (i, (tilt, x)) in poses.into_iter().zip([50.0, 100.0, 150.0, 200.0, 250.0]).enumerate() {
             let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
-            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0) });
+            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0), wheel: None });
             t.pointer(&cx, &PointerEvent { pen, pressure: 1.0, ..PointerEvent::new(kind, x, 150.0) });
             if i > 0 {
                 shown.push(bounds(&t));
             }
         }
         if let Some(tilt) = in_place {
-            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0) });
+            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0), wheel: None });
             t.pointer(&cx, &PointerEvent { pen, pressure: 1.0, ..PointerEvent::new(PointerKind::Drag, 250.2, 150.0) });
             shown.push(bounds(&t));
         }

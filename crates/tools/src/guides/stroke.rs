@@ -46,6 +46,11 @@ impl Contours {
     }
 
     pub(super) fn nearest(&self, p: Point, tol: f64) -> Option<Point> {
+        self.nearest_with(p, tol, |_| true)
+    }
+
+    /// Choose the nearest permitted contact, rather than rejecting the winner afterward.
+    pub(super) fn nearest_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<Point> {
         if !finite_point(p) || !tol.is_finite() || tol < 0.0 {
             return None;
         }
@@ -54,7 +59,7 @@ impl Contours {
             .filter(|c| c.bounds.inflate(tol, tol).contains(p))
             .flat_map(|c| &c.segments)
             .map(|s| (s, s.nearest(p, 1e-6)))
-            .filter(|(_, n)| n.distance_sq <= tol * tol)
+            .filter(|(s, n)| n.distance_sq <= tol * tol && valid(s.eval(n.t)))
             .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
             .map(|(s, n)| s.eval(n.t))
     }
@@ -62,6 +67,11 @@ impl Contours {
     /// Actual intersections with the permitted trajectory, never a projection
     /// of a free nearest-point delta back onto the constraint.
     pub(super) fn on_line(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool) -> Option<Point> {
+        self.on_line_with(at, dir, near, tol, ray, |_| true)
+    }
+
+    /// Keep candidate eligibility inside the constrained nearest-contact search.
+    pub(super) fn on_line_with(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool, valid: impl Fn(Point) -> bool) -> Option<Point> {
         let len = dir.hypot();
         if !finite_point(at) || !finite_point(near) || !len.is_finite() || len == 0.0 || !tol.is_finite() || tol < 0.0 {
             return None;
@@ -74,7 +84,7 @@ impl Contours {
             .filter(|c| c.bounds.inflate(tol, tol).contains(near))
             .flat_map(|c| &c.segments)
             .flat_map(|s| intersections(*s, line))
-            .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(u) >= 0.0))
+            .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(u) >= 0.0) && valid(*q))
             .min_by(|a, b| a.distance_squared(near).total_cmp(&b.distance_squared(near)))
     }
 
@@ -339,6 +349,15 @@ pub(super) fn gather(cx: &ToolContext, exclude: &[NodeId], visible: Option<Rect>
     if !cx.smart_guides || !cx.snap_to_stroke_edges {
         return Contours::default();
     }
+    let view = vectorcraft_effects::stroke_paint_view(cx.doc);
+    gather_from_view(cx, &view, exclude, visible, roots)
+}
+
+/// Filter contours from an already evaluated view without changing its source provenance.
+pub(super) fn gather_from_view(cx: &ToolContext, view: &Document, exclude: &[NodeId], visible: Option<Rect>, roots: Option<&[NodeId]>) -> Contours {
+    if !cx.smart_guides || !cx.snap_to_stroke_edges {
+        return Contours::default();
+    }
     let mut blocked: HashSet<NodeId> = exclude.iter().copied().collect();
     for id in exclude {
         if let Some(n) = cx.doc.node(*id) {
@@ -363,11 +382,10 @@ pub(super) fn gather(cx: &ToolContext, exclude: &[NodeId], visible: Option<Rect>
         }
         ids
     });
-    let view = vectorcraft_effects::stroke_paint_view(cx.doc);
     let mut out = Contours::default();
     let eligibility = Eligibility { blocked: &blocked, allowed: allowed.as_ref() };
     for layer in &view.layers {
-        gather_node(&view, layer, &[], &eligibility, visible, &mut out, 0);
+        gather_node(view, layer, &[], &eligibility, visible, &mut out, 0);
     }
     out
 }

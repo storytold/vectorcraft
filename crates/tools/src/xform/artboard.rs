@@ -196,12 +196,19 @@ impl ArtboardTool {
 
     /// Gather the Smart Guide targets for dragging artboard `index` (call before the first preview,
     /// while the document still shows where everything started).
-    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool, op: PixelOp) {
+    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool, moving: &[usize], op: PixelOp) {
         self.guides.clear();
         self.targets = cx.smart_guides.then(|| {
             let art = if art_moves { cx.doc.art_moving_with(index, cx.move_locked_with_artboard) } else { vec![] };
             let t = Targets::for_artboard(cx.doc, index, &art).styled(cx);
-            if cx.snaps_to_pixel(op) { t } else { t.with_stroke_edges(cx, &art, None) }
+            if cx.snaps_to_pixel(op) || cx.snap_to_grid || !cx.snap_to_stroke_edges {
+                t
+            } else {
+                // Only the contour channel uses the complete preview move set; legacy targets stay as before.
+                let stroke_art: Vec<_> =
+                    if art_moves { moving.iter().flat_map(|&i| cx.doc.art_moving_with(i, cx.move_locked_with_artboard)).collect() } else { vec![] };
+                t.with_stroke_edges(cx, &stroke_art, None)
+            }
         });
         // Nothing to skip: no artboard has this index.
         self.copy_targets = cx.smart_guides.then(|| {
@@ -229,21 +236,27 @@ impl ArtboardTool {
             let at = current * handle.pos(rect);
             let origin = if mods.alt { rect.center() } else { handle.opposite().pos(rect) };
             let along = (!handle.is_corner() || proportional).then_some(handle.pos(rect) - origin);
-            if let Some((q, ov)) = t.snap_stroke_point_with(p, at, offsets, along, cx.snap_tol()) {
+            let placed_bleed = placed_bleed_offset(cx, rect, handle, current);
+            let stroke_offsets: &[Vec2] = if placed_bleed == Vec2::ZERO { &[] } else { &[placed_bleed] };
+            let valid = |q: Point, contact: Point| {
                 let snapped = scale_for_drag(rect, handle, q, proportional, mods.alt);
                 let [sx, _, _, sy, _, _] = snapped.as_coeffs();
                 let [before_x, _, _, before_y, _, _] = current.as_coeffs();
                 let bounds = snapped.transform_rect_bbox(rect);
                 let valid_scale = [(sx, before_x), (sy, before_y)].iter().all(|(s, before)| s.abs() > 1e-4 && s * before > 0.0);
-                if snapped.as_coeffs().iter().all(|v| v.is_finite())
+                let placed = snapped * handle.pos(rect);
+                let bleed = placed_bleed_offset(cx, rect, handle, snapped);
+                let reaches = placed.distance(contact) <= 1e-6 || (placed + bleed).distance(contact) <= 1e-6;
+                snapped.as_coeffs().iter().all(|v| v.is_finite())
                     && bounds.is_finite()
                     && bounds.width() >= MIN_SIDE
                     && bounds.height() >= MIN_SIDE
                     && valid_scale
-                {
-                    self.guides = ov;
-                    return q;
-                }
+                    && reaches
+            };
+            if let Some((q, ov)) = t.snap_stroke_point_with_filter(p, at, stroke_offsets, along, cx.snap_tol(), valid) {
+                self.guides = ov;
+                return q;
             }
         }
         let (q, ov) = t.snap_point_with(p, offsets, cx.snap_tol());
@@ -319,6 +332,19 @@ fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
     let d = handle.pos(cx.doc.setup.bleed_rect(rect)) - handle.pos(rect);
     let (ax, ay) = handle.axes();
     Vec2::new(if ax { d.x } else { 0.0 }, if ay { d.y } else { 0.0 })
+}
+
+/// The dragged side after mirroring uses that side's actual document bleed, which can be asymmetric.
+fn placed_bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle, transform: Affine) -> Vec2 {
+    let [sx, _, _, sy, _, _] = transform.as_coeffs();
+    if sx >= 0.0 && sy >= 0.0 {
+        return bleed_offset(cx, rect, handle);
+    }
+    let unit = Rect::new(0.0, 0.0, 1.0, 1.0);
+    let p = handle.pos(unit);
+    let at = Point::new(if sx < 0.0 { 1.0 - p.x } else { p.x }, if sy < 0.0 { 1.0 - p.y } else { p.y });
+    let placed = Handle::ALL.into_iter().find(|h| h.pos(unit) == at).unwrap_or(handle);
+    bleed_offset(cx, rect, placed)
 }
 
 /// How far outside the middle of an edge its add button sits, in screen pixels: past the handle
@@ -453,7 +479,7 @@ impl Tool for ArtboardTool {
                         return out;
                     }
                     out.push(Action::Begin(label(m.alt).into()));
-                    self.begin_snapping(cx, index, self.move_art, PixelOp::Moving);
+                    self.begin_snapping(cx, index, self.move_art, &moving, PixelOp::Moving);
                 } else if m.alt != copy {
                     // Alt pressed or released mid-drag: start over as a copy or a move.
                     out.push(Action::Cancel);
@@ -473,7 +499,7 @@ impl Tool for ArtboardTool {
                 let mut out = vec![];
                 if !began {
                     out.push(Action::Begin("Resize Artboard".into()));
-                    self.begin_snapping(cx, index, self.scale_art, PixelOp::Scaling);
+                    self.begin_snapping(cx, index, self.scale_art, &[index], PixelOp::Scaling);
                 }
                 self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
                 let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle), rect, handle, m);

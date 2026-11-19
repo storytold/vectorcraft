@@ -409,6 +409,12 @@ pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
 }
 
 impl DrawSnap {
+    /// Whether the last hover or press still has the current targets, without gathering the art
+    /// again. A caller caching the snapped point can use this before reusing it for a cursor.
+    pub(crate) fn is_current(&self, cx: &ToolContext, exclude: &[NodeId]) -> bool {
+        self.targets.as_ref().is_some_and(|(key, _)| key.as_ref() == Some(&SnapKey::of(cx, exclude)))
+    }
+
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
@@ -593,12 +599,15 @@ pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
 /// nearby points remain cheap per pointer, and the pointer is NOT a cache key.
 #[derive(Default)]
 pub(crate) struct PickSnap {
+    /// One detached paint view per authoritative document identity/revision, independent of hits.
+    view: Option<((u64, u64), std::sync::Arc<vectorcraft_doc::Document>)>,
     contours: Option<(SnapKey, Vec<NodeId>, std::sync::Arc<super::stroke::Contours>)>,
 }
 
 impl PickSnap {
     pub(crate) fn snap(&mut self, cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
         if !(cx.snap_to_point || cx.smart_guides) {
+            self.view = None;
             self.contours = None;
             return (p, vec![]);
         }
@@ -614,8 +623,17 @@ impl PickSnap {
             contour_roots.sort_unstable();
             contour_roots.dedup();
             let key = SnapKey::of(cx, &[]);
+            if self.view.as_ref().is_some_and(|(revision, _)| *revision != cx.revision) {
+                self.view = None;
+            }
             if self.contours.as_ref().is_none_or(|(old, old_roots, _)| *old != key || *old_roots != contour_roots) {
-                let contours = super::stroke::gather(cx, &[], visible(cx), Some(&contour_roots));
+                let contours = if contour_roots.is_empty() {
+                    super::stroke::Contours::default()
+                } else {
+                    let (_, view) =
+                        self.view.get_or_insert_with(|| (cx.revision, std::sync::Arc::new(vectorcraft_effects::stroke_paint_view(cx.doc))));
+                    super::stroke::gather_from_view(cx, view, &[], visible(cx), Some(&contour_roots))
+                };
                 self.contours = Some((key, contour_roots, std::sync::Arc::new(contours)));
             }
             if let Some((_, _, contours)) = &self.contours {
@@ -623,6 +641,7 @@ impl PickSnap {
                 targets.stroke_points = true;
             }
         } else {
+            self.view = None;
             self.contours = None;
         }
         targets.snap_point(p, tol)
@@ -670,4 +689,119 @@ pub fn distance_guides(cx: &ToolContext, from: Rect, to: Rect, artboard: bool) -
         }
     }
     out
+}
+
+#[cfg(test)]
+mod pick_cache_tests {
+    use super::*;
+    use crate::testutil::{cx, paint};
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Document, Node, Selection};
+
+    fn scene() -> (Document, Selection, NodeId) {
+        let mut doc = Document::new(500.0, 500.0);
+        let layer = doc.layers[0].id;
+        let selected = doc.alloc_id();
+        let other = doc.alloc_id();
+        for (id, x) in [(selected, 100.0), (other, 300.0)] {
+            let path = vectorcraft_geom::shapes::rectangle(Rect::new(x, 100.0, x + 100.0, 200.0));
+            let appearance = Appearance::basic(
+                vectorcraft_doc::color::Paint::solid(vectorcraft_doc::color::Color::WHITE),
+                vectorcraft_doc::color::Paint::solid(vectorcraft_doc::color::Color::BLACK),
+                10.0,
+            );
+            doc.insert(Some(layer), 0, Node::path(id, path, appearance)).unwrap();
+        }
+        (doc, Selection { objects: vec![selected], ..Default::default() }, other)
+    }
+
+    fn view(snap: &PickSnap) -> Arc<Document> {
+        Arc::clone(&snap.view.as_ref().unwrap().1)
+    }
+
+    fn contours(snap: &PickSnap) -> Arc<super::super::stroke::Contours> {
+        Arc::clone(&snap.contours.as_ref().unwrap().2)
+    }
+
+    fn check_roots(snap: &mut PickSnap, cx: &ToolContext, other: NodeId) -> Arc<Document> {
+        let mut first_view = None;
+        let mut previous_contours = None;
+        for hit_other in [false, false, true, true, false] {
+            let at = if hit_other { Point::new(407.0, 150.0) } else { Point::new(250.0, 260.0) };
+            let hit = hit_test(cx.doc, at, HitOptions { tol: cx.snap_tol(), skip_guides: false, ..cx.hit_options() }).map(|h| h.leaf);
+            assert_eq!(hit, hit_other.then_some(other), "the real hit, not selection mutation, must change the roots");
+            let actual = snap.snap(cx, at);
+            assert_eq!(actual.0, if hit_other { Point::new(405.0, 150.0) } else { at });
+            assert_eq!(actual, PickSnap::default().snap(cx, at), "reuse must preserve contacts and guides");
+            let mut expected = cx.selection.objects.clone();
+            expected.extend(hit);
+            expected.sort_unstable();
+            expected.dedup();
+            assert_eq!(snap.contours.as_ref().unwrap().1, expected);
+            if let Some((roots, old)) = &previous_contours {
+                assert_eq!(Arc::ptr_eq(old, &contours(snap)), *roots == expected, "only root transitions rebuild contours");
+            }
+            previous_contours = Some((expected, contours(snap)));
+            let initial = first_view.get_or_insert_with(|| view(snap));
+            assert!(Arc::ptr_eq(initial, &view(snap)), "hit-root transitions must reuse the evaluated view");
+        }
+        first_view.unwrap()
+    }
+
+    fn check_options(snap: &mut PickSnap, cx: &ToolContext, initial: &Arc<Document>) {
+        let at = Point::new(407.0, 150.0);
+        let previous = contours(snap);
+        let screen = ScreenFrame { origin: Point::new(1000.0, 1000.0), right: Vec2::new(1.0, 0.0), down: Vec2::new(0.0, 1.0), size: (100.0, 100.0) };
+        let outside = ToolContext { screen: Some(screen), ..*cx };
+        assert_eq!(snap.snap(&outside, at).0, at, "the new viewport excludes the contour");
+        assert!(!Arc::ptr_eq(&previous, &contours(snap)), "viewport changes rebuild filtered contours");
+        assert!(Arc::ptr_eq(initial, &view(snap)), "viewport must not rebuild the evaluated view");
+        assert_eq!(snap.snap(cx, at).0, Point::new(405.0, 150.0));
+        let previous = contours(snap);
+        let options = ToolContext { snap_tangent: !cx.snap_tangent, ..*cx };
+        assert_eq!(snap.snap(&options, at), PickSnap::default().snap(&options, at));
+        assert!(!Arc::ptr_eq(&previous, &contours(snap)), "option changes retain the full contour key");
+        assert!(Arc::ptr_eq(initial, &view(snap)));
+    }
+
+    fn check_inactive(snap: &mut PickSnap, cx: &ToolContext) {
+        let at = Point::new(407.0, 150.0);
+        for inactive in [
+            ToolContext { smart_guides: false, snap_to_point: false, ..*cx },
+            ToolContext { snap_to_stroke_edges: false, ..*cx },
+            ToolContext { snap_to_grid: true, ..*cx },
+            ToolContext { snap_to_pixel: true, pixel_snap: crate::PixelSnap { drawing: true, ..cx.pixel_snap }, ..*cx },
+        ] {
+            let previous = view(snap);
+            snap.snap(&inactive, at);
+            assert!(snap.view.is_none() && snap.contours.is_none(), "inactive channels release both cache slots");
+            assert_eq!(snap.snap(cx, at).0, Point::new(405.0, 150.0));
+            assert!(!Arc::ptr_eq(&previous, &view(snap)), "reactivation builds a new view");
+        }
+    }
+
+    #[test]
+    fn review_4625303961_pick_roots_reuse_one_revision_view() {
+        let (doc, selection, other) = scene();
+        let original = doc.clone();
+        let paint = paint();
+        let cx = ToolContext { revision: (900, 1), snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&doc, &selection, &paint) };
+        let mut snap = PickSnap::default();
+        let empty_selection = Selection::default();
+        let blank = ToolContext { revision: (900, 0), selection: &empty_selection, ..cx };
+        let at = Point::new(250.0, 260.0);
+        assert!(hit_test(blank.doc, at, HitOptions { tol: blank.snap_tol(), skip_guides: false, ..blank.hit_options() }).is_none());
+        assert_eq!(snap.snap(&blank, at).0, at);
+        assert!(snap.view.is_none(), "blank hover with no roots must not allocate an evaluated view");
+        let initial = check_roots(&mut snap, &cx, other);
+        check_options(&mut snap, &cx, &initial);
+        let revised = ToolContext { revision: (900, 2), ..cx };
+        assert_eq!(snap.snap(&revised, Point::new(407.0, 150.0)).0, Point::new(405.0, 150.0));
+        assert!(!Arc::ptr_eq(&initial, &view(&snap)), "a new revision replaces the evaluated view");
+        check_inactive(&mut snap, &revised);
+        assert_eq!(doc, original, "query evaluation must leave the source document intact");
+        for layer in &doc.layers {
+            layer.walk(&mut |node| assert!(node.extras().query_origin.0.is_none()));
+        }
+    }
 }

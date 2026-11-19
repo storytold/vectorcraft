@@ -545,3 +545,130 @@ fn stroke_edge_opt_in_keeps_grid_and_pixel_moving_priority() {
         }
     }
 }
+
+fn review_462530_clear_fixture(f: &mut Fixture) {
+    let ids = [f.target, f.moving];
+    choose(f, &ids);
+    f.session.execute("edit.clear", &json!({})).unwrap();
+}
+
+fn review_462530_stroked_line(f: &mut Fixture, x: f64, y0: f64, y1: f64) -> NodeId {
+    let d = format!("M{x} {y0}L{x} {y1}");
+    let id = NodeId(f.session.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap());
+    choose(f, &[id]);
+    f.session.execute("paint.setFill", &json!({"none": true})).unwrap();
+    f.session.execute("paint.setStroke", &json!({"color": "#101010"})).unwrap();
+    f.session.execute("stroke.set", &json!({"weight": 10.0, "align": "center"})).unwrap();
+    id
+}
+
+fn review_462530_scale_grab_and_undo(f: &mut Fixture) -> Rect {
+    choose_moving(f);
+    f.view.smart_guides = false;
+    f.session.select_tool("scale", f.view).unwrap();
+    let origin = Point::new(500.0, 500.0);
+    let grab = Point::new(600.0, 600.0);
+    let raw = Point::new(500.001, 500.001);
+    // A normal click sets the Scale reference. No target, tool state or matrix is injected.
+    event(f, PointerKind::Down, origin, Mods::default());
+    event(f, PointerKind::Up, origin, Mods::default());
+    f.view.smart_guides = true;
+    let state = f.session.doc().unwrap();
+    let before = state.doc.clone();
+    let selected = state.selection.clone();
+    let history = state.history.undo.len();
+    let old = state.doc.node(f.moving).unwrap().clone();
+    assert_eq!(old.geometric_bounds().unwrap(), Rect::new(500.0, 500.0, 600.0, 600.0));
+    event(f, PointerKind::Down, grab, Mods::default());
+    let shift = Mods { shift: true, ..Mods::default() };
+    event(f, PointerKind::Drag, raw, shift);
+    assert!(f.session.tool_busy(), "the public Scale drag must have begun");
+    assert_ne!(f.session.doc().unwrap().doc.node(f.moving).unwrap(), &old, "the live preview must actually scale the selected art");
+    event(f, PointerKind::Up, raw, shift);
+    let state = f.session.doc().unwrap();
+    let now = state.doc.node(f.moving).unwrap();
+    let bounds = now.geometric_bounds().unwrap();
+    assert_eq!(now.appearance, old.appearance);
+    assert_eq!(state.selection, selected);
+    let mut untouched = (*state.doc).clone();
+    *untouched.node_mut(f.moving).unwrap() = old;
+    assert_eq!(untouched, *before, "Scale must preserve all target art and resources");
+    assert_eq!(state.history.undo.len(), history + 1);
+    assert!((bounds.x0 - origin.x).abs() < 1e-8 && (bounds.y0 - origin.y).abs() < 1e-8, "reference stays fixed: {bounds:?}");
+    assert!((bounds.width() - bounds.height()).abs() < 1e-8, "Shift remains uniform: {bounds:?}");
+    f.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(f.session.doc().unwrap().doc, before);
+    assert_eq!(f.session.doc().unwrap().selection, selected);
+    bounds
+}
+
+#[test]
+fn review_462530_scale_tries_the_nearest_feasible_contour_after_the_clamp() {
+    // Controls first: OFF keeps the clamp, an isolated reachable edge still snaps, and an
+    // isolated unreachable edge keeps the legacy fallback. The last scene has both edges.
+    for (name, on, edges, expected) in [
+        ("OFF", false, vec![0.005, 0.025], 500.01),
+        ("reachable only", true, vec![0.025], 500.025),
+        ("unreachable only", true, vec![0.005], 500.01),
+        ("nearer rejected and farther reachable", true, vec![0.005, 0.025], 500.025),
+    ] {
+        let mut f = fixture(Some(on));
+        review_462530_clear_fixture(&mut f);
+        // Translating this clamp scene keeps ordinary artboard targets out of reach. The
+        // geometric paths/endpoints/centres stay outside the four-point legacy priority.
+        for edge in edges {
+            f.target = review_462530_stroked_line(&mut f, 505.0 + edge, 400.0, 900.0);
+        }
+        f.moving = rectangle(&mut f.session, 500.0, 500.0, 100.0, 100.0);
+        choose_moving(&mut f);
+        f.session.execute("paint.setFill", &json!({"color": "#202020"})).unwrap();
+        f.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        let bounds = review_462530_scale_grab_and_undo(&mut f);
+        assert!(
+            (bounds.x1 - expected).abs() < 1e-7 && (bounds.y1 - expected).abs() < 1e-7,
+            "{name}: the actual grabbed corner must use the nearest solver-retained contact, {bounds:?}, expected {expected}"
+        );
+    }
+}
+
+#[test]
+fn review_462530_plain_path_contact_does_not_take_the_stroke_ruler_guard() {
+    // The first two legacy scenes and the genuine-stroke scene establish the controls before
+    // the regression: adding an unrelated remote stroke must not turn a plain path into a guard.
+    for (name, on, seed, genuine, expected) in [
+        ("OFF plain path and remote stroke", false, true, false, 205.0),
+        ("ON plain path without a stroke", true, false, false, 205.0),
+        ("ON genuine nearby stroke", true, false, true, 203.0),
+        ("ON plain path and remote stroke", true, true, false, 205.0),
+    ] {
+        let mut f = fixture(Some(on));
+        review_462530_clear_fixture(&mut f);
+        if genuine {
+            // The path at208 is out of reach; only its actual ten-point stroke edge203 is near.
+            f.target = review_462530_stroked_line(&mut f, 208.0, -100.0, 400.0);
+        } else {
+            f.target = rectangle(&mut f.session, 203.0, -100.0, 50.0, 500.0);
+            choose_target(&mut f);
+            f.session.execute("paint.setFill", &json!({"color": "#101010"})).unwrap();
+            f.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        }
+        if seed {
+            review_462530_stroked_line(&mut f, 1000.0, -100.0, 400.0);
+        }
+        f.moving = rectangle(&mut f.session, 100.0, 100.0, 60.0, 40.0);
+        choose_moving(&mut f);
+        f.session.execute("paint.setFill", &json!({"color": "#202020"})).unwrap();
+        f.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        f.session.execute("guide.add", &json!({"vertical": true, "pos": 205.0})).unwrap();
+        choose_moving(&mut f);
+        f.view.guides = true;
+        f.view.snap_to_point = true;
+        f.view.show_bbox = false;
+        let bounds = move_from_and_undo(&mut f, Point::new(100.0, 100.0), Point::new(202.0, 100.0), Mods { shift: true, ..Mods::default() });
+        assert!((bounds.y0 - 100.0).abs() < 1e-8, "{name}: Shift stays horizontal: {bounds:?}");
+        assert!(
+            (bounds.x0 - expected).abs() < 1e-8,
+            "{name}: only a genuine nearby painted contour may suppress the ruler205, {bounds:?}, expected left {expected}"
+        );
+    }
+}

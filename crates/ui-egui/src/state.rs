@@ -274,6 +274,10 @@ pub struct ViewFlags {
     pub trim_view: bool,
     /// View → Hide/Show Corner Widget (live corner widgets on rectangles).
     pub corner_widgets: bool,
+    /// The Control bar's Hide/Show Shape Widgets with a shape tool: selected live shapes' corner, pie
+    /// and side widgets with the Selection tool and the shape tools.
+    #[serde(default = "yes")]
+    pub shape_widgets: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
     /// View → Snap to Glyph.
@@ -314,6 +318,7 @@ impl Default for ViewFlags {
             edges: true,
             trim_view: false,
             corner_widgets: true,
+            shape_widgets: true,
             snap_to_pixel: false,
             snap_to_glyph: false,
             text_threads: true,
@@ -733,6 +738,9 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Native-picker-only raster editor; never exposed as an engine preference or dialog field.
+    #[serde(default)]
+    pub original_editor: crate::OriginalEditorChoice,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -844,6 +852,9 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
+    #[serde(default)]
+    pub hpgl_options: Value,
     /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
     /// dialog opens on them (#1152).
     #[serde(default)]
@@ -858,6 +869,10 @@ pub struct UiState {
     /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
     #[serde(default)]
     pub recolor_preserve: Value,
+    /// The open Recolor Artwork dialog's own history of color edits (Undo Changes and Redo
+    /// Changes), empty again each time the dialog opens.
+    #[serde(skip)]
+    pub recolor_history: crate::dialogs::recolor::History,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -1293,6 +1308,7 @@ impl Default for UiState {
             recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            original_editor: Default::default(),
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
@@ -1321,10 +1337,12 @@ impl Default for UiState {
             links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            hpgl_options: Value::Null,
             offset_path: Value::Null,
             smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
+            recolor_history: Default::default(),
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,

@@ -478,6 +478,9 @@ font-technology	Variable	Променливи
 	Check Spelling…	Проверка на правописа…
 	Choose a folder	Избор на папка
 	Choose…	Избор…
+	Curvature Circle Tool	Инструмент Кръг на кривината
+	Cusp	Връх
+	Straight segment	Прав сегмент
 	Circle	Кръг
 	Circle Tool	Инструмент Кръг
 	Circle too large	Кръгът е твърде голям
@@ -581,6 +584,9 @@ font-technology	Variable	Променливи
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Harmony	Показване на хармонията
+	Harmony Rule	Правило за хармония
+	Harmony color	Цвят от хармонията
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
@@ -999,10 +1005,25 @@ font-technology	Variable	Променливи
 	Duplicate Symbol	Дублиране на символ
 	Duplicate {kind} Style	Дублиране на стил ({kind})
 	Dutch	Нідерландски
+	PSD Import Options	Опции за импортиране на PSD
+	Place PSD	Вмъкване на PSD
+	Convert Layers to Objects	Преобразуване на слоевете в обекти
+	Import Hidden Layers	Импортиране на скритите слоеве
+	Flatten Layers to a Single Image	Сплескване на слоевете в едно изображение
+	Import Slices	Импортиране на отрязаните части
 	DXF Import Options	Опции за импортиране на DXF
 	DXF Info	Информация за DXF
 	DXF Options	Опции за DXF
 	DXF Options Dialog	Диалогов прозорец с опции за DXF
+	HP-GL Options	Опции за HP-GL
+	HP-GL Options Dialog	Диалогов прозорец с опции за HP-GL
+	Curve Tolerance:	Толеранс на кривите:
+	Origin:	Начало на координатите:
+	Pens:	Писци:
+	One Pen per Color	Един писец за всеки цвят
+	Pen Table	Таблица на писците
+	Draw the Nearest Path Next	Следващ да се чертае най-близкият път
+	Draw Inner Paths First	Първо да се чертаят вътрешните пътища
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Всяка страница се отпечатва като едно изображение при разделителната способност на растерните ефекти на документа.
 	Earth Tones	Земни тонове
@@ -1216,6 +1237,17 @@ font-technology	Variable	Променливи
 	Shading Color	Цвят на засенчването
 	Black Overprint	Черно с напечатване
 	Draw Hidden Faces	Изчертаване на скритите страни
+	Map Art…	Картографиране на графика…
+	Map Art	Картографиране на графика
+	First Surface	Първа повърхност
+	Previous Surface	Предишна повърхност
+	Next Surface	Следваща повърхност
+	Last Surface	Последна повърхност
+	Horizontal Scale	Хоризонтален мащаб
+	Vertical Scale	Вертикален мащаб
+	Scale to Fit	Мащабиране до побиране
+	Shade Artwork	Засенчване на графиката
+	Invisible Geometry	Невидима геометрия
 	Eyedropper	Пипета
 	Eyedropper Applies:	Пипетата прилага:
 	Eyedropper Options	Опции за пипетата
@@ -1320,6 +1352,17 @@ font-technology	Variable	Променливи
 	Largest:	Най-голям:
 	Direction:	Посока:
 	Symbolism Tools Options	Опции на символогичните инструменти
+	Tool:	Инструмент:
+	Symbol Set Density	Плътност на набор от символи
+	Symbol Sprayer Options	Опции за разпръскване на символи
+	Scrunch:	Свиване:
+	Spin:	Завъртане:
+	Screen:	Филтър:
+	Stain:	Оцветяване:
+	Symbol Sizer Options	Опции за мащабиране на символи
+	Proportional Resizing	Пропорционално мащабиране
+	Resizing Affects Density	Мащабирането влияе на плътността
+	Show Brush Size and Intensity	Показване на размера и интензивността на четката
 	Symbol Set Density:	Плътност на набор от символи:
 	Flat Image	Плоско изображение
 	Flat Logo	Плоско лого
@@ -1589,6 +1632,8 @@ font-technology	Variable	Променливи
 	More Options	Още опции
 	Show Properties Panel	Показване на панела със свойства
 	Hide Corner Widget	Скриване на приспособлението за ъгли
+	Hide Shape Widgets	Скриване на приспособленията за фигури
+	Show Shape Widgets	Показване на приспособленията за фигури
 	Hide Corner Widget for angles greater than	Скриване на приспособлението за ъгли за ъгли, по-големи от
 	Hide Edges	Скриване на ръбовете
 	Hide Gradient Annotator	Скриване на анотатора за градиент
@@ -2128,6 +2173,15 @@ font-technology	Variable	Променливи
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор Kinsoku
 	Kinsoku Shori Type	Тип Kinsoku Shori
+	Kinsoku Shori Settings…	Настройки на Kinsoku Shori…
+	Kinsoku Shori Settings	Настройки на Kinsoku Shori
+	Kinsoku Sets	Набори Kinsoku
+	Kinsoku Set Base	Основа на набор Kinsoku
+	Based on:	Въз основа на:
+	Cannot Start Line	Не може да започва ред
+	Cannot End Line	Не може да завършва ред
+	Hanging Punctuation	Висяща пунктуация
+	Inseparable Characters	Неразделими знаци
 	Push In First	Първо прибиране
 	Push Out First	Първо изтласкване
 	Push Out Only	Само изтласкване
@@ -2244,6 +2298,7 @@ font-technology	Variable	Променливи
 	Pressure	Натиск
 	Tilt	Наклон
 	Bearing	Азимут
+	Stylus Wheel	Колелце на писалката
 	Shape:	Форма:
 	Bristle Length:	Дължина на косъма:
 	Bristle Density:	Плътност на косъмчетата:
@@ -2274,6 +2329,9 @@ font-technology	Variable	Променливи
 	embedding for preview and print	вграждане за преглед и печат
 	embedding allowed	вграждането е разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестен тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} употреба|{n} употреби
 	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
 	missing: shown in {family} {style}	липсва: показан с {family} {style}
 	missing	липсва
@@ -2544,6 +2602,8 @@ font-technology	Variable	Променливи
 	Overprint and Transparency Flattener Options	Опции за сплескване на надпечатването и прозрачността
 	Custom…	Потребителски…
 	Custom Transparency Flattener Options	Потребителски опции за сплескване на прозрачността
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF наборът запазва набора за сплескване, но не и настройките от „Потребителски…“.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Файловете PDF 1.3 изрязват растеризираните области по техните очертания, а „Надпечат“ определя дали надпечатванията се запазват.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS няма алфа прозрачност, а „Надпечати“ определя дали надпечатванията се запазват.
 	Overprint Black…	Напечатване на черното върху друго…
 	Overprint Fill	Напечатване на запълването върху друго
@@ -3047,6 +3107,9 @@ digits	Malayalam	Малаялам
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
 	Color Theme Picker	Избор на цветова тема
+	Undo Changes	Отмяна на промените
+	Redo Changes	Повторение на промените
+@msg	Recolor Artwork is not open	„Преоцветяване на илюстрацията“ не е отворено
 	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
 	Prominent Colors	Преобладаващи цветове
 	Save All Colors	Запази всички цветове
@@ -3101,6 +3164,7 @@ digits	Malayalam	Малаялам
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Свойствата на динамичен правоъгълник показват едно поле „Радиус на ъгъла“ за четирите ъгъла; ако е изключено, всеки ъгъл има свое поле.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Какво трансформират промените в панела „Трансформиране“: обекта, плочките на мострата му или и двете; „По подразбиране“ следва „Трансформиране на плочките на мострата“.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когато е избран един екземпляр на символ, панелът „Трансформиране“ използва регистрационната точка на символа като опорна точка.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Рисуването на правоъгълник, елипса, многоъгълник, звезда или линия отваря панела „Трансформиране“, ако е затворен.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Затъмнява платното извън работните области, докато инструментът „Работна област“ е активен.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когато „Затъмняване на областта извън работната област“ е включено, областта извън работните области остава тъмна, докато влачите с инструмента „Работна област“.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Колко близо в пиксели трябва да е показалецът до обект, опорна точка или дръжка, за да го избере щракване.
@@ -3278,6 +3342,7 @@ digits	Malayalam	Малаялам
 	Save Preset	Запази предварителна настройка
 	Save Document Preset	Запази предварителна настройка на документа
 	Save Preset…	Запази предварителна настройка…
+	Save Summary…	Запази обобщението…
 	Save Print Preset	Запази предварителна настройка за печат
 	Save Recovery Data	Запази данни за възстановяване
 	Save Save for Web Preset	Запази предварителна настройка за „Запази за уеб“
@@ -3571,6 +3636,7 @@ digits	Malayalam	Малаялам
 	Show Modified	Показване на променените
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
+	Show on Shape Creation	Показване при създаване на фигура
 	Show Recent Colors	Показване на скорошните цветове
 	Toggle RGB Percent	Превключване на RGB в проценти
 	Show Original Path	Показване на оригиналния път
@@ -3596,6 +3662,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показване на миниатюри
 	Show Tile Edge	Показване на ръба на плочката
 	Show Tints/Shades	Показване на нюанси/затъмнения
+	Show Tool Cards	Показване на карти на инструментите
 	Show Tool Tips	Показване на подсказки
 	Show Transparency Grid	Показване на шахматна дъска за прозрачност
 	Show Video Rulers	Показване на видеолинийки
@@ -3679,6 +3746,8 @@ digits	Malayalam	Малаялам
 	Outlines	Контури
 	Outlines with Source Image	Контури с изходно изображение
 	Source Image	Изходно изображение
+	Split View	Разделен изглед
+	Divider	Разделител
 	Press and hold to view the source image	Задръжте натиснато, за да видите изходното изображение
 	Image Trace View	Изглед на трасиране на изображение
 	Snap Options	Опции за прилепване
@@ -4095,6 +4164,8 @@ digits	Malayalam	Малаялам
 	Unembed…	Премахване на връзка…
 	Ungroup	Разгрупиране
 	Ungroup Color Group	Разгрупиране на цветова група
+	Color Group Options	Опции за цветова група
+	Color Group Options…	Опции за цветова група…
 	Unicode	Уникод
 	Unicode (UTF-16)	Уникод (UTF-16)
 	Unicode (UTF-8)	Уникод (UTF-8)
@@ -5002,6 +5073,7 @@ axis	Both	И двете
 @msg	the PDF is password-protected: give its password	PDF файлът е защитен с парола: въведете паролата му
 @msg	the PDF password is wrong	паролата за PDF файла е грешна
 @msg	the Save PDF dialog didn't open	диалоговият прозорец за запазване на PDF не се отвори
+@msg	the Save PDF dialog is not open	диалоговият прозорец за запазване на PDF не е отворен
 @msg	the WMF header is damaged	WMF заглавната част е повредена
 @msg	the art could not be sampled	графиката не можа да бъде проучена
 @msg	the art has no bounds	графиката няма граници
@@ -5202,6 +5274,7 @@ axis	Both	И двете
 @msg	onto must name a panel floating in another group	onto трябва да указва панел, плаващ в друга група
 @msg	below and above must name a panel floating in another group	below и above трябва да указват панел, плаващ в друга група
 @msg	give only one of onto, below and above	задайте само едно от onto, below и above
+@msg	give only one of `index`, `indices` and `t`	задайте само едно от `index`, `indices` и `t`
 @msg	column must be true or a number from 1	column трябва да е true или число от 1 нататък
 @msg	x and y must both be numbers	x и y трябва да са числа
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" не е цвят: запишете го като #rrggbb
@@ -5365,6 +5438,25 @@ axis	Both	И двете
 	Preserve Embedded Profiles	Запазване на вградените профили
 	Convert to Working Space	Преобразуване в работното пространство
 	Preserve Numbers	Запазване на числата
+	Profile Mismatches:	Несъответствия на профила:
+	Ask When Opening	Питане при отваряне
+	Ask When Pasting	Питане при поставяне
+	Missing Profiles:	Липсващи профили:
+	Embedded Profile Mismatch	Несъответствие с вградения профил
+	Missing Profile	Липсващ профил
+	Paste Profile Mismatch	Несъответствие на профила при поставяне
+	“{name}” is not tagged with a {model} profile.	„{name}“ няма {model} профил.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“ има {model} профил „{profile}“, който не е {model} работното пространство „{working}“.
+	Use the embedded profile	Използване на вградения профил
+	Convert the colors to the working space	Преобразуване на цветовете в работното пространство
+	Discard the embedded profile	Отхвърляне на вградения профил
+	Leave as is	Оставяне без промяна
+	Assign the working space	Задаване на работното пространство
+	Assign profile:	Задаване на профил:
+	Preserve the color numbers	Запазване на цветовите стойности
+	Convert to keep the colors' appearance	Преобразуване със запазване на вида на цветовете
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` се използва само с `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Поставените цветове идват от документ с {model} профил „{from}“; профилът на този документ е „{to}“.
 	Texture	Текстура
 	Craquelure…	Кракелюр…
 	Grain…	Зърнистост…
@@ -7349,6 +7441,8 @@ breakText	Glyphs	Глифи
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Допирателна окръжност…
 	Tangent Circle	Допирателна окръжност
+	Tangent Circle Tool	Инструмент „Допирателна окръжност“
+	No tangent circle here	Тук няма допирателна окръжност
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя
@@ -7364,6 +7458,16 @@ breakText	Glyphs	Глифи
 @msg	`circle` is past the last circle found ({found})	`circle` е след последната намерена окръжност ({found})
 @msg	object {value} is not a path or compound path	обект {value} не е път или съставен път
 @msg	these shapes are too small to measure	тези форми са твърде малки, за да бъдат измерени
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Добавяне на ограничаващ правоъгълник
+	Add Bounding Circle	Добавяне на ограничаваща окръжност
+	Add Bounding Rectangle…	Добавяне на ограничаващ правоъгълник…
+	Add Bounding Circle…	Добавяне на ограничаваща окръжност…
+	One per Object	По една за всеки обект
+@msg	nothing to enclose	няма какво да се огради
+@msg	`offset` must be 0 or more	`offset` трябва да е 0 или повече
+@msg	the shape would have no size	фигурата няма да има размер
+@msg	the shape would reach past the edge of the canvas	фигурата би излязла извън ръба на работната площ
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменти за документи
 	Save a Timestamped Copy	Запазване на копие с дата и час
@@ -7685,6 +7789,50 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Fine Stipple	Фина точкова текстура
+	Dense Stipple	Гъста точкова текстура
+	Soft Stipple	Мека точкова текстура
+	Bold Stipple	Едра точкова текстура
+	Paper Cutouts	Хартиени изрезки
+	Coral Layers	Коралови слоеве
+	Mint Layers	Ментови слоеве
+	Midnight Layers	Среднощни слоеве
+	Sunflower Sheet	Слънчогледов лист
+	Rose Layers	Розови слоеве
+	Monochrome Stack	Монохромен стек
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Показва карта с това какво прави инструментът от лентата и какво правят клавишите му вместо подсказката му; изисква Показване на подсказки.
+	Selects whole objects and groups to move, resize or rotate them.	Избира цели обекти и групи, за да ги премествате, оразмерявате или завъртате.
+	Selects anchor points and path segments to reshape a path.	Избира опорни точки и сегменти от път, за да промените формата на пътя.
+	Draws paths point by point, with straight segments and smooth curves.	Рисува пътища точка по точка, с прави сегменти и плавни криви.
+	Draws smooth curves through the points you click.	Рисува плавни криви през точките, върху които щраквате.
+	Adds text at a point, or in a frame you drag.	Добавя текст в точка или в рамка, която изтегляте.
+	Draws rectangles and squares.	Рисува правоъгълници и квадрати.
+	Draws rectangles with rounded corners.	Рисува правоъгълници със закръглени ъгли.
+	Draws ellipses and circles.	Рисува елипси и окръжности.
+	Draws polygons with sides of equal length.	Рисува многоъгълници с равни страни.
+	Draws stars.	Рисува звезди.
+	Turns objects around a reference point.	Завърта обекти около опорна точка.
+	Flips objects across an axis through a reference point.	Огледално обръща обекти спрямо ос през опорна точка.
+	Resizes objects from a reference point.	Оразмерява обекти от опорна точка.
+	Slants objects from a reference point.	Наклонява обекти от опорна точка.
+	Moves the view of the document.	Премества изгледа на документа.
+	Magnifies or reduces the view.	Увеличава или намалява изгледа.
+	Copies the color and other attributes of one object to the selection.	Копира цвета и другите атрибути на един обект върху избраното.
+	Sets the direction and length of a gradient.	Задава посоката и дължината на градиент.
+	Creates, selects and resizes artboards.	Създава, избира и оразмерява работни площи.
+	Changes the width of a stroke along its length.	Променя ширината на щрих по дължината му.
+	Bends art by dragging pins placed on it.	Огъва графиката чрез плъзгане на поставени върху нея карфици.
+	Pushes the outlines of paths in the direction you drag.	Избутва очертанията на пътищата в посоката на плъзгане.
+	Twists the outlines of paths into swirls.	Усуква очертанията на пътищата във вихри.
+	Pulls the outlines of paths in toward the brush.	Придърпва очертанията на пътищата към четката.
+	Pushes the outlines of paths out from the brush.	Избутва очертанията на пътищата навън от четката.
+	Adds curved details along the outlines of paths.	Добавя извити детайли по очертанията на пътищата.
+	Adds spiky details along the outlines of paths.	Добавя остри детайли по очертанията на пътищата.
+	Adds wrinkles along the outlines of paths.	Добавя гънки по очертанията на пътищата.
+	Moves, copies and resizes objects on the perspective grid.	Премества, копира и оразмерява обекти в перспективната мрежа.
+	Makes a series of steps between two or more objects.	Създава поредица от стъпки между два или повече обекта.
+	Places dimension lines that show measured lengths.	Поставя размерни линии, които показват измерени дължини.
 	Tap	Кратко натискане
 	Clear Hold	Изчистване на задържането
 	Hold Shortcuts	Комбинации със задържане
@@ -7701,3 +7849,7 @@ breakText	Glyphs	Глифи
 	Pulse Stroke	Пулсиращ щрих
 	Round Flow	Кръгъл поток
 	Chisel Flow	Скосен поток
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редактиране на оригинала с:
+file-filter	Applications	Приложения

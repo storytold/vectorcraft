@@ -1253,7 +1253,8 @@ fn pick_snap_reuses_contours_until_document_roots_or_option_change() {
     assert_eq!(snap.snap(&c, at).0, Point::new(205.0, 150.0));
     let c = ToolContext { revision: (1, 2), ..c };
     assert_eq!(snap.snap(&c, at).0, at);
-    // A changed picked/selected root is a distinct key, even at the same revision.
+    // A different document needs a new authoritative revision; the separate
+    // root-transition test keeps one real document while changing hit roots.
     let mut d2 = Document::new(500.0, 500.0);
     let _padding_id = d2.alloc_id();
     let id2 = d2.alloc_id();
@@ -1266,7 +1267,7 @@ fn pick_snap_reuses_contours_until_document_roots_or_option_change() {
     .unwrap();
     let d2 = width(d2, 20.0);
     let s2 = Selection { objects: vec![id2], ..Default::default() };
-    let c2 = ToolContext { doc: &d2, selection: &s2, ..c };
+    let c2 = ToolContext { doc: &d2, selection: &s2, revision: (1, 3), ..c };
     assert_eq!(snap.snap(&c2, at).0, Point::new(210.0, 150.0));
     let d3 = width(d2.clone(), 10.0);
     let off = ToolContext { doc: &d3, snap_to_stroke_edges: false, ..c2 };
