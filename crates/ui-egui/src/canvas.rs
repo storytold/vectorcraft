@@ -28,6 +28,7 @@ mod input;
 mod outline;
 mod overlays;
 mod panes;
+mod quick_pen_bar;
 mod raster;
 mod selection_marks;
 mod task_bar;
@@ -68,6 +69,7 @@ use overlays::{
 };
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+pub(crate) use quick_pen_bar::quick_pen_bar_rect;
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub use selection_marks::SelectionMarks;
@@ -463,6 +465,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
+        // The Quick Pen toolbar gives way to a drag as the task bar does.
+        quick_pen_bar::quick_pen_bar(app, ui, &xf);
         contour_bar::contour_bar(app, ui, &xf);
         // After the task bar, which the row of character alternates keeps clear of.
         alternates_bar::alternates_bar(app, ui, &xf);

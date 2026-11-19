@@ -2817,6 +2817,13 @@ font-technology	Variable	Variables
 	Pen Tool	Herramienta Pluma
 	Quick Pen Tool	Herramienta Pluma rápida
 	Quick Pen	Pluma rápida
+	Quick Pen Toolbar	Barra de herramientas de Pluma rápida
+	Continuous Arc	Arco continuo
+	Sharp Corner Arc	Arco de esquina aguda
+	Flip Arc	Voltear arco
+	Hide Toolbar	Ocultar barra de herramientas
+	Pin Toolbar Position	Fijar posición de la barra de herramientas
+	Reset Toolbar Position	Restablecer posición de la barra de herramientas
 	Pencil	Lápiz
 	Pencil Tool	Herramienta Lápiz
 	per slice	por sector

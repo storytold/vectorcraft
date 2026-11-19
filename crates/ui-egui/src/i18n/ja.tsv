@@ -2951,6 +2951,13 @@ antiAlias	Sharp	シャープ
 	Pen Tool	ペンツール
 	Quick Pen Tool	クイックペンツール
 	Quick Pen	クイックペン
+	Quick Pen Toolbar	クイックペンツールバー
+	Continuous Arc	連続円弧
+	Sharp Corner Arc	鋭角円弧
+	Flip Arc	円弧を反転
+	Hide Toolbar	ツールバーを隠す
+	Pin Toolbar Position	ツールバーの位置を固定
+	Reset Toolbar Position	ツールバーの位置をリセット
 	Pencil	鉛筆
 	Pencil Tool	鉛筆ツール
 	Percent:	パーセント:

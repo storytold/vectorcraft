@@ -2776,6 +2776,13 @@ file-filter	Templates	Vorlagen
 	Pen Tool	Zeichenstift-Werkzeug
 	Quick Pen Tool	Schnellzeichenstift-Werkzeug
 	Quick Pen	Schnellzeichenstift
+	Quick Pen Toolbar	Schnellzeichenstift-Werkzeugleiste
+	Continuous Arc	Fortlaufender Bogen
+	Sharp Corner Arc	Bogen mit scharfer Ecke
+	Flip Arc	Bogen spiegeln
+	Hide Toolbar	Werkzeugleiste ausblenden
+	Pin Toolbar Position	Position der Werkzeugleiste fixieren
+	Reset Toolbar Position	Position der Werkzeugleiste zurücksetzen
 	Pencil	Buntstift
 	Pencil Tool	Buntstift-Werkzeug
 	per slice	pro Slice

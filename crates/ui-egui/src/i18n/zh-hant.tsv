@@ -4147,6 +4147,13 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pen Tool	筆型工具
 	Quick Pen Tool	快速筆型工具
 	Quick Pen	快速筆型
+	Quick Pen Toolbar	快速筆型工具列
+	Continuous Arc	連續弧線
+	Sharp Corner Arc	尖角弧線
+	Flip Arc	翻轉弧線
+	Hide Toolbar	隱藏工具列
+	Pin Toolbar Position	釘選工具列位置
+	Reset Toolbar Position	重設工具列位置
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片

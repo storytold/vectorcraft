@@ -2180,6 +2180,13 @@ font-technology	Variable	Μεταβλητές
 	Pen Tool	Πένα (Pen Tool)
 	Quick Pen Tool	Εργαλείο γρήγορης πένας
 	Quick Pen	Γρήγορη πένα
+	Quick Pen Toolbar	Γραμμή εργαλείων γρήγορης πένας
+	Continuous Arc	Συνεχές τόξο
+	Sharp Corner Arc	Τόξο με αιχμηρή γωνία
+	Flip Arc	Αναστροφή τόξου
+	Hide Toolbar	Απόκρυψη γραμμής εργαλείων
+	Pin Toolbar Position	Σταθεροποίηση θέσης γραμμής εργαλείων
+	Reset Toolbar Position	Επαναφορά θέσης γραμμής εργαλείων
 	Pencil	Μολύβι
 	Pencil Tool	Μολύβι (Pencil Tool)
 	Percent:	Ποσοστό:
