@@ -140,7 +140,7 @@ impl Contours {
             .filter(|c| contains_closed(c.bounds.inflate(tol, tol), near))
             .flat_map(|c| &c.segments)
             .flat_map(|s| intersections(*s, line))
-            .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(u) >= 0.0) && valid(*q))
+            .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(u) > 0.0) && valid(*q))
             .min_by(|a, b| a.distance_squared(near).total_cmp(&b.distance_squared(near)))
     }
 

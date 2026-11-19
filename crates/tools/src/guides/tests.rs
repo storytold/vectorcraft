@@ -1787,3 +1787,138 @@ fn review_597368_anchor_held_text_stroke_does_not_enable_a_ruler_only_crossing()
         actual
     );
 }
+
+fn review_597569_draw_document(edge: f64) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    review_597185_path(&mut d, &[Point::new(edge + 5.0, -1000.0), Point::new(edge + 5.0, 2000.0)], Some(10.0));
+    d
+}
+
+fn review_597569_rectangle_drag(d: &Document, on: bool, raw: Point) -> serde_json::Value {
+    use crate::{Action, Mods, PointerEvent, PointerKind, Tool};
+
+    let original = d.clone();
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: on,
+        snapping_tolerance: 4.0,
+        zoom: 1.0,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        constrain_angle: 0.0,
+        ..cx(d, &selection, &paint)
+    };
+    let mut tool = crate::shape::ShapeTool::new("rectangle");
+    let shift = Mods { shift: true, ..Mods::default() };
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, raw.x, raw.y).with_mods(shift));
+    assert!(
+        actions.iter().any(|action| matches!(action, Action::Begin(label) if label == "Rectangle")),
+        "a real nonzero Shift drag must begin instead of snapping back below the click threshold: {actions:?}"
+    );
+    let value = actions
+        .iter()
+        .find_map(|action| match action {
+            Action::Preview(id, value) if id == "shape.rectangle" => Some(value.clone()),
+            _ => None,
+        })
+        .expect("the public Rectangle tool previews the dragged square");
+    let (width, height) = (value["width"].as_f64().unwrap(), value["height"].as_f64().unwrap());
+    assert!(width > 0.0 && height > 0.0 && (width - height).abs() < 1e-9, "a nonzero square preview: {value}");
+    assert_eq!(value["x"], 100.0);
+    assert_eq!(value["y"], 100.0);
+    let released = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, raw.x, raw.y).with_mods(shift));
+    assert!(matches!(released.as_slice(), [Action::Commit]), "the actual drag commits once instead of opening its click-size dialog: {released:?}");
+    assert!(!tool.busy());
+    assert_eq!(d, &original, "the tool emits actions without mutating the source paint, geometry or resources");
+    value
+}
+
+#[test]
+fn review_597569_forward_stroke_contact_cannot_turn_a_shift_drag_into_a_click() {
+    let d = review_597569_draw_document(100.0);
+    let raw = Point::new(102.0, 102.0);
+    // Ordinary drawing and a genuine forward painted contact must work first.
+    review_597569_rectangle_drag(&d, false, raw);
+    let forward = review_597569_draw_document(110.0);
+    let value = review_597569_rectangle_drag(&forward, true, Point::new(108.0, 108.0));
+    assert_eq!(value["width"], 10.0, "CONTROL: the positive-travel painted contact is110,110");
+    assert_eq!(value["height"], 10.0);
+
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    let targets = Targets::for_drawing(&d, &[], None, None).styled(&c).with_stroke_edges(&c, &[], None);
+    let start = Point::new(100.0, 100.0);
+    assert!(
+        targets.nearest_point(start, 4.0).is_none() && targets.nearest_point(raw, 4.0).is_none(),
+        "CONTROL: no anchor or center explains the painted hit"
+    );
+    let (same, guides) = targets.snap_point_along(start, Vec2::new(1.0, 1.0), 4.0);
+    assert_eq!(same, start, "CONTROL: a non-ray trajectory may retain its zero-travel contact");
+    assert!(review_597185_stroke_label(&guides), "CONTROL: that zero contact belongs to the real painted edge");
+
+    // Before accepts the ray's t=0 stroke contact and never emits Begin/Preview;
+    // the public tool then treats Up as a click and opens its size dialog.
+    review_597569_rectangle_drag(&d, true, raw);
+}
+
+fn review_597569_bbox_document(stroke: Option<f64>, anchors: &[Point]) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    if let Some(edge) = stroke {
+        review_597185_vertical(&mut d, edge + 0.25);
+    }
+    for &at in anchors {
+        review_597185_anchor(&mut d, at);
+    }
+    d
+}
+
+#[test]
+fn review_597569_bbox_keeps_the_next_feasible_anchor_ahead_of_stroke() {
+    let raw = Point::new(0.5, 10.0);
+    let rejected = Point::new(-0.5, 10.0);
+    let feasible = Point::new(2.0, 10.0);
+    let both = [rejected, feasible];
+    // Every existing priority/fallback control precedes either new regression.
+    for handle in [Handle::BottomRight, Handle::Right] {
+        let stroke = review_597569_bbox_document(Some(3.0), &[]);
+        let (q, guides) = review_597185_scale(&stroke, true, handle, raw);
+        assert!(
+            q.distance(Point::new(3.0, 10.0)) < 1e-7 && review_597185_stroke_label(&guides),
+            "CONTROL: genuine painted contact: {q:?} {guides:?}"
+        );
+        let valid = review_597569_bbox_document(Some(3.0), &[feasible]);
+        let (q, guides) = review_597185_scale(&valid, true, handle, raw);
+        assert!(
+            q.distance(feasible) < 1e-7 && !review_597185_stroke_label(&guides),
+            "CONTROL: a valid nearest anchor keeps priority: {q:?} {guides:?}"
+        );
+        let invalid = review_597569_bbox_document(Some(3.0), &[rejected]);
+        let (q, guides) = review_597185_scale(&invalid, true, handle, raw);
+        assert!(
+            q.distance(Point::new(3.0, 10.0)) < 1e-7 && review_597185_stroke_label(&guides),
+            "CONTROL: an invalid sole anchor still permits paint: {q:?} {guides:?}"
+        );
+
+        // Empty, distant-only and sign-invalid painted channels must retain the
+        // original unrestricted legacy fallback, not broaden ordinary snapping.
+        for edge in [None, Some(1000.0), Some(-2.0)] {
+            let d = review_597569_bbox_document(edge, &both);
+            let off = review_597185_scale(&d, false, handle, raw);
+            let on = review_597185_scale(&d, true, handle, raw);
+            assert_eq!(on.0, off.0, "CONTROL: no eligible paint preserves OFF geometry: {edge:?} {handle:?}");
+            assert_eq!(labels(&on.1), labels(&off.1), "CONTROL: no eligible paint preserves the ordinary labels");
+            assert!(!review_597185_stroke_label(&on.1));
+        }
+    }
+    for handle in [Handle::BottomRight, Handle::Right] {
+        let d = review_597569_bbox_document(Some(3.0), &both);
+        let (q, guides) = review_597185_scale(&d, true, handle, raw);
+        assert!(
+            q.distance(feasible) < 1e-7,
+            "REGRESSION: a rejected nearest anchor cannot hide the next feasible anchor behind stroke: {handle:?} {q:?} {guides:?}"
+        );
+        assert_eq!(labels(&guides), ["anchor"], "the real feasible anchor, not a stroke or axis alignment, owns the contact");
+    }
+}

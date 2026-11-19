@@ -1024,6 +1024,17 @@ fn review_597185_4626304646_invalid_artboard_anchor_does_not_block_a_valid_strok
     review_462630_bounds(&stroke, Rect::new(0.0, 0.0, 1.5, 10.0));
 }
 fn review_597368_resize(d: &vectorcraft_doc::Document, start: Point, end: Point, mods: Mods, stroke_edges: bool, view: (f64, f64)) -> Value {
+    review_597569_resize_guides(d, start, end, mods, stroke_edges, view).0
+}
+
+fn review_597569_resize_guides(
+    d: &vectorcraft_doc::Document,
+    start: Point,
+    end: Point,
+    mods: Mods,
+    stroke_edges: bool,
+    view: (f64, f64),
+) -> (Value, Vec<Overlay>) {
     let (selection, paint) = (Selection::default(), paint());
     let c = ToolContext {
         smart_guides: true,
@@ -1043,10 +1054,11 @@ fn review_597368_resize(d: &vectorcraft_doc::Document, start: Point, end: Point,
     assert!(actions.iter().any(|a| matches!(a, Action::Begin(label) if label == "Resize Artboard")));
     assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.setProps")), "CONTROL: this is a real handle resize");
     let value = preview_params(&actions);
+    let guides = tool.overlays(&c);
     assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, end.x, end.y).with_mods(mods)).as_slice(), [Action::Commit]));
     assert!(!tool.busy());
     assert_eq!(d, &original, "CONTROL: the tool only emits a preview; source artwork/paint/bleed/resources stay exact");
-    value
+    (value, guides)
 }
 
 fn review_597368_horizontal_edge(d: &mut vectorcraft_doc::Document, x0: f64, x1: f64, y: f64) -> vectorcraft_doc::NodeId {
@@ -1108,7 +1120,12 @@ fn review_597368_artboard_collinear_contacts_keep_side_and_coupled_minima() {
         &review_597368_resize(&wide, wide_start, Point::new(1000.25, 0.5), shift, true, wide_view),
         Rect::new(0.0, -0.000125, 1000.25, 1.000125),
     );
-    review_462630_bounds(&review_597368_resize(&wide, wide_start, Point::new(999.5, 0.5), shift, false, wide_view), Rect::new(0.0, 0.0, 1000.0, 1.0));
+    let (off, off_guides) = review_597569_resize_guides(&wide, wide_start, Point::new(999.5, 0.5), shift, false, wide_view);
+    review_462630_bounds(&off, Rect::new(0.0, 0.0, 1000.0, 1.0));
+    assert!(
+        !off_guides.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge")),
+        "CONTROL: the same minimum-side bounds with stroke snapping OFF do not claim a painted contact"
+    );
 
     let mirrored = |left: f64| {
         let mut d = vectorcraft_doc::Document::new(2000.0, 1200.0);
@@ -1141,7 +1158,11 @@ fn review_597368_artboard_collinear_contacts_keep_side_and_coupled_minima() {
 
     // REGRESSION2: proportional Right changes height even though that grabbed
     // coordinate stays at0.5; the1pt short side requires factor>=1, hence width1000.
-    let v = review_597368_resize(&wide, wide_start, Point::new(999.5, 0.5), shift, true, wide_view);
+    let (v, guides) = review_597569_resize_guides(&wide, wide_start, Point::new(999.5, 0.5), shift, true, wide_view);
+    assert!(
+        guides.iter().any(|o| matches!(o, Overlay::Label { p, text, .. } if text == "stroke edge" && p.distance(Point::new(1000.0, 0.5)) <= 1e-6)),
+        "REGRESSION: the proportional minimum must retain its actual painted contact, not merely clamp to identical bounds: {guides:?}"
+    );
     review_462630_bounds(&v, Rect::new(0.0, 0.0, 1000.0, 1.0));
     assert!(v["width"].as_f64().unwrap() >= 1000.0 && v["height"].as_f64().unwrap() >= 1.0);
     assert_eq!(v["x"], 0.0, "the proportional side keeps its opposite x origin");

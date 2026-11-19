@@ -1764,10 +1764,18 @@ impl Targets {
     fn free_corner_stroke_contact(
         &self,
         anchor: Option<(Point, Kind)>,
+        near: Point,
+        tol: f64,
         valid: impl Fn(Point) -> bool,
         find: impl FnOnce() -> Option<Point>,
     ) -> Option<(Point, Kind)> {
-        if anchor.is_some_and(|(q, _)| valid(q)) || self.stroke_contours.is_empty() { None } else { find().map(|q| (q, Kind::StrokeEdge)) }
+        if anchor.is_some_and(|(q, _)| valid(q)) || self.stroke_contours.is_empty() {
+            return None;
+        }
+        let stroke = find()?;
+        // Only an eligible painted contact opens this route: otherwise keep the
+        // original legacy fallback, including its unrestricted nearest anchor.
+        self.nearest_point_with(near, tol, valid).or(Some((stroke, Kind::StrokeEdge)))
     }
 
     /// The existing open sign region for a free box corner, in local handle space.
@@ -1805,11 +1813,20 @@ impl Targets {
         valid: impl Fn(f64) -> bool,
     ) -> [Option<(f64, Point, Kind, u8)>; 2] {
         let l2 = dir.hypot2();
-        let anchor = if l2 > 1e-18 { self.nearest_point(near, tol).map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0)) } else { None };
         let stroke = if l2.is_finite() && l2 > 0.0 {
             self.stroke_contours
                 .on_line_with(base, dir, near, tol, false, |q| valid((q - base).dot(dir) / l2))
                 .map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
+        } else {
+            None
+        };
+        let anchor = if l2 > 1e-18 {
+            let point = if stroke.is_some() {
+                self.nearest_point_with(near, tol, |q| valid((q - base).dot(dir) / l2))
+            } else {
+                self.nearest_point(near, tol)
+            };
+            point.map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0))
         } else {
             None
         };
@@ -1857,7 +1874,7 @@ impl Targets {
                 valid((local.x - origin.x) / d0.x, sx) && valid((local.y - origin.y) / d0.y, sy)
             };
             let anchor = self.nearest_point(p, tol);
-            let stroke = self.free_corner_stroke_contact(anchor, valid_contact, || {
+            let stroke = self.free_corner_stroke_contact(anchor, p, tol, valid_contact, || {
                 // The existing corner solver accepts the current OPEN sign region, with no
                 // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
                 let domain = Self::free_corner_contact_domain(to_local, p, origin, d0, (sx, sy), tol);
