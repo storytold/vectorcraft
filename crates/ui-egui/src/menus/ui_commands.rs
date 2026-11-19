@@ -573,6 +573,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     (
+        "window.toolbarCompact",
+        "Compact Tools",
+        "",
+        "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
+    ),
+    (
         "window.toolsBesideCanvas",
         "Keep Tools Beside the Canvas",
         "",
@@ -924,6 +930,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Select Last Selection Tool",
         "Cmd+~",
         "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
+    ),
+    (
+        "tool.switchSelectionTools",
+        "Switch Selection Tools",
+        "",
+        "{} choose Direct Selection while Selection is active, otherwise choose Selection; this is a persistent explicit tool choice, as selecting the tool from the toolbar, and can be assigned a key in Keyboard Shortcuts with no default key. Normal tool deactivation finishes pending work; returns the actual active {tool}",
     ),
     (
         "tool.setOption",
@@ -1650,6 +1662,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "file.cancelPlace",
+        "Cancel Place",
+        "",
+        "{} stop placing every file being read in the background (its progress window's Cancel): the files aren't placed → {cancelled: n}",
     ),
     (
         "ui.dxfOptionsDialog",

@@ -7117,6 +7117,7 @@ axis	Y Axis	Y축
 	Inventory Icons	인벤토리 아이콘
 	Skill Icons	스킬 아이콘
 	Weather Icons	날씨 아이콘
+	Media Controls	미디어 제어
 	Attack	공격
 	Defend	방어
 	Heal	치유
@@ -7491,6 +7492,10 @@ axis	Y Axis	Y축
 	Rain	비
 	Thunder	천둥
 	Snow	눈
+	Play	재생
+	Pause	일시 중지
+	Skip Next	다음으로 건너뛰기
+	Shuffle	셔플
 	Bar	막대
 	Hexagon	육각형
 	Spectrum	스펙트럼

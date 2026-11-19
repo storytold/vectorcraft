@@ -9453,6 +9453,7 @@ axis	Y Axis	Y-as
 	Inventory Icons	Inventarisiconen
 	Skill Icons	Vaardigheidsiconen
 	Weather Icons	Weericonen
+	Media Controls	Mediabediening
 	Attack	Aanval
 	Defend	Verdediging
 	Heal	Genezen
@@ -9820,6 +9821,10 @@ axis	Y Axis	Y-as
 	Rain	Regen
 	Thunder	Donder
 	Snow	Sneeuw
+	Play	Afspelen
+	Pause	Pauze
+	Skip Next	Volgende
+	Shuffle	Shuffle
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen

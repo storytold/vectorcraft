@@ -6763,6 +6763,7 @@ axis	Y Axis	Y osa
 	Inventory Icons	Ikone inventara
 	Skill Icons	Ikone vještina
 	Weather Icons	Ikone vremena
+	Media Controls	Medijske kontrole
 	Attack	Napad
 	Defend	Odbrana
 	Heal	Iscjeljenje
@@ -7136,6 +7137,10 @@ axis	Y Axis	Y osa
 	Rain	Kiša
 	Thunder	Grom
 	Snow	Snijeg
+	Play	Reprodukuj
+	Pause	Pauza
+	Skip Next	Sljedeće
+	Shuffle	Nasumično
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

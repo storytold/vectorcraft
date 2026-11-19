@@ -7375,6 +7375,7 @@ axis	Y Axis	Oś Y
 	Inventory Icons	Ikony ekwipunku
 	Skill Icons	Ikony umiejętności
 	Weather Icons	Ikony pogody
+	Media Controls	Elementy sterujące multimediami
 	Attack	Atak
 	Defend	Obrona
 	Heal	Leczenie
@@ -7748,6 +7749,10 @@ axis	Y Axis	Oś Y
 	Rain	Deszcz
 	Thunder	Grzmot
 	Snow	Śnieg
+	Play	Odtwórz
+	Pause	Pauza
+	Skip Next	Pomiń do następnego
+	Shuffle	Losowo
 	Spectrum	Spektrum
 	Vivid	Żywe
 	Save Brush Library…	Zapisz bibliotekę pędzli…
