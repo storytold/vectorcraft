@@ -3798,6 +3798,7 @@ arrowhead	Feather	પીંછું
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
 	Recent	તાજેતરના
+	Clear Recent Commands	તાજેતરના આદેશો સાફ કરો
 	Search commands	આદેશો શોધો
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
@@ -4815,6 +4816,7 @@ arrowhead	Feather	પીંછું
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	વ્હીલ વ્યૂ
 	Box View	બૉક્સ વ્યૂ
+	Show Out-of-Gamut Colors	ગેમટ બહારના રંગો બતાવો
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો

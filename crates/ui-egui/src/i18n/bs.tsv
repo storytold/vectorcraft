@@ -819,6 +819,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Prikaz kotača
 	Box View	Prikaz kvadrata
+	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
@@ -4323,6 +4324,11 @@ theme	Appearance	Izgled
 	Edit Arrowheads	Uredi vrhove strelica
 	Edit Arrowheads…	Uredi vrhove strelica…
 	Reload Arrowheads	Ponovo učitaj vrhove strelica
+	Bevels	Zakošenja
+	Edit Bevels	Uredi zakošenja
+	Edit Bevels…	Uredi zakošenja…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Ponovo učitaj zakošenja
 	Stroke Options	Opcije poteza
 	Width Profiles	Profili širine
 	Apply Graphic Style	Primijeni grafički stil
@@ -4649,6 +4655,7 @@ font-technology	Variable	Varijabilni
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
+	Clear Recent Commands	Očisti nedavne naredbe
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…

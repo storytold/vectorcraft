@@ -1126,6 +1126,11 @@ impl CommandUses {
         }
     }
 
+    /// Whether no command is counted.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.uses.is_empty()
+    }
+
     /// The count of `id`'s picks as a grade from 0 (never picked) to 9: the base-2 logarithm of
     /// the count plus one, so 1 pick gives 1, 3 give 2, 7 give 3, and so on.
     fn grade(&self, id: &str) -> u8 {
@@ -1201,6 +1206,13 @@ pub(crate) fn recent_list_open(ctx: &egui::Context) -> bool {
     egui::Popup::is_id_open(ctx, recent_list_id())
 }
 
+/// Opens the palette with an empty search when it is closed, and closes it when it is open.
+pub(crate) fn toggle(app: &mut VectorcraftApp) {
+    app.ui.palette_open = !app.ui.palette_open;
+    app.ui.palette_query.clear();
+    app.ui.palette_toggled = true;
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The widget that had the keyboard focus when the palette opened takes it back when the palette
     // closes, unless a modal window is up (a pick opened a dialog, which focuses its own first
@@ -1209,6 +1221,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let focus_id = egui::Id::unique("palette-focus-before");
     let field_id = egui::Id::unique("palette-field");
     let sel_id = egui::Id::unique("palette-selected");
+    // A toggle can close the palette and open it again before it is drawn closed, as two runs of its
+    // command in one step do, so the palette forgets its highlight after any toggle.
+    if std::mem::take(&mut app.ui.palette_toggled) {
+        ctx.data_mut(|d| d.remove::<Highlight>(sel_id));
+    }
     // The Recent Commands rows drawn in the last frame, so a pick with the keyboard, which leaves the
     // focus on its row, gives the focus back too.
     let rows_id = egui::Id::unique("palette-recent-rows");
@@ -1587,18 +1604,18 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.palette_open = false;
         // A pick goes first in Recent Commands before it runs, and stays there when it ran or
         // opened a dialog, even when the dialog is then canceled. A refused pick puts the list
-        // back as it was. Only a pick that stays in the list is counted.
-        let before = (id != PALETTE_TOGGLE).then(|| app.ui.recent_commands.clone());
+        // back as it was. The pick is counted with it, before it runs, so Clear Recent Commands
+        // clears its own pick and count, and a refused pick puts the counts back too.
+        let before = (id != PALETTE_TOGGLE).then(|| (app.ui.recent_commands.clone(), app.ui.command_uses.clone()));
         if before.is_some() {
             remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+            app.ui.command_uses.count(&id);
         }
-        let picked = run_pick(app, &id);
-        if let Some(before) = before {
-            if picked == Picked::Refused {
-                app.ui.recent_commands = before;
-            } else {
-                app.ui.command_uses.count(&id);
-            }
+        if run_pick(app, &id) == Picked::Refused
+            && let Some((recent, uses)) = before
+        {
+            app.ui.recent_commands = recent;
+            app.ui.command_uses = uses;
         }
     } else if outside {
         app.ui.palette_open = false;
@@ -1957,6 +1974,10 @@ mod tests {
             remember(&mut list, id, |_| true);
         }
         assert_eq!(list, ["j", "i", "h", "g", "f", "e", "d", "c"]);
+        // A palette toggle saved before its picks were left out takes none of the eight places.
+        let mut list: Vec<String> = [PALETTE_TOGGLE, "a", "b", "c", "d", "e", "f", "g"].map(str::to_string).into();
+        remember(&mut list, "h", |_| true);
+        assert_eq!(list, ["h", "a", "b", "c", "d", "e", "f", "g"]);
         let entries = build(Lang::EN);
         let many: Vec<String> = entries.iter().take(MAX_RECENT_COMMANDS + 2).map(|e| e.id.clone()).collect();
         assert_eq!(recent(&entries, &many).len(), MAX_RECENT_COMMANDS);
@@ -2461,6 +2482,27 @@ mod tests {
         assert_eq!(open.app.ui.command_uses.grade(id), 1);
     }
 
+    /// A refused pick leaves the recent picks and the pick counts saved before it as they were.
+    #[test]
+    fn a_refused_pick_leaves_the_earlier_counts_as_they_were() {
+        let id = "edit.findReplace";
+        let mut open = Open::new("find and replace", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        for _ in 0..2 {
+            open.app.ui.command_uses.count("paint.swap");
+        }
+        open.app.ui.command_uses.count("object.group");
+        let (recent, uses) = (open.app.ui.recent_commands.clone(), open.app.ui.command_uses.clone());
+        let k = open.listed().iter().position(|c| c == id).expect("the search finds Find and Replace…");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.dialog.is_none(), "no document: the pick is refused");
+        assert_eq!(open.app.ui.recent_commands, recent);
+        assert_eq!(open.app.ui.command_uses, uses);
+        assert_eq!(open.app.ui.command_uses.grade(id), 0);
+    }
+
     /// #6376: with nothing picked yet, Recent Commands shows a dimmed No recent commands row.
     #[test]
     fn recent_commands_without_picks_show_a_dimmed_row() {
@@ -2526,6 +2568,71 @@ mod tests {
         assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
     }
 
+    /// A pick of Clear Recent Commands empties the recent picks without keeping itself, so the
+    /// empty search then says what to type, and the saved UI state holds an empty list.
+    #[test]
+    fn clear_recent_commands_empties_the_recent_picks() {
+        const CLEAR: &str = "help.clearRecentCommands";
+        let mut open = Open::new("clear recent commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        assert!(menus::enabled(&open.app, CLEAR));
+        let k = open.listed().iter().position(|id| id == CLEAR).expect("the command's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert!(open.app.ui.recent_commands.is_empty(), "{:?}", open.app.ui.recent_commands);
+        assert!(!menus::enabled(&open.app, CLEAR), "not enabled with nothing to clear");
+        let saved: serde_json::Value = serde_json::to_value(&open.app.ui).unwrap();
+        assert_eq!(saved["recent_commands"], serde_json::json!([]));
+        open.app.ui.palette_query.clear();
+        open.app.ui.palette_open = true;
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).is_empty(), "{:?}", rows(&nodes));
+        let labels = labels(&nodes);
+        assert!(labels.iter().any(|l| l == tl!("Type to search commands, tools, panels and effects")), "{labels:?}");
+        // Run as a command, it empties the list too.
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert!(open.app.ui.recent_commands.is_empty());
+        // A saved id the list leaves out (a plug-in that is not loaded) still counts, and is cleared.
+        open.app.ui.recent_commands = vec!["plugin.notLoaded.filter".into()];
+        assert!(menus::enabled(&open.app, CLEAR));
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert!(open.app.ui.recent_commands.is_empty());
+    }
+
+    /// Clear Recent Commands also empties the pick counts, and a pick of it from the search is not
+    /// counted afterward; with counts left and no recent picks, it is still enabled.
+    #[test]
+    fn clear_recent_commands_also_clears_the_pick_counts() {
+        const CLEAR: &str = "help.clearRecentCommands";
+        let mut open = Open::new("clear recent commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        for _ in 0..3 {
+            open.app.ui.command_uses.count("paint.swap");
+        }
+        open.app.ui.command_uses.count("object.group");
+        let k = open.listed().iter().position(|id| id == CLEAR).expect("the command's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.recent_commands.is_empty(), "{:?}", open.app.ui.recent_commands);
+        assert_eq!(open.app.ui.command_uses, CommandUses::default(), "the pick of Clear is not counted either");
+        let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&open.app.ui).unwrap()).unwrap();
+        assert_eq!(saved.command_uses, CommandUses::default());
+        assert!(!menus::enabled(&open.app, CLEAR));
+        // Counts without recent picks (Recent Commands emptied some other way) still enable it,
+        // and running it as a command empties them.
+        open.app.ui.command_uses.count("paint.swap");
+        assert!(menus::enabled(&open.app, CLEAR), "enabled while a count is saved");
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert_eq!(open.app.ui.command_uses, CommandUses::default());
+        assert_eq!(open.app.ui.command_uses.grade("paint.swap"), 0);
+    }
+
     /// The palette opens again with its first row highlighted, even when it shows the same rows.
     #[test]
     fn the_palette_opens_again_with_its_first_row_highlighted() {
@@ -2574,6 +2681,30 @@ mod tests {
         open.frame(vec![egui::Event::PointerMoved(at), button(true), button(false)]);
         assert!(!open.app.ui.palette_open, "the click outside closes the palette");
         open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0);
+        let before = open.app.session.active().unwrap().history.undo.len();
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open, "the palette closes");
+        assert_eq!(open.app.session.active().unwrap().history.undo.len(), before + 1, "{}", open.app.ui.status);
+        assert_eq!(open.app.ui.recent_commands, ["paint.swap", "object.group"]);
+    }
+
+    /// A palette that its command closes and opens again before it is drawn closed starts at its
+    /// first row, so Enter on an empty search runs the last pick.
+    #[test]
+    fn the_palette_toggled_closed_and_open_between_frames_starts_at_its_first_row() {
+        let mut open = Open::new("", WINDOW);
+        open.app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(open.highlighted(), 1);
+        open.app.run("help.commandPalette", json!({})).unwrap();
+        assert!(!open.app.ui.palette_open, "the command closes the palette");
+        open.app.run("help.commandPalette", json!({})).unwrap();
+        assert!(open.app.ui.palette_open, "and opens it again");
         open.frame(vec![]);
         assert_eq!(open.highlighted(), 0);
         let before = open.app.session.active().unwrap().history.undo.len();
