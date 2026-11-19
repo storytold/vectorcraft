@@ -11,7 +11,6 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
-craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "e7873217287876f76a045550369c90a541693c33" }
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "64b181977a0488e4d1e167bc5cc8cfededc2ed4b" }
@@ -78,6 +77,7 @@ vectorcraft-affinity = { path = "crates/affinity" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 vectorcraft-js = { path = "crates/js" }
 vectorcraft-apischema = { path = "crates/apischema" }
+vectorcraft-cdr = { path = "crates/cdr" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }
