@@ -12177,6 +12177,26 @@ tracking their own gaps give. These rules are VectorCraft's own. Each entry of t
 {"name":"run_command","arguments":{"command":"type.retype","params":{}}}
 ```
 
+## Retype several lines
+
+`type.retype` joins lines that follow each other in paint order, with the same group, paint, font, size, turn and
+tracking (an untracked line of one or two glyphs takes the tracking of the others), into one type object when each
+line's baseline is the same distance below the one before (between 0.25 and 3 times the size) and the lines line up at their starts, ends or centers. The object is area type with Convert To Area
+Type's frame, its lines separated by line breaks, with left, right or center alignment, checked in that order. Its
+leading is Auto when Auto puts the last baseline in place, else the mean distance between the baselines, to a
+thousandth of a point when that still puts the last baseline in place. Lines with an opacity below 100%, a blend mode
+other than Normal, a gradient or pattern fill, or a stroke stay one object per line. These rules are VectorCraft's own.
+
+Every joined object is laid out and compared with the outlines. When area type would not draw each glyph where its
+outline was, including after Text Wrap objects above it reflow it, or when its frame would reach past the canvas's
+coordinate limit, the lines become one multi-line point type object (one object per line when its bounds would reach
+past that limit). When that also moves a glyph, the lines before that glyph's line stay one object, and the lines
+from that line on are joined again from it. When the Text Wrap objects on the layers Retype changes would copy more
+than 2,000,000 units into the wrap shapes of their area type (one for each anchor, subpath and shape, for each area
+type object below them), Retype does not check the wrap and the lines become multi-line point type. Each entry of
+the result's `texts` list holds an object's lines joined by `\n`, and each entry of its `fonts` list also has
+`leading` (points; null for Auto leading or a single line) and `area`.
+
 ## Retype panel
 
 `type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
