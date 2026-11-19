@@ -347,7 +347,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind.is_centered() && placed;
+            // The default gradient (with nothing selected, or the Live Paint Bucket's) fits each object and has no aspect.
+            let radial = kind.is_centered() && placed && app.session.gradient_edit_has_objects(!app.session.fill_active);
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text(tl!("Aspect Ratio"));
                 // A mirrored conic's negative aspect shows as its size; an edit keeps the mirror.

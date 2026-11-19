@@ -89,6 +89,7 @@
 	Add to Selection	添加到选区
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
+	Add Selected Colors	添加所选颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
 	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
@@ -183,6 +184,10 @@ antiAlias	Sharp	锐利
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三点弧形工具
+	Three-Point Arc	三点弧形
+	Arc too large	弧形过大
+	Third Point Sets Direction	第三点指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -1659,6 +1664,10 @@ file-filter	Templates	模板
 	Add Color Tool	添加颜色工具
 	Remove Color Tool	删除颜色工具
 	Remove Color	删除颜色
+	Set As Base Color	设为基色
+	Select Shade	选择色调
+	Add New Color	添加新颜色
+	Set Current Color As Base Color	将当前颜色设为基色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -2754,6 +2763,11 @@ diagnostics	ui	界面
 	Preserve Alpha Transparency	保留 Alpha 透明度
 	Preserve Appearance and Overprints	保留外观和叠印
 	Preserve CMYK Numbers	保留 CMYK 数值
+	Preserve RGB Numbers	保留 RGB 数值
+	Device to Simulate:	要模拟的设备：
+	Simulate Paper Color	模拟纸张颜色
+	Simulate Black Ink	模拟黑色油墨
+	Load…	载入…
 	Preserve Editing Capabilities	保留编辑功能
 	Preserve editing capabilities	保留编辑能力
 	Preserve Lightness	保留亮度
@@ -3256,6 +3270,7 @@ digits	Malayalam	马拉雅拉姆数字
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与语言和大小写无关。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效工具的对象滤镜每次运行可使用的指令数；“大”比“正常”允许更多，60 秒的时间限制不变。重型滤镜保留自己的预算。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	How light or dark the interface is.	界面的明暗程度。
@@ -3274,6 +3289,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有开启此项时，动画缩放才会起作用；关闭此项后，动画缩放显示为灰色，缩放不带动画。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滚轮缩放时会平滑过渡，缩放工具在你向侧面拖动或按住不放时进行缩放；关闭此项后，缩放工具缩放到你拖过的区域。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	从下次启动起，桌面版使用这类图形处理器绘制；“自动”优先使用驱动显示器的图形处理器。Web 版不使用此项。
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	从下次启动起，窗口不等待显示器刷新就显示帧，每秒最多 240 帧；关闭时由显示器决定帧的节奏。启动时设置的呈现模式优先。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每个文档保留的最大撤销步骤数；调低后，单击“确定”时会删除最早的步骤。步骤占用过多内存时也可能更早被删除。
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖动时显示图稿的变化；关闭此项后，由轮廓跟随拖动，松开后图稿才改变。标尺参考线在拖动时总是跟着移动。
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	绘制图稿的工作线程数；-1 使用比 VectorCraft 可用核心数少一个的线程，最多 8 个，0 则不使用。Web 版始终不使用。
@@ -3300,6 +3316,10 @@ digits	Malayalam	马拉雅拉姆数字
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 会存储此选项，但复制和剪切尚不使用旧版矢量剪贴板格式。
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	旧版矢量剪贴板的“保留路径”或“保留外观和叠印”；VectorCraft 会存储所选项，但尚未使用。
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	将从 VectorCraft 文字对象复制的文本粘贴到文字对象时，“保留格式”保留其样式，“保留纯文本”则使用粘贴位置的样式。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	“将所有黑色显示为复合黑”在画布上将纯 CMYK 黑色（仅 100% 黑色油墨）显示为 RGB 黑色；“准确显示所有黑色”则通过工作 CMYK 空间转换它。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	“将所有黑色输出为复合黑”在 RGB 和灰度栅格导出和“以位图打印”中将纯 CMYK 黑色绘制为 RGB 黑色；不改变矢量导出、CMYK JPEG、TIFF 和 PSD 以及其他打印。
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	在触摸屏上切换到触控工作区；关闭此选项或触摸屏不再可用时，返回切换前的工作区。
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	在画布上双指轻点会撤销，在触控工作区中则在选择工具和绘图工具之间切换；三指轻点会重做。两者在演示模式下均不起作用。
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	当文档设置的语言为英语：美国且 [正常字符样式] 未设置语言时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与大小写无关；韩语单词不加连字符，印度语言的单词不会在字符簇内部断开。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
@@ -3512,6 +3532,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
 	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
@@ -4833,6 +4854,10 @@ imageTrace	Outline	轮廓
 @msg	a guide has no curvature circle	参考线没有曲率圆
 @msg	the circle that matches the path there would reach past the canvas	在该处与路径曲率相符的圆会超出画布
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
+@msg	`at` must be "start" or "end"	`at` 必须是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 和 `toward` 必须且只能指定一个
+@msg	no arc fits these points: two are the same or all three lie on one line	没有弧形符合这些点：有两点相同，或三点共线
+@msg	give `at` only with `toward`	`at` 只能与 `toward` 一起指定
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -4879,6 +4904,7 @@ imageTrace	Outline	轮廓
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
+@msg	art painted with `{name}` can't be its tile	使用 `{name}` 上色的图稿不能作为它的拼贴
 @msg	not in pattern editing mode	不在图案编辑模式中
 @msg	finish editing the pattern first	请先完成图案编辑
 @msg	pattern missing	缺少图案
@@ -7847,6 +7873,36 @@ anchor	Points:	点：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
 @msg	missing `effect`	缺少 `effect`
 @msg	`params` must be an object	`params` 必须是对象
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圆形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭头 (空心)
+	Barbed	倒钩
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭头 (左)
+	Half Arrow (right)	半箭头 (右)
+	Double Bar	双条形
+	Dot on Bar	条形上的圆点
+	Chevron	人字形
+	Plus	加号
+	Hexagon (open)	六边形 (空心)
+	Tag	标签
+	Tag (open)	标签 (空心)
+	Half Circle	半圆
+	Drop	水滴
+	Slash	斜线
+	Double Slash	双斜线
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括号
+	Fork	叉形
+	Leaf	叶形
+	Kite	风筝形
+	Triangle to Bar	三角至条形
+	Oval	椭圆
+	Line Arrow	线条箭头
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路径精确工具
 	Anchor Eraser Brush	锚点橡皮擦画笔
@@ -8136,6 +8192,7 @@ breakText	Glyphs	字形
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
 	Replace Brush Art	替换画笔图稿
+	Replace Pattern Art	替换图案图稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
 	Apply to Strokes	应用于描边
 	Leave Strokes	保留描边
@@ -10537,6 +10594,16 @@ breakText	Glyphs	字形
 	Lattice Braid	格纹编织
 	Facet Sweep	切面笔触
 	Artistic Brushes	艺术画笔
+	Paint	绘画
+	Flat Sweep	平刷
+	Dry Drag	干拖
+	Loaded Stroke	厚涂笔触
+	Fan Sweep	扇形笔触
+	Engraving	雕刻
+	Fine Hatching	细线排线
+	Dense Hatching	密集排线
+	Tapered Hatching	渐细排线
+	Broken Hatching	断续排线
 	Image Brush	图像画笔
 	Soft Bloom	柔和花朵
 	Halftone Field	半色调区域
