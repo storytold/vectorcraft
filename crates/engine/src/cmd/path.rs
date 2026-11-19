@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool}",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, link?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); link and independent cannot both be true; both default false",
             has_doc,
             set_handle
         ),
@@ -457,6 +457,9 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let ai = index_opt(p, "anchor", "path.setHandle")?.ok_or_else(|| bad("path.setHandle", "missing anchor"))?;
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
+    if switch_or(p, "link", false, "path.setHandle")? {
+        return link_handle(s, p, id, si, ai, out, pos);
+    }
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
@@ -471,6 +474,42 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         a.set_handle(out, pos, independent);
+        Ok(())
+    })?;
+    ok()
+}
+
+/// `path.setHandle` with `link` (the Anchor Point tool's Alt-drag on a handle): the handle goes to
+/// (x, y) and the anchor becomes smooth, its other handle turned in line at its own length. A
+/// retracted other handle is pulled out to the moved handle's length when a segment leaves the
+/// anchor on its side, and stays retracted at an open end. An anchor the edit would leave as it
+/// is records no undo step.
+fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out: bool, pos: Point) -> Result<Value> {
+    const C: &str = "path.setHandle";
+    if switch_or(p, "independent", false, C)? {
+        return Err(bad(C, "`link` and `independent` cannot both be true"));
+    }
+    if !(pos.x.abs() < 1e9 && pos.y.abs() < 1e9) {
+        return Err(bad(C, "x and y must be finite"));
+    }
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let unchanged = s.doc()?.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)).is_some_and(|sp| {
+        sp.anchors.get(ai).is_some_and(|a| {
+            let mut linked = *a;
+            linked.link_handle(out, pos, sp.has_segment(ai, !out));
+            linked == *a
+        })
+    });
+    if unchanged {
+        return ok();
+    }
+    s.edit("Reshape", |d, _| {
+        let sp = path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+        let pull_out = sp.has_segment(ai, !out);
+        let a = sp.anchors.get_mut(ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+        a.link_handle(out, pos, pull_out);
         Ok(())
     })?;
     ok()

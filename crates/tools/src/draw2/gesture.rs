@@ -37,7 +37,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_brush::{Calligraphic, Variation};
+use vectorcraft_brush::{BristleShape, BrushKind, Calligraphic, Variation};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, ParamCurve, PathData, PathSeg, Point, Rect, Vec2, shapes};
 use vectorcraft_pathops as po;
@@ -200,6 +200,12 @@ pub struct GestureTool {
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
+    /// Alt as it was at the last pointer event; the release can select a new path after the tool
+    /// returns, so the Bristle tip checks the current selection when overlays are drawn.
+    tip_alt: bool,
+    /// The last rotation-capable pen over the Paintbrush's Bristle tip; a mouse or a pen without
+    /// barrel rotation has no tip annotator.
+    bristle_pen: Option<(PenPose, f64)>,
     /// A pen pressed less than fully at a point of the stroke whose pressure is kept.
     light: bool,
     /// Which way the pen leaned at the last point of the stroke where it leaned 1° or more from
@@ -899,6 +905,8 @@ impl GestureTool {
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
             tip_at: None,
+            tip_alt: false,
+            bristle_pen: None,
             light: false,
             bearing: None,
             bearings: vec![],
@@ -1088,12 +1096,50 @@ impl GestureTool {
         p
     }
 
+    fn pointer_tip(&mut self, cx: &ToolContext, ev: &PointerEvent) {
+        if self.varies_size() {
+            self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(ev.pos);
+        } else if self.id == "paintbrush" {
+            self.tip_alt = ev.mods.alt;
+            self.bristle_pen =
+                ev.pen.filter(|pen| pen.rotation.is_some()).map(|pen| (pen, if ev.kind == PointerKind::Move { 0.5 } else { f64::from(ev.pressure) }));
+            let borrows_smooth = !self.active && ev.mods.alt && has_selected_smooth_path(cx);
+            self.tip_at = self.bristle_pen.filter(|_| !ev.mods.cmd && !borrows_smooth).map(|_| ev.pos);
+        }
+    }
+
     /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
     /// `size` across at its angle and roundness (the Eraser's as the pen varies them while it
     /// erases, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
     /// any art. Precise cursors show only the crosshair, and smoothing shows no tip.
     fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
+        if self.id == "paintbrush" {
+            if !self.active && self.tip_alt && has_selected_smooth_path(cx) {
+                return vec![];
+            }
+            let Some((pose, pressure)) = self.bristle_pen else { return vec![] };
+            let Some(name) = vectorcraft_brush::current(cx.doc) else { return vec![] };
+            let Some(brush) = vectorcraft_brush::find(cx.doc, &name) else { return vec![] };
+            let BrushKind::Bristle(bristle) = brush.kind else { return vec![] };
+            let [pressure, tilt, bearing, rotation] = super::pen_controls(pressure, Some(pose), super::pen_bearing(pose));
+            let size = bristle.size.max(0.1) * cx.paint.stroke_width.max(0.0) * (0.5 + pressure) * (1.25 - 0.5 * tilt);
+            if size <= 0.0 {
+                return vec![];
+            }
+            let roundness = match bristle.shape {
+                BristleShape::RoundFan | BristleShape::FlatFan => 0.25,
+                BristleShape::FlatPoint | BristleShape::FlatBlunt | BristleShape::FlatCurve | BristleShape::FlatAngle => 0.45,
+                _ => 0.8,
+            };
+            let angle = std::f64::consts::TAU * (bearing + rotation - 1.0);
+            let circle = kurbo::Shape::to_path(&kurbo::Circle::new(Point::ORIGIN, size / 2.0), size.max(0.1) * 0.05);
+            let path = Affine::translate(at.to_vec2()) * Affine::rotate(-angle) * Affine::scale_non_uniform(1.0, roundness) * circle;
+            return vec![
+                Overlay::Path { path: path.clone(), color: [0xff, 0xff, 0xff], width: 3.0, dashed: false },
+                Overlay::Path { path, color: [0, 0, 0], width: 1.0, dashed: false },
+            ];
+        }
         let [angle, roundness, size] = self.tip_now();
         let tip = if self.id == "blobBrush" { blob_tip(angle, roundness) } else { eraser_tip(angle, roundness) };
         let r = size / 2.0;
@@ -1587,9 +1633,7 @@ impl Tool for GestureTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
-        if self.varies_size() {
-            self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
-        }
+        self.pointer_tip(cx, ev);
         if let Some(out) = self.marquee_pointer(cx, ev) {
             return out;
         }
@@ -1762,6 +1806,10 @@ impl Tool for GestureTool {
                 self.close_to = None;
                 self.connect_to.clear();
                 self.redraw = None;
+                if self.id == "paintbrush" {
+                    // The release can change a drawing stroke into an Alt-borrowed Smooth hover.
+                    self.pointer_tip(cx, ev);
+                }
                 out
             }
             _ => vec![],
