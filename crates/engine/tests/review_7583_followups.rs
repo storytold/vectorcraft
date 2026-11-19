@@ -251,10 +251,11 @@ fn review7583_thumbnail_queue_skips_one_rejected_native_file_and_continues() {
     assert_eq!(skipped.len(), 1);
     assert_eq!(skipped[0]["name"], "rejected.vectorcraft");
     assert!(skipped[0]["error"].as_str().unwrap().contains(&expected_error));
+    assert_eq!(session.tool_id(), "place", "CONTROL: the public queue loads the Place cursor");
     let options = session.tool_options();
-    let queued = options["queue"]["entries"].as_array().unwrap();
-    assert_eq!(queued.len(), 2, "REGRESSION: a thumbnail rejection leaves no stale cursor entry");
-    assert_eq!(queued.iter().map(|entry| entry["name"].as_str().unwrap()).collect::<Vec<_>>(), ["first.vectorcraft", "last.vectorcraft"]);
+    let queued = options["names"].as_array().expect("Place tool exposes queued file names");
+    assert_eq!(options["count"], 2, "REGRESSION: a thumbnail rejection leaves no stale cursor entry");
+    assert_eq!(queued.iter().map(|name| name.as_str().unwrap()).collect::<Vec<_>>(), ["first.vectorcraft", "last.vectorcraft"]);
 }
 
 const NATIVE_DOTS: &str = "ReviewNativeDots";

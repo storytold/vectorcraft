@@ -1591,10 +1591,11 @@ fn review_lookup_capture_and_apply(d: &Document, use_lab: bool) {
     assert_eq!(result["profile"], "Print", "CONTROL: the native category and its resource paints participate");
     let actual = &target.doc().unwrap().doc;
     assert_eq!(actual.spot_use_lab, use_lab);
-    assert_eq!(actual.swatches, before.swatches, "apply restores the original raw palette after refreshing its resources");
-    assert_eq!(actual.swatch_groups, before.swatch_groups);
+    // Resource import may rename a pattern; the displayed palette and every other paint field stay exact.
+    assert_palette(actual, &before);
     let brand = actual.global_color("Brand").unwrap();
     let registration = actual.global_color(vectorcraft_color::swatch::REGISTRATION).unwrap();
-    review_lookup_assert_pattern(actual, "Lookup witness", brand, registration);
+    let Paint::Pattern { pattern, .. } = &actual.swatch("Lookup witness").unwrap().paint else { panic!("saved lookup pattern absent") };
+    review_lookup_assert_pattern(actual, pattern, brand, registration);
     review_lookup_assert_pattern(actual, "Profile lookup witness", brand, registration);
 }
