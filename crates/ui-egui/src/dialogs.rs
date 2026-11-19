@@ -25,6 +25,7 @@ pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
 pub mod color_balance;
+pub mod color_group_options;
 pub mod color_guide_options;
 pub(crate) mod color_picker;
 mod command;
@@ -62,11 +63,13 @@ pub mod graph_design;
 pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
+pub mod hpgl_options;
 pub mod hyphenation;
 pub mod import_pdf;
 pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
+pub mod kinsoku_sets;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
@@ -101,6 +104,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod profile_mismatch;
 pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
@@ -174,6 +178,7 @@ pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffi
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
+pub(crate) use save_pdf::{SAVE_SUMMARY as SAVE_PDF_SUMMARY, save_summary as save_pdf_summary, summary_open as pdf_summary_open};
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
 
@@ -349,6 +354,7 @@ registry! {
     MissingFontEdit: [confirm::MISSING_FONT_EDIT] => confirm::MISSING_FONT_EDIT_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    ColorGroupOptions: [color_group_options::KIND] => color_group_options::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
@@ -385,6 +391,7 @@ registry! {
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
     WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
+    KinsokuSets: [kinsoku_sets::KIND] => kinsoku_sets::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
@@ -396,6 +403,8 @@ registry! {
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
+    ProfileMismatchOpen: [profile_mismatch::OPEN_KIND] => profile_mismatch::OPEN_SPEC,
+    ProfileMismatchPaste: [profile_mismatch::PASTE_KIND] => profile_mismatch::PASTE_SPEC,
     FileInfo: [file_info::KIND] => file_info::SPEC,
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     EffectGallery: [effect_gallery::KIND] => effect_gallery::SPEC,
@@ -406,6 +415,7 @@ registry! {
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
+    PdfFlattenerOptions: [save_pdf::CUSTOM_KIND] => save_pdf::CUSTOM_SPEC,
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
@@ -425,6 +435,7 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
+    HpglOptions: [hpgl_options::KIND] => hpgl_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
@@ -608,8 +619,10 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
-/// A Graph Data Column Width set this way sets every column, as Cell Style's does. An Import PDF
-/// `allPages` set this way to the other pick sets Import PDF pages as links back to its default.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. A Width Point
+/// Edit side width set this way for several points sets it on every point, as typing it does. An
+/// Import PDF `allPages` set this way to the other pick sets Import PDF pages as links back to its
+/// default.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -637,6 +650,7 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     let mosaic = (d.kind == object_mosaic::KIND).then(|| field.clone());
     let graph = (d.kind == graph_data::KIND).then(|| field.clone());
+    let width = (d.kind == width_point::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
@@ -646,6 +660,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if let Some(field) = graph {
         graph_data::note_set(d, &field);
+    }
+    if let Some(field) = width {
+        width_point::note_set(d, &field);
     }
 }
 
@@ -691,7 +708,7 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
-/// `flattenerPreset`, which drops the Custom… options), a change
+/// and Save PDF's `flattenerPreset`, which drop the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
 /// Artwork's `group` selects that color group and its `groupAction` runs the button at once. Save
@@ -737,7 +754,16 @@ pub fn cancel(app: &mut VectorcraftApp) {
         return;
     }
     if let Some(d) = app.ui.dialog.take() {
+        if d.kind == "preferences" {
+            crate::original_editor::cancel(app);
+        }
         if d.kind == swatch_conflict::KIND {
+            crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == profile_mismatch::OPEN_KIND {
+            profile_mismatch::cancel_open(app);
+        }
+        if d.kind == profile_mismatch::PASTE_KIND {
             crate::placing::cancel_swatch_paste(app);
         }
         if d.kind == plugin::INSTALL_KIND {
@@ -760,6 +786,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::picker_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Cancel discards Recolor Artwork's own history of color edits with them.
+        if d.kind == recolor::KIND {
+            app.ui.recolor_history = Default::default();
+        }
         // Find Font's next open starts with an empty replacement search.
         if d.kind == "findFont"
             && let Some(ctx) = app.ui_ctx.clone()
@@ -813,6 +843,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
@@ -896,6 +927,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let revolves = revolve_gizmo::active(&d);
     if revolves {
         revolve_gizmo::show(app, ctx, &mut d);
+        three_d_classic::surface_outline(app, ctx, &d);
     }
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));

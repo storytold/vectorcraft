@@ -47,9 +47,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Conflicts",
             [],
             None,
-            "{} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none",
+            "{profileMismatch?: as edit.paste} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb, the pasted colour as the paste brings it, converted when profileMismatch or the policy converts it): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none, unless the paste converts its colours",
             has_doc,
             conflicts
+        ),
+        cmd!(
+            query "clipboard.profileMismatch",
+            "Paste Profile Mismatch",
+            [],
+            None,
+            "{sourceDocument?, ids?: as edit.dropSelection, allArtboards?: false (true: for edit.pasteOnAllArtboards, which leaves the background colors of copied artboards behind)} → {mismatches: [{model: \"rgb\"|\"cmyk\", clipboard, document, default: \"preserveNumbers\"|\"convert\", convertible}]} the color models whose colors the copied objects (with sourceDocument and ids: the objects edit.dropSelection drops) use and whose profile in the document they were copied from (its assigned profile, else the working space then; an assigned profile removed since: the working space) is not the active document's: Paste keeps their numbers or converts them into the document's profile as edit.paste* and edit.dropSelection {profileMismatch} say, else as the model's policy of edit.colorSettings does (convert: converts; the others: keeps the numbers). convertible: false when either profile is not available (removed with color.removeProfile): the colors then keep their numbers whatever the choice, and default is preserveNumbers. With askMismatchPaste on, the desktop app asks first. Objects from outside an open document have none",
+            has_doc,
+            profile_mismatch
         ),
     ];
     v.extend(flavours::specs());
@@ -100,6 +109,15 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+    /// The RGB and CMYK profiles the objects' colors showed through in the document they were
+    /// copied from (its assigned profiles, else the working spaces then), by name; none for objects
+    /// from outside an open document. Paste compares them with the destination's
+    /// ([`super::colormgmt::paste_mismatches`]).
+    pub source_profiles: Option<[String; 2]>,
+    /// The colors were converted for this paste ([`super::colormgmt::paste_profiles`]): back in the
+    /// source document its resources of the same names are compared with them, as another
+    /// document's are, while its layers are still found by id.
+    pub colors_converted: bool,
 }
 
 /// The layer an object was copied from, as Paste Remembers Layers finds it again: the top-level
@@ -264,6 +282,7 @@ impl Clipboard {
     pub fn from_node(st: &DocState, node: Node) -> Self {
         let mut clip = Self::gather(&st.doc, vec![node]);
         clip.source_doc = Some(st.uid);
+        clip.source_profiles = Some(super::colormgmt::effective_profiles(&st.doc));
         clip
     }
 
@@ -335,6 +354,7 @@ impl Clipboard {
             source_artboard: board.and_then(|i| d.artboards.get(i)).map(|a| a.rect),
             source_layers,
             source_doc: Some(st.uid),
+            source_profiles: Some(super::colormgmt::effective_profiles(d)),
             ..Self::gather(d, nodes)
         }
     }
@@ -369,7 +389,7 @@ impl Clipboard {
     /// The swatch name conflicts pasting into `st` raises, as (pasted, document) swatches: none
     /// back in the document the objects came from.
     pub fn swatch_conflicts<'a>(&'a self, st: &'a DocState) -> Vec<(&'a Swatch, &'a Swatch)> {
-        if self.source_doc == Some(st.uid) {
+        if self.source_doc == Some(st.uid) && !self.colors_converted {
             return vec![];
         }
         self.conflicts(&st.doc, &self.used())
@@ -417,6 +437,56 @@ impl Clipboard {
         d.layers = vec![Arc::new(layer)];
         d.fix_next_id();
         d
+    }
+
+    /// The clipboard with every color of its objects and of the resources it carries (swatches,
+    /// symbols, patterns, graphic styles, brushes, character and paragraph styles, the background
+    /// colors of copied artboards) mapped by `conv`, as Document Color Mode maps a document's
+    /// ([`super::colormgmt::convert_art_and_style_colors`]).
+    /// Images keep their pixels.
+    pub(crate) fn with_colors(&self, conv: &dyn Fn(&vectorcraft_color::Color) -> vectorcraft_color::Color) -> Self {
+        let mut d = self.to_document();
+        // Only what the clipboard carries: not the swatches, graphic styles and brushes every new
+        // document starts with.
+        d.swatches = self.swatches.clone().into();
+        d.swatch_groups = Default::default();
+        d.graphic_styles = self.graphic_styles.clone().into();
+        vectorcraft_brush::store(&mut d, &self.brushes);
+        // Not the stand-in document's own artboard and Document Setup colors: only what the
+        // clipboard carries is mapped.
+        super::colormgmt::convert_art_and_style_colors(&mut d, conv);
+        // `to_document` puts the objects in its one layer.
+        let nodes = d.layers.first().and_then(|l| l.children()).map(|ch| ch.iter().map(|n| (**n).clone()).collect()).unwrap_or_default();
+        Self {
+            nodes,
+            symbols: d.symbols.clone(),
+            patterns: d.patterns.clone(),
+            swatches: d.swatches.to_vec(),
+            graphic_styles: d.graphic_styles.to_vec(),
+            char_styles: d.char_styles.to_vec(),
+            para_styles: d.para_styles.to_vec(),
+            brushes: vectorcraft_brush::library(&d),
+            images: self.images.clone(),
+            symbol_options: self.symbol_options.clone(),
+            source_artboard: self.source_artboard,
+            source_layers: self.source_layers.clone(),
+            source_doc: self.source_doc,
+            // The background colors of copied artboards map too.
+            artboards: self
+                .artboards
+                .iter()
+                .map(|a| {
+                    let mut a = a.clone();
+                    if let Some(c) = a.color.as_mut() {
+                        *c = conv(c);
+                    }
+                    a
+                })
+                .collect(),
+            guides: self.guides.clone(),
+            source_profiles: self.source_profiles.clone(),
+            colors_converted: self.colors_converted,
+        }
     }
 
     /// The objects as standalone SVG (`None` when there are none).
@@ -486,15 +556,31 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "count": s.load_clipboard(clip, p)? }))
 }
 
-fn conflicts(s: &mut Session, _: &Value) -> Result<Value> {
+fn conflicts(s: &mut Session, p: &Value) -> Result<Value> {
     let hex = |w: &Swatch| w.paint.color().map(|c| c.to_hex());
-    let list: Vec<Value> = s
-        .clipboard
-        .swatch_conflicts(s.doc()?)
+    // The swatches as the paste brings them: converted from another profile when it converts.
+    let profile = super::colormgmt::PasteProfile::param(p, "clipboard.conflicts")?;
+    let st = s.doc()?;
+    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, true);
+    let list: Vec<Value> = converted
+        .as_ref()
+        .unwrap_or(&s.clipboard)
+        .swatch_conflicts(st)
         .into_iter()
         .map(|(c, t)| json!({"name": c.name, "document": hex(t), "clipboard": hex(c), "spot": c.spot}))
         .collect();
     Ok(json!({ "swatches": list }))
+}
+
+fn profile_mismatch(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "clipboard.profileMismatch";
+    // With `sourceDocument` and `ids`, the objects a drop brings, else the clipboard's.
+    let dropped = if p.get("sourceDocument").is_some() || p.get("ids").is_some() { Some(super::edit::drop_clip(s, p, CMD)?) } else { None };
+    let clip = dropped.as_ref().unwrap_or(&s.clipboard);
+    // Paste on All Artboards leaves the copied artboards, and so their backgrounds, behind.
+    let all_artboards = super::switch_or(p, "allArtboards", false, CMD)?;
+    let list: Vec<Value> = super::colormgmt::paste_mismatches(clip, &s.doc()?.doc, !all_artboards).iter().map(|m| m.to_json()).collect();
+    Ok(json!({ "mismatches": list }))
 }
 
 #[cfg(test)]

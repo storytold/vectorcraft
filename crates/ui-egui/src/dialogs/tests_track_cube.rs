@@ -182,3 +182,37 @@ fn grips_follow_what_is_under_the_pointer() {
     let m = rotation([0.0, 0.0, 0.0]);
     assert_eq!(edges().filter(|&(i, _, axis)| edge_visible(m, i, axis)).count(), 4);
 }
+
+/// Map Art lists each document's own surfaces: after a switch to another document whose object has
+/// the same id, effect settings and revision, the surfaces are those of the other document's object.
+#[test]
+fn map_art_surfaces_follow_the_active_document() {
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    for d in ["M50 50L150 50L150 150L50 150Z", "M50 50L80 50L80 200L50 200Z"] {
+        app.run("file.new", json!({"width":300,"height":300})).unwrap();
+        app.run("path.create", json!({"d": d})).unwrap();
+    }
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let d = app.ui.dialog.take().unwrap();
+    let ctx = egui::Context::default();
+    let key = |app: &crate::VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        (st.selection.objects.first().copied(), st.revision)
+    };
+    let second = surfaces(&app, &ctx, &d).unwrap();
+    let at_second = key(&app);
+    assert!(app.session.set_active(0));
+    assert_eq!(key(&app), at_second, "both documents' objects have the same id and revision");
+    let first = surfaces(&app, &ctx, &d).unwrap();
+    let st = app.session.active().unwrap();
+    let id = st.selection.objects[0];
+    let own = vectorcraft_effects::map_surfaces_with(
+        Some(&st.doc),
+        st.doc.node(id).unwrap(),
+        (None, None),
+        CLASSIC_EXTRUDE,
+        &super::super::form::params(&d),
+    );
+    assert_ne!(first, second, "the two objects' solids differ in size");
+    assert_eq!(Some(first.as_ref()), own.as_ref(), "the first document's surfaces");
+}
