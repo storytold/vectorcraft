@@ -502,6 +502,10 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Contextual Task Bar's actions (`canvas::TASK_BAR_ACTIONS`) that More Options › Bar
+    /// Actions has off (`window.taskBar.actions`); none: the bar shows every action it offers.
+    #[serde(deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
+    pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
     /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
     /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
     #[serde(default)]
@@ -864,6 +868,11 @@ pub struct UiState {
     /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,
+    /// The proof view the Proof Setup dialog found, and the view its preview shows on the canvas,
+    /// while the preview shows. When another dialog takes its place, [`crate::dialogs::settle`]
+    /// puts the first view back, unless the view has changed from the preview since.
+    #[serde(skip)]
+    pub proof_preview: Option<(Value, vectorcraft_render::proof::ProofView)>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -1265,6 +1274,7 @@ impl Default for UiState {
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            task_bar_hidden_actions: Default::default(),
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
@@ -1365,6 +1375,7 @@ impl Default for UiState {
             pending_fonts: vec![],
             fonts_dialog: None,
             stopped_plugin: None,
+            proof_preview: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,

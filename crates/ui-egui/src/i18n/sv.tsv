@@ -128,6 +128,7 @@
 	Add to Selection	Lägg till i markering
 	Add to Swatches	Lägg till i färgrutor
 	Add Used Colors	Lägg till använda färger
+	Add Selected Colors	Lägg till markerade färger
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
 	Plug-in Instruction Budget	Instruktionsbudget för plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
@@ -226,6 +227,10 @@ font-technology	Variable	Variabla
 	Arc	Båge
 	Arc Lower…	Nedre båge…
 	Arc Tool	Bågverktyg
+	Three-Point Arc Tool	Verktyg för trepunktsbåge
+	Three-Point Arc	Trepunktsbåge
+	Arc too large	Bågen är för stor
+	Third Point Sets Direction	Tredje punkten anger riktningen
 	Arc Upper…	Övre båge…
 	Arch…	Valv…
 	Arc…	Båge…
@@ -634,6 +639,8 @@ font-technology	Variable	Variabla
 	Contextual Task Bar	Kontextuellt aktivitetsfält
 	Pin Bar Position	Fäst fältets position
 	Reset Bar Position	Återställ fältets position
+	Bar Actions	Fältets åtgärder
+	Reset Bar Actions	Återställ fältets åtgärder
 	Resize	Ändra storlek
 	Contrast	Kontrast
 	Control	Kontroll
@@ -1654,6 +1661,10 @@ font-technology	Variable	Variabla
 	Add Color Tool	Verktyget Lägg till färg
 	Remove Color Tool	Verktyget Ta bort färg
 	Remove Color	Ta bort färg
+	Set As Base Color	Ange som grundfärg
+	Select Shade	Välj nyans
+	Add New Color	Lägg till ny färg
+	Set Current Color As Base Color	Ange aktuell färg som grundfärg
 	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
@@ -2032,6 +2043,7 @@ font-technology	Variable	Variabla
 	Limit to Library:	Begränsa till bibliotek:
 	Limit:	Gränsvärde:
 	Line	Linje
+	Line Arrow	Linjepil
 	Line Art and Text Resolution:	Upplösning för streckteckning och text:
 	Line Breaks	Radbrytningar
 	Line Color	Linjefärg
@@ -2786,6 +2798,11 @@ font-technology	Variable	Variabla
 	Preserve Alpha Transparency	Bevara alfatransparens
 	Preserve Appearance and Overprints	Bevara utseende och övertryck
 	Preserve CMYK Numbers	Bevara CMYK-värden
+	Preserve RGB Numbers	Bevara RGB-värden
+	Device to Simulate:	Enhet att simulera:
+	Simulate Paper Color	Simulera pappersfärg
+	Simulate Black Ink	Simulera svart bläck
+	Load…	Läs in…
 	Preserve Editing Capabilities	Bevara redigeringsmöjligheter
 	Preserve editing capabilities	Bevara redigeringsmöjligheter
 	Preserve Lightness	Bevara ljushet
@@ -3285,6 +3302,10 @@ digits	Malayalam	Malayalam
 	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	I stycken med Avstava på får ett listat ord avstavningsstreck bara vid bindestrecken som skrivits in i det, eller aldrig om det saknar sådana, oavsett språk och skiftläge.
 	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när OK anger en ny mapp, utom i felsäkert läge; en plugin som begär behörigheter läses in först när du har gett dem. Webbversionen läser inte in någon.
 	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Stor ger varje körning av en filter- eller kommandoplugin minst 250 miljoner instruktioner med samma tidsgräns; Normal behåller pluginens egen budget. Liveeffekter, exportörer och importörer behåller sin.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA; text som redan finns i ett dokument behåller sitt eget språk.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett språk och skiftläge.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I skrivbordsversionen läses .wasm-plugins i den här mappen in vid start och när du klickar på OK med en ny mapp här, utom i felsäkert läge; webbversionen läser inte in dem.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hur många instruktioner varje körning av ett objektfilter från ett plugin får använda; Stor tillåter fler än Normal med samma gräns på 60 sekunder. Tunga filter behåller sin egen budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det första valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andra valet av arbetsdisk: Startup, None eller en mappsökväg; VectorCraft sparar det men använder ännu inte arbetsdiskar.
 	How light or dark the interface is.	Hur ljust eller mörkt gränssnittet är.
@@ -3303,6 +3324,7 @@ digits	Malayalam	Malayalam
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animerad zoom fungerar bara medan detta är på; avstängt är Animerad zoom nedtonad och zoomningen animeras inte.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom med hjulet glider in mjukt, och Zoomverktyget zoomar medan du drar åt sidan eller håller det nedtryckt; avstängt zoomar Zoomverktyget till området du drar över.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Från nästa start ritar skrivbordsversionen med den här typen av grafikprocessor; Automatisk föredrar den som driver skärmen. Webbversionen använder den inte.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Från nästa start visar fönstret bildrutor utan att vänta på att skärmen uppdateras, högst 240 per sekund; avstängt styr skärmen takten. Ett presentationsläge som anges vid start går före.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Det högsta antalet ångra-steg som varje dokument behåller; ett lägre tal tar bort de äldsta stegen när du klickar på OK. Steg kan också försvinna tidigare när de använder för mycket minne.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Visar hur bilden ändras medan du drar; avstängt följer konturer dragningen och bilden ändras när du släpper. En stödlinje från linjalen flyttas alltid medan du drar.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hur många arbetstrådar som ritar bilden; -1 använder en färre än de kärnor VectorCraft får använda, högst 8, och 0 ingen. Webbversionen använder aldrig någon.
@@ -3329,6 +3351,10 @@ digits	Malayalam	Malayalam
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft sparar det här valet, men Kopiera och Klipp ut använder ännu inget format för äldre vektorurklipp.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Bevara banor eller Bevara utseende och övertryck för äldre vektorurklipp; VectorCraft sparar valet men använder det inte ännu.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Behåll formatering behåller formaten för text som kopierats från ett textobjekt i VectorCraft när den klistras in i ett textobjekt; Behåll oformaterad text ger den formatet där den hamnar.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Visa alla svarta som djupsvart visar ren CMYK-svart (bara svart färg på 100 %) som RGB-svart på arbetsytan; Visa alla svarta korrekt konverterar den genom arbets-CMYK-färgrymden.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Återge all svart som djupsvart ritar ren CMYK-svart som RGB-svart i RGB- och gråskale-rasterexporter och med Skriv ut som bitmapp; den ändrar inte vektorexporter, CMYK-JPEG, -TIFF och -PSD eller annan utskrift.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	På en pekskärm växlar detta till arbetslayouten för pekskärm; när inställningen stängs av eller pekskärmen försvinner återgår den till arbetslayouten från före bytet.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Ett tryck med två fingrar på arbetsytan ångrar eller växlar i arbetslayouten för pekskärm mellan markerings- och ritverktyg, och ett tryck med tre fingrar gör om; inget av dem fungerar i presentationsläge.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny text får det här språket så länge språket i Dokumentinställningar är Engelska: USA och [Normal teckenstil] inte anger något språk; text som redan finns i ett dokument behåller sitt eget språk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	I stycken med Avstava på avstavas ett listat ord bara vid bindestrecken som skrivits in i det, eller inte alls om det saknar sådana, oavsett skiftläge; koreanska ord får inget avstavningstecken, och ord på indiska språk avstavas inte inuti en teckengrupp.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
@@ -3559,6 +3585,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
+	Type to search commands, tools, panels and effects	Skriv för att söka efter kommandon, verktyg, paneler och effekter
 	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
@@ -5242,6 +5269,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	a guide has no curvature circle	en stödlinje har ingen krökningscirkel
 @msg	the circle that matches the path there would reach past the canvas	cirkeln som matchar banan där skulle nå utanför arbetsytan
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	`at` must be "start" or "end"	`at` måste vara "start" eller "end"
+@msg	give exactly one of `through` and `toward`	ange exakt en av `through` och `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ingen båge passar de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	give `at` only with `toward`	ange `at` endast tillsammans med `toward`
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
 @msg	no artboard {i} (0-based; the document has {_1})	ingen rityta {i} (räknat från 0; dokumentet har {_1})
@@ -5287,6 +5318,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no native format	inget eget format
 @msg	no pages	inga sidor
 @msg	no pattern `{name}`	inget mönster `{name}`
+@msg	art painted with `{name}` can't be its tile	grafik målad med `{name}` kan inte vara dess ruta
 @msg	no perspective grid preset named `{name}`	ingen förinställning för perspektivrutnät med namnet `{name}`
 @msg	no plug-in {0} is installed	inget plugin {0} är installerat
 @msg	no plug-in {id} is installed	inget plugin {id} är installerat
@@ -6400,6 +6432,7 @@ lighting	Light	Ljus
 	B5	B5
 	Bar	Lodstreck
 	Barbed	Hullingförsedd
+arrowhead	Feather	Fjäder
 	Baseline (Standard)	Baseline (standard)
 	Baseline Optimized	Baseline optimerad
 	Basic	Grundläggande
@@ -8330,6 +8363,7 @@ breakText	Glyphs	Glyfer
 	Remove Strokes	Ta bort konturer
 	Place Brush Art	Placera penselgrafik
 	Replace Brush Art	Ersätt penselgrafik
+	Replace Pattern Art	Ersätt mönstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
 	Apply to Strokes	Använd på konturer
 	Leave Strokes	Behåll konturer
@@ -10810,6 +10844,21 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Orbit Lines	Banlinjer
+	Petal Garland	Kronbladsgirlang
+	Lattice Braid	Gallerfläta
+	Facet Sweep	Fasetterat drag
+	Artistic Brushes	Konstnärliga penslar
+	Paint	Färg
+	Flat Sweep	Platt penseldrag
+	Dry Drag	Torrt drag
+	Loaded Stroke	Fylligt penseldrag
+	Fan Sweep	Solfjädersdrag
+	Engraving	Gravyr
+	Fine Hatching	Fin skraffering
+	Dense Hatching	Tät skraffering
+	Tapered Hatching	Avsmalnande skraffering
+	Broken Hatching	Bruten skraffering
 	Image Brush	Bildpenslar
 	Soft Bloom	Mjuk blomning
 	Halftone Field	Halvtonsfält
