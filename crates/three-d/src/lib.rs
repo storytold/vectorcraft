@@ -12,9 +12,9 @@ pub mod fold;
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MapCell, MeshFace, PlanarFace, SolidSurface, SurfaceKind, TOO_COMPLEX_SOLID,
-    View, extrude, extrude_face_map, extrude_mesh_face, extrude_side_size, extrude_surfaces, inflate, inflate_each, inflate_together, plane,
-    plane_face_map, plane_mesh_face,
+    Bevel, BevelProfile, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MapCell, MeshFace, PlanarFace, SolidSurface, SurfaceKind,
+    TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, extrude_mesh_face, extrude_side_size, extrude_surfaces, inflate, inflate_each,
+    inflate_together, plane, plane_face_map, plane_mesh_face,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
