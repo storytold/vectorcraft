@@ -27,7 +27,7 @@ pub fn dropdown_names_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<
     combo_named(ui, id, name, current, width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add(egui::Button::selectable(*o == current, *o)).clicked() {
+            if option_row(ui, true, *o == current, *o).clicked() {
                 chosen = Some(i);
             }
         }
@@ -75,7 +75,7 @@ pub fn dropdown_icon_names_sized(
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
             let on = current == Some(i);
-            if ui.add(egui::Button::selectable(on, (atom(i, on), *o))).clicked() {
+            if option_row(ui, true, on, (atom(i, on), *o)).clicked() {
                 chosen = Some(i);
             }
         }
@@ -109,12 +109,44 @@ pub fn dropdown_with_named(
     combo_named(ui, id, name, tl!(current), width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add_enabled(enabled(i), egui::Button::selectable(*o == current, tl!(o))).clicked() {
+            if option_row(ui, enabled(i), *o == current, tl!(o)).clicked() {
                 chosen = Some(i);
             }
         }
         chosen
     })
+}
+
+/// What [`option_row`] found in a list that [`combo_atoms_named`] draws on the pass the list opens
+/// and the pass after it.
+#[derive(Clone, Copy, Default)]
+struct Opening {
+    /// The list draws its options with [`option_row`].
+    rows: bool,
+    /// A current option was scrolled into view.
+    scrolled: bool,
+}
+
+thread_local! {
+    /// The [`Opening`] that [`combo_atoms_named`] keeps while it draws a list on the pass the list
+    /// opens and the pass after it; `None` otherwise. A row reads it without a lookup in the
+    /// context's data.
+    static OPENING: std::cell::Cell<Option<Opening>> = const { std::cell::Cell::new(None) };
+}
+
+/// One option of a dropdown list, `selected` for the current one. On the pass the list opens and
+/// the next one, the first current option scrolls to the middle of the list, or as near to it as
+/// the list's ends allow, so that it shows whole (#5941).
+fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
+    let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
+    if let Some(opening) = OPENING.get() {
+        let scroll = selected && !opening.scrolled;
+        if scroll {
+            ui.scroll_to_rect_animation(response.rect, Some(egui::Align::Center), egui::style::ScrollAnimation::none());
+        }
+        OPENING.set(Some(Opening { rows: true, scrolled: opening.scrolled || scroll }));
+    }
+    response
 }
 
 /// The id [`craft_ui::ComboBox::from_id_salt`] gives its button in this `Ui`: `from_id_salt`
@@ -159,6 +191,52 @@ fn combo_atoms_named<'a, R>(
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
+            // A list whose options are `option_row`s opens with its current option in view, or at
+            // its first option, not where it was scrolled when it last closed (#5941). A list that
+            // draws its own rows has no current option to show, and opens where it was scrolled
+            // when it last closed.
+            let shown_key = button_id.with("list-shown-pass");
+            let opened_key = button_id.with("list-opened-pass");
+            let offset_key = button_id.with("list-offset");
+            let list = move |ui: &mut Ui| {
+                let pass = ui.ctx().cumulative_pass_nr();
+                let last = ui.data_mut(|d| d.get_temp::<u64>(shown_key));
+                ui.data_mut(|d| d.insert_temp(shown_key, pass));
+                let opening = last.is_none_or(|p| p + 1 < pass);
+                if opening {
+                    ui.data_mut(|d| d.insert_temp(opened_key, pass));
+                }
+                // The menu measures itself against the whole screen on the pass it opens and takes
+                // the room beside its field on the next one, so the current option is scrolled into
+                // view on both.
+                let settling = ui.data(|d| d.get_temp::<u64>(opened_key)).is_some_and(|p| pass <= p + 1);
+                // A list drawn inside this one's rows finds its own record, and this one's comes back after it.
+                let outer = if settling { OPENING.replace(Some(Opening::default())) } else { OPENING.take() };
+                let (content_left, content_top) = (ui.max_rect().left(), ui.max_rect().top());
+                let at = move |y: f32| Rect::from_min_size(egui::pos2(content_left, content_top + y), Vec2::ZERO);
+                let chosen = list(ui);
+                let found = OPENING.replace(outer).unwrap_or_default();
+                let none = egui::style::ScrollAnimation::none();
+                if settling {
+                    if found.rows {
+                        if opening && !found.scrolled {
+                            ui.scroll_to_rect_animation(at(0.0), Some(egui::Align::TOP), none);
+                        }
+                    } else {
+                        // The list is taller on the pass it opens than beside its field, and egui
+                        // clamps the scroll to the taller list, so the scroll it had when it closed
+                        // is put back on both passes. A scroll area leaves an item spacing above a
+                        // target aligned to its top, so the target is that much below the scroll.
+                        let saved = ui.data(|d| d.get_temp::<f32>(offset_key)).unwrap_or(0.0);
+                        ui.scroll_to_rect_animation(at(saved + ui.spacing().item_spacing.y), Some(egui::Align::TOP), none);
+                    }
+                }
+                if !settling || chosen.is_some() {
+                    // The scroll while the list is open: the content's top is above the clip's by it.
+                    ui.data_mut(|d| d.insert_temp(offset_key, (ui.clip_rect().top() - content_top).max(0.0)));
+                }
+                chosen
+            };
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
             let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
                 .selected_text(current)
@@ -381,6 +459,8 @@ pub(crate) fn menu_room_either(below: f32, above: f32, tallest: f32) -> f32 {
 
 /// The scroll bar of a menu's list: slim, in a column of its own beside the items, so it never
 /// covers what sits at their right end (shortcuts, submenu arrows, a font's favourite star).
+/// `theme::apply` makes it the style of every scroll area that does not set its own, so the bar
+/// shows whenever there is more to scroll to (#5941).
 pub fn list_scroll_style() -> egui::style::ScrollStyle {
     egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
 }
@@ -573,18 +653,19 @@ fn show_shortened_rows(ui: &Ui, painted: usize) {
 }
 
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
-/// window is too short for it: with the mouse wheel, or the scroll bar shown while the pointer is
-/// over it.
+/// window is too short for it: with the mouse wheel, or with its scroll bar.
 /// Its scroll bar stays a slim line at the edge, even while scrolled or dragged, so it never covers
-/// the buttons (#808).
+/// the buttons (#808). The line shows while the pointer is elsewhere too (#5941).
 pub fn strip_scroll<R>(ui: &mut Ui, id: &str, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
+        let floating = egui::style::ScrollStyle::floating();
         ui.spacing_mut().scroll = egui::style::ScrollStyle {
             bar_width: 4.0,
             floating_width: 2.0,
             bar_inner_margin: 0.0,
             bar_outer_margin: 1.0,
-            ..egui::style::ScrollStyle::floating()
+            dormant_handle_opacity: floating.active_handle_opacity,
+            ..floating
         };
         egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
     })
