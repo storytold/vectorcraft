@@ -234,6 +234,10 @@ font-technology	Variable	Варіативні
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
+	Three-Point Arc Tool	Інструмент «Дуга за трьома точками»
+	Three-Point Arc	Дуга за трьома точками
+	Arc too large	Дуга завелика
+	Third Point Sets Direction	Третя точка задає напрямок
 	Arc Upper…	Дуга зверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -5384,6 +5388,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	a guide has no curvature circle	напрямна не має кола кривини
 @msg	the circle that matches the path there would reach past the canvas	коло, що відповідає контуру в цьому місці, вийшло б за межі полотна
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
+@msg	`at` must be "start" or "end"	`at` має бути "start" або "end"
+@msg	give exactly one of `through` and `toward`	вкажіть рівно один із параметрів `through` і `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	жодна дуга не підходить до цих точок: дві точки збігаються або всі три лежать на одній прямій
+@msg	give `at` only with `toward`	вказуйте `at` лише разом із `toward`
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -10396,6 +10404,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Paint	Фарба
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухий протяг
+	Loaded Stroke	Густий мазок
+	Fan Sweep	Віяловий мазок
 	Engraving	Гравіювання
 	Fine Hatching	Тонке штрихування
 	Dense Hatching	Щільне штрихування

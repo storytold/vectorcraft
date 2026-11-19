@@ -2067,6 +2067,10 @@ lighting	Light	Cahaya
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
 	Arc Tool	Alat busur
+	Three-Point Arc Tool	Alat busur tiga titik
+	Three-Point Arc	Busur tiga titik
+	Arc too large	Busur terlalu besar
+	Third Point Sets Direction	Titik ketiga menentukan arah
 	Area Graph Tool	Alat grafik area
 	Area Type Tool	Alat teks area
 	Artboard Tool	Alat artboard
@@ -8586,6 +8590,15 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
+@msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
+@msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
+@msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
 	Engraving	Ukiran
 	Fine Hatching	Arsiran halus
 	Dense Hatching	Arsiran rapat

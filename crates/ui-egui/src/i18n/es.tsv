@@ -238,6 +238,10 @@ font-technology	Variable	Variables
 	Arc	Arco
 	Arc Lower…	Arco inferior…
 	Arc Tool	Herramienta Arco
+	Three-Point Arc Tool	Herramienta Arco por tres puntos
+	Three-Point Arc	Arco por tres puntos
+	Arc too large	Arco demasiado grande
+	Third Point Sets Direction	El tercer punto indica la dirección
 	Arc Upper…	Arco superior…
 	Arch…	Arcada…
 	Arc…	Arco…
@@ -5374,6 +5378,10 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	a guide has no curvature circle	una guía no tiene círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el círculo que coincide con el trazado en ese punto excedería el lienzo
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
+@msg	`at` must be "start" or "end"	`at` debe ser "start" o "end"
+@msg	give exactly one of `through` and `toward`	indique exactamente uno de `through` y `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ningún arco se ajusta a estos puntos: dos son iguales o los tres están en una misma línea
+@msg	give `at` only with `toward`	indique `at` solo junto con `toward`
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
 @msg	no artboard {i} (0-based; the document has {_1})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {_1})
@@ -10637,6 +10645,11 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Paint	Pintura
+	Flat Sweep	Barrido plano
+	Dry Drag	Arrastre seco
+	Loaded Stroke	Trazo cargado
+	Fan Sweep	Barrido en abanico
 	Engraving	Grabado
 	Fine Hatching	Rayado fino
 	Dense Hatching	Rayado denso
