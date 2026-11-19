@@ -36,6 +36,7 @@ pub mod pen;
 pub mod pie;
 pub mod place;
 pub mod printtiling;
+pub mod quickpen;
 pub mod repeat_grid;
 pub mod repeat_radial;
 pub mod rulerguide;
@@ -47,6 +48,7 @@ pub mod sidewidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
+pub mod three_point_arc;
 pub mod touchtype;
 pub mod trace_split;
 pub mod typewidget;
@@ -388,8 +390,10 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         circle::ID => Box::new(circle::CircleTool::default()),
         curvature_circle::ID => Box::new(curvature_circle::CurvatureCircleTool::default()),
+        quickpen::ID => Box::new(quickpen::QuickPenTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
+        three_point_arc::ID => Box::new(three_point_arc::ThreePointArcTool::default()),
         other => symbolism::create(other)
             .or_else(|| builder::create(other))
             .or_else(|| draw2::create(other))

@@ -126,6 +126,7 @@
 	Add to Selection	Добавяне към селекцията
 	Add to Swatches	Добавяне към образци
 	Add Used Colors	Добавяне на използваните цветове
+	Add Selected Colors	Добавяне на избраните цветове
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
 	Plug-in Instruction Budget	Бюджет на инструкции за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
@@ -223,6 +224,10 @@ font-technology	Variable	Променливи
 	Arc	Дъга
 	Arc Lower…	Дъга надолу…
 	Arc Tool	Инструмент „Дъга“
+	Three-Point Arc Tool	Инструмент „Дъга през три точки“
+	Three-Point Arc	Дъга през три точки
+	Arc too large	Дъгата е твърде голяма
+	Third Point Sets Direction	Третата точка задава посоката
 	Arc Upper…	Дъга нагоре…
 	Arch…	Извиване…
 	Arc…	Дъга…
@@ -1630,6 +1635,10 @@ font-technology	Variable	Променливи
 	Add Color Tool	Инструмент „Добавяне на цвят“
 	Remove Color Tool	Инструмент „Премахване на цвят“
 	Remove Color	Премахване на цвят
+	Set As Base Color	Задаване като основен цвят
+	Select Shade	Избор на нюанс
+	Add New Color	Добавяне на нов цвят
+	Set Current Color As Base Color	Задаване на текущия цвят като основен
 	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
@@ -2010,6 +2019,7 @@ font-technology	Variable	Променливи
 	Limit to Library:	Ограничаване до библиотека:
 	Limit:	Ограничение:
 	Line	Линия
+	Line Arrow	Линейна стрелка
 	Line Art and Text Resolution:	Разделителна способност на линеарна графика и текст:
 	Line Breaks	Паузи на редове
 	Line Color	Цвят на линията
@@ -2682,6 +2692,8 @@ font-technology	Variable	Променливи
 	PDF/A files carry their own output intent.	Файловете PDF/A носят собствено предназначение за изход.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Файловете PDF/X-1a са в CMYK: всеки цвят се конвертира към дестинацията (при празно поле: CMYK профила на предназначението за изход), без етикет.
 	Pen Tool	Инструмент „Перо“
+	Quick Pen Tool	Инструмент „Бързо перо“
+	Quick Pen	Бързо перо
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък
@@ -2760,6 +2772,11 @@ font-technology	Variable	Променливи
 	Preserve Alpha Transparency	Запазване на алфа прозрачността
 	Preserve Appearance and Overprints	Запазване на визията и надпечатите
 	Preserve CMYK Numbers	Запазване на CMYK стойностите
+	Preserve RGB Numbers	Запазване на RGB стойностите
+	Device to Simulate:	Устройство за симулиране:
+	Simulate Paper Color	Симулиране на цвета на хартията
+	Simulate Black Ink	Симулиране на черното мастило
+	Load…	Зареди…
 	Preserve Editing Capabilities	Запазване на възможностите за редактиране
 	Preserve editing capabilities	Запазване на възможностите за редактиране
 	Preserve Lightness	Запазване на светлината
@@ -3257,6 +3274,7 @@ digits	Malayalam	Малаялам
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ; текстът, който вече е в документа, запазва своя език.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзаците с включено Пренасяне на думи изброената дума се пренася само при въведените в нея тирета или никъде, ако няма такива, независимо от езика и регистъра ѝ.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настолната версия .wasm приставките в тази папка се зареждат при стартиране и когато щракнете върху ОК с нова папка тук, освен в Безопасен режим; уеб версията не ги зарежда.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Колко инструкции може да използва всяко изпълнение на филтър за обекти от плъгин; „Голям“ позволява повече от „Нормално“ при същия лимит от 60 секунди. Тежките филтри запазват своя бюджет.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Първият избор на временен диск: Startup, None или път до папка; VectorCraft го запазва, но все още не използва временни дискове.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Вторият избор на временен диск: Startup, None или път до папка; VectorCraft го запазва, но все още не използва временни дискове.
 	How light or dark the interface is.	Колко светъл или тъмен е интерфейсът.
@@ -3275,6 +3293,7 @@ digits	Malayalam	Малаялам
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	„Анимирано мащабиране“ работи само докато това е включено; изключено, „Анимирано мащабиране“ е затъмнено и мащабирането не е анимирано.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Мащабирането с колелцето се плъзга плавно, а инструментът „Мащаб“ мащабира, докато плъзгате настрани или го задържите; изключено, той мащабира до областта, през която плъзнете.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	От следващото стартиране настолната версия рисува с този вид графичен процесор; „Автоматично“ предпочита този, който управлява дисплея. Уеб версията не го използва.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	От следващото стартиране прозорецът показва кадрите, без да чака опресняването на дисплея, най-много 240 в секунда; изключено, темпото задава дисплеят. Режим на представяне, зададен при стартиране, има предимство.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Най-многото стъпки за отмяна, които всеки документ пази; по-малко число премахва най-старите стъпки, когато щракнете върху ОК. Стъпки може да отпаднат и по-рано, ако заемат твърде много памет.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Показва как рисунката се променя, докато плъзгате; изключено, контурите следват плъзгането, а рисунката се променя, когато отпуснете. Помощна линия от линийката винаги се движи, докато плъзгате.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Колко работни нишки рисуват рисунката; -1 използва с една по-малко от ядрата, които VectorCraft може да ползва, най-много 8, а 0 не използва нито една. Уеб версията никога не използва.
@@ -3301,6 +3320,10 @@ digits	Malayalam	Малаялам
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft запазва този избор, но Копиране и Изрязване все още не използват формат на стария векторен клипборд.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	„Запазване на пътищата“ или „Запазване на визията и надпечатите“ за стария векторен клипборд; VectorCraft запазва избора, но все още не го използва.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	„Запазване на форматирането“ запазва стиловете на текст, копиран от текстов обект във VectorCraft, при поставяне в текстов обект; „Запазване като обикновен текст“ му дава стила на мястото, където попада.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	„Показване на цялото черно като наситено черно“ показва чистото CMYK черно (само черно мастило на 100%) върху платното като RGB черно; „Показване на цялото черно точно“ го преобразува през работното CMYK пространство.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	„Изход на чисто черно като наситено черно“ рисува чистото CMYK черно като RGB черно в растерните RGB и черно-бели експорти и при „Печат като растерно изображение“; не променя векторните експорти, CMYK JPEG, TIFF и PSD и другия печат.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сензорен екран превключва към работното пространство за докосване; изключването на настройката или изчезването на сензорния екран връща работното пространство отпреди това.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Докосване с два пръста върху платното отменя, а в работното пространство за докосване превключва между инструментите за селекция и за рисуване; докосване с три пръста повтаря. Нито едното не действа в режим на презентация.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ и [Нормален стил на знак] не задава език; текстът, който вече е в документа, запазва своя език.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзаците с включено Пренасяне на думи изброената дума се пренася само при въведените в нея тирета или никъде, ако няма такива, независимо от регистъра ѝ; корейските думи не получават тире, а думите на индийски езици не се пренасят вътре в група от знаци.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
@@ -3531,6 +3554,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
+	Type to search commands, tools, panels and effects	Въведете текст, за да търсите команди, инструменти, панели и ефекти
 	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
@@ -5842,6 +5866,7 @@ lighting	Light	Светлина
 	B5	B5
 	Bar	Лента
 	Barbed	С кукички
+arrowhead	Feather	Перо
 	Baseline (Standard)	Основна линия (стандартна)
 	Baseline Optimized	Оптимизирана основна линия
 	Basic	Основен
@@ -7445,6 +7470,7 @@ breakText	Glyphs	Глифи
 	Remove Strokes	Премахване на щрихи
 	Place Brush Art	Поставяне на графика на четка
 	Replace Brush Art	Замяна на графика на четка
+	Replace Pattern Art	Замяна на графика на мостра
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Щрихи използват тази четка. Да се приложи ли новата графика към тези щрихи, или те да останат както са и да се добави копие на четката с новата графика?
 	Apply to Strokes	Прилагане към щрихите
 	Leave Strokes	Оставяне на щрихите
@@ -7860,6 +7886,15 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+@msg	`at` must be "start" or "end"	`at` трябва да е "start" или "end"
+@msg	give exactly one of `through` and `toward`	посочете точно едно от `through` и `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	няма дъга през тези точки: две съвпадат или и трите лежат на една права
+@msg	give `at` only with `toward`	задайте `at` само заедно с `toward`
+	Engraving	Гравюра
+	Fine Hatching	Фино щриховане
+	Dense Hatching	Гъсто щриховане
+	Tapered Hatching	Изтъняващо щриховане
+	Broken Hatching	Прекъснато щриховане
 	Image Brush	Четки за изображения
 	Soft Bloom	Мек цъфтеж
 	Halftone Field	Полутоново поле

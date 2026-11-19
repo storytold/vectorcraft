@@ -82,10 +82,12 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if !st.selection.anchors.is_empty() {
             v.extend([c("Remove Anchor Points", "path.removeAnchors"), c("Cut Path at Selected Anchor Points", "path.cutAtAnchors")]);
         }
-        // Object › Path › Smooth…, which opens the Smooth slider (`invoke`). `prune` leaves it out
-        // unless object.path.smooth can run: the selection holds a path, in a group or a compound
-        // path too.
-        v.push(c("Smooth…", "object.path.smooth"));
+        // Object › Path › Simplify… and Smooth…, in that menu's order (#8344). Each opens what the
+        // menu item opens (`invoke`): the Simplify slider, or the Simplify dialog when its "Open
+        // this dialog with these settings next time" was ticked, and the Smooth slider. `prune`
+        // leaves each out unless its command can run: the selection holds a path, in a group or a
+        // compound path too.
+        v.extend([c("Simplify…", "object.path.simplify"), c("Smooth…", "object.path.smooth")]);
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));
         }

@@ -2053,6 +2053,10 @@ lighting	Light	Licht
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
 	Arc Tool	Boog-gereedschap
+	Three-Point Arc Tool	Driepuntsboog-gereedschap
+	Three-Point Arc	Driepuntsboog
+	Arc too large	Boog te groot
+	Third Point Sets Direction	Derde punt geeft de richting aan
 	Area Graph Tool	Vlakdiagram-gereedschap
 	Area Type Tool	Vlaktype-gereedschap
 	Artboard Tool	Tekengebied-gereedschap
@@ -3503,6 +3507,11 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Plaats de pagina's opnieuw met de plaatsing
 	Placement:	Plaatsing:
 	Preserve CMYK Numbers	CMYK-waarden behouden
+	Preserve RGB Numbers	RGB-waarden behouden
+	Device to Simulate:	Te simuleren apparaat:
+	Simulate Paper Color	Papierkleur simuleren
+	Simulate Black Ink	Zwarte inkt simuleren
+	Load…	Laden…
 	Previous page	Vorige pagina
 	Print Layers:	Lagen afdrukken:
 	Print Preset:	Afdrukvoorinstelling:
@@ -3580,6 +3589,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Gereedschap Kleur toevoegen
 	Remove Color Tool	Gereedschap Kleur verwijderen
 	Remove Color	Kleur verwijderen
+	Set As Base Color	Instellen als basiskleur
+	Select Shade	Schakering selecteren
+	Add New Color	Nieuwe kleur toevoegen
+	Set Current Color As Base Color	Huidige kleur instellen als basiskleur
 	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
@@ -4625,6 +4638,8 @@ theme	Appearance	Vormgeving
 	Paste Offset	Plakoffset
 	Pattern Editing	Patroonbewerking
 	Pen Tool	Pen-gereedschap
+	Quick Pen Tool	Snelpen-gereedschap
+	Quick Pen	Snelpen
 	Picas	Pica's
 	Portuguese	Portugees
 	Preserve Appearance and Overprints	Vormgeving en overprint behouden
@@ -4761,6 +4776,7 @@ theme	Appearance	Vormgeving
 	Add to Graphic Styles	Aan grafische stijlen toevoegen
 	Graphic Style Library	Bibliotheek met grafische stijlen
 	Add Used Colors	Gebruikte kleuren toevoegen
+	Add Selected Colors	Geselecteerde kleuren toevoegen
 	Delete Swatch	Kleurstaal verwijderen
 	Duplicate Swatch	Kleurstaal dupliceren
 	Merge Swatches	Kleurstalen samenvoegen
@@ -5048,6 +5064,7 @@ font-technology	Variable	Variabel
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
+	Type to search commands, tools, panels and effects	Typ om opdrachten, gereedschappen, panelen en effecten te zoeken
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…
@@ -5170,6 +5187,7 @@ font-technology	Variable	Variabel
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is; tekst die al in een document staat, behoudt zijn eigen taal.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht taal of hoofdletters.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer u hier met een nieuwe map op OK klikt, behalve in de veilige modus; de webversie laadt ze niet.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hoeveel instructies elke uitvoering van een objectfilter uit een plug-in mag gebruiken; Groot staat er meer toe dan Normaal, met dezelfde limiet van 60 seconden. Zware filters houden hun eigen budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De eerste keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De tweede keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
 	How light or dark the interface is.	Hoe licht of donker de gebruikersinterface is.
@@ -5188,6 +5206,7 @@ font-technology	Variable	Variabel
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Geanimeerd zoomen werkt alleen zolang dit aan staat; uit is Geanimeerd zoomen gedimd en wordt zoomen niet geanimeerd.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoomen met het wieltje glijdt soepel, en het Zoom-gereedschap zoomt terwijl u opzij sleept of het ingedrukt houdt; uit zoomt het Zoom-gereedschap in op het gebied waarover u sleept.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Vanaf de volgende start tekent de desktopversie met dit soort grafische processor; Automatisch kiest bij voorkeur de processor die het beeldscherm aanstuurt. De webversie gebruikt het niet.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Vanaf de volgende start toont het venster beelden zonder op de verversing van het beeldscherm te wachten, hoogstens 240 per seconde; uit bepaalt het beeldscherm het tempo. Een presentatiemodus die bij het starten is ingesteld, gaat voor.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Het grootste aantal ongedaanmaakstappen dat elk document bewaart; een lager getal verwijdert de oudste stappen wanneer u op OK klikt. Stappen kunnen ook eerder verdwijnen als ze te veel geheugen gebruiken.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Toont tijdens het slepen hoe de illustratie verandert; uit volgen contouren het slepen en verandert de illustratie wanneer u loslaat. Een hulplijn van de liniaal beweegt altijd mee tijdens het slepen.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hoeveel werkthreads de illustratie tekenen; -1 gebruikt er één minder dan de kernen die VectorCraft mag gebruiken, hoogstens 8, en 0 geen. De webversie gebruikt er nooit een.
@@ -5214,6 +5233,10 @@ font-technology	Variable	Variabel
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft slaat deze keuze op, maar Kopiëren en Knippen gebruiken nog geen indeling van het verouderde vectorklembord.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Paden behouden of Vormgeving en overprint behouden voor het verouderde vectorklembord; VectorCraft slaat de keuze op, maar gebruikt die nog niet.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Opmaak behouden behoudt de stijlen van tekst uit een tekstobject in VectorCraft wanneer die in een tekstobject wordt geplakt; Platte tekst behouden geeft die de stijl van de plek waar hij terechtkomt.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Alle zwarttinten weergeven als rijk zwart toont zuiver CMYK-zwart (alleen zwarte inkt op 100%) op het canvas als RGB-zwart; Alle zwarttinten nauwkeurig weergeven zet het om via de werk-CMYK-kleurruimte.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Alle zwarttinten uitvoeren als rijk zwart tekent zuiver CMYK-zwart als RGB-zwart in RGB- en grijswaarden-rasterexports en met Afdrukken als bitmap; het verandert niets aan vectorexports, CMYK-JPEG, -TIFF en -PSD of ander afdrukken.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Op een aanraakscherm wordt naar de Touch-werkruimte gewisseld; uitschakelen of het wegvallen van het aanraakscherm zet de werkruimte van daarvoor terug.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Tikken met twee vingers op het canvas maakt ongedaan of wisselt in de Touch-werkruimte tussen selectie- en tekengereedschap, en tikken met drie vingers voert opnieuw uit; geen van beide werkt in de presentatiemodus.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is en [Normale tekenstijl] geen taal instelt; tekst die al in een document staat, behoudt zijn eigen taal.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht hoofdletters; Koreaanse woorden krijgen geen afbreekstreepje, en woorden in Indiase talen worden niet binnen een tekengroep afgebroken.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
@@ -5738,6 +5761,10 @@ imageTrace	Outline	Contour
 @msg	a guide has no curvature circle	een hulplijn heeft geen krommingscirkel
 @msg	the circle that matches the path there would reach past the canvas	de cirkel die daar bij het pad past, zou voorbij het canvas reiken
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	`at` must be "start" or "end"	`at` moet "start" of "end" zijn
+@msg	give exactly one of `through` and `toward`	geef precies één van `through` en `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	er past geen boog bij deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	give `at` only with `toward`	geef `at` alleen samen met `toward`
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
 @msg	no artboard {i} (0-based; the document has {_1})	geen tekengebied {i} (vanaf 0; het document heeft er {_1})
@@ -5781,6 +5808,7 @@ imageTrace	Outline	Contour
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
 @msg	no pattern `{name}`	geen patroon `{name}`
+@msg	art painted with `{name}` can't be its tile	illustratie die met `{name}` is geverfd, kan niet de tegel ervan zijn
 @msg	no perspective grid preset named `{name}`	geen perspectiefrastervoorinstelling met de naam `{name}`
 @msg	no plug-in {0} is installed	er is geen plug-in {0} geïnstalleerd
 @msg	no plug-in {id} is installed	er is geen plug-in {id} geïnstalleerd
@@ -5825,6 +5853,9 @@ imageTrace	Outline	Contour
 @msg	no such saved selection	opgeslagen selectie bestaat niet
 @msg	no such segment	segment bestaat niet
 @msg	no such subpath	subpad bestaat niet
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` moet een lijst van hoogstens 10000 stukken zijn
+@msg	give either `start` for a new path or `id`, not both	geef `start` voor een nieuw pad of `id`, niet beide
+@msg	`subpath` and `keep` need `id`	`subpath` en `keep` vereisen `id`
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet
@@ -8284,6 +8315,7 @@ imageTrace	Outline	Contour
 	Arrow	Pijl
 	Arrow (open)	Pijl (open)
 	Barbed	Weerhaak
+arrowhead	Feather	Veer
 	Half Arrow (left)	Halve pijl (links)
 	Half Arrow (right)	Halve pijl (rechts)
 	Concave	Concaaf
@@ -8311,6 +8343,7 @@ imageTrace	Outline	Contour
 	Kite	Vlieger
 	Triangle to Bar	Driehoek naar balk
 	Oval	Ovaal
+	Line Arrow	Lijnpijl
 	Complementary	Complementair
 	Complementary 2	Complementair 2
 	Split Complementary	Gesplitst complementair
@@ -10184,6 +10217,7 @@ breakText	Glyphs	Glyphs
 	Remove Strokes	Contouren verwijderen
 	Place Brush Art	Penseelillustratie plaatsen
 	Replace Brush Art	Penseelillustratie vervangen
+	Replace Pattern Art	Patroonillustratie vervangen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
 	Apply to Strokes	Op contouren toepassen
 	Leave Strokes	Contouren behouden
@@ -10751,6 +10785,11 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Engraving	Gravure
+	Fine Hatching	Fijne arcering
+	Dense Hatching	Dichte arcering
+	Tapered Hatching	Taps toelopende arcering
+	Broken Hatching	Onderbroken arcering
 	Image Brush	Afbeeldingspenselen
 	Soft Bloom	Zachte bloei
 	Halftone Field	Halftoonveld

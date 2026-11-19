@@ -203,6 +203,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            alt_tap: Default::default(),
             hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
@@ -366,6 +367,7 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
+        crate::dialogs::proof_setup::poll(self, ctx);
         if self.session.script_running()
             && !self.session.script_waiting()
             && self.session.script_dialog().is_none()
