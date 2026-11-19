@@ -480,6 +480,76 @@ fn fill_area_fills_an_area_that_a_left_out_paths_box_holds_but_its_segments_miss
     }
 }
 
+/// Puts `path` with `look` in front on the current layer.
+fn insert_path(s: &mut Session, path: PathData, look: vectorcraft_doc::Appearance) -> NodeId {
+    s.edit("t", |d, _| {
+        let id = d.alloc_id();
+        let top = d.children(d.default_layer()).map_or(0, |c| c.len());
+        d.insert(d.default_layer(), top, Node::path(id, path, look))?;
+        Ok(id)
+    })
+    .unwrap()
+}
+
+/// A path with too many segments in the empty corner of a filled L, well clear of both arms, is
+/// left out and does not stop the L from being filled, though the L's box holds it.
+#[test]
+fn fill_area_fills_an_l_whose_empty_corner_holds_a_left_out_path() {
+    let mut s = session();
+    let l = [(0.0, 0.0), (400.0, 0.0), (400.0, 100.0), (100.0, 100.0), (100.0, 400.0), (0.0, 400.0)].map(|(x, y)| Point::new(x, y));
+    let solid = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&l, true)), solid);
+    let n = vectorcraft_pathops::SHAPE_BUILDER_MAX_SEGMENTS;
+    let pts: Vec<Point> = (0..=n).map(|k| Point::new(250.0 + 100.0 * k as f64 / n as f64, 250.0 + (k % 2) as f64)).collect();
+    let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).unwrap();
+    assert!((area(&s, id_of(&r)) - 70_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+}
+
+/// A filled contour with too many segments on a higher layer surrounds a small square, its outline
+/// far from it: it is left out of the map, and the new path still goes above it, since it covers
+/// the area.
+#[test]
+fn fill_area_stacks_above_a_left_out_path_that_covers_the_area() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.default_layer();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let over = id_of(&s.execute("layer.new", &json!({"name": "Over"})).unwrap());
+    let n = vectorcraft_pathops::SHAPE_BUILDER_MAX_SEGMENTS + 1;
+    let pts: Vec<Point> = (0..n)
+        .map(|k| {
+            let a = k as f64 * std::f64::consts::TAU / n as f64;
+            Point::new(50.0 + 3000.0 * a.cos(), 50.0 + 3000.0 * a.sin())
+        })
+        .collect();
+    let solid = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    let contour = insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), solid);
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).unwrap();
+    assert!((area(&s, id_of(&r)) - 10_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+    assert_eq!(r["above"], json!(contour.0));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(id_of(&r)), Some(over));
+    assert_ne!(d.parent_of(id_of(&r)), layer);
+}
+
+/// With Gap Detection off, a long line on a higher layer 0.75 pt from a square's edge neither
+/// touches nor covers the square, so the new path stays above the square.
+#[test]
+fn fill_area_does_not_stack_above_a_line_that_does_not_touch_the_area() {
+    let mut s = session();
+    let layer = s.doc().unwrap().doc.default_layer();
+    let square = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    id_of(&s.execute("layer.new", &json!({"name": "Other"})).unwrap());
+    line(&mut s, (-5000.0, -0.75), (5000.0, -0.75));
+    deselect(&mut s);
+    let r = s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 50]})).unwrap();
+    assert_eq!(r["above"], json!(square.0));
+    assert_eq!(s.doc().unwrap().doc.parent_of(id_of(&r)), layer);
+}
+
 /// With Gap Detection on, a square on a higher layer within the gap of the area's corners does not
 /// bound the area, so the new path stays above the square that does.
 #[test]

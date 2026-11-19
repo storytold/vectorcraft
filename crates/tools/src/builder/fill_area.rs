@@ -38,7 +38,8 @@ const NEAR_ROUNDS: usize = 4;
 /// have no area under the point, or the area does not fit after [`WINDOW_ROUNDS`] widenings, the
 /// finder maps every path. When a window's paths have more segments than one Shape Builder map
 /// takes, the paths with the most segments are left out until the rest fit, and an area is taken
-/// only when no path left out reaches it. When every path together has more segments than that,
+/// only when no path left out crosses it or comes within the gap of it; a path left out that
+/// covers it still counts for where the new path goes. When every path together has more segments than that,
 /// an area no window finds is not found. The map of every path, once a search has needed it, is
 /// kept for the next search.
 pub struct AreaFinder {
@@ -67,32 +68,77 @@ fn meet(a: &Rect, b: &Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
 }
 
-/// Does a segment of `path` (closing segments included) meet `zone`? A path whose box meets the zone
-/// may still lie wholly outside it, as a path of subpaths far apart, a diagonal line or a curve
-/// that arcs around the zone does.
-fn reaches(path: &PathData, zone: &Rect) -> bool {
-    let bez = path.to_bezpath();
-    vectorcraft_geom::kurbo::segments(bez.elements().iter().copied()).any(|seg| segment_reaches(seg, zone, 0))
+/// The area a path left out of a window's map may cut: its outline, the same as a closed path
+/// (`bez`), and the box (`zone`) its outline reaches with the gap.
+struct Reach<'a> {
+    face: &'a PathData,
+    bez: &'a vectorcraft_geom::kurbo::BezPath,
+    zone: Rect,
+    /// How close (pt) to the outline a path may come and still change the area: the gap and 1 pt.
+    reach: f64,
 }
 
-/// How many times [`segment_reaches`] halves a segment: a piece of 1/2^24 of a segment counts as
-/// meeting the zone when its box does.
+/// Does a segment of `path` (closing segments included) lie inside the area or come within its
+/// reach of the area's outline? A path in the box of the area may still lie wholly outside the
+/// area, in the empty corner of an L or around it, and such a path does not change it. `budget`
+/// counts the work (pieces checked times the outline's segments); when it runs out, the path
+/// counts as cutting the area.
+fn cuts(path: &PathData, area: &Reach, budget: &mut usize) -> bool {
+    let bez = path.to_bezpath();
+    let cost = area.face.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>().max(1);
+    vectorcraft_geom::kurbo::segments(bez.elements().iter().copied()).any(|seg| segment_cuts(seg, area, cost, budget, 0))
+}
+
+/// How many times [`segment_cuts`] halves a segment: a piece of 1/2^24 of a segment near the area
+/// counts as cutting it.
 const REACH_SPLITS: u32 = 24;
 
-/// The side (pt) below which a piece of a segment whose box meets the zone counts as meeting it.
+/// The side (pt) below which a piece of a segment that may come within reach of the area counts as
+/// cutting it.
 const REACH_TOLERANCE: f64 = 0.01;
 
-/// Does `seg` meet `zone`? Its halves are checked in turn while their boxes meet the zone and
-/// neither end is in it; a piece smaller than [`REACH_TOLERANCE`] whose box meets the zone counts.
-fn segment_reaches(seg: PathSeg, zone: &Rect, depth: u32) -> bool {
+/// How much work [`cuts`] does for one area before it takes a path as cutting it: pieces checked
+/// times the segments of the area's outline.
+const CUT_BUDGET: usize = 1 << 24;
+
+/// Does `seg` lie inside the area or come within its reach of the area's outline? A piece whose
+/// box misses the area's zone does not; a piece whose middle is inside the area or within reach of
+/// its outline does; a piece farther from the outline than its box is wide does not, since every
+/// point of it is then out of reach and on the same side. The rest is halved.
+fn segment_cuts(seg: PathSeg, area: &Reach, cost: usize, budget: &mut usize, depth: u32) -> bool {
     let b = segment_bounds(seg);
-    if !meet(&b, zone) {
+    if !meet(&b, &area.zone) {
         return false;
     }
-    if holds(zone, seg.start()) || holds(zone, seg.end()) || depth >= REACH_SPLITS || b.width().max(b.height()) < REACH_TOLERANCE {
+    let Some(left) = budget.checked_sub(cost) else { return true };
+    *budget = left;
+    let mid = seg.eval(0.5);
+    if area.bez.winding(mid) != 0 {
         return true;
     }
-    segment_reaches(seg.subsegment(0.0..0.5), zone, depth + 1) || segment_reaches(seg.subsegment(0.5..1.0), zone, depth + 1)
+    let Some((.., d)) = area.face.nearest(mid) else { return true };
+    if d <= area.reach {
+        return true;
+    }
+    let wide = b.width().hypot(b.height());
+    if d - area.reach > wide {
+        return false;
+    }
+    if depth >= REACH_SPLITS || wide < REACH_TOLERANCE {
+        return true;
+    }
+    segment_cuts(seg.subsegment(0.0..0.5), area, cost, budget, depth + 1) || segment_cuts(seg.subsegment(0.5..1.0), area, cost, budget, depth + 1)
+}
+
+/// How far (pt) an anchor of an area's outline may lie from a path's outline, with Gap Detection
+/// off, and still count as on it: the least snap distance [`outline_snap`] gives, five times the
+/// 0.01 pt precision the Shape Builder's map works to.
+const CONTACT: f64 = 0.05;
+
+/// Does the filled area of the closed subpaths of `s` hold `p`?
+fn covers(s: &po::Shape, p: Point) -> bool {
+    let closed = PathData::new(s.path.subpaths.iter().filter(|sp| sp.closed).cloned().collect());
+    path_contains(&closed, s.rule, p)
 }
 
 /// Does `outer` hold all of `inner`?
@@ -201,7 +247,7 @@ impl AreaFinder {
     /// `p` is in no enclosed area.
     pub fn find(&mut self, p: Point) -> Option<EnclosedArea> {
         if let Some((map, picked)) = &self.full {
-            return self.area_in(map, picked, p);
+            return self.area_in(map, picked, &[], p);
         }
         let total = self.total?;
         // A gap bridge reaches at most `gap` past a path, so a window takes in every path within
@@ -245,22 +291,27 @@ impl AreaFinder {
             let every = picked.len() == self.inputs.len();
             let shapes: Vec<po::Shape> = picked.iter().filter_map(|&i| self.inputs.get(i).map(|(s, ..)| s.clone())).collect();
             let map = BuilderMap::of_shapes(shapes, false, self.gap);
-            let bounds = map.region_at(p).and_then(|k| map.regions.get(k)).map(|(.., rb)| *rb);
+            let face = map.region_at(p).and_then(|k| map.regions.get(k));
+            let bounds = face.map(|(.., rb)| *rb);
             if every {
-                let area = self.area_in(&map, &picked, p);
+                let area = self.area_in(&map, &picked, &[], p);
                 self.full = Some((map, picked));
                 return area;
             }
             let before = window;
             match bounds {
-                // A path left out that reaches the area could cut it, and only the map of every
-                // path holds both.
+                // A path left out that crosses the area or comes within its reach could cut it, and
+                // only the map of every path holds both.
                 Some(rb) if within(&rb, &window) => {
                     let reached = rb.inflate(reach, reach);
+                    let mut budget = CUT_BUDGET;
                     let cut = any_left_out
-                        && self.inputs.iter().zip(&left_out).any(|((s, b, _), out)| *out && meet(b, &reached) && reaches(&s.path, &reached));
+                        && face.is_none_or(|(region, bez, _)| {
+                            let area = Reach { face: &region.path, bez, zone: reached, reach };
+                            self.inputs.iter().zip(&left_out).any(|((s, b, _), out)| *out && meet(b, &reached) && cuts(&s.path, &area, &mut budget))
+                        });
                     if !cut {
-                        return self.area_in(&map, &picked, p);
+                        return self.area_in(&map, &picked, &left_out, p);
                     }
                     every_path = true;
                 }
@@ -301,8 +352,11 @@ impl AreaFinder {
         out
     }
 
-    /// The area under `p` in `map`, made of the inputs `picked` (in its order).
-    fn area_in(&self, map: &BuilderMap, picked: &[usize], p: Point) -> Option<EnclosedArea> {
+    /// The area under `p` in `map`, made of the inputs `picked` (in its order). `left_out` marks
+    /// the inputs left out of the map, by index, none of which comes near the area: the front-most
+    /// of them that covers the area decides where the new path goes when it is in front of the
+    /// shape the map gives.
+    fn area_in(&self, map: &BuilderMap, picked: &[usize], left_out: &[bool], p: Point) -> Option<EnclosedArea> {
         let (region, ..) = map.region_at(p).and_then(|k| map.regions.get(k))?;
         let path = po::FaceMerger::with_gap(&map.shapes, self.gap).merge(&[region]);
         if path.is_empty() {
@@ -312,9 +366,10 @@ impl AreaFinder {
         // The front-most shape that covers the area or that an anchor of its outline lies on. A
         // shape within the gap of an anchor counts only when no shape is along the area itself,
         // so a path near the area that bounds none of it does not decide where the new path goes.
+        // Without a gap, an anchor is on a shape's outline within [`CONTACT`].
         let along = |gap: f64| {
             map.shapes.iter().enumerate().rev().find(|(i, s)| {
-                let tol = outline_snap(&s.path) + gap;
+                let tol = if gap > 0.0 { outline_snap(&s.path) + gap } else { CONTACT };
                 region.sources.contains(i)
                     || s.path.bounds().is_some_and(|b| {
                         let b = b.inflate(tol, tol);
@@ -323,7 +378,12 @@ impl AreaFinder {
             })
         };
         let k = along(0.0).or_else(|| along(self.gap)).map_or(map.shapes.len().checked_sub(1)?, |(i, _)| i);
-        let above = picked.get(k).and_then(|&i| self.inputs.get(i)).map(|(.., id)| *id)?;
+        let mapped = *picked.get(k)?;
+        // A path left out comes near no part of the area, so it covers all of it or none of it.
+        let covering =
+            left_out.iter().enumerate().rev().find(|(i, out)| **out && *i > mapped && self.inputs.get(*i).is_some_and(|(s, ..)| covers(s, p)));
+        let front = covering.map_or(mapped, |(i, _)| i);
+        let above = self.inputs.get(front).map(|(.., id)| *id)?;
         Some(EnclosedArea { path, above })
     }
 }
@@ -371,9 +431,22 @@ struct HoverJob {
     done: std::sync::mpsc::Receiver<(AreaFinder, Option<EnclosedArea>)>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+thread_local! {
+    /// The hover searches this thread has started on other threads ([`hover_searches_started`]).
+    static HOVER_SEARCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many hover searches this thread has started on other threads, for tests that count them.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(super) fn hover_searches_started() -> usize {
+    HOVER_SEARCHES.with(std::cell::Cell::get)
+}
+
 /// Runs `finder.find(p)` on another thread; gives the finder back when no thread starts.
 #[cfg(not(target_arch = "wasm32"))]
 fn spawn_find(finder: AreaFinder, p: Point) -> Result<std::sync::mpsc::Receiver<(AreaFinder, Option<EnclosedArea>)>, Box<AreaFinder>> {
+    HOVER_SEARCHES.with(|n| n.set(n.get() + 1));
     let (tx, done) = std::sync::mpsc::channel();
     let (back_tx, back) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new().name("vectorcraft-fill-area".into()).spawn(move || {
@@ -437,14 +510,13 @@ impl FillAreaTool {
     }
 
     /// The area under `p`, found here and now (a click). A search running on another thread is
-    /// waited for first, so its finder is not made again.
+    /// waited for first, so its finder is not made again; no search starts for where the pointer
+    /// moved meanwhile.
     fn area_at(&mut self, cx: &ToolContext, p: Point) -> Option<EnclosedArea> {
         if let Some(a) = self.hover_holding(cx, p) {
             return Some(a.clone());
         }
-        while self.job.is_some() {
-            self.settle(cx, true);
-        }
+        self.settle(cx, true, false);
         let key = self.finder_key(cx);
         let mut finder = self.take_finder(cx);
         let area = finder.find(p);
@@ -485,8 +557,8 @@ impl FillAreaTool {
     }
 
     /// Takes the result of the hover search on another thread when it is done (`wait`: waits for
-    /// it), and starts the search for where the pointer moved meanwhile.
-    fn settle(&mut self, cx: &ToolContext, wait: bool) {
+    /// it), and with `follow` starts the search for where the pointer moved meanwhile.
+    fn settle(&mut self, cx: &ToolContext, wait: bool, follow: bool) {
         let Some(job) = self.job.take() else { return };
         let got = if wait {
             job.done.recv().ok()
@@ -514,7 +586,8 @@ impl FillAreaTool {
         // The area found serves wherever the pointer moved meanwhile, as long as it holds it.
         let at = self.at;
         self.hover = area.filter(|a| current && at.is_some_and(|p| path_contains(&a.path, FillRule::NonZero, p))).map(|a| (job.key, a));
-        if let Some(p) = at
+        if follow
+            && let Some(p) = at
             && self.hover.is_none()
             && (p != job.p || !current)
         {
@@ -591,9 +664,9 @@ impl Tool for FillAreaTool {
     }
 
     fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
-        self.settle(cx, wait);
+        self.settle(cx, wait, true);
         while wait && self.job.is_some() {
-            self.settle(cx, true);
+            self.settle(cx, true, true);
         }
         vec![]
     }
