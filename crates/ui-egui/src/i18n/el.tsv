@@ -4858,6 +4858,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Unembedded to {}	Καταργήθηκε η ενσωμάτωση στο {}
 	Unembed…	Κατάργηση ενσωμάτωσης…
 	Ungroup Color Group	Κατάργηση ομαδοποίησης χρωμάτων
+	Color Group Options	Επιλογές ομάδας χρωμάτων
+	Color Group Options…	Επιλογές ομάδας χρωμάτων…
 	Unique	Μοναδικό
 	Unite	Ένωση
 	Unite and Simplify	Ένωση και απλοποίηση
@@ -5085,6 +5087,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a freeform gradient keeps at least one point	το ντεγκραντέ ελεύθερης μορφής χρειάζεται τουλάχιστον ένα σημείο
 @msg	a gradient needs at least two stops	το ντεγκραντέ χρειάζεται τουλάχιστον δύο σημεία χρώματος
 @msg	a graphic style named `{to}` already exists	υπάρχει ήδη στυλ γραφικών με όνομα `{to}`
+@msg	a swatch or color group named `{name}` already exists	υπάρχει ήδη δείγμα χρώματος ή ομάδα χρωμάτων με όνομα `{name}`
+@msg	missing `group`	λείπει το `group`
+@msg	no colour group `{group}`	δεν υπάρχει ομάδα χρωμάτων `{group}`
 @msg	a key object sits on that point	σε αυτό το σημείο βρίσκεται βασικό αντικείμενο
 @msg	a page is missing	λείπει μια σελίδα
 @msg	a page out of range	η σελίδα βρίσκεται εκτός εύρους

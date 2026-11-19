@@ -4080,6 +4080,8 @@ digits	Malayalam	Malayalam
 	Unembed…	Gömmeyi kaldır…
 	Ungroup	Grubu Çöz
 	Ungroup Color Group	Renk Grubunun Grubunu Çöz
+	Color Group Options	Renk Grubu Seçenekleri
+	Color Group Options…	Renk Grubu Seçenekleri…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4840,6 +4842,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	a freeform gradient keeps at least one point	serbest biçimli bir degrade en az bir noktayı korur
 @msg	a gradient needs at least two stops	bir degradenin en az iki durağa ihtiyacı vardır
 @msg	a graphic style named `{to}` already exists	`{to}` adlı bir grafik stili zaten mevcut
+@msg	a swatch or color group named `{name}` already exists	`{name}` adlı bir renk örneği veya renk grubu zaten mevcut
 @msg	a page is missing	bir sayfa eksik
 @msg	a page out of range	aralık dışında bir sayfa
 @msg	a page tree kid isn't a reference	sayfa ağacı çocuğu bir referans değildir

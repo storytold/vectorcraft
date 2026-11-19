@@ -4447,6 +4447,8 @@ theme	Appearance	Motiv
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
 	Ungroup Color Group	Zrušit skupinu barev
+	Color Group Options	Možnosti skupiny barev
+	Color Group Options…	Možnosti skupiny barev…
 	Copy to User Defined	Kopírovat do uživatelských
 	Swatch Library	Knihovna vzorníku
 	Clear All Tabs	Vymazat všechny tabulátory
@@ -5445,6 +5447,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	a freeform gradient keeps at least one point	volný přechod si ponechává alespoň jeden bod
 @msg	a gradient needs at least two stops	přechod potřebuje alespoň dvě zarážky
 @msg	a graphic style named `{to}` already exists	grafický styl s názvem `{to}` už existuje
+@msg	a swatch or color group named `{name}` already exists	položka vzorníku nebo skupina barev s názvem `{name}` už existuje
 @msg	a key object sits on that point	na tomto bodě leží klíčový objekt
 @msg	a page is missing	chybí stránka
 @msg	a page out of range	stránka mimo rozsah

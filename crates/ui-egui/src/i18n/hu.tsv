@@ -5068,6 +5068,8 @@ mark-style	Japanese	Japán
 	Unembed…	Beágyazás megszüntetése…
 	Ungroup	Csoportbontás
 	Ungroup Color Group	Színcsoport bontása
+	Color Group Options	Színcsoport beállításai
+	Color Group Options…	Színcsoport beállításai…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5454,6 +5456,7 @@ imageTrace	Outline	Körvonal
 @msg	a freeform gradient keeps at least one point	a szabad formájú színátmenetben legalább egy pont marad
 @msg	a gradient needs at least two stops	a színátmenethez legalább két színátmenet-pont kell
 @msg	a graphic style named `{to}` already exists	már van ilyen nevű grafikai stílus: `{to}`
+@msg	a swatch or color group named `{name}` already exists	már van ilyen nevű színminta vagy színcsoport: `{name}`
 @msg	a key object sits on that point	ezen a ponton kulcsobjektum van
 @msg	a layer couldn't be read	egy réteg nem olvasható
 @msg	a page is missing	hiányzik egy oldal

@@ -1004,6 +1004,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{swatches?: [names]} open New Color Group, from those swatches or the selected artwork (dialog `newColorGroup`, engine: swatch.newGroup)",
     ),
     (
+        "ui.colorGroupOptions",
+        "Color Group Options…",
+        "",
+        "{group?} open Color Group Options for that color group, or without group for the color group selected alone in the Swatches panel (dialog `colorGroupOptions`, field `name`): OK renames the group (engine: swatch.renameGroup); a name that is empty or that another color group or a swatch has keeps the dialog open; when another document is active, or the color group at the group's place in the list no longer has the name and swatches it opened with, OK closes the dialog and renames nothing",
+    ),
+    (
         "ui.colorPicker",
         "Color Picker…",
         "",

@@ -6178,6 +6178,8 @@ theme	Appearance	იერსახე
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
+	Color Group Options	ფერების ჯგუფის პარამეტრები
+	Color Group Options…	ფერების ჯგუფის პარამეტრები…
 	Copy to User Defined	მომხმარებლის განსაზღვრულში კოპირება
 	Swatch Library	ფერის ნიმუშების ბიბლიოთეკა
 	Clear All Tabs	ყველა ტაბულაციის გასუფთავება
@@ -6921,6 +6923,7 @@ font-technology	Variable	ცვლადი
 @msg	a freeform gradient keeps at least one point	თავისუფალი ფორმის გრადიენტი ინარჩუნებს მინიმუმ ერთ წერტილს
 @msg	a gradient needs at least two stops	გრადიენტს სჭირდება მინიმუმ ორი გადასვლის წერტილი
 @msg	a graphic style named `{to}` already exists	გრაფიკული სტილი სახელით `{to}` უკვე არსებობს
+@msg	a swatch or color group named `{name}` already exists	ფერის ნიმუში ან ფერების ჯგუფი სახელით `{name}` უკვე არსებობს
 @msg	a page is missing	გვერდი აკლია
 @msg	a page out of range	გვერდი დიაპაზონს გარეთაა
 @msg	a page tree kid isn't a reference	გვერდების ხის შვილობილი მიმართვა არ არის

@@ -4222,6 +4222,8 @@ digits	Malayalam	Malayalam
 	Unembed…	Ta bort inbäddning…
 	Ungroup	Dela upp grupp
 	Ungroup Color Group	Dela upp färggrupp
+	Color Group Options	Färggruppsalternativ
+	Color Group Options…	Färggruppsalternativ…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5025,6 +5027,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	a freeform gradient keeps at least one point	en fri gradient behåller minst en punkt
 @msg	a gradient needs at least two stops	en gradient behöver minst två stopp
 @msg	a graphic style named `{to}` already exists	det finns redan en grafisk stil med namnet `{to}`
+@msg	a swatch or color group named `{name}` already exists	det finns redan en färgruta eller färggrupp med namnet `{name}`
+@msg	no colour group `{group}`	ingen färggrupp `{group}`
 @msg	a key object sits on that point	ett nyckelobjekt ligger på den punkten
 @msg	a page is missing	en sida saknas
 @msg	a page out of range	en sida utanför intervallet

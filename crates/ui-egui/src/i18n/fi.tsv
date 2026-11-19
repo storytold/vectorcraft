@@ -4364,6 +4364,8 @@ theme	Appearance	Ulkoasu
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
 	Ungroup Color Group	Pura väriryhmä
+	Color Group Options	Väriryhmän asetukset
+	Color Group Options…	Väriryhmän asetukset…
 	Copy to User Defined	Kopioi käyttäjän määrittämiin
 	Swatch Library	Värimallikirjasto
 	Clear All Tabs	Tyhjennä kaikki sarkaimet
@@ -5370,6 +5372,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	a freeform gradient keeps at least one point	vapaamuotoisessa liukuvärissä on oltava vähintään yksi piste
 @msg	a gradient needs at least two stops	liukuvärissä on oltava vähintään kaksi väripistettä
 @msg	a graphic style named `{to}` already exists	grafiikkatyyli nimeltä `{to}` on jo olemassa
+@msg	a swatch or color group named `{name}` already exists	värimalli tai väriryhmä nimeltä `{name}` on jo olemassa
+@msg	missing `group`	`group` puuttuu
+@msg	no colour group `{group}`	ei väriryhmää `{group}`
 @msg	a key object sits on that point	pisteessä on avainobjekti
 @msg	a page is missing	sivu puuttuu
 @msg	a page out of range	sivu alueen ulkopuolella

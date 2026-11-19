@@ -25,6 +25,7 @@ pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
 pub mod color_balance;
+pub mod color_group_options;
 pub mod color_guide_options;
 pub(crate) mod color_picker;
 mod command;
@@ -353,6 +354,7 @@ registry! {
     MissingFontEdit: [confirm::MISSING_FONT_EDIT] => confirm::MISSING_FONT_EDIT_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    ColorGroupOptions: [color_group_options::KIND] => color_group_options::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,

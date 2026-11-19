@@ -1652,6 +1652,140 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     menu_frame(app, ctx, vec![button(false)]);
 }
 
+/// The panel menu's Color Group Options… opens on the selected color group when that group is the
+/// whole selection; with nothing selected, a swatch alone, or a swatch or a second group beside the
+/// group, it opens nothing. After OK, and after `swatch.renameGroup` run on its own or in a batch,
+/// the group stays selected under its new name.
+#[test]
+fn color_group_options_opens_on_a_sole_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        click_menu_item(&mut app, &ctx, "Color Group Options…");
+        assert!(app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    let d = app.ui.dialog.as_ref().expect("Color Group Options opens");
+    assert_eq!((d.kind.as_str(), d.str("__group").as_str()), (crate::dialogs::color_group_options::KIND, "Grays"));
+    // OK keeps the renamed group selected, so the item opens on it again.
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-anchor", "Grays".to_string());
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Neutrals"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(selected(&ctx), ["Neutrals"]);
+    assert_eq!(pstate::<String>(&ctx, "swatch-anchor"), "Neutrals", "Shift-click extends from the renamed group");
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Neutrals"));
+    crate::dialogs::cancel(&mut app);
+    // The command run on its own, and as batch steps, keeps the selection the same way.
+    app.run("swatch.renameGroup", json!({"group": "Neutrals", "name": "Stone"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Stone".to_string()], "Stone".to_string()));
+    let steps = json!([
+        {"command": "swatch.renameGroup", "params": {"group": "Stone", "name": "Slate"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Slate", "name": "Ash"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Ash".to_string()], "Ash".to_string()));
+}
+
+/// Color Group Options from the command palette (no `group`) opens on the color group selected
+/// alone in the panel; without one it opens nothing and reports the missing group.
+#[test]
+fn color_group_options_without_a_group_opens_on_the_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Grays"));
+    crate::dialogs::cancel(&mut app);
+    // The panel showed the selection in this document; another document made active since then
+    // does not take it.
+    let uid = app.session.active().unwrap().uid;
+    set_pstate(&ctx, "swatch-focus", (Some(Some((uid, Vec::<u64>::new()))), None::<String>));
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    crate::dialogs::cancel(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "another document");
+}
+
+/// Renames in a batch move the selection to another group neither after an Ungroup of the
+/// selected group nor in another document; a batch step that keeps the groups (Sort by Kind) does
+/// not stop the selection from following a rename, and Delete Swatch on the group ends it.
+#[test]
+fn a_batch_moves_the_selection_only_with_its_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    let select = |sel: &str| {
+        set_pstate(&ctx, "swatch-selected", vec![sel.to_string()]);
+        set_pstate(&ctx, "swatch-anchor", sel.to_string());
+    };
+    select("Brights");
+    let steps = json!([
+        {"command": "swatch.ungroup", "params": {"name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Grays", "name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Ungroup ends the selection");
+    // A step that keeps the groups, then a rename of the selected group.
+    select("Vivid");
+    let steps = json!([
+        {"command": "swatch.sortByKind", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Vivid", "name": "Bold"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Bold".to_string()], "Bold".to_string()));
+    app.run("swatch.delete", json!({"name": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Delete Swatch ends the selection");
+    // Brights selected in one new document, renamed in another.
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    }
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    select("Brights");
+    let steps = json!([
+        {"command": "document.activate", "params": {"index": 2}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+        {"command": "document.activate", "params": {"index": 1}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Brights".to_string()], "Brights".to_string()));
+}
+
+/// Sort by Name keeps the groups, so a rename after it in a batch still moves the selection, and
+/// Edit Color Group's `rename` moves it as Color Group Options does, alone or in a batch.
+#[test]
+fn the_selection_follows_sorting_and_group_edits() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-selected", vec!["Brights".to_string()]);
+    set_pstate(&ctx, "swatch-anchor", "Brights".to_string());
+    let follows = |name: &str| (vec![name.to_string()], name.to_string());
+    let steps = json!([
+        {"command": "swatch.sortByName", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Vivid"), "Sort by Name");
+    app.run("swatch.editGroup", json!({"group": "Vivid", "colors": ["#ff0000"], "rename": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Bold"), "Edit Color Group");
+    let steps = json!([
+        {"command": "swatch.editGroup", "params": {"group": "Bold", "colors": ["#00ff00"], "rename": "Loud"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Loud", "name": "Calm"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Calm"), "Edit Color Group in a batch");
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.

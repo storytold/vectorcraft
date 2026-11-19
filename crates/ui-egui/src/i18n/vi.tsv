@@ -4784,6 +4784,8 @@ mark-style	Japanese	Kiểu Nhật
 	Unembed…	Bỏ nhúng…
 	Ungroup	Bỏ nhóm
 	Ungroup Color Group	Bỏ nhóm màu
+	Color Group Options	Tùy chọn nhóm màu
+	Color Group Options…	Tùy chọn nhóm màu…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5126,6 +5128,9 @@ theme	Appearance	Giao diện
 @msg	a freeform gradient keeps at least one point	chuyển sắc tự do cần giữ ít nhất một điểm
 @msg	a gradient needs at least two stops	chuyển sắc cần ít nhất hai điểm dừng
 @msg	a graphic style named `{to}` already exists	đã có kiểu đồ họa tên `{to}`
+@msg	a swatch or color group named `{name}` already exists	đã có mẫu màu hoặc nhóm màu tên `{name}`
+@msg	missing `group`	thiếu `group`
+@msg	no colour group `{group}`	không có nhóm màu `{group}`
 @msg	a key object sits on that point	có đối tượng khóa nằm trên điểm đó
 @msg	a layer couldn't be read	một lớp không thể đọc được
 @msg	a page is missing	thiếu một trang
