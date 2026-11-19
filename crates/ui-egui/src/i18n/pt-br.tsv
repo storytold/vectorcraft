@@ -141,6 +141,7 @@
 	Add Selected Artwork as One Asset	Adicionar Arte Selecionada como Um Ativo
 	Add Spine Point	Adicionar Ponto de Coluna
 	Add Used Colors	Adicionar Cores Usadas
+	Add Selected Colors	Adicionar Cores Selecionadas
 	Add to Graphic Styles	Adicionar aos Estilos Gráficos
 	Add to Profiles	Adicionar aos Perfis
 	Add to Profiles…	Adicionar aos Perfis…
@@ -232,6 +233,10 @@ antiAlias	Sharp	Nítido
 	Arc	Arco
 	Arc Lower…	Arco Inferior…
 	Arc Tool	Ferramenta Arco
+	Three-Point Arc Tool	Ferramenta Arco por três pontos
+	Three-Point Arc	Arco por três pontos
+	Arc too large	Arco grande demais
+	Third Point Sets Direction	O terceiro ponto indica a direção
 	Arc Upper…	Arco Superior…
 	Arch…	Abóbada…
 	Arc…	Arco…
@@ -1481,6 +1486,10 @@ antiAlias	Sharp	Nítido
 	Add Color Tool	Ferramenta Adicionar cor
 	Remove Color Tool	Ferramenta Remover cor
 	Remove Color	Remover cor
+	Set As Base Color	Definir como cor base
+	Select Shade	Selecionar tonalidade
+	Add New Color	Adicionar nova cor
+	Set Current Color As Base Color	Definir cor atual como cor base
 	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
@@ -2369,6 +2378,11 @@ antiAlias	Sharp	Nítido
 	Preserve Alpha Transparency	Preservar Transparência Alfa
 	Preserve Appearance and Overprints	Preservar Aparência e Sobreimpressões
 	Preserve CMYK Numbers	Preservar Números CMYK
+	Preserve RGB Numbers	Preservar Números RGB
+	Device to Simulate:	Dispositivo a Simular:
+	Simulate Paper Color	Simular Cor do Papel
+	Simulate Black Ink	Simular Tinta Preta
+	Load…	Carregar…
 	Preserve Editing Capabilities	Preservar Capacidades de Edição
 	Preserve Lightness	Preservar Luminosidade
 	Preserve Overprints and Spot Colors	Preservar Sobreimpressões e Cores Spot
@@ -2830,6 +2844,7 @@ digits	Malayalam	Malaiala
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	O texto novo recebe este idioma enquanto o idioma da Configuração do Documento for Inglês: EUA; o texto que já está em um documento mantém o próprio idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Em parágrafos com Hifenizar ativado, uma palavra da lista é dividida apenas nos hifens digitados nela, ou em nenhum ponto se não tiver nenhum, qualquer que seja o idioma ou o uso de maiúsculas.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Na versão para desktop, os plug-ins .wasm desta pasta são carregados ao iniciar e quando você clica em OK com uma nova pasta aqui, exceto no Modo de Segurança; a versão web não os carrega.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Quantas instruções cada execução de um filtro de objetos de um plug-in pode usar; Grande permite mais que Normal com o mesmo limite de 60 segundos. Filtros pesados mantêm seu próprio orçamento.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	A primeira opção de disco de cópia: Startup, None ou o caminho de uma pasta; o VectorCraft a armazena, mas ainda não usa discos de cópia.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	A segunda opção de disco de cópia: Startup, None ou o caminho de uma pasta; o VectorCraft a armazena, mas ainda não usa discos de cópia.
 	How light or dark the interface is.	O quanto a interface é clara ou escura.
@@ -2848,6 +2863,7 @@ digits	Malayalam	Malaiala
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	O Zoom Animado só funciona enquanto isto está ativado; desativado, o Zoom Animado fica esmaecido e o zoom não é animado.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	O zoom com a roda desliza suavemente, e a Ferramenta Zoom amplia enquanto você arrasta para o lado ou a mantém pressionada; desativado, a Ferramenta Zoom amplia a área que você arrasta.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A partir da próxima inicialização, a versão para desktop desenha com este tipo de processador gráfico; Automático prefere o que controla a tela. A versão web não o usa.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A partir da próxima inicialização, a janela mostra os quadros sem esperar a tela atualizar, no máximo 240 por segundo; desativado, a tela dita o ritmo. Um modo de apresentação definido na inicialização tem prioridade.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	O número máximo de etapas de desfazer que cada documento guarda; um número menor remove as etapas mais antigas quando você clica em OK. Etapas também podem sair antes quando usam memória demais.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Mostra a arte mudando enquanto você arrasta; desativado, contornos seguem o arraste e a arte muda quando você solta. Uma guia de régua sempre se move enquanto você arrasta.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Quantas threads de trabalho desenham a arte; -1 usa uma a menos que os núcleos que o VectorCraft pode usar, no máximo 8, e 0 nenhuma. A versão web nunca usa nenhuma.
@@ -2874,6 +2890,10 @@ digits	Malayalam	Malaiala
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	O VectorCraft salva esta escolha, mas Copiar e Recortar ainda não usam um formato de área de transferência vetorial legada.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Preservar Caminhos ou Preservar Aparência e Sobreimpressões para a área de transferência vetorial legada; o VectorCraft salva a escolha, mas ainda não a usa.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Manter Formatação mantém os estilos do texto copiado de um objeto de texto do VectorCraft ao colá-lo em um objeto de texto; Manter Texto Simples dá a ele o estilo do local onde é colado.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Exibir Todos os Pretos como Preto Rico mostra o preto CMYK puro (apenas tinta preta a 100%) como preto RGB na tela; Exibir Todos os Pretos com Precisão o converte pelo espaço CMYK de trabalho.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Gerar Todos os Pretos como Preto Rico desenha o preto CMYK puro como preto RGB nas exportações raster RGB e em escala de cinza e com Imprimir como Bitmap; não altera exportações vetoriais, JPEG, TIFF e PSD CMYK nem outras impressões.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Em uma tela sensível ao toque, muda para o espaço de trabalho de toque; desativar a opção ou perder a tela sensível ao toque volta ao espaço de trabalho anterior.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Um toque com dois dedos na tela de desenho desfaz ou, no espaço de trabalho de toque, alterna entre ferramentas de seleção e de desenho, e um toque com três dedos refaz; nenhum funciona no Modo de Apresentação.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	O texto novo recebe este idioma enquanto o idioma da Configuração do Documento for Inglês: EUA e o [Estilo de Caractere Normal] não definir nenhum; o texto que já está em um documento mantém o próprio idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Em parágrafos com Hifenizar ativado, uma palavra da lista é dividida apenas nos hifens digitados nela, ou em nenhum ponto se não tiver nenhum, qualquer que seja o uso de maiúsculas; palavras coreanas não recebem hífen, e palavras em línguas indianas não são divididas dentro de um grupo de caracteres.
 	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
@@ -3083,6 +3103,7 @@ digits	Malayalam	Malaiala
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
 	No recent commands	Nenhum comando recente
+	Type to search commands, tools, panels and effects	Digite para pesquisar comandos, ferramentas, painéis e efeitos
 	Search commands	Pesquisar comandos
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
@@ -4630,6 +4651,10 @@ axis	Both	Ambos
 @msg	a guide has no curvature circle	uma guia não tem círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	o círculo que corresponde ao caminho nesse ponto ultrapassaria a tela
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	`at` must be "start" or "end"	`at` deve ser "start" ou "end"
+@msg	give exactly one of `through` and `toward`	informe exatamente um entre `through` e `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nenhum arco se ajusta a esses pontos: dois são iguais ou os três estão na mesma reta
+@msg	give `at` only with `toward`	informe `at` somente com `toward`
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
 @msg	no artboard {i} (0-based; the document has {_1})	nenhuma prancheta {i} (base 0; o documento tem {_1})
@@ -4675,6 +4700,7 @@ axis	Both	Ambos
 @msg	no native format	sem formato nativo
 @msg	no pages	sem páginas
 @msg	no pattern `{name}`	nenhum padrão `{name}`
+@msg	art painted with `{name}` can't be its tile	uma arte pintada com `{name}` não pode ser o ladrilho dele
 @msg	no perspective grid preset named `{name}`	nenhuma predefinição de grade de perspectiva chamada `{name}`
 @msg	no plug-in {0} is installed	o plug-in {0} não está instalado
 @msg	no plug-in {id} is installed	o plug-in {id} não está instalado
@@ -6435,6 +6461,7 @@ effect	Regular	Regular
 	Arrow	Seta
 	Arrow (open)	Seta (aberta)
 	Barbed	Farpada
+arrowhead	Feather	Pena
 	Half Arrow (left)	Meia Seta (esquerda)
 	Half Arrow (right)	Meia Seta (direita)
 	Concave	Côncava
@@ -6462,6 +6489,7 @@ effect	Regular	Regular
 	Kite	Pipa
 	Triangle to Bar	Triângulo para Barra
 	Oval	Oval
+	Line Arrow	Seta de Linha
 	Complementary	Complementar
 	Complementary 2	Complementar 2
 	Split Complementary	Complementar Dividida
@@ -8314,6 +8342,7 @@ breakText	Glyphs	Glifos
 	Remove Strokes	Remover Traçados
 	Place Brush Art	Colocar Arte do Pincel
 	Replace Brush Art	Substituir Arte do Pincel
+	Replace Pattern Art	Substituir Arte do Padrão
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
 	Apply to Strokes	Aplicar aos Traçados
 	Leave Strokes	Manter Traçados
@@ -10794,6 +10823,11 @@ swatch	Yellow Green	Verde-amarelado
 	Filigree Arrow	Seta filigranada
 	Petal Sweep	Traço de pétalas
 	Twin Curl	Voluta dupla
+	Engraving	Gravura
+	Fine Hatching	Hachuras finas
+	Dense Hatching	Hachuras densas
+	Tapered Hatching	Hachuras afiladas
+	Broken Hatching	Hachuras interrompidas
 	Image Brush	Pincéis de imagem
 	Soft Bloom	Flor suave
 	Halftone Field	Campo de meios-tons

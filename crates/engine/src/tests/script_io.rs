@@ -12,12 +12,14 @@ use crate::*;
 
 const DENIED: &str = "Script file access denied";
 
-/// A fresh folder for test `name`, with a `main` folder inside it for the script.
+/// A fresh folder for test `name`, with a `main` folder inside it for the script, by its real
+/// path: kept grants hold real paths, and a path named through a link (macOS's `/var` is
+/// `/private/var`) is refused by its names alone.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-io-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(base.join("main")).unwrap();
-    base
+    std::fs::canonicalize(&base).unwrap()
 }
 
 fn write(path: &Path, bytes: &[u8]) {
