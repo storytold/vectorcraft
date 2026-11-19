@@ -1140,6 +1140,92 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
 }
 
+/// Art released with Alt held over a pattern swatch becomes that pattern's tile art in one undo
+/// step: no pattern or swatch is added and the art stays. With Alt over a color swatch, or without
+/// Alt over the pattern swatch, the art becomes a new pattern swatch as before.
+#[test]
+fn art_alt_dropped_on_a_pattern_swatch_replaces_its_tile_art() {
+    let mut app = app();
+    let square = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [square], "name": "Dots", "edit": false})).unwrap();
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let tile_art = |app: &VectorcraftApp| app.session.doc().unwrap().doc.pattern("Dots").map(|p| p.art.clone());
+    let ctx = context();
+    let drop = |app: &mut VectorcraftApp, on: &str, modifiers: Modifiers, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let at = tile_center(&ctx, on);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![star]));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers };
+        frame_with(app, &ctx, vec![Event::PointerMoved(at), release], modifiers, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let (before, undo, star_before) = (tile_art(&app), undo_steps(&app), app.session.doc().unwrap().doc.node(star).cloned());
+    drop(&mut app, "Dots", Modifiers::ALT, 0.0);
+    let art = tile_art(&app).expect("Dots stays");
+    assert_ne!(Some(&art), before.as_ref(), "{}", app.ui.status);
+    assert_eq!(art.len(), 1);
+    assert_eq!(Some(&art[0].kind), star_before.as_ref().map(|n| &n.kind), "the star is the tile art");
+    assert_eq!(count(&mut app), Some(1), "no new pattern");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    assert_eq!(app.session.doc().unwrap().doc.node(star).cloned(), star_before, "the star stays as it was");
+    // Alt over a color swatch: a new pattern.
+    drop(&mut app, "Bright Red", Modifiers::ALT, 1.0);
+    assert_eq!(count(&mut app), Some(2), "Alt over a color swatch makes a pattern");
+    // No Alt over the pattern swatch: a new pattern, and Dots keeps its art.
+    drop(&mut app, "Dots", Modifiers::NONE, 2.0);
+    assert_eq!(count(&mut app), Some(3), "a plain drop on a pattern swatch makes a pattern");
+    assert_eq!(tile_art(&app), Some(art), "Dots keeps its tile art");
+}
+
+/// A drop lands where the button came up, with the keys held then. Art released with Alt held
+/// over pattern swatch Dots replaces the tile art of Dots when Alt is let go, or the pointer moves
+/// on to pattern swatch Stripes, later in the same frame. Art released over Dots without Alt makes
+/// a new pattern when Alt is pressed later in that frame. A color released with Alt held over Red
+/// gives Red that color when Alt is let go later in the frame.
+#[test]
+fn a_drop_lands_where_the_button_came_up_with_the_keys_held_then() {
+    let mut app = app();
+    for (x, name) in [(0, "Dots"), (20, "Stripes")] {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.pattern.make", json!({"ids": [id], "name": name, "edit": false})).unwrap();
+    }
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let star_kind = app.session.doc().unwrap().doc.node(star).map(|n| n.kind.clone());
+    let tile_kind =
+        |app: &VectorcraftApp, name: &str| app.session.doc().unwrap().doc.pattern(name).and_then(|p| p.art.first().map(|n| n.kind.clone()));
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let ctx = context();
+    // In one frame: release over `on` with `up` held, then hold `then` and move over `to`.
+    let drop = |app: &mut VectorcraftApp, payload: PanelDrag, on: &str, up: Modifiers, then: Modifiers, to: &str, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let (at, next) = (tile_center(&ctx, on), tile_center(&ctx, to));
+        egui::DragAndDrop::set_payload(&ctx, payload);
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: up };
+        let events = vec![Event::PointerMoved(at), release, Event::ModifiersChanged(then), Event::PointerMoved(next)];
+        frame_with(app, &ctx, events, up, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let stripes = tile_kind(&app, "Stripes");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::NONE, "Dots", 0.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "Alt let go after the release: {}", app.ui.status);
+    assert_eq!(count(&mut app), Some(2), "no new pattern");
+    app.run("edit.undo", json!({})).unwrap();
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::ALT, "Stripes", 1.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "the pointer moved on to Stripes after the release");
+    assert_eq!(tile_kind(&app, "Stripes"), stripes, "Stripes keeps its tile art");
+    app.run("edit.undo", json!({})).unwrap();
+    let dots = tile_kind(&app, "Dots");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::NONE, Modifiers::ALT, "Dots", 2.0);
+    assert_eq!(count(&mut app), Some(3), "Alt pressed after a plain release makes a pattern");
+    assert_eq!(tile_kind(&app, "Dots"), dots, "Dots keeps its tile art");
+    let rgb = Color::from_hex("#2a6fb0").unwrap();
+    drop(&mut app, PanelDrag::paint(Paint::solid(rgb)), "Red", Modifiers::ALT, Modifiers::NONE, "Red", 3.0);
+    assert_eq!(app.session.doc().unwrap().doc.swatch("Red").map(|w| w.paint.color()), Some(Some(rgb)), "Alt let go after the release on Red");
+}
+
 #[test]
 fn a_proxy_dropped_on_the_panel_becomes_a_swatch() {
     let mut app = app();
@@ -1771,6 +1857,15 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     menu_frame(app, ctx, vec![button(false)]);
 }
 
+/// Whether the panel menu's item `label` is enabled, as the accessibility tree reports it.
+fn menu_item_enabled(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> bool {
+    ctx.enable_accesskit();
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    footer_button(&out, label).1
+}
+
 /// The panel menu's Color Group Options… opens on the selected color group when that group is the
 /// whole selection; with nothing selected, a swatch alone, or a swatch or a second group beside the
 /// group, it opens nothing. After OK, and after `swatch.renameGroup` run on its own or in a batch,
@@ -2048,4 +2143,45 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
     assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
     let loose = list(None);
     assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
+}
+
+/// The panel menu's Add Selected Colors adds only the selected art's new colors, as global swatches
+/// the art links to, in one undo step; with nothing selected it is off.
+#[test]
+fn add_selected_colors_adds_the_selection_colors_as_global_swatches() {
+    let mut app = app();
+    let rect = |app: &mut VectorcraftApp, color: &str| {
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        id
+    };
+    let picked = rect(&mut app, "#abcdef");
+    rect(&mut app, "#fedcba");
+    let ctx = context();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    assert!(!menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "off with nothing selected");
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, before, "off with nothing selected");
+    assert_eq!(undo(&app), steps);
+    app.run("select.set", json!({"ids": [picked]})).unwrap();
+    assert!(menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "on with art selected");
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    let doc = &app.session.active().unwrap().doc;
+    let swatch = doc.swatch("R=171 G=205 B=239").expect("the selected art's color is a swatch");
+    assert!(swatch.global);
+    assert!(doc.swatch("R=254 G=220 B=186").is_none(), "unselected art adds nothing");
+    let fill = doc.node(vectorcraft_doc::NodeId(picked.as_u64().unwrap())).unwrap().appearance.fill_paint();
+    assert!(matches!(fill, Paint::Solid { swatch: Some(ref n), .. } if n == "R=171 G=205 B=239"), "{fill:?}");
+    assert_eq!(undo(&app), steps + 1);
+    // Run again, the color is in the panel already: nothing is added and no undo step is recorded.
+    let after = app.session.active().unwrap().doc.clone();
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, after);
+    assert_eq!(undo(&app), steps + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, before);
 }
