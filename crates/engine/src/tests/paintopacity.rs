@@ -403,6 +403,30 @@ fn an_object_in_a_symbol_instance_refuses_an_opacity() {
     assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
 }
 
+/// With an object selected in a dynamic symbol instance, a bad `target` is refused whether `id` and
+/// `ids` are left out or given as null, and leaves the document alone; a good one with a null `id`
+/// still paints the object.
+#[test]
+fn an_object_in_a_symbol_instance_refuses_a_bad_target() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let inst = s.execute("symbol.new", &json!({"name": "One", "ids": [id.0], "type": "dynamic"})).unwrap()["id"].clone();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst, "path": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [
+        json!({"color": "#ff0000", "target": "content"}),
+        json!({"color": "#ff0000", "target": "content", "id": null}),
+        json!({"color": "#ff0000", "target": "content", "ids": null}),
+    ] {
+        let e = s.execute("paint.setFill", &p).unwrap_err();
+        assert!(e.to_string().contains("`target` must be"), "{p}: {e}");
+        assert_eq!(*s.doc().unwrap().doc, *doc, "{p}");
+    }
+    assert_eq!(s.execute("paint.setFill", &json!({"color": "#ff0000", "target": "object", "id": null})).unwrap()["objects"], 1);
+    assert_ne!(*s.doc().unwrap().doc, *doc);
+}
+
 /// A gradient mesh point picked with the Mesh tool takes a fill opacity itself, and the proxy shows
 /// it; the object's fill item and the other points stay as they were.
 #[test]

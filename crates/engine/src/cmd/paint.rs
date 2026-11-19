@@ -855,6 +855,8 @@ fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(Nod
     }
     let part = super::brushsym::selected_part(s)?;
     if part.is_some() {
+        // Read `target` first: `item_target` stops at a null `id` or `ids` before it reads `target`.
+        super::appearance::targets_contents(p)?;
         item_target(s, p, cmd)?;
     }
     Ok(part)
