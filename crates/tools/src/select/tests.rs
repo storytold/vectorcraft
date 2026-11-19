@@ -247,10 +247,23 @@ fn doc_with_rect_and_lines(lines: &[(Point, Point)]) -> (vectorcraft_doc::Docume
 /// The rectangle of `d` grabbed at `(gx, gy)` (hovered first, so a press near an anchor grabs it)
 /// and dragged to `to`, with Smart Guides on or off (`smart`): the point it was grabbed at after the
 /// move, and the label shown.
-fn grabbed_and_dragged(d: &vectorcraft_doc::Document, id: NodeId, smart: bool, (gx, gy): (f64, f64), to: (f64, f64)) -> (Point, Option<String>) {
+fn grabbed_and_dragged(d: &vectorcraft_doc::Document, id: NodeId, smart: bool, grab: (f64, f64), to: (f64, f64)) -> (Point, Option<String>) {
+    grabbed_and_dragged_in(d, id, smart, false, grab, to)
+}
+
+/// [`grabbed_and_dragged`] in Preview or, with `outline`, in Outline view.
+fn grabbed_and_dragged_in(
+    d: &vectorcraft_doc::Document,
+    id: NodeId,
+    smart: bool,
+    outline: bool,
+    (gx, gy): (f64, f64),
+    to: (f64, f64),
+) -> (Point, Option<String>) {
     let (none, mut picked, p) = (Selection::default(), Selection::default(), paint());
     picked.add(id);
-    let (before, after) = (ToolContext { smart_guides: smart, ..cx(d, &none, &p) }, ToolContext { smart_guides: smart, ..cx(d, &picked, &p) });
+    let (before, after) =
+        (ToolContext { smart_guides: smart, outline, ..cx(d, &none, &p) }, ToolContext { smart_guides: smart, outline, ..cx(d, &picked, &p) });
     let mut t = SelectionTool::default();
     t.pointer(&before, &ev(PointerKind::Move, gx, gy));
     t.pointer(&before, &ev(PointerKind::Down, gx, gy));
@@ -284,6 +297,199 @@ fn a_move_grabbed_by_an_anchor_lands_it_on_another_path() {
     // With Smart Guides off, the corner stays where it was dragged.
     let (corner, _) = grabbed_and_dragged(&d, id, false, (201.0, 201.0), (430.0, 335.5));
     assert!(off_line(corner) > 0.4, "the corner lands at {corner:?}");
+}
+
+/// #8568: a selection held by a point of its path's edge (pressed on the edge, or on the fill just
+/// beside it) lands that point on another path ("path") with Smart Guides, in Preview and in
+/// Outline view.
+#[test]
+fn a_move_held_by_a_paths_edge_lands_it_on_another_path() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    for outline in [false, true] {
+        // Hold the rectangle by its bottom edge at (150, 200), away from its corners and center,
+        // and drop that point half a point beside the line.
+        let (edge, label) = grabbed_and_dragged_in(&d, id, true, outline, (150.0, 200.0), (430.0, 335.5));
+        assert!(off_line(edge) < 1e-9, "outline {outline}: the edge lands at {edge:?}, {} off the line", off_line(edge));
+        assert!((edge.x - 430.0).abs() < 0.5, "outline {outline}: {edge:?}");
+        assert_eq!(label.as_deref(), Some("path"), "outline {outline}");
+        // With Smart Guides off, the edge stays where it was dragged.
+        let (edge, _) = grabbed_and_dragged_in(&d, id, false, outline, (150.0, 200.0), (430.0, 335.5));
+        assert!(off_line(edge) > 0.4, "outline {outline}: the edge lands at {edge:?}");
+    }
+    // Pressed on the fill 3 points inside the bottom edge, the press holds the edge at
+    // (150, 200), and that point lands on the line.
+    let (edge, label) = pressed_and_dragged(&d, id, (150.0, 197.0), Point::new(150.0, 200.0), (430.0, 332.5), false);
+    assert!(off_line(edge) < 1e-9, "the edge lands at {edge:?}, {} off the line", off_line(edge));
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
+/// The rectangle of `d` pressed at `press` (not hovered first) and dragged to `to`, Alt held for a
+/// copy with `alt`: where its point `at` goes, and the label shown.
+fn pressed_and_dragged(
+    d: &vectorcraft_doc::Document,
+    id: NodeId,
+    press: (f64, f64),
+    at: Point,
+    to: (f64, f64),
+    alt: bool,
+) -> (Point, Option<String>) {
+    pressed_and_dragged_with(d, id, press, at, to, alt, true)
+}
+
+/// [`pressed_and_dragged`] with Smart Guides › Alignment Guides on or off (`lines`).
+fn pressed_and_dragged_with(
+    d: &vectorcraft_doc::Document,
+    id: NodeId,
+    press: (f64, f64),
+    at: Point,
+    to: (f64, f64),
+    alt: bool,
+    lines: bool,
+) -> (Point, Option<String>) {
+    let (none, mut picked, p) = (Selection::default(), Selection::default(), paint());
+    picked.add(id);
+    let (before, after) =
+        (ToolContext { alignment_guides: lines, ..cx(d, &none, &p) }, ToolContext { alignment_guides: lines, ..cx(d, &picked, &p) });
+    let mut t = SelectionTool::default();
+    t.pointer(&before, &ev(PointerKind::Down, press.0, press.1));
+    let a = t.pointer(&after, &ev(PointerKind::Drag, to.0, to.1).with_mods(Mods { alt, ..Mods::default() }));
+    let Some(Action::Preview(_, v)) = a.iter().find(|a| matches!(a, Action::Preview(..))) else { panic!("{a:?}") };
+    let label = t.overlays(&after).iter().find_map(|o| match o {
+        Overlay::Label { text, .. } => Some(text.clone()),
+        _ => None,
+    });
+    (at + Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), label)
+}
+
+/// #8568: a selection held by its edge that lands on a straight path still lines its bounds up
+/// along that path: on a level path the held point keeps the path's y, and the bounds line up on
+/// x with the other art, else with a ruler guide. A press on the fill farther inside than 6 points
+/// holds no edge and lines the bounds up as before, and so does an edge hold with no path in reach.
+#[test]
+fn a_move_held_by_an_edge_on_a_straight_path_still_lines_its_bounds_up_along_it() {
+    let (mut d, id) = doc_with_rect_and_lines(&[(Point::new(300.0, 300.0), Point::new(500.0, 300.0))]);
+    // Held by the top edge at (130, 100) and dropped at (331, 300.5): the point lands on the path,
+    // and the left side (at 301) lines up with the path's start at x 300.
+    let top = Point::new(130.0, 100.0);
+    let (edge, label) = pressed_and_dragged(&d, id, (130.0, 100.0), top, (331.0, 300.5), false);
+    assert!(edge.distance(Point::new(330.0, 300.0)) < 1e-9, "the edge lands at {edge:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+    // With Alignment Guides off, no line shows, and the bounds still line up.
+    let (edge, _) = pressed_and_dragged_with(&d, id, (130.0, 100.0), top, (331.0, 300.5), false, false);
+    assert!(edge.distance(Point::new(330.0, 300.0)) < 1e-9, "the edge lands at {edge:?}");
+    // A fill press 3 points inside the edge holds it the same way.
+    let (edge, _) = pressed_and_dragged(&d, id, (130.0, 103.0), top, (331.0, 303.5), false);
+    assert!(edge.distance(Point::new(330.0, 300.0)) < 1e-9, "the edge lands at {edge:?}");
+    // A fill press 10 points inside holds no edge: the bounds line up on x, and the pressed point
+    // does not land on the path.
+    let (grip, _) = pressed_and_dragged(&d, id, (130.0, 110.0), Point::new(130.0, 110.0), (331.0, 300.5), false);
+    assert!(grip.distance(Point::new(330.0, 300.5)) < 1e-9, "the grip lands at {grip:?}");
+    // Held by the edge with no path in reach, the bounds line up on x.
+    let (edge, _) = pressed_and_dragged(&d, id, (130.0, 100.0), top, (331.0, 280.0), false);
+    assert!(edge.distance(Point::new(330.0, 280.0)) < 1e-9, "the edge lands at {edge:?}");
+    // With a ruler guide at x 320 and nothing else in line, the left side (at 321) goes onto it
+    // while the point stays on the path.
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 320.0));
+    let (edge, label) = pressed_and_dragged(&d, id, (130.0, 100.0), top, (351.0, 300.5), false);
+    assert!(edge.distance(Point::new(350.0, 300.0)) < 1e-9, "the edge lands at {edge:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
+/// #8568: near the end of a steep straight path, the bounds of a selection held by its edge line
+/// up by the shortest slide that keeps the held point on the path, not by a shorter one that
+/// would take it past the path's end.
+#[test]
+fn a_move_held_by_an_edge_slides_only_within_the_path() {
+    let (a, b) = (Point::new(300.0, 300.0), Point::new(310.0, 400.0));
+    // Two upright paths far below: lining the left side up with the one at 269.95 slides the
+    // held point 6.5 back along the path, past its start, and with the one at 271.343 slides it
+    // 7.5 on.
+    let (d, id) = doc_with_rect_and_lines(&[
+        (a, b),
+        (Point::new(269.95, 440.0), Point::new(269.95, 490.0)),
+        (Point::new(271.343, 440.0), Point::new(271.343, 490.0)),
+    ]);
+    let u = (b - a) / (b - a).hypot();
+    // Dropped on the path 6 points from its start, the top edge's point at (130, 100) leaves the
+    // left side at 30 points before it.
+    let q = a + u * 6.0;
+    let (edge, label) = pressed_and_dragged(&d, id, (130.0, 100.0), Point::new(130.0, 100.0), (q.x, q.y), false);
+    let off_line = (b - a).cross(edge - a) / (b - a).hypot();
+    assert!(off_line.abs() < 1e-9, "the edge lands at {edge:?}, {off_line} off the path");
+    assert!((edge.x - 30.0 - 271.343).abs() < 1e-9, "the left side lands at {}", edge.x - 30.0);
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
+/// #8568: a straight path drawn with its handles pulled out along it counts as straight, also
+/// with a handle reaching past the far end while the curve stays between its ends: a selection
+/// held by its edge slides along it to line its bounds up, as along a plain line.
+#[test]
+fn a_move_held_by_an_edge_slides_along_a_straight_path_with_handles() {
+    use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
+    let (a, b) = (Point::new(300.0, 300.0), Point::new(500.0, 300.0));
+    for (out, into) in [(350.0, 450.0), (520.0, 480.0)] {
+        let (mut d, id) = doc_with_rect();
+        let l = d.layers[0].id;
+        let n = d.alloc_id();
+        let anchors = vec![
+            Anchor { p: a, h_in: a, h_out: Point::new(out, 300.0), kind: AnchorKind::Corner },
+            Anchor { p: b, h_in: Point::new(into, 300.0), h_out: b, kind: AnchorKind::Corner },
+        ];
+        let path = PathData::single(SubPath::new(anchors, false));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(n, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (edge, label) = pressed_and_dragged(&d, id, (130.0, 100.0), Point::new(130.0, 100.0), (331.0, 300.5), false);
+        assert!(edge.distance(Point::new(330.0, 300.0)) < 1e-9, "handles at {out} and {into}: the edge lands at {edge:?}");
+        assert_eq!(label.as_deref(), Some("path"));
+    }
+}
+
+/// #8568: an artboard's ruler guide ends at the artboard's edge. A selection held by its edge
+/// slides along a shallow path onto such a guide when the slide brings its bounds within reach of
+/// the guide's end, even though they start out beyond it.
+#[test]
+fn a_move_held_by_an_edge_slides_onto_an_artboard_guide_it_reaches() {
+    let (a, b) = (Point::new(640.0, 300.0), Point::new(440.0, 310.0));
+    let (mut d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    let u = (b - a) / (b - a).hypot();
+    // Held by the left edge at (100, 130) and dropped on the path where x is 507: the top is 30
+    // above the point, and the middle at x 557 is beyond the guide's end at 500 by more than half
+    // the width and the Snapping Tolerance. A slide of 6 along the path puts the top on the guide.
+    let q = a + u * ((a.x - 507.0) / -u.x);
+    let guide = q.y - 30.0 + u.y * 6.0;
+    let board = d.artboards[0].id;
+    d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, guide) });
+    let (edge, label) = pressed_and_dragged(&d, id, (100.0, 130.0), Point::new(100.0, 130.0), (q.x, q.y), false);
+    assert!(edge.distance(q + u * 6.0) < 1e-9, "the edge lands at {edge:?}, not {:?}", q + u * 6.0);
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
+/// #8568: a selection held by its edge lands that point where two other paths cross, and where a
+/// path crosses a ruler guide ("intersect"), as an anchor does.
+#[test]
+fn a_move_held_by_an_edge_lands_it_where_paths_cross() {
+    let bottom = Point::new(150.0, 200.0);
+    let (mut d, id) =
+        doc_with_rect_and_lines(&[(Point::new(300.0, 400.0), Point::new(500.0, 300.0)), (Point::new(460.0, 250.0), Point::new(460.0, 420.0))]);
+    let (edge, label) = pressed_and_dragged(&d, id, (150.0, 200.0), bottom, (460.4, 320.5), false);
+    assert!(edge.distance(Point::new(460.0, 320.0)) < 1e-9, "the edge lands at {edge:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 440.0));
+    let (edge, label) = pressed_and_dragged(&d, id, (150.0, 200.0), bottom, (440.5, 330.5), false);
+    assert!(edge.distance(Point::new(440.0, 330.0)) < 1e-9, "the edge lands at {edge:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+}
+
+/// #8568: an Alt copy held by its edge snaps to the original too: dragged along the original's
+/// top edge, the held point stays on that edge and the copy's right side lines up with another
+/// path.
+#[test]
+fn a_copy_held_by_an_edge_slides_along_the_originals_edge() {
+    let (d, id) = doc_with_rect_and_lines(&[(Point::new(230.0, 300.0), Point::new(230.0, 400.0))]);
+    let (edge, label) = pressed_and_dragged(&d, id, (130.0, 100.0), Point::new(130.0, 100.0), (161.0, 100.5), true);
+    assert!(edge.distance(Point::new(160.0, 100.0)) < 1e-9, "the edge lands at {edge:?}");
+    assert_eq!(label.as_deref(), Some("path"));
 }
 
 /// #7411: a selection grabbed by an anchor lands it where two other paths cross ("intersect"), and
@@ -943,6 +1149,23 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
     let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
     assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
+/// #4312: a diagonal Shift move reaches an artboard guide only where the move puts the bounds
+/// within the guide's run: the middle at x 556 is beyond the guide's end at 500 by more than half
+/// the width and the Snapping Tolerance, so the top (506) does not slide onto the guide at 503.
+#[test]
+fn a_diagonal_shift_move_reaches_an_artboard_guide_where_the_move_puts_it() {
+    let (mut d, id) = doc_with_rect();
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 500.0, 1600.0);
+    let board = d.artboards[0].id;
+    d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, 503.0) });
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let (m, _) = shift_moved(&c, (556.0, 556.0));
+    assert!(moved_by(m, (406.0, 406.0)), "{m:?}");
 }
 
 /// With Smart Guides on, a moved selection reaches a ruler guide within the Snapping Tolerance
