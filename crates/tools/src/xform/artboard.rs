@@ -28,7 +28,8 @@
 //! no other artboard). Clicking one adds an empty artboard there (`artboard.new {beside, side}`);
 //! Alt-clicking duplicates the artboard with its art there (`artboard.duplicate {index, side}`),
 //! except on a locked artboard, where an Alt-click does nothing. Each is one undo step, and the new
-//! artboard becomes the active one.
+//! artboard becomes the active one. Resting the pointer on a button shows a tooltip that says what a
+//! click does there and, on an unlocked artboard, what an Alt-click does.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::ArtboardSide;
@@ -298,6 +299,10 @@ fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
 const EDGE_BUTTON_OFFSET: f64 = 18.0;
 /// The add button's radius in screen pixels: a press this near its center takes it.
 const EDGE_BUTTON_RADIUS: f64 = 7.0;
+/// The add button's tooltip ([`Overlay::HoverText`]), an English UI string the UI translates.
+pub const EDGE_BUTTON_TIP: &str = "Click to add an artboard on this side; Alt-click to duplicate this artboard with its art";
+/// The add button's tooltip on a locked artboard, where an Alt-click does nothing.
+pub const EDGE_BUTTON_TIP_LOCKED: &str = "Click to add an artboard on this side";
 
 impl ArtboardTool {
     /// The add buttons on the active artboard's edges, each with its side and center: shown while
@@ -657,9 +662,11 @@ impl Tool for ArtboardTool {
         if self.drag.is_some() {
             o.extend(self.guides.iter().cloned());
         }
-        // The add buttons: a ring with a plus in it.
+        // The add buttons: a ring with a plus in it, and a tooltip over the area a press takes.
         let (radius, arm) = (cx.tol(EDGE_BUTTON_RADIUS), cx.tol(3.5));
+        let tip = if ab.locked { EDGE_BUTTON_TIP_LOCKED } else { EDGE_BUTTON_TIP };
         for (_, at) in self.edge_buttons(cx) {
+            o.push(Overlay::HoverText { center: at, radius, text: tip });
             let ring: Vec<Point> = (0..24).map(|k| at + Vec2::from_angle(f64::from(k) * std::f64::consts::TAU / 24.0) * radius).collect();
             let mut path = polygon(&ring, true);
             for arm in [Vec2::new(arm, 0.0), Vec2::new(0.0, arm)] {

@@ -668,6 +668,19 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Paste without Formatting	Plakken zonder opmaak
 	Clear	Wissen
 	Find and Replace…	Zoeken en vervangen…
+	Find and Replace	Zoeken en vervangen
+	Find:	Zoeken:
+	Replace With:	Vervangen door:
+	Replace & Find	Vervangen en zoeken
+	Replace All	Alles vervangen
+	Match Case	Hoofdlettergevoelig
+	Find Whole Word	Heel woord zoeken
+	Search Backwards	Achterwaarts zoeken
+	Check Hidden Layers	Verborgen lagen controleren
+	Check Locked Layers	Vergrendelde lagen controleren
+@msg	No matches found	Geen overeenkomsten gevonden
+@msg	Matches replaced: {n}	Vervangen overeenkomsten: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	geen overeenkomst van `find` bij bytes {_1}..{_2} van object {_3}
 	Find Next	Volgende zoeken
 	Spelling	Spelling
 	Auto Spell Check	Automatische spellingcontrole
@@ -821,6 +834,16 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	To Center	Naar het midden
 	To Edge	Naar de rand
 	Create Object Mosaic…	Objectmozaïek maken…
+	Create Object Mosaic	Objectmozaïek maken
+	Current Size:	Huidige grootte:
+	New Size:	Nieuwe grootte:
+	Tile Spacing:	Tussenruimte tegels:
+	Number of Tiles:	Aantal tegels:
+	Constrain Ratio:	Verhouding beperken:
+	Result:	Resultaat:
+	Resize Using Percentages	Grootte wijzigen met percentages
+	Delete Raster	Rasterafbeelding verwijderen
+	Use Ratio	Verhouding gebruiken
 	Vector Halftone…	Vectorhalftoon…
 	Create Trim Marks	Afsnijtekens maken
 	Flatten Transparency…	Transparantie afvlakken…
@@ -1345,6 +1368,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
 	Navigator Panel Options	Opties voor het paneel Navigator
+	Attributes Panel Options	Opties voor het paneel Kenmerken
+	Number of Recent URLs:	Aantal recente URL's:
+@msg	`count` must be a whole number from 1 to 30	`count` moet een geheel getal van 1 tot 30 zijn
 	Draw Dashed Lines as Solid Lines	Streepjeslijnen als doorgetrokken lijnen tekenen
 	Pattern Options	Patroonopties
 	Properties	Eigenschappen
@@ -2065,6 +2091,7 @@ lighting	Light	Licht
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
 	Replace Actions…	Acties vervangen…
+	Clear Actions	Acties wissen
 	Reset Actions	Acties opnieuw instellen
 	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
 	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
@@ -2411,6 +2438,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Actie of actieset dupliceren
 	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
 	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
+	Delete all action sets and their actions?	Alle actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken
@@ -3736,6 +3764,7 @@ antiAlias	Sharp	Scherp
 	Preserve Editing Capabilities	Bewerkbaarheid behouden
 	Responsive	Responsive
 	Show Code	Code weergeven
+	Show in Browser	Tonen in browser
 	Style Attributes	Stijlattributen
 	Style Attributes (Entity References)	Stijlattributen (entiteitsverwijzingen)
 	Styling:	Stijl:
@@ -4650,6 +4679,7 @@ theme	Appearance	Vormgeving
 	Set Tab Stops	Tabstops instellen
 	Tab Stops	Tabstops
 	Flare	Flare
+	Edit Flare	Flare bewerken
 	Rays	Stralen
 	Rectangle	Rechthoek
 	Paintbrush	Penseel
@@ -4752,6 +4782,8 @@ axis	Both	Beide
 	Show	Tonen
 	Copy Width Point	Breedtepunt kopiëren
 	Duplicate Artboard	Tekengebied dupliceren
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik om aan deze kant een tekenbord toe te voegen, Alt-klik om dit tekenbord met zijn illustratie te dupliceren
+	Click to add an artboard on this side	Klik om aan deze kant een tekenbord toe te voegen
 	Area / Path Type	Gebieds- / padtekst
 	Decrease Font Size	Tekengrootte verkleinen
 	Increase Font Size	Tekengrootte vergroten
@@ -4928,6 +4960,8 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
@@ -5009,6 +5043,7 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hoe dicht de aanwijzer of een gesleept punt op het scherm bij een illustratie moet komen voordat slimme hulplijnen erop uitlijnen; de afstand is bij elke zoom gelijk.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Lijnt het einde van een lijnsegment, of een cirkel getekend vanuit het middelpunt, zo uit dat het een curve in de buurt raakt.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Lijnt het einde van een lijnsegment zo uit dat het een recht segment in de buurt onder een rechte hoek raakt.
+	Edit type set in fonts that aren't available?	Tekst in lettertypen bewerken die niet beschikbaar zijn?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Toont op het canvas het nummer van elke slice in een vakje linksboven in de slice; staat dit uit, dan blijven de omtrekken van de slices zichtbaar.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	De kleur van de omtrekken van gebruikers- en objectslices en van hun nummervakjes; automatische slices gebruiken een vagere tint ervan.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
@@ -5295,6 +5330,7 @@ imageTrace	Outline	Contour
 @msg	Installed plug-in {_1}	Plug-in {_1} geïnstalleerd
 @msg	Internal error: {msg} (please report this bug)	Interne fout: {msg} (meld deze bug alsjeblieft)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint samenvoegen: selecteer een Live Paint-groep en de paden om toe te voegen
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` en `Edge` zijn de namen van de vlakken en randen van een Live Paint-groep: geef het pad een andere naam
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint neemt paden en samengestelde paden: zet tekst, afbeeldingen en andere objecten eerst om in paden
 @msg	Live Paint: select paths or compound paths	Live Paint: selecteer paden of samengestelde paden
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: deze paden zijn te gedegenereerd om te verven
@@ -5561,6 +5597,7 @@ imageTrace	Outline	Contour
 @msg	no graphic style `{n}`	geen grafische stijl `{n}`
 @msg	no interaction in progress	geen interactie gaande
 @msg	no key object	geen sleutelobject
+@msg	Align to Key Object isn't available with the Artboard tool	Uitlijnen op sleutelobject is niet beschikbaar met het tekengebied-gereedschap
 @msg	no library `{key}` (see {list})	geen bibliotheek `{key}` (zie {list})
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
@@ -5691,6 +5728,7 @@ imageTrace	Outline	Contour
 @msg	select a Live Paint group	selecteer een Live Paint-groep
 @msg	select a blend	selecteer een vermenging
 @msg	select a clip group	selecteer een knipgroep
+@msg	select a flare	selecteer een flare
 @msg	select a gradient mesh	selecteer een verloopnet
 @msg	select a linked image: an embedded one has no file	selecteer een gekoppelde afbeelding: een ingesloten afbeelding heeft geen bestand
 @msg	select a repeat	selecteer een herhaling
@@ -5899,6 +5937,7 @@ imageTrace	Outline	Contour
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	het document stelt een afloop in die dit PDF/X-bestand weglaat: schakel 'Afloopinstellingen van document gebruiken' in
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} object reikt tot de snijrand maar stopt voor de afloop|{n} objecten reiken tot de snijrand maar stoppen voor de afloop
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
@@ -7504,6 +7543,7 @@ imageTrace	Outline	Contour
 @msg	the character's size can't be measured	de grootte van het teken kan niet worden gemeten
 @msg	the code runs past its last instruction	de code loopt voorbij de laatste instructie
 @msg	the compound shape is too complex to expand	de samengestelde vorm is te complex om uit te breiden
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	een lijn of ander open pad dat geen oppervlak omsluit, voegt geen oppervlak toe aan de samengestelde vorm; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
 @msg	the container of the listed objects is gone	de container van de vermelde objecten is verdwenen
 @msg	the copy `{user_id}` can't be read as a library	de kopie `{user_id}` kan niet als bibliotheek worden gelezen
 @msg	the copy would leave the canvas	de kopie zou buiten het canvas vallen
@@ -7850,7 +7890,6 @@ imageTrace	Outline	Contour
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-bestanden hebben geen transparantie, en het bestand zou {what} bevatten: vlak het eerst af (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-afbeeldingen kunnen niet worden geopend (zie document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` is geen van de keuzes
-@msg	{k} has control characters{_1}	{k} bevat besturingstekens{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} is te lang (maximaal {MAX_TEXT} tekens)
 @msg	{k} must be > 0	{k} moet > 0 zijn
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} moet een getal (pt) of een lengte zoals "210 mm" zijn
@@ -8508,6 +8547,11 @@ mark-style	Japanese	Japans
 	The active document changed while the screen color sampler was open	Het actieve document is gewijzigd terwijl de schermkleurkiezer open was
 	This system has no screen color sampler	Dit systeem heeft geen schermkleurkiezer
 	Color blindness – Tritanopia-type	Kleurenblindheid – type tritanopie
+	Show Color Vision Preview	Voorvertoning van kleurwaarneming tonen
+	Protanopia	Protanopie
+	Deuteranopia	Deuteranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Panels Except Tools and Control	Alle panelen behalve Gereedschap en Bediening
 	Reset Tracking and Kerning	Tracking en kerning herstellen
 	Reset Horizontal Scale	Horizontale schaal herstellen
@@ -8913,6 +8957,8 @@ swatch	Bright Violet	Felviolet
 @msg	no such spine point	dat aspunt bestaat niet
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` moet een lijst van hoogstens 10000 aspuntindexen zijn
 @msg	`with` moves points, not a handle	`with` verplaatst punten, geen handgreep
+@msg	`link` and `independent` cannot both be true	`link` en `independent` kunnen niet allebei true zijn
+@msg	`link` places a handle: give `handle`	`link` plaatst een handgreep: geef `handle` op
 @msg	no such spine segment	dat assegment bestaat niet
 @msg	not a blend	geen vermenging
 @msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
@@ -8954,6 +9000,9 @@ variable-list-end	{0}, {1}	{0} en {1}
 	Continue in Background	Doorgaan op achtergrond
 	Cancel Export	Export annuleren
 @msg	Export cancelled	Export geannuleerd
+	Cancel Save	Opslaan annuleren
+@plural	{n} more save waiting|{n} more saves waiting	Nog {n} opslagactie in de wachtrij|Nog {n} opslagacties in de wachtrij
+@msg	Save canceled	Opslaan geannuleerd
 # Paragraph panel menu › Justification…
 	Desired	Gewenst
 	Word Spacing:	Woordafstand:
@@ -9175,6 +9224,7 @@ axis	Y Axis	Y-as
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
 	Skill Icons	Vaardigheidsiconen
+	Weather Icons	Weericonen
 	Attack	Aanval
 	Defend	Verdediging
 	Heal	Genezen
@@ -9274,6 +9324,12 @@ axis	Y Axis	Y-as
 	Bus Lines	Buslijnen
 	Terminal Nodes	Aansluitpunten
 
+# Original arrow art brushes.
+	Arrows	Pijlen
+	Solid Arrow	Massieve pijl
+	Open Arrow	Open pijl
+	Chevron Arrow	Chevronpijl
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf
@@ -9290,6 +9346,252 @@ axis	Y Axis	Y-as
 	Stars	Sterren
 	Triangles	Driehoeken
 	Sparkles	Fonkelingen
+	Warm Gray	Warm grijs
+	Cool Gray	Koel grijs
+	Neutrals	Neutrale tinten
+	Ivory	Ivoor
+	Linen	Linnen
+	Oat	Haver
+	Greige	Greige
+	Stone	Steen
+	Taupe	Taupe
+	Slate	Leisteen
+	Clay	Klei
+	Terracotta	Terracotta
+	Ochre	Oker
+	Umber	Omber
+	Sand	Zand
+	Olive	Olijf
+	Moss	Mos
+	Rosy	Rozig
+	Neutral	Neutraal
+	Golden	Goudkleurig
+	Pastel	Pastel
+	Pastel Red	Pastelrood
+	Pastel Orange	Pasteloranje
+	Pastel Amber	Pastelamber
+	Pastel Yellow	Pastelgeel
+	Pastel Lime	Pastellimoen
+	Pastel Green	Pastelgroen
+	Pastel Teal	Pastelblauwgroen
+	Pastel Cyan	Pastelcyaan
+	Pastel Azure	Pastelazuur
+	Pastel Blue	Pastelblauw
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Zacht rood
+	Soft Orange	Zacht oranje
+	Soft Amber	Zacht amber
+	Soft Yellow	Zacht geel
+	Soft Lime	Zacht limoen
+	Soft Green	Zacht groen
+	Soft Teal	Zacht blauwgroen
+	Soft Cyan	Zacht cyaan
+	Soft Azure	Zacht azuur
+	Soft Blue	Zacht blauw
+	Soft Violet	Zacht violet
+	Soft Magenta	Zacht magenta
+	Vivid Red	Levendig rood
+	Vivid Orange	Levendig oranje
+	Vivid Amber	Levendig amber
+	Vivid Yellow	Levendig geel
+	Vivid Lime	Levendig limoen
+	Vivid Green	Levendig groen
+	Vivid Teal	Levendig blauwgroen
+	Vivid Cyan	Levendig cyaan
+	Vivid Azure	Levendig azuur
+	Vivid Blue	Levendig blauw
+	Vivid Violet	Levendig violet
+	Vivid Magenta	Levendig magenta
+	Deep	Diep
+	Deep Red	Dieprood
+	Deep Orange	Dieporanje
+	Deep Amber	Diepamber
+	Deep Yellow	Diepgeel
+	Deep Lime	Dieplimoen
+	Deep Green	Diepgroen
+	Deep Teal	Diepblauwgroen
+	Deep Cyan	Diepcyaan
+	Deep Azure	Diepazuur
+	Deep Blue	Diepblauw
+	Deep Violet	Diepviolet
+	Deep Magenta	Diepmagenta
+	Gold	Goud
+	Silver	Zilver
+	Bronze	Brons
+	Copper	Koper
+	Brass	Messing
+	Rose Gold	Roségoud
+	Gunmetal	Antraciet metaal
+	Platinum	Platina
+	Pewter	Tin
+	Ember	Gloed
+	Lagoon	Lagune
+	Dusk	Schemering
+	Clay to Teal	Klei naar blauwgroen
+	Plum to Olive	Pruim naar olijf
+	Complementary Coral	Koraal complementair
+	Split Complementary Coral	Koraal gesplitst complementair
+	Analogous Coral	Koraal analoog
+	Triad Coral	Koraal triade
+	Tetrad Coral	Koraal tetrade
+	Pentagram Coral	Koraal pentagram
+	Complementary Teal	Blauwgroen complementair
+	Split Complementary Teal	Blauwgroen gesplitst complementair
+	Analogous Teal	Blauwgroen analoog
+	Triad Teal	Blauwgroen triade
+	Tetrad Teal	Blauwgroen tetrade
+	Pentagram Teal	Blauwgroen pentagram
+	Soft Spectrum	Zacht spectrum
+	Red to Amber	Rood naar amber
+	Orange to Yellow	Oranje naar geel
+	Amber to Lime	Amber naar limoen
+	Yellow to Green	Geel naar groen
+	Lime to Teal	Limoen naar blauwgroen
+	Green to Cyan	Groen naar cyaan
+	Teal to Azure	Blauwgroen naar azuur
+	Cyan to Blue	Cyaan naar blauw
+	Azure to Violet	Azuur naar violet
+	Blue to Magenta	Blauw naar magenta
+	Violet to Red	Violet naar rood
+	Magenta to Orange	Magenta naar oranje
+	Dawn	Dageraad
+	Noon	Middag
+	Sunset	Zonsondergang
+	Night	Nacht
+	Overcast	Bewolkt
+	White to Black	Wit naar zwart
+	Light Grays	Lichte grijstinten
+	Dark Grays	Donkere grijstinten
+	Warm Grays	Warme grijstinten
+	Cool Grays	Koele grijstinten
+	Fade to Transparent	Vervagen naar transparant
+	White Fade	Witte vervaging
+	Vignette	Vignet
+	Mist	Nevel
+	Petal	Bloemblad
+	Fern	Varen
+	Smoke	Rook
+	Honey	Honing
+	Seafoam	Zeeschuim
+	Lavender	Lavendel
+	Driftwood	Drijfhout
+	Ink Wash	Inktwassing
+	Tide	Getij
+	Bloom	Bloei
+	Dew	Dauw
+	Pollen	Stuifmeel
+	Lichen	Korstmos
+	Prism Veil	Prismasluier
+	Opal Ribbon	Opaallint
+	Pearl Flash	Parelflits
+	Aurora Foil	Noorderlichtfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	IJzig spectrum
+	Silver Tide	Zilveren getij
+	Rose Quartz Gleam	Rozenkwartsglans
+	Moonstone Shift	Maansteenglans
+	Violet Edge	Violette rand
+	Mint Halo	Munthalo
+	Amber Corona	Ambercorona
+	Polar Glint	Poolschittering
+	Pastel Orbit	Pastelbaan
+	Coral and Navy	Koraal en marineblauw
+	Plum and Lime	Pruim en limoen
+	Teal and Gold	Blauwgroen en goud
+	Indigo and Peach	Indigo en perzik
+	Forest and Rose	Bos en roze
+	Red Glow	Rode gloed
+	Orange Glow	Oranje gloed
+	Amber Glow	Amberkleurige gloed
+	Yellow Glow	Gele gloed
+	Lime Glow	Limoengloed
+	Green Glow	Groene gloed
+	Teal Glow	Blauwgroene gloed
+	Cyan Glow	Cyaangloed
+	Azure Glow	Azuurgloed
+	Blue Glow	Blauwe gloed
+	Violet Glow	Violette gloed
+	Magenta Glow	Magentagloed
+	Polka Dots	Stippen
+	Vertical Stripes	Verticale strepen
+	Horizontal Stripes	Horizontale strepen
+	Diagonal Stripes	Diagonale strepen
+	Checkerboard	Dambord
+	Diamonds	Ruiten
+	Crosses	Kruisjes
+	Coarse Grit	Grove korrel
+	Stipple	Stippeling
+	Scratches	Krassen
+	Sparse Flecks	Verspreide spikkels
+	Dense Flecks	Dichte spikkels
+	Sine Bands	Sinusbanden
+	Ripple Lines	Rimpellijnen
+	Interference Rings	Interferentieringen
+	Offset Rings	Verschoven ringen
+	Warped Checks	Vervormde ruiten
+	Pinched Stripes	Ingesnoerde strepen
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Stralende lenzen
+	Soft Shadow	Zachte schaduw
+	Hard Shadow	Harde schaduw
+	Lifted Card	Opgetilde kaart
+	Neon Tube	Neonbuis
+	Inner Light	Binnenlicht
+	Feathered	Zachte rand
+	Haze	Waas
+	Double Rule	Dubbele lijn
+	Triple Rule	Driedubbele lijn
+	Dashed Border	Gestreepte rand
+	Dotted Border	Gestippelde rand
+	Offset Keyline	Verschoven contour
+	Inset Keyline	Binnencontour
+	Outside Stroke	Buitenlijn
+	Pointer	Aanwijzer
+	Highlighter	Markeerstift
+	Sketchy Line	Schetslijn
+	Scribble Fill	Krabbelvulling
+	Wobble	Wiebel
+	Zig Zag Edge	Zigzagrand
+	Wavy Edge	Golvende rand
+	Puffy	Opgeblazen
+	Starburst	Sterrenuitbarsting
+	Glossy	Glanzend
+	Brushed Metal	Geborsteld metaal
+	Spotlight	Spotlight
+	Sunset Band	Zonsondergangband
+	Sea Glass	Zeeglas
+	Pearl	Parel
+	Chrome Rim	Chromen rand
+	Glow Orb	Gloeibol
+	Pill Badge	Pilbadge
+	Round Badge	Ronde badge
+	Flag Wave	Wapperende vlag
+	Bulge	Bolling
+	Twisted	Gedraaid
+	Echo	Echo
+	Spiral Copies	Spiraalkopieën
+	Multiply Tint	Vermenigvuldigen-tint
+	Darken Veil	Donkerder-sluier
+	Ghosted	Doorschijnend
+	Two Tone	Tweekleurig
+	Overlay Glaze	Bedekken-glazuur
+	Screen Light	Scherm-licht
+	Soft Light Wash	Zacht-licht-wassing
+	Cyan Neon	Cyaan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Amberkleurige buis
+	Electric Lime	Elektrisch limoen
+	Pulse Violet	Pulserend violet
+	Cobalt Phosphor	Kobaltfosfor
+	Burst	Uitbarsting
+	Rounded Square	Afgerond vierkant
+	Sun	Zon
+	Moon	Maan
+	Cloud	Wolk
+	Rain	Regen
+	Thunder	Donder
+	Snow	Sneeuw
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
@@ -9681,10 +9983,18 @@ breakText	Glyphs	Glyphs
 	Smooth Bridge…	Vloeiende brug…
 	Smooth Bridge	Vloeiende brug
 	Keep Originals	Originelen behouden
-@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	select two or more circles to bridge	selecteer twee of meer cirkels om te verbinden
 @msg	one circle is inside the other	de ene cirkel ligt binnen de andere
 @msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
 @msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
+	Constant Gap	Constante tussenruimte
+	Reach:	Bereik:
+@msg	the circles are too far apart for this gap: raise the gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte: vergroot de tussenruimte
+@msg	the circles are too far apart for this gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte
+@msg	no two circles are within reach: raise the reach	geen twee cirkels liggen binnen bereik: vergroot het bereik
+@msg	select at most 2000 circles to bridge	selecteer hoogstens 2000 cirkels om te verbinden
+@msg	that makes too many bridges (at most 8000): lower the reach	dat geeft te veel bruggen (hoogstens 8000): verklein het bereik
+@msg	the bridged circles are too complex to unite	de verbonden cirkels zijn te complex om samen te voegen
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeenschappelijke raaklijnen…
 	Common Tangents	Gemeenschappelijke raaklijnen
@@ -10133,6 +10443,16 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Tap	Kort drukken
+	Clear Hold	Vasthouden wissen
+	Hold Shortcuts	Vasthoudsneltoetsen
+	Hold Shortcut Delay	Vertraging vasthoudsneltoetsen
+	How hold shortcuts work	Zo werken vasthoudsneltoetsen
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik en druk vervolgens een toets in die hiervoor wordt vastgehouden (Esc annuleert). De toets vasthouden voert dit uit; kort drukken voert de eigen sneltoets van de toets uit.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kort drukken op een toets voert de sneltoets ervan uit. De toets vasthouden gedurende de vertraging voert in plaats daarvan het gereedschap of de opdracht in de kolom Houd uit. Een vasthoudsneltoets is een letter-, cijfer- of leestekentoets, alleen of met Shift.
+@msg	Hold {_1} is already used by {_2}	Vasthouden {_1} wordt al gebruikt door {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	een vasthoudsneltoets is een toets die een teken typt, alleen of met Shift ({shown} bevat Cmd, Ctrl of Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan geen vasthoudsneltoets zijn: gebruik een letter, een cijfer of een leestekentoets
 	Check	Controleren
 	Check Fold Lines	Vouwlijnen controleren
 @msg	No cut lines are in the selection.	De selectie bevat geen snijlijnen.
@@ -10153,6 +10473,7 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Dashed Arrow	Gestreepte pijl
 	Pressure Sensitive	Drukgevoelig
 	Flex Ribbon	Flexibel lint
 	Pulse Stroke	Pulserende streek
