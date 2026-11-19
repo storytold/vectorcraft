@@ -606,7 +606,6 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-03 | minor | SVG Options has a Units choice (Pixels, Points, Millimeters, Centimeters, Inches) for the `width` and `height` an export writes, so laser and plotter software read the physical size (#4462; the `units` option, Pixels still bare numbers as before); scores and estimates unchanged |
 | 2026-11-18 | minor | Lock Guides: a selection marquee (Selection, Direct Selection, Group Selection, Enclosing Lasso) leaves out paths made into guides inside groups and compound paths too, as clicks do (#3074), so a group is no longer selected by a locked guide in it; an enclosing marquee measures a group without its locked or hidden guides, and Direct Selection takes no anchor or segment of a guide that can't be picked; a guide in a group still moves with its group (#8538). Scores and estimates unchanged. |
 | 2026-11-18 | minor | Production Preflight: output-aware fonts, text overflow, linked files and effective image resolution, clickable findings and automatic rechecking; scores and estimates unchanged. See [production-preflight.md](production-preflight.md) for scope and limits. |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
@@ -657,6 +656,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
+| 2026-11-03 | minor | SVG Options has a Units choice (Pixels, Points, Millimeters, Centimeters, Inches) for the `width` and `height` an export writes, so laser and plotter software read the physical size (#4462; the `units` option, Pixels still bare numbers as before); scores and estimates unchanged |
 | 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | Object › Image Trace › Batch Trace Folder asks for a source and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
