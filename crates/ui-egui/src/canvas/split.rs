@@ -124,14 +124,33 @@ pub(super) fn on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, r
         && at.is_some_and(|p| resp.hovered() && drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p)))
 }
 
-/// The last primary press in this frame, before later moves or releases replace its position.
-pub(crate) fn primary_press_pos(ui: &Ui) -> Option<Pos2> {
+/// The last primary press in this frame, with its event index.
+pub(crate) fn primary_press(ui: &Ui) -> Option<(usize, Pos2)> {
     ui.input(|i| {
-        i.events.iter().rev().find_map(|e| match e {
-            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some(*pos),
+        i.events.iter().enumerate().rev().find_map(|(index, e)| match e {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some((index, *pos)),
             _ => None,
         })
     })
+}
+
+/// The first primary release, optionally restricted to events after a particular press.
+pub(crate) fn primary_release(ui: &Ui, after: Option<usize>) -> Option<(usize, Pos2)> {
+    ui.input(|i| {
+        i.events.iter().enumerate().find_map(|(index, e)| match e {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, .. }
+                if after.is_none_or(|press| index > press) =>
+            {
+                Some((index, *pos))
+            }
+            _ => None,
+        })
+    })
+}
+
+/// The last primary press in this frame, before later moves or releases replace its position.
+pub(crate) fn primary_press_pos(ui: &Ui) -> Option<Pos2> {
+    primary_press(ui).map(|(_, p)| p)
 }
 
 /// Whether the new primary press belongs to the divider, using that event's position.
@@ -142,81 +161,99 @@ pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Respo
         && primary_press_pos(ui).is_some_and(|p| drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p)))
 }
 
+/// Whether divider input owned this frame, or ended an old press before a later Down.
+pub(super) enum DividerInput {
+    Ignored,
+    Consumed,
+    Handoff,
+}
+
 /// Called after wheel/touch navigation, before any art/name press. An existing art press keeps
 /// its owner even when it crosses the divider.
-pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, modal: bool, space: bool) -> bool {
+pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, modal: bool, space: bool) -> DividerInput {
     let Some(st) = app.session.active() else {
         forget(ui.ctx());
-        return false;
+        return DividerInput::Ignored;
     };
     let uid = st.uid;
-    let Some((_, view)) = crate::doc_windows::current(app) else { return false };
-    let Some(settings) = app.view().map(|v| v.split).filter(|_| enabled(app)) else { return false };
+    let Some((_, view)) = crate::doc_windows::current(app) else { return DividerInput::Ignored };
+    let Some(settings) = app.view().map(|v| v.split).filter(|_| enabled(app)) else { return DividerInput::Ignored };
     let held = ui.data(|d| d.get_temp::<DividerDrag>(divider_id()));
-    if let Some(held) = held {
+    let handoff = if let Some(held) = held {
         if held.doc != uid || held.view != view || held.orientation != settings.orientation || modal {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
-            return false;
+            return DividerInput::Ignored;
         }
         let escape = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-        let (down, at) = ui.input(|i| {
-            let down = i.pointer.primary_down();
-            let release = (!down)
-                .then(|| {
-                    i.events.iter().find_map(|e| match e {
-                        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, .. } => Some(*pos),
-                        _ => None,
-                    })
-                })
-                .flatten();
-            (down, release.or_else(|| i.pointer.interact_pos()))
-        });
         if escape {
             if let Some(v) = app.view_mut() {
                 v.split.fraction = held.start;
             }
-        } else if let Some(p) = at {
-            let value = match settings.orientation {
-                SplitOrientation::Vertical => (p.x - rect.left()) / rect.width().max(1.0),
-                SplitOrientation::Horizontal => (p.y - rect.top()) / rect.height().max(1.0),
-            };
-            if let Some(v) = app.view_mut() {
-                v.split.fraction = value.clamp(0.0, 1.0);
-            }
+            ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
+            ui.ctx().request_repaint();
+            return DividerInput::Consumed;
         }
-        if escape || !down {
+        let release = primary_release(ui, None);
+        let at = release.map(|(_, p)| p).or_else(|| ui.input(|i| i.pointer.interact_pos()));
+        if let Some(p) = at {
+            move_divider(app, rect, settings.orientation, p);
+        }
+        if release.is_some() || !ui.input(|i| i.pointer.primary_down()) {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
         }
         ui.ctx().request_repaint();
-        return true;
-    }
-    let press = primary_press_pos(ui);
+        // A later press is a new gesture, admitted against the divider's final position.
+        if !release.is_some_and(|(up, _)| primary_press(ui).is_some_and(|(down, _)| down > up)) {
+            return DividerInput::Consumed;
+        }
+        true
+    } else {
+        false
+    };
+    let Some(settings) = app.view().map(|v| v.split) else { return DividerInput::Ignored };
+    let press = primary_press(ui);
     let on = if press.is_some() { press_on_divider(app, ui, resp, rect) } else { on_divider(app, ui, resp, rect) };
     if modal || space || crate::touch::finger_navigates_only() || !on {
-        return false;
+        return if handoff { DividerInput::Handoff } else { DividerInput::Ignored };
     }
-    if press.is_some() {
+    if let Some((index, p)) = press {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        // A same-frame tap has no drag left to hold.
-        if ui.input(|i| i.pointer.primary_down()) {
+        // A completed press applies its own release, never a later hover or another press.
+        if let Some((_, released)) = primary_release(ui, Some(index)) {
+            if released != p {
+                move_divider(app, rect, settings.orientation, released);
+                ui.ctx().request_repaint();
+            }
+        } else if ui.input(|i| i.pointer.primary_down()) {
             ui.data_mut(|d| d.insert_temp(divider_id(), DividerDrag { doc: uid, view, orientation: settings.orientation, start: settings.ratio() }));
         }
         app.session.tool_press_elsewhere();
     }
     app.session.tool_hover_ended(app.view_info());
     ui.data_mut(|d| d.insert_temp(egui::Id::unique("canvas-hovered"), false));
-    true
+    DividerInput::Consumed
+}
+
+fn move_divider(app: &mut VectorcraftApp, rect: egui::Rect, orientation: SplitOrientation, p: Pos2) {
+    let value = match orientation {
+        SplitOrientation::Vertical => (p.x - rect.left()) / rect.width().max(1.0),
+        SplitOrientation::Horizontal => (p.y - rect.top()) / rect.height().max(1.0),
+    };
+    if let Some(v) = app.view_mut() {
+        v.split.fraction = value.clamp(0.0, 1.0);
+    }
 }
 
 pub(super) fn input_view(app: &VectorcraftApp, ui: &Ui, rect: egui::Rect, at: Option<Pos2>) -> ViewInfo {
     let mut view = app.view_info();
-    if ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some_and(drag::tool_holds))
-        && let Some(held) = ui.data(|d| d.get_temp::<HeldMode>(held_id()))
-        && app.session.active().is_some_and(|st| st.uid == held.doc)
-    {
-        view.outline = held.outline;
-        view.pixel_preview = held.pixel;
+    if ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some_and(drag::tool_holds)) {
+        if let Some(held) = ui.data(|d| d.get_temp::<HeldMode>(held_id()))
+            && app.session.active().is_some_and(|st| st.uid == held.doc)
+        {
+            view.outline = held.outline;
+            view.pixel_preview = held.pixel;
+        }
     } else if enabled(app)
         && let (Some(v), Some(p)) = (app.view(), at)
         && clips(rect, v.split)[1].contains(p)

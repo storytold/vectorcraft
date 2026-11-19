@@ -33,12 +33,29 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let view_at = press_at.filter(|p| pointer.primary_pressed() && on_canvas(ui, resp, *p)).or(at);
     let view = super::split::input_view(app, ui, rect, view_at);
     let (backquote_now, backquote_before) = backquote_seen(ui);
-    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
-    if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() && super::split::divider_input(app, ui, resp, rect, modal, space) {
-        poll_tool(app, ui, view);
-        return;
+    if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() {
+        match super::split::divider_input(app, ui, resp, rect, modal, space) {
+            super::split::DividerInput::Consumed => {
+                poll_tool(app, ui, view);
+                return;
+            }
+            super::split::DividerInput::Handoff
+                if !modal
+                    && !space
+                    && !crate::touch::finger_navigates_only()
+                    && ui.data(|d| d.get_temp::<Drag>(drag_id()).is_none())
+                    && !super::split::press_on_divider(app, ui, resp, rect)
+                    && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect, false) =>
+            {
+                return;
+            }
+            super::split::DividerInput::Ignored | super::split::DividerInput::Handoff => {}
+        }
     }
+    // Ending a divider drag may move the comparison boundary before a later Down is admitted.
+    let view = super::split::input_view(app, ui, rect, view_at);
+    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
     // tool's press is dropped, as a right-click presses nothing. Under a modal dialog it drops nothing.
     if resp.long_touched() && !modal {
@@ -186,6 +203,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // the edit.
     poll_tool(app, ui, view);
     if pointer.primary_released()
+        && !pointer.primary_down()
         && let Some((i, shift)) = ui.data_mut(|d| d.remove_temp::<(usize, bool)>(name_press_id()))
     {
         let release_shift = ui

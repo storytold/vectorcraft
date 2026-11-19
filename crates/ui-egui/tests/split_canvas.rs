@@ -1453,3 +1453,323 @@ synchronous_test!(review_4626118640_primary_down_owns_split_mode_before_later_mo
         assert_eq!(s.document(), original, "{label}: Undo restores the actual document");
     }
 });
+
+fn review_597489_divider_point(s: &Scene, fraction: f32) -> Pos2 {
+    pos2(s.rect().left() + s.rect().width() * fraction, s.rect().center().y)
+}
+
+fn review_597489_divider_scene() -> Scene {
+    let mut s = Scene::new();
+    s.enable();
+    s.command("view.splitVertical");
+    s.command("view.splitPreview");
+    let p = s.xf().to_doc(review_597489_divider_point(&s, 0.8));
+    s.rectangle =
+        NodeId(s.app.run("shape.rectangle", json!({"x":p.x - 12.0,"y":p.y - 12.0,"width":24,"height":24})).unwrap()["id"].as_u64().unwrap());
+    s.app.run("paint.setFill", json!({"color":"#8050c0"})).unwrap();
+    s.app.run("paint.setStroke", json!({"none":true})).unwrap();
+    s.app.run("select.set", json!({"ids":[]})).unwrap();
+    s.idle();
+    assert!((s.fraction() - 0.5).abs() < 1e-6);
+    let bounds = s.bounds();
+    assert!(bounds.x0 < p.x && p.x < bounds.x1 && bounds.y0 < p.y && p.y < bounds.y1);
+    s
+}
+
+fn review_597489_primary(p: Pos2, pressed: bool) -> Event {
+    Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }
+}
+
+fn review_597489_ordinary_drag(s: &mut Scene, fraction: f32) {
+    assert_eq!(
+        s.app.session.active().unwrap().selection.objects,
+        vec![s.rectangle],
+        "the ordinary Down reaches Selection and picks the new rectangle"
+    );
+    let before = s.bounds();
+    let undo = s.app.session.active().unwrap().history.undo.len();
+    let start = review_597489_divider_point(s, 0.8);
+    let end = review_597489_divider_point(s, 0.85);
+    let delta = s.xf().to_doc(end) - s.xf().to_doc(start);
+    s.frame(vec![Event::PointerMoved(end)]);
+    s.release(end, PointerButton::Primary);
+    let after = s.bounds();
+    assert!((after.x0 - before.x0 - delta.x).abs() < 1e-6, "the held ordinary gesture translates from its fresh Down");
+    assert!((after.y0 - before.y0 - delta.y).abs() < 1e-6);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), undo + 1, "the ordinary drag commits exactly once");
+    assert!((s.fraction() - fraction).abs() < 1e-6, "the later ordinary Up cannot edit the old divider");
+    let released = s.snapshot();
+    s.frame(vec![Event::PointerMoved(review_597489_divider_point(s, 0.9))]);
+    assert_eq!(s.snapshot(), released, "button-up hover cannot continue either released gesture");
+    assert!((s.fraction() - fraction).abs() < 1e-6);
+}
+
+fn review_597489_release_then_press(coalesced: bool) {
+    let mut s = review_597489_divider_scene();
+    let before = s.snapshot();
+    let start = s.point_on_divider();
+    s.press(start, PointerButton::Primary);
+    let held = review_597489_divider_point(&s, 0.6);
+    s.frame(vec![Event::PointerMoved(held)]);
+    assert!((s.fraction() - 0.6).abs() < 1e-6, "CONTROL: the old divider really is held and moving");
+    assert_eq!(s.snapshot(), before, "CONTROL: the held divider edits no document, selection or history");
+    let release = review_597489_divider_point(&s, 0.65);
+    let ordinary = review_597489_divider_point(&s, 0.8);
+    if coalesced {
+        s.frame(vec![review_597489_primary(release, false), review_597489_primary(ordinary, true)]);
+    } else {
+        s.release(release, PointerButton::Primary);
+        assert!((s.fraction() - 0.65).abs() < 1e-6, "CONTROL: a separate release commits its own position");
+        assert_eq!(s.snapshot(), before, "CONTROL: the divider edits no document, selection or history");
+        s.press(ordinary, PointerButton::Primary);
+    }
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "REGRESSION: old Up65 commits before the independent Down80, got {}", s.fraction());
+    review_597489_ordinary_drag(&mut s, 0.65);
+}
+
+synchronous_test!(review_597489_owned_divider_release_before_fresh_down_keeps_both_owners, {
+    let _globals = Globals::new();
+    let mut ordinary = review_597489_divider_scene();
+    let p = review_597489_divider_point(&ordinary, 0.8);
+    ordinary.press(p, PointerButton::Primary);
+    review_597489_ordinary_drag(&mut ordinary, 0.5);
+    review_597489_release_then_press(false);
+    review_597489_release_then_press(true);
+});
+
+fn review_597489_same_frame_divider(coalesced: bool) {
+    let mut s = review_597489_divider_scene();
+    let before = s.snapshot();
+    let start = s.point_on_divider();
+    let release = review_597489_divider_point(&s, 0.7);
+    if coalesced {
+        s.frame(vec![
+            Event::PointerMoved(start),
+            review_597489_primary(start, true),
+            Event::PointerMoved(release),
+            review_597489_primary(release, false),
+        ]);
+    } else {
+        s.press(start, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(release)]);
+        s.release(release, PointerButton::Primary);
+    }
+    assert!(
+        (s.fraction() - 0.7).abs() < 1e-6,
+        "REGRESSION: a completed divider gesture commits Up70 even with Down50 in the same frame, got {}",
+        s.fraction()
+    );
+    assert_eq!(s.snapshot(), before, "a completed divider gesture edits no document, selection or history");
+    let hover = review_597489_divider_point(&s, 0.9);
+    s.frame(vec![Event::PointerMoved(hover)]);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "button-up hover cannot continue the completed divider");
+    assert_eq!(s.snapshot(), before);
+    let ordinary = review_597489_divider_point(&s, 0.8);
+    s.press(ordinary, PointerButton::Primary);
+    review_597489_ordinary_drag(&mut s, 0.7);
+}
+
+synchronous_test!(review_597489_same_frame_divider_drag_commits_its_release_and_ends, {
+    let _globals = Globals::new();
+    review_597489_same_frame_divider(false);
+    review_597489_same_frame_divider(true);
+});
+
+// The clipping path's real live effect moves its Preview region 100 pt to the right.
+// Outline uses its plain path, so the two empty-space marquees distinguish the modes.
+fn review_597489_mode_scene(split_on: bool) -> (Scene, NodeId) {
+    let mut s = Scene::new();
+    s.app.run("select.all", json!({})).unwrap();
+    s.app.run("edit.clear", json!({})).unwrap();
+    let ink = s.app.run("shape.rectangle", json!({"x":120,"y":100,"width":120,"height":60})).unwrap()["id"].clone();
+    s.app.run("paint.setFill", json!({"color":"#d83020"})).unwrap();
+    s.app.run("paint.setStroke", json!({"none":true})).unwrap();
+    let mask = s.app.run("shape.rectangle", json!({"x":100,"y":80,"width":160,"height":100})).unwrap()["id"].clone();
+    s.app.run("paint.setStroke", json!({"none":true})).unwrap();
+    s.app.run("select.set", json!({"ids":[ink,mask.clone()]})).unwrap();
+    let group = NodeId(s.app.run("object.clippingMask.make", json!({})).unwrap()["id"].as_u64().unwrap());
+    // Making the mask clears its appearance; apply the real effect afterwards.
+    s.app.run("select.set", json!({"ids":[mask]})).unwrap();
+    s.app.run("effect.apply", json!({"effect":"distort.transform","item":null,"params":{"moveH":100.0}})).unwrap();
+    s.app.run("select.set", json!({"ids":[]})).unwrap();
+    s.enable();
+    s.command("view.splitOutline");
+    if !split_on {
+        s.command("view.splitView");
+    }
+    assert_eq!(s.app.view().unwrap().split.enabled, split_on);
+    assert_eq!(s.app.view().unwrap().split.comparison, SplitMode::Outline);
+    assert!(!s.app.outline_view(), "CONTROL: the ordinary view starts in Preview");
+    assert_eq!(s.app.session.prefs.marquee_selection, "touching", "CONTROL: the real default marquee touches objects");
+    s.idle();
+    (s, group)
+}
+
+fn review_597489_marquee_mode_case(split_on: bool, enable_while_held: bool) {
+    let (mut s, group) = review_597489_mode_scene(split_on);
+    let before = s.document();
+    let history = (s.app.session.active().unwrap().history.undo.len(), s.app.session.active().unwrap().history.redo.len());
+    let p = s.screen(Point::new(140.0, 120.0));
+    let q = s.screen(Point::new(180.0, 150.0));
+    assert!(s.rect().contains(p) && s.rect().contains(q));
+    assert!(p.x < s.point_on_divider().x - 10.0 && q.x > s.point_on_divider().x + 10.0);
+    s.press(p, PointerButton::Primary);
+    assert!(s.ctx.input(|i| i.pointer.primary_down()));
+    assert!(s.app.session.tool_busy(), "CONTROL: the ordinary Selection tool owns the held marquee");
+    assert!(!s.app.session.tool_waiting(), "CONTROL: this ordinary marquee is not a deferred tool command");
+    assert!(s.app.session.active().unwrap().selection.objects.is_empty(), "CONTROL: the press starts on empty Preview canvas");
+    if enable_while_held {
+        // Use the supported command without an idle/release frame in between.
+        s.app.run("view.splitView", json!({})).unwrap();
+        assert!(s.app.view().unwrap().split.enabled);
+        assert!(s.ctx.input(|i| i.pointer.primary_down()));
+        assert!(s.app.session.tool_busy(), "enabling Split View keeps the ordinary held gesture alive");
+    }
+    s.frame(vec![Event::PointerMoved(q)]);
+    s.release(q, PointerButton::Primary);
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    assert!(!s.app.session.tool_busy(), "the ordinary marquee ends at release");
+    assert!(
+        s.app.session.active().unwrap().selection.objects.is_empty(),
+        "REGRESSION: enabling Split View cannot change an already-held Preview marquee into an Outline marquee"
+    );
+    assert_eq!(s.document(), before, "a selection-only gesture leaves the art unchanged");
+    assert_eq!((s.app.session.active().unwrap().history.undo.len(), s.app.session.active().unwrap().history.redo.len()), history);
+    if s.app.view().unwrap().split.enabled {
+        // A new press wholly in the comparison side must use Outline, proving the
+        // real mode-sensitive fixture and retirement of the previous gesture's mode.
+        let p = s.screen(Point::new(170.0, 120.0));
+        let q = s.screen(Point::new(190.0, 150.0));
+        assert!(p.x > s.point_on_divider().x + 10.0 && q.x > s.point_on_divider().x + 10.0);
+        s.press(p, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(q)]);
+        s.release(q, PointerButton::Primary);
+        assert_eq!(
+            s.app.session.active().unwrap().selection.objects,
+            vec![group],
+            "CONTROL: a fresh comparison-side Outline marquee reaches the plain clip group"
+        );
+        assert_eq!(s.document(), before);
+        assert_eq!((s.app.session.active().unwrap().history.undo.len(), s.app.session.active().unwrap().history.redo.len()), history);
+    }
+}
+
+synchronous_test!(review_597489_split_enabled_during_a_tool_gesture_keeps_its_start_mode, {
+    let _globals = Globals::new();
+    review_597489_marquee_mode_case(false, false); // Ordinary Split-OFF control.
+    review_597489_marquee_mode_case(true, false); // Existing latch and fresh Outline control.
+    review_597489_marquee_mode_case(false, true);
+});
+
+fn review_597489_completed_handle(coalesced: bool) {
+    let (mut s, handle) = review8211_mapped_scene();
+    let fraction = s.fraction();
+    let before = s.document();
+    let graphics = review8211_graphics(&s);
+    let selection = s.app.session.active().unwrap().selection.objects.clone();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    assert!(s.app.session.active().unwrap().history.redo.is_empty());
+    let release = handle + vec2(24.0, 0.0);
+    assert!(s.rect().contains(release) && release.x < s.point_on_divider().x - 8.0, "CONTROL: the release is on the canvas, away from the divider");
+    s.review8211_materials_frame(vec![Event::PointerMoved(handle)]);
+    let down = Event::PointerButton { pos: handle, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE };
+    let up = Event::PointerButton { pos: release, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+    if coalesced {
+        s.review8211_materials_frame(vec![down, Event::PointerMoved(release), up]);
+    } else {
+        s.review8211_materials_frame(vec![down]);
+        s.review8211_materials_frame(vec![Event::PointerMoved(release)]);
+        assert_ne!(review8211_graphics(&s), graphics, "CONTROL: the real mapped handle previews the move while held");
+        s.review8211_materials_frame(vec![up]);
+    }
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    let released = s.document();
+    let released_graphics = review8211_graphics(&s);
+    assert_ne!(released_graphics, graphics, "REGRESSION: a mapped-handle press, move and release must complete at its release even in one frame");
+    assert_ne!(released, before);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "the completed handle drag commits exactly once at release");
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert_eq!(s.fraction(), fraction);
+    s.review8211_materials_frame(vec![Event::PointerMoved(release + vec2(15.0, 10.0))]);
+    assert_eq!(s.document(), released, "REGRESSION: a later button-up hover cannot edit the released graphic");
+    assert_eq!(review8211_graphics(&s), released_graphics);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "a later hover cannot commit again");
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert_eq!(s.fraction(), fraction);
+    s.app.run("edit.undo", json!({})).unwrap();
+    s.review8211_materials_frame(vec![]);
+    assert_eq!(s.document(), before, "one Undo restores the whole document before the handle drag");
+    assert_eq!(review8211_graphics(&s), graphics);
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    assert_eq!(s.app.session.active().unwrap().history.redo.len(), 1);
+}
+
+fn review_597489_divider_release_before_mapped_press() {
+    let (mut s, handle) = review8211_mapped_scene();
+    let before = s.document();
+    let graphics = review8211_graphics(&s);
+    let selection = s.app.session.active().unwrap().selection.objects.clone();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    assert!(s.app.session.active().unwrap().history.redo.is_empty());
+    let divider = pos2(s.point_on_divider().x, handle.y);
+    let held = pos2(s.rect().left() + s.rect().width() * 0.60, handle.y);
+    let old_release = pos2(s.rect().left() + s.rect().width() * 0.65, handle.y);
+    assert!(s.rect().contains(held) && s.rect().contains(old_release));
+    assert!(old_release.x < 830.0, "CONTROL: the divider release is left of the real Materials window at x850");
+    assert!((old_release.x - handle.x).abs() > 35.0, "CONTROL: the fresh mapped-handle Down is away from the final divider");
+    s.review8211_materials_frame(vec![Event::PointerMoved(divider)]);
+    s.review8211_materials_frame(vec![Event::PointerButton {
+        pos: divider,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    }]);
+    s.review8211_materials_frame(vec![Event::PointerMoved(held)]);
+    assert!((s.fraction() - 0.60).abs() < 1e-6, "CONTROL: the real divider owns and follows its initial drag");
+    assert_eq!(s.document(), before);
+    assert_eq!(review8211_graphics(&s), graphics);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    s.review8211_materials_frame(vec![
+        Event::PointerButton { pos: old_release, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE },
+        Event::PointerButton { pos: handle, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE },
+    ]);
+    assert!(s.ctx.input(|i| i.pointer.primary_down()));
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "REGRESSION: the old divider ends at its own Up before the fresh mapped-handle Down");
+    let release = handle + vec2(24.0, 0.0);
+    assert!((release.x - old_release.x).abs() > 8.0 && s.rect().contains(release));
+    s.review8211_materials_frame(vec![Event::PointerMoved(release)]);
+    assert_ne!(review8211_graphics(&s), graphics, "CONTROL: the fresh Down owns a real mapped-graphic preview");
+    s.review8211_materials_frame(vec![Event::PointerButton {
+        pos: release,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    }]);
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    let released = s.document();
+    assert_ne!(released, before);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "only the fresh mapped gesture commits, exactly once");
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert!((s.fraction() - 0.65).abs() < 1e-6);
+    s.review8211_materials_frame(vec![Event::PointerMoved(release + vec2(15.0, 10.0))]);
+    assert_eq!(s.document(), released, "button-up hover cannot edit the completed mapped gesture");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1);
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "REGRESSION: button-up hover cannot revive the old divider drag");
+    s.app.run("edit.undo", json!({})).unwrap();
+    s.review8211_materials_frame(vec![]);
+    assert_eq!(s.document(), before, "one Undo restores the fresh mapped edit without an extra divider history entry");
+    assert_eq!(review8211_graphics(&s), graphics);
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    assert_eq!(s.app.session.active().unwrap().history.redo.len(), 1);
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "Undo of an art edit leaves the completed divider position alone");
+}
+
+synchronous_test!(review_597489_mapped_handle_finishes_a_coalesced_press_and_release, {
+    let _globals = Globals::new();
+    review_597489_completed_handle(false); // Ordinary separate-frame mapped-handle control first.
+    review_597489_completed_handle(true);
+    // This routing tail is unreached on Before if the preceding completion oracle fails.
+    review_597489_divider_release_before_mapped_press();
+});

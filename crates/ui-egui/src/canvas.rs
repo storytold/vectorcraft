@@ -74,7 +74,7 @@ pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub use selection_marks::SelectionMarks;
 pub(crate) use split::dragging as dragging_split;
-pub(crate) use split::primary_press_pos;
+pub(crate) use split::{primary_press, primary_release};
 use task_bar::task_bar;
 #[cfg(test)]
 pub(crate) use task_bar::{chip_paints, images_with_other_art};
@@ -514,6 +514,7 @@ pub(crate) fn pointer_on_canvas(ui: &Ui, resp: &egui::Response, p: Pos2) -> bool
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
 pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    let block_fresh = split::dragging(ui.ctx()) || (ui.input(|i| i.pointer.primary_pressed()) && split::press_on_divider(app, ui, resp, rect));
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
         // The artboard's 3D gizmo owns these gestures while its options are open.
         // Do not let a ring drag also move or deselect the editable source path.
@@ -521,9 +522,7 @@ pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         // A press on the canvas while the context menu is open only closes it (a drag too, which
         // egui alone would leave open); neither the tool nor a graphic's handle gets it.
         egui::Popup::close_all(ui.ctx());
-    } else if (!ui.input(|i| i.pointer.primary_pressed()) || !split::press_on_divider(app, ui, resp, rect))
-        && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect)
-    {
+    } else if crate::panels::three_d::graphic_handles_input(app, ui, resp, rect, block_fresh) {
         // A mapped graphic's handle, shown while the 3D and Materials panel's Materials tab is
         // open, has the press: the drag moves the graphic, not the object.
         // Only a new press yields to the divider; a held handle still gets its move and release.

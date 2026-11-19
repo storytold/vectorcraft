@@ -583,7 +583,7 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
         ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
             crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
             let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
-            taken = super::graphic_handles_input(app, ui, &resp, rect);
+            taken = super::graphic_handles_input(app, ui, &resp, rect, false);
         })
         .textures_delta
         .clear();
@@ -643,7 +643,7 @@ fn handles_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui
     ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
         crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
         let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
-        taken = super::graphic_handles_input(app, ui, &resp, rect);
+        taken = super::graphic_handles_input(app, ui, &resp, rect, false);
     })
     .textures_delta
     .clear();

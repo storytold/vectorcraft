@@ -477,13 +477,30 @@ fn moved_to(g: &vectorcraft_effects::MappedGraphic, x: f64, y: f64) -> Option<(f
 /// How near a press must be to a graphic's handle to grab it, in screen points.
 const HANDLE_REACH: f32 = 8.0;
 
+/// Moves a captured handle, or commits its final position when its press ends.
+fn move_graphic_handle(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &crate::canvas::Xf, drag: &HandleDrag, at: Option<egui::Pos2>, down: bool) {
+    if let (Some(p), Some((frame, mut list, _))) = (at, graphic_handles(app, ctx))
+        && let Some((x, y)) = frame.offset_at(drag.face, xf.to_doc(p) - drag.grab)
+        && let Some(g) = list.get_mut(drag.index)
+        && let Some((x, y)) = moved_to(g, x, y)
+    {
+        (g.x, g.y) = (x, y);
+        let graphics = Value::Array(list.iter().map(vectorcraft_effects::MappedGraphic::to_value).collect());
+        let mut changed = Map::new();
+        changed.insert(vectorcraft_effects::GRAPHICS.into(), graphics);
+        send(app, ctx, changed, down);
+    } else if !down {
+        send(app, ctx, Map::new(), false);
+    }
+}
+
 /// The artboard's handles of the mapped graphics while the Materials tab is open: a press on one
 /// grabs it, and dragging moves that graphic over its face, previewed while the pointer is down and
 /// committed as one undo step when it is released. Returns whether the handles took the pointer.
-pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
+pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, block_fresh: bool) -> bool {
     let ctx = ui.ctx().clone();
     let xf = &crate::canvas::Xf::at(rect, app.view().unwrap_or(&crate::state::View::default()), app.canvas_ui_zoom);
-    let pointer = ui.input(|i| i.pointer.interact_pos());
+    let press = crate::canvas::primary_press(ui);
     if let Some(drag) = ctx.data(|m| m.get_temp::<HandleDrag>(handle_drag_id())) {
         if drag_owner(app) != drag.owner {
             // The selection or the document changed during the drag: commit the preview and end
@@ -492,26 +509,22 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
             ctx.data_mut(|m| m.remove::<HandleDrag>(handle_drag_id()));
             return true;
         }
-        let down = ui.input(|i| i.pointer.primary_down());
-        if let (Some(p), Some((frame, mut list, _))) = (pointer, graphic_handles(app, &ctx))
-            && let Some((x, y)) = frame.offset_at(drag.face, xf.to_doc(p) - drag.grab)
-            && let Some(g) = list.get_mut(drag.index)
-            && let Some((x, y)) = moved_to(g, x, y)
-        {
-            (g.x, g.y) = (x, y);
-            let graphics = Value::Array(list.iter().map(vectorcraft_effects::MappedGraphic::to_value).collect());
-            let mut changed = Map::new();
-            changed.insert(vectorcraft_effects::GRAPHICS.into(), graphics);
-            send(app, &ctx, changed, down);
-        } else if !down {
-            send(app, &ctx, Map::new(), false);
-        }
+        let release = crate::canvas::primary_release(ui, None);
+        let down = release.is_none() && ui.input(|i| i.pointer.primary_down());
+        let at = release.map(|(_, p)| p).or_else(|| ui.input(|i| i.pointer.interact_pos()));
+        move_graphic_handle(app, &ctx, xf, &drag, at, down);
         if !down {
             ctx.data_mut(|m| m.remove::<HandleDrag>(handle_drag_id()));
         }
-        return true;
+        if !release.is_some_and(|(up, _)| press.is_some_and(|(down, _)| down > up)) {
+            return true;
+        }
     }
-    let Some(p) = crate::canvas::primary_press_pos(ui).filter(|p| crate::canvas::pointer_on_canvas(ui, resp, *p)) else { return false };
+    // A new divider press yields only after an older mapped-handle press has been completed.
+    if block_fresh {
+        return false;
+    }
+    let Some((index, p)) = press.filter(|(_, p)| crate::canvas::pointer_on_canvas(ui, resp, *p)) else { return false };
     // A press with Space held, or with the Hand, Zoom or Rotate View tool, pans, zooms or turns the
     // view, as on any other part of the canvas.
     let space = ui.input(|i| i.key_down(egui::Key::Space));
@@ -524,11 +537,16 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
         .map(|(i, at)| (*i, *at, xf.to_screen(*at).distance(p)))
         .filter(|(.., d)| *d <= HANDLE_REACH)
         .min_by(|a, b| a.2.total_cmp(&b.2));
-    let Some((index, at, _)) = nearest else { return false };
-    let Some(face) = list.get(index).map(|g| g.face) else { return false };
+    let Some((graphic, at, _)) = nearest else { return false };
+    let Some(face) = list.get(graphic).map(|g| g.face) else { return false };
     let owner = drag_owner(app);
-    ctx.data_mut(|m| m.insert_temp(handle_drag_id(), HandleDrag { index, face, grab: xf.to_doc(p) - at, owner }));
-    set_selected_graphic(&ctx, index);
+    let drag = HandleDrag { index: graphic, face, grab: xf.to_doc(p) - at, owner };
+    set_selected_graphic(&ctx, graphic);
+    if let Some((_, released)) = crate::canvas::primary_release(ui, Some(index)) {
+        move_graphic_handle(app, &ctx, xf, &drag, Some(released), false);
+    } else if ui.input(|i| i.pointer.primary_down()) {
+        ctx.data_mut(|m| m.insert_temp(handle_drag_id(), drag));
+    }
     true
 }
 
