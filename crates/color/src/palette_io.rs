@@ -110,9 +110,22 @@ fn color_from_cms(c: PaletteColor) -> Color {
     }
 }
 
-fn swatches_to_cms(list: &[Swatch]) -> Vec<PaletteSwatch> {
+// GPL must retain the app-managed display conversion; ASE preserves authoring models.
+fn swatches_to_cms(list: &[Swatch], rgb_only: bool) -> Vec<PaletteSwatch> {
     list.iter()
-        .filter_map(|w| w.paint.color().map(|c| PaletteSwatch { name: w.name.clone(), color: color_to_cms(c), global: w.global, spot: w.spot }))
+        .filter_map(|w| {
+            w.paint.color().map(|c| PaletteSwatch {
+                name: w.name.clone(),
+                color: if rgb_only {
+                    let [r, g, b, _] = c.to_rgba8(1.0);
+                    PaletteColor::rgb8(r, g, b)
+                } else {
+                    color_to_cms(c)
+                },
+                global: w.global,
+                spot: w.spot,
+            })
+        })
         .collect()
 }
 
@@ -120,11 +133,11 @@ fn swatches_from_cms(list: Vec<PaletteSwatch>) -> Vec<Swatch> {
     list.into_iter().map(|w| Swatch { name: w.name, paint: Paint::solid(color_from_cms(w.color)), global: w.global, spot: w.spot }).collect()
 }
 
-fn to_cms_palette(lib: &SwatchLibrary) -> Palette {
+fn to_cms_palette(lib: &SwatchLibrary, rgb_only: bool) -> Palette {
     Palette {
         name: lib.name.clone(),
-        swatches: swatches_to_cms(&lib.swatches),
-        groups: lib.groups.iter().map(|g| PaletteGroup { name: g.name.clone(), swatches: swatches_to_cms(&g.swatches) }).collect(),
+        swatches: swatches_to_cms(&lib.swatches, rgb_only),
+        groups: lib.groups.iter().map(|g| PaletteGroup { name: g.name.clone(), swatches: swatches_to_cms(&g.swatches, rgb_only) }).collect(),
     }
 }
 
@@ -142,17 +155,20 @@ fn palette_error(err: PaletteError) -> String {
         PaletteError::UnsupportedFormat => "not a supported palette (.gpl, .ase, or .acb)".into(),
         PaletteError::TruncatedAse => "the swatch exchange file is cut short".into(),
         PaletteError::TruncatedAcb => "the color book is cut short".into(),
-        PaletteError::AseWriteEntryLimit { limit, entries } => {
-            format!("VectorCraft reads at most {limit} colors and groups from a swatch exchange file, and this library has {entries}")
+        PaletteError::AseWriteEntryLimit { limit, entries } => format!(
+            "VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}",
+            ASE_MAX_ENTRIES = limit
+        ),
+        PaletteError::AseReadEntryLimit { limit } => {
+            format!("the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups", ASE_MAX_ENTRIES = limit)
         }
-        PaletteError::AseReadEntryLimit { limit } => format!("the swatch exchange file holds more than {limit} colors and groups"),
         PaletteError::AseBlockCount => "too many swatch exchange blocks".into(),
         PaletteError::AseBlockLength => "a swatch exchange block is too long".into(),
         PaletteError::AseNameLength => "a swatch exchange name is too long".into(),
         PaletteError::AseVersion { major, minor } => format!("swatch exchange version {major}.{minor} isn't supported (only 1.x)"),
         PaletteError::AcbVersion { version } => format!("color book version {version} isn't supported (only 1)"),
-        PaletteError::AcbEntryLimit { limit } => format!("the color book holds more than {limit} colors"),
-        PaletteError::AcbColorSpace { space } => format!("color books in color space {space} aren't supported (only RGB, CMYK and Lab)"),
+        PaletteError::AcbEntryLimit { limit } => format!("the color book holds more than {ASE_MAX_ENTRIES} colors", ASE_MAX_ENTRIES = limit),
+        PaletteError::AcbColorSpace { space: other } => format!("color books in color space {other} aren't supported (only RGB, CMYK and Lab)"),
         PaletteError::AcbNameBytes { limit } => format!("the color book's names take more than {} MB", limit >> 20),
     }
 }
@@ -174,8 +190,12 @@ pub fn write(lib: &SwatchLibrary, format: PaletteFormat) -> Result<Vec<u8>, Stri
             let file = NativeFile { format: NATIVE_FORMAT.into(), version: 1, library };
             serde_json::to_string_pretty(&file).unwrap_or_default()
         }
-        PaletteFormat::Gpl => return cms_palette::write_palette_typed(&to_cms_palette(lib), cms_palette::PaletteFormat::Gpl).map_err(palette_error),
-        PaletteFormat::Ase => return cms_palette::write_palette_typed(&to_cms_palette(lib), cms_palette::PaletteFormat::Ase).map_err(palette_error),
+        PaletteFormat::Gpl => {
+            return cms_palette::write_palette_typed(&to_cms_palette(lib, true), cms_palette::PaletteFormat::Gpl).map_err(palette_error);
+        }
+        PaletteFormat::Ase => {
+            return cms_palette::write_palette_typed(&to_cms_palette(lib, false), cms_palette::PaletteFormat::Ase).map_err(palette_error);
+        }
         PaletteFormat::Css => write_css(lib, keep),
     };
     Ok(text.into_bytes())
