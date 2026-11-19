@@ -1282,6 +1282,15 @@ font-technology	Variable	Variables
 	Shading Color	Color de sombreado
 	Black Overprint	Negro sobreimpreso
 	Draw Hidden Faces	Dibujar caras ocultas
+	Map Art…	Asignar ilustración…
+	Map Art	Asignar ilustración
+	First Surface	Primera superficie
+	Previous Surface	Superficie anterior
+	Next Surface	Superficie siguiente
+	Last Surface	Última superficie
+	Scale to Fit	Escalar para encajar
+	Shade Artwork	Sombrear ilustración
+	Invisible Geometry	Geometría invisible
 	Eyedropper	Cuentagotas
 	Sample Color from Screen	Tomar color de la pantalla
 	This system has no screen color sampler	Este sistema no tiene muestreador de color de la pantalla

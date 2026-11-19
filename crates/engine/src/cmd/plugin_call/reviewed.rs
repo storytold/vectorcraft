@@ -661,6 +661,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "text.thread.remove",
     "text.touchType",
     "threeD.addGraphic",
+    "threeD.mapArt",
     "threeD.mapGraphic",
     "transparency.disableOpacityMask",
     "transparency.editOpacityMask",
