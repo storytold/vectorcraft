@@ -278,6 +278,28 @@ impl ItemTarget {
         }
     }
 
+    /// [`ItemTarget::targets`] of a fill (`fill`) or a stroke edit: on the topmost fill or stroke, a
+    /// Live Paint group stands for its faces in a fill edit and for its edges in a stroke edit
+    /// ([`super::paint::live_paint_parts_skipped`]).
+    pub(crate) fn targets_for(self, s: &Session, p: &Value, fill: bool) -> Result<Vec<NodeId>> {
+        Ok(self.targets_and_skipped(s, p, fill)?.0)
+    }
+
+    /// [`ItemTarget::targets_for`], and whether it left out any object inside a Live Paint group: a
+    /// group with no part of the edited kind was still given or selected, so the edit does not go
+    /// to new art.
+    pub(crate) fn targets_and_skipped(self, s: &Session, p: &Value, fill: bool) -> Result<(Vec<NodeId>, bool)> {
+        let mut ids = self.targets(s, p)?;
+        let mut skipped_any = false;
+        if self == ItemTarget::Top {
+            let skipped = super::paint::live_paint_parts_skipped(&s.doc()?.doc, &super::targets(s, p)?, fill);
+            let before = ids.len();
+            ids.retain(|id| !skipped.contains(id));
+            skipped_any = ids.len() != before;
+        }
+        Ok((ids, skipped_any))
+    }
+
     /// The target of a fill (`fill`) or stroke edit: the panel's active item stands only for edits
     /// of its own kind, so a fill row leaves stroke edits on the topmost stroke of the painted
     /// leaves (as without an active item) and vice versa. Explicit items are kept (and checked).
@@ -772,7 +794,7 @@ fn edit_items_writing_then(
         // The objects whose rows `f` edited: on type, no row means its characters.
         let mut rows = Vec::new();
         // The objects where `f` wrote the topmost visible row of its kind.
-        let mut wrote = Vec::new();
+        let mut wrote = HashSet::new();
         // The row of each object `f` wrote: its index, else the topmost row of the kind.
         let mut written = Vec::new();
         for (id, item) in ids.iter().zip(&per) {
@@ -785,7 +807,7 @@ fn edit_items_writing_then(
                 rows.push(*id);
             }
             if index.is_none_or(|i| is_top_shown(n, i)) {
-                wrote.push(*id);
+                wrote.insert(*id);
             }
             written.extend(index.or_else(|| n.appearance.items.iter().rposition(|it| it.is_fill() == fill)).map(|at| (*id, at)));
         }
@@ -1341,7 +1363,8 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, written));
         let painted = super::graph::capture_series_top_paints(d, &rows);
-        let reached = shown_rows_edited(&before, d, reached, |id| edited.iter().any(|(e, _)| *e == id));
+        let wrote: HashSet<NodeId> = edited.iter().map(|(id, _)| *id).collect();
+        let reached = shown_rows_edited(&before, d, reached, |id| wrote.contains(&id));
         let labels = capture_row_edits(&before, d, &reached);
         // A graph line keeps what was written to its topmost visible row, also when it already showed it.
         let tops: Vec<(NodeId, usize)> = ids.iter().zip(&per).filter_map(|(id, at)| Some((*id, *at.first()?))).collect();
@@ -1503,7 +1526,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let mut rows = top_paint_changed(&before, d, &ids);
-        let top_copies: Vec<NodeId> = added.iter().map(|(id, _)| *id).collect();
+        let top_copies: HashSet<NodeId> = added.iter().map(|(id, _)| *id).collect();
         rows.extend(painted_rows(d, added));
         super::graph::capture_series_top_paints(d, &rows);
         capture_row_edits(&before, d, &shown_rows_edited(&before, d, reached, |id| top_copies.contains(&id)));

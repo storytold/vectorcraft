@@ -38,7 +38,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Shapes",
         &[
             &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse", "circle"],
+            &["ellipse", "circle", "curvatureCircle"],
             &["polygon"],
             &["shaper"],
         ],
@@ -49,7 +49,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["pencil", "smooth", "pathEraser", "join"],
             &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
             &["curvature"],
         ],
     ),
@@ -112,8 +112,22 @@ pub(crate) fn docked_rect_id() -> egui::Id {
     egui::Id::unique("toolbar-docked-rect")
 }
 
-fn panel_width(ui: &crate::state::UiState) -> f32 {
-    if ui.toolbar_double { 80.0 } else { WIDTH }
+/// Geometry of the main Tools panel only; flyouts and custom toolbars keep their own metrics.
+struct ToolsMetrics {
+    cell: egui::Vec2,
+    well: egui::Vec2,
+    panel_width: f32,
+}
+
+fn main_metrics(ui: &crate::state::UiState) -> ToolsMetrics {
+    let (cell, well) = if ui.toolbar_compact { (vec2(30.0, 25.0), vec2(26.0, 23.0)) } else { (vec2(36.0, PITCH - 1.0), vec2(30.0, 27.5)) };
+    let panel_width = match (ui.toolbar_compact, ui.toolbar_double) {
+        (false, false) => WIDTH,
+        (false, true) => 80.0,
+        (true, false) => 44.0,
+        (true, true) => 76.0,
+    };
+    ToolsMetrics { cell, well, panel_width }
 }
 
 /// Space reserved inside the protected canvas panel for a visible Tools panel docked beside the
@@ -121,7 +135,7 @@ fn panel_width(ui: &crate::state::UiState) -> f32 {
 /// none while Tools docks at the window's left edge.
 pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     if (ui.tools_beside_canvas || ui.toolbar_right) && ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() {
-        panel_width(ui) + 6.0
+        main_metrics(ui).panel_width + 6.0
     } else {
         0.0
     }
@@ -157,9 +171,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
-    // overran the right border).
-    let w = panel_width(&app.ui);
+    // Regular: two 36 pt cells need 80 pt to fit the frame. Compact: 30 pt cells fit in 76 pt,
+    // leaving room for the unchanged 66 pt drawing-mode footer and the frame.
+    let w = main_metrics(&app.ui).panel_width;
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
@@ -219,6 +233,7 @@ pub fn show_custom(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
+    let metrics = main_metrics(&app.ui);
     let bounds = ui.max_rect();
     let editing = app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -292,14 +307,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 // Centred on the panel's inside (`bounds`: within its border and, docked, the
                 // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
                 // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
-                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
+                ui.add_space((bounds.center().x - cols as f32 * (metrics.cell.x / 2.0) - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
-                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                    let (rect, resp) = ui.allocate_exact_size(metrics.cell, Sense::click_and_drag());
                     crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
+                    let well = egui::Rect::from_center_size(rect.center(), metrics.well);
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
                     } else if resp.hovered() {
@@ -352,7 +367,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         app.select_tool(shown.id);
                     }
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(shown)));
-                    resp.on_hover_text(tip(shown));
+                    card::hover(resp, shown, card::Side::Beside, Some(tip(shown)));
                 }
             });
             i += row.len();
@@ -923,6 +938,9 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(tool)));
+        // A row already shows the name and shortcut: its card adds the rest, and without one it has
+        // no tool tip.
+        let resp = card::hover(resp, tool, card::Side::Row, None);
         if resp.clicked() {
             chosen = Some(tool.id);
         }
@@ -999,7 +1017,7 @@ fn tool_strip(
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
-        if resp.on_hover_text(tip(tool)).clicked() {
+        if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);
         }
         if locate == Some(tool.id) {
@@ -1236,5 +1254,6 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     fit.separator(ui);
 }
 
+pub(crate) mod card;
 #[cfg(test)]
 pub(crate) mod tests;

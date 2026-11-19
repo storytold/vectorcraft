@@ -3844,6 +3844,124 @@ fn color_halftones_max_radius_stays_in_pixels_whatever_the_units() {
     }
 }
 
+/// A real Key Color pick returns to its initiating tool when choosing its replacement fails.
+#[test]
+fn a_failed_tool_choice_restores_the_brush_key_color_initiator() {
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
+
+    fn full_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> egui::FullOutput {
+        let mut raw =
+            RawInput { events, focused: true, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1100.0))), ..Default::default() };
+        app.raw_input_hook(ctx, &mut raw);
+        let mut output = ctx.run_ui(raw, |ui| {
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
+        output.textures_delta.clear();
+        output
+    }
+
+    fn arm(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        for _ in 0..4 {
+            let _ = full_frame(app, ctx, vec![]);
+        }
+        let mut bounds = None;
+        for _ in 0..8 {
+            let output = full_frame(app, ctx, vec![]);
+            bounds = output.platform_output.accesskit_update.as_ref().and_then(|update| {
+                update
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| node.label() == Some("Eyedropper: click the art to sample the key color"))
+                    .and_then(|(_, node)| node.bounds())
+            });
+            if bounds.is_some() {
+                break;
+            }
+        }
+        let bounds = bounds.expect("the real Brush Options pipette button");
+        let at = egui::pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+        let _ = full_frame(app, ctx, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at)]);
+        for pressed in [true, false] {
+            let _ = full_frame(app, ctx, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        assert_eq!(app.session.tool_id(), "eyedropper");
+        let pick = app.ui.brush_key_color_pick.as_ref().expect("the button owns a live pick");
+        assert_eq!(pick.back, "paintbrush");
+        assert_eq!(pick.doc, app.session.active().unwrap().uid);
+        assert!(pick.press.is_none());
+        assert_eq!(app.session.tool_options()["brushKeyColor"], true);
+        assert_eq!(app.session.tool_options()["stop"], "paintbrush");
+    }
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    let art = app.run("shape.rectangle", json!({"x": 300, "y": 30, "width": 20, "height": 12})).unwrap()["id"].clone();
+    let brush = "Failed tool choice fixture";
+    app.run(
+        "brush.new",
+        json!({"type": "art", "name": brush, "ids": [art],
+        "params": {"colorization": {"method": "hueShift", "key": vectorcraft_color::Color::BLACK}}}),
+    )
+    .unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.select_tool("paintbrush");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true;
+    app.session.prefs.interface_language = "en".into();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    app.run("ui.brushOptions", json!({"name": brush})).unwrap();
+    arm(&mut app, &ctx);
+    let unchanged = |app: &VectorcraftApp| {
+        let state = app.session.active().unwrap();
+        (
+            json!({"uid": state.uid, "doc": state.doc, "selection": state.selection, "revision": state.revision,
+            "undo": state.history.undo.len(), "redo": state.history.redo.len()}),
+            app.session.paint.clone(),
+        )
+    };
+    let before = unchanged(&app);
+    let draft = app.ui.dialog.as_ref().unwrap().fields.clone();
+    let group_tools = app.ui.group_tool.clone();
+    let drawing_tool = app.ui.touch_drawing_tool.clone();
+
+    // The existing failure hook exercises a valid replacement, not an unknown tool id.
+    app.fail_next_tool_choice = Some("key-color replacement failed".into());
+    assert_eq!(app.try_select_tool("rectangle"), Err(String::from("key-color replacement failed")));
+    assert!(app.fail_next_tool_choice.is_none());
+    assert!(app.ui.brush_key_color_pick.is_none());
+    assert_eq!(app.session.tool_options_of("eyedropper")["brushKeyColor"], false);
+    assert!(app.session.tool_options_of("eyedropper")["stop"].is_null());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, draft);
+    assert_eq!(app.ui.group_tool, group_tools);
+    assert_eq!(app.ui.touch_drawing_tool, drawing_tool);
+    assert_eq!(unchanged(&app), before);
+    // Before the repair, all cleanup checks above pass, but the session stays on Eyedropper.
+    assert_eq!(app.session.tool_id(), "paintbrush", "a failed replacement must restore the pick's initiating tool");
+
+    cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_id(), "paintbrush", "Cancel cannot return an already consumed pick twice");
+    assert_eq!(unchanged(&app), before);
+    app.run("ui.brushOptions", json!({"name": brush})).unwrap();
+    arm(&mut app, &ctx);
+    app.try_select_tool("rectangle").unwrap();
+    assert_eq!(app.session.tool_id(), "rectangle", "a successful replacement stays selected");
+    assert!(app.ui.brush_key_color_pick.is_none());
+    assert_eq!(app.session.tool_options_of("eyedropper")["brushKeyColor"], false);
+    assert!(app.session.tool_options_of("eyedropper")["stop"].is_null());
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, draft);
+    assert_eq!(unchanged(&app), before);
+    cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_id(), "rectangle", "Cancel must preserve the successful replacement");
+    assert_eq!(unchanged(&app), before);
+}
+
 /// The resolution fields of Flatten Transparency, Document Raster Effects Settings, Effect ›
 /// Rasterize, the PNG options and the PDF save dialog's Compression section show their unit in the interface
 /// language (French "ppp"), as the `{n} ppi` row writes it.

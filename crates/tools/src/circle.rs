@@ -8,7 +8,8 @@
 //! the release, the tool shows the circle as a dashed outline (solid once it is more than 50,000
 //! screen points around) with its points, its center as a small cross, a line from the center to
 //! each point and, with Measurement Labels on, the diameter by the pointer. The circle is one undo
-//! step. Escape, a press dropped part way, and an edit, Undo or Redo made outside the tool drop
+//! step. A press let go within 2 screen points of where it was pressed is a click, also after a
+//! drag. Escape, a press dropped part way, and an edit, Undo or Redo made outside the tool drop
 //! the first point. A second press within 3 screen points
 //! of the first point, or one that snaps to it, is a press on it: let go there (a double-click) it
 //! places nothing, and dragged out it draws the circle on the diameter it drags out. Where no
@@ -137,10 +138,11 @@ impl CircleTool {
         vec![Action::Exec(c, v)]
     }
 
-    /// Is the press a drag at `ev`: dragged already, or `ev` is [`DRAG_PX`] or more from the press?
+    /// Is the press let go at `ev` a drag: is `ev` [`DRAG_PX`] or more from the press? A release
+    /// nearer the press is a click, also after a drag that came back to it.
     fn drags(&self, cx: &ToolContext, ev: &PointerEvent) -> bool {
         match self.press {
-            Some(Press::First { from, dragged, .. } | Press::Second { from, dragged, .. }) => dragged || ev.pos.distance(from) >= cx.tol(DRAG_PX),
+            Some(Press::First { from, .. } | Press::Second { from, .. }) => ev.pos.distance(from) >= cx.tol(DRAG_PX),
             None => false,
         }
     }
@@ -156,9 +158,27 @@ impl Tool for CircleTool {
             return vec![];
         }
         // A drag ends where it is let go: the release moves the points as a drag to it would. A
-        // click, or a release within DRAG_PX of the press, keeps the points of the press.
-        if ev.kind == PointerKind::Up && self.drags(cx, ev) {
-            self.pointer(cx, &PointerEvent { kind: PointerKind::Drag, ..*ev });
+        // click, or a release within DRAG_PX of the press (also after a drag), keeps the points of
+        // the press.
+        if ev.kind == PointerKind::Up {
+            if self.drags(cx, ev) {
+                self.pointer(cx, &PointerEvent { kind: PointerKind::Drag, ..*ev });
+            } else if let Some(press) = &mut self.press {
+                let (at, on_first) = match press {
+                    Press::First { at, dragged, .. } => {
+                        *dragged = false;
+                        (*at, false)
+                    }
+                    Press::Second { at, on_first, dragged, .. } => {
+                        *dragged = false;
+                        (*at, *on_first)
+                    }
+                };
+                // A click on the first point places nothing: the pointer goes back to that point, so
+                // the tool shows no circle.
+                self.pointer = if on_first { self.first } else { Some(at) };
+                self.snap.clear();
+            }
         }
         match ev.kind {
             PointerKind::Move => {

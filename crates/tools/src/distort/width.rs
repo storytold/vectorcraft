@@ -7,8 +7,9 @@
 //! either onto another width point makes a discontinuous point (the width steps there). Shift-click
 //! adds width points to the selection (or takes them out), and dragging one of several selected
 //! points moves or widens them all. Double-clicking a stroke opens Width Point Edit (the
-//! `widthPoint` dialog), editing a hit point or creating one on confirmation. Delete/Backspace
-//! removes the selected width points.
+//! `widthPoint` dialog), editing a hit point or creating one on confirmation; on one of several
+//! selected points it edits all of them (`indices`). Delete/Backspace removes the selected width
+//! points.
 //!
 //! Gestures preview `stroke.widthPoint.set {id, t, left, right, index?}` (side widths in points),
 //! `stroke.widthPoint.copy {id, index, t}` or, for several points, `stroke.widthProfile.set {ids,
@@ -117,6 +118,9 @@ pub struct WidthTool {
     selected: Option<(NodeId, Vec<f64>)>,
     /// The selected width points when the button went down: a dropped press puts them back.
     before_press: Option<(NodeId, Vec<f64>)>,
+    /// The width points selected before a click on one of them selected just that one, and
+    /// whether the button has gone down again since: a double-click on that point edits them all.
+    before_click: Option<((NodeId, Vec<f64>), bool)>,
     /// The document's brush library as it was at a revision, so pointer moves and overlays do not
     /// parse it again ([`Self::keeps_size`]).
     brushes: Cell<Option<BrushesAt>>,
@@ -360,6 +364,9 @@ impl Tool for WidthTool {
             }
             PointerKind::TripleClick => vec![],
             PointerKind::DoubleClick => {
+                // The double-click's first click selected just the point under it: the points
+                // selected before it are selected again.
+                let before_click = self.before_click.take().and_then(|(sel, pressed)| pressed.then_some(sel));
                 let spot = match self.edit_spot_at(cx, p) {
                     Ok(spot) => spot,
                     Err(false) => return vec![],
@@ -374,11 +381,32 @@ impl Tool for WidthTool {
                     self.selected = Some((spot.owner, vec![spot.t]));
                     return vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "t": spot.t}))];
                 };
-                self.selected = Some((spot.owner, vec![w.t]));
-                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index, "adjustAdjoining": ev.mods.shift}))]
+                if let Some((owner, ts)) = before_click
+                    && owner == spot.owner
+                    && self.is_selected(owner, w.t)
+                    && ts.iter().any(|t| (t - w.t).abs() <= SAME_T)
+                {
+                    self.selected = Some((owner, ts));
+                }
+                // A selected point edits every selected point; another one edits itself alone.
+                if !self.is_selected(spot.owner, w.t) {
+                    self.selected = Some((spot.owner, vec![w.t]));
+                }
+                // Every selected entry goes to the dialog, which opens one point (or the two
+                // halves of a discontinuous point) as `index` would.
+                let indices = self.selected_indices(cx, spot.owner);
+                let mut params = json!({"id": spot.owner.0, "adjustAdjoining": ev.mods.shift});
+                if indices.len() > 1 {
+                    params["indices"] = json!(indices);
+                } else {
+                    params["index"] = json!(w.index);
+                }
+                vec![Action::Dialog("widthPoint".into(), params)]
             }
             PointerKind::Down => {
                 self.before_press = self.selected.clone();
+                // Only the press right after the click counts as the double-click's second one.
+                self.before_click = self.before_click.take().filter(|(_, pressed)| !pressed).map(|(sel, _)| (sel, true));
                 let spot = match self.edit_spot_at(cx, p) {
                     Ok(spot) => spot,
                     Err(brushed) => {
@@ -455,7 +483,14 @@ impl Tool for WidthTool {
                     let dt = d.t - d.spot.t;
                     self.selected = match (d.group.is_some(), d.moved, self.selected.take()) {
                         // A click on one of several selected points selects just that one.
-                        (true, false, _) if !ev.mods.shift => Some((d.spot.owner, vec![d.spot.t])),
+                        (true, false, sel) if !ev.mods.shift => {
+                            // Only a selection of several places: a discontinuous point alone also
+                            // drags as a group, and its click must not replace the remembered one.
+                            if let Some(sel) = sel.filter(|(_, ts)| ts.len() > 1) {
+                                self.before_click = Some((sel, false));
+                            }
+                            Some((d.spot.owner, vec![d.spot.t]))
+                        }
                         // Points moved together stay selected.
                         (true, _, Some((id, ts))) if d.mode == Mode::Move => Some((id, ts.into_iter().map(|t| (t + dt).clamp(0.0, 1.0)).collect())),
                         (true, _, sel) => sel,
@@ -1036,5 +1071,75 @@ mod tests {
             assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
             assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 250.0, mods)).is_empty(), "not on a stroked path");
         }
+    }
+
+    #[test]
+    fn double_click_on_one_of_several_selected_points_edits_them_all() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        let click = |t: &mut WidthTool, x: f64, mods: Mods| {
+            t.pointer(&c, &ev(PointerKind::Down, x, 200.0, mods));
+            t.pointer(&c, &ev(PointerKind::Up, x, 200.0, mods));
+        };
+        // The events a double-click sends: two clicks, then the double-click.
+        let double_click = |t: &mut WidthTool, x: f64, mods: Mods| {
+            click(t, x, mods);
+            click(t, x, mods);
+            match t.pointer(&c, &ev(PointerKind::DoubleClick, x, 200.0, mods)).as_slice() {
+                [Action::Dialog(kind, v)] if kind == "widthPoint" => v.clone(),
+                acts => panic!("expected Width Point Edit: {acts:?}"),
+            }
+        };
+        for mods in [none, shift] {
+            let mut t = WidthTool::default();
+            click(&mut t, 150.0, none);
+            click(&mut t, 250.0, shift);
+            let v = double_click(&mut t, 250.0, mods);
+            assert_eq!((&v["id"], &v["indices"]), (&json!(id.0), &json!([1, 3])), "{mods:?}");
+            assert!(v.get("index").is_none());
+            assert_eq!(v["adjustAdjoining"], json!(mods.shift));
+            assert_eq!(t.selected_indices(&c, id), vec![1, 3], "the selection is kept");
+            // A point outside the selection edits itself alone, and is selected alone.
+            let v = double_click(&mut t, 200.0, none);
+            assert_eq!(v["index"], json!(2));
+            assert!(v.get("indices").is_none());
+            assert_eq!(t.selected_indices(&c, id), vec![2]);
+        }
+        // A discontinuous point among them keeps both halves, and double-clicking it keeps the others.
+        let (mut d2, _) = doc_line();
+        let points = vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (0.75, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        d2.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile = Some(WidthProfile { points });
+        let c2 = cx(&d2, &s, &p);
+        let mut t = WidthTool::default();
+        for (x, mods) in [(150.0, none), (200.0, shift), (200.0, none), (200.0, none)] {
+            t.pointer(&c2, &ev(PointerKind::Down, x, 200.0, mods));
+            t.pointer(&c2, &ev(PointerKind::Up, x, 200.0, mods));
+        }
+        let acts = t.pointer(&c2, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
+        let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+        assert_eq!(v["indices"], json!([1, 2, 3]));
+        // Three points at nearly one place are selected together and all go to the dialog.
+        let (mut d3, _) = doc_line();
+        let points = vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5000005, 2.0, 2.0), (0.5000009, 3.0, 3.0), (1.0, 1.0, 1.0)];
+        d3.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile = Some(WidthProfile { points });
+        let c3 = cx(&d3, &s, &p);
+        let mut t = WidthTool::default();
+        for _ in 0..2 {
+            t.pointer(&c3, &ev(PointerKind::Down, 200.0, 200.0, none));
+            t.pointer(&c3, &ev(PointerKind::Up, 200.0, 200.0, none));
+        }
+        let acts = t.pointer(&c3, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
+        let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+        assert_eq!(v["indices"], json!([1, 2, 3]));
+        // A click on one of the selected points, then a double-click on it later, edits that point.
+        let mut t = WidthTool::default();
+        click(&mut t, 150.0, none);
+        click(&mut t, 250.0, shift);
+        click(&mut t, 250.0, none);
+        click(&mut t, 200.0, none);
+        let v = double_click(&mut t, 250.0, none);
+        assert_eq!(v["index"], json!(3));
     }
 }
