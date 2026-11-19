@@ -508,6 +508,10 @@ font-technology	Variable	Variables
 	Cusp	Point de rebroussement
 	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
+	Show Radii	Afficher les rayons
+	Show Diameter	Afficher le diamètre
+	Anchors at Standard Positions	Points d’ancrage aux positions standard
+	Third Point by Dragging	Troisième point par glissement
 	Classic Defaults	Valeurs par défaut classiques
 	Clean Up…	Nettoyer…
 	Clear	Effacer
@@ -615,6 +619,10 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Show Harmony	Afficher l’harmonie
 	Harmony Rule	Règle d’harmonie
 	Harmony color	Couleur de l’harmonie
@@ -1899,6 +1907,10 @@ font-technology	Variable	Variables
 	Rename Preset	Renommer le paramètre prédéfini
 	Save Image Trace Preset	Enregistrer le paramètre prédéfini de vectorisation de l’image
 	Delete Image Trace Preset	Supprimer le paramètre prédéfini de vectorisation de l’image
+	Tracing Presets…	Paramètres prédéfinis de vectorisation…
+	Import Image Trace Presets	Importer des paramètres prédéfinis de vectorisation de l’image
+	Export Image Trace Presets	Exporter les paramètres prédéfinis de vectorisation de l’image
+	Replace the saved presets that have these names?	Remplacer les paramètres prédéfinis enregistrés qui portent ces noms ?
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image
 	Image:	Image :
 	Images:	Images :
@@ -2793,6 +2805,13 @@ font-technology	Variable	Variables
 	Pen Tool	Outil Plume
 	Quick Pen Tool	Outil Plume rapide
 	Quick Pen	Plume rapide
+	Quick Pen Toolbar	Barre d’outils Plume rapide
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc à angle vif
+	Flip Arc	Retourner l’arc
+	Hide Toolbar	Masquer la barre d’outils
+	Pin Toolbar Position	Épingler la position de la barre d’outils
+	Reset Toolbar Position	Réinitialiser la position de la barre d’outils
 	Pencil	Crayon
 	Pencil Tool	Outil Crayon
 	per slice	par tranche
@@ -10741,6 +10760,11 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Vector Packs	Packs vectoriels
+	Compass Rose	Rose des vents
+	Botanical Sprig	Rameau botanique
+	Facet Diamond	Diamant facetté
+	Tide Crest	Crête de vague
 	Leaf Vine	Liane feuillue
 	Blossom Chain	Chaîne de fleurs
 	Pennant Garland	Guirlande de fanions

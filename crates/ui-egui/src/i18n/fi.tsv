@@ -821,6 +821,10 @@
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Document Colors	Näytä asiakirjan värit
+	Document Colors	Asiakirjan värit
+	Selection Colors	Valinnan värit
+@plural	Used {n} time|Used {n} times	Käytetty {n} kerran|Käytetty {n} kertaa
 	Show Harmony	Näytä harmonia
 	Harmony Rule	Harmoniasääntö
 	Harmony color	Harmonian väri
@@ -2097,6 +2101,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Nimeä esiasetus uudelleen
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
+	Tracing Presets…	Jäljityksen esiasetukset…
+	Import Image Trace Presets	Tuo kuvan jäljityksen esiasetukset
+	Export Image Trace Presets	Vie kuvan jäljityksen esiasetukset
+	Replace the saved presets that have these names?	Korvataanko tallennetut esiasetukset, joilla on nämä nimet?
 	Method:	Menetelmä:
 	Pad	Jatka
 	Repeats	Toistokerrat
@@ -4235,6 +4243,13 @@ theme	Appearance	Ulkoasu
 	Pen Tool	Kynätyökalu
 	Quick Pen Tool	Pikakynätyökalu
 	Quick Pen	Pikakynä
+	Quick Pen Toolbar	Pikakynän työkalurivi
+	Continuous Arc	Jatkuva kaari
+	Sharp Corner Arc	Terävän kulman kaari
+	Flip Arc	Käännä kaari
+	Hide Toolbar	Piilota työkalurivi
+	Pin Toolbar Position	Kiinnitä työkalurivin sijainti
+	Reset Toolbar Position	Palauta työkalurivin sijainti
 	Picas	Picat
 	Portuguese	Portugali
 	Preserve Appearance and Overprints	Säilytä ulkoasu ja päällepainatukset
@@ -4879,6 +4894,10 @@ font-technology	Variable	Muuttuvat
 	Cusp	Kärki
 	Straight segment	Suora segmentti
 	Circle too large	Ympyrä on liian suuri
+	Show Radii	Näytä säteet
+	Show Diameter	Näytä halkaisija
+	Anchors at Standard Positions	Ankkuripisteet vakiokohdissa
+	Third Point by Dragging	Kolmas piste vetämällä
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -9010,6 +9029,11 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Vector Packs	Vektoripaketit
+	Compass Rose	Kompassiruusu
+	Botanical Sprig	Kasvinoksa
+	Facet Diamond	Särmätty timantti
+	Tide Crest	Aallonharja
 	Leaf Vine	Lehtiköynnös
 	Blossom Chain	Kukkaketju
 	Pennant Garland	Viiririvistö

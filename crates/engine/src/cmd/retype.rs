@@ -11,9 +11,10 @@
 //! ([`vectorcraft_text::retype`]), the same up to uniform scale, rotation and translation. Matched
 //! glyphs map back to characters through the font's cmap and are rebuilt as point text, one object
 //! per line of glyphs, with the first glyph's fill and stroke. A line whose glyphs are evenly spaced
-//! apart takes that spacing as its tracking ([`Line::tracked`]). Shapes that match no font stay as
-//! they are and are reported. Near matches (another version of the font, simplified outlines,
-//! merged glyphs) and images are phase 2.
+//! apart takes that spacing as its tracking ([`Line::tracked`]), and lines stacked at one leading
+//! and lined up at their starts, ends or centers become one area type object ([`blocks`]). Shapes
+//! that match no font stay as they are and are reported. Near matches (another version of the
+//! font, simplified outlines, merged glyphs) and images are phase 2.
 
 use std::f64::consts::{PI, TAU};
 use std::sync::Arc;
@@ -40,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, tracking (1/1000 em)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
+        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
         has_selected_path,
         retype
     )]
@@ -369,18 +370,15 @@ impl Line {
     /// (a substitution the font makes) or the same glyph elsewhere (tracking, manual spacing,
     /// more space than whole spaces make); `None` when the type draws every glyph in its place.
     fn first_mismatch(&self, t: &TextObject) -> Option<usize> {
-        let lay = vectorcraft_text::layout(FontDb::global(), t);
-        let mut drawn = lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty());
-        let tol = (self.scale * self.face.units_per_em() * 0.01).max(0.01);
-        for (k, m) in self.matches.iter().enumerate() {
-            let Some(g) = drawn.next() else { return Some(k) };
-            let at = t.xf * (g.xf * Point::ORIGIN);
-            if g.font_id != m.face.id() || g.gid != m.gid || at.distance(m.origin) > tol {
-                return Some(k);
-            }
-        }
-        // Ink the outlines did not have: the last glyph is where it went wrong.
-        drawn.next().map(|_| self.matches.len().saturating_sub(1))
+        first_mismatch(t, &self.matches, self.size())
+    }
+
+    /// Along the line, where its first glyph starts and its last glyph's advance ends, from
+    /// `from` (the tracking after the last glyph left out).
+    fn span_from(&self, from: Point) -> (f64, f64) {
+        let dir = self.dir();
+        let last = self.matches.last().map_or(self.end, |m| m.origin + dir * (m.face.advance(m.gid) * m.scale));
+        ((self.origin - from).dot(dir), (last - from).dot(dir))
     }
 
     /// This line with the tracking its glyphs are spaced by, when it has at least three glyphs.
@@ -595,6 +593,24 @@ fn round_tracking(t: f64) -> f64 {
     if (t - t.round()).abs() < 0.05 { t.round() } else { t }
 }
 
+/// The first of `matches` that type `t` (at `size`) does not draw as the outlines did: another
+/// glyph (a substitution the font makes) or the same glyph elsewhere (tracking, manual spacing,
+/// more space than whole spaces make); `None` when the type draws every glyph in its place.
+fn first_mismatch(t: &TextObject, matches: &[GlyphMatch], size: f64) -> Option<usize> {
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let mut drawn = lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty());
+    let tol = (size * 0.01).max(0.01);
+    for (k, m) in matches.iter().enumerate() {
+        let Some(g) = drawn.next() else { return Some(k) };
+        let at = t.xf * (g.xf * Point::ORIGIN);
+        if g.font_id != m.face.id() || g.gid != m.gid || at.distance(m.origin) > tol {
+            return Some(k);
+        }
+    }
+    // Ink the outlines did not have: the last glyph is where it went wrong.
+    drawn.next().map(|_| matches.len().saturating_sub(1))
+}
+
 /// `lines` checked against their own layout: a line splits where its type stops drawing the
 /// outlines, and a glyph its type cannot draw even on its own stays an outline (`unmatched`).
 /// The glyphs laid out are bounded by a multiple of the number of glyphs.
@@ -683,6 +699,290 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                 }
             }
         }
+    }
+    out
+}
+
+/// Most units (anchors, subpaths and shapes) that Text Wrap objects may copy into the wrap shapes
+/// of the area type on the layers Retype changes
+/// ([`vectorcraft_doc::text::wrap_copy_units`]) when Retype checks how they flow new area type.
+const MAX_WRAP_WORK: usize = 2_000_000;
+
+#[cfg(not(test))]
+fn max_wrap_work() -> usize {
+    MAX_WRAP_WORK
+}
+
+#[cfg(test)]
+thread_local! {
+    /// [`MAX_WRAP_WORK`], lowered by tests on their own thread.
+    static WRAP_LIMIT: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_WRAP_WORK) };
+}
+
+#[cfg(test)]
+fn max_wrap_work() -> usize {
+    WRAP_LIMIT.with(|c| c.get())
+}
+
+/// Lines farther apart than this many times their size do not join into one object.
+const MAX_LEADING: f64 = 3.0;
+
+/// What Retype makes: one type object and the shapes it replaces.
+struct Made {
+    t: TextObject,
+    /// For area type, the point type that also draws the glyphs in place: the type kept when
+    /// Text Wrap objects above it change the area type's layout.
+    point: Option<TextObject>,
+    /// The glyphs the type must draw, in order.
+    matches: Vec<GlyphMatch>,
+    pieces: Vec<NodeId>,
+    text: String,
+    face: Arc<vectorcraft_text::FontFace>,
+    size: f64,
+    tracking: f64,
+    /// The leading set on the type: None for Auto or a single line.
+    leading: Option<f64>,
+    opacity: f32,
+    blend: vectorcraft_color::BlendMode,
+}
+
+impl Made {
+    fn line(l: &Line, system_layout: bool) -> Made {
+        Made {
+            t: l.text_object(system_layout),
+            point: None,
+            matches: l.matches.clone(),
+            pieces: l.pieces.clone(),
+            text: l.text.clone(),
+            face: l.face.clone(),
+            size: l.size(),
+            tracking: l.tracking,
+            leading: None,
+            opacity: l.opacity,
+            blend: l.blend,
+        }
+    }
+}
+
+/// The alignments lines can share, in the order one is chosen: their starts, their ends, their
+/// centers.
+const ALIGNS: [vectorcraft_doc::Justify; 3] = [vectorcraft_doc::Justify::Left, vectorcraft_doc::Justify::Right, vectorcraft_doc::Justify::Center];
+
+/// A run of lines that may become one object: lines after the first, each one leading further
+/// across, in the same group, paint, transparency, font, size, turn and tracking, lined up alike.
+struct Block {
+    lines: Vec<Line>,
+    /// The mean distance between baselines, from the first line's to the last line's.
+    leading: f64,
+    /// Which of [`ALIGNS`] every line so far shares.
+    aligns: [bool; 3],
+    /// The tracking of the first line that has one ([`Block::spaced`]).
+    tracking: Option<f64>,
+}
+
+impl Block {
+    fn new(l: Line) -> Block {
+        let tracking = Block::spaced(&l).then_some(l.tracking);
+        Block { lines: vec![l], leading: 0.0, aligns: [true; 3], tracking }
+    }
+
+    /// Does line `l` have a tracking of its own? A line of fewer than three glyphs that kept no
+    /// tracking has no gaps to measure it by ([`Line::tracked`]): it takes the block's.
+    fn spaced(l: &Line) -> bool {
+        l.pieces.len() >= 3 || l.tracking != 0.0
+    }
+
+    /// Add `l` when it continues the block; `l` back when it does not. `follows` tells whether the
+    /// shape `l` starts with comes right after the block's last shape, with nothing between them
+    /// in paint order.
+    fn take(&mut self, l: Line, follows: impl Fn(NodeId, NodeId) -> bool) -> Option<Line> {
+        let (Some(first), Some(prev)) = (self.lines.first(), self.lines.last()) else { return Some(l) };
+        let (Some(a), Some(b)) = (prev.pieces.last(), l.pieces.first()) else { return Some(l) };
+        let size = first.size();
+        let tol = (size * 0.01).max(0.01);
+        let same = follows(*a, *b)
+            && l.parent == first.parent
+            && l.appearance == first.appearance
+            && l.opacity == first.opacity
+            && l.blend == first.blend
+            && l.face.id() == first.face.id()
+            && (l.scale - first.scale).abs() <= first.scale * 1e-4
+            && ((l.angle - first.angle + PI).rem_euclid(TAU) - PI).abs() < 1e-5
+            // The lines' estimates may differ a little; the layout check decides.
+            && (!Block::spaced(&l) || self.tracking.is_none_or(|t| (l.tracking - t).abs() < 1.0))
+            // Lines whose ink overlaps, or a gradient spanning them, would paint otherwise as one.
+            && paints_as_one(first);
+        if !same {
+            return Some(l);
+        }
+        // Across the lines, down from the first line's baseline.
+        let across = Vec2::new(-first.angle.sin(), first.angle.cos());
+        let down = (l.origin - first.origin).dot(across);
+        let n = self.lines.len() as f64;
+        // The mean distance between the baselines so far, which this line's must continue.
+        let leading = if self.lines.len() == 1 { down } else { self.leading };
+        // A quarter of the size is the least leading; the outlines' positions are rounded.
+        if !(leading >= size * 0.25 * (1.0 - 1e-6) && leading <= size * MAX_LEADING) || (down - n * leading).abs() > tol {
+            return Some(l);
+        }
+        let leading = down / n;
+        let (s0, e0) = first.span_from(first.origin);
+        let (s, e) = l.span_from(first.origin);
+        let fits = [(s - s0).abs() <= tol, (e - e0).abs() <= tol, ((s + e) - (s0 + e0)).abs() * 0.5 <= tol];
+        let aligns = [self.aligns[0] && fits[0], self.aligns[1] && fits[1], self.aligns[2] && fits[2]];
+        if !aligns.contains(&true) {
+            return Some(l);
+        }
+        self.leading = leading;
+        self.aligns = aligns;
+        if self.tracking.is_none() && Block::spaced(&l) {
+            self.tracking = Some(l.tracking);
+        }
+        self.lines.push(l);
+        None
+    }
+
+    /// The block as one area type object when type draws every glyph in its place as area type,
+    /// else as one point type object when that does. When neither does, the lines before the line
+    /// of the first glyph the type moves are made again as a block, and the lines from that one on
+    /// are joined again ([`blocks`]); the first line on its own stays one object. Area type whose
+    /// frame would reach past [`crate::MAX_COORD`] stays point type, and point type whose bounds
+    /// would stays one object per line. Each try takes six times the
+    /// block's glyphs from `budget` (point and area type are each laid out, measured and checked);
+    /// without enough left, each line is one object.
+    fn made(self, system_layout: bool, budget: &mut usize) -> Vec<Made> {
+        let single = |lines: &[Line]| lines.iter().map(|l| Made::line(l, system_layout)).collect::<Vec<_>>();
+        let (Some(first), true) = (self.lines.first(), self.lines.len() > 1) else { return single(&self.lines) };
+        let Some(justify) = ALIGNS.iter().zip(self.aligns).find(|(_, ok)| *ok).map(|(j, _)| *j) else { return single(&self.lines) };
+        let glyphs = self.lines.iter().map(|l| l.pieces.len()).fold(0usize, usize::saturating_add);
+        let Some(left) = budget.checked_sub(glyphs.saturating_mul(6)) else { return single(&self.lines) };
+        *budget = left;
+        let mut all = first.clone();
+        all.tracking = self.tracking.unwrap_or(first.tracking);
+        all.text = self.lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
+        let mut t = all.probe(system_layout);
+        t.para.justify = justify;
+        let size = first.size();
+        let mut set_leading = None;
+        if let Some(r) = t.runs.first_mut() {
+            // The leading that puts the last baseline where the last line's is: Auto when Auto
+            // does, else the mean distance between baselines, to a thousandth of a point (as
+            // typed leading is) when that still puts the last baseline in place.
+            let gaps = self.lines.len().saturating_sub(1) as f64;
+            let across = Vec2::new(-first.angle.sin(), first.angle.cos());
+            let span = self.lines.last().map_or(0.0, |l| (l.origin - first.origin).dot(across));
+            if (t.para.effective_leading(&r.style) * gaps - span).abs() > size * 1e-4 {
+                let exact = span / gaps;
+                let rounded = (exact * 1000.0).round() / 1000.0;
+                let leading = if ((rounded - exact) * gaps).abs() <= size * 1e-4 { rounded } else { exact };
+                r.style.leading = Some(leading);
+                set_leading = Some(leading);
+            }
+        }
+        let matches: Vec<GlyphMatch> = self.lines.iter().flat_map(|l| l.matches.iter().cloned()).collect();
+        // Aligned at its end or center, point type starts its first line elsewhere: the type moves
+        // so its first glyph is where the first outline is.
+        let lay = vectorcraft_text::layout(FontDb::global(), &t);
+        if let (Some(g), Some(m)) = (lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()), matches.first()) {
+            let at = t.xf * (g.xf * Point::ORIGIN);
+            t.xf = kurbo::Affine::translate(m.origin - at) * t.xf;
+        }
+        super::typecmd::refresh_bounds(&mut t);
+        if let Some(k) = first_mismatch(&t, &matches, size) {
+            // The line that holds glyph `k`.
+            let mut seen = 0usize;
+            let at = self.lines.iter().position(|l| {
+                seen = seen.saturating_add(l.pieces.len());
+                k < seen
+            });
+            let Block { mut lines, leading, aligns, .. } = self;
+            let rest = lines.split_off(at.unwrap_or(0).clamp(1, lines.len()));
+            let mut out = if lines.len() > 1 {
+                let tracking = lines.iter().find(|l| Block::spaced(l)).map(|l| l.tracking);
+                Block { lines, leading, aligns, tracking }.made(system_layout, budget)
+            } else {
+                single(&lines)
+            };
+            // The lines of the rest followed each other in the block.
+            out.extend(blocks(rest, |_, _| true, system_layout, budget));
+            return out;
+        }
+        // The edit is refused when an object's bounds reach past the coordinate limit. A turned
+        // block's box can reach a corner that none of its lines does: the lines then stay apart.
+        let in_range =
+            |t: &TextObject| Node::new(NodeId(0), NodeKind::Text(Box::new(t.clone()))).geometric_bounds().is_none_or(crate::sanity::rect_in_range);
+        if !in_range(&t) {
+            return single(&self.lines);
+        }
+        let mut area = t.clone();
+        super::typemenu::point_to_area(&mut area);
+        let mut point = None;
+        if in_range(&area) && first_mismatch(&area, &matches, size).is_none() {
+            point = Some(std::mem::replace(&mut t, area));
+        }
+        vec![Made {
+            t,
+            point,
+            matches,
+            pieces: self.lines.iter().flat_map(|l| l.pieces.iter().copied()).collect(),
+            text: all.text,
+            face: first.face.clone(),
+            size,
+            tracking: all.tracking,
+            leading: set_leading,
+            opacity: first.opacity,
+            blend: first.blend,
+        }]
+    }
+}
+
+/// A line of two untracked glyphs has one gap, too few to measure a tracking by
+/// ([`Line::tracked`]). It is set at the tracking of the nearest tracked line of the same font,
+/// size and turn, so the layout check ([`verified`]) tries it as that line is set: the check falls
+/// back to the line untracked, and then splits it, when the pair is not spaced so. A pair that
+/// untracked type already draws in place keeps its text, and negative tracking goes only to a pair
+/// that paints the same as one object ([`paints_as_one`]).
+fn share_tracking(lines: &mut [Line], system_layout: bool) {
+    for i in 0..lines.len() {
+        let Some(l) = lines.get(i).filter(|l| l.pieces.len() == 2 && l.tracking == 0.0) else { continue };
+        if l.first_mismatch(&l.probe(system_layout)).is_none() {
+            continue;
+        }
+        let like = |o: &Line| {
+            o.tracking != 0.0
+                && o.parent == l.parent
+                && o.face.id() == l.face.id()
+                && (o.scale - l.scale).abs() <= l.scale * 1e-4
+                && ((o.angle - l.angle + PI).rem_euclid(TAU) - PI).abs() < 1e-5
+        };
+        let nearest = lines.iter().enumerate().filter(|(_, o)| like(o)).min_by_key(|(j, _)| j.abs_diff(i)).map(|(_, o)| o.tracking);
+        if let Some(p) = nearest.filter(|t| *t > 0.0 || paints_as_one(l)).and_then(|t| l.respaced(0, 2, t)) {
+            lines[i] = p;
+        }
+    }
+}
+
+/// `lines`, in paint order, as the objects Retype makes: runs of lines that stack as the lines of
+/// one paragraph do become one object ([`Block`]). `follows(a, b)`: shape `b` comes right after
+/// shape `a`, with nothing between them in paint order. `budget`: see [`Block::made`].
+fn blocks(lines: Vec<Line>, follows: impl Fn(NodeId, NodeId) -> bool, system_layout: bool, budget: &mut usize) -> Vec<Made> {
+    let mut out = vec![];
+    let mut block: Option<Block> = None;
+    for l in lines {
+        let l = match block.as_mut() {
+            Some(b) => match b.take(l, &follows) {
+                None => continue,
+                Some(l) => l,
+            },
+            None => l,
+        };
+        if let Some(b) = block.take() {
+            out.extend(b.made(system_layout, budget));
+        }
+        block = Some(Block::new(l));
+    }
+    if let Some(b) = block {
+        out.extend(b.made(system_layout, budget));
     }
     out
 }
@@ -874,7 +1174,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // glyphs), so every line has what its measure can take.
         let mut budget =
             lines.iter().map(|l| l.text.chars().count().saturating_add(l.pieces.len().saturating_mul(393))).fold(256usize, usize::saturating_add);
-        let lines = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
+        let mut lines: Vec<Line> = lines.into_iter().map(|l| l.tracked(system_layout, &mut budget)).collect();
+        share_tracking(&mut lines, system_layout);
         let mut lines = verified(lines, system_layout, &mut unmatched);
         if pieces.len() > 1 {
             lines.retain(|l| {
@@ -885,20 +1186,29 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 !lone
             });
         }
-        (lines, unmatched, truncated)
+        let at: std::collections::HashMap<NodeId, usize> = pieces.iter().enumerate().map(|(i, pc)| (pc.id, i)).collect();
+        let follows = |a: NodeId, b: NodeId| match (at.get(&a), at.get(&b)) {
+            (Some(i), Some(j)) => *j == i + 1 && pieces.get(*j).is_some_and(|pc| !pc.after_barrier),
+            _ => false,
+        };
+        // Joining lines takes at most four tries' work per glyph (see [`Block::made`]), with room
+        // for small blocks.
+        let mut budget = lines.iter().map(|l| l.pieces.len()).fold(0usize, usize::saturating_add).saturating_mul(24).saturating_add(256);
+        (blocks(lines, follows, system_layout, &mut budget), unmatched, truncated)
     };
     if lines.is_empty() {
         return Err(EngineError::Other(format!("Retype: no selected shape matches a glyph of an available font ({} checked)", unmatched.len())));
     }
     let made = s.edit("Retype", |d, sel| {
+        // The layers as they were, for the Text Wrap check below.
+        let before = lines.iter().any(|l| l.point.is_some()).then(|| d.clone());
         let mut ids = vec![];
         let mut emptied = vec![];
         for l in &lines {
             let Some(first) = l.pieces.first() else { continue };
             let (par, idx, _) = d.position(*first).ok_or(EngineError::NoNode(*first))?;
-            let t = l.text_object(system_layout);
             let id = d.alloc_id();
-            let mut node = Node::new(id, NodeKind::Text(Box::new(t)));
+            let mut node = Node::new(id, NodeKind::Text(Box::new(l.t.clone())));
             // The glyphs' own transparency (the group's, kept, still applies over it).
             node.opacity = l.opacity;
             node.blend = l.blend;
@@ -945,17 +1255,65 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        // Text Wrap objects above new area type flow it once the edit is done: area type they
+        // would move a glyph of becomes the point type that draws it in place.
+        if let Some(before) = &before {
+            // Worked out on a copy, so the edit's own Text Wrap refresh still sees every other
+            // area type whose wrap changes, and only on the layers this edit changed, as that
+            // refresh is. The copy holds only the changed layers while the work is counted; past
+            // the limit, the new area type is not flowed and all of it becomes its point type.
+            let mut probe = d.clone();
+            let all = std::mem::take(&mut probe.layers);
+            probe.layers = all
+                .iter()
+                .enumerate()
+                .filter(|(i, layer)| {
+                    // As resolve_wrap tells an unchanged layer: the same layer at its index first.
+                    !(before.layers.get(*i).is_some_and(|b| Arc::ptr_eq(b, layer))
+                        || before.layers.iter().any(|b| b.id == layer.id && Arc::ptr_eq(b, layer)))
+                })
+                .map(|(_, layer)| layer.clone())
+                .collect();
+            let units = vectorcraft_doc::text::wrap_copy_units(&probe);
+            let flowed = units <= max_wrap_work();
+            probe.layers = all;
+            if flowed && units > 0 {
+                vectorcraft_doc::text::resolve_wrap(Some(before), &mut probe);
+            }
+            // With nothing to copy, no area type on those layers has a wrap shape.
+            for (l, id) in lines.iter().zip(&ids).filter(|_| units > 0) {
+                let Some(point) = &l.point else { continue };
+                let Some(NodeKind::Text(t)) = probe.node(*id).map(|n| &n.kind) else { continue };
+                if flowed && (t.wrap.is_empty() || first_mismatch(t, &l.matches, l.size).is_none()) {
+                    continue;
+                }
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    **t = point.clone();
+                }
+            }
+        }
         let mut keep: Vec<NodeId> = roots.iter().copied().filter(|r| d.node(*r).is_some()).collect();
         keep.extend(&ids);
         sel.set(keep);
         Ok(ids)
     })?;
+    let d = &s.doc()?.doc;
+    let area =
+        |id: &NodeId| matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }));
     Ok(json!({
         "ids": made.iter().map(|i| i.0).collect::<Vec<_>>(),
         "texts": lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>(),
         "fonts": lines
             .iter()
-            .map(|l| json!({"family": l.face.family, "style": l.face.style, "size": l.size(), "tracking": l.tracking}))
+            .zip(&made)
+            .map(|(l, id)| json!({
+                "family": l.face.family,
+                "style": l.face.style,
+                "size": l.size,
+                "tracking": l.tracking,
+                "leading": l.leading,
+                "area": area(id),
+            }))
             .collect::<Vec<_>>(),
         "unmatched": unmatched.iter().map(|i| i.0).collect::<Vec<_>>(),
         "truncated": truncated,

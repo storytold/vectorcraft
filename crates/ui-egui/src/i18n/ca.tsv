@@ -734,6 +734,10 @@ arrowhead	Target	Diana
 	Cusp	Punta
 	Straight segment	Segment recte
 	Circle too large	El cercle és massa gran
+	Show Radii	Mostra els radis
+	Show Diameter	Mostra el diàmetre
+	Anchors at Standard Positions	Punts d’ancoratge en posicions estàndard
+	Third Point by Dragging	Tercer punt arrossegant
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -891,6 +895,10 @@ arrowhead	Target	Diana
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Document Colors	Mostra els colors del document
+	Document Colors	Colors del document
+	Selection Colors	Colors de la selecció
+@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Show Harmony	Mostra l’harmonia
 	Harmony Rule	Regla d’harmonia
 	Harmony color	Color de l’harmonia
@@ -1222,6 +1230,10 @@ arrowhead	Target	Diana
 	Delete Guide	Suprimeix la guia
 	Delete Guides	Suprimeix les guies
 	Delete Image Trace Preset	Suprimeix el preajust de traçat d’imatge
+	Tracing Presets…	Preajustos de traçat…
+	Import Image Trace Presets	Importa preajustos de traçat d’imatge
+	Export Image Trace Presets	Exporta els preajustos de traçat d’imatge
+	Replace the saved presets that have these names?	Voleu substituir els preajustos desats que tenen aquests noms?
 	Delete Layer	Suprimeix la capa
 	Delete Library	Suprimeix la biblioteca
 	Delete Library Group	Suprimeix el grup de biblioteca
@@ -3458,6 +3470,13 @@ digits	Malayalam	Malaiàlam
 	Pen Tool	Eina de ploma
 	Quick Pen Tool	Eina de ploma ràpida
 	Quick Pen	Ploma ràpida
+	Quick Pen Toolbar	Barra d’eines de la ploma ràpida
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc de cantonada aguda
+	Flip Arc	Inverteix l’arc
+	Hide Toolbar	Amaga la barra d’eines
+	Pin Toolbar Position	Fixa la posició de la barra d’eines
+	Reset Toolbar Position	Restableix la posició de la barra d’eines
 	Pencil	Llapis
 	Pencil Tool	Eina de llapis
 	Pentagram	Pentagrama
@@ -8954,6 +8973,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Vector Packs	Paquets vectorials
+	Compass Rose	Rosa dels vents
+	Botanical Sprig	Branqueta botànica
+	Facet Diamond	Diamant facetat
+	Tide Crest	Cresta de l'onada
 	Leaf Vine	Enfiladissa de fulles
 	Blossom Chain	Cadena de flors
 	Pennant Garland	Garlanda de banderins

@@ -503,6 +503,11 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	Show Radii	Показати радіуси
+	Show Diameter	Показати діаметр
+	Anchors at Standard Positions	Опорні точки в стандартних позиціях
+	Third Point by Dragging	Третя точка перетягуванням
+	Gray	Сірий
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -610,6 +615,10 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії
@@ -1941,6 +1950,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2840,6 +2853,13 @@ file-filter	Templates	Шаблони
 	Pen Tool	Інструмент «Перо»
 	Quick Pen Tool	Інструмент «Швидке перо»
 	Quick Pen	Швидке перо
+	Quick Pen Toolbar	Панель швидкого пера
+	Continuous Arc	Неперервна дуга
+	Sharp Corner Arc	Дуга з гострим кутом
+	Flip Arc	Відобразити дугу
+	Hide Toolbar	Сховати панель інструментів
+	Pin Toolbar Position	Закріпити положення панелі інструментів
+	Reset Toolbar Position	Скинути положення панелі інструментів
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -10429,6 +10449,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Vector Packs	Векторні набори
+	Compass Rose	Роза вітрів
+	Botanical Sprig	Ботанічна гілочка
+	Facet Diamond	Гранований діамант
+	Tide Crest	Гребінь хвилі
 	Leaf Vine	Листяна лоза
 	Blossom Chain	Квітковий ланцюжок
 	Pennant Garland	Гірлянда прапорців

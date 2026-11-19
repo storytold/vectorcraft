@@ -509,6 +509,11 @@ font-technology	Variable	Variabili
 	Cusp	Cuspide
 	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
+	Show Radii	Mostra raggi
+	Show Diameter	Mostra diametro
+	Anchors at Standard Positions	Punti di ancoraggio in posizioni standard
+	Third Point by Dragging	Terzo punto trascinando
+	Gray	Grigio
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -616,6 +621,10 @@ font-technology	Variable	Variabili
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
+	Show Document Colors	Mostra colori del documento
+	Document Colors	Colori del documento
+	Selection Colors	Colori della selezione
+@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Show Harmony	Mostra armonia
 	Harmony Rule	Regola di armonia
 	Harmony color	Colore dell’armonia
@@ -1947,6 +1956,10 @@ file-filter	Templates	Modelli
 	Rename Preset	Rinomina preset
 	Save Image Trace Preset	Salva preset ricalco immagine
 	Delete Image Trace Preset	Elimina preset ricalco immagine
+	Tracing Presets…	Preset di ricalco…
+	Import Image Trace Presets	Importa preset ricalco immagine
+	Export Image Trace Presets	Esporta preset ricalco immagine
+	Replace the saved presets that have these names?	Sostituire i preset salvati con questi nomi?
 	Image Trace Presets	Preset ricalco immagine
 	Image:	Immagine:
 	Images:	Immagini:
@@ -2848,6 +2861,13 @@ file-filter	Templates	Modelli
 	Pen Tool	Strumento Penna
 	Quick Pen Tool	Strumento Penna rapida
 	Quick Pen	Penna rapida
+	Quick Pen Toolbar	Barra degli strumenti Penna rapida
+	Continuous Arc	Arco continuo
+	Sharp Corner Arc	Arco ad angolo vivo
+	Flip Arc	Capovolgi arco
+	Hide Toolbar	Nascondi barra degli strumenti
+	Pin Toolbar Position	Fissa posizione barra degli strumenti
+	Reset Toolbar Position	Ripristina posizione barra degli strumenti
 	Pencil	Matita
 	Pencil Tool	Strumento Matita
 	per slice	per sezione
@@ -10453,6 +10473,11 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Vector Packs	Pacchetti vettoriali
+	Compass Rose	Rosa dei venti
+	Botanical Sprig	Rametto botanico
+	Facet Diamond	Diamante sfaccettato
+	Tide Crest	Cresta dell'onda
 	Leaf Vine	Tralcio di foglie
 	Blossom Chain	Catena di fiori
 	Pennant Garland	Ghirlanda di bandierine

@@ -2945,6 +2945,10 @@
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
+	Show Document Colors	დოკუმენტის ფერების ჩვენება
+	Document Colors	დოკუმენტის ფერები
+	Selection Colors	მონიშნულის ფერები
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ
 	Show Harmony	ჰარმონიის ჩვენება
 	Harmony Rule	ჰარმონიის წესი
 	Harmony color	ჰარმონიის ფერი
@@ -4077,6 +4081,10 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Tracing Presets…	ვექტორიზაციის პრესეტები…
+	Import Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების იმპორტირება
+	Export Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების ექსპორტირება
+	Replace the saved presets that have these names?	ჩავანაცვლოთ ამ სახელების მქონე შენახული პრესეტები?
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Pad	გაგრძელება
@@ -6056,6 +6064,13 @@ theme	Appearance	იერსახე
 	Pen Tool	კალმის ხელსაწყო
 	Quick Pen Tool	სწრაფი კალმის ხელსაწყო
 	Quick Pen	სწრაფი კალამი
+	Quick Pen Toolbar	სწრაფი კალმის ხელსაწყოთა ზოლი
+	Continuous Arc	უწყვეტი რკალი
+	Sharp Corner Arc	მახვილკუთხიანი რკალი
+	Flip Arc	რკალის არეკვლა
+	Hide Toolbar	ხელსაწყოთა ზოლის დამალვა
+	Pin Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამაგრება
+	Reset Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამოყრა
 	Picas	პიკები
 	Portuguese	პორტუგალიური
 	Preserve Appearance and Overprints	იერსახისა და ზედდაბეჭდვების შენარჩუნება
@@ -6671,6 +6686,10 @@ font-technology	Variable	ცვლადი
 	Cusp	წვეტი
 	Straight segment	სწორი სეგმენტი
 	Circle too large	წრე ზედმეტად დიდია
+	Show Radii	რადიუსების ჩვენება
+	Show Diameter	დიამეტრის ჩვენება
+	Anchors at Standard Positions	საყრდენი წერტილები სტანდარტულ პოზიციებზე
+	Third Point by Dragging	მესამე წერტილი გადათრევით
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -11064,6 +11083,11 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Vector Packs	ვექტორული პაკეტები
+	Compass Rose	კომპასის ვარდი
+	Botanical Sprig	ბოტანიკური ტოტი
+	Facet Diamond	წახნაგოვანი ბრილიანტი
+	Tide Crest	ტალღის ქედი
 	Leaf Vine	ფოთლების ვაზი
 	Blossom Chain	ყვავილების ჯაჭვი
 	Pennant Garland	ალმების გირლანდა

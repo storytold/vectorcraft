@@ -392,6 +392,10 @@ digits	Malayalam	말라얄람어
 	Rename Preset	프리셋 이름 바꾸기
 	Save Image Trace Preset	이미지 추적 프리셋 저장
 	Delete Image Trace Preset	이미지 추적 프리셋 삭제
+	Tracing Presets…	추적 프리셋…
+	Import Image Trace Presets	이미지 추적 프리셋 가져오기
+	Export Image Trace Presets	이미지 추적 프리셋 내보내기
+	Replace the saved presets that have these names?	이 이름을 가진 저장된 프리셋을 대체하시겠습니까?
 	Text Wrap	문자 감싸기
 	Text Wrap Options…	문자 감싸기 옵션…
 	Clipping Mask	클리핑 마스크
@@ -865,6 +869,10 @@ digits	Malayalam	말라얄람어
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
+	Show Document Colors	문서 색상 표시
+	Document Colors	문서 색상
+	Selection Colors	선택 영역 색상
+@plural	Used {n} time|Used {n} times	{n}회 사용
 	Show Harmony	하모니 표시
 	Harmony Rule	하모니 규칙
 	Harmony color	하모니 색상
@@ -1405,6 +1413,11 @@ antiAlias	Sharp	날카롭게
 	Cusp	뾰족점
 	Straight segment	직선 세그먼트
 	Circle too large	원이 너무 큽니다
+	Show Radii	반지름 표시
+	Show Diameter	지름 표시
+	Anchors at Standard Positions	표준 위치에 앵커 포인트
+	Third Point by Dragging	드래그로 세 번째 점 지정
+	Gray	회색
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -2928,6 +2941,13 @@ antiAlias	Sharp	날카롭게
 	Pen Tool	펜 도구
 	Quick Pen Tool	빠른 펜 도구
 	Quick Pen	빠른 펜
+	Quick Pen Toolbar	빠른 펜 도구 모음
+	Continuous Arc	연속 호
+	Sharp Corner Arc	뾰족한 모서리 호
+	Flip Arc	호 뒤집기
+	Hide Toolbar	도구 모음 숨기기
+	Pin Toolbar Position	도구 모음 위치 고정
+	Reset Toolbar Position	도구 모음 위치 재설정
 	Pencil	연필
 	Pencil Tool	연필 도구
 	Percent:	퍼센트:
@@ -10416,6 +10436,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Vector Packs	벡터 팩
+	Compass Rose	나침반 장미
+	Botanical Sprig	식물 가지
+	Facet Diamond	패싯 다이아몬드
+	Tide Crest	파도 마루
 	Leaf Vine	잎 덩굴
 	Blossom Chain	꽃사슬
 	Pennant Garland	깃발 장식

@@ -471,6 +471,11 @@ font-technology	Variable	可變
 	Cusp	尖點
 	Straight segment	直線段
 	Circle too large	圓形過大
+	Show Radii	顯示半徑
+	Show Diameter	顯示直徑
+	Anchors at Standard Positions	錨點位於標準位置
+	Third Point by Dragging	拖曳放置第三點
+	Gray	灰
 	Classic Defaults	經典預設值
 	Clean Up…	清除…
 	Clear	清除
@@ -578,6 +583,10 @@ font-technology	Variable	可變
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Document Colors	顯示文件顏色
+	Document Colors	文件顏色
+	Selection Colors	所選物件的顏色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	顯示色彩調和
 	Harmony Rule	色彩調和規則
 	Harmony color	調和色彩
@@ -1912,6 +1921,10 @@ file-filter	Templates	範本
 	Rename Preset	重新命名預設集
 	Save Image Trace Preset	儲存影像描圖預設集
 	Delete Image Trace Preset	刪除影像描圖預設集
+	Tracing Presets…	描圖預設集…
+	Import Image Trace Presets	匯入影像描圖預設集
+	Export Image Trace Presets	匯出影像描圖預設集
+	Replace the saved presets that have these names?	要取代具有這些名稱的已儲存預設集嗎？
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -4134,6 +4147,13 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pen Tool	筆型工具
 	Quick Pen Tool	快速筆型工具
 	Quick Pen	快速筆型
+	Quick Pen Toolbar	快速筆型工具列
+	Continuous Arc	連續弧線
+	Sharp Corner Arc	尖角弧線
+	Flip Arc	翻轉弧線
+	Hide Toolbar	隱藏工具列
+	Pin Toolbar Position	釘選工具列位置
+	Reset Toolbar Position	重設工具列位置
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片
@@ -10436,6 +10456,11 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Vector Packs	向量筆刷包
+	Compass Rose	羅盤玫瑰
+	Botanical Sprig	植物枝條
+	Facet Diamond	切面鑽石
+	Tide Crest	浪尖
 	Leaf Vine	葉藤
 	Blossom Chain	花鏈
 	Pennant Garland	旗幟花環

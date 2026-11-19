@@ -507,6 +507,10 @@ font-technology	Variable	Variables
 	Cusp	Cúspide
 	Straight segment	Segmento recto
 	Circle too large	Círculo demasiado grande
+	Show Radii	Mostrar radios
+	Show Diameter	Mostrar diámetro
+	Anchors at Standard Positions	Puntos de ancla en posiciones estándar
+	Third Point by Dragging	Tercer punto arrastrando
 	Classic Defaults	Valores predeterminados clásicos
 	Clean Up…	Limpiar…
 	Clear	Borrar
@@ -614,6 +618,10 @@ font-technology	Variable	Variables
 	Box Channel	Canal del cuadro
 	Color box	Cuadro de color
 	Color Wheel Options	Opciones de la rueda de color
+	Show Document Colors	Mostrar colores del documento
+	Document Colors	Colores del documento
+	Selection Colors	Colores de la selección
+@plural	Used {n} time|Used {n} times	Usado {n} vez|Usado {n} veces
 	Show Harmony	Mostrar armonía
 	Harmony Rule	Regla de armonía
 	Harmony color	Color de la armonía
@@ -1909,6 +1917,10 @@ font-technology	Variable	Variables
 	Rename Preset	Cambiar nombre del preajuste
 	Save Image Trace Preset	Guardar preajuste de calco de imagen
 	Delete Image Trace Preset	Eliminar preajuste de calco de imagen
+	Tracing Presets…	Preajustes de calco…
+	Import Image Trace Presets	Importar preajustes de calco de imagen
+	Export Image Trace Presets	Exportar preajustes de calco de imagen
+	Replace the saved presets that have these names?	¿Reemplazar los preajustes guardados que tienen estos nombres?
 	Image Trace Presets	Preajustes de calco de imagen
 	Image:	Imagen:
 	Images:	Imágenes:
@@ -2805,6 +2817,13 @@ font-technology	Variable	Variables
 	Pen Tool	Herramienta Pluma
 	Quick Pen Tool	Herramienta Pluma rápida
 	Quick Pen	Pluma rápida
+	Quick Pen Toolbar	Barra de herramientas de Pluma rápida
+	Continuous Arc	Arco continuo
+	Sharp Corner Arc	Arco de esquina aguda
+	Flip Arc	Voltear arco
+	Hide Toolbar	Ocultar barra de herramientas
+	Pin Toolbar Position	Fijar posición de la barra de herramientas
+	Reset Toolbar Position	Restablecer posición de la barra de herramientas
 	Pencil	Lápiz
 	Pencil Tool	Herramienta Lápiz
 	per slice	por sector
@@ -10671,6 +10690,11 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Vector Packs	Paquetes vectoriales
+	Compass Rose	Rosa de los vientos
+	Botanical Sprig	Ramita botánica
+	Facet Diamond	Diamante facetado
+	Tide Crest	Cresta de ola
 	Leaf Vine	Enredadera de hojas
 	Blossom Chain	Cadena de flores
 	Pennant Garland	Guirnalda de banderines
