@@ -3811,9 +3811,10 @@ already walks Image Trace. Short agent entry points:
   moving and transforming, `path.moveAnchors`, `file.place` with `replace`, Puppet Warp, Delete
   and Cut, Group, Hide, Lock, Arrange, Expand,
   Recolor Artwork, plug-in filters, effects, the gradient commands, `gradient.selectStop`, the Appearance panel's rows and
-  `symbol.instance.setAppearance`. While the Live Paint Bucket is the active tool, `paint.editGradient` without `ids`,
-  `id` or `item` changes the bucket's gradient instead, and `gradient.selectStop` selects a stop of it. A Cmd-drag that lends the Selection or Group Selection tool selects the instance whole
-  first and moves it. `swatch.unused` and `recolor.colors` count the fills and strokes an instance keeps for objects of its
+  `symbol.instance.setAppearance`. While the Live Paint Bucket is the active tool, `paint.editGradient` and
+  `gradient.presets.apply` without `ids`, `id` or `item` change the bucket's gradient instead, and
+  `gradient.selectStop` selects a stop of it. A Cmd-drag that lends the Selection or Group Selection tool selects the
+  instance whole first and moves it. `swatch.unused` and `recolor.colors` count the fills and strokes an instance keeps for objects of its
   art. Commands that change nothing in the document, such as `attributes.info`, `css.selection`, `css.export`,
   `effect.list` and `object.expand.info`, read the instance. These commands do not check for a selected object and use the instance:
   `edit.copy` copies the instance whole; `document.exportSelection`, `document.export` with `selectionOnly` and
@@ -4588,9 +4589,12 @@ already walks Image Trace. Short agent entry points:
   `paint.invert`, `paint.complement`, `paint.sampleColor`, `gradient.presets.apply`, a swatch or the Color Picker), and
   `paint.swap` or `paint.default` without `ids` or `id`, becomes the color the bucket paints with, and a stroke weight
   (`stroke.set`, `stroke.weightUp`, `stroke.weightDown`) becomes the weight it paints with. The selection keeps its
-  paint, and no undo step is recorded. A null `ids` or `id` counts as left out. The Stroke panel's other options (`stroke.set`, `stroke.setAdvanced` without
-  `brush`) change the stroke for new art and leave the selection as it is; the bucket takes only the color and weight
-  of that stroke. The Fill and Stroke proxies (`paint.proxies`) show those colors, never mixed, the Stroke panel shows
+  paint, and no undo step is recorded. A null `ids` or `id` counts as left out. The Stroke panel's other options
+  (`stroke.set`, `stroke.setAdvanced` without `brush`) change the stroke for new art and leave the selection as it is;
+  the bucket takes only the color and weight of that stroke. A stop selected on the bucket's gradient
+  (`gradient.selectStop`) is deselected when another tool is chosen, when the first selected object changes, when an
+  object of a symbol instance's art is picked or released, when the other proxy comes to the front, and when the
+  Appearance panel's active row changes. The Fill and Stroke proxies (`paint.proxies`) show those colors, never mixed, the Stroke panel shows
   that stroke as it does with nothing selected, and with New Art Has Basic Appearance off the selection's appearance
   does not replace them after a command. They are also the fill and stroke for new art, so another tool chosen
   afterwards keeps them until a command or a new selection changes them.

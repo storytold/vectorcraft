@@ -3294,6 +3294,8 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
         ("stroke.set", json!({"weight": 5}), Box::new(|s: &Session| s.paint.stroke_width == 5.0 && s.shown_stroke().map(|st| st.width) == Some(5.0))),
         ("stroke.weightUp", json!({}), Box::new(|s: &Session| s.paint.stroke_width == 3.0)),
         ("stroke.weightDown", json!({}), Box::new(|s: &Session| s.paint.stroke_width == 1.0)),
+        ("stroke.set", json!({"weight": 6, "ids": null}), Box::new(|s: &Session| s.paint.stroke_width == 6.0)),
+        ("stroke.weightUp", json!({"id": null}), Box::new(|s: &Session| s.paint.stroke_width == 3.0)),
         (
             "stroke.setAdvanced",
             json!({"arrowScale": [150, 200]}),
@@ -3391,22 +3393,34 @@ fn live_paint_bucket_and_the_selection_keep_their_own_selected_stop() {
     assert_eq!(s.selected_stop(), None, "the bucket's stop is not the selection's");
 }
 
-/// While the Live Paint Bucket is active, a paint command with a bad `target` or `aligned` is
-/// refused, as it is with any other tool, and the bucket's color stays.
+/// While the Live Paint Bucket is active, a paint or stroke command with a bad `target` or
+/// `aligned` is refused, as it is with the Selection tool, and the bucket's fill, stroke and weight
+/// stay.
 #[test]
-fn live_paint_bucket_refuses_a_bad_target() {
-    let mut s = session();
-    let g = live(&mut s);
-    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
-    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
-    let fill = s.paint.fill.clone();
-    for (cmd, p) in [
+fn live_paint_bucket_refuses_a_bad_target_or_aligned() {
+    let refused = [
         ("paint.setFill", json!({"color": "#00ffff", "target": "bogus"})),
         ("paint.invert", json!({"ids": null, "aligned": "bad"})),
         ("paint.complement", json!({"aligned": "bad"})),
-    ] {
-        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
-        assert_eq!(s.paint.fill, fill, "{cmd} {p}");
+        ("stroke.set", json!({"weight": 6, "target": "bogus"})),
+        ("stroke.set", json!({"weight": 6, "aligned": "bad"})),
+        ("stroke.weightUp", json!({"target": "bogus"})),
+        ("stroke.weightUp", json!({"aligned": "bad"})),
+        ("stroke.weightDown", json!({"target": "bogus"})),
+        ("stroke.weightDown", json!({"aligned": "bad"})),
+        ("paint.swap", json!({"aligned": "bad"})),
+        ("paint.default", json!({"target": "bogus"})),
+    ];
+    for tool in ["selection", "livePaintBucket"] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        let before = (s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+        for (cmd, p) in &refused {
+            assert!(s.execute(cmd, p).is_err(), "{tool}: {cmd} {p}");
+            assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width), before, "{tool}: {cmd} {p}");
+        }
     }
 }
 
