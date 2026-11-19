@@ -241,6 +241,13 @@ fn unit(v: f32) -> f32 {
     if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
 }
 
+/// The color of `stops` (offsets in order, from 0 to 1) at 1, which a diamond gradient without a
+/// frame is everywhere, as [`vectorcraft_color::Gradient::sample`] gives it: the first stop at
+/// 1, the end of the stretch before it when several stops share that offset.
+fn frameless_color(stops: &[(f64, Vec<f32>)]) -> Option<&[f32]> {
+    stops.iter().find(|(o, _)| *o >= 1.0).or(stops.last()).map(|(_, c)| c.as_slice())
+}
+
 /// Can `a` be drawn through (a finite, non-flat map)?
 fn invertible(a: Affine) -> bool {
     let det = a.determinant();
@@ -1231,15 +1238,15 @@ impl<'a> Scene<'a> {
             GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
             GradientKind::Diamond => {
                 // Its levels are diamonds about the center, the square's edge at 1.
-                let frame = geom.diamond_frame();
+                let Some(frame) = geom.diamond_frame() else {
+                    // Without a frame it is its color at 1 everywhere; overprinting on a plate,
+                    // paper white there leaves the ink below.
+                    if !(self.keep_below && frameless_color(&stops).is_some_and(|c| space.paper(c))) {
+                        self.diamond_quadrants(&geom, area, space, &stops, smooth);
+                    }
+                    return;
+                };
                 if let Some(spans) = &spans {
-                    let Some(frame) = frame else {
-                        // Without a frame it is its last stop everywhere.
-                        if stops.last().is_some_and(|(_, c)| !space.paper(c)) {
-                            self.diamond_quadrants(&geom, area, space, &stops, smooth);
-                        }
-                        return;
-                    };
                     let level = |t: f64| (t > 0.0).then(|| frame * BezPath::from_vec(diamond(t)));
                     self.line("q");
                     let clipped = self.clip_rings(spans, area.inflate(1.0, 1.0), level);
@@ -1444,7 +1451,8 @@ impl<'a> Scene<'a> {
     /// frame and equal to the diamond there (PostScript has no diamond shading;
     /// [`vectorcraft_color::GradientGeom::diamond_quadrants`]): smooth axial shadings, else
     /// stepped fills. Each quadrant but the last runs on under the next (stops are opaque here),
-    /// so no hairline shows between them. A diamond without an extent is its last stop.
+    /// so no hairline shows between them. A diamond without an extent is its color at 1
+    /// ([`frameless_color`]).
     fn diamond_quadrants(
         &mut self,
         geom: &vectorcraft_color::GradientGeom,
@@ -1454,7 +1462,7 @@ impl<'a> Scene<'a> {
         smooth: bool,
     ) {
         let Some(quadrants) = geom.diamond_quadrants(area) else {
-            if let Some((_, c)) = stops.last() {
+            if let Some(c) = frameless_color(stops) {
                 self.set_comps(space, c);
                 self.rect_fill(area);
             }
