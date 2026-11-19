@@ -1995,6 +1995,22 @@ fn review_597702_forward_paint_survives_an_unreachable_nearby_anchor() {
         actual.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&actual.1),
         "REGRESSION: a nearby anchor behind the origin and off the forward line cannot hide its reachable painted contact: {actual:?}"
     );
+    // A distant real anchor supplies an alignment, but is not a nearby point target.
+    let axis = Point::new(103.0, 500.0);
+    let aligned = review_597702_ray_document(Some(104.0), &[axis]);
+    let off = review_597702_ray(&aligned, false, None);
+    assert_eq!(off.0, Point::new(103.0, 100.0), "CONTROL: the ordinary forward route reaches the distant anchor's vertical alignment");
+    let without_rejected = review_597702_ray(&aligned, true, None);
+    assert!(
+        without_rejected.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&without_rejected.1),
+        "CONTROL: eligible paint precedes an unrelated alignment when there is no nearby point: {without_rejected:?}"
+    );
+    let aligned_and_rejected = review_597702_ray_document(Some(104.0), &[axis, rejected]);
+    let actual = review_597702_ray(&aligned_and_rejected, true, Some(rejected));
+    assert!(
+        actual.0.distance(Point::new(104.0, 100.0)) < 1e-7 && review_597185_stroke_label(&actual.1),
+        "REGRESSION: adding an unusable nearby anchor cannot let an unrelated forward alignment suppress paint: {actual:?}"
+    );
 }
 
 fn review_597702_bbox_document(center: Option<f64>, anchors: &[Point]) -> Document {
@@ -2087,9 +2103,20 @@ fn review_597702_move_document(stroke: Option<(f64, f64)>, ruler: Option<f64>, a
 }
 
 fn review_597702_shift_move(stroke: Option<(f64, f64)>, ruler: Option<f64>, anchor: Option<Point>, on: bool, edge: bool) -> (Point, Vec<Overlay>) {
+    review_597702_shift_move_display(stroke, ruler, anchor, on, edge, true)
+}
+
+fn review_597702_shift_move_display(
+    stroke: Option<(f64, f64)>,
+    ruler: Option<f64>,
+    anchor: Option<Point>,
+    on: bool,
+    edge: bool,
+    show_guides: bool,
+) -> (Point, Vec<Overlay>) {
     let (d, selection) = review_597702_move_document(stroke, ruler, anchor);
     let paint = paint();
-    let c = ToolContext {
+    let mut c = ToolContext {
         smart_guides: true,
         guides: true,
         snap_to_point: true,
@@ -2102,6 +2129,10 @@ fn review_597702_shift_move(stroke: Option<(f64, f64)>, ruler: Option<f64>, anch
         snapping_tolerance: 4.0,
         ..cx(&d, &selection, &paint)
     };
+    if !show_guides {
+        c.alignment_guides = false;
+        c.anchor_path_labels = false;
+    }
     let raw = Point::new(200.0, 150.0);
     let targets = Targets::for_move_by_anchor(&c, &selection.objects);
     assert_eq!(targets.has_point_near(raw, 4.0), anchor.is_some(), "CONTROL: distant stroke endpoints and center introduce no nearby legacy anchor");
@@ -2145,6 +2176,19 @@ fn review_597702_shift_move_keeps_a_closer_ruler_than_a_painted_contact() {
             !zero.1.is_empty() && !review_597185_stroke_label(&zero.1),
             "CONTROL: a real zero-displacement ruler contact has ordinary guide evidence: {zero:?}"
         );
+        // Display switches hide overlays, not the shown ruler's mathematical contact.
+        for ruler in [200.0, 201.0] {
+            let (center, width) = if ruler == 200.0 { (233.0, 60.0) } else { (213.0, 20.0) };
+            let off = review_597702_shift_move_display(Some((center, width)), Some(ruler), None, false, edge, false);
+            assert_eq!(off.0, Point::new(ruler, 150.0), "CONTROL: hidden guide graphics preserve the OFF ruler contact: edge={edge}, ruler={ruler}");
+            assert!(off.1.is_empty(), "CONTROL: both display options suppress the ordinary ruler overlays");
+        }
+        let hidden_paint = review_597702_shift_move_display(Some((213.0, 20.0)), None, None, true, edge, false);
+        assert_eq!(hidden_paint.0, Point::new(203.0, 150.0), "CONTROL: hiding guide graphics keeps the real no-ruler painted contact");
+        assert!(hidden_paint.1.is_empty());
+        let hidden_closer = review_597702_shift_move_display(Some((211.0, 20.0)), Some(203.0), None, true, edge, false);
+        assert_eq!(hidden_closer.0, Point::new(201.0, 150.0), "CONTROL: hidden graphics retain nearer paint ahead of a farther ruler");
+        assert!(hidden_closer.1.is_empty());
     }
     let observed: Vec<_> = [false, true]
         .into_iter()
@@ -2161,5 +2205,21 @@ fn review_597702_shift_move_keeps_a_closer_ruler_than_a_painted_contact() {
             && !zero.1.is_empty()
             && !review_597185_stroke_label(&zero.1)),
         "REGRESSION: moved and zero-displacement closer ruler contacts must both survive farther genuine paint: {observed:?}"
+    );
+
+    let hidden_observed: Vec<_> = [false, true]
+        .into_iter()
+        .map(|edge| {
+            let moved = review_597702_shift_move_display(Some((213.0, 20.0)), Some(201.0), None, true, edge, false);
+            let zero = review_597702_shift_move_display(Some((233.0, 60.0)), Some(200.0), None, true, edge, false);
+            (edge, moved, zero)
+        })
+        .collect();
+    assert!(
+        hidden_observed.iter().all(|(_, moved, zero)| moved.0 == Point::new(201.0, 150.0)
+            && moved.1.is_empty()
+            && zero.0 == Point::new(200.0, 150.0)
+            && zero.1.is_empty()),
+        "REGRESSION: the same moved and zero-displacement ruler contacts must win with both guide-display options off: {hidden_observed:?}"
     );
 }

@@ -437,10 +437,9 @@ impl MoveSnap {
         }
         let mut on_ruler = false;
         if let Some(t) = self.rulers.as_ref().filter(|_| !on_contour) {
-            let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
-            // A real ruler contact can already be at the OFF position: zero travel
-            // with its ruler overlays still beats a farther painted contact.
-            on_ruler = q != start + d || !ov.is_empty();
+            let (q, ov, contact) = t.snap_point_along_contact(start + d, u, cx.snap_tol());
+            // Contact belongs to geometry, even at zero travel with lines and labels hidden.
+            on_ruler = contact;
             if q != start + d {
                 d = q - start;
                 guides = ov;
@@ -449,8 +448,8 @@ impl MoveSnap {
             {
                 // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
                 // they do without Shift (#4312).
-                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.snap_tol());
-                on_ruler |= adj != Vec2::ZERO || !ov.is_empty();
+                let (adj, ov, contact) = t.snap_moved_along_to_rulers_contact(start + d, b + d, u, cx.snap_tol());
+                on_ruler |= contact;
                 d += adj;
                 guides = ov;
             }

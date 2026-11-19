@@ -1073,6 +1073,10 @@ impl Targets {
     /// the nearest target line or angled glyph guide crosses it, at most twice `tol` away: where it lands and the
     /// target's own point (where its line starts).
     fn slide(&self, at: Point, dir: Vec2, q: Point, tol: f64, ray: bool) -> Option<(Point, Point)> {
+        self.slide_with(at, dir, q, tol, ray, |_| true)
+    }
+
+    fn slide_with(&self, at: Point, dir: Vec2, q: Point, tol: f64, ray: bool, accept_origin: impl Fn(Point) -> bool) -> Option<(Point, Point)> {
         if !dir.hypot2().is_finite() || dir.hypot2() <= 1e-18 {
             return None;
         }
@@ -1085,7 +1089,7 @@ impl Targets {
             // The ruler guides that way count as lines too (#812).
             let rulers: Vec<(f64, Point, Kind)> = self.rulers.iter().filter(|r| r.vertical == vertical).filter_map(|r| r.line_at(q, reach)).collect();
             // A line that far across the way crosses it at least that far along.
-            for (t, from, _) in lines_near(lines, v, reach).iter().chain(&rulers) {
+            for (t, from, _) in lines_near(lines, v, reach).iter().chain(&rulers).filter(|candidate| accept_origin(candidate.1)) {
                 let s = (t - a) / d;
                 // Exactly on the line, whatever the rounding along the way.
                 let hit = if vertical { Point::new(*t, at.y + dir.y * s) } else { Point::new(at.x + dir.x * s, *t) };
@@ -1097,6 +1101,9 @@ impl Targets {
         }
         // The angled glyph guides it crosses.
         for &(on, e) in &self.angled {
+            if !accept_origin(on) {
+                continue;
+            }
             let across = dir.cross(e);
             if across.abs() <= 1e-9 * dir.hypot() {
                 continue;
@@ -1144,9 +1151,11 @@ impl Targets {
         if !l2.is_finite() || l2 == 0.0 {
             return None;
         }
-        // A nearby legacy anchor keeps its ordinary priority only when that route can
-        // actually reach a forward contact. A parallel/behind anchor cannot block paint.
-        if self.nearest_point(near, tol).is_some() && (!ray || self.slide(at, dir, near, tol, true).is_some()) {
+        // Only this nearby point's own alignment may grant it forward priority;
+        // an unrelated line cannot make an unreachable point suppress paint.
+        if let Some((point, _)) = self.nearest_point(near, tol)
+            && (!ray || self.slide_with(at, dir, near, tol, true, |from| from == point).is_some())
+        {
             return None;
         }
         self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
@@ -1374,19 +1383,25 @@ impl Targets {
     /// at the anchor or center, else to where the nearest target line or ruler guide crosses the
     /// line, at most twice `tol` away ([`Self::slide`]). Returns where it goes and the guides.
     pub(crate) fn snap_point_along(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>) {
+        let (q, overlays, _) = self.snap_point_along_contact(p, dir, tol);
+        (q, overlays)
+    }
+
+    /// As `snap_point_along`, with actual contact evidence independent of drawn guides.
+    pub(crate) fn snap_point_along_contact(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>, bool) {
         let l2 = dir.hypot2();
         if !l2.is_finite() || l2 <= 1e-18 {
-            return (p, vec![]);
+            return (p, vec![], false);
         }
         if let Some((q, k)) = self.nearest_point(p, tol) {
-            return (p + dir * ((q - p).dot(dir) / l2), self.label(q, k.label()).into_iter().collect());
+            return (p + dir * ((q - p).dot(dir) / l2), self.label(q, k.label()).into_iter().collect(), true);
         }
         if let Some((q, kind)) = self.stroke_line(p, dir, p, tol, false) {
-            return (q, self.label(q, kind.label()).into_iter().collect());
+            return (q, self.label(q, kind.label()).into_iter().collect(), true);
         }
         match self.slide(p, dir, p, tol, false) {
-            Some((q, from)) => (q, self.lined_up(q, from)),
-            None => (p, vec![]),
+            Some((q, from)) => (q, self.lined_up(q, from), true),
+            None => (p, vec![], false),
         }
     }
 
@@ -1716,12 +1731,18 @@ impl Targets {
     /// guide runs past within `tol` goes onto it by sliding along the line, the way needing the
     /// shortest slide winning and at most twice `tol` (a line nearly parallel to a guide would
     /// carry the selection far to meet it). Returns the shift along the line and the guides.
+    #[cfg(test)]
     pub(crate) fn snap_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
-        let (s, ov, _) = self.slide_moved_along_to_rulers(p, r, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
+        let (s, ov, _) = self.snap_moved_along_to_rulers_contact(p, r, dir, tol);
         (s, ov)
     }
 
-    /// [`Self::snap_moved_along_to_rulers`] for a slide of `within` (the least and the most way
+    /// As `snap_moved_along_to_rulers`, retaining the solver's contact bit even at zero travel.
+    pub(crate) fn snap_moved_along_to_rulers_contact(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        self.slide_moved_along_to_rulers(p, r, dir, tol, (f64::NEG_INFINITY, f64::INFINITY))
+    }
+
+    /// [`Self::snap_moved_along_to_rulers_contact`] for a slide of `within` (the least and the most way
     /// along `dir`), also saying whether the bounds lined up with a guide.
     fn slide_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
