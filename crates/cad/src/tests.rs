@@ -1555,7 +1555,7 @@ fn drawings_doc() -> Document {
     });
     let art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved_by(art, 20.0)) });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 
