@@ -642,9 +642,7 @@ mod review_5972993766_adoption {
         assert_eq!(d.symbol_pixel_aligned(&expected.name), aligned, "CONTROL: existing destination option is unchanged");
         // Resource import can rename definitions while the panel swatch name stays stable.
         let swatch = d.swatch(&format!("Existing {} tile", expected.name)).expect("CONTROL: existing destination palette consumer is retained");
-        let Paint::Pattern { pattern, xf } = &swatch.paint else {
-            panic!("CONTROL: existing destination palette consumer remains a pattern")
-        };
+        let Paint::Pattern { pattern, xf } = &swatch.paint else { panic!("CONTROL: existing destination palette consumer remains a pattern") };
         assert_eq!(*xf, Affine::IDENTITY, "CONTROL: existing destination pattern paint keeps its transform");
         let tile = d.pattern(pattern).expect("CONTROL: existing destination palette consumer resolves to its pattern");
         assert!(
