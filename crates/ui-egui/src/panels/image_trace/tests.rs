@@ -1763,7 +1763,8 @@ fn lookup_fixture() -> (VectorcraftApp, std::collections::HashMap<&'static str, 
 /// The panel's lookup gives what putting the whole selection in paint order gave, field for field,
 /// for every kind of selection: images in either selection order, an Image Trace object with its
 /// own image, a clipping group named Image Trace, nested groups, hidden and locked images, two
-/// layers, repeated ids, ids the document lacks, and nothing selected. The result kept for a
+/// layers, repeated ids, ids the document lacks, and nothing selected. Selected ancestors with
+/// their descendants have separate canonical-root expectations below. The result kept for a
 /// revision follows each change of the selection, an edit, Undo and a switch of document.
 #[test]
 fn the_target_lookup_matches_sorting_the_whole_selection() {
@@ -1779,10 +1780,8 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
         &["trace image", "trace"],
         &["rect", "trace image"],
         &["clip"],
-        &["clip", "clipped"],
         &["rect", "clipped"],
         &["outer"],
-        &["outer", "deep"],
         &["inner", "rect"],
         &["deep", "back"],
         &["hidden", "locked"],
@@ -1836,6 +1835,37 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
     let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     assert_eq!(find_target(&none), target_sorting_everything(&none));
     assert_eq!(target(&none, &ctx), Target::default());
+}
+
+/// Trace only accepts selected roots: a selected parent blocks its image descendant.
+/// Missing implicit-selection ids are dropped, while explicit ids are validated.
+#[test]
+fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
+    let (mut app, ids) = lookup_fixture();
+    let ctx = egui::Context::default();
+    for (parent, child) in [("clip", "clipped"), ("outer", "deep")] {
+        select_as_is(&mut app, &[ids[parent], ids[child]]);
+        let uid = app.session.active().unwrap().uid;
+        let expected = Target { object: Some((uid, ids[parent])), ..Default::default() };
+        assert_eq!(find_target(&app), expected, "the selected {parent} supplies metadata, not its pruned image");
+        assert_eq!(target(&app, &ctx), expected);
+        assert_eq!(target(&app, &ctx), expected, "the canonical result is also cached");
+        assert!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).is_err());
+        let document = app.session.active().unwrap().doc.clone();
+        assert!(app.run("imageTrace.make", json!({})).is_err(), "Trace rejects that non-image root");
+        assert_eq!(app.session.active().unwrap().doc, document);
+        select_as_is(&mut app, &[ids[child]]);
+        assert_eq!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).unwrap(), ids[child], "the image alone remains eligible");
+    }
+    let stale = NodeId(u64::MAX);
+    select_as_is(&mut app, &[stale, ids["front"]]);
+    assert_eq!(target(&app, &ctx).object.map(|(_, id)| id), Some(ids["front"]), "implicit stale entries do not hide a valid image");
+    assert_eq!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).unwrap(), ids["front"]);
+    let explicit = json!({"ids": [stale.0, ids["front"].0]});
+    let document = app.session.active().unwrap().doc.clone();
+    assert!(vectorcraft_engine::cmd::image_trace_target(&app.session, &explicit).is_err(), "explicit missing ids are invalid");
+    assert!(app.run("imageTrace.make", explicit).is_err());
+    assert_eq!(app.session.active().unwrap().doc, document);
 }
 
 /// The panel and its menu look the object Trace acts on up once for each revision of the document,

@@ -2920,6 +2920,8 @@
 	Contextual Task Bar	კონტექსტური ამოცანების ზოლი
 	Pin Bar Position	ზოლის პოზიციის ჩამაგრება
 	Reset Bar Position	ზოლის პოზიციის ჩამოყრა
+	Bar Actions	ზოლის მოქმედებები
+	Reset Bar Actions	ზოლის მოქმედებების ჩამოყრა
 	Tools	ხელსაწყოები
 	Toolbars	ხელსაწყოთა ზოლები
 	Advanced	დამატებითი
@@ -3585,6 +3587,10 @@ lighting	Light	სინათლე
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
 	Arc Tool	რკალის ხელსაწყო
+	Three-Point Arc Tool	სამწერტილიანი რკალის ხელსაწყო
+	Three-Point Arc	სამწერტილიანი რკალი
+	Arc too large	რკალი ზედმეტად დიდია
+	Third Point Sets Direction	მესამე წერტილი მიმართულებას განსაზღვრავს
 	Area Graph Tool	ფართობითი დიაგრამის ხელსაწყო
 	Area Type Tool	არის ტექსტის ხელსაწყო
 	Artboard Tool	სამუშაო დაფის ხელსაწყო
@@ -4995,6 +5001,11 @@ digits	Malayalam	მალაიალამური
 	Place the pages with the placement again	გვერდების ხელახლა განთავსება განთავსების მიხედვით
 	Placement:	განთავსება:
 	Preserve CMYK Numbers	CMYK მნიშვნელობების შენარჩუნება
+	Preserve RGB Numbers	RGB მნიშვნელობების შენარჩუნება
+	Device to Simulate:	სიმულირებადი მოწყობილობა:
+	Simulate Paper Color	ქაღალდის ფერის იმიტაცია
+	Simulate Black Ink	შავი მელნის იმიტაცია
+	Load…	ჩატვირთვა…
 	Previous page	წინა გვერდი
 	Print Layers:	შრეების ბეჭდვა:
 	Print Preset:	ბეჭდვის პრესეტი:
@@ -5067,6 +5078,10 @@ digits	Malayalam	მალაიალამური
 	Add Color Tool	ფერის დამატების ხელსაწყო
 	Remove Color Tool	ფერის წაშლის ხელსაწყო
 	Remove Color	ფერის წაშლა
+	Set As Base Color	საბაზო ფერად დაყენება
+	Select Shade	ელფერის არჩევა
+	Add New Color	ახალი ფერის დამატება
+	Set Current Color As Base Color	მიმდინარე ფერის საბაზო ფერად დაყენება
 	Find the selected colors in the artwork	მონიშნული ფერების ძებნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
@@ -6171,6 +6186,7 @@ theme	Appearance	იერსახე
 	Add to Graphic Styles	გრაფიკულ სტილებში დამატება
 	Graphic Style Library	გრაფიკული სტილების ბიბლიოთეკა
 	Add Used Colors	გამოყენებული ფერების დამატება
+	Add Selected Colors	მონიშნული ფერების დამატება
 	Delete Swatch	ფერის ნიმუშის წაშლა
 	Duplicate Swatch	ფერის ნიმუშის დუბლირება
 	Merge Swatches	ფერის ნიმუშების შერწყმა
@@ -6349,6 +6365,11 @@ axis	Both	ორივე
 	Image	გამოსახულება
 	Ink	მელანი
 	Lab	Lab
+	OKLCH Sliders	OKLCH სლაიდერები
+	HSL Sliders	HSL სლაიდერები
+	Chroma	ქრომა
+	The largest chroma sRGB holds at this lightness and hue	უდიდესი ქრომა, რომელსაც sRGB იტევს ამ სიღიავესა და ფერის ტონზე
+	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 	Medium	საშუალო
 	Name	სახელი
 	None	არცერთი
@@ -6438,6 +6459,7 @@ font-technology	Variable	ცვლადი
 	Recent Commands	ბოლოდროინდელი ბრძანებები
 	No recent commands	ბოლოდროინდელი ბრძანებები არ არის
 	Clear Recent Commands	ბოლო ბრძანებების სიის გასუფთავება
+	Type to search commands, tools, panels and effects	აკრიფეთ ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების მოსაძებნად
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
@@ -6558,9 +6580,11 @@ font-technology	Variable	ცვლადი
 	Edit type set in fonts that aren't available?	დავარედაქტიროთ მიუწვდომელი შრიფტებით აწყობილი ტექსტი?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა მხოლოდ მასში აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	დესკტოპის ვერსიაში ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და როცა აქ ახალი საქაღალდით OK-ს დააწკაპუნებთ, გარდა უსაფრთხო რეჟიმისა; ვებ-ვერსია მათ არ ტვირთავს.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	ჩვეულებრივი ინარჩუნებს თითოეული პლაგინის საკუთარ ლიმიტებს; დიდით პლაგინის ფილტრს ან ბრძანებას შეუძლია შეასრულოს მინიმუმ 250 მილიონი ინსტრუქცია მისი შეყვანისთვის საჭირო ინსტრუქციების გარდა. დროის ლიმიტი იგივე რჩება.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	რამდენი ინსტრუქციის გამოყენება შეუძლია პლაგინის ობიექტების ფილტრის თითოეულ გაშვებას; დიდი ჩვეულებრივზე მეტს უშვებს, იმავე 60-წამიანი ლიმიტით. მძიმე ფილტრები საკუთარ ბიუჯეტს ინარჩუნებენ.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის პირველი არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის მეორე არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
 	How light or dark the interface is.	რამდენად ღია ან მუქია ინტერფეისი.
@@ -6578,7 +6602,10 @@ font-technology	Variable	ცვლადი
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ინტერფეისის ენა; ავტომატური სისტემის ენას იყენებს. დიალოგი ენას იცვლის, როგორც კი რომელიმეს აირჩევთ.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ანიმირებული მასშტაბირება მუშაობს მხოლოდ მაშინ, როცა ეს ჩართულია; გამორთულისას ანიმირებული მასშტაბირება მკრთალია და მასშტაბირება არ ანიმირდება.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ბორბლით მასშტაბირება რბილად სრიალებს, მასშტაბის ხელსაწყო კი ადიდებს, როცა გვერდზე გადაათრევთ ან დაჭერილს გაჩერებთ; გამორთულისას ის ადიდებს არეს, რომელზეც გადაათრევთ.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ტილოს აჩვენებს ამ ტიპის გრაფიკული პროცესორით; ნამუშევარი ყოველთვის CPU-ზე იხატება. ავტომატური Windows-სა და macOS-ზე ინტეგრირებულს ანიჭებს უპირატესობას. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს თითოეულ კადრს ეკრანის განახლების მოლოდინის გარეშე, სადაც გრაფიკული დრაივერი ამის საშუალებას იძლევა, წამში არაუმეტეს 240 კადრისა.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ხატავს ამ ტიპის გრაფიკული პროცესორით; ავტომატური უპირატესობას ანიჭებს ეკრანის მმართველს. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს კადრებს ეკრანის განახლების მოლოდინის გარეშე, წამში არაუმეტეს 240-ისა; გამორთულისას ტემპს ეკრანი განსაზღვრავს. უპირატესობა აქვს გაშვებისას დაყენებულ ჩვენების რეჟიმს.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	გაუქმების ნაბიჯების მაქსიმალური რაოდენობა თითო დოკუმენტში; მცირე რიცხვი OK-ზე დაწკაპუნებისას შლის უძველეს ნაბიჯებს. ნაბიჯები შეიძლება ადრეც წაიშალოს, თუ ბევრ მეხსიერებას იკავებს.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	აჩვენებს, როგორ იცვლება ნახატი გადათრევისას; გამორთულისას კონტურები მისდევს გადათრევას, ნახატი კი ხელის აშვებისას იცვლება. სახაზავის დამხმარე ხაზი გადათრევისას ყოველთვის მოძრაობს.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	რამდენი სამუშაო ნაკადი ხატავს ნახატს; -1 იყენებს ერთით ნაკლებს VectorCraft-ისთვის ხელმისაწვდომ ბირთვებზე, მაქსიმუმ 8-ს, 0 კი არცერთს. ვებ-ვერსია არასდროს იყენებს.
@@ -6605,7 +6632,10 @@ font-technology	Variable	ცვლადი
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft ამ არჩევანს ინახავს, მაგრამ კოპირება და ამოჭრა ძველი ვექტორული ბუფერის ფორმატს ჯერ არ იყენებს.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	ტრაექტორიების შენარჩუნება ან იერსახისა და ზედდაბეჭდვების შენარჩუნება ძველი ვექტორული ბუფერისთვის; VectorCraft არჩევანს ინახავს, მაგრამ ჯერ არ იყენებს.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	ფორმატირების შენარჩუნება VectorCraft-ის ტექსტური ობიექტიდან კოპირებული ტექსტის სტილებს ინახავს ტექსტურ ობიექტში ჩასმისას; მხოლოდ ტექსტის შენარჩუნება მას ჩასმის ადგილის სტილს აძლევს.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	ყველა შავის მდიდარ შავად ჩვენება სუფთა CMYK შავს (მხოლოდ შავი მელანი 100%-ზე) ტილოზე RGB შავად აჩვენებს; ყველა შავის ზუსტად ჩვენება მას სამუშაო CMYK სივრცით გარდაქმნის.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	ყველა შავის მდიდარ შავად გამოტანა სუფთა CMYK შავს RGB შავად ხატავს RGB და ნაცრისფერი გრადაციების რასტრულ ექსპორტებში და ბიტმაპად ბეჭდვისას; ის არ ცვლის ვექტორულ ექსპორტებს, CMYK JPEG-ს, TIFF-სა და PSD-ს ან სხვა ბეჭდვას.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	სენსორულ ეკრანზე გადადის სენსორულ სამუშაო სივრცეზე; პარამეტრის გამორთვისას ან სენსორული ეკრანის დაკარგვისას ბრუნდება წინა სამუშაო სივრცეზე.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	ტილოზე ორი თითით შეხება აბრუნებს მოქმედებას, სენსორულ სამუშაო სივრცეში კი მონიშვნისა და ხატვის ხელსაწყოებს შორის გადართავს; სამი თითით შეხება ხელახლა ასრულებს. პრეზენტაციის რეჟიმში არცერთი არ მუშაობს.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	გადატანის ჩართვისას სიის სიტყვა მხოლოდ აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ არ აქვს, რეგისტრის მიუხედავად; კორეულ სიტყვებს დეფისი არ ემატება, ინდური ენების სიტყვები კი სიმბოლოთა ჯგუფის შიგნით არ გადაიტანება.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
@@ -7124,6 +7154,10 @@ font-technology	Variable	ცვლადი
 @msg	a guide has no curvature circle	დამხმარე ხაზს სიმრუდის წრე არ აქვს
 @msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	`at` must be "start" or "end"	`at` უნდა იყოს "start" ან "end"
+@msg	give exactly one of `through` and `toward`	მიუთითეთ ზუსტად ერთი: `through` ან `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ამ წერტილებს რკალი არ ერგება: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	give `at` only with `toward`	`at` მიუთითეთ მხოლოდ `toward`-თან ერთად
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
 @msg	no artboard {i} (0-based; the document has {_1})	სამუშაო დაფა {i} არ არსებობს (0-დან ითვლება; დოკუმენტს აქვს {_1})
@@ -7169,6 +7203,7 @@ font-technology	Variable	ცვლადი
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
 @msg	no pattern `{name}`	პატერნი `{name}` არ არის
+@msg	art painted with `{name}` can't be its tile	`{name}`-ით შეღებილი ნახატი მისი ფილა ვერ იქნება
 @msg	no perspective grid preset named `{name}`	პერსპექტივის ბადის პრესეტი სახელით `{name}` არ არის
 @msg	no plug-in {0} is installed	პლაგინი {0} დაინსტალირებული არ არის
 @msg	no plug-in {id} is installed	პლაგინი {id} დაინსტალირებული არ არის
@@ -7871,6 +7906,7 @@ font-technology	Variable	ცვლადი
 	Arrow	ისარი
 	Arrow (open)	ისარი (ღია)
 	Barbed	წვეტიანი
+arrowhead	Feather	ბუმბული
 	Half Arrow (left)	ნახევარი ისარი (მარცხენა)
 	Half Arrow (right)	ნახევარი ისარი (მარჯვენა)
 	Concave	ჩაზნექილი
@@ -7898,6 +7934,7 @@ font-technology	Variable	ცვლადი
 	Kite	ფრანი
 	Triangle to Bar	სამკუთხედიდან ზოლამდე
 	Oval	ოვალი
+	Line Arrow	ხაზოვანი ისარი
 	Complementary	დამატებითი
 	Complementary 2	დამატებითი 2
 	Split Complementary	გაყოფილი დამატებითი
@@ -8747,6 +8784,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
 @msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა
@@ -10470,6 +10509,7 @@ breakText	Glyphs	გლიფები
 	Remove Strokes	კონტურების მოხსნა
 	Place Brush Art	ფუნჯის ნახატის განთავსება
 	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
+	Replace Pattern Art	პატერნის ნახატის ჩანაცვლება
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
 	Apply to Strokes	კონტურებზე გამოყენება
 	Leave Strokes	კონტურების დატოვება
@@ -11004,6 +11044,21 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Orbit Lines	ორბიტული ხაზები
+	Petal Garland	ფურცლების გირლანდა
+	Lattice Braid	ბადის ნაწნავი
+	Facet Sweep	წახნაგოვანი მონასმი
+	Artistic Brushes	მხატვრული ფუნჯები
+	Paint	საღებავი
+	Flat Sweep	ბრტყელი მოსმა
+	Dry Drag	მშრალი მოსმა
+	Loaded Stroke	სქელი მონასმი
+	Fan Sweep	მარაოსებრი მოსმა
+	Engraving	გრავიურა
+	Fine Hatching	წვრილი შტრიხები
+	Dense Hatching	მჭიდრო შტრიხები
+	Tapered Hatching	შევიწროებული შტრიხები
+	Broken Hatching	წყვეტილი შტრიხები
 	Image Brush	გამოსახულების ფუნჯები
 	Soft Bloom	რბილი ყვავილი
 	Halftone Field	ნახევარტონური ველი

@@ -106,6 +106,15 @@ pub fn specs() -> Vec<CommandSpec> {
             arc
         ),
         cmd!(
+            "shape.threePointArc",
+            "Three-Point Arc",
+            [],
+            None,
+            "{start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: \"start\"|\"end\" (default \"start\"; only with `toward`)} → {id, cx, cy, radius, sweep}: an open circular arc from `start` to `end` in the current stroke (black when it is none) with no fill, its ends exactly at the two points (not pixel-aligned). With `through`, the arc passes through that point, an anchor of the path; with `toward`, it leaves the end `at` names heading toward that point (its tangent there). Give exactly one of `through` and `toward`; `at` with `through` is an error. `sweep` is the arc's turn in degrees, positive clockwise on the page. Two points that are the same, three on one line, or an arc reaching past the canvas are an error, and nothing is drawn",
+            has_doc,
+            three_point_arc
+        ),
+        cmd!(
             "shape.rectangularGrid",
             "Rectangular Grid",
             [],
@@ -678,6 +687,50 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke_width.max(0.1),
     );
     insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle, true)
+}
+
+/// An open circular arc from `start` to `end` ([`shapes::CircularArc`]): through `through`, or
+/// leaving the end `at` names toward `toward`. One undo step, named as an Arc tool drag is.
+fn three_point_arc(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.threePointArc";
+    let point = |key: &str| finite_numbers::<2>(&p[key]).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, format!("`{key}` must be [x, y]")));
+    let (start, end) = (point("start")?, point("end")?);
+    let from_end = match p.get("at") {
+        None => false,
+        Some(Value::String(v)) if v == "start" || v == "end" => v == "end",
+        Some(_) => return Err(bad(C, "`at` must be \"start\" or \"end\"")),
+    };
+    // The arc, and the point it passes through (an anchor of the path, so the path meets it exactly).
+    let (arc, via) = match (p.get("through"), p.get("toward")) {
+        (Some(_), None) if p.get("at").is_some() => return Err(bad(C, "give `at` only with `toward`")),
+        (Some(_), None) => {
+            let through = point("through")?;
+            (shapes::CircularArc::through(start, end, through), Some(through))
+        }
+        (None, Some(_)) if from_end => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::arriving(start, end, end - toward), None)
+        }
+        (None, Some(_)) => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::leaving(start, toward - start, end), None)
+        }
+        _ => return Err(bad(C, "give exactly one of `through` and `toward`")),
+    };
+    let arc = arc.ok_or_else(|| bad(C, "no arc fits these points: two are the same or all three lie on one line"))?;
+    let path = via.map_or_else(|| arc.to_path(), |v| arc.to_path_via(v));
+    let look = s.new_art_look(
+        vectorcraft_color::Paint::None,
+        if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
+        s.paint.stroke_width.max(0.1),
+    );
+    // Not pixel-aligned: the ends stay on the given points.
+    let mut out = insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, 0.0, false)?;
+    out["cx"] = json!(arc.center.x);
+    out["cy"] = json!(arc.center.y);
+    out["radius"] = json!(arc.radius);
+    out["sweep"] = json!(arc.sweep.to_degrees());
+    Ok(out)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
