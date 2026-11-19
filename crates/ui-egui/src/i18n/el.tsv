@@ -7512,6 +7512,7 @@ axis	Y Axis	Άξονας Y
 	Inventory Icons	Εικονίδια αποθέματος
 	Skill Icons	Εικονίδια δεξιοτήτων
 	Weather Icons	Εικονίδια καιρού
+	Media Controls	Στοιχεία ελέγχου πολυμέσων
 	Attack	Επίθεση
 	Defend	Άμυνα
 	Heal	Θεραπεία
@@ -7885,6 +7886,10 @@ axis	Y Axis	Άξονας Y
 	Rain	Βροχή
 	Thunder	Βροντή
 	Snow	Χιόνι
+	Play	Αναπαραγωγή
+	Pause	Παύση
+	Skip Next	Επόμενο
+	Shuffle	Τυχαία σειρά
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

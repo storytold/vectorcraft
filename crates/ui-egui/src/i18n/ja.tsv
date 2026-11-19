@@ -9035,6 +9035,7 @@ axis	Y Axis	Y 軸
 	Inventory Icons	インベントリアイコン
 	Skill Icons	スキルアイコン
 	Weather Icons	天気アイコン
+	Media Controls	メディアコントロール
 	Attack	攻撃
 	Defend	防御
 	Heal	回復
@@ -9409,6 +9410,10 @@ axis	Y Axis	Y 軸
 	Rain	雨
 	Thunder	雷
 	Snow	雪
+	Play	再生
+	Pause	一時停止
+	Skip Next	次へ
+	Shuffle	シャッフル
 	Bar	バー
 	Hexagon	六角形
 	Spectrum	スペクトル

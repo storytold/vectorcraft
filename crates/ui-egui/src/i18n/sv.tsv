@@ -7529,6 +7529,7 @@ axis	Y Axis	Y-axel
 	Inventory Icons	Inventarieikoner
 	Skill Icons	Färdighetsikoner
 	Weather Icons	Väderikoner
+	Media Controls	Mediekontroller
 	Attack	Attack
 	Defend	Försvar
 	Heal	Retuschering
@@ -7902,6 +7903,10 @@ axis	Y Axis	Y-axel
 	Rain	Regn
 	Thunder	Åska
 	Snow	Snö
+	Play	Spela upp
+	Pause	Paus
+	Skip Next	Hoppa till nästa
+	Shuffle	Blanda
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

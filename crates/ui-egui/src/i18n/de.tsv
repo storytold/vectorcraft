@@ -7106,6 +7106,7 @@ axis	Y Axis	Y-Achse
 	Inventory Icons	Inventar-Symbole
 	Skill Icons	Fähigkeitssymbole
 	Weather Icons	Wettersymbole
+	Media Controls	Mediensteuerung
 	Attack	Angriff
 	Defend	Verteidigung
 	Heal	Heilung
@@ -7480,6 +7481,10 @@ axis	Y Axis	Y-Achse
 	Rain	Regen
 	Thunder	Donner
 	Snow	Schnee
+	Play	Wiedergabe
+	Pause	Pause
+	Skip Next	Vorblättern
+	Shuffle	Mischen
 	Bar	Balken
 	Fine Dots	Feine Punkte
 	Hexagon	Sechseck
