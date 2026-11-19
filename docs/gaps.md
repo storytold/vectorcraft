@@ -40,6 +40,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-18 | minor | G12: Layers panel ruler guide and blend spine row context menus (#8592): Hide/Show, Lock/Unlock, Release Guides, Delete and Locate Object on guide rows; Select, Blend Options…, Reverse Spine, Reverse Front to Back, Expand, Release and Locate Object on blend spine rows. Scores and estimates unchanged. |
 | 2026-11-18 | minor | G19: PDF export writes the document language chosen in Document Setup as the catalog's `/Lang` (its BCP 47 tag, `en-US` by default) and the XMP packet's `dc:language`, in exported and printed PDFs (#3644); `/MarkInfo` stays with tagged PDF (#3643). Scores and estimates unchanged. |
 | 2026-11-16 | minor | G1: Recolor Artwork - native Lab entry in Color Picker, swatch libraries access in Color Picker, and row right-click context menu ("Pick from Swatches", "Limit to Library") (#4028); scores and estimates unchanged. |
 | 2026-11-15 | minor | G4 type: modal Check Spelling dialog (Edit › Spelling › Check Spelling…, `ui.checkSpelling`, #4936) with Not in Dictionary sentence context, suggestions, Ignore, Ignore All, Change, Change All, Add to Dictionary, Done/Cancel, keyboard navigation, and one-step Undo/Redo; spell check complete; scores and estimates unchanged. |
@@ -506,7 +507,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Estimate unchanged.
 - **Done (2026-10-21, #394):** General › Constrain Angle turns the arrow keys' axes (guides stay on the page's), holds Shift drags of the Selection, Direct Selection, Free Transform, Slice Selection, Reshape and Measure tools and the Pen's handles to the turned axes, and new rectangles, rounded rectangles, ellipses, grids, point and area type, Shift-drawn polygons and stars and the shape size dialogs are drawn along it with their bounding box turned; 0° and whole turns are exactly as before, quarter turns exact (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>). Flares and the Pen's new paths are not turned yet. Estimate unchanged.
 - **Done (2026-10-21, #394):** General › Constrain Angle turns the arrow keys' axes (guides stay on the page's), holds Shift drags of the Selection, Direct Selection, Free Transform, Slice Selection, Reshape and Measure tools and the Pen's handles to the turned axes, and new rectangles, rounded rectangles, ellipses, grids, point and area type, Shift-drawn polygons and stars and the shape size dialogs are drawn along it with their bounding box turned; 0° and whole turns are exactly as before, quarter turns exact (<https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>). Flares and the Pen's new paths are not turned yet. Estimate unchanged. **2026-10-24:** General › Corner Radius is the Rounded Rectangle tool's radius: the tool takes the preference when chosen and when it changes while the tool is active (or lent a selection tool for a drag), and the radius ↑/↓ set while drawing one, or a Tool Options value, becomes the preference, clamped to its 0–1296 pt range (<https://helpx.adobe.com/illustrator/using/drawing-simple-lines-shapes.html>). Estimate unchanged.
-- **Done (2026-10-17):** Background Export shows its progress in a dialog with Cancel and Continue in Background (#2564), on the shared cancel token (#2546); a cancelled export writes no file. Save As, Export for Screens and Export Selection don't show it yet. Estimate unchanged. **2026-11-06:** opening a file that takes longer than 0.4 s shows a progress window too, with a moving bar, Cancel and Continue in Background (part of #5930); Save and Place still show only the status bar's spinner. Estimate unchanged.
+- **Done (2026-10-17):** Background Export shows its progress in a dialog with Cancel and Continue in Background (#2564), on the shared cancel token (#2546); a cancelled export writes no file. Save As, Export for Screens and Export Selection don't show it yet. Estimate unchanged. **2026-11-06:** opening a file that takes longer than 0.4 s shows a progress window too, with a moving bar, Cancel and Continue in Background (part of #5930); Save and Place still show only the status bar's spinner. Estimate unchanged. **2026-11-15:** a save that runs in the background shows in that window too, with a moving bar, Cancel (the file stays as it was and the document stays modified) and Continue in Background (`file.cancelSave`, `file.saveInBackground`); Place still shows only the spinner. Estimate unchanged.
 - **Done:** quick Image Trace presets trace at once and leave the panel as it was; the Image Trace button (Control bar, Properties) opens the controls with Threshold and Advanced (Paths, Corners, Noise), as the public documentation describes (<https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html>). Other context-specific Properties gaps remain.
 - **Done (2026-10-31, #394):** Units › East Asian Type is read, and Q and Ha are units. 1 Q and 1 Ha are each a
   quarter of a millimetre (0.709 pt), the Japanese typesetting units: the [Illustrator Scripting Guide's
@@ -534,13 +535,14 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   run hyphenates in its own language (Character panel). English, eleven Indian languages, Bulgarian, Turkish
   and Russian have break points, and German, Polish, Portuguese and Italian have them in builds that embed
   their patterns; other languages stay whole apart from the Exceptions list (#394, #4947).
+- **Done (2026-11-18, #8592):** Layers panel guide and blend spine row context menus: right-clicking a ruler guide row shows Hide / Show, Lock / Unlock, Release Guides, Delete and Locate Object / Locate Layer (selecting an unselected editable guide or preserving a multi-guide selection); right-clicking a blend spine row selects the blend and shows Select, Blend Options…, Reverse Spine, Reverse Front to Back, Expand, Release and Locate Object / Locate Layer. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Done (2026-11-18):** Layers panel guide row context menu: right-clicking a guide row presents specialized actions (Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show). Clicking "Release Guide" converts the guide back to a normal unpainted path using `view.guides.release` in one undo step. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus in the panels that have none, and menus on blend spine rows in the Layers panel (guide row menus are done).
+  panel per context, and context menus in the panels that have none.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
@@ -690,8 +692,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (eleven original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive, Bristle Brushes (one
-  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes) and Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  its own (twelve original libraries generated in code: Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive, Bristle Brushes (one
+  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, Dry Media (grainy chalk, pencil, crayon and charcoal art brushes), Tech Circuit (Circuit Trace, Bus Lines and Terminal Nodes) and Arrows (Solid, Open, Double, Chevron and Dashed Arrow); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and
@@ -713,7 +715,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the ten shipped (and further graphic-style libraries beyond the eleven shipped, and further symbol libraries beyond Basic
+- **Missing:** more built-in brush libraries beyond the eleven shipped (and further graphic-style libraries beyond the eleven shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
 - **Estimate:** 3–13 h (estimated).
 
