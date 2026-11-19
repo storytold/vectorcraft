@@ -52,6 +52,23 @@ impl Density {
         let s = if scale.is_finite() && scale > 1e-6 { scale } else { 1.0 };
         Density { tolerance: 0.25 / s, min_cell: 4.0 / s, overlap: 2.0 / s }
     }
+
+    /// [`Density::PAGE`] for art that is drawn `scale` times its size (a symbol's art in an
+    /// instance that scales it): the tolerance, the cell size and the overlap measured on the page.
+    pub fn page_at(scale: f64) -> Density {
+        let s = if scale.is_finite() && scale > 1e-6 { scale } else { 1.0 };
+        let p = Density::PAGE;
+        Density { tolerance: p.tolerance / s, min_cell: p.min_cell / s, overlap: p.overlap / s }
+    }
+}
+
+/// How much `a` stretches its most stretched direction: the larger singular value of its linear
+/// part.
+pub fn max_stretch(a: Affine) -> f64 {
+    let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+    let sum = m0 * m0 + m1 * m1 + m2 * m2 + m3 * m3;
+    let det = m0 * m3 - m1 * m2;
+    ((sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt()
 }
 
 /// Why corners cannot be an image's.
@@ -126,20 +143,28 @@ pub fn check_for(im: &ImageObject, q: &[Point; 4]) -> Result<(), QuadError> {
     if parallelogram(im, q).is_some() {
         return Ok(());
     }
-    let side = (0..4).map(|i| q[i].distance(q[(i + 1) % 4])).fold(f64::INFINITY, f64::min);
-    let far = q.iter().map(|p| p.x.abs().max(p.y.abs())).fold(0.0, f64::max);
-    let tol = side * 1e-6 + far * 1e-12;
+    let tol = placement_tolerance(q);
     let map = pixel_map(im, q);
     let placed = rect_corners(pixel_rect(im)).iter().zip(q).all(|(c, want)| map.apply(*c).is_some_and(|p| p.distance(*want) <= tol));
     if placed { Ok(()) } else { Err(QuadError::TooNarrow) }
 }
 
+/// How far a map may place a corner from `q`'s: a millionth of `q`'s shortest side plus the
+/// rounding error of coordinates as far from the origin as `q`'s.
+fn placement_tolerance(q: &[Point; 4]) -> f64 {
+    let side = (0..4).map(|i| q[i].distance(q[(i + 1) % 4])).fold(f64::INFINITY, f64::min);
+    let far = q.iter().map(|p| p.x.abs().max(p.y.abs())).fold(0.0, f64::max);
+    side * 1e-6 + far * 1e-12
+}
+
 /// The affine map from `im`'s pixel space that places its corners at `q`, when `q` is a
-/// parallelogram (within 1e-9 of the quad's size); `None` otherwise.
+/// parallelogram (within 1e-9 of the quad's size): the map puts the fourth corner within
+/// [`placement_tolerance`] of `q`'s. `None` otherwise.
 fn parallelogram(im: &ImageObject, q: &[Point; 4]) -> Option<Affine> {
     let size = q.iter().fold(0.0_f64, |m, p| m.max((*p - q[0]).hypot()));
+    // The affine map through the other three corners misses the bottom right one by this much.
     let gap = (q[0].to_vec2() + q[2].to_vec2() - q[1].to_vec2() - q[3].to_vec2()).hypot();
-    if gap > 1e-9 * size {
+    if gap > 1e-9 * size || gap > placement_tolerance(q) {
         return None;
     }
     let (w, h) = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
@@ -392,6 +417,66 @@ mod tests {
         // Back to a rectangle: the quad is cleared.
         n.set_image_corners(pts([(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)])).unwrap();
         assert!(n.extras().image_quad.is_none());
+    }
+
+    /// Corners whose gap from a parallelogram is tiny next to the quad's size but not next to its
+    /// shortest side stay a distortion: the affine map would put the bottom right corner twice as
+    /// low as asked.
+    #[test]
+    fn corners_the_affine_map_misses_stay_a_distortion() {
+        let mut n = image(100, 100);
+        let q = pts([(0.0, 0.0), (100000.0, 0.0), (100000.0, 0.00005), (0.0, 0.0001)]);
+        n.set_image_corners(q).unwrap();
+        assert_eq!(n.image_quad(), Some(q));
+        let map = n.image_map().unwrap();
+        for (c, want) in rect_corners(Rect::new(0.0, 0.0, 100.0, 100.0)).iter().zip(q) {
+            assert!(map.apply(*c).unwrap().distance(want) < 1e-9, "{c:?}");
+        }
+    }
+
+    /// A scale that squeezes valid corners past what a perspective map can place leaves the image
+    /// at the placement nearest them, scaled, not at the rectangle it had before.
+    #[test]
+    fn a_scale_past_the_perspective_limit_keeps_the_nearest_placement() {
+        let mut n = image(100, 100);
+        n.set_image_corners(pts([(0.0, 0.0), (100.0, 0.0), (200.0, 2e-7), (0.0, 2e-7)])).unwrap();
+        assert!(n.is_distorted_image());
+        n.transform(Affine::scale_non_uniform(1.0, 0.25), false);
+        assert!(n.extras().image_quad.is_none());
+        let b = n.geometric_bounds().unwrap();
+        assert!(b.height() < 1e-6 && (b.width() - 150.0).abs() < 60.0, "{b:?}");
+    }
+
+    /// A file's corners that the image cannot take are dropped as it is read, so a later scale
+    /// that would make them valid leaves the image placed by its transform; a list of three
+    /// points is dropped too, and the rest of the image is read.
+    #[test]
+    fn corners_a_file_holds_that_are_refused_or_not_four_are_dropped_as_it_is_read() {
+        let mut n = image(100, 100);
+        n.extras_mut().image_quad = Some(Box::new(pts([(0.0, 0.0), (100.0, 0.0), (200.0, 5e-8), (0.0, 5e-8)])));
+        assert_eq!(n.image_quad(), None);
+        let mut read: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert!(read.extras().image_quad.is_none());
+        read.transform(Affine::scale_non_uniform(1.0, 4.0), false);
+        assert!(!read.is_distorted_image());
+        assert_eq!(read.geometric_bounds(), Some(Rect::new(0.0, 0.0, 100.0, 400.0)));
+        let mut v = serde_json::to_value(&n).unwrap();
+        v["image_quad"] = serde_json::json!([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]);
+        let read: Node = serde_json::from_value(v).unwrap();
+        assert!(read.extras().image_quad.is_none());
+        assert!(matches!(read.kind, NodeKind::Image(_)));
+        // Past a fourth point the rest is skipped without being read as points.
+        for extra in [serde_json::json!([5.0, 5.0]), serde_json::json!("not a point")] {
+            let mut v = serde_json::to_value(&n).unwrap();
+            v["image_quad"] = serde_json::json!([[40.0, 0.0], [60.0, 0.0], [100.0, 100.0], [0.0, 100.0], extra, {"x": 1}]);
+            let read: Node = serde_json::from_value(v).unwrap();
+            assert!(read.extras().image_quad.is_none());
+        }
+        // Valid corners read back.
+        let q = pts([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        n.set_image_corners(q).unwrap();
+        let read: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert_eq!(read.image_quad(), Some(q));
     }
 
     #[test]

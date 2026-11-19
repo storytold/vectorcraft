@@ -758,6 +758,8 @@
 	Contextual Task Bar	Kontekstowy pasek zadań
 	Pin Bar Position	Przypnij położenie paska
 	Reset Bar Position	Resetuj położenie paska
+	Bar Actions	Akcje paska
+	Reset Bar Actions	Resetuj akcje paska
 	Resize	Zmień rozmiar
 	Tools	Narzędzia
 	Toolbars	Paski narzędzi
@@ -1457,6 +1459,10 @@ lighting	Light	Światło
 	Add Anchor Point Tool	Narzędzie Dodaj punkt kontrolny
 	Anchor Point Tool	Narzędzie Punkt kontrolny
 	Arc Tool	Narzędzie Łuk
+	Three-Point Arc Tool	Narzędzie Łuk przez trzy punkty
+	Three-Point Arc	Łuk przez trzy punkty
+	Arc too large	Łuk jest za duży
+	Third Point Sets Direction	Trzeci punkt wyznacza kierunek
 	Area Graph Tool	Narzędzie Wykres warstwowy
 	Area Type Tool	Narzędzie Tekst akapitowy
 	Artboard Tool	Narzędzie Obszar kompozycji
@@ -4497,6 +4503,11 @@ axis	Both	Obie
 	Image	Obraz
 	Ink	Farba
 	Lab	Lab
+	OKLCH Sliders	Suwaki OKLCH
+	HSL Sliders	Suwaki HSL
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	Największa chroma, jaką sRGB mieści przy tej jasności i barwie
+	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
 	Medium	Średni
 	Name	Nazwa
 	None	Brak
@@ -4712,6 +4723,7 @@ font-technology	Variable	Zmienne
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nowy tekst otrzymuje ten język, dopóki językiem w Ustawieniach dokumentu jest Angielski: USA; tekst, który już jest w dokumencie, zachowuje swój język.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	W akapitach z włączoną opcją Dziel wyrazy wyraz z listy jest dzielony tylko w miejscach wpisanych w nim łączników albo wcale, jeśli ich nie ma, bez względu na język i wielkość liter.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	W wersji na komputer wtyczki .wasm z tego folderu są wczytywane przy uruchomieniu i po kliknięciu OK z nowym folderem tutaj, z wyjątkiem trybu awaryjnego; wersja internetowa ich nie wczytuje.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normalny zachowuje własne limity każdej wtyczki; przy ustawieniu Duże filtr lub polecenie wtyczki może wykonać co najmniej 250 milionów instrukcji oprócz tych na swoje dane wejściowe. Limit czasu pozostaje bez zmian.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Ile instrukcji może zużyć każde uruchomienie filtra obiektów z wtyczki; Duże pozwala na więcej niż Normalny przy tym samym limicie 60 sekund. Ciężkie filtry zachowują własny budżet.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pierwszy wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Drugi wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
@@ -4731,14 +4743,16 @@ font-technology	Variable	Zmienne
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animowane powiększanie działa tylko wtedy, gdy to jest włączone; po wyłączeniu Animowane powiększanie jest wyszarzone, a powiększanie nie jest animowane.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Powiększanie kółkiem przebiega płynnie, a Narzędzie Lupka powiększa, gdy przeciągasz w bok lub je przytrzymujesz; po wyłączeniu Narzędzie Lupka powiększa obszar, przez który przeciągniesz.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od następnego uruchomienia wersja na komputer rysuje tym rodzajem procesora graficznego; Automatycznie wybiera najpierw ten, który obsługuje ekran. Wersja internetowa go nie używa.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Od następnego uruchomienia wersja na komputer wyświetla obszar roboczy przez ten rodzaj procesora graficznego; kompozycja jest zawsze rysowana na CPU. Automatycznie w systemach Windows i macOS wybiera najpierw zintegrowany. Wersja internetowa go nie używa.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Od następnego uruchomienia okno wyświetla każdą klatkę bez czekania na odświeżenie ekranu, jeśli pozwala na to sterownik grafiki, najwyżej 240 klatek na sekundę.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od następnego uruchomienia okno pokazuje klatki bez czekania na odświeżenie ekranu, najwyżej 240 na sekundę; po wyłączeniu tempo wyznacza ekran. Tryb prezentacji ustawiony przy uruchomieniu ma pierwszeństwo.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Największa liczba kroków cofania, które zachowuje każdy dokument; mniejsza liczba usuwa najstarsze kroki po kliknięciu OK. Kroki mogą też zniknąć wcześniej, gdy zajmują zbyt dużo pamięci.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Pokazuje zmiany kompozycji podczas przeciągania; po wyłączeniu kontury podążają za przeciąganiem, a kompozycja zmienia się po puszczeniu. Linia pomocnicza z linijki zawsze porusza się podczas przeciągania.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Ile wątków roboczych rysuje kompozycję; -1 używa o jeden mniej niż rdzeni, których VectorCraft może używać, najwyżej 8, a 0 żadnego. Wersja internetowa nigdy żadnego nie używa.
 	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Od następnego uruchomienia na pulpicie Wayland X11 (XWayland) otwiera okno przez XWayland; inne wybory robią to tylko wtedy, gdy podłączone jest pióro.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Konwertuje kompozycję i obszary kompozycji na płótnie do profilu kolorów ekranu tam, gdzie system tego jeszcze nie robi; po wyłączeniu płótno jest rysowane w sRGB.
 	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Od następnego uruchomienia wersja na komputer wyświetla klatki bez czekania na odświeżenie ekranu, najwyżej 240 na sekundę; po wyłączeniu tempo wyznacza ekran.
 	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Większy budżet pięciokrotnie zwiększa podstawową liczbę instrukcji każdego uruchomienia filtra obiektów i zachowuje ten sam dodatek na bajt danych wejściowych; ciężkie filtry, efekty na żywo, eksportery i importery zachowują własne limity.
-	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Konwertuje kompozycję i obszary kompozycji na płótnie do profilu kolorów ekranu tam, gdzie system tego jeszcze nie robi; po wyłączeniu płótno jest rysowane w sRGB.
 	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	W wersji na komputer zapis do pliku odbywa się w tle, gdy dalej edytujesz; po wyłączeniu czekasz, aż zostanie zapisany.
 	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	W wersji na komputer eksporty do plików i pakiety są zapisywane w tle, gdy dalej edytujesz, z wyjątkiem eksportów 3D; po wyłączeniu na nie czekasz.
 	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Co kilka minut zachowuje kopię odzyskiwania każdego dokumentu z niezapisanymi zmianami od jego ostatniej kopii; po wyłączeniu kopie okresowe nie powstają.
@@ -5309,6 +5323,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
 @msg	`view` must be wheel or box	`view` musi mieć wartość wheel lub box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` musi mieć wartość none, oklch lub hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę
@@ -5502,6 +5518,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a guide has no curvature circle	linia pomocnicza nie ma okręgu krzywizny
 @msg	the circle that matches the path there would reach past the canvas	okrąg pasujący w tym miejscu do ścieżki wykroczyłby poza płótno
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	`at` must be "start" or "end"	`at` musi mieć wartość "start" lub "end"
+@msg	give exactly one of `through` and `toward`	podaj dokładnie jeden z parametrów `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	żaden łuk nie pasuje do tych punktów: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	give `at` only with `toward`	podaj `at` tylko razem z `toward`
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
 @msg	no artboard {i} (0-based; the document has {_1})	brak obszaru kompozycji {i} (numeracja od 0; dokument ma {_1})
@@ -10605,6 +10625,16 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Orbit Lines	Linie orbitalne
+	Petal Garland	Girlanda płatków
+	Lattice Braid	Plecionka kratowa
+	Facet Sweep	Fasetowane pociągnięcie
+	Artistic Brushes	Pędzle artystyczne
+	Paint	Farba
+	Flat Sweep	Płaskie pociągnięcie
+	Dry Drag	Suche przeciągnięcie
+	Loaded Stroke	Grube pociągnięcie
+	Fan Sweep	Wachlarzowy ślad
 	Engraving	Grawerowanie
 	Fine Hatching	Drobne kreskowanie
 	Dense Hatching	Gęste kreskowanie

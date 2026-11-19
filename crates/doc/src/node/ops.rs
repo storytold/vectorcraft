@@ -532,6 +532,9 @@ impl Node {
         }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
+        // A distorted image's placement nearest its corners, before they are transformed (`None`
+        // within when its stored corners are refused, and `None` for anything else).
+        let image_before = self.extras().image_quad.is_some().then(|| crate::image_quad::nearest_affine(self));
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -655,6 +658,18 @@ impl Node {
                     *p = a * *p;
                 }
             }
+        }
+        // Corners that a scale squeezes past what a perspective map can place (or that were
+        // refused already) leave the image placed by its transform: for valid corners, the
+        // placement that was nearest them, transformed, rather than the rectangle it had before
+        // it was distorted.
+        if let Some(before) = image_before
+            && self.image_quad().is_none()
+        {
+            if let (Some(near), NodeKind::Image(im)) = (before, &mut self.kind) {
+                im.xf = a * near;
+            }
+            self.extras_mut().image_quad = None;
         }
     }
 

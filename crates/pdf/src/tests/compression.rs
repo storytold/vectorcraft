@@ -180,6 +180,20 @@ fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
     });
     assert!(pieces > 2, "{pieces}");
     assert_eq!(seen, [true; 4]);
+    // The pieces are clipped by the quad: a clipping path with its bounds and its area.
+    let mut quad_clips = 0;
+    back.walk(|n| {
+        if let NodeKind::Group { children, clip: true } = &n.kind
+            && let Some(p) = children.first().and_then(|c| c.path_data())
+            && let Some(b) = p.bounds()
+        {
+            let area: f64 = p.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+            if [b.x0 - 10.0, b.y0 - 10.0, b.x1 - 90.0, b.y1 - 90.0].iter().all(|v| v.abs() < 0.01) && (area - 4000.0).abs() < 1.0 {
+                quad_clips += 1;
+            }
+        }
+    });
+    assert!(quad_clips >= 1, "no clipping path on the quad");
 }
 
 /// A distorted image's own fill that Convert to Shape gives a shape is written with it.

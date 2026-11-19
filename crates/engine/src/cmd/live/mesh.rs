@@ -25,16 +25,21 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let (rows, cols) = if at.is_some() { (1, 1) } else { (rows, cols) };
     let roots = roots_param(s, p)?;
+    // The distorted images left as they are, each with why.
+    let mut distorted = vec![];
     let (ids, index) = s.edit("Create Gradient Mesh", |d, sel| {
         let mut out = vec![];
         let mut index = None;
         let mut refused = None;
         let model = d.color_mode.model();
+        distorted.clear();
         for id in &roots {
             let Some(n) = d.node(*id).cloned() else { continue };
             let m = if let NodeKind::Image(im) = &n.kind {
                 if n.is_distorted_image() {
-                    refused.get_or_insert_with(|| super::super::xform::distorted_image_error(C, *id));
+                    let e = super::super::xform::distorted_image_error(C, *id);
+                    distorted.push(json!({"id": id.0, "reason": e.to_string()}));
+                    refused.get_or_insert(e);
                     continue;
                 }
                 // An embedded image: the points take the picture's colours there.
@@ -87,6 +92,9 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     let mut r = ids_json(&ids);
     if let Some(i) = index {
         r["index"] = json!(i);
+    }
+    if !distorted.is_empty() {
+        r["skipped"] = json!(distorted);
     }
     Ok(r)
 }

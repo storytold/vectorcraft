@@ -679,9 +679,10 @@ every attribute:
   `truncated: true` too.
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An image whose corners Perspective Distort or Free Distort moved to a shape
-  other than a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right, bottom
-  right, bottom left), and its `transform` is the affine placement that matches it at its middle. Corners that make a
-  parallelogram are described by `transform` alone. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
+  that is not a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right,
+  bottom right, bottom left), and its `transform` is then the affine placement nearest them, the one that matches the
+  perspective at the middle of its pixels. Corners that make a parallelogram are described by `transform` alone. An
+  embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
   `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile, as sRGB. The pixels of
   all the images in one input take at most 16 MiB in base64, and an image the host starts to decode takes its size

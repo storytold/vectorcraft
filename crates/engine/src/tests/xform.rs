@@ -859,6 +859,10 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
     // A convex shape too small for a perspective map: the corners could not reach the handles.
     let e = s.execute("object.distort", &json!({"corners": [[0, 0], [1e-7, 0], [8e-8, 1e-7], [0, 1e-7]]})).unwrap_err().to_string();
     assert!(e.contains("too close together"), "{e}");
+    // The same shape far from the origin: its distance from it does not hide the missed corner.
+    let x = 1_000_000.0;
+    let e = s.execute("object.distort", &json!({"corners": [[x, 0], [x + 1e-7, 0], [x + 8e-8, 1e-7], [x, 1e-7]]})).unwrap_err().to_string();
+    assert!(e.contains("too close together"), "{e}");
     // A long, thin shape with one side all but gone.
     let e = s.execute("object.distort", &json!({"corners": [[0, 0], [1_000_000, 0], [1_000_000, 1e-19], [0, 1]]})).unwrap_err().to_string();
     assert!(e.contains("too close together"), "{e}");
@@ -888,6 +892,33 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
     }
     assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
     assert_eq!(undo_len(&s), undo + 1);
+    // Type replaces a distorted image by its bounds, which the corners give: not refused.
+    let text = json!({"replace": true, "name": "note.txt", "dataBase64": vectorcraft_format::base64_encode(b"Hello")});
+    let out = s.execute("file.place", &text).unwrap();
+    let id = NodeId(out["ids"][0].as_u64().unwrap());
+    assert!(matches!(s.doc().unwrap().doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Text(_)));
+}
+
+/// Create Gradient Mesh on a path and a distorted image converts the path and names the image it
+/// left as it is, with the shared refusal.
+#[test]
+fn mesh_create_reports_the_distorted_image_it_skips() {
+    let mut s = session();
+    let img = placed_image(&mut s);
+    s.execute("object.distort", &json!({ "corners": [[40, 0], [60, 0], [100, 100], [0, 100]] })).unwrap();
+    let path = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [img.0, path.0]})).unwrap();
+    let out = s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    assert_eq!(out["ids"].as_array().map(Vec::len), Some(1), "{out}");
+    let skipped = out["skipped"].as_array().expect("the skipped image");
+    assert_eq!(skipped.len(), 1, "{out}");
+    assert_eq!(skipped[0]["id"], json!(img.0));
+    assert!(skipped[0]["reason"].as_str().unwrap().contains("Perspective Distort or Free Distort"), "{out}");
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    // Without a distorted image, no `skipped`.
+    let other = rect(&mut s, 400.0, 0.0, 100.0, 100.0);
+    let out = s.execute("object.mesh.create", &json!({"ids": [other.0], "rows": 1, "cols": 1})).unwrap();
+    assert!(out.get("skipped").is_none(), "{out}");
 }
 
 /// A blend takes the warp's affine approximation whole, so an image inside it does not stop a
@@ -1080,12 +1111,16 @@ fn rasterize_draws_a_distorted_image_between_its_corners() {
     let n = d.node(id).unwrap();
     assert!(!n.is_distorted_image());
     let vectorcraft_doc::NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    // The raster covers the corners' bounds.
+    let b = n.geometric_bounds().unwrap();
+    assert!([b.x0, b.y0, b.x1 - 100.0, b.y1 - 100.0].iter().all(|v| v.abs() <= 1.0), "{b:?}");
     let px = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
     let (w, h) = px.dimensions();
     let rgba = px.to_rgba8();
     let alpha = |x: f64, y: f64| {
         let p = im.xf.inverse() * Point::new(x, y);
-        let (i, j) = ((p.x as u32).min(w - 1), (p.y as u32).min(h - 1));
+        assert!(p.x >= 0.0 && p.y >= 0.0 && p.x < f64::from(w) && p.y < f64::from(h), "({x}, {y}) is outside the raster: {p:?}");
+        let (i, j) = (p.x as u32, p.y as u32);
         rgba[((j * w + i) * 4 + 3) as usize]
     };
     assert_eq!(alpha(50.0, 90.0), 255, "inside the corners");

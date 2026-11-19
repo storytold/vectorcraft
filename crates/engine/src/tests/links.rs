@@ -634,7 +634,14 @@ fn update_links_keeps_a_distorted_images_corners() {
         });
         out
     };
+    let symbol_corners = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| out.extend(n.image_corners()));
+        out
+    };
     assert_eq!(in_symbol(&s), [(true, (20, 10))]);
+    let symbol_before = symbol_corners(&s);
+    assert_eq!(symbol_before.len(), 1);
     write(&photo, &png(60, 20, BLUE));
     let u = s.execute("links.update", &json!({})).unwrap();
     assert_eq!(u["updated"].as_array().unwrap().len(), 2, "{u}");
@@ -652,6 +659,7 @@ fn update_links_keeps_a_distorted_images_corners() {
     d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
     assert!(!clipped, "the symbol's image is not clipped");
     assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+    assert_eq!(symbol_corners(&s), symbol_before, "the symbol's image keeps its corners");
     scale_matches_ppi(&mut s);
 }
 

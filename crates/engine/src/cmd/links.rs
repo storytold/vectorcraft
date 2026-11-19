@@ -2136,6 +2136,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
+    // Whether the images were found as the missing links (nothing selected, a folder given) rather
+    // than named or selected.
+    let mut found_missing = false;
     let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids", C)?) {
         (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
         (None, Some(ids)) => ids,
@@ -2143,6 +2146,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
                 Some(_) if selected.is_empty() => {
+                    found_missing = true;
                     groups(&st.doc, None).into_iter().filter(|g| probe(g, LinkBase::of(st)).0 == Status::Missing).flat_map(|g| g.ids).collect()
                 }
                 _ => selected,
@@ -2154,6 +2158,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if ids.is_empty() {
         return Err(bad(C, "select the images to relink, or pass ids"));
+    }
+    // A named or selected distorted image is refused before a folder is searched, whether or not
+    // its file is found there.
+    if !found_missing && let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
+        return Err(super::xform::distorted_image_error(C, *id));
     }
     // All Instances: the other stored objects linked to the same files, each once.
     if scope == Scope::All {
@@ -2858,6 +2867,9 @@ fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Re
         if im.link.is_some() {
             skipped.push(id);
             continue;
+        }
+        if n.is_distorted_image() {
+            return Err(super::xform::distorted_image_error(C, id));
         }
         let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
         embedded.push((id, n.display_name(), blob));

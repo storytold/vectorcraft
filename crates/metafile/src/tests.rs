@@ -305,6 +305,63 @@ fn a_distorted_image_is_its_mesh_with_clips_and_its_nearest_parallelogram_withou
     assert!(images(&ops) > 2 && !warned(&warnings), "{} images, {warnings:?}", images(&ops));
     let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, false).run();
     assert!(images(&ops) == 1 && warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    // Without clips, the image is placed by the affine map nearest its corners.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let placed = ops.iter().find_map(|o| match o {
+        crate::scene::Op::Image { xf, .. } => Some(*xf),
+        _ => None,
+    });
+    assert!(placed.unwrap().as_coeffs().iter().zip(near.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{placed:?} against {near:?}");
+}
+
+/// Each piece of a distorted image's mesh in EMF stores the pixels inside its clips, not the
+/// whole image, placed where the uncropped piece puts them.
+#[test]
+fn the_pieces_of_a_distorted_image_store_only_the_pixels_they_show() {
+    let mut pixels = vec![];
+    for y in 0..64u8 {
+        for x in 0..64u8 {
+            pixels.extend_from_slice(&[x * 4, y * 4, 0, 255]);
+        }
+    }
+    let img =
+        craft_image_codecs::Image::from_raw(64, 64, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels).unwrap();
+    let bytes = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let n = image_node(&mut d, bytes, 64, 64, Affine::scale(1.5));
+    add(&mut d, n);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(30.0, 0.0), (66.0, 0.0), (96.0, 96.0), (0.0, 96.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let art = vectorcraft_doc::image_quad::distorted_art(d.node(id).unwrap()).unwrap();
+    let whole: Vec<Affine> = vectorcraft_doc::image_quad::distorted_pieces(&art)
+        .iter()
+        .filter_map(|p| match &p.children()?.get(1)?.kind {
+            NodeKind::Image(im) => Some(im.xf),
+            _ => None,
+        })
+        .collect();
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let parts: Vec<(&crate::dib::Rgba, Affine)> = ops
+        .iter()
+        .filter_map(|o| match o {
+            crate::scene::Op::Image { image, xf, .. } => Some((&**image, *xf)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(parts.len(), whole.len());
+    assert!(parts.len() > 8, "{}", parts.len());
+    let stored: u64 = parts.iter().map(|(i, _)| u64::from(i.width) * u64::from(i.height)).sum();
+    assert!(stored * 4 < 64 * 64 * parts.len() as u64, "{stored} pixels in {} pieces", parts.len());
+    for ((part, xf), full) in parts.iter().zip(&whole) {
+        // The part's first pixel names where it starts in the image.
+        let (x0, y0) = (f64::from(part.pixels[0] / 4), f64::from(part.pixels[1] / 4));
+        let want = *full * Affine::translate((x0, y0));
+        assert!(xf.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{xf:?} against {want:?}");
+        // Each row runs on from that pixel.
+        let last = (part.width as usize - 1) * 4;
+        assert_eq!(f64::from(part.pixels[last] / 4), x0 + f64::from(part.width - 1));
+    }
 }
 
 #[test]
