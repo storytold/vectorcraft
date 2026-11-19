@@ -221,4 +221,6 @@ fn the_next_click_passes_over_the_circle_the_tool_drew() {
     let count = object_count(&s);
     click(&mut s, Mods::default(), 280.0, 241.0);
     assert_eq!(object_count(&s), count + 1, "the circle drawn first is within reach again");
+    let third = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert!(bounds_are(&s, third, Rect::new(100.0, 200.0, 300.0, 400.0)), "the click drew the first circle's own circle");
 }

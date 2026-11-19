@@ -46,8 +46,9 @@ const SMOOTH_TURN: f64 = 0.5 * std::f64::consts::PI / 180.0;
 
 /// The circle that touches segment `c` at `t` (0 to 1) with its curvature there, on the side the
 /// segment bends toward, or on the other side with `convex`. A segment that is the usual cubic of
-/// a circular arc of 90° or less gives the circle of that arc: on the concave side it is the arc's
-/// own circle, and it touches the arc's circle at the point nearest `c` at `t`. A `t` outside 0 to
+/// a circular arc of 90° or less gives a circle of that arc's radius: on the concave side it is the
+/// arc's own circle, and it touches the arc's circle at the point nearest `c` at `t`; on the convex
+/// side it touches `c` at `t`, its center one radius out from there. A `t` outside 0 to
 /// 1 and a segment whose points are not finite give [`NoCircle::Cusp`].
 pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
     let finite = [c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.is_finite());
@@ -62,9 +63,13 @@ pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCi
             if len == 0.0 || !len.is_finite() {
                 return Err(NoCircle::Cusp);
             }
+            if convex {
+                // One radius out from `at`, so the circle touches the segment at `at` even where
+                // the cubic strays a little from the arc's circle.
+                return Ok(CurvatureCircle { at, center: at + out * (radius / len), radius, nominal: true });
+            }
             // The point of the arc's circle nearest `at`: the circle touches the segment there.
             let on = center + out * (radius / len);
-            let center = if convex { on + (on - center) } else { center };
             return Ok(CurvatureCircle { at: on, center, radius, nominal: true });
         }
         None => {
@@ -223,6 +228,24 @@ mod tests {
                 assert!((got.at.distance(got.center) - 100.0).abs() < 1e-9, "the circle touches on its own edge");
             }
         }
+    }
+
+    /// A quarter circle of radius 10,000 whose handles are 0.09% longer than the usual cubic's still
+    /// counts as the arc, and its middle lies a few points off the arc's circle: on the convex side
+    /// the circle still touches the segment at that point, one radius from its center.
+    #[test]
+    fn the_convex_circle_of_a_near_arc_touches_the_segment() {
+        let r = 10_000.0;
+        let k = 4.0 / 3.0 * (std::f64::consts::FRAC_PI_8).tan() * r * 1.0009;
+        let c = CubicBez::new(Point::new(r, 0.0), Point::new(r, k), Point::new(k, r), Point::new(0.0, r));
+        assert!(circular_arc(c).is_some());
+        let at = c.eval(0.5);
+        assert!((at.distance(Point::ORIGIN) - r).abs() > 1.0, "the middle lies off the arc's circle");
+        let got = curvature_circle(c, 0.5, true).unwrap();
+        assert!(got.nominal);
+        assert_eq!(got.at, at);
+        assert!((got.center.distance(at) - got.radius).abs() < 1e-6, "{got:?}");
+        assert!(got.center.distance(Point::ORIGIN) > got.radius, "the center is on the side away from the arc's");
     }
 
     /// The cubic's own radius of curvature on a quarter circle's segment is about 2.2% larger than
