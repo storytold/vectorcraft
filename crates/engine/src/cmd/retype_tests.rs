@@ -533,9 +533,24 @@ fn a_long_tracked_line_is_checked_in_time() {
     let t0 = std::time::Instant::now();
     let r = s.execute("type.retype", &json!({})).unwrap();
     let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
-    assert_eq!(texts.concat(), text);
+    assert_eq!(texts, vec![text], "the whole line is one object: {r}");
+    assert_eq!(r["fonts"][0]["tracking"], json!(50.0), "{r}");
     assert_eq!(r["unmatched"], json!([]));
     eprintln!("450 tracked glyphs: {:?}, {} objects", t0.elapsed(), texts.len());
+}
+
+#[test]
+fn two_overlapping_lone_glyphs_beside_art_stay_outlines() {
+    // Two M outlines start 0.3 em apart, closer than the first one's advance: a tight-tracking
+    // line of two, which the layout check splits again. Each is still a lone one-contour glyph.
+    let mut s = session();
+    let a = outlined(&mut s, json!({"x": 40, "y": 100, "text": "M", "size": 30}));
+    let b = outlined(&mut s, json!({"x": 49, "y": 100, "text": "M", "size": 30}));
+    let dot = s.execute("shape.ellipse", &json!({"x": 300, "y": 60, "width": 8, "height": 8})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, dot]})).unwrap();
+    // Nothing is left to retype: both stay outlines, as the lone bar beside art does.
+    let e = s.execute("type.retype", &json!({})).unwrap_err();
+    assert!(format!("{e:?}").contains("no selected shape matches"), "{e:?}");
 }
 
 /// Where type `t` draws each glyph that has ink, in document space.
@@ -773,7 +788,9 @@ fn glyphs_type_cannot_draw_do_not_use_up_the_tracking_measure() {
 fn tightly_tracked_type_keeps_its_tracking() {
     // Tracking tighter than a space: the space moves the next glyph back.
     // M MM: of its two gaps, the word space is the tighter, and the lower median.
-    for text in ["MMMM", "MMMM MM", "M MM", "MM M"] {
+    // M M MM: most gaps hold a word space, so the tightest extras alone seed a tracking that
+    // splits the last glyph.
+    for text in ["MMMM", "MMMM MM", "M MM", "MM M", "M M MM"] {
         let mut s = session();
         let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 30}), &[json!({"tracking": -300})]);
         assert_eq!(r["texts"], json!([text]), "{r}");
