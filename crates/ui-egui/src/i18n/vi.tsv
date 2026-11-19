@@ -1968,6 +1968,10 @@ file-filter	Templates	Mẫu
 	Add Color Tool	Công cụ Thêm màu
 	Remove Color Tool	Công cụ Xóa màu
 	Remove Color	Xóa màu
+	Set As Base Color	Đặt làm màu cơ sở
+	Select Shade	Chọn sắc độ
+	Add New Color	Thêm màu mới
+	Set Current Color As Base Color	Đặt màu hiện tại làm màu cơ sở
 	Find the selected colors in the artwork	Tìm các màu đã chọn trong tác phẩm
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
@@ -5790,6 +5794,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no native format	không có định dạng gốc
 @msg	no pages	không có trang
 @msg	no pattern `{name}`	không có họa tiết `{name}`
+@msg	art painted with `{name}` can't be its tile	đối tượng được tô bằng `{name}` không thể làm ô của nó
 @msg	no perspective grid preset named `{name}`	không có thiết lập sẵn lưới phối cảnh tên `{name}`
 @msg	no plug-in {0} is installed	plug-in {0} chưa được cài đặt
 @msg	no plug-in {id} is installed	plug-in {id} chưa được cài đặt
@@ -7667,6 +7672,36 @@ anchor	Points:	Điểm:
 @msg	`{id}` is not a colour adjustment	`{id}` không phải là điều chỉnh màu
 @msg	missing `effect`	thiếu `effect`
 @msg	`params` must be an object	`params` phải là một đối tượng
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Tam giác (rỗng)
+	Circle (open)	Hình tròn (rỗng)
+	Square (open)	Hình vuông (rỗng)
+	Arrow (open)	Mũi tên (rỗng)
+	Barbed	Có ngạnh
+arrowhead	Feather	Lông vũ
+	Half Arrow (left)	Nửa mũi tên (trái)
+	Half Arrow (right)	Nửa mũi tên (phải)
+	Double Bar	Thanh đôi
+	Dot on Bar	Chấm trên thanh
+	Chevron	Hình chữ V
+	Plus	Dấu cộng
+	Hexagon (open)	Lục giác (rỗng)
+	Tag	Nhãn
+	Tag (open)	Nhãn (rỗng)
+	Half Circle	Nửa hình tròn
+	Drop	Giọt nước
+	Slash	Gạch chéo
+	Double Slash	Gạch chéo đôi
+	Diamond (open)	Hình thoi (rỗng)
+	Reverse Triangle	Tam giác ngược
+	Swallowtail	Đuôi én
+	Bracket	Ngoặc
+	Fork	Chạc
+	Leaf	Chiếc lá
+	Kite	Hình diều
+	Triangle to Bar	Tam giác đến thanh
+	Oval	Hình bầu dục
+	Line Arrow	Mũi tên nét
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Công cụ chính xác cho đường dẫn
 	Anchor Eraser Brush	Cọ tẩy điểm neo
@@ -7957,6 +7992,7 @@ breakText	Glyphs	Glyph
 	Remove Strokes	Gỡ nét
 	Place Brush Art	Đặt đối tượng của cọ
 	Replace Brush Art	Thay đối tượng của cọ
+	Replace Pattern Art	Thay đối tượng của họa tiết
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
 	Apply to Strokes	Áp dụng cho nét
 	Leave Strokes	Giữ nguyên nét
@@ -8541,6 +8577,11 @@ breakText	Glyphs	Glyph
 	Blossom Chain	Chuỗi hoa
 	Pennant Garland	Dây cờ tam giác
 	Lantern String	Dây đèn lồng
+	Engraving	Khắc nét
+	Fine Hatching	Nét gạch mảnh
+	Dense Hatching	Nét gạch dày
+	Tapered Hatching	Nét gạch thuôn
+	Broken Hatching	Nét gạch đứt
 	Image Brush	Cọ hình ảnh
 	Soft Bloom	Hoa nở mềm
 	Halftone Field	Vùng bán sắc

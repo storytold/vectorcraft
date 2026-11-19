@@ -3581,6 +3581,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Alat Tambah Warna
 	Remove Color Tool	Alat Hapus Warna
 	Remove Color	Hapus Warna
+	Set As Base Color	Atur sebagai Warna Dasar
+	Select Shade	Pilih Corak
+	Add New Color	Tambah Warna Baru
+	Set Current Color As Base Color	Atur Warna Saat Ini sebagai Warna Dasar
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -6379,6 +6383,7 @@ imageTrace	Outline	Kontur
 	Arrow	Panah
 	Arrow (open)	Panah (terbuka)
 	Barbed	Berduri
+arrowhead	Feather	Bulu
 	Half Arrow (left)	Setengah panah (kiri)
 	Half Arrow (right)	Setengah panah (kanan)
 	Concave	Cekung
@@ -6406,6 +6411,7 @@ imageTrace	Outline	Kontur
 	Kite	Layang-layang
 	Triangle to Bar	Segitiga ke batang
 	Oval	Oval
+	Line Arrow	Panah garis
 	Complementary	Komplementer
 	Complementary 2	Komplementer 2
 	Split Complementary	Komplementer terpisah
@@ -8145,6 +8151,7 @@ breakText	Glyphs	Glif
 	Remove Strokes	Hapus Stroke
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
+	Replace Pattern Art	Ganti karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8564,6 +8571,11 @@ breakText	Glyphs	Glif
 	Blossom Chain	Rangkaian Bunga
 	Pennant Garland	Untaian Panji
 	Lantern String	Rangkaian Lentera
+	Engraving	Ukiran
+	Fine Hatching	Arsiran halus
+	Dense Hatching	Arsiran rapat
+	Tapered Hatching	Arsiran meruncing
+	Broken Hatching	Arsiran terputus
 	Image Brush	Kuas gambar
 	Soft Bloom	Mekar lembut
 	Halftone Field	Bidang halftone

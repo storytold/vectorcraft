@@ -811,6 +811,7 @@ antiAlias	Sharp	शार्प
 	Bar	बार
 	Bar Graph Tool	बार ग्राफ़ टूल
 	Barbed	कंटीले
+arrowhead	Feather	पंख
 	Bas Relief	बास रिलीफ़
 	Bas Relief…	बास रिलीफ़…
 	Base Along:	आधार के साथ:
@@ -3113,6 +3114,7 @@ antiAlias	Sharp	शार्प
 	Limit:	सीमा:
 	Limited	लिमिटेड
 	Line	लाइन
+	Line Arrow	लाइन तीर
 	line {line}	लाइन {line}
 	Line {line}	लाइन {line}
 	Line {line}: {name}: {status}	लाइन {line}: {name}: {status}
@@ -4491,6 +4493,7 @@ antiAlias	Sharp	शार्प
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
 	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Replace Pattern Art	पैटर्न आर्टवर्क बदलें
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
 	Apply to Strokes	स्ट्रोक्स पर लागू करें
 	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
@@ -5334,6 +5337,10 @@ antiAlias	Sharp	शार्प
 	Add Color Tool	रंग जोड़ें टूल
 	Remove Color Tool	रंग हटाएँ टूल
 	Remove Color	रंग हटाएँ
+	Set As Base Color	आधार रंग के रूप में सेट करें
+	Select Shade	शेड चुनें
+	Add New Color	नया रंग जोड़ें
+	Set Current Color As Base Color	वर्तमान रंग को आधार रंग के रूप में सेट करें
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -8390,6 +8397,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no parent layer	कोई अभिभावक लेयर नहीं
 @msg	no Pathfinder operation applied yet	अभी तक कोई पाथफाइंडर ऑपरेशन लागू नहीं है
 @msg	no pattern `{name}`	कोई पैटर्न `{name}` नहीं
+@msg	art painted with `{name}` can't be its tile	`{name}` से रंगी कला उसकी टाइल नहीं हो सकती
 @msg	no pattern named `{choice}`	`{choice}` नाम का कोई पैटर्न नहीं
 @msg	no pattern swatch `{name}`	कोई पैटर्न स्वॉच `{name}` नहीं
 @msg	no PDF preset named `{n}`	कोई PDF प्रीसेट नहीं है जिसका नाम `{n}` है
@@ -10327,6 +10335,11 @@ theme	Appearance	अपीयरेंस
 	Blossom Chain	फूलों की शृंखला
 	Pennant Garland	झंडियों की माला
 	Lantern String	लालटेन की शृंखला
+	Engraving	नक्काशी
+	Fine Hatching	बारीक रेखांकन
+	Dense Hatching	घना रेखांकन
+	Tapered Hatching	पतला होता रेखांकन
+	Broken Hatching	टूटा रेखांकन
 	Image Brush	छवि ब्रश
 	Soft Bloom	कोमल खिलावट
 	Halftone Field	हाफ़टोन क्षेत्र

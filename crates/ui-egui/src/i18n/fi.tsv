@@ -3127,6 +3127,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Lisää väri -työkalu
 	Remove Color Tool	Poista väri -työkalu
 	Remove Color	Poista väri
+	Set As Base Color	Aseta perusväriksi
+	Select Shade	Valitse sävy
+	Add New Color	Lisää uusi väri
+	Set Current Color As Base Color	Aseta nykyinen väri perusväriksi
 	Find the selected colors in the artwork	Etsi valitut värit kuvituksesta
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
@@ -5634,6 +5638,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no native format	ei omaa tiedostomuotoa
 @msg	no pages	ei sivuja
 @msg	no pattern `{name}`	ei kuviota `{name}`
+@msg	art painted with `{name}` can't be its tile	kuviolla `{name}` maalattu kuvitus ei voi olla sen ruutu
 @msg	no perspective grid preset named `{name}`	ei perspektiiviruudukon esiasetusta nimeltä `{name}`
 @msg	no plug-in {0} is installed	laajennusta {0} ei ole asennettu
 @msg	no plug-in {id} is installed	laajennusta {id} ei ole asennettu
@@ -6415,6 +6420,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Arrow	Nuoli
 	Arrow (open)	Nuoli (avoin)
 	Barbed	Väkänen
+arrowhead	Feather	Sulka
 	Half Arrow (left)	Puolinuoli (vasen)
 	Half Arrow (right)	Puolinuoli (oikea)
 	Concave	Kovera
@@ -6442,6 +6448,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Kite	Leija
 	Triangle to Bar	Kolmiosta palkkiin
 	Oval	Soikio
+	Line Arrow	Viivanuoli
 	Complementary	Vastaväri
 	Complementary 2	Vastaväri 2
 	Split Complementary	Jaettu vastaväri
@@ -8362,6 +8369,7 @@ breakText	Glyphs	Merkit
 	Remove Strokes	Poista viivat
 	Place Brush Art	Sijoita siveltimen kuvitus
 	Replace Brush Art	Korvaa siveltimen kuvitus
+	Replace Pattern Art	Korvaa kuvion kuvitus
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Viivat käyttävät tätä sivellintä. Käytetäänkö uutta kuvitusta näissä viivoissa, vai jätetäänkö ne ennalleen ja lisätään siveltimestä kopio, jossa on uusi kuvitus?
 	Apply to Strokes	Käytä viivoihin
 	Leave Strokes	Jätä viivat ennalleen
@@ -8953,6 +8961,11 @@ breakText	Glyphs	Merkit
 	Blossom Chain	Kukkaketju
 	Pennant Garland	Viiririvistö
 	Lantern String	Lyhtyketju
+	Engraving	Kaiverrus
+	Fine Hatching	Hieno viivoitus
+	Dense Hatching	Tiheä viivoitus
+	Tapered Hatching	Kapeneva viivoitus
+	Broken Hatching	Katkoviivoitus
 	Image Brush	Kuvasiveltimet
 	Soft Bloom	Pehmeä kukinta
 	Halftone Field	Rasterikenttä

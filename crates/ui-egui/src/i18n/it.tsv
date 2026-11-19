@@ -1731,6 +1731,10 @@ file-filter	Templates	Modelli
 	Add Color Tool	Strumento Aggiungi colore
 	Remove Color Tool	Strumento Rimuovi colore
 	Remove Color	Rimuovi colore
+	Set As Base Color	Imposta come colore base
+	Select Shade	Seleziona sfumatura
+	Add New Color	Aggiungi nuovo colore
+	Set Current Color As Base Color	Imposta il colore corrente come colore base
 	Find the selected colors in the artwork	Trova i colori selezionati nella grafica
 	Harmony Sets	Gruppi di armonia
 	Height	Altezza
@@ -5427,6 +5431,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no native format	nessun formato nativo
 @msg	no pages	nessuna pagina
 @msg	no pattern `{name}`	nessun motivo `{name}`
+@msg	art painted with `{name}` can't be its tile	una grafica dipinta con `{name}` non può esserne la porzione
 @msg	no perspective grid preset named `{name}`	nessun preset di griglia prospettica denominato `{name}`
 @msg	no plug-in {0} is installed	nessun plug-in {0} installato
 @msg	no plug-in {id} is installed	nessun plug-in {id} installato
@@ -7638,6 +7643,37 @@ anchor	Points:	Punti:
 @msg	`{id}` is not a colour adjustment	`{id}` non è una regolazione del colore
 @msg	missing `effect`	manca `effect`
 @msg	`params` must be an object	`params` deve essere un oggetto
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Triangolo (aperto)
+	Circle (open)	Cerchio (aperto)
+	Square (open)	Quadrato (aperto)
+	Arrow (open)	Freccia (aperta)
+	Barbed	Uncinata
+arrowhead	Feather	Piuma
+arrowhead	Target	Bersaglio
+	Half Arrow (left)	Mezza freccia (sinistra)
+	Half Arrow (right)	Mezza freccia (destra)
+	Double Bar	Doppia barra
+	Dot on Bar	Punto su barra
+	Chevron	Gallone
+	Plus	Più
+	Hexagon (open)	Esagono (aperto)
+	Tag	Etichetta
+	Tag (open)	Etichetta (aperta)
+	Half Circle	Semicerchio
+	Drop	Goccia
+	Slash	Barra obliqua
+	Double Slash	Doppia barra obliqua
+	Diamond (open)	Rombo (aperto)
+	Reverse Triangle	Triangolo invertito
+	Swallowtail	Coda di rondine
+	Bracket	Parentesi
+	Fork	Forcella
+	Leaf	Foglia
+	Kite	Aquilone
+	Triangle to Bar	Da triangolo a barra
+	Oval	Ovale
+	Line Arrow	Freccia a linee
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Strumenti di precisione per tracciati
 	Anchor Eraser Brush	Pennello gomma punti di ancoraggio
@@ -7928,6 +7964,7 @@ breakText	Glyphs	Glifi
 	Remove Strokes	Rimuovi tracce
 	Place Brush Art	Inserisci grafica del pennello
 	Replace Brush Art	Sostituisci grafica del pennello
+	Replace Pattern Art	Sostituisci grafica del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
 	Apply to Strokes	Applica alle tracce
 	Leave Strokes	Lascia le tracce
@@ -10367,6 +10404,11 @@ breakText	Glyphs	Glifi
 	Blossom Chain	Catena di fiori
 	Pennant Garland	Ghirlanda di bandierine
 	Lantern String	Fila di lanterne
+	Engraving	Incisione
+	Fine Hatching	Tratteggio fine
+	Dense Hatching	Tratteggio fitto
+	Tapered Hatching	Tratteggio affusolato
+	Broken Hatching	Tratteggio spezzato
 	Image Brush	Pennelli immagine
 	Soft Bloom	Fioritura morbida
 	Halftone Field	Campo mezzitoni
