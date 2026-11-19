@@ -8,6 +8,7 @@ use vectorcraft_doc::{
     Unit, WidthProfile,
 };
 use vectorcraft_geom::PathData;
+use vectorcraft_tools::builder::is_live_paint;
 
 use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::{live_paint_parts, live_paint_parts_skipped, painted};
@@ -220,7 +221,7 @@ fn own_stroke_or_leaves(s: &Session, p: &Value) -> Result<Vec<vectorcraft_doc::N
             matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
                 && !n.is_compound_shape()
                 && n.appearance.stroke().is_some()
-                && !vectorcraft_tools::builder::is_live_paint(n)
+                && !is_live_paint(n)
         })
     };
     let (mut out, rest): (Vec<_>, Vec<_>) = picked.into_iter().partition(own);
@@ -464,7 +465,7 @@ impl Session {
             if let Some(n) = nodes.first() {
                 return node_stroke(n);
             }
-            if !vectorcraft_tools::builder::is_live_paint(n) {
+            if !is_live_paint(n) {
                 return None;
             }
         }

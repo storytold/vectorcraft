@@ -3878,6 +3878,19 @@ fn live_paint_group_swap_trades_the_faces_fill_and_the_edges_stroke() {
     let (faces2, edges2) = part_looks(&s, g);
     assert!(faces2.iter().all(|f| f.fill_paint() == Paint::solid(Color::BLACK)));
     assert!(edges2.iter().all(|e| matches!(e.stroke_paint(), Paint::Gradient(gr) if gr.geom.is_none() && gr.freeform.is_none())));
+    // A freeform gradient's points belong to its face: faces with freeform fills keep their paint, in no undo step.
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "freeform"}})).unwrap();
+    assert!(
+        part_looks(&s, g)
+            .0
+            .iter()
+            .all(|f| matches!(f.fill_paint(), Paint::Gradient(gr) if gr.gradient.kind == vectorcraft_color::GradientKind::Freeform))
+    );
+    let looks = part_looks(&s, g);
+    let depth = history_state(&s).0;
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_eq!(part_looks(&s, g), looks);
+    assert_eq!(history_state(&s).0, depth);
     // A group with edges and no faces keeps its paint.
     let line = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 300, "x2": 100, "y2": 300})).unwrap()["id"].as_u64().unwrap());
     let edges_only = NodeId(s.execute("livePaint.make", &json!({"ids": [line.0]})).unwrap()["id"].as_u64().unwrap());
@@ -3917,8 +3930,19 @@ fn live_paint_group_default_clears_the_faces_and_gives_the_edges_a_thin_black_st
     s.execute("select.set", &json!({"ids": [g.0, r.0]})).unwrap();
     s.execute("paint.default", &json!({})).unwrap();
     assert_eq!(node(&s, r).appearance.fill_paint(), Paint::solid(Color::WHITE));
-    assert_eq!(part_looks(&s, g), (faces, edges));
+    assert_eq!(part_looks(&s, g), (faces.clone(), edges.clone()));
     assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::solid(Color::WHITE), 1.0));
+    // A redefined Default Graphic Style goes to other art; the parts still take no fill and a 0.5 pt black stroke.
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0, r.0]})).unwrap();
+    s.execute("paint.default", &json!({})).unwrap();
+    assert_eq!(part_looks(&s, g), (faces, edges), "the parts do not take the redefined style");
+    assert_eq!(node(&s, r).appearance.fill_paint(), Paint::solid(Color::from_hex("#00ff00").unwrap()));
 }
 
 /// Invert on a whole selected Live Paint group recolors its faces' fills and leaves its edges and
@@ -4016,6 +4040,10 @@ fn live_paint_group_rules_stop_where_paint_commands_stop() {
     s.execute("select.set", &json!({"ids": [g.0, edge.0]})).unwrap();
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fillMixed"], false);
+    assert!(node(&s, edge).appearance.fill_paint().is_none(), "an edge selected with its group takes no fill");
+    // The same for an edge given in `ids` with its group.
+    s.execute("paint.setFill", &json!({"ids": [g.0, edge.0], "color": "#0000ff"})).unwrap();
+    assert!(node(&s, edge).appearance.fill_paint().is_none(), "an edge given with its group takes no fill");
 
     // The same for a blend's key.
     let mut s = session();

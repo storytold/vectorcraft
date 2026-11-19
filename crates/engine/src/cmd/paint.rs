@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
 use vectorcraft_doc::appearance::{FillLayer, StrokeLayer};
 use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, Document, GraySource, Node, NodeId, NodeKind};
+use vectorcraft_tools::builder::{edges, faces, is_live_paint};
 
 use super::appearance::{ItemTarget, edit_items, edit_items_then, item_target, row_targets};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
@@ -44,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. A Live Paint group's faces take the stroke its edges share and its edges take the fill its faces share, a gradient fitted to each face or edge; a group whose faces' fills or edges' strokes differ, or that has no face or no edge, keeps its paint. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring what the swap changes on its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. A Live Paint group's faces take the stroke its edges share and its edges take the fill its faces share, a gradient fitted to each face or edge; a group whose faces' fills or edges' strokes differ (a freeform gradient counts as differing), or that has no face or no edge, keeps its paint. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring what the swap changes on its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
             has_doc,
             swap
         ),
@@ -53,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. A Live Paint group's faces get no fill and its edges get a 0.5 pt black stroke, and with only Live Paint groups selected (or in ids) the defaults become no fill and a 0.5 pt black stroke (with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command). On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. A Live Paint group's faces get no fill and its edges get a 0.5 pt black stroke, in place of their whole appearance and also when the Default Graphic Style is redefined, and with only Live Paint groups selected (or in ids) the defaults become no fill and a 0.5 pt black stroke (with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command). On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
             has_doc,
             default_paint
         ),
@@ -226,7 +227,7 @@ impl Session {
             if let Some(n) = nodes.first() {
                 return Some((Cow::Borrowed(*n), None));
             }
-            if !vectorcraft_tools::builder::is_live_paint(n) {
+            if !is_live_paint(n) {
                 return None;
             }
         }
@@ -273,7 +274,6 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
 
 /// The ids of the faces and edges of `n` when it is a Live Paint group, else none.
 pub(crate) fn live_paint_parts(n: &Node) -> Vec<NodeId> {
-    use vectorcraft_tools::builder::{edges, faces, is_live_paint};
     if !is_live_paint(n) {
         return vec![];
     }
@@ -290,8 +290,7 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, stroke: bool, out: &mut Vec<&'
     if n.is_ruler_guide() {
         return;
     }
-    if vectorcraft_tools::builder::is_live_paint(n) {
-        use vectorcraft_tools::builder::{edges, faces};
+    if is_live_paint(n) {
         out.extend(if stroke { edges(n) } else { faces(n) }.into_iter().map(|part| &**part));
         return;
     }
@@ -765,7 +764,6 @@ pub(crate) fn bucket_color_params(s: &Session, p: &Value, cmd: &str) -> Result<O
 /// shape are painted as one object, and a Live Paint group kept among another one's hidden sources
 /// is not one of them. The art of graph designs drawn in graph series is left out.
 fn live_paint_groups(d: &Document, roots: &[NodeId]) -> Vec<(NodeId, Vec<NodeId>, Vec<NodeId>)> {
-    use vectorcraft_tools::builder::{edges, faces, is_live_paint};
     fn find<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
         let group = matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. });
         if is_live_paint(n) {
@@ -1128,12 +1126,18 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 
 /// The paint every one of `parts` has on top as its fill (`fill`) or stroke, swatch link included
 /// and gradient placement left out ([`unplaced`]: each part fits it to its own bounds), or None
-/// when they differ or there are none.
+/// when they differ or there are none. A freeform gradient's points and their colors belong to the
+/// part they sit on, so a freeform gradient on any part counts as a paint the parts do not share.
 fn shared_paint(d: &Document, parts: &[NodeId], fill: bool) -> Option<Paint> {
-    let mut paints =
-        parts.iter().filter_map(|id| d.node(*id)).map(|n| unplaced(&if fill { n.appearance.fill_paint() } else { n.appearance.stroke_paint() }));
+    let mut paints = parts.iter().filter_map(|id| d.node(*id)).map(|n| if fill { n.appearance.fill_paint() } else { n.appearance.stroke_paint() });
     let first = paints.next()?;
-    paints.all(|p| p == first).then_some(first)
+    let freeform =
+        |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some());
+    if freeform(&first) {
+        return None;
+    }
+    let first = unplaced(&first);
+    paints.all(|p| !freeform(&p) && unplaced(&p) == first).then_some(first)
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1152,7 +1156,8 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     if !ids.is_empty() || !groups.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
-        // A group whose faces' fills (or edges' strokes) differ, or that has no face or no edge, keeps its paint.
+        // A group whose faces' fills (or edges' strokes) differ or are freeform gradients, or that has no face or no edge,
+        // keeps its paint.
         let swaps: Vec<(&[NodeId], &[NodeId], Paint, Paint)> = groups
             .iter()
             .filter_map(|(_, faces, edges)| {
@@ -1400,7 +1405,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             // its faces' or edges').
             let own = |d: &Document, id: NodeId| {
                 d.node(id)
-                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !vectorcraft_tools::builder::is_live_paint(n))
+                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !is_live_paint(n))
                     .and_then(|n| n.proxy_paint_only(stroke, None))
                     .cloned()
             };
