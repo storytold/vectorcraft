@@ -16,6 +16,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("disableAutoAddDelete", "Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment."),
     ("usePreciseCursors", "Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on."),
     ("showToolTips", "Shows a tip when the pointer rests on a button or field that has one."),
+    ("showToolCards", "Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips."),
     ("showExternalScriptWarning", "Shows a warning before a script you choose runs."),
     ("antiAliasedArtwork", "Smooths the edges of artwork on the canvas."),
     (
@@ -59,6 +60,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useRegistrationPointForSymbol",
         "With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.",
     ),
+    ("showOnShapeCreation", "Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed."),
     ("fadeRegionOutsideArtboard", "Darkens the canvas outside the artboards while the Artboard tool is active."),
     (
         "artboardUpdateWhileDragging",
@@ -226,11 +228,11 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Hyphenation
     (
         "hyphenationLanguage",
-        "New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.",
+        "New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.",
     ),
     (
         "hyphenationExceptions",
-        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.",
+        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.",
     ),
     // Plug-ins & Scratch Disks
     (
@@ -350,6 +352,21 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "useCompression",
         "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
+    ),
+    // Clipboard Handling
+    (
+        "copyAsSvg",
+        "Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.",
+    ),
+    ("copyAsPdf", "On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
+    ("copyAicb", "VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet."),
+    (
+        "aicbMode",
+        "Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.",
+    ),
+    (
+        "pasteTextFormatting",
+        "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
     ),
 ];
 
