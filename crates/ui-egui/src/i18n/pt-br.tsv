@@ -474,6 +474,10 @@ antiAlias	Sharp	Nítido
 	Cusp	Cúspide
 	Straight segment	Segmento reto
 	Circle too large	Círculo grande demais
+	Show Radii	Mostrar Raios
+	Show Diameter	Mostrar Diâmetro
+	Anchors at Standard Positions	Pontos de Ancoragem em Posições Padrão
+	Third Point by Dragging	Terceiro Ponto Arrastando
 	Clean Up…	Limpar…
 	Clear	Limpar
 	Clear All Tabs	Limpar Todas as Paradas de Tabulação
@@ -549,9 +553,14 @@ antiAlias	Sharp	Nítido
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Exibição em Roda
 	Box View	Exibição em Caixa
+	Show Out-of-Gamut Colors	Mostrar Cores Fora do Gamut
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores
+	Show Document Colors	Mostrar Cores do Documento
+	Document Colors	Cores do Documento
+	Selection Colors	Cores da Seleção
+@plural	Used {n} time|Used {n} times	Usada {n} vez|Usada {n} vezes
 	Show Harmony	Mostrar Harmonia
 	Harmony Rule	Regra de Harmonia
 	Harmony color	Cor da harmonia
@@ -2707,6 +2716,11 @@ digits	Malayalam	Malaiala
 	Edit Arrowheads	Editar Pontas de Seta
 	Edit Arrowheads…	Editar Pontas de Seta…
 	Reload Arrowheads	Recarregar Pontas de Seta
+	Bevels	Chanfros
+	Edit Bevels	Editar Chanfros
+	Edit Bevels…	Editar Chanfros…
+	{name} (document)	{name} (documento)
+	Reload Bevels	Recarregar Chanfros
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
 	Rotate View to Selection	Girar Visualização para a Seleção
@@ -3115,6 +3129,7 @@ digits	Malayalam	Malaiala
 	Recent Commands	Comandos recentes
 	No recent commands	Nenhum comando recente
 	Type to search commands, tools, panels and effects	Digite para pesquisar comandos, ferramentas, painéis e efeitos
+	Clear Recent Commands	Limpar Comandos Recentes
 	Search commands	Pesquisar comandos
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
@@ -6800,7 +6815,10 @@ mark-style	Japanese	Japonesas
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve ser um objeto que contenha apenas `mode`, com o valor shaded ou wireframe
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
-@msg	bevel must be none or one of {_1}	bevel deve ser none ou um de {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel deve ser none, um de {_1}, ou custom com {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom precisa de {BEVEL_PROFILE}, os pontos do chanfro
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} deve ser uma string
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} deve ter de 2 a {most} pontos [x, y], cada proporção entre 0 e 1, de [0, 0] (a borda da tampa) a [1, 1] (a parede lateral)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} não pode construir sólidos a partir desta arte: suas instâncias de símbolo, mesclagens e grupos de recorte contêm objetos demais
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} não pode construir um sólido a partir da instância do símbolo “{symbol}”: a arte do símbolo não está disponível
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: o caminho de recorte é complexo demais para recortar a arte
@@ -10840,6 +10858,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Vector Packs	Pacotes vetoriais
+	Compass Rose	Rosa dos ventos
+	Botanical Sprig	Ramo botânico
+	Facet Diamond	Diamante facetado
+	Tide Crest	Crista da onda
 	Leaf Vine	Trepadeira de folhas
 	Blossom Chain	Corrente de flores
 	Pennant Garland	Guirlanda de bandeirolas

@@ -488,7 +488,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => None,
         };
         let label = match style {
-            Some(name) => std::borrow::Cow::Owned(format!("{label}: {name}")),
+            Some(name) => std::borrow::Cow::Owned(format!("{} {name}", crate::i18n::colon(label))),
             None => std::borrow::Cow::Borrowed(label),
         };
         if !hide_thumb {

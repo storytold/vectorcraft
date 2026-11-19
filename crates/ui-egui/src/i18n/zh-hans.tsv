@@ -456,6 +456,10 @@ antiAlias	Sharp	锐利
 	Cusp	尖点
 	Straight segment	直线段
 	Circle too large	圆形过大
+	Show Radii	显示半径
+	Show Diameter	显示直径
+	Anchors at Standard Positions	锚点位于标准位置
+	Third Point by Dragging	拖动放置第三点
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -557,9 +561,14 @@ antiAlias	Sharp	锐利
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色轮视图
 	Box View	方块视图
+	Show Out-of-Gamut Colors	显示超出色域的颜色
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
+	Show Document Colors	显示文档颜色
+	Document Colors	文档颜色
+	Selection Colors	所选对象的颜色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	显示协调
 	Harmony Rule	协调规则
 	Harmony color	协调颜色
@@ -3137,6 +3146,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit Arrowheads	编辑箭头
 	Edit Arrowheads…	编辑箭头…
 	Reload Arrowheads	重新载入箭头
+	Bevels	斜角列表
+	Edit Bevels	编辑斜角
+	Edit Bevels…	编辑斜角…
+	{name} (document)	{name} (文档)
+	Reload Bevels	重新载入斜角
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
@@ -3549,6 +3563,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
 	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
+	Clear Recent Commands	清除最近使用的命令
 	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
@@ -6715,7 +6730,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
-@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必须是 none、{_1} 之一，或带 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，即斜角的点
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必须是字符串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必须是 2 到 {most} 个 [x, y] 点，每个比例在 0 到 1 之间，从 [0, 0]（端面的边缘）到 [1, 1]（侧壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
@@ -10611,6 +10629,11 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Vector Packs	矢量画笔包
+	Compass Rose	罗盘玫瑰
+	Botanical Sprig	植物枝条
+	Facet Diamond	切面钻石
+	Tide Crest	浪尖
 	Leaf Vine	叶藤
 	Blossom Chain	花链
 	Pennant Garland	旗帜花环
