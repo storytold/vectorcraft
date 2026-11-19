@@ -3,7 +3,7 @@ use super::{
 };
 
 /// The Contextual Task Bar's area.
-fn task_bar_id() -> egui::Id {
+pub(crate) fn task_bar_id() -> egui::Id {
     egui::Id::unique("task-bar")
 }
 
@@ -17,14 +17,6 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
 /// too narrow for them it leaves them out.
 pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
     task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
-}
-
-/// The actions and chips the Contextual Task Bar offered when it was last drawn, before Bar Actions
-/// left any out: each one's name and its id in [`TASK_BAR_ACTIONS`] or [`TASK_BAR_CHIPS`] (none:
-/// Bar Actions cannot turn it off).
-#[cfg(test)]
-pub(crate) fn task_bar_offered(ctx: &egui::Context) -> Vec<(String, Option<&'static str>)> {
-    ctx.data(|d| d.get_temp(task_bar_id().with("offered")).unwrap_or_default())
 }
 
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
@@ -362,13 +354,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let paints = chip_paints(app, ui.ctx());
     let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
-    // Every action and chip the bar offers here, with its name, for More Options › Bar Actions;
-    // the ones that are off there are left out of the bar.
+    // Every action and chip the bar offers here, with its name and its id in TASK_BAR_ACTIONS or
+    // TASK_BAR_CHIPS (none: Bar Actions cannot turn it off), for More Options › Bar Actions; the
+    // ones that are off there are left out of the bar.
     let hidden = &app.ui.task_bar_hidden_actions;
-    #[cfg(test)]
-    let mut probe: Vec<(String, Option<&'static str>)> =
-        items.iter().map(|(label, _, cmd, params)| (label.to_string(), action_id(cmd, params))).collect();
-    let mut offered: Vec<(&str, &'static str)> = items.iter().filter_map(|(label, _, cmd, params)| Some((*label, action_id(cmd, params)?))).collect();
+    let mut offered: Vec<(&'static str, Option<&'static str>)> =
+        items.iter().map(|(label, _, cmd, params)| (*label, action_id(cmd, params))).collect();
     items.retain(|(_, _, cmd, params)| action_id(cmd, params).is_none_or(|a| !hidden.contains(a)));
     let bounds = xf.rect.shrink(8.0);
     // The canvas's width less the frame's margins and stroke.
@@ -390,14 +381,11 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     .into_iter()
     .filter_map(|(shown, chip)| shown.then_some(chip))
     .collect();
-    offered.extend(chips.iter().map(|c| (c.label(shape.is_some()), c.id(shape.is_some()))));
-    #[cfg(test)]
-    {
-        probe.extend(chips.iter().map(|c| (c.label(shape.is_some()).to_string(), Some(c.id(shape.is_some())))));
-        ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("offered"), probe));
-    }
+    offered.extend(chips.iter().map(|c| (c.label(shape.is_some()), Some(c.id(shape.is_some())))));
     let chips: Vec<Chip> = chips.into_iter().filter(|c| !hidden.contains(c.id(shape.is_some()))).collect();
-    let offered: Vec<(&str, &str, bool)> = offered.into_iter().map(|(label, action)| (label, action, !hidden.contains(action))).collect();
+    let bar_actions: Vec<(&str, &str, bool)> =
+        offered.iter().filter_map(|&(label, action)| action.map(|a| (label, a, !hidden.contains(a)))).collect();
+    ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("offered"), offered));
     let any_hidden = !hidden.is_empty();
     let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| item_width(ui, label, cmd)).collect();
     let fidelity = app.session.tool_options()["fidelity"].as_f64();
@@ -531,7 +519,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             // Actions, which shows every action again.
                             ui.menu_button(format!("   {}", tl!("Bar Actions")), |ui| {
                                 ui.set_min_width(170.0);
-                                for (label, action, shown) in &offered {
+                                for (label, action, shown) in &bar_actions {
                                     if widgets::menu_item_name(ui, bar_action_name(label), true, *shown) {
                                         run = Some(("window.taskBar.actions", json!({ "action": action })));
                                     }

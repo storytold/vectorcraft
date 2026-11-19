@@ -1973,7 +1973,7 @@ fn every_action_the_bar_offers_can_be_turned_off() {
         app.run("tool.select", json!({"tool": "selection"})).unwrap();
         setup(&mut app);
         let (ctx, _) = bar(&mut app);
-        let offered = canvas::task_bar_offered(&ctx);
+        let offered: Vec<(&'static str, Option<&'static str>)> = ctx.data(|d| d.get_temp(canvas::task_bar_id().with("offered")).unwrap_or_default());
         assert!(canvas::task_bar_rect(&ctx).is_some() && !offered.is_empty(), "{case}: the bar shows actions");
         for (label, action) in &offered {
             assert!(action.is_some(), "{case}: {label} has no id in Bar Actions");
