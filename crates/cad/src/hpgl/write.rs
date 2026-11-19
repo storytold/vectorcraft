@@ -939,10 +939,8 @@ impl<'a> Walk<'a> {
                     end(&mut cur, &mut out, false);
                     cur.push(p);
                 }
-                PathEl::LineTo(p) => {
-                    if cur.last() != Some(&p) {
-                        cur.push(p);
-                    }
+                PathEl::LineTo(p) if cur.last() != Some(&p) => {
+                    cur.push(p);
                 }
                 PathEl::ClosePath => {
                     let s = cur.first().copied();
