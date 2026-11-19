@@ -7,10 +7,11 @@
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
 > Blend redraw update (#5179): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
-> SVG Options can write physical dimensions with Responsive off and a physical unit selected (#4462); pixel output remains bare numbers.
 
 
 ## Feature submission evidence
+
+> SVG Options can write physical dimensions with Responsive off and a physical unit selected (#4462); pixel output remains bare numbers.
 
 Draft enhancement #5804: Preferences › File Handling can select a raster editor through the native picker, with a private draft outside engine preferences and generic dialog fields. OK saves it, Cancel discards it, and Reset restores PhotoCraft. With Use System Defaults off, a missing chosen editor falls back to PhotoCraft, then the system default; validation and launch failures are reported. Control/MCP and synthetic input cannot choose an application or run external Edit Original. Web behavior, parity scores and estimates are unchanged; macOS/Linux smoke tests remain pending.
 
