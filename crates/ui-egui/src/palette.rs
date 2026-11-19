@@ -1091,8 +1091,17 @@ pub struct CommandUses {
 impl CommandUses {
     /// Counts a pick of `id`. A new id when [`MAX_COUNTED_COMMANDS`] are counted first removes
     /// one id from the half of the ids picked longest ago: the one with the lowest count, of those
-    /// the one picked longest ago. It then counts once.
+    /// the one picked longest ago. It then counts once. When the pick number is at its limit, the
+    /// counted ids' pick numbers are first renumbered from 1 in their order ([`renumbered`]), so
+    /// the pick still takes a number above all of them.
     pub(crate) fn count(&mut self, id: &str) {
+        if self.pick == u32::MAX {
+            let lasts: Vec<u64> = self.uses.values().map(|&(_, last)| u64::from(last)).collect();
+            for ((_, last), number) in self.uses.values_mut().zip(renumbered(&lasts)) {
+                *last = number;
+            }
+            self.pick = self.uses.values().map(|&(_, last)| last).max().unwrap_or(0);
+        }
         self.pick = self.pick.saturating_add(1);
         let pick = self.pick;
         if let Some((n, last)) = self.uses.get_mut(id) {
@@ -1138,32 +1147,52 @@ impl CommandUses {
     }
 }
 
+/// The pick numbers `lasts` renumbered from 1 in their order, in the order of `lasts`: equal
+/// numbers stay equal, and the lowest becomes 1.
+fn renumbered(lasts: &[u64]) -> Vec<u32> {
+    let mut distinct = lasts.to_vec();
+    distinct.sort_unstable();
+    distinct.dedup();
+    lasts.iter().map(|last| u32::try_from(distinct.partition_point(|d| d < last) + 1).unwrap_or(u32::MAX)).collect()
+}
+
 /// Serde reader for the saved pick counts ([`crate::UiState::command_uses`]): an entry that is not
 /// a pair of counts is dropped, a count above 999 reads as 999, and of more than
-/// [`MAX_COUNTED_COMMANDS`] ids the ones picked most recently are kept. Anything else reads as no
-/// picks, so an unknown value doesn't lose the rest of the preferences.
+/// [`MAX_COUNTED_COMMANDS`] ids the ones picked most recently are kept. When a kept pick number or
+/// the last pick number is above the largest the counts hold, the kept pick numbers are
+/// renumbered from 1 in their order ([`renumbered`]). Anything else reads as no picks, so an
+/// unknown value doesn't lose the rest of the preferences.
 pub fn deserialize_command_uses<'de, D: serde::Deserializer<'de>>(d: D) -> Result<CommandUses, D::Error> {
     use std::cmp::Reverse;
     let v = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
-    let number = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_u64).map(|n| u32::try_from(n).unwrap_or(u32::MAX));
+    let number = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_u64);
     // The heap holds at most MAX_COUNTED_COMMANDS + 1 entries, the least recent pick on top (of
-    // equal picks, the id that sorts last), so a long saved list is not collected whole.
-    let mut kept: std::collections::BinaryHeap<Reverse<(u32, Reverse<&String>, u32)>> = std::collections::BinaryHeap::new();
+    // equal picks, the id that sorts last), so a long saved list is not collected whole. Pick
+    // numbers are compared as saved, before any is renumbered.
+    let mut kept: std::collections::BinaryHeap<Reverse<(u64, Reverse<&String>, u32)>> = std::collections::BinaryHeap::new();
     for (id, u) in v.get("uses").and_then(serde_json::Value::as_object).into_iter().flatten() {
         let (Some(n), Some(last)) = (number(u.get(0)), number(u.get(1))) else { continue };
         if n == 0 || !u.as_array().is_some_and(|a| a.len() == 2) {
             continue;
         }
-        kept.push(Reverse((last, Reverse(id), n.min(HALVING_COUNT - 1))));
+        let n = u32::try_from(n.min(u64::from(HALVING_COUNT - 1))).unwrap_or(HALVING_COUNT - 1);
+        kept.push(Reverse((last, Reverse(id), n)));
         if kept.len() > MAX_COUNTED_COMMANDS {
             kept.pop();
         }
     }
-    let uses: std::collections::BTreeMap<String, (u32, u32)> =
-        kept.into_iter().map(|Reverse((last, Reverse(id), n))| (id.clone(), (n, last))).collect();
+    let kept: Vec<(&String, u32, u64)> = kept.into_iter().map(|Reverse((last, Reverse(id), n))| (id, n, last)).collect();
     // The pick number stays above every saved last pick, so the next pick is the most recent.
-    let newest = uses.values().map(|&(_, last)| last).max().unwrap_or(0);
+    let newest = kept.iter().map(|&(_, _, last)| last).max().unwrap_or(0);
     let pick = number(v.get("pick")).unwrap_or(0).max(newest);
+    if let Ok(pick) = u32::try_from(pick) {
+        let uses = kept.into_iter().map(|(id, n, last)| (id.clone(), (n, u32::try_from(last).unwrap_or(pick)))).collect();
+        return Ok(CommandUses { pick, uses });
+    }
+    let lasts: Vec<u64> = kept.iter().map(|&(_, _, last)| last).collect();
+    let uses: std::collections::BTreeMap<String, (u32, u32)> =
+        kept.into_iter().zip(renumbered(&lasts)).map(|((id, n, _), last)| (id.clone(), (n, last))).collect();
+    let pick = uses.values().map(|&(_, last)| last).max().unwrap_or(0);
     Ok(CommandUses { pick, uses })
 }
 
@@ -2344,10 +2373,31 @@ mod tests {
         assert_eq!(uses.uses.get("a"), Some(&(500, 4)));
         assert_eq!(uses.uses.get("c"), Some(&(2, 3)));
         assert!(!uses.uses.contains_key("b"));
-        let mut stuck = counted(&[("a", 1)]);
-        stuck.pick = u32::MAX;
-        stuck.count("a");
-        assert_eq!(stuck.uses.get("a"), Some(&(2, u32::MAX)), "the pick number saturates");
+    }
+
+    /// At the pick number's limit, the counted ids' pick numbers are renumbered from 1 in their
+    /// order, so a pick still takes a number above all of them and a command picked again leaves
+    /// the half of the ids picked longest ago.
+    #[test]
+    fn picks_keep_their_order_at_the_pick_number_limit() {
+        let ids: Vec<String> = (0..MAX_COUNTED_COMMANDS).map(|i| format!("c{i:03}")).collect();
+        let mut uses = CommandUses { pick: u32::MAX, uses: ids.iter().map(|id| (id.clone(), (2, u32::MAX))).collect() };
+        uses.uses.insert("c000".into(), (1, u32::MAX));
+        uses.count("c000");
+        assert_eq!(uses.uses.get("c000"), Some(&(2, 2)));
+        assert_eq!(uses.uses.get("c001"), Some(&(2, 1)));
+        uses.count("new");
+        assert!(uses.uses.contains_key("c000"), "c000 was picked last: {:?}", uses.uses.get("c000"));
+        assert!(!uses.uses.contains_key("c001"));
+        assert_eq!(uses.uses.get("new"), Some(&(1, 3)));
+        // Equal pick numbers stay equal, and the order of the others is kept.
+        let mut uses =
+            CommandUses { pick: u32::MAX, uses: [("a", (1, 7)), ("b", (1, u32::MAX)), ("c", (1, 7))].map(|(k, v)| (k.to_string(), v)).into() };
+        uses.count("d");
+        assert_eq!(
+            uses,
+            CommandUses { pick: 3, uses: [("a", (1, 1)), ("b", (1, 2)), ("c", (1, 1)), ("d", (1, 3))].map(|(k, v)| (k.to_string(), v)).into() }
+        );
     }
 
     /// Saved counts load what is readable: a count above 999 reads as 999, entries that are not a
@@ -2374,6 +2424,18 @@ mod tests {
         let mut uses = load(json!({ "pick": 1, "uses": {"a": [1, 9]} }));
         uses.count("b");
         assert_eq!(uses.uses.get("b"), Some(&(1, 10)));
+        // Saved pick numbers above the largest the counts hold are compared as saved, and the kept
+        // ones are renumbered from 1 in their order.
+        let big = u64::from(u32::MAX) + 1;
+        let mut many: serde_json::Map<String, serde_json::Value> = (0..MAX_COUNTED_COMMANDS).map(|i| (format!("c{i:03}"), json!([1, big]))).collect();
+        many.insert("z".into(), json!([1, big + 1]));
+        let uses = load(json!({ "pick": big + 1, "uses": many }));
+        assert_eq!(uses.uses.len(), MAX_COUNTED_COMMANDS);
+        assert_eq!(uses.uses.get("z"), Some(&(1, 2)), "the newest pick is kept");
+        assert_eq!(uses.uses.get("c000"), Some(&(1, 1)));
+        assert_eq!(uses.pick, 2);
+        let uses = load(json!({ "pick": big, "uses": {"a": [1, 5], "b": [1, 3]} }));
+        assert_eq!(uses, CommandUses { pick: 2, uses: [("a", (1, 2)), ("b", (1, 1))].map(|(k, v)| (k.to_string(), v)).into() });
     }
 
     /// A pick is counted only when Recent Commands records it: a refused pick and a pick of the

@@ -198,6 +198,10 @@ font-technology	Variable	可變
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三點弧形工具
+	Three-Point Arc	三點弧形
+	Arc too large	弧形過大
+	Third Point Sets Direction	第三點指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -570,6 +574,7 @@ font-technology	Variable	可變
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色輪檢視
 	Box View	方塊檢視
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
@@ -616,6 +621,8 @@ font-technology	Variable	可變
 	Contextual Task Bar	快捷工作列
 	Pin Bar Position	釘選工作列位置
 	Reset Bar Position	重設工作列位置
+	Bar Actions	工作列動作
+	Reset Bar Actions	重設工作列動作
 	Resize	調整大小
 	Contrast	對比
 	Control	控制
@@ -2221,6 +2228,10 @@ file-filter	Templates	範本
 @msg	a guide has no curvature circle	參考線沒有曲率圓
 @msg	the circle that matches the path there would reach past the canvas	在該處與路徑曲率相符的圓會超出畫布
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
+@msg	`at` must be "start" or "end"	`at` 必須是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 與 `toward` 必須且只能指定一個
+@msg	no arc fits these points: two are the same or all three lie on one line	沒有弧形符合這些點：有兩點相同，或三點共線
+@msg	give `at` only with `toward`	`at` 只能與 `toward` 一起指定
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
@@ -2675,6 +2686,8 @@ file-filter	Templates	範本
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必須是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必須是 none、oklch 或 hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -2706,6 +2719,10 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	物件 {_1} 是經過透視扭曲或隨意扭曲的影像，此指令無法用於它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	無法這樣扭曲影像 {_1}：其角點不會構成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	無法這樣扭曲影像 {_1}：其角點會越過扭曲的地平線
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	無法這樣扭曲影像 {_1}：其角點會太靠近，無法進行透視對應
 @msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
@@ -3331,6 +3348,11 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Knife	美工刀
 	Knockout Group	去底群組
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑桿
+	HSL Sliders	HSL 滑桿
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容納的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 	Lab Spot Colors:	Lab 特別色：
 	Lab Values	Lab 值
 	Landscape	橫向
@@ -4700,9 +4722,13 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處加上斷字連字號，沒有連字號則從不斷字，與語言和大小寫無關。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及透過「確定」設定新資料夾時載入，安全模式除外；要求權限的增效模組只在您授予權限後載入。網頁版不載入任何增效模組。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	「大」為濾鏡或指令增效模組的每次執行提供至少 2.5 億個指令，時間限制不變；「正常」保留增效模組自己的預算。即時效果、轉存器和匯入器保留各自的預算。
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效模組的物件濾鏡每次執行可使用的指令數；「大」比「正常」允許更多，60 秒的時間限制不變。重型濾鏡保留自己的預算。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
@@ -4714,13 +4740,15 @@ digits	Malayalam	馬來亞拉姆數字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具列中將每個工具組的名稱顯示在其工具上方；關閉此選項時，各組依序排列，中間沒有任何內容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	從現在起，開啟或新增的文件會以分頁開啟；關閉此選項時，每份文件會在浮動視窗中開啟。已開啟的文件保持原位。
 	Makes the document tabs taller and their names larger.	讓文件頁籤更高，頁籤上的名稱更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 變數優先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列或 VECTORCRAFT_TITLEBAR 變數選擇了標題列。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或縮小介面；在相同縮放比例下，畫布上的圖稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 繪製的工具指標會隨介面縮放一起變大變小；關閉此選項時，指標保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有開啟此選項時，動畫縮放才會起作用；關閉此選項時，動畫縮放會顯示為灰色，縮放不帶動畫。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滾輪縮放時會平滑過渡，縮放工具在你向側邊拖曳或按住不放時進行縮放；關閉此選項時，縮放工具會縮放到你拖曳過的區域。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	從下次啟動起，桌面版透過這類圖形處理器顯示畫布；圖稿一律在 CPU 上繪製。「自動」在 Windows 和 macOS 上優先使用內建圖形處理器。網頁版不使用此選項。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	從下次啟動起，在圖形驅動程式允許時，視窗顯示每一影格而不等待顯示器重新整理，最多每秒 240 影格。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	從下次啟動起，桌面版使用這類圖形處理器繪製；「自動」優先使用驅動顯示器的圖形處理器。網頁版不使用此選項。
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	從下次啟動起，視窗不等待顯示器重新整理就顯示畫面，每秒最多 240 格；關閉時由顯示器決定畫面的節奏。啟動時設定的呈現模式優先。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每份文件保留的最大復原步驟數；調低後，按一下「確定」時會刪除最早的步驟。步驟佔用過多記憶體時也可能更早被刪除。
@@ -4739,6 +4767,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	「開啟最近使用的檔案」和首頁畫面最多列出這麼多最近的檔案；設為 0 時不列出，但 VectorCraft 仍會記住最多 30 個。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	開啟文件時，顯示已儲存預視的連結 EPS 影像會保留該預視，而不重新讀取 EPS 檔案；已變更的檔案仍依「更新連結」處理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素預視中，影像以平滑方式繪製；關閉此選項時，像素邊緣清晰銳利。像素預視以外，影像一律平滑顯示。
+	PDF Text	PDF 文字
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開啟或嵌入的 PDF 中的文字會以可編輯文字匯入，或以外框匯入，在沒有其字體的電腦上看起來也相同。
+	Linked pages show the file's own text.	連結的頁面顯示檔案本身的文字。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	連結的檔案變更時，「自動」會重新讀取，「修改時詢問」會先詢問您，「手動」則保持不變並在狀態列顯示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，「從範本新增…」和「另存範本…」開啟時所在的資料夾；留空則使用文件資料夾中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	「編輯原稿」以系統中該類型的預設應用程式開啟連結的檔案；關閉此選項時，若已安裝 PhotoCraft，連結的點陣影像會在 PhotoCraft 中開啟。
@@ -10397,6 +10428,20 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Leaf Vine	葉藤
+	Blossom Chain	花鏈
+	Pennant Garland	旗幟花環
+	Lantern String	燈籠串
+	Orbit Lines	軌道線
+	Petal Garland	花瓣花環
+	Lattice Braid	格紋編織
+	Facet Sweep	切面筆觸
+	Artistic Brushes	藝術筆刷
+	Paint	繪畫
+	Flat Sweep	平刷
+	Dry Drag	乾拖
+	Loaded Stroke	厚塗筆觸
+	Fan Sweep	扇形筆觸
 	Engraving	雕刻
 	Fine Hatching	細線排線
 	Dense Hatching	密集排線
