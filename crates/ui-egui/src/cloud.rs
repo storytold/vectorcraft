@@ -8,8 +8,8 @@
 //! The words are the ones [`crate::i18n`] has.
 //!
 //! VectorCraft holds no provider credential and speaks no provider protocol. Every call goes to
-//! the CollabCraft service, which is the single place a provider is configured and permissions are
-//! decided. Replacing one storage provider with another changes nothing here.
+//! the one service the host configured. That service is where a provider is chosen and where
+//! permissions are decided. One storage provider replaces another without a line changing here.
 //!
 //! Nothing in this file opens a socket either. The transport half is a [`CloudBackend`] the host
 //! application supplies (see `apps/vectorcraft/src/cloud.rs`). Every service call blocks. A
@@ -125,13 +125,13 @@ pub fn copies() -> Vec<CopyFormat> {
         .collect()
 }
 
-/// Where the CollabCraft service is, as the environment names it.
+/// Where the cloud service is, as the environment names it.
 ///
 /// Read from the environment and compiled in nowhere, because the service is deployment-specific
 /// and a desktop binary must not carry one. The host application reads the same list, so the badge
 /// names the deployment the worker actually reaches.
 pub fn base_url() -> Option<String> {
-    ["VECTORCRAFT_CLOUD_URL", "CRAFT_CLOUD_URL", "COLLABCRAFT_URL"]
+    ["VECTORCRAFT_CLOUD_URL", "CRAFT_CLOUD_URL"]
         .into_iter()
         .filter_map(|key| std::env::var(key).ok())
         .map(|value| value.trim().trim_end_matches('/').to_owned())
