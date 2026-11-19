@@ -112,7 +112,9 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "calligraphic-nibs",
             "pressure-sensitive",
             "bristle-brushes",
+            "paint",
             "pattern-borders",
+            "decorative",
             "scatter-shapes",
             "stipple",
             "game-trails",
@@ -121,10 +123,25 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "tech-circuit",
             "engraving",
             "arrows",
-            "image-brush"
+            "image-brush",
+            "artistic"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
+    // None of them is a default brush.
+    let defaults: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).collect();
+    for id in ids {
+        let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
+        assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
+    }
+    assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn the_builtin_libraries_list_their_brush_names_and_counts() {
+    let mut s = Session::new();
+    let list = run(&mut s, "brush.libraries", json!({}));
+    let libs = list["libraries"].as_array().unwrap();
     // Looked up by id, so a library added to the list does not shift these checks.
     let entry = |id: &str| libs.iter().find(|l| l["id"] == id).unwrap();
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
@@ -133,6 +150,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ["Notched Ribbon", "Double Line", "Wave", "Teardrop", "Striped Ribbon"]
     );
     assert_eq!(entry("art-ribbons")["count"].as_u64(), Some(5));
+    assert_eq!((entry("decorative")["name"].as_str(), entry("decorative")["count"].as_u64()), (Some("Decorative"), Some(4)));
     let trails = run(&mut s, "brush.library", json!({"library": "game-trails"}));
     assert_eq!(
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
@@ -162,6 +180,11 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
     assert_eq!(strs(&added["added"]), ["Laser Bolt"]);
+}
+
+#[test]
+fn every_builtin_library_brush_has_its_kind_and_draws() {
+    let s = Session::new();
     // One kind of brush per library (Ink and Wash: art brushes and a calligraphic one), every
     // brush drawing something.
     for (id, kind) in [
@@ -170,7 +193,9 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("calligraphic-nibs", "calligraphic"),
         ("pressure-sensitive", "art"),
         ("bristle-brushes", "bristle"),
+        ("paint", "art"),
         ("pattern-borders", "pattern"),
+        ("decorative", "pattern"),
         ("scatter-shapes", "scatter"),
         ("stipple", "scatter"),
         ("game-trails", "art"),
@@ -178,6 +203,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("dry-media", "art"),
         ("arrows", "art"),
         ("image-brush", "scatter"),
+        ("artistic", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
@@ -191,6 +217,11 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             assert!(!vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &stroke).is_empty(), "{} draws nothing", b.name);
         }
     }
+}
+
+#[test]
+fn builtin_library_brushes_bring_the_resources_their_art_uses() {
+    let s = Session::new();
     // The resources their art uses come with them: Striped Ribbon's pattern, Sparkles' symbol.
     let (_, ribbons) = cmd::brushlib::library(&s, "art-ribbons").unwrap();
     assert_eq!(art_patterns(ribbons.brush("Striped Ribbon").unwrap()), ["Pinstripes"]);
@@ -199,13 +230,46 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let BrushKind::Scatter(sparkles) = &shapes.brush("Sparkles").unwrap().kind else { panic!("not a scatter brush") };
     assert!(matches!(&sparkles.art.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Sparkle"));
     assert!(shapes.doc.symbols.iter().any(|x| x.name == "Sparkle"));
-    // None of them is a default brush.
-    let defaults: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).collect();
-    for id in ids {
-        let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
-        assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
+}
+
+#[test]
+fn artistic_library_strokes_are_editable_and_reopen_from_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "artistic").unwrap();
+    let (_, alias) = cmd::brushlib::library(&s, "Artistic").unwrap();
+    assert_eq!(alias.brushes, lib.brushes);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], "artistic");
+    let names = ["Orbit Lines", "Petal Garland", "Lattice Braid", "Facet Sweep"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let line = run(&mut s, "shape.line", json!({"x1": 10, "y1": 50, "x2": 190, "y2": 50}))["id"].as_u64().unwrap();
+    let red = vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)), 1.0);
+    for b in &lib.brushes {
+        let BrushKind::Art(a) = &b.kind else { panic!("{} is not an art brush", b.name) };
+        assert!(art_paths(&a.art).len() >= 2, "{} has no editable vector art", b.name);
+        for path in [line_to(180.0), line_to(1.0)] {
+            assert!(!vectorcraft_brush::stroke_pieces(&lib.doc, b, &path, &black_stroke()).is_empty(), "{} draws nothing", b.name);
+        }
+        // The art is black, so with Tints every path takes the stroke color itself.
+        let mut fills = vec![];
+        for piece in vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &red) {
+            piece.walk(&mut |n| {
+                if n.path_data().is_some() {
+                    fills.push(n.appearance.fill_paint().color().map(|c| c.to_rgb()));
+                }
+            });
+        }
+        let is_red = |c: &Option<[f32; 3]>| c.is_some_and(|[r, g, b]| (r - 1.0).abs() < 1e-5 && g.abs() < 1e-5 && b.abs() < 1e-5);
+        assert!(!fills.is_empty() && fills.iter().all(is_red), "{} does not take the stroke color: {fills:?}", b.name);
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "artistic", "name": b.name, "apply": true, "ids": [line]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([line]));
+        assert_eq!(undo_len(&s), before + 1);
     }
-    assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
 #[test]
@@ -243,6 +307,26 @@ fn image_brush_stamps_draw_and_carry_their_pixels_when_added_and_saved() {
     }
     assert_eq!(saved_brushes, lib.brushes);
     assert_eq!(reopened.images, lib.doc.images);
+}
+
+#[test]
+fn a_loaded_library_named_artistic_keeps_its_name_ahead_of_the_builtin_alias() {
+    let mut file = vectorcraft_doc::Document::new(100.0, 100.0);
+    vectorcraft_brush::store(&mut file, &[vectorcraft_brush::defaults()[0].clone()]);
+    let b64 = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&file));
+    let mut s = session();
+    let loaded = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Artistic.vectorcraft"}));
+    assert_eq!(loaded["name"], "Artistic");
+    let id = loaded["library"].as_str().unwrap();
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "ARTISTIC"}))["id"], id);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "artistic"}))["id"], "artistic", "exact built-in id still works");
+    // A name a built-in library has selects the built-in, as for every built-in; the loaded one keeps its id.
+    let full = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Artistic Brushes.vectorcraft"}));
+    assert_eq!(full["name"], "Artistic Brushes");
+    let full_id = full["library"].as_str().unwrap();
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic Brushes"}))["id"], "artistic");
+    assert_eq!(run(&mut s, "brush.library", json!({"library": full_id}))["id"], full_id);
 }
 
 /// Every path of brush art `n`: (anchors, opacity).
@@ -499,6 +583,41 @@ fn the_tech_circuit_library_constructs_adds_and_applies_each_brush() {
 }
 
 #[test]
+fn decorative_brushes_repeat_distinct_art_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Decorative").unwrap();
+    let names = ["Leaf Vine", "Blossom Chain", "Pennant Garland", "Lantern String"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    let mut signatures = std::collections::HashSet::new();
+    for b in &lib.brushes {
+        let BrushKind::Pattern(pattern) = &b.kind else { panic!("{} is not a pattern brush", b.name) };
+        assert_eq!(pattern.colorization, vectorcraft_brush::Colorization::Tints);
+        let points = |len: f64| anchors(&vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(len), &black_stroke()).iter().collect::<Vec<_>>());
+        let (one, four) = (points(48.0), points(192.0));
+        assert!(!one.is_empty() && four.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        // A path four tiles long places the motif four times, each copy one tile further along.
+        assert_eq!(four.len(), 4 * one.len(), "{} repeats its motif", b.name);
+        for (i, p) in four.iter().enumerate() {
+            let q = one[i % one.len()];
+            let shift = 48.0 * (i / one.len()) as f64;
+            assert!((p.x - q.x - shift).abs() < 1e-3 && (p.y - q.y).abs() < 1e-3, "{} copy {} at {p:?}, not {q:?}", b.name, i / one.len());
+        }
+        signatures.insert(one.iter().map(|p| ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)).collect::<Vec<_>>());
+        let before = undo_len(&s);
+        let applied = run(&mut s, "brush.addFromLibrary", json!({"library": "decorative", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!((strs(&applied["added"]), &applied["applied"]), (vec![b.name.as_str()], &json!([path])));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    assert_eq!(signatures.len(), names.len(), "each design produces a different repeating shape");
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
 fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_library() {
     let mut s = session();
     let (_, lib) = cmd::brushlib::library(&s, "Pressure Sensitive").unwrap();
@@ -533,6 +652,37 @@ fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_librar
         }
         let before = undo_len(&s);
         let added = run(&mut s, "brush.addFromLibrary", json!({"library": "pressure-sensitive", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
+fn paint_brushes_draw_distinct_marks_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Paint").unwrap();
+    let names = ["Flat Sweep", "Dry Drag", "Loaded Stroke", "Fan Sweep"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    let mut curve = line_to(20.0);
+    curve.curve_to((60.0, -25.0), (140.0, 25.0), (180.0, 0.0));
+    for b in &lib.brushes {
+        let BrushKind::Art(art) = &b.kind else { panic!("{} is not an art brush", b.name) };
+        assert_eq!(art.colorization, vectorcraft_brush::Colorization::Tints);
+        assert_eq!(art.width, 150.0);
+        for line in [line_to(2.0), line_to(180.0), curve.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &black_stroke());
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "paint", "name": b.name, "apply": true, "ids": [path]}));
         assert_eq!(strs(&added["added"]), [b.name.as_str()]);
         assert_eq!(added["applied"], json!([path]));
         assert_eq!(undo_len(&s), before + 1);
