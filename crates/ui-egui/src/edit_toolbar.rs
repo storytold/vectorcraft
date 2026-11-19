@@ -694,7 +694,10 @@ fn row(ui: &mut Ui, t: &Tokens, tool: &'static ToolInfo, on: bool, dimmed: bool)
     if on {
         ui.painter().rect_filled(fill, 2.0, t.selection);
     } else if resp.hovered() {
-        ui.painter().rect_filled(fill, 2.0, t.hover);
+        // A dimmed row can't be dragged in again, so its hover is a recess in the panel's darker
+        // fill rather than the lighter hover fill: over that fill the dim text falls to 4.3:1 in
+        // the default theme, under the 4.5:1 it is drawn for (#8294).
+        ui.painter().rect_filled(fill, 2.0, if dimmed { t.panel_darker } else { t.hover });
     }
     // The active tool's row is lit, dimmed or not. A tool the toolbar holds is drawn in the dim
     // text colour, not the disabled colour: at the drawer's 12.5 px the disabled colour is
