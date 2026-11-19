@@ -4,7 +4,9 @@ use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Document, GraySource, Node, NodeId, NodeKind};
+use vectorcraft_doc::appearance::{FillLayer, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, Document, GraySource, Node, NodeId, NodeKind};
+use vectorcraft_tools::builder::{edges, faces, is_live_paint};
 
 use super::appearance::{ItemTarget, edit_items, edit_items_then, item_target, row_targets};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
@@ -14,6 +16,10 @@ use super::{
 };
 use crate::{DocState, EngineError};
 
+/// The Live Paint Bucket's tool id. While it is active, a fill or stroke color chosen for no
+/// object in particular is the color it paints with ([`apply_paint`]).
+pub(crate) const LIVE_PAINT_BUCKET: &str = "livePaintBucket";
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -21,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a Live Paint group among the targets (or inside one) takes the fill on its faces only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes (the color the bucket paints with) and the selection keeps its paint → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -30,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke",
             [],
             None,
-            "{…as paint.setFill, item?: the stroke item to set, aligned?: bool (as paint.setFill)} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, as paint.setFill",
+            "{…as paint.setFill, item?: the stroke item to set, aligned?: bool (as paint.setFill)} same as paint.setFill, for the stroke; without `item`, a Live Paint group among the targets (or inside one) takes the stroke on its edges only; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, as paint.setFill",
             has_doc,
             |s, p| { set_paint(s, p, false) }
         ),
@@ -39,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring what the swap changes on its rows for every line of its kind (exceptions: docs/mcp.md)",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. A Live Paint group's faces take the stroke its edges share and its edges take the fill its faces share, a gradient fitted to each face or edge; a group whose faces' fills or edges' strokes differ (a freeform gradient counts as differing), or that has no face or no edge, keeps its paint. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring what the swap changes on its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
             has_doc,
             swap
         ),
@@ -48,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. A Live Paint group's faces get no fill and its edges get a 0.5 pt black stroke, in place of their whole appearance and also when the Default Graphic Style is redefined, and with only Live Paint groups selected (or in ids) the defaults become no fill and a 0.5 pt black stroke (with New Art Has Basic Appearance off, new art then takes the selection's appearance, as after any command). On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md). While the Live Paint Bucket is the active tool and no ids or id are given (a null one counts as none), only the defaults change",
             has_doc,
             default_paint
         ),
@@ -69,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "None",
             [],
             Some("/"),
-            "{} set the active proxy (fill or stroke) to None, as paint.setFill or paint.setStroke with none does → {objects}",
+            "{} set the active proxy (fill or stroke) to None, as paint.setFill or paint.setStroke with none does (while the Live Paint Bucket is the active tool, only the default changes) → {objects}",
             has_doc,
             |s, _| {
                 let f = s.fill_active;
@@ -96,7 +102,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents and, except with target \"contents\", their own fills and strokes; a compound path's member stands for its compound path) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke, and on a graph label the new color of its characters and rows for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md); no undo step when no color changes → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents and, except with target \"contents\", their own fills and strokes; a compound path's member stands for its compound path; a Live Paint group recolors its faces' fills or its edges' strokes) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, or while the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke, and on a graph label the new color of its characters and rows for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md); no undo step when no color changes → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -105,7 +111,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Complement",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item and a selected object of a dynamic symbol instance as paint.invert does; with nothing selected, the default; no undo step when no color changes → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; a Live Paint group recolors its faces' fills or its edges' strokes as with paint.invert; honours the Appearance panel's active item and a selected object of a dynamic symbol instance as paint.invert does; with nothing selected, or while the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), the default; no undo step when no color changes → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.complement", "Complement", &|c: Color| c.complement_keep_model())
         ),
@@ -114,7 +120,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Apply Last Color",
             [],
             Some(","),
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} apply the last solid colour used (paint.recent lastColor) to the active proxy of the selection and the default → {objects} (as paint.setFill)",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} apply the last solid colour used (paint.recent lastColor) to the active proxy of the selection and the default (while the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), to the default only) → {objects} (as paint.setFill)",
             has_doc,
             |s, p| {
                 let paint = Paint::solid(s.last_solid);
@@ -126,7 +132,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Apply Last Gradient",
             [],
             Some("."),
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default → {objects} (as paint.setFill)",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default (while the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), to the default only) → {objects} (as paint.setFill)",
             has_doc,
             |s, p| {
                 let paint = super::gradient::unplaced(&Paint::Gradient(Box::new(s.last_gradient.clone())));
@@ -154,7 +160,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors)}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors)}",
             always,
             proxies
         ),
@@ -178,10 +184,11 @@ impl Session {
 
     /// The fill and stroke the Fill/Stroke proxies show: the Appearance panel's active item (in the
     /// first selected object's own stack) for the proxy of its kind, else the first selected
-    /// object's (a group's first painted object's; type: its first run's), else the defaults for
-    /// new art. When the object whose fill the proxy shows is a gradient mesh with points picked
-    /// ([`Session::fill_mesh_points`]), the fill is its first picked point's color, which a solid
-    /// fill color changes.
+    /// object's (a group's first painted object's; a Live Paint group's first face's fill and first
+    /// edge's stroke, or the next selected object's when it has no face or edge; type: its first
+    /// run's), else the defaults for new art. When the object whose fill the proxy shows is a
+    /// gradient mesh with points picked ([`Session::fill_mesh_points`]), the fill is its first
+    /// picked point's color, which a solid fill color changes.
     pub fn proxy_paints(&self) -> (Paint, Paint) {
         let points = self.fill_mesh_points();
         let show = |stroke: bool| match self.proxy_source(stroke) {
@@ -196,8 +203,12 @@ impl Session {
     /// The object whose fill (or stroke) the proxy shows, with the Appearance panel's active item
     /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art. With
     /// an object of a dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that
-    /// object as the instance draws it.
+    /// object as the instance draws it. None while the Live Paint Bucket is the active tool: the
+    /// proxies show the colors it paints with.
     pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(Cow<'_, Node>, Option<usize>)> {
+        if self.tool_id() == LIVE_PAINT_BUCKET {
+            return None;
+        }
         let st = self.active()?;
         if let Some(part) = st.selected_symbol_part() {
             return Some((Cow::Owned(part), None));
@@ -207,9 +218,20 @@ impl Session {
         if first.appearance.item_of_kind(item, !stroke).is_some() {
             return Some((Cow::Borrowed(first), item));
         }
-        let mut nodes = vec![];
-        painted(first, true, &mut nodes);
-        nodes.first().map(|n| (Cow::Borrowed(*n), None))
+        // A Live Paint group without faces (or edges) shows the next selected object's paint; any other
+        // object without a painted object shows the defaults for new art.
+        for id in st.selection.subjects() {
+            let Some(n) = st.doc.node(*id) else { continue };
+            let mut nodes = vec![];
+            painted(n, true, stroke, &mut nodes);
+            if let Some(n) = nodes.first() {
+                return Some((Cow::Borrowed(*n), None));
+            }
+            if !is_live_paint(n) {
+                return None;
+            }
+        }
+        None
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
@@ -250,12 +272,26 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
     }
 }
 
+/// The ids of the faces and edges of `n` when it is a Live Paint group, else none.
+pub(crate) fn live_paint_parts(n: &Node) -> Vec<NodeId> {
+    if !is_live_paint(n) {
+        return vec![];
+    }
+    faces(n).into_iter().chain(edges(n)).map(|part| part.id).collect()
+}
+
 /// The objects whose paints the proxies show for a selected `n`, the ones the paint commands
 /// change ([`leaf_targets`]): groups and layers stand for their contents (and so do blends and
-/// other containers inside them), a compound path for its parts.
-pub(crate) fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
+/// other containers inside them), a compound path for its parts. A Live Paint group stands for its
+/// faces in the fill proxy (`stroke` false) and for its edges in the stroke proxy, the parts a fill
+/// or a stroke given to it changes ([`live_paint_parts_skipped`]).
+pub(crate) fn painted<'a>(n: &'a Node, top: bool, stroke: bool, out: &mut Vec<&'a Node>) {
     // A ruler guide has no paints.
     if n.is_ruler_guide() {
+        return;
+    }
+    if is_live_paint(n) {
+        out.extend(if stroke { edges(n) } else { faces(n) }.into_iter().map(|part| &**part));
         return;
     }
     let expand = match n.kind {
@@ -264,7 +300,7 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
         _ => !top && n.is_container(),
     };
     if expand {
-        n.children().into_iter().flatten().for_each(|c| painted(c, false, out));
+        n.children().into_iter().flatten().for_each(|c| painted(c, false, stroke, out));
     } else {
         out.push(n);
     }
@@ -293,18 +329,31 @@ impl DocState {
         }
         // Looking the first object up builds the id cache when there is none.
         let first = self.selection.objects.first().and_then(|id| self.doc.node(*id));
-        let (mut selected, mut nodes) = (vec![], vec![]);
+        let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
+        // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
+        let mut covered = std::collections::HashSet::new();
         // Every node with a selected id, in tree order: a repeated id (a damaged file) counts at each
         // place it appears.
         for n in self.doc.nodes_in_order(self.selection.objects.iter().copied()) {
             #[cfg(test)]
             tests::note_gathered();
             selected.push(n);
-            painted(n, true, &mut nodes);
+            if covered.contains(&n.id) {
+                continue;
+            }
+            covered.extend(live_paint_parts(n));
+            painted(n, true, false, &mut fills);
+            painted(n, true, true, &mut strokes);
         }
         let differ = |stroke: bool| {
             let item = first.and_then(|f| f.appearance.item_of_kind(item, !stroke));
-            let set = if item.is_some() { &selected } else { &nodes };
+            let set = if item.is_some() {
+                &selected
+            } else if stroke {
+                &strokes
+            } else {
+                &fills
+            };
             let mut paints = set.iter().flat_map(|n| match picked_colors(n, if stroke || item.is_some() { &[] } else { points }) {
                 c if c.is_empty() => vec![proxy_paint(n, stroke, item)],
                 c => c.into_iter().map(Paint::solid).collect(),
@@ -331,7 +380,11 @@ impl DocState {
 impl Session {
     /// [`DocState::proxy_mixed`] of the active document for the Appearance panel's active item.
     /// A gradient mesh with points picked ([`Session::fill_mesh_points`]) counts with their colors.
+    /// Neither is mixed while the Live Paint Bucket is the active tool ([`Session::proxy_source`]).
     pub fn proxy_mixed(&self) -> (bool, bool) {
+        if self.tool_id() == LIVE_PAINT_BUCKET {
+            return (false, false);
+        }
         self.active().map_or((false, false), |st| st.proxy_mixed_with(self.appearance_item(), &self.fill_mesh_points()))
     }
 }
@@ -478,6 +531,8 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint, cmd: &str) -> Result
 /// remember the paint. Replies `{objects}`: how many objects took the paint.
 pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let bucket = bucket_color_params(s, p, cmd)?;
+    let p = bucket.as_ref().unwrap_or(p);
     let focus = switch_or(p, "focus", true, cmd)?;
     let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
     // Characters selected with the Type tool take the paint, not the whole type object (#1063).
@@ -554,7 +609,7 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     }
     // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
-    let selected = item.targets(s, p)?;
+    let selected = item.targets_for(s, p, fill)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
     let of = super::appearance::reference_of(s, p, item, cmd)?;
     let paint = if span {
@@ -680,6 +735,89 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     }
     s.remember_paint(&paint);
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+}
+
+/// Is the Live Paint Bucket the active tool while `p` names no `ids`, `id` or `item`? A fill,
+/// stroke or stroke weight chosen then is what the bucket paints with, so it goes to the defaults
+/// and the selection keeps its paint.
+pub(crate) fn for_bucket(s: &Session, p: &Value) -> bool {
+    // A null `ids` or `id` is no target, as `given_nodes` reads it; `item: null` names the top row.
+    s.tool_id() == LIVE_PAINT_BUCKET && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
+}
+
+/// `p` with `ids: []` when [`for_bucket`]: the paint goes to the defaults only. None otherwise.
+/// A bad `target` or `aligned` is refused first, as it is without the bucket.
+pub(crate) fn bucket_color_params(s: &Session, p: &Value, cmd: &str) -> Result<Option<Value>> {
+    if !for_bucket(s, p) {
+        return Ok(None);
+    }
+    super::appearance::aligned(p, cmd)?;
+    super::appearance::targets_contents(p)?;
+    let mut v = p.as_object().cloned().unwrap_or_default();
+    v.insert("ids".into(), json!([]));
+    Ok(Some(Value::Object(v)))
+}
+
+/// The Live Paint groups in `roots` (or inside them), given or selected whole, with the ids of
+/// their faces and of their edges, found where [`leaf_targets`] finds the objects a paint command
+/// changes: a given or selected object other than a group or layer (a blend, say) and a compound
+/// shape are painted as one object, and a Live Paint group kept among another one's hidden sources
+/// is not one of them. The art of graph designs drawn in graph series is left out.
+fn live_paint_groups(d: &Document, roots: &[NodeId]) -> Vec<(NodeId, Vec<NodeId>, Vec<NodeId>)> {
+    fn find<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
+        let group = matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. });
+        if is_live_paint(n) {
+            out.push(n);
+        } else if (group || !top) && !n.is_compound_shape() && !matches!(n.kind, NodeKind::Compound { .. }) {
+            n.children().into_iter().flatten().for_each(|c| find(c, false, out));
+        }
+    }
+    let mut found = vec![];
+    for n in roots.iter().filter_map(|r| d.node(*r)) {
+        find(n, true, &mut found);
+    }
+    let mut seen = std::collections::HashSet::new();
+    found.retain(|g| seen.insert(g.id));
+    // A given or selected compound shape or compound path (or one inside a given or selected object) paints its members,
+    // also when one of them is given as well. A Live Paint group given inside one that is not given stays a Live Paint group.
+    let owns = |id: &NodeId| d.node(*id).is_some_and(|n| n.is_compound_shape() || matches!(n.kind, NodeKind::Compound { .. }));
+    let given: std::collections::HashSet<NodeId> = roots.iter().copied().collect();
+    found.retain(|g| {
+        !d.ancestry(g.id).is_some_and(|up| {
+            let outer = up.iter().position(|a| given.contains(a)).unwrap_or(up.len());
+            up.iter().skip(outer).any(|a| *a != g.id && owns(a))
+        })
+    });
+    let kept: std::collections::HashSet<NodeId> = super::appearance::drop_design_art(d, found.iter().map(|g| g.id).collect()).into_iter().collect();
+    let ids = |parts: Vec<&std::sync::Arc<Node>>| parts.into_iter().map(|part| part.id).collect();
+    found.into_iter().filter(|g| kept.contains(&g.id)).map(|g| (g.id, ids(faces(g)), ids(edges(g)))).collect()
+}
+
+/// Every object inside the Live Paint groups `groups` (faces, edges and the hidden source paths).
+fn inside_live_paint(d: &Document, groups: &[(NodeId, Vec<NodeId>, Vec<NodeId>)]) -> std::collections::HashSet<NodeId> {
+    let mut out = std::collections::HashSet::new();
+    for n in groups.iter().filter_map(|(g, _, _)| d.node(*g)) {
+        n.walk(&mut |c| {
+            if c.id != n.id {
+                out.insert(c.id);
+            }
+        });
+    }
+    out
+}
+
+/// The objects inside the Live Paint groups in `roots` (or inside them) that a fill (`fill`) or a
+/// stroke given to the whole group leaves as they are: a fill paints the group's faces only, and a
+/// stroke its edges only. Their edges (faces) and hidden source paths are left out.
+pub(crate) fn live_paint_parts_skipped(d: &Document, roots: &[NodeId], fill: bool) -> std::collections::HashSet<NodeId> {
+    let groups = live_paint_groups(d, roots);
+    let mut out = inside_live_paint(d, &groups);
+    for (_, faces, edges) in &groups {
+        for id in if fill { faces } else { edges } {
+            out.remove(id);
+        }
+    }
+    out
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path
@@ -986,18 +1124,62 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
     }
 }
 
+/// The paint every one of `parts` has on top as its fill (`fill`) or stroke, swatch link included
+/// and gradient placement left out ([`unplaced`]: each part fits it to its own bounds), or None
+/// when they differ or there are none. A freeform gradient's points and their colors belong to the
+/// part they sit on, so a freeform gradient on any part counts as a paint the parts do not share.
+fn shared_paint(d: &Document, parts: &[NodeId], fill: bool) -> Option<Paint> {
+    let mut paints = parts.iter().filter_map(|id| d.node(*id)).map(|n| if fill { n.appearance.fill_paint() } else { n.appearance.stroke_paint() });
+    let first = paints.next()?;
+    let freeform =
+        |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some());
+    if freeform(&first) {
+        return None;
+    }
+    let first = unplaced(&first);
+    paints.all(|p| !freeform(&p) && unplaced(&p) == first).then_some(first)
+}
+
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
+    let bucket = bucket_color_params(s, p, "paint.swap")?;
+    let p = bucket.as_ref().unwrap_or(p);
     let targets = paint_targets(s, p)?;
     let given = !targets.is_empty();
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // A whole Live Paint group: its faces take the stroke its edges share and its edges the fill its faces share.
+    let groups = live_paint_groups(&s.doc()?.doc, &super::targets(s, p)?);
+    let inside = inside_live_paint(&s.doc()?.doc, &groups);
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets.into_iter().filter(|id| !inside.contains(id)).collect());
     // Only design art was given or selected: nothing changes, the defaults included.
-    if given && ids.is_empty() {
+    if given && ids.is_empty() && groups.is_empty() {
         return ok();
     }
-    if !ids.is_empty() {
+    if !ids.is_empty() || !groups.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
+        // A group whose faces' fills (or edges' strokes) differ or are freeform gradients, or that has no face or no edge,
+        // keeps its paint.
+        let swaps: Vec<(&[NodeId], &[NodeId], Paint, Paint)> = groups
+            .iter()
+            .filter_map(|(_, faces, edges)| {
+                Some((faces.as_slice(), edges.as_slice(), shared_paint(&before, faces, true)?, shared_paint(&before, edges, false)?))
+            })
+            .collect();
+        let parts: Vec<NodeId> = groups.iter().flat_map(|(_, faces, edges)| faces.iter().chain(edges)).copied().collect();
         super::overprint::edit_counted(s, "Swap Fill and Stroke", |d| {
+            for (faces, edges, fill, stroke) in &swaps {
+                for id in *faces {
+                    if let Some(n) = d.node_mut(*id) {
+                        n.appearance.set_fill(stroke.clone());
+                    }
+                }
+                for id in *edges {
+                    if let Some(n) = d.node_mut(*id) {
+                        restore_unpainted_stroke(&mut n.appearance, None, fill);
+                        n.appearance.set_stroke(fill.clone());
+                    }
+                }
+            }
+            let parts_changed = super::appearance::count_changed(d, &before, &parts);
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 if let NodeKind::Text(t) = &mut n.kind {
@@ -1017,7 +1199,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
             let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
+            Ok(super::appearance::count_changed(d, &before, &ids) + parts_changed + usize::from(kept || labels))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
@@ -1027,20 +1209,44 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// The weight of the stroke [`paint.default`](default_paint) gives the edges of a whole Live Paint group.
+const LIVE_PAINT_DEFAULT_WEIGHT: f64 = 0.5;
+
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
+    let bucket = bucket_color_params(s, p, "paint.default")?;
+    let p = bucket.as_ref().unwrap_or(p);
     let targets = paint_targets(s, p)?;
     let given = !targets.is_empty();
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // A whole Live Paint group: its faces lose their fill and its edges take a black 0.5 pt stroke.
+    let groups = live_paint_groups(&s.doc()?.doc, &super::targets(s, p)?);
+    let inside = inside_live_paint(&s.doc()?.doc, &groups);
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets.into_iter().filter(|id| !inside.contains(id)).collect());
     // Only design art was given or selected: nothing changes, the defaults included.
-    if given && ids.is_empty() {
+    if given && ids.is_empty() && groups.is_empty() {
         return ok();
     }
-    if !ids.is_empty() {
+    if !ids.is_empty() || !groups.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
         // A redefined Default Graphic Style gives other art its fills, strokes and effects, placed on each object.
         let style = super::newart::redefined_default_style(&before).cloned();
+        let parts: Vec<NodeId> = groups.iter().flat_map(|(_, faces, edges)| faces.iter().chain(edges)).copied().collect();
         super::overprint::edit_counted(s, "Default Fill and Stroke", |d| {
+            for (_, faces, edges) in &groups {
+                let face = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::None))], ..Appearance::default() };
+                let edge = Appearance {
+                    items: vec![AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), LIVE_PAINT_DEFAULT_WEIGHT))],
+                    ..Appearance::default()
+                };
+                for (ids, look) in [(faces, &face), (edges, &edge)] {
+                    for id in ids {
+                        if let Some(n) = d.node_mut(*id) {
+                            n.appearance = look.clone().into();
+                        }
+                    }
+                }
+            }
+            let parts_changed = super::appearance::count_changed(d, &before, &parts);
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
                 match &mut n.kind {
@@ -1067,10 +1273,20 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 st.stroke = Paint::None;
             });
             let lines = super::graph::capture_line_fill_stroke_rows(d, &ids);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
+            Ok(super::appearance::count_changed(d, &before, &ids) + parts_changed + usize::from(kept || labels || lines))
         })?;
     }
-    super::newart::reset(s);
+    if ids.is_empty() && !groups.is_empty() {
+        // With only whole Live Paint groups given or selected, new art takes what their parts took, and nothing else.
+        s.paint = vectorcraft_tools::PaintDefaults {
+            fill: Paint::None,
+            stroke: Paint::solid(Color::BLACK),
+            stroke_width: LIVE_PAINT_DEFAULT_WEIGHT,
+            ..Default::default()
+        };
+    } else {
+        super::newart::reset(s);
+    }
     ok()
 }
 
@@ -1078,6 +1294,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
 /// default when there are none) and remember the first target's new paint. The Appearance panel's
 /// active item of the proxy's kind is recoloured in each selected object's own stack instead.
 fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+    let bucket = bucket_color_params(s, p, cmd)?;
+    let p = bucket.as_ref().unwrap_or(p);
     let stroke = stroke_param(s, p, cmd)?;
     // An object of a dynamic symbol instance's art selected with Direct Selection: the solid color
     // it shows is recolored for this instance only. A gradient or pattern is refused, and so is type
@@ -1174,11 +1392,20 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             if roots.is_empty() {
                 return Ok(json!({ "changed": 0 }));
             }
-            let art = super::appearance::design_art_in(d, &roots).into_iter().collect();
-            // The fill or stroke the proxy shows of each group among the roots, before the edit.
+            // A Live Paint group's fill is its faces' fills and its stroke its edges' strokes, also with `target: "contents"`;
+            // like any group, it recolors rows of its own as well.
+            let parts_skipped = live_paint_parts_skipped(d, &ids, !stroke);
+            let roots: Vec<NodeId> = roots.into_iter().filter(|id| !parts_skipped.contains(id)).collect();
+            if roots.is_empty() {
+                return Ok(json!({ "changed": 0 }));
+            }
+            let mut art: std::collections::HashSet<NodeId> = super::appearance::design_art_in(d, &roots).into_iter().collect();
+            art.extend(parts_skipped.iter().copied());
+            // The fill or stroke the proxy shows of each group among the roots, before the edit (a Live Paint group shows
+            // its faces' or edges').
             let own = |d: &Document, id: NodeId| {
                 d.node(id)
-                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !is_live_paint(n))
                     .and_then(|n| n.proxy_paint_only(stroke, None))
                     .cloned()
             };
@@ -1196,7 +1423,8 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
                     shown_at = Some((*id, None));
                     break;
                 }
-                if let Some(leaf) = super::appearance::drop_design_art(d, leaf_targets(s, &[*id])?).first() {
+                let leaves = leaf_targets(s, &[*id])?.into_iter().filter(|leaf| !parts_skipped.contains(leaf)).collect();
+                if let Some(leaf) = super::appearance::drop_design_art(d, leaves).first() {
                     shown_at = Some((*leaf, None));
                     break;
                 }
