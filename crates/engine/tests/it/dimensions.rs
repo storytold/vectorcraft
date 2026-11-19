@@ -2080,19 +2080,36 @@ fn a_dimension_of_the_same_points_lines_up_and_the_line_follows_the_pointer() {
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 186.0), pt(300.0, 186.0)));
 }
 
-/// With Real-time Drawing off, a dimension hidden, locked or deleted by a command while another is
-/// placed is no longer a level: no guide runs along its level.
+/// A command that moves or hides a dimension while another is placed (Real-time Drawing on) does
+/// not leave the placed dimension on a level the committed document does not have: committed with
+/// its line near the other dimension's line as the document has it then, it is on that level, and
+/// otherwise at the pointer.
 #[test]
-fn a_dimension_hidden_locked_or_deleted_while_another_is_placed_is_no_longer_a_level() {
+fn a_dimension_placed_after_a_command_lines_up_with_the_committed_document() {
     let plain = ViewInfo::default();
-    for cmd in ["object.hide", "object.lock", "edit.clear"] {
+    for (cmd, params, y) in [("dimension.update", json!({"offset": -10.0}), 192.0), ("object.hide", json!({}), 172.0)] {
         let (mut s, first) = level_start(plain);
-        run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
-        linear_click(&mut s, plain, 200.0, 200.0);
-        linear_click(&mut s, plain, 300.0, 200.0);
-        assert!(!guide_lines(&mut s, plain, 250.0, 172.5).is_empty(), "{cmd}: on the level before");
-        run(&mut s, cmd, json!({"ids": [first]}));
-        assert!(guide_lines(&mut s, plain, 250.0, 172.5).is_empty(), "{cmd}: no level after");
+        run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": true}));
+        // The bottom edge dragged out onto the level of the first line.
+        for (kind, y) in [(PointerKind::Move, 300.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 240.0), (PointerKind::Drag, 172.0)] {
+            s.pointer(&PointerEvent::new(kind, 160.0, y), plain).unwrap();
+        }
+        let mut params = params;
+        params["ids"] = json!([first]);
+        run(&mut s, cmd, params);
+        if cmd == "dimension.update" {
+            assert_eq!(recipe(&s, first).line_ends().0.y, 190.0, "moved before the release");
+        }
+        // Released without a drag in between: the release places the dimension.
+        s.pointer(&PointerEvent::new(PointerKind::Up, 160.0, y), plain).unwrap();
+        let placed = s.doc().unwrap().selection.objects[0].0;
+        assert_ne!(placed, first, "{cmd}: a new dimension");
+        let reference = s.doc().unwrap().doc.node(NodeId(first)).map(|n| (n.visible, recipe(&s, first).line_ends().0.y));
+        let expected = match reference {
+            Some((true, level)) if (level - y).abs() <= 4.0 => level,
+            _ => y,
+        };
+        assert_eq!(recipe(&s, placed).line_ends().0.y, expected, "{cmd}: the other dimension is {reference:?}");
     }
 }
 

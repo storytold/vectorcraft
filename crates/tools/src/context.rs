@@ -350,6 +350,10 @@ pub struct ToolContext<'a> {
     /// The objects of the Global Edit in progress (Select › Start Global Edit), the one it started
     /// from first, each with its transform; empty while Global Edit is off.
     pub global_edit: &'a [(NodeId, vectorcraft_geom::Affine)],
+    /// While an interaction is in progress: the document as it was when the interaction began,
+    /// which each preview of the interaction replaces the document with before it applies. None
+    /// outside an interaction.
+    pub interaction_doc: Option<&'a Document>,
 }
 
 impl ToolContext<'_> {
