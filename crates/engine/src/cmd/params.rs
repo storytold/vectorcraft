@@ -36,6 +36,9 @@
 //! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
 //! themselves ([`check_effect_color`], [`check_effect_channel`]).
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use serde_json::Value;
 use vectorcraft_apischema::shown_key;
 
@@ -43,7 +46,7 @@ use super::{bad, command_specs, find_command};
 use crate::Result;
 
 /// What a params description says about the keys of the params object.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ParamKeys<'a> {
     /// The keys it names.
     pub keys: Vec<&'a str>,
@@ -107,6 +110,8 @@ pub(crate) fn is_key(s: &str) -> bool {
 
 /// The keys a params description names, or what in it doesn't read as one.
 pub fn doc_keys(doc: &str) -> std::result::Result<ParamKeys<'_>, String> {
+    #[cfg(test)]
+    PARSES.with(|n| n.set(n.get() + 1));
     let mut out = ParamKeys::default();
     let (mut body, mut rest) = object_body(doc)?;
     let mut entries = split_top(body, ',');
@@ -155,7 +160,12 @@ fn named_commands(more: &str) -> impl Iterator<Item = &'static super::CommandSpe
 /// `None`: any key (a `…` entry naming no command, or a description that doesn't parse, which
 /// the tests rule out).
 fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
-    let parsed = doc_keys(doc).ok()?;
+    resolve(doc, depth, &mut |doc| doc_keys(doc).ok())
+}
+
+/// [`accepted`], with `parse` reading each description it reaches.
+fn resolve(doc: &'static str, depth: usize, parse: &mut dyn FnMut(&'static str) -> Option<ParamKeys<'static>>) -> Option<Vec<&'static str>> {
+    let parsed = parse(doc)?;
     let mut keys = parsed.keys;
     for more in parsed.more {
         let mut named = named_commands(more).peekable();
@@ -168,22 +178,120 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
             if UNCHECKED.contains(&spec.id) {
                 return None;
             }
-            keys.extend(accepted(spec.params, depth + 1)?);
+            keys.extend(resolve(spec.params, depth + 1, parse)?);
         }
     }
     Some(keys)
+}
+
+/// What the params description of a built-in command says about its keys, read once per process
+/// ([`known`]).
+#[derive(Debug)]
+struct Known {
+    /// The keys it names itself; none when it doesn't parse.
+    own: Vec<&'static str>,
+    /// [`accepted`] of it.
+    accepted: Option<Vec<&'static str>>,
+    /// [`id_stands_for_ids`] of it.
+    id_stands_for_ids: bool,
+}
+
+impl Known {
+    /// [`takes_key`] of the description.
+    fn takes(&self, key: &str) -> bool {
+        self.own.contains(&key) || self.accepted.as_ref().is_some_and(|keys| keys.contains(&key))
+    }
+}
+
+/// The place and length of `doc`'s text: a description with the same words elsewhere (a plug-in's)
+/// has another place.
+fn text_key(doc: &str) -> (usize, usize) {
+    (doc.as_ptr().addr(), doc.len())
+}
+
+/// [`Known`] of each description in `docs`, each one and each one its `…` entries name parsed once.
+/// A description is left out when one it reaches has a `…` entry naming a plug-in command, whose
+/// keys change as plug-ins are installed and removed.
+fn read_descriptions(docs: impl IntoIterator<Item = &'static str>) -> HashMap<(usize, usize), Known> {
+    let names_plugin =
+        |more: &str| more.split_whitespace().any(|w| w.trim_matches(|c: char| !c.is_ascii_alphanumeric()).starts_with(vectorcraft_plugins::PREFIX));
+    let mut parsed: HashMap<(usize, usize), (Option<ParamKeys<'static>>, bool)> = HashMap::new();
+    let mut table = HashMap::new();
+    for doc in docs {
+        if table.contains_key(&text_key(doc)) {
+            continue;
+        }
+        let mut live = false;
+        let mut parse = |doc: &'static str| {
+            let (keys, plugin) = parsed.entry(text_key(doc)).or_insert_with(|| {
+                let keys = doc_keys(doc).ok();
+                let plugin = keys.as_ref().is_some_and(|k| k.more.iter().any(|m| names_plugin(m)));
+                (keys, plugin)
+            });
+            live |= *plugin;
+            keys.clone()
+        };
+        let own = parse(doc).map(|p| p.keys).unwrap_or_default();
+        let accepted = resolve(doc, 0, &mut parse);
+        if live {
+            continue;
+        }
+        let mut known = Known { own, accepted, id_stands_for_ids: false };
+        known.id_stands_for_ids = known.takes("ids") && known.takes("id") && no_required_id_beside_ids(doc);
+        table.insert(text_key(doc), known);
+    }
+    table
+}
+
+/// [`Known`] of `doc` when it is the params description of a built-in command.
+fn known(doc: &str) -> Option<&'static Known> {
+    #[cfg(test)]
+    if UNCACHED.get() {
+        return None;
+    }
+    static TABLE: OnceLock<HashMap<(usize, usize), Known>> = OnceLock::new();
+    TABLE.get_or_init(|| read_descriptions(command_specs().iter().map(|c| c.params))).get(&text_key(doc))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The times [`doc_keys`] parsed a description on this thread.
+    pub(crate) static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`known`] is skipped on this thread ([`uncached`]).
+    static UNCACHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether [`read_descriptions`] keeps what `doc` says.
+#[cfg(test)]
+pub(crate) fn read_once(doc: &'static str) -> bool {
+    read_descriptions([doc]).contains_key(&text_key(doc))
+}
+
+/// `f`'s result with every description parsed again where it is used, as without [`known`].
+#[cfg(test)]
+pub(crate) fn uncached<T>(f: impl FnOnce() -> T) -> T {
+    let before = UNCACHED.replace(true);
+    let out = f();
+    UNCACHED.set(before);
+    out
 }
 
 /// Every key the description `doc` takes, those of the commands its `…` entries name included, or
 /// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
 /// command in [`UNCHECKED`].
 pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
-    accepted(doc, 0)
+    match known(doc) {
+        Some(known) => known.accepted.clone(),
+        None => accepted(doc, 0),
+    }
 }
 
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
 pub fn takes_key(doc: &'static str, key: &str) -> bool {
+    if let Some(known) = known(doc) {
+        return known.takes(key);
+    }
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
@@ -191,11 +299,16 @@ pub fn takes_key(doc: &'static str, key: &str) -> bool {
 /// (instead of id)}`, `{id} or {ids: […]}`): it names both keys, and no params object of it names
 /// `ids` beside a required `id`, which is something else (`plugin.run {id, ids?}`: the plug-in's)?
 pub(crate) fn id_stands_for_ids(doc: &'static str) -> bool {
+    if let Some(known) = known(doc) {
+        return known.id_stands_for_ids;
+    }
+    takes_key(doc, "ids") && takes_key(doc, "id") && no_required_id_beside_ids(doc)
+}
+
+/// No params object of `doc` names `ids` beside a required `id`.
+fn no_required_id_beside_ids(doc: &str) -> bool {
     fn head(alternative: &str) -> &str {
         alternative.split([':', '=', '(']).next().unwrap_or_default().trim()
-    }
-    if !takes_key(doc, "ids") || !takes_key(doc, "id") {
-        return false;
     }
     let mut rest = doc;
     while let Ok((body, after)) = object_body(rest) {
@@ -249,20 +362,34 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
     if given.is_empty() {
         return Ok(());
     }
-    let Some(keys) = accepted(doc, 0) else { return Ok(()) };
+    let live;
+    let keys = match known(doc) {
+        Some(known) => known.accepted.as_deref(),
+        None => {
+            live = accepted(doc, 0);
+            live.as_deref()
+        }
+    };
+    let Some(keys) = keys else { return Ok(()) };
     match given.keys().find(|k| !keys.contains(&k.as_str())) {
-        Some(key) => Err(unknown(id, key, &keys)),
+        Some(key) => Err(unknown(id, key, keys)),
         None => Ok(()),
     }
 }
 
 /// Parameters a command takes instead of one another: (command, key, other key). Giving both,
 /// neither null, is a parameter error ([`check_exclusive_keys`]).
-const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[
+    ("addon.pathtools.cornerSet", "items", "ids"),
+    ("addon.pathtools.cornerRemove", "items", "ids"),
+    ("addon.pathtools.bridge", "radius", "gap"),
+    ("links.unembed", "id", "ids"),
+    ("links.unembed", "path", "folder"),
+];
 
 /// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
 /// error naming the pair.
-fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
+pub(crate) fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
     let given = |key: &str| params.get(key).filter(|v| !v.is_null());
     for (_, key, other) in EXCLUSIVE_KEYS.iter().filter(|(c, ..)| *c == id) {
         if given(key).is_some() && given(other).is_some() {
@@ -649,6 +776,7 @@ pub const UNCHECKED: &[&str] = &[
     "transparency.setOpacityMask",
     "transparency.unlinkOpacityMask",
     "type.pathOptions",
+    "webExport.optimizeToFileSize",
     "webExport.presets.save",
     "webExport.settings",
 ];
@@ -663,18 +791,28 @@ fn pdf_option_tree() -> Value {
     tree
 }
 
+/// The parameter error of command `id` for `key`, a key with the objects it is in (`marks.ofset`),
+/// when a key those objects take is near it: `near`, written the same way (`marks.offset`). Each
+/// is one value of the message, so a catalog can match the message and translate it.
+fn misspelled(id: &str, key: &str, near: &str) -> crate::EngineError {
+    bad(id, format!("unknown parameter `{key}`; did you mean `{near}`?"))
+}
+
 /// `given`, the object at `within` (`marks.`), has only keys of `schema`, the objects inside it too.
 fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) -> Result<()> {
     for (key, value) in given {
         match (schema.get(key), value) {
             (None, _) => {
                 let keys: Vec<&str> = schema.keys().map(String::as_str).collect();
-                let why = match nearest(key, &keys) {
-                    Some(near) => format!("did you mean `{within}{near}`?"),
-                    None => format!("`{}` takes: {}", within.trim_end_matches('.'), keys.join(", ")),
-                };
-                let key = shown_key(key);
-                return Err(bad(id, format!("unknown parameter `{within}{key}`; {why}")));
+                let near = nearest(key, &keys);
+                let key = format!("{within}{}", shown_key(key));
+                return Err(match near {
+                    Some(near) => misspelled(id, &key, &format!("{within}{near}")),
+                    None => {
+                        let (object, keys) = (within.trim_end_matches('.'), keys.join(", "));
+                        bad(id, format!("unknown parameter `{key}`; `{object}` takes: {keys}"))
+                    }
+                });
             }
             (Some(Value::Object(inner)), Value::Object(value)) => check_option_tree(id, &format!("{within}{key}."), value, inner)?,
             _ => {}
@@ -691,14 +829,11 @@ fn check_option_keys(id: &str, within: &str, given: &serde_json::Map<String, Val
     for (key, value) in given {
         if !keys.contains(&key.as_str()) {
             let near = nearest(key, keys);
-            let key = shown_key(key);
-            return Err(bad(
-                id,
-                match near {
-                    Some(near) => format!("unknown parameter `{within}{key}`; did you mean `{within}{near}`?"),
-                    None => format!("unknown parameter `{within}{key}`; {why_not}"),
-                },
-            ));
+            let key = format!("{within}{}", shown_key(key));
+            return Err(match near {
+                Some(near) => misspelled(id, &key, &format!("{within}{near}")),
+                None => bad(id, format!("unknown parameter `{key}`; {why_not}")),
+            });
         }
         if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
             check_option_tree(id, &format!("{within}{key}."), value, schema)?;
@@ -797,12 +932,15 @@ fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>)
         let formats = screen_formats();
         for (format, options) in settings {
             if !formats.contains(&format.as_str()) {
-                let why = match nearest(format, &formats) {
-                    Some(near) => format!("did you mean `{within}settings.{near}`?"),
-                    None => format!("`{within}settings` takes: {}", formats.join(", ")),
-                };
-                let format = shown_key(format);
-                return Err(bad(id, format!("unknown parameter `{within}settings.{format}`; {why}")));
+                let near = nearest(format, &formats);
+                let key = format!("{within}settings.{}", shown_key(format));
+                return Err(match near {
+                    Some(near) => misspelled(id, &key, &format!("{within}settings.{near}")),
+                    None => {
+                        let (object, keys) = (format!("{within}settings"), formats.join(", "));
+                        bad(id, format!("unknown parameter `{key}`; `{object}` takes: {keys}"))
+                    }
+                });
             }
             if let Value::Object(options) = options {
                 check_option_keys(id, &format!("{within}settings.{format}."), options, &keys, NO_FORMAT, trees)?;
@@ -917,9 +1055,14 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         crate::schemas::check(spec, params, false)?;
     }
     if matches!(id, "command.batch" | "action.batch") && !in_batch {
-        for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
+        for (i, step) in params.get("commands").and_then(Value::as_array).into_iter().flatten().enumerate() {
             if let Some(step_id) = step.get("command").and_then(Value::as_str) {
-                check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true)?;
+                let checked = check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true);
+                // An `action.batch` names the step it refuses by its place, from 1, as its own checks and its steps' errors do.
+                match checked {
+                    Err(e) if id == "action.batch" => return Err(bad(id, super::fileio::action_step(i, step_id, &e.to_string()))),
+                    checked => checked?,
+                }
             }
         }
     }

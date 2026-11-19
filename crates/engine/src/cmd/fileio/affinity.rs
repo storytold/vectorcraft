@@ -4,7 +4,6 @@
 //! native document can't be read opens as its embedded preview instead, with a warning that says
 //! why, and can't be placed.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};

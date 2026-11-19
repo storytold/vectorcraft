@@ -22,11 +22,7 @@ pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
 /// a gradient's stops or a mesh's points, which Recolor Artwork can change.
 pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
-    ids.iter().filter_map(|id| doc.node(*id)).any(|n| {
-        let mut found = false;
-        vectorcraft_doc::swatches::node_colors(n, &mut |_, _| found = true);
-        found
-    })
+    ids.iter().filter_map(|id| doc.node(*id)).any(vectorcraft_doc::swatches::node_has_colors)
 }
 
 /// The bounds of the artboards the Artboard tool has selected ([`crate::panels::artboards::picked`]).
@@ -92,6 +88,31 @@ fn smooth_tool_on_paths(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
         return found;
     }
     let found = vectorcraft_tools::draw2::can_smooth(&st.doc, &st.selection);
+    ctx.data_mut(|d| d.insert_temp(id, (key, found)));
+    found
+}
+
+/// Whether the selection holds images together with other objects, for which the bar offers Make
+/// Clipping Mask: at least one selected object is an image and at least one is not (a selected id
+/// with no object counts as not an image). The walk stops once it has seen both. The answer is kept
+/// in `ctx` for the document's revision, as [`smooth_tool_on_paths`] keeps its own.
+pub(crate) fn images_with_other_art(st: &vectorcraft_engine::DocState, ctx: &egui::Context) -> bool {
+    let id = task_bar_id().with("mixed");
+    let key = (st.uid, st.revision);
+    if let Some((k, found)) = ctx.data(|d| d.get_temp::<((u64, u64), bool)>(id))
+        && k == key
+    {
+        return found;
+    }
+    let (mut image, mut other) = (false, false);
+    let found = st.selection.objects.iter().any(|id| {
+        if st.doc.node(*id).is_some_and(|o| matches!(o.kind, NodeKind::Image(_))) {
+            image = true;
+        } else {
+            other = true;
+        }
+        image && other
+    });
     ctx.data_mut(|d| d.insert_temp(id, (key, found)));
     found
 }
@@ -196,10 +217,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         _ => None,
     });
     // Images and vector art selected together: a clipping mask is the likely next step.
-    let mixed = n > 1 && {
-        let images = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).filter(|o| matches!(o.kind, NodeKind::Image(_))).count();
-        images > 0 && images < n
-    };
+    let mixed = n > 1 && images_with_other_art(st, ui.ctx());
     // An Image Trace object: the group the engine names "Image Trace", its source image first.
     let is_trace = is_group
         && first.as_ref().is_some_and(|f| {

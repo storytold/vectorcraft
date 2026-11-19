@@ -46,10 +46,15 @@ pub(crate) fn encode(img: &Raster, bw: bool, alpha: bool) -> Result<Vec<u8>, Str
 
 /// `img` as a PNG.
 pub(crate) fn png(img: &Raster) -> Result<Vec<u8>, String> {
-    let rgba = image::RgbaImage::from_raw(img.width, img.height, img.rgba.clone()).ok_or("the thumbnail image is malformed")?;
-    let mut out = vec![];
-    rgba.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).map_err(|e| e.to_string())?;
-    Ok(out)
+    let raw = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.rgba.clone(),
+    )
+    .map_err(|_| "the thumbnail image is malformed".to_string())?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
 }
 
 /// Most pixels a palette preview may have.

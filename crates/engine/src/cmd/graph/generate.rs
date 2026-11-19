@@ -393,6 +393,16 @@ impl<'a> Plot<'a> {
         series_marks(self.g, i, series_fill, stroke, width)
     }
 
+    /// The stroke paint and width series `s`'s filled marks and its legend swatch get when the series keeps no stroke
+    /// of its own: a white line between stacked segments, area bands and pie wedges, none on other marks.
+    fn mark_stroke(&self, s: usize) -> (Paint, f64) {
+        match self.kind(s) {
+            GraphKind::StackedColumn | GraphKind::StackedBar | GraphKind::Area => (Paint::solid(Color::WHITE), 0.25),
+            GraphKind::Pie => (Paint::solid(Color::WHITE), 0.5),
+            _ => (Paint::None, 0.0),
+        }
+    }
+
     fn series_label(&self, i: usize) -> String {
         self.g.series.get(i).cloned().unwrap_or_default()
     }
@@ -471,7 +481,8 @@ impl<'a> Plot<'a> {
             }
             let sweep = v / total * std::f64::consts::TAU;
             let bp = wedge_path(ring, a0, sweep);
-            let (fill, stroke, sw) = self.mark(s, true, Paint::solid(Color::WHITE), 0.5);
+            let (stroke, width) = self.mark_stroke(s);
+            let (fill, stroke, sw) = self.mark(s, true, stroke, width);
             let dark = is_dark(&fill);
             let n = self.b.path(PathData::from_bezpath(&bp), fill, stroke, sw);
             self.push_shadowed(s, n);
@@ -532,7 +543,7 @@ impl<'a> Plot<'a> {
         }
         for v in tick_values(lo, hi, step).into_iter().skip(1) {
             let ring: Vec<Point> = (0..ncat).map(|c| at(c, v)).collect();
-            axes.push(self.b.path(polyline(&ring, true), Paint::None, Paint::solid(Color::rgb(0.6, 0.6, 0.6)), 0.25));
+            axes.push(self.b.ring(polyline(&ring, true)));
         }
         let ax = self.b.group("Axes", axes);
         self.b.out.push(ax);
@@ -887,7 +898,8 @@ impl<'a> Plot<'a> {
             let Some(base) = (if v >= 0.0 { pos.get_mut(ax) } else { neg.get_mut(ax) }) else { continue };
             let (v0, v1) = (geo.vpos(ax, *base), geo.vpos(ax, *base + v));
             *base += v;
-            let paint = self.mark(s, true, Paint::solid(Color::WHITE), 0.25);
+            let (stroke, width) = self.mark_stroke(s);
+            let paint = self.mark(s, true, stroke, width);
             let rect = bar_rect(geo.horizontal, a, w, v0, v1);
             // A segment of 0 has no area to shade.
             let n = self.bar_node(Bar { s, rect, value: v, down: v1 < v0, per_unit: geo.per_unit(ax) }, paint, v != 0.0);
@@ -907,7 +919,8 @@ impl<'a> Plot<'a> {
             let at = |c: usize, v: &[f64]| Point::new(geo.cat_mid(c), geo.vpos(a, v.get(c).copied().unwrap_or(0.0)));
             let mut pts: Vec<Point> = (0..ncat).map(|c| at(c, &above)).collect();
             pts.extend((0..ncat).rev().map(|c| at(c, below)));
-            let (fill, stroke, w) = self.mark(s, true, Paint::solid(Color::WHITE), 0.25);
+            let (stroke, width) = self.mark_stroke(s);
+            let (fill, stroke, w) = self.mark(s, true, stroke, width);
             let n = self.b.path(polyline(&pts, true), fill, stroke, w);
             self.push_series(s, n);
             *below = above;
@@ -951,10 +964,11 @@ impl<'a> Plot<'a> {
     }
 
     /// The swatch of series `s` at `(x, y)`: series drawn with markers show their marker design in the legend, and
-    /// series drawn with a column design that design.
+    /// series drawn with a column design that design. A default swatch has the stroke of its series' marks.
     fn legend_swatch(&mut self, s: usize, (x, y): (f64, f64)) {
         let marked = matches!(self.g.kind, GraphKind::Scatter | GraphKind::Radar) || self.kind(s) == GraphKind::Line;
-        let paint = self.mark(s, true, Paint::None, 0.0);
+        let (stroke, width) = self.mark_stroke(s);
+        let paint = self.mark(s, true, stroke, width);
         let column = nth(self.column_looks, s).filter(|_| self.columnar(s));
         let swatch = self.b.swatch(column, nth(&self.designs, s).filter(|_| marked), Rect::new(x, y, x + 8.0, y + 8.0), paint);
         self.push_series(s, swatch);
