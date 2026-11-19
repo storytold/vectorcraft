@@ -179,9 +179,9 @@ fn managed(n: &Node) -> bool {
 /// only the isolated layer or group's paths count: of `named`, the ones inside it, with the
 /// isolated object in place of one that holds it. An isolated object that no longer exists counts
 /// as no isolation. None while an object that is not a layer or a group is isolated (a compound
-/// path or a single path), a layer or group with a live effect, a group that is [`managed`] or a
-/// clipping mask, or one inside such an object or inside another object that is not a layer or a
-/// group (an envelope): no area is found then.
+/// path or a single path), a layer or group with a live effect, a group that is [`managed`], a
+/// clipping group or clipped layer, or one inside such an object or inside another object that is
+/// not a layer or a group (an envelope): no area is found then.
 pub fn fill_area_roots(doc: &Document, isolation: Option<NodeId>, named: Option<&[NodeId]>) -> Option<(Vec<NodeId>, Option<NodeId>)> {
     let Some(iso) = isolation.filter(|i| doc.node(*i).is_some()) else {
         return Some((named.map_or_else(|| every_layer(doc), <[NodeId]>::to_vec), None));
@@ -197,12 +197,9 @@ pub fn fill_area_roots(doc: &Document, isolation: Option<NodeId>, named: Option<
     if !line.iter().all(|a| doc.node(*a).is_some_and(plain)) {
         return None;
     }
-    // A clipping group or clipped layer's first member is its mask, which clips and is not painted.
-    let in_mask = line.windows(2).any(|w| {
-        let [p, m] = w else { return false };
-        doc.node(*p).is_some_and(|p| p.clips() && p.children().and_then(|c| c.first()).is_some_and(|f| f.id == *m))
-    });
-    if in_mask {
+    // A clipping group or clipped layer's mask clips and is not painted, and its mask hides or cuts
+    // a new path among the art it clips.
+    if line.iter().any(|a| doc.node(*a).is_some_and(Node::clips)) {
         return None;
     }
     let Some(named) = named else { return Some((vec![iso], Some(iso))) };

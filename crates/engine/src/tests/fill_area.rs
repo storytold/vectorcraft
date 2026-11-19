@@ -318,6 +318,19 @@ fn fill_area_finds_nothing_while_a_compound_path_is_isolated() {
     let members = node(&s, mask).children().unwrap().len();
     assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70]})).is_err());
     assert_eq!((undo_len(&s), stack(&s), node(&s, mask).children().unwrap().len()), (undo, kids, members));
+    // The clipping group itself, and a group of the art it clips, take no new path either: the
+    // mask would hide or cut it.
+    s.doc_mut().unwrap().isolation = None;
+    s.execute("select.set", &json!({"ids": [back.0]})).unwrap();
+    let clipped = id_of(&s.execute("object.group", &json!({})).unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(clipped), Some(clip));
+    deselect(&mut s);
+    for iso in [clip, clipped] {
+        s.doc_mut().unwrap().isolation = Some(iso);
+        let (undo, kids) = (undo_len(&s), stack(&s));
+        assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [5, 5]})).is_err(), "{iso:?}");
+        assert_eq!((undo_len(&s), stack(&s)), (undo, kids), "{iso:?}");
+    }
 }
 
 /// The new path goes directly above the front-most object along the area, not above art that
