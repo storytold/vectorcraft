@@ -2889,4 +2889,12 @@ fn a_press_on_a_selected_member_of_a_group_moves_the_selected_members() {
     let c = cx(&d, &s, &p);
     let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
     assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+    // Every anchor of the member picked (as `select.anchors` and `select.key` leave it) selects
+    // it whole: the press moves it.
+    s.anchors.insert(a, [(0, 0), (0, 1), (0, 2), (0, 3)].into_iter().collect());
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "every anchor");
+    let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+    assert!(!is_select(&down), "every anchor: {down:?}");
 }

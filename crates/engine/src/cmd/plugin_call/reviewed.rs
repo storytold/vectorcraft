@@ -557,6 +557,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.update",
     "shape.arc",
     "shape.circleThroughPoints",
+    "shape.editFlare",
     "shape.ellipse",
     "shape.flare",
     "shape.line",

@@ -841,6 +841,9 @@ digits	Malayalam	말라얄람어
 	Magic Wand	마술봉
 	Navigator	내비게이터
 	Navigator Panel Options	내비게이터 패널 옵션
+	Attributes Panel Options	속성 패널 옵션
+	Number of Recent URLs:	최근 URL 수:
+@msg	`count` must be a whole number from 1 to 30	`count`은(는) 1에서 30 사이의 정수여야 합니다
 	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
@@ -1587,6 +1590,7 @@ antiAlias	Sharp	날카롭게
 	Duplicate Action or Action Set	액션 또는 액션 세트 복제
 	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
 	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
+	Delete all action sets and their actions?	모든 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
@@ -1931,6 +1935,7 @@ antiAlias	Sharp	날카롭게
 	Fit in Window	창에 맞추기
 	Fit on Screen	화면에 맞추기
 	Flare	플레어
+	Edit Flare	플레어 편집
 	Flare Tool	플레어 도구
 	Flat Image	단일 이미지
 	Flatness:	평탄도:
@@ -2886,6 +2891,7 @@ diagnostics	ui	UI
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
 	Replace Actions…	액션 바꾸기…
+	Clear Actions	액션 지우기
 	Reset Actions	액션 재설정
 	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
 	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
@@ -3218,6 +3224,8 @@ mark-style	Japanese	일본식
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
 	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
@@ -4813,6 +4821,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no such spine point	해당 스파인 포인트가 없습니다
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`는 스파인 포인트 인덱스 최대 10000개의 목록이어야 합니다
 @msg	`with` moves points, not a handle	`with`는 포인트를 이동하며 핸들에는 쓸 수 없습니다
+@msg	`link` and `independent` cannot both be true	`link`와 `independent`를 동시에 true로 지정할 수 없습니다
+@msg	`link` places a handle: give `handle`	`link`는 핸들을 배치합니다. `handle`을 지정하십시오
 @msg	no such spine segment	해당 스파인 세그먼트가 없습니다
 @msg	no such subpath	해당 하위 패스가 없습니다
 @msg	object {id} is not a path	개체 {id}은(는) 패스가 아닙니다
@@ -4939,9 +4949,11 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no bounds	경계가 없습니다
 @msg	no current layer	현재 레이어가 없습니다
 @msg	no key object	키 개체가 없습니다
+@msg	Align to Key Object isn't available with the Artboard tool	아트보드 도구에서는 키 개체에 정렬을 사용할 수 없습니다
 @msg	no previous transform	이전 변형이 없습니다
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요
+@msg	select a flare	플레어를 선택하세요
 @msg	select two or more objects to distribute	분포할 개체를 두 개 이상 선택하세요
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
 @msg	give horizontal or vertical	horizontal 또는 vertical을 지정하세요
@@ -5684,6 +5696,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	객체 {n}개가 재단선에 닿지만 도련까지 이어지지 않습니다
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -6465,6 +6478,9 @@ lighting	Light	광원
 	Continue in Background	백그라운드에서 계속
 	Cancel Export	내보내기 취소
 @msg	Export cancelled	내보내기를 취소했습니다
+	Cancel Save	저장 취소
+@plural	{n} more save waiting|{n} more saves waiting	대기 중인 저장 {n}개 더
+@msg	Save canceled	저장을 취소했습니다
 # Paragraph panel menu › Justification…
 	Desired	희망
 	Word Spacing:	단어 간격:
@@ -6987,6 +7003,13 @@ axis	Y Axis	Y축
 	Circuit Trace	회로 배선
 	Bus Lines	버스 배선
 	Terminal Nodes	단자 노드
+
+# Original arrow art brushes.
+	Arrows	화살표 브러시
+	Solid Arrow	채워진 화살표
+	Open Arrow	속이 빈 화살표
+	Double Arrow	양방향 화살표
+	Chevron Arrow	갈매기형 화살표
 
 	Notched Ribbon	노치 리본
 	Double Line	이중선
@@ -7681,10 +7704,18 @@ breakText	Glyphs	글리프
 	Smooth Bridge…	부드러운 브리지…
 	Smooth Bridge	부드러운 브리지
 	Keep Originals	원본 유지
-@msg	select two circles to bridge	연결할 원 두 개를 선택하십시오
+@msg	select two or more circles to bridge	연결할 원을 두 개 이상 선택하십시오
 @msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
 @msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
 @msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
+	Constant Gap	일정한 간격
+	Reach:	도달 거리:
+@msg	the circles are too far apart for this gap: raise the gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다. 간격을 늘리십시오
+@msg	the circles are too far apart for this gap	이 간격에서는 원이 너무 멀리 떨어져 있습니다
+@msg	no two circles are within reach: raise the reach	도달 거리 안에 있는 두 원이 없습니다. 도달 거리를 늘리십시오
+@msg	select at most 2000 circles to bridge	연결할 원을 2000개 이하로 선택하십시오
+@msg	that makes too many bridges (at most 8000): lower the reach	브리지가 너무 많아집니다(최대 8000개). 도달 거리를 줄이십시오
+@msg	the bridged circles are too complex to unite	연결된 원이 너무 복잡하여 합칠 수 없습니다
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	공통 접선…
 	Common Tangents	공통 접선
@@ -9992,6 +10023,16 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Tap	짧게 누르기
+	Clear Hold	길게 누르기 지우기
+	Hold Shortcuts	길게 누르기 단축키
+	Hold Shortcut Delay	길게 누르기 단축키 지연 시간
+	How hold shortcuts work	길게 누르기 단축키 작동 방식
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	클릭한 다음 이 항목에 길게 누를 키를 누르세요 (Esc로 취소). 키를 길게 누르면 이 항목이 실행되고, 짧게 누르면 키 자체의 단축키가 실행됩니다.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	키를 짧게 누르면 해당 단축키가 실행됩니다. 지연 시간 동안 키를 누르고 있으면 대신 누르고 있기 열의 도구나 명령이 실행됩니다. 길게 누르기 단축키는 문자, 숫자 또는 문장 부호 키이며, 단독으로 또는 Shift와 함께 사용합니다.
+@msg	Hold {_1} is already used by {_2}	길게 누르기 {_1}은(는) 이미 {_2}에서 사용 중입니다
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	길게 누르기 단축키는 문자를 입력하는 키를 단독으로 또는 Shift와 함께 사용해야 합니다 ({shown}에 Cmd, Ctrl 또는 Alt가 있음)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown}은(는) 길게 누르기 단축키가 될 수 없습니다: 문자, 숫자 또는 문장 부호 키를 사용하세요
 	Check	검사
 	Check Fold Lines	접는 선 검사
 @msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
@@ -10012,6 +10053,7 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Dashed Arrow	점선 화살표
 	Pressure Sensitive	압력 감지
 	Flex Ribbon	유연한 리본
 	Pulse Stroke	맥동 획

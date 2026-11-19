@@ -763,6 +763,9 @@
 	Magic Wand	Tongkat ajaib
 	Navigator	Navigator
 	Navigator Panel Options	Opsi panel navigator
+	Attributes Panel Options	Opsi panel atribut
+	Number of Recent URLs:	Jumlah URL terbaru:
+@msg	`count` must be a whole number from 1 to 30	`count` harus bilangan bulat dari 1 sampai 30
 	Draw Dashed Lines as Solid Lines	Gambar garis putus-putus sebagai garis utuh
 	Pattern Options	Opsi pola
 	Properties	Properti
@@ -1487,6 +1490,7 @@ lighting	Light	Cahaya
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
 	Replace Actions…	Ganti tindakan…
+	Clear Actions	Bersihkan tindakan
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -1791,6 +1795,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikatkan tindakan atau set tindakan
 	Delete the action set “{name}” and its actions?	Hapus set tindakan “{name}” beserta tindakannya?
 	Delete the selected action sets and their actions?	Hapus set tindakan yang dipilih beserta tindakannya?
+	Delete all action sets and their actions?	Hapus semua set tindakan beserta tindakannya?
 	Delete these {n} graphic styles?	Hapus {n} gaya grafis ini?
 	Delete this {n} graphic style?	Hapus {n} gaya grafis ini?
 	Graphic Style Libraries Menu	Menu pustaka gaya grafis
@@ -4018,6 +4023,7 @@ theme	Appearance	Tampilan
 	Set Tab Stops	Atur hentian tab
 	Tab Stops	Hentian tab
 	Flare	Flare
+	Edit Flare	Edit flare
 	Rays	Sinar
 	Rectangle	Persegi panjang
 	Paintbrush	Kuas lukis
@@ -4298,6 +4304,8 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
@@ -4921,6 +4929,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	tidak ada gaya grafis `{n}`
 @msg	no interaction in progress	tidak ada interaksi yang berlangsung
 @msg	no key object	tidak ada objek kunci
+@msg	Align to Key Object isn't available with the Artboard tool	Ratakan ke objek kunci tidak tersedia dengan alat artboard
 @msg	no library `{key}` (see {list})	tidak ada pustaka `{key}` (lihat {list})
 @msg	no native format	tidak ada format asli
 @msg	no pages	tidak ada halaman
@@ -5049,6 +5058,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend
 @msg	select a clip group	pilih grup klip
+@msg	select a flare	pilih flare
 @msg	select a gradient mesh	pilih mesh gradien
 @msg	select a linked image: an embedded one has no file	pilih gambar tertaut: gambar yang tersemat tidak memiliki berkas
 @msg	select a repeat	pilih pengulangan
@@ -5252,6 +5262,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Telah memperbarui {n} berkas tertaut yang berubah di disk
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumen menetapkan bleed yang dihilangkan oleh file PDF/X ini: aktifkan "Gunakan pengaturan bleed dokumen"
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objek mencapai tepi potong tetapi berhenti sebelum bleed
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} diekspor dengan {n} catatan: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} berkas font kini berada di {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
@@ -6339,6 +6350,9 @@ swatch	Bright Violet	Violet cerah
 	Continue in Background	Lanjutkan di latar belakang
 	Cancel Export	Batalkan ekspor
 @msg	Export cancelled	Ekspor dibatalkan
+	Cancel Save	Batalkan penyimpanan
+@plural	{n} more save waiting|{n} more saves waiting	{n} penyimpanan lagi menunggu
+@msg	Save canceled	Penyimpanan dibatalkan
 # Paragraph panel menu › Justification…
 	Desired	Diinginkan
 	Word Spacing:	Spasi Kata:
@@ -6658,6 +6672,12 @@ axis	Y Axis	Sumbu Y
 	Circuit Trace	Jalur sirkuit
 	Bus Lines	Jalur bus
 	Terminal Nodes	Simpul terminal
+
+# Original arrow art brushes.
+	Arrows	Kuas panah
+	Solid Arrow	Panah solid
+	Open Arrow	Panah terbuka
+	Chevron Arrow	Panah chevron
 
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
@@ -7312,10 +7332,18 @@ breakText	Glyphs	Glif
 	Smooth Bridge…	Jembatan Halus…
 	Smooth Bridge	Jembatan Halus
 	Keep Originals	Pertahankan Asli
-@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	select two or more circles to bridge	pilih dua lingkaran atau lebih untuk dijembatani
 @msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
 @msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
 @msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
+	Constant Gap	Celah Tetap
+	Reach:	Jangkauan:
+@msg	the circles are too far apart for this gap: raise the gap	lingkaran terlalu berjauhan untuk celah ini: perbesar celah
+@msg	the circles are too far apart for this gap	lingkaran terlalu berjauhan untuk celah ini
+@msg	no two circles are within reach: raise the reach	tidak ada dua lingkaran dalam jangkauan: perbesar jangkauan
+@msg	select at most 2000 circles to bridge	pilih paling banyak 2000 lingkaran untuk dijembatani
+@msg	that makes too many bridges (at most 8000): lower the reach	itu membuat terlalu banyak jembatan (paling banyak 8000): perkecil jangkauan
+@msg	the bridged circles are too complex to unite	lingkaran yang dijembatani terlalu rumit untuk disatukan
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Garis Singgung Persekutuan…
 	Common Tangents	Garis Singgung Persekutuan
@@ -7679,6 +7707,17 @@ breakText	Glyphs	Glif
 @msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
 @msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
 @msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
+	Tap	Tekan singkat
+	Clear Hold	Hapus Tahan
+	Hold Shortcuts	Pintasan tahan
+	Hold Shortcut Delay	Jeda pintasan tahan
+	How hold shortcuts work	Cara kerja pintasan tahan
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, lalu tekan tombol yang ditahan untuk ini (Esc membatalkan). Menahan tombol menjalankan ini; tekan singkat menjalankan pintasan milik tombol itu sendiri.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Tekan singkat sebuah tombol menjalankan pintasannya. Menahan tombol selama jeda menjalankan alat atau perintah di kolom Tahan sebagai gantinya. Pintasan tahan adalah tombol huruf, angka, atau tanda baca, sendiri atau dengan Shift.
+@msg	Hold {_1} is already used by {_2}	Tahan {_1} sudah digunakan oleh {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pintasan tahan adalah tombol yang mengetik karakter, sendiri atau dengan Shift ({shown} memakai Cmd, Ctrl, atau Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} tidak bisa menjadi pintasan tahan: gunakan huruf, angka, atau tombol tanda baca
+	Dashed Arrow	Panah Putus-putus
 	Pressure Sensitive	Peka Tekanan
 	Flex Ribbon	Pita Lentur
 	Pulse Stroke	Goresan Berdenyut

@@ -831,6 +831,7 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Action or Action Set	Δημιουργία αντιγράφου ενέργειας ή συνόλου ενεργειών
 	Delete the action set “{name}” and its actions?	Να διαγραφεί το σύνολο ενεργειών «{name}» και οι ενέργειές του;
 	Delete the selected action sets and their actions?	Να διαγραφούν τα επιλεγμένα σύνολα ενεργειών και οι ενέργειές τους;
+	Delete all action sets and their actions?	Να διαγραφούν όλα τα σύνολα ενεργειών και οι ενέργειές τους;
 	Delete Theme	Διαγραφή θέματος
 	Delete theme	Διαγραφή θέματος
 	Delete these {n} graphic styles?	Να διαγραφούν αυτά τα {n} στυλ γραφικών;
@@ -1299,6 +1300,7 @@ font-technology	Variable	Μεταβλητές
 	Fit to Selected Art	Προσαρμογή στο επιλεγμένο γραφικό
 	Flag…	Σημαία…
 	Flare	Λάμψη
+	Edit Flare	Επεξεργασία λάμψης
 	Flare Tool	Λάμψη (Flare Tool)
 	Flare Tool Options	Επιλογές εργαλείου λάμψης
 	Halo	Άλως
@@ -1963,6 +1965,9 @@ font-technology	Variable	Μεταβλητές
 	Name:	Όνομα:
 	Navigator	Πλοήγηση
 	Navigator Panel Options	Επιλογές πίνακα πλοήγησης
+	Attributes Panel Options	Επιλογές πίνακα χαρακτηριστικών
+	Number of Recent URLs:	Αριθμός πρόσφατων διευθύνσεων URL:
+@msg	`count` must be a whole number from 1 to 30	Το `count` πρέπει να είναι ακέραιος από 1 έως 30
 	Draw Dashed Lines as Solid Lines	Σχεδίαση διακεκομμένων γραμμών ως συνεχών
 	New	Νέο
 	Scatter:	Διασπορά:
@@ -3660,6 +3665,7 @@ theme	Appearance	Εμφάνιση
 	Save Actions…	Αποθήκευση ενεργειών…
 	Load Actions…	Φόρτωση ενεργειών…
 	Replace Actions…	Αντικατάσταση ενεργειών…
+	Clear Actions	Απαλοιφή ενεργειών
 	Reset Actions	Επαναφορά ενεργειών
 	Replace the current actions with the default set?	Να αντικατασταθούν οι τρέχουσες ενέργειες με το προεπιλεγμένο σύνολο;
 	Append adds the default set after the current sets instead.	Η Προσάρτηση προσθέτει αντί γι’ αυτό το προεπιλεγμένο σύνολο μετά τα τρέχοντα σύνολα.
@@ -4011,6 +4017,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Ο τροχός του ποντικιού με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
 	Dragging sideways on a numeric field's label changes the field's value.	Η μεταφορά προς τα πλάγια πάνω στην ετικέτα ενός αριθμητικού πεδίου αλλάζει την τιμή του πεδίου.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Το παρατεταμένο πάτημα ενός πλήκτρου εκτελεί το εργαλείο ή την εντολή της στήλης «Κρατήστε πατημένο» στις Συντομεύσεις πληκτρολογίου· ένα σύντομο πάτημα εκτελεί τη συνηθισμένη συντόμευσή του.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Πόσα δευτερόλεπτα πρέπει να μένει πατημένο ένα πλήκτρο πριν εκτελεστεί η συντόμευση παρατεταμένου πατήματος αντί για τη συνηθισμένη συντόμευσή του.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Όταν μετακινείτε σημεία αγκύρωσης, κάθε καμπύλη με ένα μετακινημένο άκρο διατηρεί το σχήμα της σε σχέση με τα άκρα της.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
 	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.
@@ -5201,6 +5209,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no graphic style `{n}`	δεν υπάρχει στυλ γραφικών `{n}`
 @msg	no interaction in progress	δεν υπάρχει αλληλεπίδραση σε εξέλιξη
 @msg	no key object	δεν υπάρχει βασικό αντικείμενο
+@msg	Align to Key Object isn't available with the Artboard tool	η «Στοίχιση ως προς το βασικό αντικείμενο» δεν είναι διαθέσιμη με το εργαλείο πίνακα σχεδίασης
 @msg	no library `{key}` (see {list})	δεν υπάρχει βιβλιοθήκη `{key}` (δείτε {list})
 @msg	no native format	δεν υπάρχει εγγενής μορφή
 @msg	no pages	δεν υπάρχουν σελίδες
@@ -5256,6 +5265,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such spine point	δεν υπάρχει τέτοιο σημείο κεντρικής καμπύλης
 @msg	`with` must be a list of at most 10000 spine point indexes	το `with` πρέπει να είναι λίστα με έως 10000 δείκτες σημείων κεντρικής καμπύλης
 @msg	`with` moves points, not a handle	το `with` μετακινεί σημεία, όχι λαβή
+@msg	`link` and `independent` cannot both be true	Τα `link` και `independent` δεν μπορούν να είναι και τα δύο true
+@msg	`link` places a handle: give `handle`	το `link` τοποθετεί μια λαβή: δώστε `handle`
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
@@ -5349,6 +5360,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	select a blend	επιλέξτε ανάμειξη
 @msg	select a blend or give `id`	επιλέξτε ανάμειξη ή δώστε το `id`
 @msg	select a clip group	επιλέξτε ομάδα αποκοπής
+@msg	select a flare	επιλέξτε λάμψη
 @msg	select a gradient mesh	επιλέξτε πλέγμα ντεγκραντέ
 @msg	select a linked image: an embedded one has no file	επιλέξτε συνδεδεμένη εικόνα: η ενσωματωμένη δεν έχει αρχείο
 @msg	select a repeat	επιλέξτε επανάληψη
@@ -5599,6 +5611,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τη νέα έκδοση|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ενημερώθηκε {n} συνδεδεμένο αρχείο που άλλαξε στον δίσκο|Ενημερώθηκαν {n} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	το έγγραφο ορίζει ξάκρισμα που αυτό το αρχείο PDF/X παραλείπει: ενεργοποιήστε τη «Χρήση ρυθμίσεων ξακρίσματος εγγράφου»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} αντικείμενο φτάνει στο άκρο κοπής αλλά σταματά πριν από το ξάκρισμα|{n} αντικείμενα φτάνουν στο άκρο κοπής αλλά σταματούν πριν από το ξάκρισμα
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Εξήχθη το {what} με {n} σημείωση: {first}|Εξήχθη το {what} με {n} σημειώσεις: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
@@ -6861,6 +6874,9 @@ effect	Points	Σημεία
 	Continue in Background	Συνέχεια στο παρασκήνιο
 	Cancel Export	Ακύρωση εξαγωγής
 @msg	Export cancelled	Η εξαγωγή ακυρώθηκε
+	Cancel Save	Ακύρωση αποθήκευσης
+@plural	{n} more save waiting|{n} more saves waiting	{n} ακόμη αποθήκευση σε αναμονή|{n} ακόμη αποθηκεύσεις σε αναμονή
+@msg	Save canceled	Η αποθήκευση ακυρώθηκε
 # Paragraph panel menu › Justification…
 	Desired	Επιθυμητό
 	Word Spacing:	Απόσταση λέξεων:
@@ -7379,6 +7395,12 @@ axis	Y Axis	Άξονας Y
 	Circuit Trace	Διαδρομή κυκλώματος
 	Bus Lines	Γραμμές διαύλου
 	Terminal Nodes	Τερματικοί κόμβοι
+
+# Original arrow art brushes.
+	Arrows	Βέλη
+	Solid Arrow	Συμπαγές βέλος
+	Open Arrow	Ανοιχτό βέλος
+	Chevron Arrow	Βέλος με σεβρόν
 
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
@@ -8065,10 +8087,18 @@ breakText	Glyphs	Γλύφοι
 	Smooth Bridge…	Ομαλή γέφυρα…
 	Smooth Bridge	Ομαλή γέφυρα
 	Keep Originals	Διατήρηση πρωτοτύπων
-@msg	select two circles to bridge	επιλέξτε δύο κύκλους για γεφύρωση
+@msg	select two or more circles to bridge	επιλέξτε δύο ή περισσότερους κύκλους για γεφύρωση
 @msg	one circle is inside the other	ο ένας κύκλος βρίσκεται μέσα στον άλλο
 @msg	the circles are too far apart for this radius: raise the radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα: αυξήστε την ακτίνα
 @msg	the circles are too far apart for this radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα
+	Constant Gap	Σταθερή απόσταση
+	Reach:	Εμβέλεια:
+@msg	the circles are too far apart for this gap: raise the gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση: αυξήστε την απόσταση
+@msg	the circles are too far apart for this gap	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την απόσταση
+@msg	no two circles are within reach: raise the reach	δεν υπάρχουν δύο κύκλοι εντός εμβέλειας: αυξήστε την εμβέλεια
+@msg	select at most 2000 circles to bridge	επιλέξτε έως 2000 κύκλους για γεφύρωση
+@msg	that makes too many bridges (at most 8000): lower the reach	αυτό δημιουργεί πάρα πολλές γέφυρες (έως 8000): μειώστε την εμβέλεια
+@msg	the bridged circles are too complex to unite	οι γεφυρωμένοι κύκλοι είναι πολύ σύνθετοι για ένωση
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Κοινές εφαπτόμενες…
 	Common Tangents	Κοινές εφαπτόμενες
@@ -8593,6 +8623,17 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Tap	Σύντομο πάτημα
+	Clear Hold	Εκκαθάριση παρατεταμένου πατήματος
+	Hold Shortcuts	Συντομεύσεις παρατεταμένου πατήματος
+	Hold Shortcut Delay	Καθυστέρηση συντομεύσεων παρατεταμένου πατήματος
+	How hold shortcuts work	Πώς λειτουργούν οι συντομεύσεις παρατεταμένου πατήματος
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Κάντε κλικ και πατήστε ένα πλήκτρο που θα κρατάτε πατημένο για αυτό (Esc για ακύρωση). Το παρατεταμένο πάτημα του πλήκτρου εκτελεί αυτό. Ένα σύντομο πάτημα εκτελεί τη συντόμευση του ίδιου του πλήκτρου.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ένα σύντομο πάτημα πλήκτρου εκτελεί τη συντόμευσή του. Αν κρατήσετε πατημένο το πλήκτρο για τον χρόνο καθυστέρησης, εκτελείται αντί γι’ αυτό το εργαλείο ή η εντολή της στήλης «Κρατήστε πατημένο». Μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο γράμματος, ψηφίου ή σημείου στίξης, μόνο του ή με Shift.
+@msg	Hold {_1} is already used by {_2}	το παρατεταμένο πάτημα του {_1} χρησιμοποιείται ήδη από το {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο που πληκτρολογεί έναν χαρακτήρα, μόνο του ή με Shift (το {shown} έχει Cmd, Ctrl ή Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	το {shown} δεν μπορεί να είναι συντόμευση παρατεταμένου πατήματος: χρησιμοποιήστε γράμμα, ψηφίο ή πλήκτρο στίξης
+	Dashed Arrow	Διακεκομμένο βέλος
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	μια γραμμή ή άλλη ανοιχτή διαδρομή που δεν περικλείει εμβαδόν δεν προσθέτει εμβαδόν στο σύνθετο σχήμα· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
 	Pressure Sensitive	Ευαίσθητα στην πίεση
 	Flex Ribbon	Εύκαμπτη κορδέλα

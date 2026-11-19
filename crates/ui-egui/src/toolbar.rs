@@ -462,7 +462,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
         // The Three-Point Arc tool: whether the third point gives a direction.
         vectorcraft_tools::three_point_arc::ID => Ok(crate::dialogs::three_point_arc_options::open(app)),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),

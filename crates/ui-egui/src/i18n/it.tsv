@@ -879,6 +879,7 @@ font-technology	Variable	Variabili
 	Duplicate Action or Action Set	Duplica azione o set di azioni
 	Delete the action set “{name}” and its actions?	Eliminare il set di azioni “{name}” e le sue azioni?
 	Delete the selected action sets and their actions?	Eliminare i set di azioni selezionati e le loro azioni?
+	Delete all action sets and their actions?	Eliminare tutti i set di azioni e le loro azioni?
 	Delete Theme	Elimina tema
 	Delete theme	Elimina tema
 	Delete these {n} graphic styles?	Eliminare questi {n} stili grafici?
@@ -1398,6 +1399,7 @@ font-technology	Variable	Variabili
 	Fit to Selected Art	Adatta alla grafica selezionata
 	Flag…	Bandiera…
 	Flare	Riflesso
+	Edit Flare	Modifica riflesso
 	Flare Tool	Strumento Riflesso
 	Flare Tool Options	Opzioni strumento Riflesso
 	Halo	Alone
@@ -2319,6 +2321,9 @@ file-filter	Templates	Modelli
 	Navigate	Naviga
 	Navigator	Navigatore
 	Navigator Panel Options	Opzioni pannello Navigatore
+	Attributes Panel Options	Opzioni pannello Attributi
+	Number of Recent URLs:	Numero di URL recenti:
+@msg	`count` must be a whole number from 1 to 30	`count` deve essere un numero intero compreso tra 1 e 30
 	Draw Dashed Lines as Solid Lines	Disegna le linee tratteggiate come linee continue
 	Needs the desktop app	Richiede l'app desktop
 	Neutral Gradients	Sfumature neutre
@@ -2800,6 +2805,7 @@ diagnostics	ui	interfaccia
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
 	Replace Actions…	Sostituisci azioni…
+	Clear Actions	Cancella azioni
 	Reset Actions	Ripristina azioni
 	Replace the current actions with the default set?	Sostituire le azioni correnti con il set predefinito?
 	Append adds the default set after the current sets instead.	Aggiungi aggiunge invece il set predefinito dopo i set correnti.
@@ -3245,6 +3251,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rotellina del mouse con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
 	Dragging sideways on a numeric field's label changes the field's value.	Trascinare in orizzontale sull'etichetta di un campo numerico ne cambia il valore.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quando sposti i punti di ancoraggio, ogni curva con un’estremità spostata mantiene la propria forma rispetto alle sue estremità.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
@@ -5282,6 +5290,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no graphic style `{n}`	nessuno stile grafico `{n}`
 @msg	no interaction in progress	nessuna interazione in corso
 @msg	no key object	nessun oggetto chiave
+@msg	Align to Key Object isn't available with the Artboard tool	«Allinea all'oggetto chiave» non è disponibile con lo strumento Tavola da disegno
 @msg	no library `{key}` (see {list})	nessuna libreria `{key}` (vedi {list})
 @msg	no native format	nessun formato nativo
 @msg	no pages	nessuna pagina
@@ -5337,6 +5346,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no such spine point	punto della dorsale inesistente
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` deve essere un elenco di al massimo 10000 indici di punti della dorsale
 @msg	`with` moves points, not a handle	`with` sposta punti, non una maniglia
+@msg	`link` and `independent` cannot both be true	`link` e `independent` non possono essere entrambi true
+@msg	`link` places a handle: give `handle`	`link` posiziona una maniglia: indica `handle`
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
 @msg	no such user library	libreria utente inesistente
@@ -5426,6 +5437,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	select a blend	seleziona una fusione
 @msg	select a blend or give `id`	seleziona una fusione o specifica il suo `id`
 @msg	select a clip group	seleziona un gruppo di ritaglio
+@msg	select a flare	seleziona un riflesso
 @msg	select a gradient mesh	seleziona una trama sfumatura
 @msg	select a linked image: an embedded one has no file	seleziona un'immagine collegata: un'immagine incorporata non ha un file
 @msg	select a repeat	seleziona una ripetizione
@@ -5683,6 +5695,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} immagine collegata modificata su disco: Aggiorna collegamenti mostra la nuova versione|{n} immagini collegate modificate su disco: Aggiorna collegamenti mostra le nuove versioni
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aggiornato {n} file collegato modificato su disco|Aggiornati {n} file collegati modificati su disco
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	il documento imposta un'abbondanza che questo file PDF/X omette: attiva «Usa impostazioni abbondanza del documento»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} oggetto raggiunge il bordo di rifilo ma si ferma prima dell'abbondanza|{n} oggetti raggiungono il bordo di rifilo ma si fermano prima dell'abbondanza
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Esportato {what} con {n} nota: {first}|Esportato {what} con {n} note: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} file di font ora in {folder}|{n} file di font ora in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}|{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}
@@ -6493,6 +6506,9 @@ lighting	Light	Luce
 	Continue in Background	Continua in background
 	Cancel Export	Annulla esportazione
 @msg	Export cancelled	Esportazione annullata
+	Cancel Save	Annulla salvataggio
+@plural	{n} more save waiting|{n} more saves waiting	{n} altro salvataggio in attesa|{n} altri salvataggi in attesa
+@msg	Save canceled	Salvataggio annullato
 # Paragraph panel menu › Justification…
 	Desired	Desiderato
 	Word Spacing:	Spaziatura parole:
@@ -7015,6 +7031,13 @@ axis	Y Axis	Asse Y
 	Circuit Trace	Pista del circuito
 	Bus Lines	Linee del bus
 	Terminal Nodes	Nodi terminali
+
+# Original arrow art brushes.
+	Arrows	Frecce
+	Solid Arrow	Freccia piena
+	Open Arrow	Freccia aperta
+	Double Arrow	Doppia freccia
+	Chevron Arrow	Freccia con gallone
 
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
@@ -7709,10 +7732,18 @@ breakText	Glyphs	Glifi
 	Smooth Bridge…	Ponte morbido…
 	Smooth Bridge	Ponte morbido
 	Keep Originals	Mantieni originali
-@msg	select two circles to bridge	seleziona due cerchi da unire
+@msg	select two or more circles to bridge	seleziona due o più cerchi da unire
 @msg	one circle is inside the other	un cerchio è dentro l’altro
 @msg	the circles are too far apart for this radius: raise the radius	i cerchi sono troppo distanti per questo raggio: aumenta il raggio
 @msg	the circles are too far apart for this radius	i cerchi sono troppo distanti per questo raggio
+	Constant Gap	Distanza costante
+	Reach:	Portata:
+@msg	the circles are too far apart for this gap: raise the gap	i cerchi sono troppo lontani per questa distanza: aumenta la distanza
+@msg	the circles are too far apart for this gap	i cerchi sono troppo lontani per questa distanza
+@msg	no two circles are within reach: raise the reach	nessuna coppia di cerchi è entro la portata: aumenta la portata
+@msg	select at most 2000 circles to bridge	seleziona al massimo 2000 cerchi da unire
+@msg	that makes too many bridges (at most 8000): lower the reach	così si creano troppi ponti (al massimo 8000): riduci la portata
+@msg	the bridged circles are too complex to unite	i cerchi uniti sono troppo complessi da fondere
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangenti comuni…
 	Common Tangents	Tangenti comuni
@@ -10029,6 +10060,16 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Tap	Pressione breve
+	Clear Hold	Cancella pressione prolungata
+	Hold Shortcuts	Scorciatoie a pressione prolungata
+	Hold Shortcut Delay	Ritardo delle scorciatoie a pressione prolungata
+	How hold shortcuts work	Come funzionano le scorciatoie a pressione prolungata
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fai clic, poi premi un tasto da tenere premuto per questo (Esc annulla). Tenere premuto il tasto esegue questo; una pressione breve esegue la scorciatoia del tasto stesso.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pressione breve di un tasto esegue la sua scorciatoia. Tenere premuto il tasto per la durata del ritardo esegue invece lo strumento o il comando della sua colonna Tieni premuto. Una scorciatoia a pressione prolungata è un tasto di lettera, cifra o punteggiatura, da solo o con Shift.
+@msg	Hold {_1} is already used by {_2}	La pressione prolungata di {_1} è già usata da {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una scorciatoia a pressione prolungata è un tasto che digita un carattere, da solo o con Shift ({shown} ha Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} non può essere una scorciatoia a pressione prolungata: usa una lettera, una cifra o un tasto di punteggiatura
 	Check	Verifica
 	Check Fold Lines	Verifica linee di piega
 @msg	No cut lines are in the selection.	Nella selezione non ci sono linee di taglio.
@@ -10049,6 +10090,7 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Dashed Arrow	Freccia tratteggiata
 	Pressure Sensitive	Sensibile alla pressione
 	Flex Ribbon	Nastro flessibile
 	Pulse Stroke	Tratto pulsante

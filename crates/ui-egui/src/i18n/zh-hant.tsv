@@ -841,6 +841,7 @@ font-technology	Variable	可變
 	Duplicate Action or Action Set	製作動作或動作組複本
 	Delete the action set “{name}” and its actions?	要刪除動作組「{name}」及其中的動作嗎？
 	Delete the selected action sets and their actions?	要刪除所選動作組及其中的動作嗎？
+	Delete all action sets and their actions?	要刪除所有動作組及其中的動作嗎？
 	Delete Theme	刪除主題
 	Delete theme	刪除主題
 	Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？
@@ -1363,6 +1364,7 @@ font-technology	Variable	可變
 	Fit to Selected Art	符合選取的圖稿
 	Flag…	旗形…
 	Flare	光暈
+	Edit Flare	編輯光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
 	Halo	光暈
@@ -2164,9 +2166,11 @@ file-filter	Templates	範本
 @msg	no bounds	沒有邊界
 @msg	no current layer	沒有目前圖層
 @msg	no key object	沒有關鍵物件
+@msg	Align to Key Object isn't available with the Artboard tool	使用工作區域工具時無法對齊關鍵物件
 @msg	no previous transform	沒有上一次的變形
 @msg	nothing to align	沒有可對齊的內容
 @msg	select a clip group	請選取剪裁群組
+@msg	select a flare	請選取光暈
 @msg	select two or more objects to distribute	請選取兩個以上要均分的物件
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis 必須是 "vertical"、"horizontal" 或以度為單位的角度，而非 `{v}`
 @msg	give horizontal or vertical	請提供 horizontal 或 vertical
@@ -2892,6 +2896,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} 個物件到達裁切線，但未延伸到出血區域
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -3493,6 +3498,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	no such spine point	沒有這個脊線點
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
 @msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
+@msg	`link` and `independent` cannot both be true	`link` 和 `independent` 不能同時為 true
+@msg	`link` places a handle: give `handle`	`link` 用於放置控制把手：請提供 `handle`
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -3517,6 +3524,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Navigate	導覽
 	Navigator	導覽器
 	Navigator Panel Options	導覽器面板選項
+	Attributes Panel Options	屬性面板選項
+	Number of Recent URLs:	最近使用的網址數量：
+@msg	`count` must be a whole number from 1 to 30	`count` 必須是 1 到 30 之間的整數
 	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
@@ -4000,6 +4010,7 @@ diagnostics	ui	介面
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
 	Replace Actions…	取代動作…
+	Clear Actions	清除動作
 	Reset Actions	重設動作
 	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
 	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
@@ -4448,6 +4459,8 @@ digits	Malayalam	馬來亞拉姆數字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某個鍵會執行鍵盤快速鍵中其按住欄的工具或命令；快速按下則執行其一般快速鍵。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某個鍵多少秒後，執行其按住快速鍵而不是一般快速鍵。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
@@ -6517,6 +6530,9 @@ lighting	Light	光源
 	Continue in Background	在背景繼續
 	Cancel Export	取消匯出
 @msg	Export cancelled	已取消匯出
+	Cancel Save	取消儲存
+@plural	{n} more save waiting|{n} more saves waiting	另有 {n} 個儲存等待中
+@msg	Save canceled	已取消儲存
 # Paragraph panel menu › Justification…
 	Desired	所需
 	Word Spacing:	字間距：
@@ -7046,6 +7062,13 @@ axis	Y Axis	Y 軸
 	Circuit Trace	電路走線
 	Bus Lines	匯流排
 	Terminal Nodes	端子節點
+
+# Original arrow art brushes.
+	Arrows	箭頭筆刷
+	Solid Arrow	實心箭頭
+	Open Arrow	空心箭頭
+	Double Arrow	雙向箭頭
+	Chevron Arrow	人字紋箭頭
 
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
@@ -7740,10 +7763,18 @@ breakText	Glyphs	字符
 	Smooth Bridge…	平滑橋接…
 	Smooth Bridge	平滑橋接
 	Keep Originals	保留原始物件
-@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	select two or more circles to bridge	請選取兩個或更多要橋接的圓形
 @msg	one circle is inside the other	一個圓形位於另一個圓形內
 @msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
 @msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
+	Constant Gap	固定間隙
+	Reach:	範圍：
+@msg	the circles are too far apart for this gap: raise the gap	就此間隙而言，兩個圓形相距太遠：請增加間隙
+@msg	the circles are too far apart for this gap	就此間隙而言，兩個圓形相距太遠
+@msg	no two circles are within reach: raise the reach	範圍內沒有任何兩個圓形：請增加範圍
+@msg	select at most 2000 circles to bridge	最多選取 2000 個圓形進行橋接
+@msg	that makes too many bridges (at most 8000): lower the reach	這會產生過多橋接（最多 8000 個）：請減少範圍
+@msg	the bridged circles are too complex to unite	橋接的圓形過於複雜，無法合併
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切線…
 	Common Tangents	公切線
@@ -10076,6 +10107,17 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快速鍵
+	Hold Shortcut Delay	按住快速鍵延遲
+	How hold shortcuts work	按住快速鍵的運作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	按一下後按下要為此按住的按鍵 (Esc 取消)。按住該按鍵會執行此項；短按會執行該按鍵本身的快速鍵。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按按鍵會執行它的快速鍵。按住按鍵達延遲時間，則改為執行其「按住」欄中的工具或命令。按住快速鍵是字母、數字或標點符號按鍵，可單獨使用或搭配 Shift。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快速鍵是可輸入字元的按鍵，可單獨使用或搭配 Shift ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作為按住快速鍵：請使用字母、數字或標點符號按鍵
+	Dashed Arrow	虛線箭頭
 	Pressure Sensitive	壓感筆刷
 	Flex Ribbon	柔韌色帶
 	Pulse Stroke	脈動筆觸

@@ -875,6 +875,7 @@ font-technology	Variable	Вариативные
 	Duplicate Action or Action Set	Дублировать действие или набор действий
 	Delete the action set “{name}” and its actions?	Удалить набор действий «{name}» и его действия?
 	Delete the selected action sets and their actions?	Удалить выбранные наборы действий и их действия?
+	Delete all action sets and their actions?	Удалить все наборы действий и их действия?
 	Delete Theme	Удалить тему
 	Delete theme	Удалить тему
 	Delete these {n} graphic styles?	Удалить эти графические стили ({n})?
@@ -1384,6 +1385,7 @@ font-technology	Variable	Вариативные
 	Fit to Selected Art	Вписать в выделенный рисунок
 	Flag…	Флаг…
 	Flare	Блик
+	Edit Flare	Редактировать блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
 	Halo	Ореол
@@ -2305,6 +2307,9 @@ file-filter	Templates	Шаблоны
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Параметры панели «Навигатор»
+	Attributes Panel Options	Параметры панели «Атрибуты»
+	Number of Recent URLs:	Число последних URL:
+@msg	`count` must be a whole number from 1 to 30	`count` должно быть целым числом от 1 до 30
 	Draw Dashed Lines as Solid Lines	Рисовать штриховые линии сплошными
 	Needs the desktop app	Требуется настольное приложение
 	Neutral Gradients	Нейтральные градиенты
@@ -2782,6 +2787,7 @@ diagnostics	ui	интерфейс
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
 	Replace Actions…	Заменить действия…
+	Clear Actions	Очистить действия
 	Reset Actions	Сбросить действия
 	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
 	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
@@ -3227,6 +3233,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Удержание клавиши запускает инструмент или команду из её столбца «Удерживать» в «Сочетаниях клавиш»; короткое нажатие запускает её обычное сочетание.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Сколько секунд нужно удерживать клавишу, прежде чем вместо её обычного сочетания сработает сочетание удержания.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	При перемещении опорных точек каждая кривая с одним перемещённым концом сохраняет форму относительно своих концов.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
@@ -5277,6 +5285,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no graphic style `{n}`	нет графического стиля `{n}`
 @msg	no interaction in progress	нет взаимодействия в процессе
 @msg	no key object	нет ключевого объекта
+@msg	Align to Key Object isn't available with the Artboard tool	«Выровнять по ключевому объекту» недоступно с инструментом «Монтажная область»
 @msg	no library `{key}` (see {list})	нет библиотеки `{key}` (см. {list})
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
@@ -5332,6 +5341,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such spine point	такой точки остова нет
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` должен быть списком не более чем из 10000 индексов точек остова
 @msg	`with` moves points, not a handle	`with` перемещает точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могут одновременно быть true
+@msg	`link` places a handle: give `handle`	`link` размещает маркер: укажите `handle`
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
 @msg	no such user library	такой пользовательской библиотеки нет
@@ -5423,6 +5434,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	select a blend	выделите переход
 @msg	select a blend or give `id`	выделите переход или укажите `id`
 @msg	select a clip group	выделите группу обрезки
+@msg	select a flare	выделите блик
 @msg	select a gradient mesh	выделите градиентную сетку
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор
@@ -5680,6 +5692,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}|Объектов, доходящих до обрезного края, но не до вылета: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}
@@ -6492,6 +6505,9 @@ lighting	Light	Свет
 	Continue in Background	Продолжить в фоне
 	Cancel Export	Отменить экспорт
 @msg	Export cancelled	Экспорт отменён
+	Cancel Save	Отменить сохранение
+@plural	{n} more save waiting|{n} more saves waiting	Ещё {n} сохранение в очереди|Ещё {n} сохранения в очереди|Ещё {n} сохранений в очереди
+@msg	Save canceled	Сохранение отменено
 # Paragraph panel menu › Justification…
 	Desired	Желательно
 	Word Spacing:	Интервал между словами:
@@ -7015,6 +7031,12 @@ axis	Y Axis	Ось Y
 	Circuit Trace	Дорожка схемы
 	Bus Lines	Линии шины
 	Terminal Nodes	Контактные узлы
+
+# Original arrow art brushes.
+	Arrows	Кисти-стрелки
+	Solid Arrow	Сплошная стрелка
+	Open Arrow	Открытая стрелка
+	Chevron Arrow	Стрелка с шевроном
 
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
@@ -8067,10 +8089,18 @@ breakText	Glyphs	Глифы
 	Smooth Bridge…	Плавный мост…
 	Smooth Bridge	Плавный мост
 	Keep Originals	Сохранить оригиналы
-@msg	select two circles to bridge	выделите две окружности для соединения
+@msg	select two or more circles to bridge	выделите две или более окружностей для соединения
 @msg	one circle is inside the other	одна окружность находится внутри другой
 @msg	the circles are too far apart for this radius: raise the radius	окружности слишком далеко друг от друга для этого радиуса: увеличьте радиус
 @msg	the circles are too far apart for this radius	окружности слишком далеко друг от друга для этого радиуса
+	Constant Gap	Постоянный зазор
+	Reach:	Охват:
+@msg	the circles are too far apart for this gap: raise the gap	окружности слишком далеко друг от друга для этого зазора: увеличьте зазор
+@msg	the circles are too far apart for this gap	окружности слишком далеко друг от друга для этого зазора
+@msg	no two circles are within reach: raise the reach	нет двух окружностей в пределах охвата: увеличьте охват
+@msg	select at most 2000 circles to bridge	выделите не более 2000 окружностей для соединения
+@msg	that makes too many bridges (at most 8000): lower the reach	получается слишком много мостов (не более 8000): уменьшите охват
+@msg	the bridged circles are too complex to unite	соединяемые окружности слишком сложны для объединения
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общие касательные…
 	Common Tangents	Общие касательные
@@ -10502,6 +10532,17 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Короткое нажатие
+	Clear Hold	Очистить удержание
+	Hold Shortcuts	Клавиши удержания
+	Hold Shortcut Delay	Задержка клавиш удержания
+	How hold shortcuts work	Как работают клавиши удержания
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щелкните, затем нажмите клавишу, которую нужно удерживать для этого (Esc отменяет). Удержание клавиши запускает это; короткое нажатие запускает собственное сочетание клавиши.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Короткое нажатие клавиши запускает ее сочетание. Удержание клавиши в течение задержки запускает вместо этого инструмент или команду из ее столбца «Удерживать». Клавиша удержания — это клавиша буквы, цифры или знака препинания, отдельно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Удержание {_1} уже используется для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавиша удержания — это клавиша, которая вводит символ, отдельно или с Shift ({shown} содержит Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не может быть клавишей удержания: используйте букву, цифру или клавишу знака препинания
+	Dashed Arrow	Пунктирная стрелка
 	Pressure Sensitive	Чувствительные к нажиму
 	Flex Ribbon	Гибкая лента
 	Pulse Stroke	Пульсирующий штрих
