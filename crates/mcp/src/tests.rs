@@ -338,6 +338,23 @@ fn headless_command_list_includes_ui_commands() {
     assert!(text_of(&r).contains("--connect"), "{r}");
 }
 
+/// Desktop commands that the app refuses for every automated request are not offered through
+/// `--connect`: the headless error says only the person at the keyboard can run them.
+#[test]
+fn headless_does_not_send_keyboard_only_commands_to_connect() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    for (n, id) in ["attributes.openUrl", "file.export.svg.browser", "file.saveForWeb.browser", "file.showPackage"].iter().enumerate() {
+        assert!(crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| cid == id), "{id} is not a desktop UI command");
+        let r = call(&mut s, 10 + n as u64, "command_run", json!({"id": id, "params": {}}));
+        assert_eq!(r["isError"], true, "{id}: {r}");
+        let text = text_of(&r);
+        assert!(text.contains("only the person at the keyboard"), "{id}: {r}");
+        assert!(!text.contains("start `vectorcraft --control"), "{id}: {r}");
+    }
+}
+
 // ---------- headless end-to-end ----------
 
 #[test]
