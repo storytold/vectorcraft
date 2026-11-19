@@ -261,7 +261,7 @@ impl ScopeHandle {
             (None, None) => None,
             (Some(g), None) | (None, Some(g)) => Some(g),
             (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(a),
-            (Some(a), Some(b)) => Some(Arc::new(ScriptGate { also: Some(b), ..(*a).clone() })),
+            (Some(a), Some(b)) => Some(Arc::new(a.followed_by(b))),
         };
         let exempt = self.2 && here.2;
         let scope = match (self.roots(), here.roots()) {
@@ -289,6 +289,17 @@ pub(crate) struct ScriptGate {
 }
 
 impl ScriptGate {
+    /// This gate with `next` at the end of its chain of `also` gates, so a path must pass every
+    /// gate already in the chain as well as `next`.
+    fn followed_by(&self, next: Arc<ScriptGate>) -> ScriptGate {
+        let also = match &self.also {
+            None => next,
+            Some(also) if Arc::ptr_eq(also, &next) => next,
+            Some(also) => Arc::new(also.followed_by(next)),
+        };
+        ScriptGate { also: Some(also), ..self.clone() }
+    }
+
     fn check(&self, path: &str, access: Access) -> Result<(), String> {
         if let Some(also) = &self.also {
             also.check(path, access)?;
@@ -923,6 +934,26 @@ mod tests {
         assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), Some(gate("outside"))), (false, false), "both gates");
         assert_eq!(reads(ScopeHandle(None, None, true), Some(gate("in"))), (true, false), "exempt only where both are");
         assert_eq!(reads(plain, None), (true, true));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed again and again keeps every gate it was narrowed by: a gate an earlier
+    /// narrowing joined to the chain still refuses what it refused before.
+    #[test]
+    fn a_scope_narrowed_several_times_keeps_every_gate() {
+        let (base, _) = folders("narrowed-thrice");
+        let gate = |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], also: None };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
+        let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
+        let first = narrow(ScopeHandle(None, None, false), gate(&base));
+        assert_eq!(reads(&first), (true, true));
+        let second = narrow(first, gate(&base.join("in")));
+        assert_eq!(reads(&second), (true, false), "the second gate refuses the outside file");
+        let third = narrow(second, gate(&base));
+        assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
+        let fourth = narrow(third, gate(&base));
+        assert_eq!(reads(&fourth), (true, false), "and after a fourth");
         let _ = std::fs::remove_dir_all(base);
     }
 
