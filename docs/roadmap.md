@@ -147,7 +147,7 @@ Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule 
    Selection, smart guides and snapping first. 60–90 h, parallel by tool.
 2. **`.ai` files from real users** (G9): layer structure (#951). 10–20 h.
 3. **Launch and stability** (G10): the Windows and Linux start-up reports. 20–35 h.
-4. **Core-tool bugs** (G11): SVG units reverting to points (#864) and a Transform effect in a fill's or stroke's own effects (#885). Shape Builder regions (#937), Asset Export ghost borders (#983 / #1037) and the stalling bezier drag preview (#834) are fixed. 8–15 h.
+4. **Core-tool bugs** (G11): SVG units reverting to points (#864; SVG export physical units fixed) and a Transform effect in a fill's or stroke's own effects (#885). Shape Builder regions (#937), Asset Export ghost borders (#983 / #1037) and the stalling bezier drag preview (#834) are fixed. 6–13 h.
 5. **Then:** advanced type (G4) and the Illustrator 2026 additions (G13), then 3D (G3). The Effect Gallery's filter thumbnails and in-dialog preview are in (G2).
 
 ## Next
