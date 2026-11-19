@@ -12,18 +12,24 @@
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes.
 //!
+//! Show Harmony puts a marker on the ring for each other color of the harmony rule picked under
+//! Harmony Rule (the Color Guide's rules whose colors each have a hue of their own), filled with
+//! that color. The markers follow the current color, and a click on one applies its color as a
+//! pick does.
+//!
 //! Panel menu › Show Color Vision Preview adds a row under the wheel or the box with the color as
 //! simulated for protanopia, deuteranopia and tritanopia, through the simulations View › Proof
 //! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
 //! simulation.
 //!
-//! The view, the channel and Show Color Vision Preview are kept with the preferences
-//! (`ui.colorWheel`).
+//! The view, the channel, Show Harmony, Harmony Rule and Show Color Vision Preview are kept with
+//! the preferences (`ui.colorWheel`).
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ProofSetup, ProofTarget};
+use vectorcraft_color::harmony::Harmony;
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
 
@@ -69,17 +75,54 @@ impl View {
 
 /// The panel's settings, kept with the preferences (`UiState::color_wheel`, `ui.colorWheel`).
 /// Each key reads on its own, and a value this build does not know reads as the key's default.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     #[serde(deserialize_with = "deserialize_view")]
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
+    /// Show Harmony: markers on the ring for the other colors of `harmony_rule`.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub harmony: bool,
+    /// The rule of Show Harmony, one of [`harmony_rules`].
+    #[serde(serialize_with = "serialize_rule", deserialize_with = "deserialize_rule")]
+    pub harmony_rule: Harmony,
     /// Show Color Vision Preview: the row of simulated colors under the wheel or the box. A saved
     /// `true` shows the row and any other value hides it.
     #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub vision: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { view: View::default(), channel: Channel::default(), harmony: false, harmony_rule: Harmony::Complementary, vision: false }
+    }
+}
+
+/// The harmony rules the wheel shows: those whose colors each have a hue of their own, so that no
+/// two markers sit at the same place on the ring.
+pub fn harmony_rules() -> impl Iterator<Item = Harmony> {
+    Harmony::ALL.into_iter().filter(|h| h.hues_differ())
+}
+
+/// The wheel's harmony rule named by `s`, its id or its label.
+fn parse_rule(s: &str) -> Option<Harmony> {
+    Harmony::parse(s).filter(|h| h.hues_differ())
+}
+
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
+}
+
+fn serialize_rule<S: serde::Serializer>(h: &Harmony, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&h.id())
+}
+
+fn deserialize_rule<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Harmony, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(parse_rule).unwrap_or(Harmony::Complementary))
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -103,12 +146,12 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?, vision?}`: show the wheel or the box, pick the box's channel,
-/// and show or hide the color vision row. Keys left out or null keep their values; params that are
-/// not an object, another key or a value off the list are an error and change nothing. → the
-/// settings.
+/// `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`: show the wheel or the box,
+/// pick the box's channel, show the colors of a harmony rule on the wheel, and show or hide the
+/// color vision row. Keys left out or null keep their values; params that are not an object,
+/// another key or a value off the list are an error and change nothing. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    const KEYS: [&str; 3] = ["view", "channel", "vision"];
+    const KEYS: [&str; 5] = ["view", "channel", "harmony", "harmonyRule", "vision"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -127,6 +170,21 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         None | Some(Value::Null) => {}
         Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
     }
+    let key = "harmony";
+    match p.get(key) {
+        None | Some(Value::Null) => {}
+        Some(v) => set.harmony = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?,
+    }
+    let key = "harmonyRule";
+    match p.get(key) {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            set.harmony_rule = v.as_str().and_then(parse_rule).ok_or_else(|| {
+                let ids: Vec<String> = harmony_rules().map(Harmony::id).collect();
+                format!("`{key}` must be one of {}", ids.join(", "))
+            })?
+        }
+    }
     if let Some(on) = crate::menus::opt_bool(p, "vision")? {
         set.vision = on;
     }
@@ -134,8 +192,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     Ok(json!(app.ui.color_wheel))
 }
 
-/// The panel menu: Wheel View and Box View, Box Channel while the box shows, and Show Color Vision
-/// Preview.
+/// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Harmony
+/// and Harmony Rule while the wheel shows; and Show Color Vision Preview.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -153,6 +211,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.separator();
+    if menu_item(ui, tl!("Show Harmony"), set.view == View::Wheel, set.harmony) {
+        command(app, &json!({ "harmony": !set.harmony })).ok();
+    }
+    ui.add_enabled_ui(set.view == View::Wheel, |ui| {
+        ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
+            for rule in harmony_rules() {
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
+                    command(app, &json!({ "harmonyRule": rule.id() })).ok();
+                }
+            }
+        });
+    });
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
         command(app, &json!({ "vision": !set.vision })).ok();
     }
@@ -410,7 +480,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
         let name = tl!("Saturation and brightness");
         let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
-        if let Some((h, phase)) = ring.hue {
+        // Show Harmony: the rule's other colors for the current one, which follow it. While a press
+        // is held on a marker, the ring's drag under it picks nothing.
+        let set = &app.ui.color_wheel;
+        let mut held = false;
+        if set.harmony && marked {
+            let others: Vec<[f32; 3]> = set.harmony_rule.apply_hsb(hsb).into_iter().skip(1).collect();
+            let markers = widgets::ring_markers(ui, "color-wheel-harmony", ring.rect, &others, tl!("Harmony color"));
+            held = markers.held;
+            if let Some(i) = markers.picked
+                && let Some(&c) = others.get(i)
+            {
+                pick = Some((c, Live::Released));
+            }
+        }
+        if let Some((h, phase)) = ring.hue
+            && !held
+            && pick.is_none()
+        {
             pick = Some(([h, hsb[1], hsb[2]], phase));
         }
         // A press between the square and the ring picks the closest point of the square, which

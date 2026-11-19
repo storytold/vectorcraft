@@ -560,6 +560,15 @@
 	Shading Color	Varjostusväri
 	Black Overprint	Päällepainettu musta
 	Draw Hidden Faces	Piirrä piilotetut pinnat
+	Map Art…	Kartoita kuvitus…
+	Map Art	Kartoita kuvitus
+	First Surface	Ensimmäinen pinta
+	Previous Surface	Edellinen pinta
+	Next Surface	Seuraava pinta
+	Last Surface	Viimeinen pinta
+	Scale to Fit	Skaalaa sopivaksi
+	Shade Artwork	Varjosta kuvitus
+	Invisible Geometry	Näkymätön geometria
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
 	Materials…	Materiaalit…
@@ -673,6 +682,8 @@
 	Hide Gradient Annotator	Piilota liukuvärin säädin
 	Show Gradient Annotator	Näytä liukuvärin säädin
 	Hide Corner Widget	Piilota kulmasäädin
+	Hide Shape Widgets	Piilota muotosäätimet
+	Show Shape Widgets	Näytä muotosäätimet
 	Show Corner Widget	Näytä kulmasäädin
 	Guides	Apuviivat
 	Hide Guides	Piilota apuviivat
@@ -793,6 +804,9 @@
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Harmony	Näytä harmonia
+	Harmony Rule	Harmoniasääntö
+	Harmony color	Harmonian väri
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu
@@ -1039,6 +1053,25 @@
 	Preserve Embedded Profiles	Säilytä upotetut profiilit
 	Convert to Working Space	Muunna työväriavaruuteen
 	Preserve Numbers	Säilytä lukuarvot
+	Profile Mismatches:	Profiilien ristiriidat:
+	Ask When Opening	Kysy avattaessa
+	Ask When Pasting	Kysy liitettäessä
+	Missing Profiles:	Puuttuvat profiilit:
+	Embedded Profile Mismatch	Upotetun profiilin ristiriita
+	Missing Profile	Profiili puuttuu
+	Paste Profile Mismatch	Profiiliristiriita liitettäessä
+	“{name}” is not tagged with a {model} profile.	Kohteella ”{name}” ei ole {model}-profiilia.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	Kohteella ”{name}” on {model}-profiili ”{profile}”, joka ei ole {model}-työväriavaruus ”{working}”.
+	Use the embedded profile	Käytä upotettua profiilia
+	Convert the colors to the working space	Muunna värit työväriavaruuteen
+	Discard the embedded profile	Hylkää upotettu profiili
+	Leave as is	Jätä ennalleen
+	Assign the working space	Määritä työväriavaruus
+	Assign profile:	Määritä profiili:
+	Preserve the color numbers	Säilytä värien lukuarvot
+	Convert to keep the colors' appearance	Muunna ja säilytä värien ulkoasu
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` annetaan vain, kun `{key}` on "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Liitetyt värit ovat asiakirjasta, jonka {model}-profiili on ”{from}”; tämän asiakirjan profiili on ”{to}”.
 	CMYK	CMYK
 	Texture	Tekstuuri
 	Craquelure…	Krakelyyri…
@@ -1121,6 +1154,15 @@ lighting	Light	Valo
 	Document Raster Effects Settings Dialog	Asiakirjan rasteritehosteiden asetusten valintaikkuna
 	Drop Shadow	Pudotusvarjo
 	DXF Options Dialog	DXF-asetusten valintaikkuna
+	HP-GL Options	HP-GL-asetukset
+	HP-GL Options Dialog	HP-GL-asetusten valintaikkuna
+	Curve Tolerance:	Käyrien toleranssi:
+	Origin:	Origo:
+	Pens:	Kynät:
+	One Pen per Color	Yksi kynä kullekin värille
+	Pen Table	Kynätaulukko
+	Draw the Nearest Path Next	Piirrä seuraavaksi lähin polku
+	Draw Inner Paths First	Piirrä sisemmät polut ensin
 	Edit Toolbar	Muokkaa työkaluriviä
 	Edit Views	Muokkaa näkymiä
 	Effect…	Tehoste…
@@ -1696,6 +1738,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinalainen perusviiva
 	Select a text object to edit its character attributes.	Valitse tekstiobjekti, jonka merkkimääritteitä haluat muokata.
 	Show Options	Näytä asetukset
+	Show on Shape Creation	Näytä muotoa luotaessa
 	Show Recent Colors	Näytä viimeisimmät värit
 	Toggle RGB Percent	Vaihda RGB prosentteina
 	Small Caps	Kapiteelit
@@ -2048,6 +2091,8 @@ digits	Malayalam	Malajalam
 	Snap Curves To Lines	Tartu käyrät viivoihin
 	Tracing Result with Outlines	Jäljitystulos ääriviivoineen
 	Source Image	Lähdekuva
+	Split View	Jaettu näkymä
+	Divider	Jakoviiva
 	Threshold	Kynnys
 	Trace	Jäljitä
 	Trace the image with the Default preset	Jäljitä kuva oletusesiasetuksella
@@ -2185,6 +2230,15 @@ digits	Malayalam	Malajalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-joukko
 	Kinsoku Shori Type	Kinsoku Shori -tyyppi
+	Kinsoku Shori Settings…	Kinsoku Shori -asetukset…
+	Kinsoku Shori Settings	Kinsoku Shori -asetukset
+	Kinsoku Sets	Kinsoku-joukot
+	Kinsoku Set Base	Kinsoku-joukon pohja
+	Based on:	Pohjana:
+	Cannot Start Line	Ei voi aloittaa riviä
+	Cannot End Line	Ei voi päättää riviä
+	Hanging Punctuation	Riippuvat välimerkit
+	Inseparable Characters	Erottamattomat merkit
 	Push In First	Ensin sisään
 	Push Out First	Ensin ulos
 	Push Out Only	Vain ulos
@@ -2585,6 +2639,12 @@ digits	Malayalam	Malajalam
 	Units:	Yksiköt:
 	Use Typographer's Quotes	Käytä typografisia lainausmerkkejä
 	Center Artwork	Keskitä kuvitus
+	PSD Import Options	PSD-tuonnin asetukset
+	Place PSD	Sijoita PSD
+	Convert Layers to Objects	Muunna tasot objekteiksi
+	Import Hidden Layers	Tuo piilotetut tasot
+	Flatten Layers to a Single Image	Litistä tasot yhdeksi kuvaksi
+	Import Slices	Tuo siivut
 	DXF Import Options	DXF-tuonnin asetukset
 	Layout:	Asettelu:
 	Merge Layers	Yhdistä tasot
@@ -2736,6 +2796,7 @@ digits	Malayalam	Malajalam
 	Save As Preset…	Tallenna esiasetuksena…
 	Save Changes	Tallenna muutokset
 	Save Preset…	Tallenna esiasetus…
+	Save Summary…	Tallenna yhteenveto…
 	Vectors	Vektorit
 	A saved copy of the selected preset	Tallennettu kopio valitusta esiasetuksesta
 	Built-in presets don't change: New makes a copy you can edit.	Sisäiset esiasetukset eivät muutu: Uusi luo muokattavan kopion.
@@ -2969,6 +3030,8 @@ digits	Malayalam	Malajalam
 	Overprint and Transparency Flattener Options	Päällepainatuksen ja läpinäkyvyyden litistyksen asetukset
 	Custom…	Mukautettu…
 	Custom Transparency Flattener Options	Läpinäkyvyyden litistyksen mukautetut asetukset
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF-esiasetus säilyttää litistyksen esiasetuksen mutta ei Mukautettu…-asetuksia.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 -tiedostot rajaavat rasteroidut alueet niiden muotoon, ja Päällepainatus määrää, säilytetäänkö päällepainatukset.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS:ssä ei ole alfa-läpinäkyvyyttä, ja Päällepainatukset määrää, säilytetäänkö päällepainatukset.
 	Place the pages with the placement again	Sijoita sivut uudelleen sijoittelun mukaan
 	Placement:	Sijoittelu:
@@ -3064,6 +3127,9 @@ digits	Malayalam	Malajalam
 	Recolor this row	Väritä tämä rivi uudelleen
 	Reset the rows to the artwork's colors	Palauta rivit kuvituksen väreihin
 	Color Theme Picker	Väriteeman valitsin
+	Undo Changes	Kumoa muutokset
+	Redo Changes	Tee muutokset uudelleen
+@msg	Recolor Artwork is not open	Väritä kuvitus uudelleen ei ole auki
 	Click or drag across the art to pick its colors; Shift adds more	Napsauta tai vedä kuvituksen yli poimiaksesi sen värit; Vaihto lisää useampia
 	Prominent Colors	Hallitsevat värit
 	Save All Colors	Tallenna kaikki värit
@@ -3351,6 +3417,17 @@ antiAlias	Sharp	Terävä
 	Swatch Name:	Värimallin nimi:
 	Diameter:	Halkaisija:
 	Symbolism Tools Options	Symbolityökalujen asetukset
+	Tool:	Työkalu:
+	Symbol Set Density	Symbolijoukon tiheys
+	Symbol Sprayer Options	Symbolisuihkuttimen asetukset
+	Scrunch:	Tiivistys:
+	Spin:	Kierto:
+	Screen:	Läpinäkyvyys:
+	Stain:	Värjäys:
+	Symbol Sizer Options	Symbolien koonmuutoksen asetukset
+	Proportional Resizing	Suhteellinen koonmuutos
+	Resizing Affects Density	Koonmuutos vaikuttaa tiheyteen
+	Show Brush Size and Intensity	Näytä siveltimen koko ja voimakkuus
 	Symbol Set Density:	Symbolijoukon tiheys:
 	Intensity:	Voimakkuus:
 	Place PDF	Sijoita PDF
@@ -3447,6 +3524,7 @@ antiAlias	Sharp	Terävä
 	Width Point Edit	Leveyspisteen muokkaus
 	Art	Kuvitus
 	Bearing	Suunta
+	Stylus Wheel	Kynän rulla
 	Bristle	Harjas
 	Calligraphic	Kalligrafinen
 	Dots	Pisteet
@@ -3589,6 +3667,9 @@ theme	Appearance	Ulkoasu
 	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
 	embedding allowed	upottaminen sallittu
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tuntematon tyyppi
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} käyttö|{n} käyttöä
 	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
 	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
 	missing	puuttuu
@@ -4162,6 +4243,7 @@ theme	Appearance	Ulkoasu
 	Show Pixel Grid (Above 600% Zoom)	Näytä pikseliruudukko (yli 600 %:n zoomaus)
 	Show Slice Numbers	Näytä viipaleiden numerot
 	Show The Home Screen When No Documents Are Open	Näytä aloitusnäyttö, kun asiakirjoja ei ole avoinna
+	Show Tool Cards	Näytä työkalukortit
 	Show Tool Tips	Näytä työkaluvihjeet
 	Size/Leading	Koko/riviväli
 	Snapping Tolerance	Tartuntatoleranssi
@@ -4287,6 +4369,8 @@ theme	Appearance	Ulkoasu
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
 	Ungroup Color Group	Pura väriryhmä
+	Color Group Options	Väriryhmän asetukset
+	Color Group Options…	Väriryhmän asetukset…
 	Copy to User Defined	Kopioi käyttäjän määrittämiin
 	Swatch Library	Värimallikirjasto
 	Clear All Tabs	Tyhjennä kaikki sarkaimet
@@ -4589,6 +4673,7 @@ font-technology	Variable	Muuttuvat
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Dynaamisen suorakulmion ominaisuuksissa on yksi Kulman säde -kenttä kaikille neljälle kulmalle; kun asetus ei ole käytössä, jokaisella kulmalla on oma kenttänsä.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mitä Muunna-paneelin muokkaukset muuntavat: objektin, sen kuvioruudut tai molemmat; Oletus noudattaa asetusta Muunna kuvioruudut.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kun yksi symbolin esiintymä on valittuna, Muunna-paneeli käyttää symbolin kohdistuspistettä viitepisteenä.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Suorakulmion, ellipsin, monikulmion, tähden tai viivan piirtäminen avaa Muunna-paneelin, jos se on suljettu.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Tummentaa piirtopinnan piirtoalustojen ulkopuolelta, kun Piirtoalusta-työkalu on käytössä.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kun Himmennä piirtoalustan ulkopuolinen alue on käytössä, piirtoalustojen ulkopuolinen alue pysyy tummana, kun vedät Piirtoalusta-työkalulla.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Kuinka lähellä, pikseleinä, osoittimen on oltava objektia, ankkuripistettä tai kahvaa, jotta napsautus valitsee sen.
@@ -4681,6 +4766,9 @@ font-technology	Variable	Muuttuvat
 	Channel	Kanava
 	Circle	Ympyrä
 	Circle Tool	Ympyrätyökalu
+	Curvature Circle Tool	Kaarevuusympyrätyökalu
+	Cusp	Kärki
+	Straight segment	Suora segmentti
 	Circle too large	Ympyrä on liian suuri
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
@@ -5292,6 +5380,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	a freeform gradient keeps at least one point	vapaamuotoisessa liukuvärissä on oltava vähintään yksi piste
 @msg	a gradient needs at least two stops	liukuvärissä on oltava vähintään kaksi väripistettä
 @msg	a graphic style named `{to}` already exists	grafiikkatyyli nimeltä `{to}` on jo olemassa
+@msg	a swatch or color group named `{name}` already exists	värimalli tai väriryhmä nimeltä `{name}` on jo olemassa
+@msg	missing `group`	`group` puuttuu
+@msg	no colour group `{group}`	ei väriryhmää `{group}`
 @msg	a key object sits on that point	pisteessä on avainobjekti
 @msg	a page is missing	sivu puuttuu
 @msg	a page out of range	sivu alueen ulkopuolella
@@ -5404,6 +5495,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	missing `folder`	`folder` puuttuu
 @msg	missing `id` (see plugin.list)	`id` puuttuu (ks. plugin.list)
 @msg	missing `name`	`name` puuttuu
+@msg	missing `path`	`path` puuttuu
 @msg	missing `tool`	`tool` puuttuu
 @msg	missing id	id puuttuu
 @msg	missing index	indeksi puuttuu
@@ -5426,6 +5518,11 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` on annettava kahtena tai kolmena lukuparina [x, y]
 @msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`
+@msg	the path is straight there, so no circle matches its curvature	polku on siinä kohdassa suora, joten mikään ympyrä ei vastaa sen kaarevuutta
+@msg	the path has a cusp there, so it has no single curvature	polulla on siinä kohdassa kärki, joten sillä ei ole yksiselitteistä kaarevuutta
+@msg	the path has a corner there, so it has no single curvature	polulla on siinä kohdassa kulma, joten sillä ei ole yksiselitteistä kaarevuutta
+@msg	a guide has no curvature circle	apuviivalla ei ole kaarevuusympyrää
+@msg	the circle that matches the path there would reach past the canvas	ympyrä, joka vastaa polkua siinä kohdassa, ylittäisi kankaan
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
@@ -5678,6 +5775,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	the PDF is password-protected: give its password	tämä PDF-tiedosto on suojattu salasanalla: anna sen salasana
 @msg	the PDF password is wrong	annettu PDF-salasana on väärä
 @msg	the Save PDF dialog didn't open	valintaikkuna Tallenna PDF ei avautunut
+@msg	the Save PDF dialog is not open	valintaikkuna Tallenna PDF ei ole auki
 @msg	the WMF header is damaged	tiedoston WMF-otsake on vaurioitunut
 @msg	the art could not be sampled	kuvitusta ei voitu näytteistää
 @msg	the art has no bounds	kuvituksella ei ole rajoja
@@ -5901,6 +5999,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	onto must name a panel floating in another group	onto-arvon on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	below and above must name a panel floating in another group	below- ja above-arvojen on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	give only one of onto, below and above	anna vain yksi arvoista onto, below ja above
+@msg	give only one of `index`, `indices` and `t`	anna vain yksi arvoista `index`, `indices` ja `t`
 @msg	column must be true or a number from 1	column-arvon on oltava true tai luku 1:stä alkaen
 @msg	x and y must both be numbers	x:n ja y:n on molempien oltava lukuja
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ei ole väri: kirjoita se muodossa #rrggbb
@@ -6020,6 +6119,49 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	the PSD file's layer groups are nested too deeply	tämän PSD-tiedoston tasoryhmät ovat sisäkkäin liian syvällä
 @msg	a layer of the PSD file is too large to read	tämän PSD-tiedoston taso on liian suuri luettavaksi
 @msg	the PSD file's layers take more memory to read than allowed	tämän PSD-tiedoston tasojen lukeminen vaatii enemmän muistia kuin sallitaan
+@msg	the file is no longer loaded	tiedosto ei ole enää ladattuna
+@msg	the layers can't be read ({e}): the file was placed as its merged image	tasoja ei voi lukea ({e}): tiedosto sijoitettiin yhdistettynä kuvanaan
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstitaso tuotiin pikseleinä: tekstiä ei voi muokata
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstitasoa tuotiin pikseleinä: tekstiä ei voi muokata
+@msg	1 adjustment layer was not applied	1 säätötasoa ei käytetty
+@msg	{n} adjustment layers were not applied	{n} säätötasoa ei käytetty
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 täyttötasoa ei piirretty (liukuväri- tai kuviotäyttö, väri, jota ei voi lukea, tai muoto, joka ei tallenna pikseleitä)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} täyttötasoa ei piirretty (liukuväri- tai kuviotäyttö, väri, jota ei voi lukea, tai muoto, joka ei tallenna pikseleitä)
+@msg	the layer effects of 1 layer weren't drawn	1 tason tasotehosteita ei piirretty
+@msg	the layer effects of {n} layers weren't drawn	{n} tason tasotehosteita ei piirretty
+@msg	the vector masks of 1 layer weren't applied	1 tason vektorimaskeja ei käytetty
+@msg	the vector masks of {n} layers weren't applied	{n} tason vektorimaskeja ei käytetty
+@msg	the knockout of 1 layer wasn't applied	1 tason poistoa ei käytetty
+@msg	the knockout of {n} layers wasn't applied	{n} tason poistoa ei käytetty
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 taso jätettiin pois (piilotetut tasot ja niihin leikatut tasot)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} tasoa jätettiin pois (piilotetut tasot ja niihin leikatut tasot)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 taso, joka on leikattu piirtämättä jääneeseen täyttötasoon, jätettiin pois
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} tasoa, jotka on leikattu piirtämättä jääneisiin täyttötasoihin, jätettiin pois
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	tasot sekoitustiloissa, joita VectorCraftissa ei ole ({modes}), yhdistettiin alla oleviin tasoihin
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 taso sekoitustilassa, jota VectorCraftissa ei ole, tuotiin Normaali-tilassa: yhdistäminen vaatii sallittua enemmän muistia
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} tasoa sekoitustiloissa, joita VectorCraftissa ei ole, tuotiin Normaali-tilassa: yhdistäminen vaatii sallittua enemmän muistia
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 alla olevaan tasoon leikattu taso tuotiin leikkaamattomana: yhdistäminen vaatii sallittua enemmän muistia
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} alla olevaan tasoon leikattua tasoa tuotiin leikkaamattomina: yhdistäminen vaatii sallittua enemmän muistia
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers koskee PSD-tiedostoa, joka sijoitetaan asetuksella layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: linkitetty PSD-tiedosto sijoitetaan litteänä kuvanaan; anna link: false, jotta se upotetaan siivuineen
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: linkitetty PSD-tiedosto sijoitetaan litteänä kuvanaan; jätä link pois tai anna link: false
+@msg	the slices can't be read ({e}) and were left out	siivuja ei voi lukea ({e}), ja ne jätettiin pois
+@msg	1 slice lies outside the canvas or has no size and was left out	1 siivu on kankaan ulkopuolella tai sillä ei ole kokoa, ja se jätettiin pois
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} siivua on kankaan ulkopuolella tai niillä ei ole kokoa, ja ne jätettiin pois
+@msg	1 slice would lie outside the canvas and was left out	1 siivu olisi kankaan ulkopuolella, ja se jätettiin pois
+@msg	{n} slices would lie outside the canvas and were left out	{n} siivua olisi kankaan ulkopuolella, ja ne jätettiin pois
+@msg	the slices' descriptor holds too many values	siivujen kuvaajassa on liian monta arvoa
+@msg	the slices' descriptor has a version other than 16	siivujen kuvaajan versio on muu kuin 16
+@msg	the slices are stored in version {v}, which isn't read	siivut on tallennettu versiossa {v}, jota ei lueta
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	tiedostossa on {count} siivua, enemmän kuin luettavat {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	siivujen kuvaajassa ei ole siivuluetteloa
+@msg	the slices' descriptor lists something other than a slice	siivujen kuvaaja luettelee jotain muuta kuin siivun
+@msg	a slice in the slices' descriptor has no bounds	siivujen kuvaajan siivulla ei ole rajoja
+@msg	a slice's bounds in the slices' descriptor aren't numbers	siivujen kuvaajan siivun rajat eivät ole lukuja
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	siivujen tekstissä on enemmän kuin luettavat {MAX_TEXT} merkkiä
+@msg	the slices' descriptor nests too deep	siivujen kuvaaja on sisäkkäin liian syvälle
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	siivujen kuvaajassa on tuntematonta lajia oleva viittaus ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	siivujen kuvaajassa on tuntematonta tyyppiä oleva arvo ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	tasoja ei voi lukea ({e}): tiedosto avattiin yhdistettynä kuvanaan
 @msg	{depth}-bit PSD files in this colour mode can't be read	tässä väritilassa olevia {depth}-bittisiä PSD-tiedostoja ei voi lukea
 @msg	the PSD file is cut short	tämä PSD-tiedosto on katkennut
@@ -8190,6 +8332,8 @@ breakText	Glyphs	Merkit
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Sivuava ympyrä…
 	Tangent Circle	Sivuava ympyrä
+	Tangent Circle Tool	Sivuava ympyrä -työkalu
+	No tangent circle here	Tässä ei ole sivuavaa ympyrää
 	Circle:	Ympyrä:
 @msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
 @msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua
@@ -8205,6 +8349,16 @@ breakText	Glyphs	Merkit
 @msg	`circle` is past the last circle found ({found})	`circle` on viimeisen löydetyn ympyrän jälkeen ({found})
 @msg	object {value} is not a path or compound path	objekti {value} ei ole polku eikä yhdistelmäpolku
 @msg	these shapes are too small to measure	nämä muodot ovat liian pieniä mitattaviksi
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Lisää rajaava suorakulmio
+	Add Bounding Circle	Lisää rajaava ympyrä
+	Add Bounding Rectangle…	Lisää rajaava suorakulmio…
+	Add Bounding Circle…	Lisää rajaava ympyrä…
+	One per Object	Yksi kutakin objektia kohden
+@msg	nothing to enclose	ei ympäröitävää
+@msg	`offset` must be 0 or more	`offset` on oltava 0 tai enemmän
+@msg	the shape would have no size	muodolla ei olisi kokoa
+@msg	the shape would reach past the edge of the canvas	muoto ulottuisi kankaan reunan yli
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Asiakirjatyökalut
 	Save a Timestamped Copy	Tallenna kopio aikaleimalla
@@ -8705,6 +8859,39 @@ breakText	Glyphs	Merkit
 	Sunflower Sheet	Auringonkukka-arkki
 	Rose Layers	Ruusukerrokset
 	Monochrome Stack	Yksivärinen pino
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Näyttää vihjeen sijaan kortin siitä, mitä työkalurivin työkalu ja sen näppäimet tekevät; vaatii asetuksen Näytä työkaluvihjeet.
+	Selects whole objects and groups to move, resize or rotate them.	Valitsee kokonaisia objekteja ja ryhmiä niiden siirtämistä, koon muuttamista tai kiertämistä varten.
+	Selects anchor points and path segments to reshape a path.	Valitsee ankkuripisteitä ja polun osia polun muodon muuttamista varten.
+	Draws paths point by point, with straight segments and smooth curves.	Piirtää polkuja piste kerrallaan suorin osin ja pehmein kaarin.
+	Draws smooth curves through the points you click.	Piirtää pehmeitä kaaria napsauttamiesi pisteiden kautta.
+	Adds text at a point, or in a frame you drag.	Lisää tekstiä pisteeseen tai vetämääsi kehykseen.
+	Draws rectangles and squares.	Piirtää suorakulmioita ja neliöitä.
+	Draws rectangles with rounded corners.	Piirtää pyöristettykulmaisia suorakulmioita.
+	Draws ellipses and circles.	Piirtää ellipsejä ja ympyröitä.
+	Draws polygons with sides of equal length.	Piirtää monikulmioita, joiden sivut ovat yhtä pitkiä.
+	Draws stars.	Piirtää tähtiä.
+	Turns objects around a reference point.	Kiertää objekteja viitepisteen ympäri.
+	Flips objects across an axis through a reference point.	Peilaa objekteja viitepisteen kautta kulkevan akselin yli.
+	Resizes objects from a reference point.	Muuttaa objektien kokoa viitepisteestä.
+	Slants objects from a reference point.	Vinouttaa objekteja viitepisteestä.
+	Moves the view of the document.	Siirtää asiakirjan näkymää.
+	Magnifies or reduces the view.	Suurentaa tai pienentää näkymää.
+	Copies the color and other attributes of one object to the selection.	Kopioi yhden objektin värin ja muut määritteet valintaan.
+	Sets the direction and length of a gradient.	Asettaa liukuvärin suunnan ja pituuden.
+	Creates, selects and resizes artboards.	Luo ja valitsee piirtoalustoja ja muuttaa niiden kokoa.
+	Changes the width of a stroke along its length.	Muuttaa viivan leveyttä sen pituudella.
+	Bends art by dragging pins placed on it.	Taivuttaa kuvitusta vetämällä siihen asetettuja nastoja.
+	Pushes the outlines of paths in the direction you drag.	Työntää polkujen ääriviivoja vetosuuntaan.
+	Twists the outlines of paths into swirls.	Kiertää polkujen ääriviivat pyörteiksi.
+	Pulls the outlines of paths in toward the brush.	Vetää polkujen ääriviivoja siveltimeen päin.
+	Pushes the outlines of paths out from the brush.	Työntää polkujen ääriviivoja ulospäin siveltimestä.
+	Adds curved details along the outlines of paths.	Lisää kaarevia yksityiskohtia polkujen ääriviivoihin.
+	Adds spiky details along the outlines of paths.	Lisää piikikkäitä yksityiskohtia polkujen ääriviivoihin.
+	Adds wrinkles along the outlines of paths.	Lisää ryppyjä polkujen ääriviivoihin.
+	Moves, copies and resizes objects on the perspective grid.	Siirtää, kopioi ja muuttaa objektien kokoa perspektiiviruudukossa.
+	Makes a series of steps between two or more objects.	Luo sarjan välivaiheita kahden tai useamman objektin välille.
+	Places dimension lines that show measured lengths.	Lisää mittaviivoja, jotka näyttävät mitatut pituudet.
 	Tap	Lyhyt painallus
 	Clear Hold	Tyhjennä pitkä painallus
 	Hold Shortcuts	Pitkän painalluksen pikanäppäimet
@@ -8723,3 +8910,7 @@ breakText	Glyphs	Merkit
 	Round Flow	Pyöreä veto
 	Chisel Flow	Viisto veto
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: käytä arvoa "{_1}" tai "{_2}"
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
+file-filter	Applications	Sovellukset

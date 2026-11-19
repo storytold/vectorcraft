@@ -241,7 +241,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enter Isolation Mode",
             [],
             None,
-            "{id?} isolate a group, a layer or a single object (default: the first selected object); type, a hidden or locked object, an object in a hidden or locked group or layer, and a guide path while Lock Guides is on are refused, and so is every object while an opacity mask is edited",
+            "{id?} isolate a group, a layer or a single object (default: the first selected object); type, a ruler guide, a hidden or locked object, an object in a hidden or locked group or layer, and a guide path while Lock Guides is on are refused, and so is every object while an opacity mask is edited",
             crate::cmd::maskedit::outside_mask_editing,
             isolate
         ),

@@ -36,8 +36,7 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     if params.get("swatchConflict").is_some() {
         return None;
     }
-    let found = app.session.execute("clipboard.conflicts", &json!({})).ok()?;
-    let conflicts = found["swatches"].as_array().filter(|a| !a.is_empty())?.clone();
+    let conflicts = found(app, params).filter(|a| !a.is_empty())?;
     let fields = json!({
         "conflicts": conflicts, "index": 0, "choice": "merge", "applyToAll": false, "choices": {},
         "__command": command, "__params": params, DOC: app.session.active().map(|doc| doc.uid),
@@ -137,6 +136,23 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     }
     let mut params = d.fields.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
     params["swatchConflict"] = Value::Object(choices);
+    // When the conflicts the paste raises have changed meanwhile (another profile converts the
+    // pasted swatches), it asks again about them instead.
+    let asked = list.to_vec();
     app.ui.dialog = None;
-    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, d.fields.get("__deferredPaste").and_then(Value::as_u64))
+    let changed = |app: &mut VectorcraftApp, _: &str, params: &Value| found(app, params).is_some_and(|now| now != asked);
+    let recheck = crate::placing::Recheck { key: "swatchConflict", changed: &changed };
+    let deferred = d.fields.get("__deferredPaste").and_then(Value::as_u64);
+    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, deferred, Some(&recheck))
+}
+
+/// The swatch conflicts pasting with `params` raises (`clipboard.conflicts`), with the swatches as
+/// the paste brings them: converted from another profile when it converts.
+fn found(app: &mut VectorcraftApp, params: &Value) -> Option<Vec<Value>> {
+    let mut q = json!({});
+    if let Some(m) = params.get("profileMismatch") {
+        q["profileMismatch"] = m.clone();
+    }
+    let found = app.session.execute("clipboard.conflicts", &q).ok()?;
+    found["swatches"].as_array().cloned()
 }
