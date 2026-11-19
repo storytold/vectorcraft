@@ -168,7 +168,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             drag_held(app, ui, &f, d, p);
         } else {
             // The drag ends where its button went up: the moves after the release in this frame are hover.
-            drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
+            drag_released(app, ui, &f, d, release_pos(ui, button, false).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
@@ -216,15 +216,18 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             .unwrap_or(m.shift);
         select_named_artboard(app, i, shift || release_shift);
     }
-    if resp.double_clicked()
+    let click = super::primary_click(ui, resp);
+    if !super::ignore_sampler_owns_primary(ui, resp.id)
+        && click.count == 2
         && !f.modal
-        && let Some(p) = at
+        && let Some(p) = click.at.or(at)
     {
         double_click(app, ui, &f, p);
     }
-    if resp.triple_clicked()
+    if !super::ignore_sampler_owns_primary(ui, resp.id)
+        && click.count == 3
         && !f.modal
-        && let Some(p) = at
+        && let Some(p) = click.at.or(at)
     {
         triple_click(app, ui, &f, p);
     }
@@ -375,7 +378,7 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation, snaps: !space }
     } else {
         // Cmd with another tool drags with the selection tool used last (the session lends it).
-        let ev = PointerEvent {
+        let mut ev = PointerEvent {
             kind: PointerKind::Down,
             pos: xf.to_doc(p),
             mods: mods(m, space),
@@ -383,9 +386,25 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             pressure: pen_pressure(ui, app, true),
             pen: pen_pose(app, &xf),
         };
+        // Only a Down actually sent to this sampler owns the gesture. Cmd/Ctrl's borrowed
+        // selection press keeps the ordinary tool path.
+        let sampler = app.ui.trace_ignore_sampler.is_some() && tool == "eyedropper" && app.session.lent_tool_id(&ev.mods).is_none();
+        if sampler {
+            // A later hover move is not the source pixel that was pressed.
+            let pressed = ui.input(|i| {
+                i.events.iter().find_map(|event| match event {
+                    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some(*pos),
+                    _ => None,
+                })
+            });
+            if let Some(pressed) = pressed {
+                ev.pos = xf.to_doc(pressed);
+            }
+            ui.data_mut(|data| data.insert_temp(super::ignore_sampler_primary_id(resp.id), true));
+        }
         dispatch(app, &ev, view);
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
-        Drag::Tool
+        if sampler { Drag::Gesture } else { Drag::Tool }
     };
     if tool_holds(d) {
         super::split::latch(app, ui, view);
@@ -650,7 +669,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             // The second click of a double-click: don't fit another artboard on this release.
             // A double-click on an object does not open Artboard Options. Empty artboard
             // space still does.
-            if resp.double_clicked() && app.session.tool_id() == "artboard" {
+            if super::primary_click_count(ui, resp) == 2 && app.session.tool_id() == "artboard" {
                 app.session.set_tool_option("suppressFitClick", &json!(true));
             }
             // A move that came in the release's own frame shapes the preview first: the
@@ -753,13 +772,14 @@ fn triple_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     dispatch(app, &ev, view);
 }
 
-/// Where `button` went up in this frame, if it did.
-fn release_pos(ui: &Ui, button: egui::PointerButton) -> Option<Pos2> {
+/// Where `button` went up: the first release ends a drag, the last classifies this frame's click.
+fn release_pos(ui: &Ui, button: egui::PointerButton, last: bool) -> Option<Pos2> {
     ui.input(|i| {
-        i.events.iter().find_map(|e| match e {
+        let mut releases = i.events.iter().filter_map(|e| match e {
             egui::Event::PointerButton { pos, button: b, pressed: false, .. } if *b == button => Some(*pos),
             _ => None,
-        })
+        });
+        if last { releases.next_back() } else { releases.next() }
     })
 }
 

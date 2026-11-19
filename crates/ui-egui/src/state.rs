@@ -6,6 +6,15 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// A one-shot Image Trace Ignore Color sampler, bound to the unchanged selected source.
+#[derive(Clone, Debug)]
+pub struct TraceIgnoreSampler {
+    pub doc: u64,
+    pub target: vectorcraft_doc::NodeId,
+    pub revision: u64,
+    pub back: String,
+}
+
 /// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
 #[derive(Clone, Debug)]
 pub struct BrushKeyColorPick {
@@ -978,6 +987,9 @@ pub struct UiState {
     /// panel's eye button is held down ([`vectorcraft_render::RenderOptions::trace_source`]).
     #[serde(skip)]
     pub trace_hold_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// Ignore Color's one-shot canvas sampler; independent of the eye button's press lifetime.
+    #[serde(skip)]
+    pub trace_ignore_sampler: Option<TraceIgnoreSampler>,
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
@@ -1422,6 +1434,7 @@ impl Default for UiState {
             psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
+            trace_ignore_sampler: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             attributes_panel: Default::default(),
