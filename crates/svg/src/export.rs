@@ -85,8 +85,9 @@ fn physical_num(v: f64) -> String {
         return "0".into();
     }
     let leading_zeros = (-v.log10().floor() as i32).max(0);
-    let decimals = (leading_zeros + 3).clamp(3, 8) as u8;
-    fmt_num(v, decimals)
+    let decimals = (leading_zeros + 3).clamp(3, 14) as u8;
+    let s = fmt_num(v, decimals);
+    if s == "0" && v > 0.0 { format!("{v:.16}").trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
 }
 
 /// `doc` as SVG with `opts`, the native file `native` embedded for Preserve Editing, its generated
@@ -202,7 +203,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
             root = root.attr("width", &ww).attr("height", &hh);
         }
     }
-    root.attr("viewBox", format_args!("0 0 {ww} {hh}")).open();
+    let vb_w = if rect.width() > 0.0 && ww == "0" { physical_num(rect.width()) } else { ww.clone() };
+    let vb_h = if rect.height() > 0.0 && hh == "0" { physical_num(rect.height()) } else { hh.clone() };
+    root.attr("viewBox", format_args!("0 0 {vb_w} {vb_h}")).open();
     let mut out = svg.as_str().to_string();
     out.push_str(nl);
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();

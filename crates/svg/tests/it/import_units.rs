@@ -181,6 +181,13 @@ fn export_physical_units_writes_unit_suffixes() {
     let s = export(&d, &ExportOptions::default());
     assert!(s.contains("width=\"0.001mm\" height=\"0.002mm\""), "{s}");
 
+    // Extreme small dimension below 8 decimal places preserves non-zero width and viewBox
+    let mut d = Document::new(1e-9 * 72.0 / 25.4, 1e-9 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(!s.contains("width=\"0mm\""), "{s}");
+    assert!(!s.contains("viewBox=\"0 0 0 0\""), "{s}");
+
     // Re-importing preserved physical units
     let back = import(&s).unwrap();
     assert_eq!(back.units, Unit::Millimeters);
