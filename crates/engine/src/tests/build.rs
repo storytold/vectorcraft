@@ -3332,7 +3332,7 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
 }
 
 /// `paint.editGradient` with an `aspect` and no object to edit (the Live Paint Bucket's gradient,
-/// or nothing selected) is an error that leaves the default gradient as it was, since a gradient
+/// nothing selected, or a fill edit of a Live Paint group without faces) is an error that leaves the default gradient as it was, since a gradient
 /// fitted to each object has no aspect of its own. Named objects still take the aspect.
 #[test]
 fn edit_gradient_aspect_without_objects_is_an_error() {
@@ -3376,6 +3376,16 @@ fn edit_gradient_aspect_without_objects_is_an_error() {
     s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
     assert!(!s.gradient_edit_has_objects(false), "an empty group");
     assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    // A fill edit of a Live Paint group with edges and no faces edits no object; a stroke edit edits its edges.
+    let line = NodeId(s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 100, "y2": 0})).unwrap()["id"].as_u64().unwrap());
+    let edges_only = NodeId(s.execute("livePaint.make", &json!({"ids": [line.0]})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [edges_only.0]})).unwrap();
+    let (fill, group, steps) = (s.paint.fill.clone(), node(&s, edges_only), s.doc().unwrap().history.undo.len());
+    assert!(!s.gradient_edit_has_objects(false), "a Live Paint group without faces");
+    assert!(s.gradient_edit_has_objects(true), "its edges take a stroke edit");
+    assert!(s.execute("paint.editGradient", &json!({"stroke": false, "aspect": 50})).is_err());
+    assert_eq!((&s.paint.fill, node(&s, edges_only)), (&fill, group), "the default and the group stay");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
     // A selected object takes it.
     s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
     assert!(s.gradient_edit_has_objects(false) && s.gradient_edit_has_objects(true));

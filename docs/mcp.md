@@ -1651,7 +1651,7 @@ for a conic gradient is an error. A negative `aspect` mirrors the sweep (counter
 does; for the other kinds a negative `aspect` is an error. The Gradient panel's Aspect Ratio field and the aspect dot
 keep a mirrored sweep mirrored. The default gradient for new art, and the Live Paint Bucket's, fits each object it
 paints and keeps no aspect, so `paint.editGradient` with an `aspect` is an error when it edits no object (nothing
-selected, or the bucket's gradient without `ids`) and leaves the default as it was. Dither and Method apply as they do to a linear gradient. PDF export writes it as a
+selected, the bucket's gradient without `ids`, or a fill edit of a Live Paint group without faces) and leaves the default as it was. Dither and Method apply as they do to a linear gradient. PDF export writes it as a
 function-based shading (type 1) whose calculator function turns the angle into the ramp, and PDF import reads a
 function-based shading whose color turns around the origin of its space back as a conic gradient, with its stops'
 opacity, also when the origin lies outside the painted area; in a PDF/A file, or with more than 97 stops on its
