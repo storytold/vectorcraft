@@ -51,8 +51,8 @@ pub use drag::{
 use dropdowns::combo_button_id;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
-    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,
+    dropdown_with_named, list_scroll_style, menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
@@ -674,6 +674,17 @@ mod field_number_tests {
         assert_eq!(field_number("(1,5)", "", true), Some(1.5));
         assert_eq!(field_number("(0,125)", "", true), Some(0.125));
         assert_eq!(field_number("12,5%", "%", false), Some(12.5));
+    }
+
+    /// `x` multiplies in a unitless field as `*` does (#8435), next to a suffix, `%` and a decimal
+    /// comma too.
+    #[test]
+    fn x_multiplies_in_a_unitless_field() {
+        assert_eq!(field_number("45x2", "", false), Some(90.0));
+        assert_eq!(field_number("45x2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% x 2", "%", false), Some(100.0));
+        assert_eq!(field_number("1,5x2", "", false), Some(3.0));
+        assert_eq!(field_number("(10x2)", "", true), Some(20.0));
     }
 }
 

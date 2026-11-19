@@ -384,6 +384,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let p = picked(d);
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
+    super::modal::fits_itself(ui);
     let (side, values_w, button_w, stacked) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };

@@ -673,8 +673,13 @@ fn frame_out(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, 
 
 /// The Delete Swatch button in `out`: its rectangle and whether it is enabled.
 fn trash_button(out: &egui::FullOutput) -> (Rect, bool) {
+    footer_button(out, "Delete Swatch")
+}
+
+/// The button labeled `label` in `out`: its rectangle and whether it is enabled.
+fn footer_button(out: &egui::FullOutput, label: &str) -> (Rect, bool) {
     let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == "Delete Swatch")).expect("a Delete Swatch button");
+    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == label)).unwrap_or_else(|| panic!("a {label} button"));
     let b = node.bounds().expect("the button's bounds");
     (Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)), !node.is_disabled())
 }
@@ -691,16 +696,23 @@ fn outlined(out: &egui::FullOutput, rect: Rect) -> bool {
 /// there, a frame per step from `time`. Returns whether the button was outlined and enabled while
 /// the drag was held over it.
 fn drag_to_trash(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
+    drag_to_button(app, ctx, name, "Delete Swatch", modifiers, time)
+}
+
+/// Drag the tile of `name` with `modifiers` held onto the button labeled `label` and release the
+/// primary button there, a frame per step from `time`. Returns whether the button was outlined and
+/// enabled while the drag was held over it.
+fn drag_to_button(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, label: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
     frame_out(app, ctx, vec![], modifiers, time);
-    let (trash, _) = trash_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05));
+    let (target, _) = footer_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05), label);
     let from = tile_center(ctx, name);
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
     frame_out(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time + 0.1);
     frame_out(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.2);
-    frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.3);
-    let held = frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.4);
-    let seen = (outlined(&held, trash), trash_button(&held).1);
-    frame_out(app, ctx, vec![Event::PointerMoved(trash.center()), button(trash.center(), false)], modifiers, time + 0.5);
+    frame_out(app, ctx, vec![Event::PointerMoved(target.center())], modifiers, time + 0.3);
+    let held = frame_out(app, ctx, vec![Event::PointerMoved(target.center())], modifiers, time + 0.4);
+    let seen = (outlined(&held, target), footer_button(&held, label).1);
+    frame_out(app, ctx, vec![Event::PointerMoved(target.center()), button(target.center(), false)], modifiers, time + 0.5);
     seen
 }
 
@@ -763,6 +775,14 @@ fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
         assert_eq!(doc(&app), kept, "{name}");
     }
     assert_eq!(undo_steps(&app), undo + 2);
+    // A swatch of the user's whose name starts with a bracket is an ordinary swatch.
+    app.run("swatch.new", json!({"name": "[Blue]", "color": "#0000ff"})).unwrap();
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_trash(&mut app, &ctx, "[Blue]", Modifiers::NONE, 7.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “[Blue]”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(doc(&app).swatch("[Blue]").is_none(), "OK deletes it");
+    assert_eq!(undo_steps(&app), undo + 1);
 }
 
 /// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
@@ -828,6 +848,157 @@ fn delete_swatch_ignores_other_drags() {
     assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some() && undo_steps(&app) == undo_new, "the other document keeps Orange");
     assert!(app.session.set_active(0));
     unchanged(&app, "the first document");
+}
+
+/// Swatches dragged from the list onto New Swatch are duplicated without a dialog, in thumbnail
+/// and list views: each copy goes just after its swatch, in its color group, and is selected, and
+/// the copies of one drop are one undo step. A selected swatch carries the other selected swatches
+/// with it, but not the selected groups, None or Registration. Modifiers do not change the drop, a
+/// repeated name is numbered, and a group, None and Registration dragged alone duplicate nothing.
+#[test]
+fn swatches_dropped_on_new_swatch_are_duplicated() {
+    let mut app = app();
+    let ctx = context();
+    let after = |app: &VectorcraftApp, group: Option<&str>, name: &str| {
+        let n = names_of(app, group);
+        n.iter().position(|x| x == name).and_then(|i| n.get(i + 1).cloned())
+    };
+    let undo = undo_steps(&app);
+    // An unselected swatch, nothing selected.
+    assert_eq!(drag_to_button(&mut app, &ctx, "Orange", "New Swatch", Modifiers::NONE, 1.0), (true, true), "outlined while held");
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy"));
+    assert_eq!(selected(&ctx), ["Orange copy"], "the copy is selected");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    let copy = app.session.doc().unwrap().doc.swatch("Orange copy").cloned().unwrap();
+    assert_eq!(copy.paint, app.session.doc().unwrap().doc.swatch("Orange").unwrap().paint, "the copy keeps the paint");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(app.session.doc().unwrap().doc.swatch("Orange copy").is_none(), "Undo removes the copy");
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy"), "Redo brings it back");
+    // Again: the copy's name is numbered.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    drag_to_button(&mut app, &ctx, "Orange", "New Swatch", Modifiers::NONE, 2.0);
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy 2"));
+    assert_eq!(selected(&ctx), ["Orange copy 2"]);
+    // A selected swatch carries the selected swatches, in panel order and into their groups, with
+    // Alt held; the copies are one undo step.
+    let sel = ["[None]", "Bright Red", "Grays", "Sunset", "Lime"].map(String::from).to_vec();
+    set_pstate(&ctx, "swatch-selected", sel);
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_button(&mut app, &ctx, "Lime", "New Swatch", Modifiers::ALT, 3.0), (true, true));
+    assert!(app.ui.dialog.is_none(), "no dialog with Alt");
+    assert_eq!(after(&app, None, "Lime").as_deref(), Some("Lime copy"));
+    assert_eq!(after(&app, None, "Sunset").as_deref(), Some("Sunset copy"));
+    assert_eq!(after(&app, Some("Brights"), "Bright Red").as_deref(), Some("Bright Red copy"));
+    assert_eq!(selected(&ctx), ["Lime copy", "Sunset copy", "Bright Red copy"]);
+    assert_eq!(names_of(&app, Some("Grays")).len(), 9, "the group is not duplicated");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for all");
+    app.run("edit.undo", json!({})).unwrap();
+    let d = app.session.doc().unwrap().doc.clone();
+    assert!(["Lime copy", "Sunset copy", "Bright Red copy"].iter().all(|n| d.swatch(n).is_none()), "Undo removes every copy");
+    // A group, None and Registration dragged alone: nothing.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    let (kept, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    for (i, name) in ["Grays", "[None]", REGISTRATION].into_iter().enumerate() {
+        assert_eq!(drag_to_button(&mut app, &ctx, name, "New Swatch", Modifiers::NONE, 4.0 + i as f64), (false, true), "{name}");
+        assert!(app.ui.dialog.is_none(), "{name}");
+        assert_eq!(app.session.doc().unwrap().doc, kept, "{name}");
+    }
+    assert_eq!(undo_steps(&app), undo);
+    // A swatch of the user's whose name starts with a bracket is an ordinary swatch.
+    app.run("swatch.new", json!({"name": "[Blue]", "color": "#0000ff"})).unwrap();
+    assert_eq!(drag_to_button(&mut app, &ctx, "[Blue]", "New Swatch", Modifiers::NONE, 8.0), (true, true));
+    assert_eq!(after(&app, None, "[Blue]").as_deref(), Some("[Blue] copy"));
+    // In a list view.
+    let undo = undo_steps(&app);
+    app.ui.swatches_view = View::SmallList;
+    assert_eq!(drag_to_button(&mut app, &ctx, "Red", "New Swatch", Modifiers::NONE, 9.0), (true, true));
+    assert_eq!(after(&app, None, "Red").as_deref(), Some("Red copy"));
+    assert_eq!(undo_steps(&app), undo + 1);
+}
+
+/// New Swatch duplicates only swatches dragged from the active document's list that are still in
+/// it: a paint dragged from elsewhere, art, a swatch dragged from another document, and a swatch
+/// deleted while it is dragged duplicate nothing. A secondary button released while a swatch is
+/// held over the button ends the drag without duplicating, and a click still opens New Swatch.
+#[test]
+fn new_swatch_ignores_other_drags() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = context();
+    let (new, _) = footer_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0), "New Swatch");
+    let (before, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    let unchanged = |app: &VectorcraftApp, case: &str| {
+        assert!(app.ui.dialog.is_none(), "{case}: no dialog");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{case}: duplicates nothing");
+        assert_eq!(undo_steps(app), undo, "{case}: no undo step");
+    };
+    // The payloads are set directly, as if dragged from this document's list.
+    set_pstate(&ctx, super::actions::DRAG_DOC, app.session.active().map(|st| st.uid));
+    let release = |at| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+    let cases = [
+        ("a paint", PanelDrag::paint(Paint::solid(Color::from_hex("#ed1c24").unwrap()))),
+        ("art", PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])),
+    ];
+    for (i, (case, drag)) in cases.into_iter().enumerate() {
+        egui::DragAndDrop::set_payload(&ctx, drag);
+        let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 1.0 + i as f64);
+        assert!(!outlined(&held, new), "{case}: not outlined");
+        frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 1.5 + i as f64);
+        unchanged(&app, case);
+        egui::DragAndDrop::clear_payload(&ctx);
+    }
+    let press = |at, button, pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+    let hold_orange = |app: &mut VectorcraftApp, time: f64| {
+        frame_out(app, &ctx, vec![], Modifiers::NONE, time);
+        let from = tile_center(&ctx, "Orange");
+        frame_out(app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, time + 0.1);
+        frame_out(app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, time + 0.2);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_some(), "Orange is dragged");
+    };
+    // A secondary release over the button, then the primary release.
+    hold_orange(&mut app, 3.0);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 3.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 3.4);
+    assert!(outlined(&held, new), "Orange is held over the button");
+    frame_out(&mut app, &ctx, vec![press(new.center(), PointerButton::Secondary, true)], Modifiers::NONE, 3.5);
+    frame_out(&mut app, &ctx, vec![press(new.center(), PointerButton::Secondary, false)], Modifiers::NONE, 3.6);
+    unchanged(&app, "a secondary release");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 3.7);
+    unchanged(&app, "the primary release after it");
+    // A swatch deleted while it is dragged.
+    hold_orange(&mut app, 4.0);
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    let (gone, undo_gone) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.4);
+    assert!(!outlined(&held, new), "a deleted swatch is not outlined");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 4.5);
+    assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (gone, undo_gone), "a deleted swatch is not duplicated");
+    app.run("edit.undo", json!({})).unwrap();
+    // A swatch dragged from this document while another document with the same swatches becomes
+    // active.
+    hold_orange(&mut app, 5.0);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let (other, undo_new) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.4);
+    let (new_other, _) = footer_button(&held, "New Swatch");
+    assert!(!outlined(&held, new_other), "not outlined in the other document");
+    frame_out(&mut app, &ctx, vec![release(new_other.center())], Modifiers::NONE, 5.5);
+    assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (other, undo_new), "the other document duplicates nothing");
+    assert!(app.session.set_active(0));
+    unchanged(&app, "the first document");
+    // A click still opens New Swatch.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 6.0);
+    let click = vec![
+        Event::PointerMoved(new.center()),
+        press(new.center(), PointerButton::Primary, true),
+        press(new.center(), PointerButton::Primary, false),
+    ];
+    frame_out(&mut app, &ctx, click, Modifiers::NONE, 6.1);
+    assert!(app.ui.dialog.is_some(), "a click opens the New Swatch dialog");
 }
 
 #[test]
