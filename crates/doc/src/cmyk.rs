@@ -676,7 +676,7 @@ fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
     let opts = craft_image_codecs::DecodeOptions { limits, keep_orientation: true };
     let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Tiff, bytes, &opts).ok()?;
     if img.layout() != craft_image_codecs::ChannelLayout::Cmyk
-        || img.warnings.iter().any(|w| matches!(w, craft_image_codecs::DecodeWarning::Truncated))
+        || img.warnings.iter().any(|w| matches!(w, craft_image_codecs::DecodeWarning::Truncated { .. }))
     {
         return None;
     }
@@ -702,12 +702,11 @@ fn jpeg_source(bytes: &[u8]) -> Option<CmykSource> {
 /// above 0, and carrying `icc` as tag 34675 (ICCProfile, of type UNDEFINED); `None` when it can't be
 /// written.
 fn write_cmyk_tiff(width: u32, height: u32, samples: SampleSlice<'_>, ppi: Option<(f64, f64)>, icc: Option<&[u8]>) -> Option<Vec<u8>> {
-    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType, TiffCompression, encode_as_with};
-    let (sample_type, data) = match samples {
-        SampleSlice::Eight(data) => (SampleType::U8, data.to_vec()),
-        SampleSlice::Sixteen(data) => (SampleType::U16, data.iter().flat_map(|s| s.to_ne_bytes()).collect()),
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, TiffCompression, encode};
+    let mut img = match samples {
+        SampleSlice::Eight(data) => Image::from_u8(width, height, ChannelLayout::Cmyk, data.to_vec()).ok()?,
+        SampleSlice::Sixteen(data) => Image::from_u16(width, height, ChannelLayout::Cmyk, data).ok()?,
     };
-    let mut img = Image::new(width, height, ChannelLayout::Cmyk, sample_type, data).ok()?;
     img.icc = icc.map(<[u8]>::to_vec);
     let dpi = ppi
         .filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0))
@@ -720,7 +719,7 @@ fn write_cmyk_tiff(width: u32, height: u32, samples: SampleSlice<'_>, ppi: Optio
         embed_metadata: dpi.is_some(),
         ..EncodeOptions::default()
     };
-    encode_as_with(Format::Tiff, &img, &opts).ok()
+    encode(&img, Format::Tiff, &opts).ok()
 }
 
 impl ImageBlob {
