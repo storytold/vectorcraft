@@ -224,6 +224,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
     (
+        "view.shapeWidgets",
+        "Hide Shape Widgets",
+        "",
+        "{on?: bool} hide or show selected live shapes' corner, pie and side widgets for the Selection tool and the shape tools (the shape tools' Control bar button); without `on` it toggles; returns the new state. Direct Selection's corner widgets follow view.cornerWidget alone",
+    ),
+    (
         "view.snapToPixel",
         "Snap to Pixel",
         "",
@@ -566,6 +572,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     (
+        "window.toolbarCompact",
+        "Compact Tools",
+        "",
+        "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
+    ),
+    (
         "window.toolsBesideCanvas",
         "Keep Tools Beside the Canvas",
         "",
@@ -821,6 +833,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
+    (
+        "retype.find",
+        "Find Matching Fonts",
+        "",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+    ),
+    (
+        "retype.list",
+        "List Matching Fonts",
+        "",
+        "{} what the Retype panel shows: {searched (a search ran since the last reset), fonts: [{family, style, matched (shapes it matches)}], shapes (shapes the last search compared), more (more fonts match than the list holds), truncated (the last search left out shapes past type.retype's limits), size: small|medium|large, text (the samples' text; empty for a generic sample)}",
+    ),
+    (
+        "retype.preview",
+        "Retype Preview",
+        "",
+        "{size?: small|medium|large, text?: string} the size of the Retype panel's samples, as its panel menu sets it, and the text they show, as its sample field sets it (at most 100 characters; empty for a generic sample); any other value is an error and changes nothing; returns what retype.list returns",
+    ),
+    (
+        "retype.reset",
+        "Reset Retype Panel",
+        "",
+        "{} clear the Retype panel's list of matching fonts, as Reset Retype Panel in its panel menu does; the samples' size and text stay; returns what retype.list returns",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
         "window.workspace",
@@ -895,6 +931,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
     ),
     (
+        "tool.switchSelectionTools",
+        "Switch Selection Tools",
+        "",
+        "{} choose Direct Selection while Selection is active, otherwise choose Selection; this is a persistent explicit tool choice, as selecting the tool from the toolbar, and can be assigned a key in Keyboard Shortcuts with no default key. Normal tool deactivation finishes pending work; returns the actual active {tool}",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "",
@@ -923,6 +965,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Recolor Artwork…",
         "",
         "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+    ),
+    (
+        "ui.recolorUndo",
+        "Undo Changes",
+        "",
+        "{} the open Recolor Artwork dialog goes back one of its own color edits (rows, Colors, Method, the Preserve options, Limit to Library, the harmony rule, Global Adjust, the Color Theme Picker's picks, the Prominent Colors weights): its fields and the preview return to their values before that edit; the document's undo history is unchanged, and OK still records one undo step → {changed, canUndo, canRedo}; an error when the dialog isn't open. Each opening starts with nothing to undo, and selecting another color group or Save Changes leaves nothing to undo or redo",
+    ),
+    (
+        "ui.recolorRedo",
+        "Redo Changes",
+        "",
+        "{} the open Recolor Artwork dialog restores the color edit ui.recolorUndo went back from last; a new edit after ui.recolorUndo leaves nothing to redo → {changed, canUndo, canRedo}; an error when the dialog isn't open",
     ),
     (
         "ui.cropImage",
@@ -995,6 +1049,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "New Color Group…",
         "",
         "{swatches?: [names]} open New Color Group, from those swatches or the selected artwork (dialog `newColorGroup`, engine: swatch.newGroup)",
+    ),
+    (
+        "ui.colorGroupOptions",
+        "Color Group Options…",
+        "",
+        "{group?} open Color Group Options for that color group, or without group for the color group selected alone in the Swatches panel (dialog `colorGroupOptions`, field `name`): OK renames the group (engine: swatch.renameGroup); a name that is empty or that another color group or a swatch has keeps the dialog open; when another document is active, or the color group at the group's place in the list no longer has the name and swatches it opened with, OK closes the dialog and renames nothing",
     ),
     (
         "ui.colorPicker",
@@ -1078,7 +1138,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x, y and preview (on initially), previews one there and accepts it as one Undo step; Cancel rolls back the preview; with flares selected, the fields show the first one's settings, `flares` lists them and OK runs shape.editFlare with the settings changed instead, leaving the tool's options), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph, or for the series picked in it with Group Selection (dialog `graphType`, fields the options graph.setType {} returns under their names, with legend, pieLegend, piePosition, pieSort, firstRowInFront, firstColumnInFront, filledLines and lineWidth held for every type; overrideValues and rightOverrideValues, Override Calculated Values of the left or only value axis and of the right one: while one is on OK sends axisMin, axisMax and ticks, or rightAxisMin, rightAxisMax and rightTicks, filled with the calculated values where the graph has none, and one turned off sends null, null and 0; __page: options|valueAxis|rightAxis|categoryAxis, the page shown, options when the type picked has no such page; OK runs graph.setType, and with nothing changed closes without a step of history; an overridden value axis whose maximum is not more than its minimum is an error and the dialog stays open; an error without a selected graph), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (px for pencil, paintbrush and smooth, the same at any zoom; pt for blobBrush), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), livePaintBucket → Live Paint Bucket Options (dialog `livePaintBucketOptions`, fields paintFills (on) and paintStrokes (off), cursorSwatchPreview (on: the active fill or stroke shows above the pointer between the color swatches before and after it; Left and Right without modifiers step it through the color swatches whether it is on or off), highlight (on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the face highlight's width, 1–20 px; 4; an edge's highlight is half as wide); OK runs tool.setOption {tool: \"livePaintBucket\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values}; a highlightColor with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), objectsOnPath → Objects on Path Tool Options (dialog `objectsOnPathOptions`, fields pivot (0–8, row by row from the top left; 4, the center) and rotate (°, −360–360; 0); Reset puts 4 and 0 back; Save runs tool.setOption {tool: \"objectsOnPath\", values}: the objects attached next use them, groups attached before keep theirs)",
+        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x, y and preview (on initially), previews one there and accepts it as one Undo step; Cancel rolls back the preview; with flares selected, the fields show the first one's settings, `flares` lists them and OK runs shape.editFlare with the settings changed instead, leaving the tool's options), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph, or for the series picked in it with Group Selection (dialog `graphType`, fields the options graph.setType {} returns under their names, with legend, pieLegend, piePosition, pieSort, firstRowInFront, firstColumnInFront, filledLines and lineWidth held for every type; overrideValues and rightOverrideValues, Override Calculated Values of the left or only value axis and of the right one: while one is on OK sends axisMin, axisMax and ticks, or rightAxisMin, rightAxisMax and rightTicks, filled with the calculated values where the graph has none, and one turned off sends null, null and 0; __page: options|valueAxis|rightAxis|categoryAxis, the page shown, options when the type picked has no such page; OK runs graph.setType, and with nothing changed closes without a step of history; an overridden value axis whose maximum is not more than its minimum is an error and the dialog stays open; an error without a selected graph), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool (the tool whose options show; the Tool row changes it), diameter (pt), intensity and density (1–10), usePressure, method: userDefined|average|random (not used by the Sprayer and the Shifter), showBrush, sprayScrunch, spraySize, spraySpin, sprayScreen, sprayStain and sprayStyle: average|userDefined (the Symbol Sprayer's), proportional and affectsDensity (the Symbol Sizer's), shared by the eight tools; OK runs tool.setOption {tool, values}, after symbol.setDensity from the density the dialog opened with to the new one when symbol sets are selected and it changed), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (px for pencil, paintbrush and smooth, the same at any zoom; pt for blobBrush), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), livePaintBucket → Live Paint Bucket Options (dialog `livePaintBucketOptions`, fields paintFills (on) and paintStrokes (off), cursorSwatchPreview (on: the active fill or stroke shows above the pointer between the color swatches before and after it; Left and Right without modifiers step it through the color swatches whether it is on or off), highlight (on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the face highlight's width, 1–20 px; 4; an edge's highlight is half as wide); OK runs tool.setOption {tool: \"livePaintBucket\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values}; a highlightColor with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), objectsOnPath → Objects on Path Tool Options (dialog `objectsOnPathOptions`, fields pivot (0–8, row by row from the top left; 4, the center) and rotate (°, −360–360; 0); Reset puts 4 and 0 back; Save runs tool.setOption {tool: \"objectsOnPath\", values}: the objects attached next use them, groups attached before keep theirs)",
     ),
     (
         "ui.colorGuideOptions",
@@ -1160,19 +1220,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerDelete",
         "Delete Selection",
         "",
-        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer; in isolation mode, with no row highlighted, a current layer outside the isolated art is an error and nothing is deleted). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. In isolation mode a row outside the isolated art is an error and nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",
         "Rename",
         "",
-        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, or a row the panel's search, filter or Show Layers Only hides, is an error and nothing opens → {id, name}",
+        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, a row the panel's search, filter or Show Layers Only hides, or in isolation mode an object outside the isolated art, is an error and nothing opens → {id, name}",
     ),
     (
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
-        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields",
+        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields. In isolation mode, a layer that would be outside the isolated art is an error and nothing opens; OK checks again, and with isolation mode started since, it returns the same error and makes no layer",
     ),
     (
         "ui.newArtboard",
@@ -1417,7 +1477,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.widthPointEdit",
         "Width Point Edit…",
         "",
-        "{id, index?: existing width point, t?: 0..1 for a new point, adjustAdjoining?: bool (false)} open Width Point Edit on path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking the stroke opens it too, Shift on a width point enabling adjoining adjustment): OK runs stroke.widthPoint.set; discard: true (Delete) removes an existing point or discards a prospective point",
+        "{id, index?: existing width point, indices?: [i…] several existing width points, t?: 0..1 for a new point (give only one of index, indices and t), adjustAdjoining?: bool (false)} open Width Point Edit on path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; for several points also totalWidth, and side1, side2 and totalWidth are null where the points differ; double-clicking the stroke opens it too, on one of several Shift-selected width points for all of them, Shift on a width point enabling adjoining adjustment): OK runs stroke.widthPoint.set, for several points one stroke.widthProfile.set (none when nothing changed); discard: true (Delete) removes the existing points or discards a prospective point",
     ),
     (
         "ui.corners",
@@ -1495,13 +1555,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorWheel",
         "Color Wheel Options",
         "",
-        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, opacity?: bool, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); opacity checks (true) or unchecks (false) Show Opacity, as the panel menu does: a row under the wheel or the box with a slider and a percent field that set the opacity of what the panel edits (the fill item, as paint.setFill {opacity} sets it, the stroke item, as paint.setStroke {opacity} sets it, the selected gradient stop, or the selected freeform point, the first stop or point when none is selected; gray with nothing selected, for an object selected in a symbol instance, and when the fill or stroke item it would set is on type characters or missing); vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list (opacity or vision: not true or false) are an error and change nothing, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, opacity, vision}",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, harmony?: bool, harmonyRule?: complementary|splitComplementary|leftComplement|rightComplement|analogous|analogous2|triad|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast3|pentagram, opacity?: bool, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); harmony shows a marker on the wheel's ring for each other color of harmonyRule (the Color Guide's rule of that id; a rule's label is taken too), as Show Harmony and Harmony Rule do, and a click on a marker applies its color; opacity checks (true) or unchecks (false) Show Opacity, as the panel menu does: a row under the wheel or the box with a slider and a percent field that set the opacity of what the panel edits (the fill item, as paint.setFill {opacity} sets it, the stroke item, as paint.setStroke {opacity} sets it, the selected gradient stop, or the selected freeform point, the first stop or point when none is selected; gray with nothing selected, for an object selected in a symbol instance, and when the fill or stroke item it would set is on type characters or missing); vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, harmony, harmonyRule, opacity, vision}",
     ),
     (
         "ui.savePdfDialog",
         "Save PDF Dialog",
         "",
-        "{path?, preset?, range?, useArtboards?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks); useArtboards: false: one page of the visible art's bounds, with no Artboards section",
+        "{path?, preset?, range?, useArtboards?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; Custom… sets `flattener`, which setting flattenerPreset drops; OK writes path, else asks); useArtboards: false: one page of the visible art's bounds, with no Artboards section",
+    ),
+    (
+        "ui.pdfSummary.save",
+        "Save Summary…",
+        "",
+        "{path} write the Summary of the open Save PDF dialog (or PDF preset editor) to path as UTF-8 text without a byte order mark, with LF line endings, line for line as the Summary section shows it: Options and each option that differs from the preset (or the line saying none does), a blank line, then Warnings and each warning (or None.). The Summary the section last drew for the same fields, document, saved PDF and flattener presets, loaded color profiles and available fonts is used without computing the settings again. The web downloads the file under path's file name. The Summary section's Save Summary… button writes the same text to a file picked in a save panel that suggests `<document> PDF Summary.txt` in the document's folder. The dialog stays open and the document does not change. No such dialog open, a path that is missing, empty or not a string, a path outside the automation write roots and a failed document.pdfSettings are errors that write nothing; a failed write is an error → {path, bytes}",
     ),
     (
         "file.exportAs",
@@ -1597,6 +1663,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.cancelPlace",
+        "Cancel Place",
+        "",
+        "{} stop placing every file being read in the background (its progress window's Cancel): the files aren't placed → {cancelled: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
@@ -1660,13 +1732,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.action.new",
         "New Action",
         "",
-        "{set: index, name, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} add an action named name (spaces trimmed from both ends) after the last action of the Actions panel's set at set (0 is the top set) and start recording into it; Stop Playing/Recording (ui.action.stop) ends the recording. key 1 to 15 is the function key F1 to F15 that plays the action (0 or null: none), with cmd (Ctrl, Command on macOS) and shift; color is its Button Mode color (null or \"\": none), the color of its button in Button Mode (ui.action.buttonMode). Action function keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6 cannot be used. The set becomes current and the new action is selected. The panel's Create New Action button and menu's New Action… (dialog `actionNew` with set, name, key, cmd, shift and color) run this on Record. While an action is recording, and for an index past the last set, an empty name, a key or color that is not one of these, or an action that would give the set more than 1,000 actions or an action set file larger than 8 MiB, it is an error, nothing is added and no recording starts → {set, action}",
+        "{set: index, name, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet, automaticAlignTo?: bool} add an action named name (spaces trimmed from both ends) after the last action of the Actions panel's set at set (0 is the top set) and start recording into it; Stop Playing/Recording (ui.action.stop) ends the recording. key 1 to 15 is the function key F1 to F15 that plays the action (0 or null: none), with cmd (Ctrl, Command on macOS) and shift; color is its Button Mode color (null or \"\": none), the color of its button in Button Mode (ui.action.buttonMode). Action function keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6 cannot be used. automaticAlignTo (false when omitted or null) makes each object.align choose its reference at playback: an active key object, key anchor or key guide, else the artboard for one whole selected object, else the selection; false uses the recorded target, and stored steps stay unchanged. The set becomes current and the new action is selected. The panel's Create New Action button and menu's New Action… (dialog `actionNew` with set, name, key, cmd, shift, color and automaticAlignTo) run this on Record. While an action is recording, and for an index past the last set, an empty name, a key or color that is not one of these, or an action that would give the set more than 1,000 actions or an action set file larger than 8 MiB, it is an error, nothing is added and no recording starts → {set, action}",
     ),
     (
         "ui.action.options",
         "Action Options",
         "",
-        "{set: index, action: index, name?, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} change the Actions panel's action at action in set (0 is the top set); its steps stay. name renames it (spaces trimmed from both ends), key 1 to 15 with cmd (Ctrl, Command on macOS) and shift sets the function key F1 to F15 that plays it (0 or null: none), and color sets its Button Mode color (null or \"\": none); a param left out keeps what the action has, and cmd or shift alone changes that modifier of its key. Action function keys take priority over command shortcuts and preserve the command's binding. The panel menu's Action Options… (dialog `actionSetOptions` with set, action, name, key, cmd, shift and color) runs this for the selected action. An index past the last set or action, an empty name, a key or color that is not one of these, or a change that would give the set's action set file more than 8 MiB (counting the steps the recording in progress adds to it; a change that leaves the file as large or makes it smaller is never refused) is an error and changes nothing → {name, key, color}",
+        "{set: index, action: index, name?, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet, automaticAlignTo?: bool} change the Actions panel's action at action in set (0 is the top set); its steps stay. name renames it (spaces trimmed from both ends), key 1 to 15 with cmd (Ctrl, Command on macOS) and shift sets the function key F1 to F15 that plays it (0 or null: none), and color sets its Button Mode color (null or \"\": none); a param left out keeps what the action has, and cmd or shift alone changes that modifier of its key. automaticAlignTo overrides each object.align reference at playback with the current key object, key anchor or key guide, else the artboard for one whole selected object, else the selection; false uses the unchanged recorded targets, and omission or null keeps the option. Action function keys take priority over command shortcuts and preserve the command's binding. The panel menu's Action Options… (dialog `actionSetOptions` with set, action, name, key, cmd, shift, color and automaticAlignTo) runs this for the selected action. An index past the last set or action, an empty name, a key or color that is not one of these, or a change that would give the set's action set file more than 8 MiB (counting the steps the recording in progress adds to it; a change that leaves the file as large or makes it smaller is never refused) is an error and changes nothing → {name, key, color, automaticAlignTo}",
     ),
     (
         "ui.action.play",
@@ -1806,6 +1878,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "EPS Options Dialog",
         "",
         "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last; Custom… sets `flattener`, which a flattenerPreset given without it drops); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
+    ),
+    (
+        "ui.hpglOptionsDialog",
+        "HP-GL Options Dialog",
+        "",
+        "{path?, useArtboards?, range?, hpglVersion?, curveTolerance?, origin?, pens?, sortPaths?, insideFirst?} open HP-GL Options (dialog `hpglOptions`: fields = these document.export options over the ones used last; pens null is One Pen per Color); OK checks them, remembers them and writes path (else asks). Export As… → HP-GL opens it too",
     ),
     (
         "file.saveForWeb",

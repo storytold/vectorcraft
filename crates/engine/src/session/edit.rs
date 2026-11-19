@@ -321,6 +321,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
+        // each preview starts from the colors the interaction began with.
+        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -334,8 +337,10 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
-            let restore_paint =
-                cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some();
+            let restore_paint = bucket
+                || cmd == "command.batch"
+                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
             it.color_mode_paints = None;
@@ -458,6 +463,7 @@ impl Session {
             st.last_perspective = perspective_again;
         }
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
+        self.note_shape_drawn(&preview.0, &preview.1);
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
         if self.depth == 0 {
@@ -477,10 +483,13 @@ impl Session {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
+        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
+        // cancel puts back as well.
+        let bucket = self.tool_id() == cmd::LIVE_PAINT_BUCKET;
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
             .map(|it| it.paint.clone())
         {
             self.paint = paint;
