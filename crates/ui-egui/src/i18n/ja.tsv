@@ -3384,7 +3384,6 @@ mark-style	Japanese	日本式
 	Edit type set in fonts that aren't available?	使用できないフォントのテキストを編集しますか？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) で、[標準文字スタイル] に言語が設定されていない間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
 	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみハイフネーションされ、ハイフンがなければハイフネーションされません。言語や大文字小文字は問いません。
 	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、OK で新しいフォルダーを設定したときに読み込まれます (セーフモードを除く)。権限を求めるプラグインは、権限を許可した後にのみ読み込まれます。Web 版では読み込まれません。
 	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	大では、フィルターまたはコマンドのプラグインの各実行に、同じ制限時間で 2 億 5,000 万以上の命令を与えます。通常では、プラグイン独自の予算を使います。ライブ効果、書き出し、読み込みはそれぞれの予算を使います。
