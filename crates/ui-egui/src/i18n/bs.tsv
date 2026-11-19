@@ -823,6 +823,10 @@
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Document Colors	Prikaži boje dokumenta
+	Document Colors	Boje dokumenta
+	Selection Colors	Boje odabira
+@plural	Used {n} time|Used {n} times	Korišteno {n} put|Korišteno {n} puta|Korišteno {n} puta
 	Show Harmony	Prikaži harmoniju
 	Harmony Rule	Pravilo harmonije
 	Harmony color	Boja harmonije
@@ -2054,6 +2058,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Preimenuj unaprijed postavljeno
 	Save Image Trace Preset	Sačuvaj unaprijed postavljeno praćenje slike
 	Delete Image Trace Preset	Izbriši unaprijed postavljeno praćenje slike
+	Tracing Presets…	Predlošci praćenja…
+	Import Image Trace Presets	Uvezi predloške praćenja slike
+	Export Image Trace Presets	Izvezi predloške praćenja slike
+	Replace the saved presets that have these names?	Zamijeniti sačuvane predloške s ovim imenima?
 	Method:	Metoda:
 	Pad	Produži
 	Repeats	Broj ponavljanja
@@ -4211,6 +4219,13 @@ theme	Appearance	Izgled
 	Pen Tool	Alat pero
 	Quick Pen Tool	Alat brzo pero
 	Quick Pen	Brzo pero
+	Quick Pen Toolbar	Traka Brzog pera
+	Continuous Arc	Neprekidni luk
+	Sharp Corner Arc	Luk s oštrim uglom
+	Flip Arc	Preokreni luk
+	Hide Toolbar	Sakrij traku s alatima
+	Pin Toolbar Position	Prikvači položaj trake s alatima
+	Reset Toolbar Position	Vrati položaj trake s alatima na početno
 	Picas	Pice
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Očuvaj izgled i pretiske
@@ -4324,6 +4339,11 @@ theme	Appearance	Izgled
 	Edit Arrowheads	Uredi vrhove strelica
 	Edit Arrowheads…	Uredi vrhove strelica…
 	Reload Arrowheads	Ponovo učitaj vrhove strelica
+	Bevels	Zakošenja
+	Edit Bevels	Uredi zakošenja
+	Edit Bevels…	Uredi zakošenja…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Ponovo učitaj zakošenja
 	Stroke Options	Opcije poteza
 	Width Profiles	Profili širine
 	Apply Graphic Style	Primijeni grafički stil
@@ -4650,6 +4670,7 @@ font-technology	Variable	Varijabilni
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
+	Clear Recent Commands	Očisti nedavne naredbe
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…
@@ -4854,6 +4875,10 @@ font-technology	Variable	Varijabilni
 	Circle	Krug
 	Circle Tool	Alat za krug
 	Circle too large	Krug je prevelik
+	Show Radii	Prikaži poluprečnike
+	Show Diameter	Prikaži prečnik
+	Anchors at Standard Positions	Sidrene tačke na standardnim položajima
+	Third Point by Dragging	Treća tačka povlačenjem
 	Clip to Art	Isijeci prema crtežu
 	Colorize	Oboji
 	Gamma	Gama
@@ -7960,6 +7985,11 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Vector Packs	Vektorski paketi
+	Compass Rose	Ruža kompasa
+	Botanical Sprig	Botanička grančica
+	Facet Diamond	Fasetirani romb
+	Tide Crest	Vrh vala
 	Leaf Vine	Lisnata loza
 	Blossom Chain	Cvjetni lanac
 	Pennant Garland	Girlanda zastavica

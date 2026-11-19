@@ -582,8 +582,9 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
 /// and a Gaussian Blur's `linear` is true or false. A Pathfinder effect's `precision` is a number and
 /// its `removeRedundantPoints` and `removeUnpainted` are true or false. A Glass, Texturizer or Rough
-/// Pastels `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of
-/// Crop Marks have checks of their own; they aren't listed.
+/// Pastels `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version`, the `style` of Crop
+/// Marks and an Extrude & Bevel's custom `bevelName` and `bevelProfile` have checks of their own;
+/// they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));

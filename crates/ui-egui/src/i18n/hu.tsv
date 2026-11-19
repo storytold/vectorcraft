@@ -673,6 +673,10 @@ arrowhead	Target	Céltábla
 	Cusp	Csúcspont
 	Straight segment	Egyenes szakasz
 	Circle too large	A kör túl nagy
+	Show Radii	Sugarak megjelenítése
+	Show Diameter	Átmérő megjelenítése
+	Anchors at Standard Positions	Horgonypontok szabványos helyeken
+	Third Point by Dragging	Harmadik pont húzással
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
 	Clean Up…	Tisztítás…
@@ -818,6 +822,10 @@ arrowhead	Target	Céltábla
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Document Colors	Dokumentumszínek megjelenítése
+	Document Colors	Dokumentumszínek
+	Selection Colors	A kijelölés színei
+@plural	Used {n} time|Used {n} times	{n} alkalommal használva
 	Show Harmony	Harmónia megjelenítése
 	Harmony Rule	Harmóniaszabály
 	Harmony color	Harmóniaszín
@@ -3338,6 +3346,13 @@ file-filter	Templates	Sablonok
 	Pen Tool	Toll
 	Quick Pen Tool	Gyorstoll
 	Quick Pen	Gyorstoll
+	Quick Pen Toolbar	Gyorstoll eszköztár
+	Continuous Arc	Folytonos ív
+	Sharp Corner Arc	Éles sarkú ív
+	Flip Arc	Ív tükrözése
+	Hide Toolbar	Eszköztár elrejtése
+	Pin Toolbar Position	Eszköztár helyének rögzítése
+	Reset Toolbar Position	Eszköztár helyének visszaállítása
 	Pencil	Ceruza
 	Pencil Tool	Ceruza
 	Pentagram	Pentagram
@@ -3824,6 +3839,11 @@ mark-style	Japanese	Japán
 	Edit Arrowheads	Nyílhegyek szerkesztése
 	Edit Arrowheads…	Nyílhegyek szerkesztése…
 	Reload Arrowheads	Nyílhegyek újratöltése
+	Bevels	Élletörések
+	Edit Bevels	Élletörések szerkesztése
+	Edit Bevels…	Élletörések szerkesztése…
+	{name} (document)	{name} (dokumentum)
+	Reload Bevels	Élletörések újratöltése
 	Reset Rotate View	Nézetforgatás visszaállítása
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
@@ -4324,6 +4344,7 @@ mark-style	Japanese	Japán
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
 	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
+	Clear Recent Commands	Legutóbbi parancsok listájának törlése
 	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
@@ -5089,6 +5110,10 @@ mark-style	Japanese	Japán
 	Rename Preset	Előbeállítás átnevezése
 	Save Image Trace Preset	Képvektorizálási előbeállítás mentése
 	Delete Image Trace Preset	Képvektorizálási előbeállítás törlése
+	Tracing Presets…	Vektorizálási előbeállítások…
+	Import Image Trace Presets	Képvektorizálási előbeállítások importálása
+	Export Image Trace Presets	Képvektorizálási előbeállítások exportálása
+	Replace the saved presets that have these names?	Lecseréli az ilyen nevű mentett előbeállításokat?
 	Tracing Result	Vektorizálás eredménye
 	Tracing Result with Outlines	Vektorizálás eredménye vázlattal
 	Tracking	Betűköz
@@ -6838,7 +6863,10 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
-@msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	a bevel értéke none, ezek egyike: {_1}, vagy custom lehet {BEVEL_PROFILE} megadásával
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	a bevel custom értékéhez {BEVEL_PROFILE} kell, az élletörés pontjai
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME}: karakterlánc kell
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}: legalább 2 és legfeljebb {most} [x, y] pont kell, minden arány 0 és 1 között, [0, 0]-tól (a fedőlap éle) [1, 1]-ig (az oldalfal)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: nem hozható létre test a(z) „{symbol}” szimbólum példányából: a szimbólum rajza nem érhető el
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: a vágóútvonal túl összetett a rajz kivágásához
@@ -10758,6 +10786,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Vector Packs	Vektorcsomagok
+	Compass Rose	Iránytűrózsa
+	Botanical Sprig	Növényi ágacska
+	Facet Diamond	Csiszolt gyémánt
+	Tide Crest	Hullámhegy
 	Leaf Vine	Leveles inda
 	Blossom Chain	Virágfüzér
 	Pennant Garland	Zászlófüzér

@@ -508,6 +508,10 @@ font-technology	Variable	Variables
 	Cusp	Point de rebroussement
 	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
+	Show Radii	Afficher les rayons
+	Show Diameter	Afficher le diamètre
+	Anchors at Standard Positions	Points d’ancrage aux positions standard
+	Third Point by Dragging	Troisième point par glissement
 	Classic Defaults	Valeurs par défaut classiques
 	Clean Up…	Nettoyer…
 	Clear	Effacer
@@ -615,6 +619,10 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Show Harmony	Afficher l’harmonie
 	Harmony Rule	Règle d’harmonie
 	Harmony color	Couleur de l’harmonie
@@ -1899,6 +1907,10 @@ font-technology	Variable	Variables
 	Rename Preset	Renommer le paramètre prédéfini
 	Save Image Trace Preset	Enregistrer le paramètre prédéfini de vectorisation de l’image
 	Delete Image Trace Preset	Supprimer le paramètre prédéfini de vectorisation de l’image
+	Tracing Presets…	Paramètres prédéfinis de vectorisation…
+	Import Image Trace Presets	Importer des paramètres prédéfinis de vectorisation de l’image
+	Export Image Trace Presets	Exporter les paramètres prédéfinis de vectorisation de l’image
+	Replace the saved presets that have these names?	Remplacer les paramètres prédéfinis enregistrés qui portent ces noms ?
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image
 	Image:	Image :
 	Images:	Images :
@@ -2793,6 +2805,13 @@ font-technology	Variable	Variables
 	Pen Tool	Outil Plume
 	Quick Pen Tool	Outil Plume rapide
 	Quick Pen	Plume rapide
+	Quick Pen Toolbar	Barre d’outils Plume rapide
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc à angle vif
+	Flip Arc	Retourner l’arc
+	Hide Toolbar	Masquer la barre d’outils
+	Pin Toolbar Position	Épingler la position de la barre d’outils
+	Reset Toolbar Position	Réinitialiser la position de la barre d’outils
 	Pencil	Crayon
 	Pencil Tool	Outil Crayon
 	per slice	par tranche
@@ -3236,6 +3255,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Modifier les pointes de flèche
 	Edit Arrowheads…	Modifier les pointes de flèche…
 	Reload Arrowheads	Recharger les pointes de flèche
+	Bevels	Biseaux
+	Edit Bevels	Modifier les biseaux
+	Edit Bevels…	Modifier les biseaux…
+	{name} (document)	{name} (document)
+	Reload Bevels	Recharger les biseaux
 	Reset Rotate View	Réinitialiser la rotation de l’affichage
 	Rotate View to Selection	Faire pivoter l’affichage selon la sélection
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
@@ -3678,6 +3702,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
 	Type to search commands, tools, panels and effects	Tapez pour rechercher des commandes, des outils, des panneaux et des effets
+	Clear Recent Commands	Effacer les commandes récentes
 	Search commands	Chercher des commandes
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
@@ -6418,7 +6443,10 @@ lighting	Light	Lumière
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objet n’a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
-@msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel doit valoir none, l’une des valeurs {_1}, ou custom avec {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom nécessite {BEVEL_PROFILE}, les points du biseau
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} doit être une chaîne
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} doit contenir de 2 à {most} points [x, y], chaque proportion entre 0 et 1, de [0, 0] (le bord de la face) à [1, 1] (la paroi latérale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ne peut pas construire de volumes à partir de cette illustration : ses occurrences de symbole, dégradés de formes et groupes de découpe contiennent trop d’objets
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ne peut pas construire de volume à partir de l’occurrence du symbole « {symbol} » : l’illustration du symbole n’est pas disponible
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1} : le tracé de découpe est trop complexe pour découper l’illustration
@@ -10732,6 +10760,11 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Vector Packs	Packs vectoriels
+	Compass Rose	Rose des vents
+	Botanical Sprig	Rameau botanique
+	Facet Diamond	Diamant facetté
+	Tide Crest	Crête de vague
 	Leaf Vine	Liane feuillue
 	Blossom Chain	Chaîne de fleurs
 	Pennant Garland	Guirlande de fanions

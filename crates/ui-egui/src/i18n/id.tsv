@@ -314,7 +314,10 @@
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
 @msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat
-@msg	bevel must be none or one of {_1}	bevel harus none atau salah satu dari {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel harus none, salah satu dari {_1}, atau custom dengan {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom memerlukan {BEVEL_PROFILE}, yaitu titik-titik bevel
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} harus berupa string
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} harus berisi 2 sampai {most} titik [x, y], masing-masing bernilai antara 0 dan 1, dari [0, 0] (tepi tutup) hingga [1, 1] (dinding samping)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} tidak dapat membangun bentuk padat dari karya ini: instans simbol, blend, dan grup klipingnya berisi terlalu banyak objek
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} tidak dapat membangun bentuk padat dari instans simbol "{symbol}": karya simbol tidak tersedia
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: jalur kliping terlalu rumit untuk memotong karya
@@ -1409,6 +1412,10 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Document Colors	Tampilkan warna dokumen
+	Document Colors	Warna dokumen
+	Selection Colors	Warna pilihan
+@plural	Used {n} time|Used {n} times	Dipakai {n} kali
 	Show Harmony	Tampilkan harmoni
 	Harmony Rule	Aturan harmoni
 	Harmony color	Warna harmoni
@@ -2572,6 +2579,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Ganti nama preset
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
+	Tracing Presets…	Preset penelusuran…
+	Import Image Trace Presets	Impor preset telusur gambar
+	Export Image Trace Presets	Ekspor preset telusur gambar
+	Replace the saved presets that have these names?	Ganti preset tersimpan yang memiliki nama-nama ini?
 	Method:	Metode:
 	Pad	Perpanjang
 	Repeats	Jumlah ulangan
@@ -4640,6 +4651,13 @@ theme	Appearance	Tampilan
 	Pen Tool	Alat pena
 	Quick Pen Tool	Alat pena cepat
 	Quick Pen	Pena cepat
+	Quick Pen Toolbar	Bilah alat Pena cepat
+	Continuous Arc	Busur bersambung
+	Sharp Corner Arc	Busur sudut tajam
+	Flip Arc	Balik busur
+	Hide Toolbar	Sembunyikan bilah alat
+	Pin Toolbar Position	Sematkan posisi bilah alat
+	Reset Toolbar Position	Atur ulang posisi bilah alat
 	Picas	Pica
 	Portuguese	Portugis
 	Preserve Appearance and Overprints	Pertahankan tampilan dan overprint
@@ -4753,6 +4771,11 @@ theme	Appearance	Tampilan
 	Edit Arrowheads	Edit mata panah
 	Edit Arrowheads…	Edit mata panah…
 	Reload Arrowheads	Muat ulang mata panah
+	Bevels	Bentuk bevel
+	Edit Bevels	Edit bentuk bevel
+	Edit Bevels…	Edit bentuk bevel…
+	{name} (document)	{name} (dokumen)
+	Reload Bevels	Muat ulang bentuk bevel
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -5068,6 +5091,7 @@ font-technology	Variable	Variabel
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
 	Type to search commands, tools, panels and effects	Ketik untuk mencari perintah, alat, panel, dan efek
+	Clear Recent Commands	Kosongkan perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -5272,6 +5296,10 @@ font-technology	Variable	Variabel
 	Circle	Lingkaran
 	Circle Tool	Alat lingkaran
 	Circle too large	Lingkaran terlalu besar
+	Show Radii	Tampilkan jari-jari
+	Show Diameter	Tampilkan diameter
+	Anchors at Standard Positions	Titik jangkar di posisi standar
+	Third Point by Dragging	Titik ketiga dengan menyeret
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma
@@ -8603,6 +8631,11 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Vector Packs	Paket Vektor
+	Compass Rose	Mawar Kompas
+	Botanical Sprig	Ranting Botani
+	Facet Diamond	Berlian Berfaset
+	Tide Crest	Puncak Gelombang
 	Leaf Vine	Sulur Daun
 	Blossom Chain	Rangkaian Bunga
 	Pennant Garland	Untaian Panji
