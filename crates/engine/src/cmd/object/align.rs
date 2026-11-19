@@ -218,12 +218,32 @@ pub(super) fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let m = measure(s, p, "object.align")?;
     let (h, v) = direction(p, "object.align")?;
-    choice(p, "object.align", "to", &["selection", "artboard", "key"])?;
+    let to = choice(p, "object.align", "to", &["selection", "artboard", "key", "auto"])?;
     check_switches(p, &["patterns"], "object.align")?;
     check_numbers(p, &["artboard"], "object.align")?;
     if h.is_none() && v.is_none() {
         return Err(bad("object.align", "give horizontal or vertical"));
     }
+    // Resolve only the explicit automatic target at this step, without changing the caller's
+    // parameters or selection. The existing reference/anchor/guide paths receive a concrete target.
+    let automatic_params = if to == Some("auto") {
+        let selection = &s.doc()?.selection;
+        let to = if selection.has_key() {
+            "key"
+        } else if selection.anchors.is_empty() && selection.len() == 1 {
+            "artboard"
+        } else {
+            "selection"
+        };
+        let Some(mut params) = p.as_object().cloned() else {
+            return Err(bad("object.align", "expected an object of align parameters"));
+        };
+        params.insert("to".into(), Value::String(to.into()));
+        Some(Value::Object(params))
+    } else {
+        None
+    };
+    let p = automatic_params.as_ref().unwrap_or(p);
     // Anchor points selected with Direct Selection align themselves, as in Illustrator (#1180).
     if !s.doc()?.selection.anchors.is_empty() {
         return align_anchors(s, p, &ids, (h, v));

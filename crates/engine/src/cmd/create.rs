@@ -1,14 +1,16 @@
 //! Creating art: shapes, paths, text.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, CharStyle, LiveShape, MAX_COORD, Node, NodeKind, TextObject};
+use vectorcraft_geom::curvature::{self, NoCircle};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::newart::NewArt;
 use super::{
     CommandSpec, NodeId, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, f64_req, finite_numbers, has_doc,
-    number_or, str_param, switch_or,
+    index_opt, number_or, object_param, str_param, switch_or,
 };
+use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -75,6 +77,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             circle_through_points
         ),
+        cmd!(
+            "shape.curvatureCircle",
+            "Curvature Circle",
+            [],
+            None,
+            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
+            has_doc,
+            curvature_circle
+        ),
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
         cmd!(
             "shape.spiral",
@@ -93,6 +104,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{x1, y1, x2, y2, closed?, slope?: −100…100 (default 100), rotation?: deg clockwise about (x1, y1)} or {x, y, lengthX, lengthY, reference?: 0–8 (default 0), baseAlong?: x|y (either case; default x), slope?: −100…100 (default 50), closed?, fillArc?, rotation?: deg clockwise about the reference point (x, y)} (0: upright); a reference or baseAlong given as anything else (null included) or a slope outside its range is an error and draws nothing → {id}",
             has_doc,
             arc
+        ),
+        cmd!(
+            "shape.threePointArc",
+            "Three-Point Arc",
+            [],
+            None,
+            "{start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: \"start\"|\"end\" (default \"start\"; only with `toward`)} → {id, cx, cy, radius, sweep}: an open circular arc from `start` to `end` in the current stroke (black when it is none) with no fill, its ends exactly at the two points (not pixel-aligned). With `through`, the arc passes through that point, an anchor of the path; with `toward`, it leaves the end `at` names heading toward that point (its tangent there). Give exactly one of `through` and `toward`; `at` with `through` is an error. `sweep` is the arc's turn in degrees, positive clockwise on the page. Two points that are the same, three on one line, or an arc reaching past the canvas are an error, and nothing is drawn",
+            has_doc,
+            three_point_arc
         ),
         cmd!(
             "shape.rectangularGrid",
@@ -485,6 +505,51 @@ fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
     Ok(matches!(points.len(), 2 | 3).then_some(points))
 }
 
+/// A live ellipse that touches a path at a point with the path's curvature there
+/// ([`curvature::curvature_circle_on`]). One undo step, named as an Ellipse tool drag is.
+fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.curvatureCircle";
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let si = index_opt(p, "subpath", C)?.unwrap_or(0);
+    let seg = index_opt(p, "segment", C)?.ok_or_else(|| bad(C, "missing segment"))?;
+    let t = f64_req(p, "t", C)?;
+    if !(0.0..=1.0).contains(&t) {
+        return Err(bad(C, "`t` must be from 0 to 1"));
+    }
+    let convex = switch_or(p, "convex", false, C)?;
+    let found = {
+        let st = s.doc()?;
+        let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        if node.is_guide() {
+            return Err(bad(C, "a guide has no curvature circle"));
+        }
+        let path = node.path_data().ok_or_else(|| bad(C, format!("object {id} is not a path")))?;
+        let sp = path.subpaths.get(si).ok_or_else(|| bad(C, "no such subpath"))?;
+        if seg >= sp.segment_count() {
+            return Err(bad(C, "no such segment"));
+        }
+        curvature::curvature_circle_on(sp, seg, t, convex)
+    };
+    let circle = found.map_err(|e| match e {
+        NoCircle::Straight => bad(C, "the path is straight there, so no circle matches its curvature"),
+        NoCircle::Cusp => bad(C, "the path has a cusp there, so it has no single curvature"),
+        NoCircle::Corner => bad(C, "the path has a corner there, so it has no single curvature"),
+    })?;
+    let (center, radius) = (circle.center, circle.radius);
+    let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD) {
+        return Err(bad(C, "the circle that matches the path there would reach past the canvas"));
+    }
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+    // Not pixel-aligned: the circle stays on the path.
+    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    out["cx"] = json!(center.x);
+    out["cy"] = json!(center.y);
+    out["radius"] = json!(radius);
+    out["nominal"] = json!(circle.nominal);
+    Ok(out)
+}
+
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
 /// null. A fraction, a negative, a non-finite or a non-number is an error rather than the default.
 fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
@@ -622,6 +687,50 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke_width.max(0.1),
     );
     insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle, true)
+}
+
+/// An open circular arc from `start` to `end` ([`shapes::CircularArc`]): through `through`, or
+/// leaving the end `at` names toward `toward`. One undo step, named as an Arc tool drag is.
+fn three_point_arc(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.threePointArc";
+    let point = |key: &str| finite_numbers::<2>(&p[key]).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, format!("`{key}` must be [x, y]")));
+    let (start, end) = (point("start")?, point("end")?);
+    let from_end = match p.get("at") {
+        None => false,
+        Some(Value::String(v)) if v == "start" || v == "end" => v == "end",
+        Some(_) => return Err(bad(C, "`at` must be \"start\" or \"end\"")),
+    };
+    // The arc, and the point it passes through (an anchor of the path, so the path meets it exactly).
+    let (arc, via) = match (p.get("through"), p.get("toward")) {
+        (Some(_), None) if p.get("at").is_some() => return Err(bad(C, "give `at` only with `toward`")),
+        (Some(_), None) => {
+            let through = point("through")?;
+            (shapes::CircularArc::through(start, end, through), Some(through))
+        }
+        (None, Some(_)) if from_end => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::arriving(start, end, end - toward), None)
+        }
+        (None, Some(_)) => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::leaving(start, toward - start, end), None)
+        }
+        _ => return Err(bad(C, "give exactly one of `through` and `toward`")),
+    };
+    let arc = arc.ok_or_else(|| bad(C, "no arc fits these points: two are the same or all three lie on one line"))?;
+    let path = via.map_or_else(|| arc.to_path(), |v| arc.to_path_via(v));
+    let look = s.new_art_look(
+        vectorcraft_color::Paint::None,
+        if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
+        s.paint.stroke_width.max(0.1),
+    );
+    // Not pixel-aligned: the ends stay on the given points.
+    let mut out = insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, 0.0, false)?;
+    out["cx"] = json!(arc.center.x);
+    out["cy"] = json!(arc.center.y);
+    out["radius"] = json!(arc.radius);
+    out["sweep"] = json!(arc.sweep.to_degrees());
+    Ok(out)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the

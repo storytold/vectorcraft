@@ -8,7 +8,7 @@
 //! turned plane) are cut into triangles: each hole is joined to its outline by a bridge, then the
 //! outline is cut by ear clipping.
 
-use vectorcraft_geom::{FillRule, PathData, Rect};
+use vectorcraft_geom::{FillRule, PathData, Point, Rect};
 
 use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
 use crate::{Extrude, Facet, Inflate, Revolve, V3, View};
@@ -127,6 +127,21 @@ pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revo
     mesh(&faces)
 }
 
+/// [`revolve_mesh`], with where each corner of each triangle of the side lies on the side surface
+/// unrolled ([`crate::SurfaceCell`]), as the effect places a graphic mapped onto the side: one
+/// entry for each triangle, in order, `None` for a triangle of an end cap, of a cut side or of a
+/// contour other than the one that carries the graphics. Only a sweep with
+/// [`Revolve::map_surface`] lays out its side; without it every entry is `None`.
+pub fn revolve_mesh_surface(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve) -> Result<SurfaceMesh, String> {
+    let (mut faces, mut surface) = (vec![], vec![]);
+    crate::revolve_surface_faces(path, rule, bounds, options, &mut faces, &mut surface)?;
+    mesh_on(&faces, Some(&surface))
+}
+
+/// A mesh with, for each of its triangles, the surface point of each corner, or `None`
+/// ([`revolve_mesh_surface`]).
+pub type SurfaceMesh = (Mesh, Vec<Option<[Point; 3]>>);
+
 /// The area-weighted normal of `contours` (Newell's method).
 pub(crate) fn newell(contours: &[Vec<V3>]) -> V3 {
     let mut n = V3::default();
@@ -147,9 +162,28 @@ fn up(v: V3) -> [f64; 3] {
 /// `faces` (view space) as one mesh, each cut into triangles turned to its normal, which is written
 /// at unit length whatever length it is given (a face given no normal takes its corners' own).
 fn mesh(faces: &[Face3]) -> Result<Mesh, String> {
+    mesh_on(faces, None).map(|(mesh, _)| mesh)
+}
+
+/// [`mesh`], with for each triangle where its corners lie on a surface: `surface` lists faces by
+/// their index in `faces` (in increasing order) with a surface point for each corner of the face's
+/// one contour, and a triangle of such a face takes its corners' points. `None` for a triangle of
+/// any other face. Without `surface` the list is empty.
+fn mesh_on(faces: &[Face3], surface: Option<&[(usize, [Point; 4])]>) -> Result<SurfaceMesh, String> {
+    let track = surface.is_some();
+    let surface = surface.unwrap_or_default();
     let mut out = Mesh::default();
+    let mut on = vec![];
     let mut work = 0usize;
-    for (contours, normal) in faces {
+    let mut cells = surface.iter().peekable();
+    for (k, (contours, normal)) in faces.iter().enumerate() {
+        while cells.next_if(|(i, _)| *i < k).is_some() {}
+        let cell = cells.next_if(|(i, _)| *i == k).map(|(_, uv)| uv);
+        // The surface point of a corner of a triangle: the point of the face's corner it is.
+        let point = |v: V3| {
+            let corners = contours.first()?;
+            corners.iter().zip(cell?).find(|(c, _)| c.0 == v.0 && c.1 == v.1 && c.2 == v.2).map(|(_, p)| *p)
+        };
         let geometric = newell(contours);
         let given = normal.unit();
         let n = if given.dot(given) > 0.5 { given } else { geometric.unit() };
@@ -157,20 +191,36 @@ fn mesh(faces: &[Face3]) -> Result<Mesh, String> {
             continue;
         }
         let [nx, ny, nz] = up(n);
-        for [a, b, c] in triangulate(contours, geometric, &mut work)? {
+        // A face on the surface is cut along its diagonal from corner 0 to corner 2, as the canvas
+        // cuts it to place the graphics: the surface's layout of a quad whose ends lie at different
+        // distances from the axis is not one affine map, so the other diagonal would move them.
+        let quad = match contours.as_slice() {
+            [only] if cell.is_some() => <[V3; 4]>::try_from(only.as_slice()).ok(),
+            _ => None,
+        };
+        let triangles = match quad {
+            Some([v0, v1, v2, v3]) => vec![[v0, v1, v2], [v0, v2, v3]],
+            None => triangulate(contours, geometric, &mut work)?,
+        };
+        for [a, b, c] in triangles {
             let (pa, pb, pc) = (up(a), up(b), up(c));
             let cross = V3(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]).cross(V3(pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]));
             if cross.dot(cross) < 1e-24 {
                 continue;
             }
-            let (pb, pc) = if cross.dot(V3(nx, ny, nz)) < 0.0 { (pc, pb) } else { (pb, pc) };
+            let turned = cross.dot(V3(nx, ny, nz)) < 0.0;
+            let (pb, pc) = if turned { (pc, pb) } else { (pb, pc) };
+            let (b, c) = if turned { (c, b) } else { (b, c) };
             let base = u32::try_from(out.positions.len()).map_err(|_| "The 3D object is too complex to export".to_string())?;
             out.positions.extend([pa, pb, pc]);
             out.normals.extend([[nx, ny, nz]; 3]);
             out.triangles.push([base, base + 1, base + 2]);
+            if track {
+                on.push(point(a).zip(point(b)).zip(point(c)).map(|((a, b), c)| [a, b, c]));
+            }
         }
     }
-    Ok(out)
+    Ok((out, on))
 }
 
 /// A corner of a face: its position on the plane the face is cut in, and in 3D.

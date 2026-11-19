@@ -4652,6 +4652,17 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     assert_eq!(selected(&s), vec![g]);
 }
 
+/// A ruler guide is not isolated, and isolation mode stays as it was.
+#[test]
+fn ruler_guides_are_not_isolated() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let err = s.execute("object.isolate", &json!({"id": guide.0})).unwrap_err();
+    assert!(err.to_string().contains("ruler guides can't be isolated"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, None);
+}
+
 /// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one
 /// layer per call, without an undo step; from the top-level layer it leaves isolation mode. `all: true`
 /// leaves from any depth, a hidden parent layer is not isolated (the call leaves), and a group in a
