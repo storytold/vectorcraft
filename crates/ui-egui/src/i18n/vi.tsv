@@ -3238,6 +3238,7 @@ diagnostics	ui	giao diện
 	Device to Simulate:	Thiết bị cần giả lập:
 	Simulate Paper Color	Giả lập màu giấy
 	Simulate Black Ink	Giả lập mực đen
+	Load…	Tải…
 	Preserve Editing Capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve editing capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve Lightness	Bảo lưu độ sáng
@@ -4058,6 +4059,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Type to search commands, tools, panels and effects	Nhập để tìm kiếm lệnh, công cụ, bảng và hiệu ứng
 	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ

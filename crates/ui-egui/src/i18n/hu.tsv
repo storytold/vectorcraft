@@ -3441,6 +3441,7 @@ diagnostics	ui	felület
 	Device to Simulate:	Szimulálandó eszköz:
 	Simulate Paper Color	Papírszín szimulálása
 	Simulate Black Ink	Fekete festék szimulálása
+	Load…	Betöltés…
 	Preserve editing capabilities	Szerkeszthetőség megtartása
 	Preserve Editing Capabilities	Szerkeszthetőség megtartása
 	Preserve Lightness	Világosság megtartása
@@ -4294,6 +4295,7 @@ mark-style	Japanese	Japán
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
+	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
 	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában

@@ -4195,6 +4195,7 @@ diagnostics	ui	介面
 	Device to Simulate:	要模擬的裝置：
 	Simulate Paper Color	模擬紙張顏色
 	Simulate Black Ink	模擬黑色油墨
+	Load…	載入…
 	Preserve Editing Capabilities	保留編輯功能
 	Preserve editing capabilities	保留編輯功能
 	Preserve Lightness	保留亮度
@@ -4989,6 +4990,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要

@@ -2795,6 +2795,7 @@ font-technology	Variable	Variabla
 	Device to Simulate:	Enhet att simulera:
 	Simulate Paper Color	Simulera pappersfärg
 	Simulate Black Ink	Simulera svart bläck
+	Load…	Läs in…
 	Preserve Editing Capabilities	Bevara redigeringsmöjligheter
 	Preserve editing capabilities	Bevara redigeringsmöjligheter
 	Preserve Lightness	Bevara ljushet
@@ -3568,6 +3569,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
+	Type to search commands, tools, panels and effects	Skriv för att söka efter kommandon, verktyg, paneler och effekter
 	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär

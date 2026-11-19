@@ -2919,6 +2919,7 @@ diagnostics	ui	interfaccia
 	Device to Simulate:	Dispositivo da simulare:
 	Simulate Paper Color	Simula colore carta
 	Simulate Black Ink	Simula inchiostro nero
+	Load…	Carica…
 	Preserve Editing Capabilities	Mantieni possibilità di modifica
 	Preserve editing capabilities	Mantieni possibilità di modifica
 	Preserve Lightness	Mantieni luminosità
@@ -3712,6 +3713,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
+	Type to search commands, tools, panels and effects	Digita per cercare comandi, strumenti, pannelli ed effetti
 	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario

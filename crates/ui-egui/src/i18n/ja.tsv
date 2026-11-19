@@ -2994,6 +2994,7 @@ diagnostics	ui	UI
 	Device to Simulate:	シミュレートするデバイス:
 	Simulate Paper Color	用紙の色をシミュレート
 	Simulate Black Ink	インキの黒をシミュレート
+	Load…	読み込み…
 	Preserve Editing Capabilities	編集機能を保持
 	Preserve Lightness	明度を保持
 	Preserve Overprints and Spot Colors	オーバープリントと特色を保持
@@ -3584,6 +3585,7 @@ mark-style	Japanese	日本式
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
+	Type to search commands, tools, panels and effects	入力してコマンド、ツール、パネル、効果を検索
 	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択

@@ -2902,6 +2902,7 @@ diagnostics	ui	интерфейс
 	Device to Simulate:	Имитируемое устройство:
 	Simulate Paper Color	Имитировать цвет бумаги
 	Simulate Black Ink	Имитировать чёрную краску
+	Load…	Загрузить…
 	Preserve Editing Capabilities	Сохранять возможности редактирования
 	Preserve editing capabilities	Сохранять возможности редактирования
 	Preserve Lightness	Сохранять светлоту
@@ -3693,6 +3694,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
+	Type to search commands, tools, panels and effects	Начните вводить для поиска команд, инструментов, панелей и эффектов
 	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный

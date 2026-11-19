@@ -3771,6 +3771,7 @@ theme	Appearance	Εμφάνιση
 	Device to Simulate:	Συσκευή προς προσομοίωση:
 	Simulate Paper Color	Προσομοίωση χρώματος χαρτιού
 	Simulate Black Ink	Προσομοίωση μαύρης μελάνης
+	Load…	Φόρτωση…
 	Preserve Editing Capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve editing capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve Lightness	Διατήρηση φωτεινότητας
@@ -4363,6 +4364,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
+	Type to search commands, tools, panels and effects	Πληκτρολογήστε για αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ
 	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον

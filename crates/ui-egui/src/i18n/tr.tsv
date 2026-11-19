@@ -2644,6 +2644,7 @@ shape	Open	Açık
 	Device to Simulate:	Simüle Edilecek Aygıt:
 	Simulate Paper Color	Kağıt Rengini Simüle Et
 	Simulate Black Ink	Siyah Mürekkebi Simüle Et
+	Load…	Yükle…
 	Preserve Editing Capabilities	Düzenleme Yeteneklerini Koruyun
 	Preserve editing capabilities	Düzenleme yeteneklerini koruyun
 	Preserve Lightness	Hafifliği Koruyun
@@ -3448,6 +3449,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
+	Type to search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri aramak için yazın
 	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil

@@ -4171,6 +4171,7 @@ arrowhead	Feather	पंख
 	Device to Simulate:	सिम्युलेट करने के लिए डिवाइस:
 	Simulate Paper Color	पेपर का रंग सिम्युलेट करें
 	Simulate Black Ink	काली स्याही सिम्युलेट करें
+	Load…	लोड करें…
 	Preserve editing capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Editing Capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Lightness	प्रकाश संरक्षण
@@ -5112,6 +5113,7 @@ arrowhead	Feather	पंख
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
 	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर

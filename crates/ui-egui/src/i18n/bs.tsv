@@ -3030,6 +3030,7 @@ digits	Malayalam	Malajalam
 	Device to Simulate:	Uređaj za simulaciju:
 	Simulate Paper Color	Simuliraj boju papira
 	Simulate Black Ink	Simuliraj crnu tintu
+	Load…	Učitaj…
 	Previous page	Prethodna stranica
 	Print Layers:	Štampaj slojeve:
 	Print Preset:	Predložak štampanja:
@@ -4635,6 +4636,7 @@ font-technology	Variable	Varijabilni
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
+	Type to search commands, tools, panels and effects	Upišite za pretragu naredbi, alata, panela i efekata
 	Dashed Line	Isprekidana linija
 	Panel menu	Meni panela
 	Unembed…	Poništi ugrađivanje…

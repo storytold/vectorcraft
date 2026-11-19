@@ -2906,6 +2906,7 @@
 	Device to Simulate:	અનુકરણ કરવાનું ઉપકરણ:
 	Simulate Paper Color	કાગળના રંગનું અનુકરણ કરો
 	Simulate Black Ink	કાળી શાહીનું અનુકરણ કરો
+	Load…	લોડ કરો…
 	Preserve Editing Capabilities	સંપાદન ક્ષમતાઓ જાળવો
 	Preserve Lightness	તેજ જાળવો
 	Preserve Overprints and Spot Colors	ઓવરપ્રિન્ટ અને સ્પોટ રંગ જાળવો
@@ -3767,6 +3768,8 @@ arrowhead	Feather	પીંછું
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
+	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
+	Recent	તાજેતરના
 	Search commands	આદેશો શોધો
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
