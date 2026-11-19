@@ -224,6 +224,33 @@ fn hidden_and_culled() {
     assert_eq!(rr.stats.culled, 1);
 }
 
+#[test]
+fn a_render_leaves_out_every_object_of_a_large_hidden_set() {
+    // 2,000 one-pixel-wide strips; the strips in even columns are in `hidden`.
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut hidden = std::collections::HashSet::new();
+    for row in 0..20 {
+        for col in 0..100 {
+            let r = Rect::new(f64::from(col), f64::from(row * 5), f64::from(col + 1), f64::from(row * 5 + 5));
+            let n = rect_node(&mut d, r, Paint::solid(Color::BLACK), Paint::None, 0.0);
+            let id = d.insert(Some(l), usize::MAX, n).unwrap();
+            if col % 2 == 0 {
+                hidden.insert(id);
+            }
+        }
+    }
+    assert_eq!(hidden.len(), 1_000);
+    let opts = RenderOptions { hidden, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    for row in 0..20 {
+        for col in 0..100 {
+            let want = if col % 2 == 0 { [0, 0, 0, 0] } else { [0, 0, 0, 255] };
+            assert_eq!(r.pixel(col, row * 5 + 2), want, "column {col}, row {row}");
+        }
+    }
+}
+
 /// A document with symbol "Far" holding a red rectangle `art`, and an instance of it moved by
 /// (-50, -50): its 20 × 20 square, (-60, -60) to (-40, -40), lies outside a view of the page.
 fn far_instance(art: Rect) -> Document {

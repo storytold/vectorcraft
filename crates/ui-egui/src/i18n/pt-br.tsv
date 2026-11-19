@@ -2297,6 +2297,8 @@ antiAlias	Sharp	Nítido
 	Pattern Options	Opções de Padrão
 	Pattern options are available in pattern editing mode.	As opções de padrão estão disponíveis no modo de edição de padrão.
 	Pen Tool	Ferramenta Caneta
+	Quick Pen Tool	Ferramenta Caneta rápida
+	Quick Pen	Caneta rápida
 	Pencil	Lápis
 	Pencil Tool	Ferramenta Lápis
 	Percent:	Porcentagem:
@@ -4728,6 +4730,9 @@ axis	Both	Ambos
 @msg	`link` places a handle: give `handle`	`link` posiciona uma alça: informe `handle`
 @msg	no such spine segment	segmento da coluna inexistente
 @msg	no such subpath	subtraçado inexistente
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` deve ser uma lista de no máximo 10000 trechos
+@msg	give either `start` for a new path or `id`, not both	informe `start` para um novo caminho ou `id`, mas não ambos
+@msg	`subpath` and `keep` need `id`	`subpath` e `keep` exigem `id`
 @msg	no such user library	biblioteca do usuário inexistente
 @msg	no such view	vista inexistente
 @msg	no such width point	ponto de largura inexistente

@@ -34,6 +34,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("addAnchor", "Add Anchor Point Tool", Some("+"), "tool-pen-add"),
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
+        t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[

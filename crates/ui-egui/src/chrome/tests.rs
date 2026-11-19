@@ -1697,6 +1697,32 @@ fn the_artboard_list_lays_out_only_the_rows_near_the_view() {
     assert_eq!(app.view().unwrap().artboard, 999);
 }
 
+/// #5941: with the app's scroll bar, which takes a column of its own, the artboard list's rows took
+/// the whole list's width, so the list grew by the bar's width on every pass. Open, it keeps its
+/// width.
+#[test]
+fn the_artboard_list_keeps_its_width_while_it_is_open() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 30})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, Default::default());
+    let texts = status_texts(&mut app, &ctx, vec![]);
+    let field = texts.iter().find(|(s, _)| s == "1  Artboard 1").map(|(_, r)| *r).expect("the field");
+    status_click(&mut app, &ctx, field.center());
+    let list = |ctx: &egui::Context| {
+        ctx.memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+    };
+    let widths: Vec<f32> = (0..8)
+        .map(|_| {
+            status_texts(&mut app, &ctx, vec![]);
+            list(&ctx).expect("the list is open").width()
+        })
+        .collect();
+    assert!(widths.windows(2).skip(2).all(|w| w[0] == w[1]), "the list keeps its width: {widths:?}");
+}
+
 fn artboard_navigation_app(tool: &str) -> (crate::VectorcraftApp, vectorcraft_doc::NodeId) {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();

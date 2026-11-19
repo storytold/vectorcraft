@@ -244,6 +244,109 @@ fn an_empty_export_as_range_shows_an_example() {
     assert!(text.lines().any(|l| l == "1-3, 5"), "{text}");
 }
 
+/// #5941: the Format list showed no scroll bar until the pointer came over it, so nothing told
+/// the user that more formats lay below the last one shown, and it opened again where it was last
+/// scrolled, with its first formats out of view. Opened with the pointer elsewhere and a format
+/// near the end chosen, a list that does not show every format shows its bar, the chosen format shows
+/// whole, and a list opened again after a scroll shows the same rows as when it first opened.
+#[test]
+fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format_in_view() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let labels: Vec<&str> = export_as::formats().iter().map(|f| f.label).collect();
+    // A built-in format six from the end of the built-in ones: out of view when the list opens at
+    // its top, and far enough from the end that a plug-in format another test adds after the
+    // built-in ones does not move the rows shown around it.
+    let built_in: Vec<_> = fileio::FORMATS.iter().filter(|f| f.write && !matches!(f.id, "vectorcraft" | "ai")).collect();
+    let chosen = built_in.len().checked_sub(6).and_then(|i| built_in.get(i)).copied().expect("Export As lists formats");
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": chosen.id})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // Every scroll area takes the bar at rest from the theme, whatever style the list sets itself.
+    assert_eq!(ctx.global_style().spacing.scroll, crate::widgets::list_scroll_style());
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1024.0, 480.0)));
+    let mut time = 0.0;
+    let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.25;
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let (mut texts, mut bars) = (vec![], vec![]);
+        out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        (texts, bars)
+    };
+    let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
+    run(&mut app, vec![away.clone()]);
+    let (texts, _) = run(&mut app, vec![]);
+    let field = texts.iter().find(|(s, ..)| s == chosen.label).map(|(_, r, _)| r.center()).expect("the Format field shows the chosen format");
+    let click_at = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // Opens the list, moves the pointer away and returns the list's rect, the format names drawn in
+    // it with their clip rects, and the bars drawn.
+    type Run<'r> = dyn FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> (Vec<(String, egui::Rect, egui::Rect)>, Vec<egui::Rect>) + 'r;
+    let open = |run: &mut Run<'_>, app: &mut VectorcraftApp| {
+        run(app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
+        run(app, vec![click_at(field, false)]);
+        run(app, vec![away.clone()]);
+        let (mut texts, mut bars) = (vec![], vec![]);
+        for _ in 0..4 {
+            (texts, bars) = run(app, vec![]);
+        }
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the Format list is open");
+        let rows: Vec<_> = texts.into_iter().filter(|(s, r, _)| labels.contains(&s.as_str()) && list.contains_rect(*r)).collect();
+        (list, rows, bars)
+    };
+    let whole = |rows: &[(String, egui::Rect, egui::Rect)], name: &str| {
+        rows.iter().any(|(s, r, clip)| s == name && r.top() >= clip.top() && r.bottom() <= clip.bottom())
+    };
+    let tops = |rows: &[(String, egui::Rect, egui::Rect)]| rows.iter().map(|(s, r, _)| (s.clone(), r.top().round())).collect::<Vec<_>>();
+    let (list, rows, bars) = open(&mut run, &mut app);
+    assert!(!rows.is_empty(), "the Format list is open");
+    assert!(whole(&rows, chosen.label), "the chosen format shows whole: {:?}", tops(&rows));
+    // A list that shows every format needs no bar; one that does not shows its bar.
+    if rows.len() < labels.len() {
+        assert!(
+            bars.iter().any(|b| list.contains_rect(*b) && b.left() > list.center().x),
+            "the list's scroll bar is drawn at rest in {list:?}: {bars:?}"
+        );
+    }
+
+    // Scrolled, closed and opened again, the list shows the rows it first opened with, not the
+    // offset it was scrolled to.
+    run(&mut app, vec![egui::Event::PointerMoved(list.center())]);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, 30.0),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    run(&mut app, vec![wheel]);
+    let mut scrolled = vec![];
+    for _ in 0..4 {
+        (scrolled, _) = run(&mut app, vec![]);
+    }
+    let scrolled: Vec<_> = scrolled.into_iter().filter(|(s, r, _)| labels.contains(&s.as_str()) && list.contains_rect(*r)).collect();
+    run(&mut app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
+    run(&mut app, vec![click_at(field, false)]);
+    let (_, reopened, _) = open(&mut run, &mut app);
+    if rows.len() < labels.len() {
+        assert_ne!(tops(&scrolled), tops(&rows), "the wheel scrolled the list");
+    }
+    assert_eq!(tops(&reopened), tops(&rows), "the reopened list shows the rows it first opened with");
+    assert!(whole(&reopened, chosen.label), "the chosen format shows whole: {:?}", tops(&reopened));
+}
+
 #[test]
 fn svg_continues_in_svg_options() {
     let (mut app, written) = app(2);
