@@ -120,6 +120,7 @@
 	Add to Selection	Προσθήκη στην επιλογή
 	Add to Swatches	Προσθήκη στα δείγματα χρωμάτων
 	Add Used Colors	Προσθήκη των χρησιμοποιημένων χρωμάτων
+	Add Selected Colors	Προσθήκη των επιλεγμένων χρωμάτων
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
 	Plug-in Instruction Budget	Προϋπολογισμός εντολών επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
@@ -1617,6 +1618,10 @@ font-technology	Variable	Μεταβλητές
 	Add Color Tool	Εργαλείο προσθήκης χρώματος
 	Remove Color Tool	Εργαλείο αφαίρεσης χρώματος
 	Remove Color	Αφαίρεση χρώματος
+	Set As Base Color	Ορισμός ως βασικό χρώμα
+	Select Shade	Επιλογή απόχρωσης
+	Add New Color	Προσθήκη νέου χρώματος
+	Set Current Color As Base Color	Ορισμός τρέχοντος χρώματος ως βασικού
 	Find the selected colors in the artwork	Εύρεση των επιλεγμένων χρωμάτων στο σχέδιο
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
@@ -1976,6 +1981,7 @@ font-technology	Variable	Μεταβλητές
 	Lighten	Φώτισμα
 	Lightness	Φωτεινότητα
 	Line	Γραμμή
+	Line Arrow	Γραμμικό βέλος
 	Line Segment Tool	Ευθύγραμμο τμήμα (Line Segment Tool)
 	Linear Gradient	Γραμμικό ντεγκραντέ
 	Lines	Γραμμές
@@ -3778,6 +3784,11 @@ theme	Appearance	Εμφάνιση
 	Preserve Alpha Transparency	Διατήρηση διαφάνειας άλφα
 	Preserve Appearance and Overprints	Διατήρηση εμφάνισης και υπερεκτυπώσεων
 	Preserve CMYK Numbers	Διατήρηση τιμών CMYK
+	Preserve RGB Numbers	Διατήρηση τιμών RGB
+	Device to Simulate:	Συσκευή προς προσομοίωση:
+	Simulate Paper Color	Προσομοίωση χρώματος χαρτιού
+	Simulate Black Ink	Προσομοίωση μαύρης μελάνης
+	Load…	Φόρτωση…
 	Preserve Editing Capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve editing capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve Lightness	Διατήρηση φωτεινότητας
@@ -4197,6 +4208,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Σε παραγράφους με ενεργό τον Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά που έχουν πληκτρολογηθεί σε αυτήν ή πουθενά αν δεν έχει, ανεξάρτητα από τη γλώσσα ή τα πεζά-κεφαλαία της.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Στην έκδοση για υπολογιστή, τα πρόσθετα .wasm αυτού του φακέλου φορτώνονται κατά την εκκίνηση και όταν κάνετε κλικ στο Εντάξει με νέο φάκελο εδώ, εκτός από την Ασφαλή λειτουργία· η έκδοση web δεν τα φορτώνει.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Πόσες εντολές μπορεί να χρησιμοποιεί κάθε εκτέλεση φίλτρου αντικειμένων επέκτασης· το Μεγάλο επιτρέπει περισσότερες από το Κανονική, με το ίδιο όριο 60 δευτερολέπτων. Τα βαριά φίλτρα κρατούν το δικό τους όριο.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η πρώτη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η δεύτερη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
 	How light or dark the interface is.	Πόσο φωτεινό ή σκοτεινό είναι το περιβάλλον χρήστη.
@@ -4215,6 +4227,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Η Κινούμενη μεγέθυνση λειτουργεί μόνο όσο αυτό είναι ενεργό· όταν είναι ανενεργό, η Κινούμενη μεγέθυνση είναι αχνή και η μεγέθυνση δεν κινείται.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Η μεγέθυνση με τον τροχό γλιστρά ομαλά, και το εργαλείο Μεγέθυνση μεγεθύνει καθώς σύρετε στο πλάι ή το κρατάτε πατημένο· όταν είναι ανενεργό, μεγεθύνει στην περιοχή που σύρετε.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Από την επόμενη εκκίνηση, η έκδοση για υπολογιστή σχεδιάζει με αυτό το είδος επεξεργαστή γραφικών· το Αυτόματο προτιμά αυτόν που οδηγεί την οθόνη. Η έκδοση web δεν το χρησιμοποιεί.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Από την επόμενη εκκίνηση, το παράθυρο δείχνει τα καρέ χωρίς αναμονή για ανανέωση της οθόνης, έως 240 το δευτερόλεπτο· ανενεργό, τα ρυθμίζει η οθόνη. Υπερισχύει η λειτουργία που ορίζεται στην εκκίνηση.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Τα περισσότερα βήματα αναίρεσης που κρατά κάθε έγγραφο· μικρότερος αριθμός αφαιρεί τα παλαιότερα βήματα όταν κάνετε κλικ στο Εντάξει. Βήματα μπορεί να φύγουν και νωρίτερα αν πιάνουν πολλή μνήμη.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Δείχνει το έργο να αλλάζει όσο σύρετε· όταν είναι ανενεργό, περιγράμματα ακολουθούν τη μεταφορά και το έργο αλλάζει όταν αφήσετε. Ένας οδηγός χάρακα κινείται πάντα όσο σύρετε.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Πόσα νήματα εργασίας σχεδιάζουν το έργο· το -1 χρησιμοποιεί ένα λιγότερο από τους πυρήνες που επιτρέπονται στο VectorCraft, έως 8, και το 0 κανένα. Η έκδοση web δεν χρησιμοποιεί ποτέ.
@@ -4241,6 +4254,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	Το VectorCraft αποθηκεύει αυτή την επιλογή, αλλά η Αντιγραφή και η Αποκοπή δεν χρησιμοποιούν ακόμη μορφή του πρόχειρου διανυσμάτων παλαιού τύπου.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Διατήρηση διαδρομών ή Διατήρηση εμφάνισης και υπερεκτυπώσεων για το πρόχειρο διανυσμάτων παλαιού τύπου· το VectorCraft αποθηκεύει την επιλογή αλλά δεν τη χρησιμοποιεί ακόμη.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Η Διατήρηση μορφοποίησης κρατά τα στυλ κειμένου από αντικείμενο κειμένου του VectorCraft όταν επικολλάται σε αντικείμενο κειμένου· η Διατήρηση απλού κειμένου του δίνει το στυλ του σημείου όπου καταλήγει.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Η Εμφάνιση όλων των μαύρων ως πλούσιο μαύρο δείχνει το καθαρό μαύρο CMYK (μόνο μαύρο μελάνι στο 100%) ως μαύρο RGB στον καμβά· η Ακριβής απεικόνιση όλων των μαύρων το μετατρέπει μέσω του χώρου εργασίας CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Η Απόδοση όλων των μαύρων ως πλούσιο μαύρο σχεδιάζει το καθαρό μαύρο CMYK ως μαύρο RGB στις εξαγωγές raster RGB και κλίμακας του γκρι και με την Εκτύπωση ως bitmap· δεν αλλάζει τις διανυσματικές εξαγωγές, τα CMYK JPEG, TIFF και PSD ή την άλλη εκτύπωση.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Σε οθόνη αφής μεταβαίνει στον χώρο εργασίας αφής· η απενεργοποίηση ή η απώλεια της οθόνης αφής επαναφέρει τον χώρο εργασίας που υπήρχε πριν.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Το πάτημα με δύο δάχτυλα στον καμβά κάνει αναίρεση ή, στον χώρο εργασίας αφής, εναλλάσσει εργαλεία επιλογής και σχεδίασης, και το πάτημα με τρία δάχτυλα κάνει επανάληψη· κανένα δεν λειτουργεί στη λειτουργία παρουσίασης.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ και το [Κανονικό στυλ χαρακτήρων] δεν ορίζει γλώσσα· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Με Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά της ή πουθενά αν δεν έχει, με πεζά ή κεφαλαία· οι κορεατικές λέξεις δεν παίρνουν ενωτικό, οι λέξεις ινδικών γλωσσών δεν χωρίζονται μέσα σε ομάδα χαρακτήρων.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
@@ -4370,6 +4387,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
+	Type to search commands, tools, panels and effects	Πληκτρολογήστε για αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ
 	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
@@ -5365,6 +5383,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no native format	δεν υπάρχει εγγενής μορφή
 @msg	no pages	δεν υπάρχουν σελίδες
 @msg	no pattern `{name}`	δεν υπάρχει μοτίβο `{name}`
+@msg	art painted with `{name}` can't be its tile	σχέδιο βαμμένο με `{name}` δεν μπορεί να είναι το πλακίδιό του
 @msg	no perspective grid preset named `{name}`	δεν υπάρχει προεπιλογή πλέγματος προοπτικής με όνομα `{name}`
 @msg	no plug-in {0} is installed	δεν είναι εγκατεστημένο το πρόσθετο {0}
 @msg	no plug-in {id} is installed	δεν είναι εγκατεστημένο το πρόσθετο {id}
@@ -6302,6 +6321,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 	Auto Size	Αυτόματο μέγεθος
 	Bar	Ράβδος
 	Barbed	Αγκιστρωτό
+arrowhead	Feather	Φτερό
 	Baseline (Standard)	Γραμμή βάσης (τυπική)
 	Baseline Optimized	Βελτιστοποιημένο για γραμμή βάσης
 	Black Outline	Μαύρο περίγραμμα
@@ -8312,6 +8332,7 @@ breakText	Glyphs	Γλύφοι
 	Remove Strokes	Αφαίρεση περιγραμμάτων
 	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
 	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
+	Replace Pattern Art	Αντικατάσταση σχεδίου μοτίβου
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
 	Apply to Strokes	Εφαρμογή στα περιγράμματα
 	Leave Strokes	Διατήρηση περιγραμμάτων
@@ -8892,6 +8913,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Engraving	Χαρακτική
+	Fine Hatching	Λεπτή διαγράμμιση
+	Dense Hatching	Πυκνή διαγράμμιση
+	Tapered Hatching	Κωνική διαγράμμιση
+	Broken Hatching	Διακεκομμένη διαγράμμιση
 	Image Brush	Πινέλα εικόνας
 	Soft Bloom	Απαλό άνθος
 	Halftone Field	Πεδίο ημιτόνων
