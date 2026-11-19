@@ -74,6 +74,7 @@ pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub use selection_marks::SelectionMarks;
 pub(crate) use split::dragging as dragging_split;
+pub(crate) use split::primary_press_pos;
 use task_bar::task_bar;
 #[cfg(test)]
 pub(crate) use task_bar::{chip_paints, images_with_other_art};
@@ -506,6 +507,11 @@ fn needs_frame(app: &mut VectorcraftApp, ui: &Ui, key: &CacheKey) -> bool {
     wait.is_none() && (!same_frame || app.canvas.texture.is_none() || settle)
 }
 
+/// Whether an event position is on this canvas, through the same layer/clip test as tool input.
+pub(crate) fn pointer_on_canvas(ui: &Ui, resp: &egui::Response, p: Pos2) -> bool {
+    drag::on_canvas(ui, resp, p)
+}
+
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
 pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
@@ -515,9 +521,12 @@ pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         // A press on the canvas while the context menu is open only closes it (a drag too, which
         // egui alone would leave open); neither the tool nor a graphic's handle gets it.
         egui::Popup::close_all(ui.ctx());
-    } else if !split::on_divider(app, ui, resp, rect) && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect) {
+    } else if (!ui.input(|i| i.pointer.primary_pressed()) || !split::press_on_divider(app, ui, resp, rect))
+        && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect)
+    {
         // A mapped graphic's handle, shown while the 3D and Materials panel's Materials tab is
         // open, has the press: the drag moves the graphic, not the object.
+        // Only a new press yields to the divider; a held handle still gets its move and release.
     } else {
         handle_input(app, ui, resp, rect);
         // `hover_doc` is the document point under the pointer in the view `handle_input` left. The

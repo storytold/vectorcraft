@@ -7,6 +7,7 @@ use vectorcraft_engine::ViewInfo;
 #[derive(Clone, Copy)]
 struct DividerDrag {
     doc: u64,
+    view: u32,
     orientation: SplitOrientation,
     start: f32,
 }
@@ -123,6 +124,24 @@ pub(super) fn on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, r
         && at.is_some_and(|p| resp.hovered() && drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p)))
 }
 
+/// The last primary press in this frame, before later moves or releases replace its position.
+pub(crate) fn primary_press_pos(ui: &Ui) -> Option<Pos2> {
+    ui.input(|i| {
+        i.events.iter().rev().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some(*pos),
+            _ => None,
+        })
+    })
+}
+
+/// Whether the new primary press belongs to the divider, using that event's position.
+pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
+    enabled(app)
+        && !ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some())
+        && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
+        && primary_press_pos(ui).is_some_and(|p| drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p)))
+}
+
 /// Called after wheel/touch navigation, before any art/name press. An existing art press keeps
 /// its owner even when it crosses the divider.
 pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, modal: bool, space: bool) -> bool {
@@ -131,10 +150,11 @@ pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Resp
         return false;
     };
     let uid = st.uid;
+    let Some((_, view)) = crate::doc_windows::current(app) else { return false };
     let Some(settings) = app.view().map(|v| v.split).filter(|_| enabled(app)) else { return false };
     let held = ui.data(|d| d.get_temp::<DividerDrag>(divider_id()));
     if let Some(held) = held {
-        if held.doc != uid || held.orientation != settings.orientation || modal {
+        if held.doc != uid || held.view != view || held.orientation != settings.orientation || modal {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
             return false;
         }
@@ -170,15 +190,17 @@ pub(super) fn divider_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Resp
         ui.ctx().request_repaint();
         return true;
     }
-    if modal || space || crate::touch::finger_navigates_only() || !on_divider(app, ui, resp, rect) {
+    let press = primary_press_pos(ui);
+    let on = if press.is_some() { press_on_divider(app, ui, resp, rect) } else { on_divider(app, ui, resp, rect) };
+    if modal || space || crate::touch::finger_navigates_only() || !on {
         return false;
     }
-    if ui.input(|i| i.pointer.primary_pressed()) {
+    if press.is_some() {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
         // A same-frame tap has no drag left to hold.
         if ui.input(|i| i.pointer.primary_down()) {
-            ui.data_mut(|d| d.insert_temp(divider_id(), DividerDrag { doc: uid, orientation: settings.orientation, start: settings.ratio() }));
+            ui.data_mut(|d| d.insert_temp(divider_id(), DividerDrag { doc: uid, view, orientation: settings.orientation, start: settings.ratio() }));
         }
         app.session.tool_press_elsewhere();
     }

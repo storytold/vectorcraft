@@ -511,16 +511,14 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
         }
         return true;
     }
-    if !(resp.hovered() && ui.input(|i| i.pointer.primary_pressed())) {
-        return false;
-    }
+    let Some(p) = crate::canvas::primary_press_pos(ui).filter(|p| crate::canvas::pointer_on_canvas(ui, resp, *p)) else { return false };
     // A press with Space held, or with the Hand, Zoom or Rotate View tool, pans, zooms or turns the
     // view, as on any other part of the canvas.
     let space = ui.input(|i| i.key_down(egui::Key::Space));
     if space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
         return false;
     }
-    let (Some(p), Some((_, list, handles))) = (pointer, graphic_handles(app, &ctx)) else { return false };
+    let Some((_, list, handles)) = graphic_handles(app, &ctx) else { return false };
     let nearest = handles
         .iter()
         .map(|(i, at)| (*i, *at, xf.to_screen(*at).distance(p)))
