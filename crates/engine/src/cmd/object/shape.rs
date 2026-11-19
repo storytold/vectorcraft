@@ -124,7 +124,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii"], "object.setLiveShape")?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -225,6 +225,13 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // When every value given is the current one, the document and its undo history stay as they
     // are.
     let st = s.doc()?;
+    // `rectanglesOnly`: the live rectangles among the targets; the other objects stay as they are.
+    let ids: Vec<NodeId> = if p.get("rectanglesOnly").and_then(Value::as_bool) == Some(true) {
+        let rectangle = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if matches!(**l, LiveShape::Rectangle { .. }));
+        ids.into_iter().filter(rectangle).collect()
+    } else {
+        ids
+    };
     // The lines that Line Length or Line Angle changes, as they become. A line that would reach
     // past the document's coordinate limit is an error before anything changes.
     let mut lines = std::collections::BTreeMap::new();
@@ -270,16 +277,20 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         (radius.is_none() || live.as_deref().is_none_or(|l| l.folded() == *l))
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
-                    && radius.is_none_or(|r| (c.drawn_radius(*k) - r.max(0.0)).abs() < 1e-9)
+                    // A radius stored in document units can be larger than it draws; a relative
+                    // one is a fraction, so it is compared as drawn.
+                    && radius.is_none_or(|r| {
+                        let now = if c.radii_relative() { c.drawn_radius(*k) } else { c.radius(*k) };
+                        (now - r.max(0.0)).abs() < 1e-9
+                    })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
     };
     // The objects every value given already matches stay as they are, beside others that change.
-    let unchanged: BTreeSet<NodeId> = ids.iter().copied().filter(has_values).collect();
-    if ids.iter().all(|id| unchanged.contains(id)) {
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !has_values(id)).collect();
+    if ids.is_empty() {
         return ok();
     }
-    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !unchanged.contains(id)).collect();
     s.edit("Live Shape", |d, sel| {
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };

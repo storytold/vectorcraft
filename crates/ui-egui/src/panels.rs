@@ -57,7 +57,7 @@ use std::sync::Arc;
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{LiveCorners, LiveShape, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{LiveCorners, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_engine::inspect::StrokeMixed;
 use vectorcraft_geom::shapes::CornerKind;
 
@@ -146,19 +146,12 @@ fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<
     // selected after it.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
-    match app.session.active() {
-        // The command refuses the selection, with its message, while part of a symbol's art is
-        // selected.
-        Some(st) if st.selection.symbol_part.is_some() => {}
-        // The selected live rectangles as `ids`, all sharing `corners`.
-        Some(st) => {
-            let is_rectangle = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Rectangle { .. }));
-            let rectangle = |id: &&NodeId| st.doc.node(**id).is_some_and(is_rectangle);
-            let ids: Vec<u64> = st.selection.objects.iter().filter(rectangle).map(|id| id.0).collect();
-            p["ids"] = json!(ids);
-        }
-        None => return,
+    if app.session.active().is_none() {
+        return;
     }
+    // The live rectangles of the selection when it runs, so an action that records it acts on the
+    // rectangles selected when it plays.
+    p["rectanglesOnly"] = json!(true);
     if let Err(e) = app.run("object.setLiveShape", p) {
         app.status(e);
     }
