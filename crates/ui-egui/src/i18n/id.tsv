@@ -8655,6 +8655,7 @@ liquify-list-end	{0}, {1}	{0}, dan {1}
 @msg	the panels are not shown	panel tidak ditampilkan
 @msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	garis atau jalur terbuka lain yang tidak melingkupi area tidak mengubah bentuk hasil; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} memberikan hasil kosong: garis atau jalur terbuka lain tidak melingkupi area; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	garis atau jalur terbuka lain yang tidak melingkupi area tidak menambahkan area ke bentuk majemuk; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
 @msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Sematan {n} gambar dilepaskan ke {folder}
 @msg	every numbered name for {name} is taken in that folder	setiap nama bernomor untuk {name} sudah dipakai di folder itu
 @msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Impor membaca file sumber data yang berakhiran .csv, .tsv, .txt, atau .xml
