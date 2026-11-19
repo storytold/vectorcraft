@@ -8909,6 +8909,70 @@ variable-list-end	{0}, {1}	{0}, dan {1}
 	Edit Original with:	Edit asli dengan:
 file-filter	Applications	Aplikasi
 
+# .cdr and .cmx import notes.
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	teks, bitmap, blend, kontur, goresan kuas, dan objek CDR lain yang belum dibaca VectorCraft tidak disertakan
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	isian fountain, pola, tekstur, dan PostScript CDR tidak disertakan
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	warna dalam model warna CDR yang tidak dibaca VectorCraft dibuka sebagai hitam
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	warna pustaka CDR yang disimpan gambar hanya berdasarkan nomor dibuka sebagai warna spot hitam
+@msg	CDR outline arrowheads were left out	kepala panah garis luar CDR tidak disertakan
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	amplop CDR tidak diterapkan, dan bentuk di bawahnya mempertahankan garis luarnya
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	lensa dan transparansi objek CDR tidak diterapkan, dan objek tempatnya berada tampil buram
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	bagian gambar yang bersarang terlalu dalam, atau melewati batas impor, tidak disertakan
+@msg	damaged parts of the drawing were left out	bagian gambar yang rusak tidak disertakan
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	halaman CDR yang lebih panjang dari 163.830 pt dibuka dengan panjang tersebut, dan karya di dekat tepinya berada di luar artboard
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	teks, gambar, persegi panjang, elips, jalur kliping, dan objek CMX lain yang belum dibaca VectorCraft tidak disertakan
+@msg	CMX fills other than uniform colors were left out	isian CMX selain warna seragam tidak disertakan
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	warna dalam model warna CMX yang tidak dibaca VectorCraft dibuka sebagai hitam
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	warna pustaka CMX yang disimpan berkas hanya berdasarkan nomor dibuka sebagai warna spot hitam
+@msg	CMX outline arrowheads were left out	kepala panah garis luar CMX tidak disertakan
+@msg	CMX lenses were not applied	lensa CMX tidak diterapkan
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	halaman CMX yang lebih panjang dari 163.830 pt dibuka dengan panjang tersebut, dan karya di dekat tepinya berada di luar artboard
+
+# PSD import notes.
+@msg	the file is no longer loaded	berkas tidak lagi dimuat
+@msg	1 type layer came in as pixels: the text isn't editable	1 lapisan teks masuk sebagai piksel: teksnya tidak dapat disunting
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} lapisan teks masuk sebagai piksel: teksnya tidak dapat disunting
+@msg	1 adjustment layer was not applied	1 lapisan penyesuaian tidak diterapkan
+@msg	{n} adjustment layers were not applied	{n} lapisan penyesuaian tidak diterapkan
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 lapisan isian tidak digambar (isian gradien atau pola, warna yang tidak dapat dibaca, atau bentuk yang tidak menyimpan piksel)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} lapisan isian tidak digambar (isian gradien atau pola, warna yang tidak dapat dibaca, atau bentuk yang tidak menyimpan piksel)
+@msg	the layer effects of 1 layer weren't drawn	efek lapisan dari 1 lapisan tidak digambar
+@msg	the layer effects of {n} layers weren't drawn	efek lapisan dari {n} lapisan tidak digambar
+@msg	the vector masks of 1 layer weren't applied	masker vektor dari 1 lapisan tidak diterapkan
+@msg	the vector masks of {n} layers weren't applied	masker vektor dari {n} lapisan tidak diterapkan
+@msg	the knockout of 1 layer wasn't applied	knockout dari 1 lapisan tidak diterapkan
+@msg	the knockout of {n} layers wasn't applied	knockout dari {n} lapisan tidak diterapkan
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lapisan tidak disertakan (lapisan tersembunyi dan lapisan yang dikliping padanya)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lapisan tidak disertakan (lapisan tersembunyi dan lapisan yang dikliping padanya)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lapisan yang dikliping ke lapisan isian yang tidak digambar tidak disertakan
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lapisan yang dikliping ke lapisan isian yang tidak digambar tidak disertakan
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lapisan dalam mode campuran yang tidak dimiliki VectorCraft ({modes}) digabungkan dengan lapisan di bawahnya
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lapisan dalam mode campuran yang tidak dimiliki VectorCraft masuk sebagai Normal: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lapisan dalam mode campuran yang tidak dimiliki VectorCraft masuk sebagai Normal: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lapisan yang dikliping ke lapisan di bawahnya masuk tanpa kliping: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lapisan yang dikliping ke lapisan di bawahnya masuk tanpa kliping: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers berlaku untuk berkas PSD yang ditempatkan dengan layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: berkas PSD tertaut ditempatkan sebagai gambar datarnya; berikan link: false untuk menyematkannya beserta irisannya
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: berkas PSD tertaut ditempatkan sebagai gambar datarnya; hilangkan link atau berikan link: false
+@msg	1 slice lies outside the canvas or has no size and was left out	1 irisan berada di luar kanvas atau tidak berukuran dan tidak disertakan
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} irisan berada di luar kanvas atau tidak berukuran dan tidak disertakan
+@msg	1 slice would lie outside the canvas and was left out	1 irisan akan berada di luar kanvas dan tidak disertakan
+@msg	{n} slices would lie outside the canvas and were left out	{n} irisan akan berada di luar kanvas dan tidak disertakan
+@msg	the slices' descriptor holds too many values	deskriptor irisan menyimpan terlalu banyak nilai
+@msg	the slices' descriptor has a version other than 16	deskriptor irisan memiliki versi selain 16
+@msg	the slices' descriptor has no list of slices	deskriptor irisan tidak memiliki daftar irisan
+@msg	the slices' descriptor lists something other than a slice	deskriptor irisan mencantumkan sesuatu selain irisan
+@msg	a slice in the slices' descriptor has no bounds	sebuah irisan dalam deskriptor irisan tidak memiliki batas
+@msg	a slice's bounds in the slices' descriptor aren't numbers	batas sebuah irisan dalam deskriptor irisan bukan angka
+@msg	the slices' descriptor nests too deep	deskriptor irisan bersarang terlalu dalam
+@msg	the slices can't be read ({e}) and were left out	irisan tidak dapat dibaca ({e}) dan tidak disertakan
+@msg	the slices are stored in version {v}, which isn't read	irisan disimpan dalam versi {v}, yang tidak dibaca
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	berkas memiliki {count} irisan, lebih dari {MAX_SLICES} yang dibaca
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	sebuah teks dalam irisan memiliki lebih dari {MAX_TEXT} karakter yang dibaca
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor irisan memiliki referensi dengan jenis yang tidak dikenal ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor irisan memiliki nilai dengan tipe yang tidak dikenal ({_1})
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lapisan tidak dapat dibaca ({e}): berkas ditempatkan sebagai gambar gabungannya
+
 # Persistent default swatch palette.
 	Use Current Swatches as Default	Gunakan sampel warna saat ini sebagai default
 	Restore Factory Default Swatches	Pulihkan sampel warna default pabrik
