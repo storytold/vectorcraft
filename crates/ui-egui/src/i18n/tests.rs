@@ -498,6 +498,22 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Attributes Panel Options dialog's heading and field, and the error for a count out of range.
+#[test]
+fn attributes_panel_options_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Attributes Panel Options", "Number of Recent URLs:"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let range = "`count` must be a whole number from 1 to 30";
+    assert!(message_literals().contains(range));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, range), range, "{code}");
+    }
+}
+
 /// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
 /// falling back to the plain row).
 #[test]
@@ -2683,6 +2699,31 @@ fn messages_translate_by_template_and_their_parts() {
     let shown = message(es, nested);
     assert!(shown.contains("`object.group`") && !shown.contains("nothing selected") && !shown.contains("not available"), "{shown}");
     assert_eq!(message(Lang::EN, nested), nested);
+}
+
+/// Spanish shows the status and error messages of the script engine, the parameter checks, the
+/// importers and the 3D effects in Spanish, with the values, names and command ids they carry kept.
+#[test]
+fn spanish_translates_engine_import_and_parameter_messages() {
+    let es = Lang::from_code("es").expect("registered");
+    for (english, spanish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` debe ser un número entero entre 2 y 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (en el desplazamiento 12)"),
+        ("unknown mode `foo` (set, add, subtract)", "modo desconocido `foo` (set, add, subtract)"),
+        (
+            "the Word document is encrypted or protected with a password; save it without one to place it",
+            "el documento de Word está cifrado o protegido con contraseña; guárdalo sin ella para colocarlo",
+        ),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objeto 7: con una profundidad de 0 el objeto tiene una sola cara: asigna sus gráficos a la parte frontal",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "no existe la punta de flecha personalizada Fin (consulta stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` debe ser un número entero entre 1 y 6"),
+        ("the rectangle or line reaches too many paths to check", "el rectángulo o la línea alcanza demasiados trazados para comprobarlos"),
+    ] {
+        assert_eq!(message(es, english), spanish);
+    }
 }
 
 /// The note `recolor.apply` and the Edit Colors commands give when they leave out locked or hidden
@@ -5754,6 +5795,21 @@ fn pdfx_bleed_warning_is_translated() {
     for lang in Lang::all().filter(|l| l.code() != Lang::EN.code()) {
         for shown in [message(lang, w), message(lang, &status)] {
             assert!(!shown.contains("leaves out") && !shown.contains("turn on"), "{}: {shown}", lang.code());
+        }
+    }
+}
+
+/// The warning about art that reaches the trim edge but stops short of the bleed is translated in
+/// every complete-message catalog, for one object and for more, alone and in the status bar's note.
+#[test]
+fn short_of_bleed_warning_is_translated() {
+    for n in [1, 3, 5, 21] {
+        let w = vectorcraft_engine::cmd::fileio::pdf::short_of_bleed_warning(n).expect("a warning");
+        let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+        for code in COMPLETE_MESSAGES {
+            for shown in [message(Lang::from_code(code).expect("registered"), &w), message(Lang::from_code(code).expect("registered"), &status)] {
+                assert!(!shown.contains("trim edge") && !shown.contains("short of") && shown.contains(&n.to_string()), "{code}: {shown}");
+            }
         }
     }
 }

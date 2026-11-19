@@ -323,6 +323,7 @@ fn headless_command_list_includes_ui_commands() {
         "app.quit",
         "window.arrange.tile",
         "align.horizontalLeft",
+        "align.toKeyObject",
         "ui.action.play",
     ];
     for (n, id) in want.iter().enumerate() {
