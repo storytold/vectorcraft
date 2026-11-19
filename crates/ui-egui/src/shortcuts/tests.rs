@@ -1531,7 +1531,8 @@ fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open(
 
 /// Color Picker… (`ui.colorPicker`) has no default key. Keyboard Shortcuts lists it, and a key
 /// assigned there opens the picker for the proxy in front: with no document open, with nothing
-/// selected and with an object selected, and for the stroke while the Stroke proxy is in front.
+/// selected and with an object selected, and for the stroke while the Stroke proxy is in front,
+/// with or without a document open.
 #[test]
 fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -1550,6 +1551,10 @@ fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
     };
     frame(&mut app, key());
     assert_eq!(opened(&mut app), Some(false), "no document: the fill");
+    app.run("paint.toggleActive", json!({"fill": false})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(true), "no document, the Stroke proxy in front: the stroke");
+    app.run("paint.toggleActive", json!({"fill": true})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     frame(&mut app, key());
     assert_eq!(opened(&mut app), Some(false), "nothing selected: the fill");
