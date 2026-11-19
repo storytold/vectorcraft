@@ -14,6 +14,7 @@ struct Harness {
     time: f64,
     cursor: egui::CursorIcon,
     nodes: Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>,
+    shapes: Vec<egui::epaint::ClippedShape>,
 }
 
 impl Harness {
@@ -21,7 +22,7 @@ impl Harness {
     fn new() -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, cursor: egui::CursorIcon::Default, nodes: Vec::new() };
+        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, cursor: egui::CursorIcon::Default, nodes: Vec::new(), shapes: Vec::new() };
         for _ in 0..3 {
             h.frame(vec![]);
         }
@@ -53,6 +54,7 @@ impl Harness {
         out.textures_delta.clear();
         self.cursor = out.platform_output.cursor_icon;
         self.nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
+        self.shapes = out.shapes;
     }
 
     fn hit(&self, hit: &Hit<String>) -> Option<Rect> {
@@ -326,6 +328,101 @@ fn expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists() {
             assert_eq!(h.app.session.active().unwrap().doc.artboards.len(), 2, "the pinned New button works");
         }
     }
+}
+
+/// #8307: below a pinned footer a sized panel keeps a 10 pt margin, which hides a list scrolled
+/// behind the footer instead of showing its tiles through a gap under the buttons.
+#[test]
+fn the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel":"swatches","icon":true})).unwrap();
+    let mut layout = h.layout();
+    layout.apply(Action::ResizeGroup { panel: "swatches".into(), height: Some(120.0) }).unwrap();
+    h.app.ui.docking = Some(layout);
+    h.app.ui.open_panel = Some("swatches".into());
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    let edge = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect;
+    let at = pos2(edge.center().x, edge.bottom() - 5.0);
+    let panel = crate::theme::Tokens::get(&h.ctx).panel;
+    // The last shape that paints over the margin is what shows there. Outlines and fully
+    // transparent meshes (a scroll area's resting fade) paint nothing inside their bounds.
+    let outline = |shape: &egui::Shape| match shape {
+        egui::Shape::Noop => true,
+        egui::Shape::Rect(r) => r.fill.a() == 0,
+        egui::Shape::Mesh(m) => m.vertices.iter().all(|v| v.color.a() == 0),
+        _ => false,
+    };
+    let top =
+        h.shapes.iter().rfind(|c| c.clip_rect.contains(at) && c.shape.visual_bounding_rect().contains(at) && !outline(&c.shape)).map(|c| &c.shape);
+    assert!(matches!(top, Some(egui::Shape::Rect(r)) if r.fill == panel), "the margin under the footer shows {top:?}, not the panel's background");
+    // A click there lands on the margin, not on the tile scrolled behind it.
+    let fill = h.app.session.paint.fill.color().map(|c| c.to_hex());
+    h.click(at);
+    assert_eq!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click in the margin applied the swatch behind it");
+}
+
+/// #8307: the margin under a sized panel covers only the panel body's 10 pt bottom padding. Scrolled
+/// to its end, a panel without a footer shows its last row down to the margin, as without the margin,
+/// and a click there reaches it: the bottom of Color Wheel's hue ring picks a hue.
+#[test]
+fn the_last_row_of_a_sized_panel_without_a_footer_scrolls_to_the_margin_and_takes_clicks() {
+    let mut h = Harness::new();
+    h.ctx.enable_accesskit();
+    h.app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    h.app.run("window.panel.dock", json!({"panel": crate::panels::color_wheel::ID, "icon": true})).unwrap();
+    let mut layout = h.layout();
+    layout.apply(Action::ResizeGroup { panel: crate::panels::color_wheel::ID.into(), height: Some(120.0) }).unwrap();
+    h.app.ui.docking = Some(layout);
+    h.app.ui.open_panel = Some(crate::panels::color_wheel::ID.into());
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    let edge = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect;
+    let back = panel_background(&h, pos2(edge.center().x, edge.bottom() - 5.0));
+    let margin = back.bottom() - 10.0;
+    let ring = |h: &Harness| {
+        let b = h.nodes.iter().find(|(_, node)| node.label() == Some("Hue ring")).and_then(|(_, node)| node.bounds()).expect("the hue ring");
+        Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
+    };
+    let before = ring(&h);
+    assert!(before.bottom() > back.bottom(), "the ring fits the panel without scrolling: {before:?} in {back:?}");
+    let over = back.left_top() + vec2(20.0, 20.0);
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, -200.0),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for _ in 0..10 {
+        h.frame(vec![Event::PointerMoved(over), wheel.clone()]);
+    }
+    for _ in 0..10 {
+        h.frame(vec![]);
+    }
+    let end = ring(&h);
+    assert!(end.bottom() < before.bottom(), "the panel did not scroll: {before:?}, then {end:?}");
+    assert!((end.bottom() - margin).abs() < 0.5, "scrolled to its end, the ring ends at {}, not at the margin's top at {margin}", end.bottom());
+    // The ring's band ends 4 pt inside its rect; 6 pt up is on the band at hue 270.
+    let fill = h.app.session.paint.fill.color().map(|c| c.to_hex());
+    h.click(pos2(end.center().x, end.bottom() - 6.0));
+    assert_ne!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click on the bottom of the ring picked nothing");
+}
+
+/// The background of the panel under `at`: the smallest panel-colored rect there, as the window
+/// behind a flyout is painted with the same color.
+fn panel_background(h: &Harness, at: Pos2) -> Rect {
+    let panel = crate::theme::Tokens::get(&h.ctx).panel;
+    h.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.fill == panel && r.rect.contains(at) && r.rect.height() > 60.0 => Some(r.rect),
+            _ => None,
+        })
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+        .expect("the panel's background")
 }
 
 #[test]
