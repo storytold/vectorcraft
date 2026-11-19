@@ -502,3 +502,150 @@ fn split_cache_real_worker_drains_before_reusing_side_slots() {
     assert_eq!(cache.shown().unwrap().keys.each_ref().map(|key| key.revision), [5, 5]);
     cache.clear();
 }
+
+fn review_597943_camera(jobs: &[Job; 2], x: f64) -> [Job; 2] {
+    jobs.each_ref().map(|job| {
+        let mut job = clone_job(job);
+        job.key.cx += x;
+        job.view = Affine::translate((-x, 0.0)) * job.view;
+        job
+    })
+}
+
+fn review_597943_step(cache: &mut SplitCache, ctx: &egui::Context, time: f64, jobs: [Job; 2]) {
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |_| {});
+    out.textures_delta.clear();
+    cache.update(ctx, jobs);
+}
+
+fn review_597943_held(cache: &SplitCache, keys: &[CacheKey; 2], sequence: (u64, u64), textures: [egui::TextureId; 2]) {
+    let pair = cache.shown().unwrap();
+    assert!(pair.keys == *keys, "the complete old pair remains available for reprojection");
+    assert_eq!((cache.sequence, cache.shown_sequence), sequence, "waiting must neither render nor allocate a sequence");
+    assert_eq!(pair.textures.each_ref().map(|t| t.id()), textures);
+    assert!(cache.pending.is_none());
+    assert!(cache.latest.is_some(), "one newest desired pair stays queued during the delay");
+}
+
+fn review_597943_immediate_requests(base: &[Job; 2]) -> Vec<(&'static str, [Job; 2])> {
+    let mut edit = review_597943_camera(base, 4.0);
+    for job in &mut edit {
+        job.key.revision += 1;
+    }
+    let mut document = review_597943_camera(base, 4.0);
+    for job in &mut document {
+        job.key.doc += 1;
+    }
+    let mut placed = review_597943_camera(base, 4.0);
+    for job in &mut placed {
+        job.key.placed += 1;
+    }
+    let mut plugins = review_597943_camera(base, 4.0);
+    // The first side is camera-only: the second side must independently block deferral.
+    plugins[1].key.plugins += 1;
+    let mut mode = review_597943_camera(base, 4.0);
+    mode[1].key.outline = false;
+    mode[1].opts.outline = false;
+    let mut proof = review_597943_camera(base, 4.0);
+    for job in &mut proof {
+        job.opts.proof = Some(Default::default());
+    }
+    let mut options = review_597943_camera(base, 4.0);
+    // Context compatibility ignores this flag, but rendering options must still match exactly.
+    options[1].opts.interacting = true;
+    vec![
+        ("revision", edit),
+        ("document", document),
+        ("placed", placed),
+        ("second-side plugins", plugins),
+        ("mode", mode),
+        ("proof", proof),
+        ("options", options),
+    ]
+}
+
+fn review_597943_disconnected_pair_waits(ctx: &egui::Context, base: &[Job; 2]) {
+    let (mut cache, probe) = controlled();
+    review_597943_step(&mut cache, ctx, 50.0, review_597943_camera(base, 0.0));
+    for submission in probe.pair() {
+        probe.render(submission);
+    }
+    review_597943_step(&mut cache, ctx, 50.01, review_597943_camera(base, 0.0));
+    cache.shown.as_mut().unwrap().ms = 9.0;
+    let keys = cache.shown().unwrap().keys.clone();
+    let sequence = (cache.sequence, cache.shown_sequence);
+    let textures = cache.shown().unwrap().textures.each_ref().map(|t| t.id());
+    drop(probe);
+    review_597943_step(&mut cache, ctx, 50.02, review_597943_camera(base, 1.0));
+    assert!(!cache.has_worker(), "the real completion-channel failure enters synchronous fallback");
+    review_597943_held(&cache, &keys, sequence, textures);
+    review_597943_step(&mut cache, ctx, 50.23, review_597943_camera(base, 1.0));
+    assert_eq!(cache.shown().unwrap().keys[0].cx, base[0].key.cx + 1.0);
+    assert!(cache.latest.is_none());
+}
+
+#[test]
+fn review_597943_synchronous_pairs_wait_only_for_slow_camera_changes() {
+    let ctx = egui::Context::default();
+    let base = jobs(1);
+    let mut cache = SplitCache::default();
+    review_597943_step(&mut cache, &ctx, 10.0, review_597943_camera(&base, 0.0));
+    assert_eq!((cache.sequence, cache.shown_sequence), (1, 1), "the first real tiny pair renders at once");
+    assert!(cache.worker.is_none() && cache.pending.is_none());
+    cache.shown.as_mut().unwrap().ms = 8.0;
+    review_597943_step(&mut cache, &ctx, 10.01, review_597943_camera(&base, 1.0));
+    assert_eq!((cache.sequence, cache.shown_sequence), (2, 2), "the fast/8ms boundary stays immediate");
+    // A declared observed duration tests the policy threshold, not elapsed benchmark performance.
+    cache.shown.as_mut().unwrap().ms = 9.0;
+    let keys = cache.shown().unwrap().keys.clone();
+    let sequence = (cache.sequence, cache.shown_sequence);
+    let textures = cache.shown().unwrap().textures.each_ref().map(|t| t.id());
+    for (time, camera) in [(11.0, 2.0), (11.1, 3.0), (11.29, 3.0)] {
+        review_597943_step(&mut cache, &ctx, time, review_597943_camera(&base, camera));
+        review_597943_held(&cache, &keys, sequence, textures);
+        assert_eq!(cache.latest.as_ref().unwrap().identity.keys[0].cx, base[0].key.cx + camera);
+    }
+    review_597943_step(&mut cache, &ctx, 11.31, review_597943_camera(&base, 3.0));
+    assert_eq!(cache.shown().unwrap().keys[0].cx, base[0].key.cx + 3.0, "settling renders only the newest desired camera");
+    assert_eq!((cache.sequence, cache.shown_sequence), (sequence.0 + 1, sequence.1 + 1));
+    assert!(cache.latest.is_none());
+
+    cache.shown.as_mut().unwrap().ms = 9.0;
+    let shown = cache.shown().unwrap().keys.clone();
+    let sequence = (cache.sequence, cache.shown_sequence);
+    let textures = cache.shown().unwrap().textures.each_ref().map(|t| t.id());
+    review_597943_step(&mut cache, &ctx, 12.0, review_597943_camera(&base, 4.0));
+    review_597943_held(&cache, &shown, sequence, textures);
+    review_597943_step(&mut cache, &ctx, 12.1, review_597943_camera(&base, 3.0));
+    assert!(cache.latest.is_none(), "returning to the shown camera withdraws the pending request");
+    review_597943_step(&mut cache, &ctx, 12.3, review_597943_camera(&base, 4.0));
+    review_597943_held(&cache, &shown, sequence, textures);
+    review_597943_step(&mut cache, &ctx, 12.51, review_597943_camera(&base, 4.0));
+    assert_eq!(cache.shown().unwrap().keys[0].cx, base[0].key.cx + 4.0, "a revisited camera gets a fresh stability interval");
+
+    for (label, changed) in review_597943_immediate_requests(&base) {
+        let mut cache = SplitCache::default();
+        review_597943_step(&mut cache, &ctx, 20.0, review_597943_camera(&base, 0.0));
+        cache.shown.as_mut().unwrap().ms = 9.0;
+        let sequence = cache.sequence;
+        let expected = Identity::of(&changed);
+        review_597943_step(&mut cache, &ctx, 20.01, changed);
+        assert!(cache.shown_identity.as_ref() == Some(&expected), "{label} changes render immediately despite camera motion");
+        assert_eq!(cache.sequence, sequence + 1);
+        assert!(cache.latest.is_none());
+    }
+    cache.shown.as_mut().unwrap().ms = 9.0;
+    review_597943_step(&mut cache, &ctx, 30.0, review_597943_camera(&base, 5.0));
+    assert!(cache.latest.is_some());
+    let sequence = cache.sequence;
+    review_597943_step(&mut cache, &ctx, 29.0, review_597943_camera(&base, 5.0));
+    assert_eq!(cache.sequence, sequence + 1, "a backward clock does not wait for its previous timestamp");
+    cache.shown.as_mut().unwrap().ms = 9.0;
+    review_597943_step(&mut cache, &ctx, 31.0, review_597943_camera(&base, 6.0));
+    assert!(cache.latest.is_some());
+    cache.clear();
+    assert!(cache.latest.is_none() && cache.shown().is_none());
+    review_597943_step(&mut cache, &ctx, 31.01, review_597943_camera(&base, 6.0));
+    assert!(cache.shown().is_some() && cache.latest.is_none(), "clear restores first-pair immediate rendering");
+    review_597943_disconnected_pair_waits(&ctx, &base);
+}

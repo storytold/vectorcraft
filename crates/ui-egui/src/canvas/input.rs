@@ -1,8 +1,9 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, mods, move_pose, on_canvas, paired_frame_moves, pen_pose, pen_pressure, pen_pressure_before, released_tool_frame_moves,
-    space_lends_view_tools, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    drop_press, mods, move_pose, on_canvas, paired_frame_moves, pen_pose, pen_pressure, pen_pressure_before, primary_press_state,
+    released_tool_frame_moves, space_before, space_lends_view_tools, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves,
+    tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, edge_scroll_pixels, pan_pixels, pan_ppp, rotate_about,
@@ -63,22 +64,24 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         None
     };
     if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() {
-        match super::split::divider_input(app, ui, resp, rect, modal, space, finished) {
+        let handoff = match super::split::divider_input(app, ui, resp, rect, modal, space, finished) {
             super::split::DividerInput::Consumed => {
                 poll_tool(app, ui, view);
                 return;
             }
-            super::split::DividerInput::Handoff
-                if !modal
-                    && !space
-                    && !crate::touch::finger_navigates_only()
-                    && ui.data(|d| d.get_temp::<Drag>(drag_id()).is_none())
-                    && !super::split::press_on_divider(app, ui, resp, rect)
-                    && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect, false) =>
-            {
-                return;
-            }
-            super::split::DividerInput::Ignored | super::split::DividerInput::Handoff => {}
+            super::split::DividerInput::Handoff => true,
+            // Split View being off does not erase an ordinary owner's completed handoff.
+            super::split::DividerInput::Ignored => finished.is_some(),
+        };
+        if handoff
+            && !modal
+            && !press.is_some_and(|(down, _)| primary_press_state(app, ui, down).1)
+            && !crate::touch::finger_navigates_only()
+            && ui.data(|d| d.get_temp::<Drag>(drag_id()).is_none())
+            && !super::split::press_on_divider(app, ui, resp, rect)
+            && crate::panels::three_d::graphic_handles_input(app, ui, resp, rect, false)
+        {
+            return;
         }
     }
     // Ending either owner may move the camera or comparison boundary before a later Down.
@@ -401,11 +404,7 @@ fn present_step(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, drag: Option<Dr
 /// A press on the canvas at `p` starts a gesture: a zoom, pan or turn of the view, or the tool's drag.
 fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2, down: usize) {
     let Pointing { resp, rect, xf, v, view, .. } = *f;
-    let space = space_before(ui, down);
-    let m = ui.input(|i| match i.events.get(down) {
-        Some(egui::Event::PointerButton { modifiers, .. }) => *modifiers,
-        _ => f.m,
-    });
+    let (m, space) = primary_press_state(app, ui, down);
     let tool = app.session.tool_id();
     // Held, Space is the Hand tool for the moment, Space+Shift is the Rotate View tool and
     // Cmd+Space is the Zoom tool (with Alt, zooming out), whatever the tool. While the Type tool
@@ -920,18 +919,6 @@ fn zoom_marquee_start(ui: &Ui, start: Pos2, before: Option<Pos2>, p: Pos2, owned
     }
     ui.data_mut(|d| d.insert_temp(id, free));
     start
-}
-
-/// Space at a particular raw event boundary, including changes before this owner's Down.
-fn space_before(ui: &Ui, index: usize) -> bool {
-    ui.input(|i| {
-        let step = |event: &egui::Event| match event {
-            egui::Event::Key { key: egui::Key::Space, pressed, repeat: false, .. } => Some(*pressed),
-            _ => None,
-        };
-        let start = i.events.iter().find_map(step).map_or(i.key_down(egui::Key::Space), |pressed| !pressed);
-        i.events.iter().take(index).filter_map(step).fold(start, |_, pressed| pressed)
-    })
 }
 
 /// A marquee around screen rectangle `r`: dark dashes over a light line, so it shows on a white

@@ -148,17 +148,12 @@ pub(crate) fn primary_release(ui: &Ui, after: Option<usize>) -> Option<(usize, P
     })
 }
 
-/// The last primary press in this frame, before later moves or releases replace its position.
-pub(crate) fn primary_press_pos(ui: &Ui) -> Option<Pos2> {
-    primary_press(ui).map(|(_, p)| p)
-}
-
 /// Whether the new primary press belongs to the divider, using that event's position.
 pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
     enabled(app)
         && !ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some())
         && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
-        && primary_press_pos(ui).is_some_and(|p| divider_press_at(app, ui, resp, rect, p))
+        && primary_press(ui).is_some_and(|(down, p)| !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p))
 }
 
 fn divider_press_at(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, p: Pos2) -> bool {
@@ -199,7 +194,7 @@ fn completed_divider_press(
     });
     presses.into_iter().find_map(|(down, p)| {
         let (up, released) = primary_release(ui, Some(down))?;
-        (up < latest && divider_press_at(app, ui, resp, rect, p)).then_some((up, p, released))
+        (up < latest && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p)).then_some((up, p, released))
     })
 }
 
@@ -262,14 +257,15 @@ pub(super) fn divider_input(
         after.is_some()
     };
     // Earlier completed divider pairs apply their own Up before ordinary latest-Down admission.
-    if !modal && !space && !crate::touch::finger_navigates_only() {
+    if !modal && !crate::touch::finger_navigates_only() {
         after = finish_completed_dividers(app, ui, resp, rect, after);
         handoff |= after.is_some();
     }
     let Some(settings) = app.view().map(|v| v.split) else { return DividerInput::Ignored };
     let press = primary_press(ui).filter(|(down, _)| after.is_none_or(|up| *down > up));
     let on = if press.is_some() { press_on_divider(app, ui, resp, rect) } else { on_divider(app, ui, resp, rect) };
-    if modal || space || crate::touch::finger_navigates_only() || !on {
+    let press_space = press.map_or(space, |(down, _)| drag::primary_press_state(app, ui, down).1);
+    if modal || press_space || crate::touch::finger_navigates_only() || !on {
         return if handoff { DividerInput::Handoff } else { DividerInput::Ignored };
     }
     if let Some((index, p)) = press {

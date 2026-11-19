@@ -527,7 +527,7 @@ pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, res
     let Some((index, p)) = press.filter(|(_, p)| crate::canvas::pointer_on_canvas(ui, resp, *p)) else { return false };
     // A press with Space held, or with the Hand, Zoom or Rotate View tool, pans, zooms or turns the
     // view, as on any other part of the canvas.
-    let space = ui.input(|i| i.key_down(egui::Key::Space));
+    let space = crate::canvas::primary_press_state(app, ui, index).1;
     if space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
         return false;
     }

@@ -43,6 +43,7 @@ use context::{context_menu, panel_drop};
 pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
+pub(crate) use drag::primary_press_state;
 pub use drag::{apply_requests, dispatch, mods};
 pub(crate) use drag::{art_out, end_art_move, end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]

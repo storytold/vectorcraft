@@ -319,6 +319,27 @@ pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, s
     space && (m.command || !app.session.tool_wants_text())
 }
 
+/// Event modifiers and the Space navigation policy at this primary Down, before later keys.
+pub(crate) fn primary_press_state(app: &VectorcraftApp, ui: &Ui, index: usize) -> (egui::Modifiers, bool) {
+    let modifiers = ui.input(|i| match i.events.get(index) {
+        Some(egui::Event::PointerButton { modifiers, .. }) => *modifiers,
+        _ => i.modifiers,
+    });
+    (modifiers, space_lends_view_tools(app, modifiers, space_before(ui, index)))
+}
+
+/// Space at a particular raw event boundary, including changes before this owner's Down.
+pub(super) fn space_before(ui: &Ui, index: usize) -> bool {
+    ui.input(|i| {
+        let step = |event: &egui::Event| match event {
+            egui::Event::Key { key: egui::Key::Space, pressed, repeat: false, .. } => Some(*pressed),
+            _ => None,
+        };
+        let start = i.events.iter().find_map(step).map_or(i.key_down(egui::Key::Space), |pressed| !pressed);
+        i.events.iter().take(index).filter_map(step).fold(start, |_, pressed| pressed)
+    })
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {

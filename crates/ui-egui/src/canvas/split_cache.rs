@@ -107,6 +107,8 @@ pub(crate) struct SplitCache {
     shown: Option<Pair>,
     shown_identity: Option<Identity>,
     shown_sequence: u64,
+    // Only synchronous camera changes wait; content and render-option changes stay immediate.
+    still: [Option<(CacheKey, f64)>; 2],
     epoch: u64,
     sequence: u64,
     // A completion independent of the current epoch: repeated clears must not invalidate its
@@ -137,6 +139,10 @@ impl SplitCache {
         // Check the new context before polling: a completed old-mode frame must never be uploaded.
         let requested = self.pending.as_ref().map(|batch| &batch.request.identity).or(self.shown_identity.as_ref());
         self.latest = (requested != Some(&request.identity)).then_some(request);
+        if self.latest.is_none() {
+            // Returning to the pair already shown ends any earlier camera wait.
+            self.still = Default::default();
+        }
         self.poll(ctx);
         self.start_latest(ctx);
     }
@@ -148,6 +154,7 @@ impl SplitCache {
         self.shown = None;
         self.shown_identity = None;
         self.shown_sequence = 0;
+        self.still = Default::default();
         self.renderer = None;
         let busy = self.pending.take().is_some();
         if busy && self.draining.is_none() && self.has_worker() {
@@ -263,12 +270,38 @@ impl SplitCache {
     }
 
     fn render_sync(&mut self, ctx: &egui::Context, mut request: Request) {
+        if let Some(secs) = self.synchronous_wait(ctx, &request) {
+            self.latest = Some(request);
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(secs));
+            return;
+        }
         let sequence = self.next_sequence();
         let renderer = self.renderer.get_or_insert_with(Renderer::new);
         let t0 = crate::now_ms();
         request.placed_generation = vectorcraft_render::placed_document::generation();
         let images = request.jobs.each_ref().map(|job| render(renderer, job));
         self.publish(ctx, request, images, crate::now_ms() - t0, sequence);
+    }
+
+    /// Keep a slow coherent pair for reprojection while only its camera is moving, as the
+    /// ordinary canvas does. Context compatibility is broader and must not defer edits/resources.
+    fn synchronous_wait(&mut self, ctx: &egui::Context, request: &Request) -> Option<f64> {
+        let shown = self.shown_identity.as_ref().zip(self.shown.as_ref()).filter(|(identity, pair)| {
+            !self.has_worker()
+                && pair.ms > 8.0
+                && identity.options == request.identity.options
+                && identity.keys.iter().zip(&request.identity.keys).all(|(a, b)| super::cursor::only_view_differs(a, b))
+        });
+        let Some((identity, _)) = shown else {
+            self.still = Default::default();
+            return None;
+        };
+        let now = ctx.input(|i| i.time);
+        self.still
+            .iter_mut()
+            .zip(identity.keys.iter().zip(&request.identity.keys))
+            .filter_map(|(still, (shown, key))| super::cursor::still_wait(still, Some(shown), key, true, now))
+            .max_by(f64::total_cmp)
     }
 
     fn publish(&mut self, ctx: &egui::Context, request: Request, images: [Rendered; 2], ms: f64, sequence: u64) {
