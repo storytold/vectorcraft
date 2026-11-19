@@ -90,10 +90,12 @@ pub struct DimensionTool {
     level_guide: Option<(Point, Point)>,
     /// While a linear dimension is placed: the lines of the visible, unlocked linear dimensions in
     /// the document ([`dimension_lines`]), which its line can line up with while Smart Guides are
-    /// on. With Smart Guides on, they are read again when the document's revision has moved.
+    /// on. With Smart Guides on, they are read again when the document they come from has changed.
     levels: Vec<DimensionLine>,
-    /// The document revision `levels` were read at.
-    levels_at: (u64, u64),
+    /// Which document `levels` were read from: the open document's id and revision, or, while an
+    /// interaction is in progress, the open document's id and the address of the document the
+    /// interaction began with.
+    levels_at: (u64, u64, usize),
     /// The document's next object id at the dimension's first preview: the id its preview takes
     /// (`dimension.create` gives the dimension the next id). The preview is not a level.
     preview_id: u64,
@@ -749,19 +751,23 @@ impl DimensionTool {
         }
         // With Smart Guides on, a linear dimension's line lands on the level of a parallel
         // dimension line already drawn within the Smart Guides snapping tolerance. The lines are
-        // read at the first preview and, with Smart Guides on, again when the document has changed
-        // since. They are read from the document the next preview applies to: while the
-        // interaction is in progress, the document as it began, which each preview starts again
-        // from, so a dimension that a command moves or hides in between, and that the next
-        // preview puts back, stays a level where it was. The preview of this dimension is not one
-        // of them.
+        // read at the first preview and, with Smart Guides on, again when the document they come
+        // from has changed since. They come from the document the next preview applies to: while
+        // the interaction is in progress, the document as it began, which each preview starts
+        // again from, so a dimension that a command moves or hides in between, and that the next
+        // preview puts back, stays a level where it was, and the previews themselves do not make
+        // the tool read the lines again. The preview of this dimension is not one of them.
         if d.mode == DimensionMode::Linear {
             if !self.began {
                 self.preview_id = cx.doc.peek_next_id();
             }
-            if !self.began || (cx.smart_guides && self.levels_at != cx.revision) {
-                self.levels = dimension_lines(cx.interaction_doc.unwrap_or(cx.doc), (self.preview_id, [d.a, d.b]));
-                self.levels_at = cx.revision;
+            let (from, at) = match cx.interaction_doc {
+                Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
+                None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
+            };
+            if !self.began || (cx.smart_guides && self.levels_at != at) {
+                self.levels = dimension_lines(from, (self.preview_id, [d.a, d.b]));
+                self.levels_at = at;
             }
         }
         let level = if cx.smart_guides { line_level(&self.levels, d, p, cx.snap_tol()) } else { None };
@@ -1289,6 +1295,14 @@ mod tests {
             assert_eq!(offset(&mut t, &c, 318.0), json!(-82.0), "{edit}: not on the level at y = 320");
             assert_eq!(offset(&mut t, &c, 302.0), json!(-100.0), "{edit}: on the level at y = 300");
         }
+        // A revision that moves with the same document the interaction began with does not read
+        // the lines again; another document it began with does.
+        t.levels.clear();
+        let c = ToolContext { revision: (0, 3), interaction_doc: Some(&d), ..cx(&d, &s, &p) };
+        assert_eq!(offset(&mut t, &c, 302.0), json!(-98.0), "not read again");
+        let again = d.clone();
+        let c = ToolContext { revision: (0, 4), interaction_doc: Some(&again), ..cx(&d, &s, &p) };
+        assert_eq!(offset(&mut t, &c, 302.0), json!(-100.0), "read again");
     }
 
     /// The preview of the dimension itself does not count toward the 20,000 objects read: a
