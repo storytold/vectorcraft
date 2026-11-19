@@ -8,7 +8,7 @@ use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
-use harfrust::{BufferClusterLevel, Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use harfrust::{Direction, Feature, Tag};
 use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
@@ -450,6 +450,79 @@ pub fn inseparable(a: char, b: char) -> bool {
     )
 }
 
+/// Kurikaeshi Moji Shori: the last character of `text` that a repeat mark after it could stand for:
+/// the last one that is neither a repeat mark, a soft return (U+2028) nor a combining voicing mark
+/// (U+3099, U+309A), or None when there is none. The engine gives a threaded frame whose first
+/// paragraph continues from the frame before the result for the text before it
+/// (`TextObject::first_para_lead`).
+pub fn repeat_base(text: &str) -> Option<char> {
+    #[cfg(test)]
+    REPEAT_SCANNED.with(|c| c.set(c.get() + text.len()));
+    text.chars().rev().find(|&c| !matches!(c, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ' | '\u{2028}' | '\u{3099}' | '\u{309A}'))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many bytes of text [`repeat_base`] was given on this thread.
+    static REPEAT_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many bytes of text [`repeat_base`] has been given on this thread.
+#[cfg(test)]
+pub(crate) fn repeat_scanned() -> usize {
+    REPEAT_SCANNED.get()
+}
+
+/// Kurikaeshi Moji Shori: the character the repeat mark `mark` stands for after the text `before`
+/// it, or None when `mark` is not a repeat mark or nothing before it fits. `lead` stands before
+/// `before` (the text of a threaded paragraph in the frames before). VectorCraft's rules: the
+/// repeated character is the last one before the mark that is neither a repeat mark, a soft return
+/// (U+2028) nor a combining voicing mark ([`repeat_base`]); 々 repeats a Han ideograph, ゝ and ゞ a
+/// hiragana and ヽ and ヾ a katakana. ゝ and ヽ give the kana without its voicing marks, and ゞ and
+/// ヾ its voiced form, or the plain kana when it has none.
+pub(crate) fn repeated_char(lead: Option<char>, before: &str, mark: char) -> Option<char> {
+    let script = match mark {
+        '々' => Script::Han,
+        'ゝ' | 'ゞ' => Script::Hiragana,
+        'ヽ' | 'ヾ' => Script::Katakana,
+        _ => return None,
+    };
+    let base = repeat_base(before).or(lead)?;
+    if base.script() != script || (script != Script::Han && !matches!(base as u32, 0x3041..=0x3096 | 0x30A1..=0x30F6)) {
+        return None;
+    }
+    if script == Script::Han {
+        return Some(base);
+    }
+    // Katakana from U+30A1 to U+30F6 lie 0x60 past their hiragana, so one table serves both.
+    let shift = if script == Script::Katakana { 0x60 } else { 0 };
+    let plain = unvoiced(base as u32 - shift);
+    let kana = if matches!(mark, 'ゞ' | 'ヾ') { voiced(plain).unwrap_or(plain) } else { plain };
+    char::from_u32(kana + shift)
+}
+
+/// The hiragana `h` (a code point) without its dakuten or handakuten.
+fn unvoiced(h: u32) -> u32 {
+    match h {
+        0x304C..=0x3062 if h.is_multiple_of(2) => h - 1,
+        0x3065 | 0x3067 | 0x3069 => h - 1,
+        0x3070..=0x307D => h - (h - 0x306F) % 3,
+        0x3094 => 0x3046,
+        _ => h,
+    }
+}
+
+/// The voiced form (with dakuten) of the plain hiragana `h`, if it has one.
+fn voiced(h: u32) -> Option<u32> {
+    match h {
+        0x304B..=0x3061 if !h.is_multiple_of(2) => Some(h + 1),
+        0x3064 | 0x3066 | 0x3068 => Some(h + 1),
+        0x306F..=0x307B if (h - 0x306F).is_multiple_of(3) => Some(h + 1),
+        0x3046 => Some(0x3094),
+        _ => None,
+    }
+}
+
 /// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
 pub(crate) fn is_hangul(c: char) -> bool {
     c.script() == Script::Hangul
@@ -600,7 +673,7 @@ pub(crate) fn shape_runs(
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { db, range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
-        let mut script = Script::Common;
+        let mut boundary = craft_font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
@@ -620,19 +693,15 @@ pub(crate) fn shape_runs(
             };
             let small = small_caps && c.is_lowercase();
             let next_script = shaping_script(c);
-            let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
-            let script_change = strong_script && script != Script::Common && script != next_script;
+            let strong_script = (!matches!(next_script, Script::Common | Script::Inherited)).then_some(next_script);
             // Combining marks, zero width joiners and non-joiners, and variation selectors stay
             // with the character before them.
-            if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
+            if boundary.advance(face.id(), level, small, strong_script, is_mark(c)) {
                 if i > seg.range.start {
                     seg.range.end = i;
                     shape_segment(text, &range, &seg, feats, out);
                 }
                 seg = Segment { range: i..i, face, small, level, ..seg };
-            }
-            if strong_script {
-                script = next_script;
             }
         }
         if b > seg.range.start {
@@ -1228,10 +1297,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
 /// variation selectors.
 fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
-    cluster
-        .chars()
-        .map(move |c| digits.map(c))
-        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+    craft_font_catalog::drawable_characters(cluster, move |c| digits.map(c))
 }
 
 /// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
@@ -1243,11 +1309,14 @@ fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
 /// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
 /// it (#4491); when there is none, the face its first character takes on its own.
 fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
-    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
-    drawn_chars(cluster, digits)
-        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
-        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
-        .unwrap_or_else(|| primary.clone())
+    craft_font_catalog::cluster_face(
+        cluster,
+        primary,
+        |c| digits.map(c),
+        |c| in_face(pmap, c),
+        |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic),
+        |face, c| face.covers(c),
+    )
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
@@ -1533,46 +1602,28 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let along_features = with_more(&|s| feats.resolve(s));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let mut buf = UnicodeBuffer::new();
-                for (i, c) in text_seg.char_indices() {
-                    let cl = (range.start + i) as u32;
-                    let c = st.digits.map(c);
-                    if upper {
-                        for u in c.to_uppercase() {
-                            buf.add(u, cl);
-                        }
-                    } else {
-                        buf.add(c, cl);
-                    }
-                }
-                buf.set_direction(direction);
-                buf.guess_segment_properties();
-                if char_level.get() {
-                    buf.set_cluster_level(BufferClusterLevel::Characters);
-                }
-                // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
-                // apart and the dot on its i).
-                if let Some(l) = &language {
-                    buf.set_language(l.clone());
-                }
-                // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
-                // glyphs for it. This retains context at real style/font segmentation boundaries without
-                // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
-                if let Some(pre) = text.get(context.start..range.start) {
-                    buf.set_pre_context(pre);
-                }
-                if let Some(post) = text.get(range.end..context.end) {
-                    buf.set_post_context(post);
-                }
-                // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
-                let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
-                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), feats);
-                let gb = shaper.shape(buf, ShapeOptions::new().features(feats).plan(Some(&plan)));
-                gb.glyph_infos()
-                    .iter()
-                    .zip(gb.glyph_positions())
-                    .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.y_advance, pos.x_offset, pos.y_offset))
-                    .collect::<Vec<_>>()
+                let input = craft_font_catalog::RunInput {
+                    text: text_seg,
+                    source_start: range.start,
+                    pre_context: text.get(context.start..range.start).unwrap_or_default(),
+                    post_context: text.get(range.end..context.end).unwrap_or_default(),
+                    direction,
+                    language: language.as_ref(),
+                    features: feats,
+                    character_clusters: char_level.get(),
+                    uppercase: upper,
+                };
+                craft_font_catalog::shape_run(
+                    &shaper,
+                    &input,
+                    |c| st.digits.map(c),
+                    |shaper, direction, script, language, features| face.shape_plan(shaper, direction, script, language, features),
+                )
+                // HarfRust clusters are u32; a run beyond that source offset cannot be represented.
+                .unwrap_or_default()
+                .into_iter()
+                .map(|g| (g.glyph_id, g.cluster, g.x_advance, g.y_advance, g.x_offset, g.y_offset))
+                .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
             *raw = shape(&along_features, along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();

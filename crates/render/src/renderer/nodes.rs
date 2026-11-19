@@ -36,7 +36,7 @@ impl Renderer {
             // drawn otherwise, measured as below.
             _ if measures_three_d(a)
                 && let Some(b) = {
-                    let art = self.measured_fx_art(symbols.document(), a);
+                    let art = self.measured_fx_art(symbols, a);
                     self.three_d_art_bounds(symbols, &art)
                 } =>
             {
@@ -578,7 +578,7 @@ impl Renderer {
                 self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
             }
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                if let Some(sym) = f.symbols.symbol(symbol) {
                     // The instance draws when the frame has room for its art's objects; a symbol
                     // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
                     let mut used = self.symbol_nodes;
@@ -653,7 +653,20 @@ impl Renderer {
         if view.shows_outlines() {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
-            for c in shapes {
+            // An Abutting trace's seam fills hold no traced outline: a clip group of paths that are
+            // each stroked without a fill or (on a stretched image, the strokes' outlines) filled
+            // without a stroke, named "Seam Fills" or, renamed, still the lowest shape, where the
+            // trace puts it.
+            let seam_fills = |i: usize, c: &Arc<Node>| {
+                let one_paint = |m: &Arc<Node>| {
+                    matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+                        && m.appearance.fill_paint().is_none() != m.appearance.stroke_paint().is_none()
+                };
+                (i == 0 || c.name.as_deref() == Some("Seam Fills"))
+                    && matches!(&c.kind, NodeKind::Group { clip: true, children }
+                    if children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(one_paint)))
+            };
+            for (_, c) in shapes.iter().enumerate().filter(|(i, c)| !seam_fills(*i, c)) {
                 self.draw_outline_member(ctx, &frame, c);
             }
         }

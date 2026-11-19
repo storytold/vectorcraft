@@ -255,6 +255,13 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_filled(c, r, if w.area { color } else { Color32::WHITE });
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
+        // A live polygon's side widget: a diamond beside the middle of the box's right side, drawn
+        // only while the box is drawn (the box hides during a turn and during a drag of the widget).
+        if !drawing_boxed && let Some(w) = vectorcraft_tools::sidewidget::SideWidget::of(&st.doc, &st.selection, &b, xf.zoom) {
+            let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::sidewidget::RADIUS_PX);
+            let diamond = vec![c + vec2(0.0, -r), c + vec2(r, 0.0), c + vec2(0.0, r), c + vec2(-r, 0.0)];
+            p.add(Shape::convex_polygon(diamond, Color32::WHITE, Stroke::new(1.0, color)));
+        }
     }
     // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
     // by a line to the outline's point at its angle. They stay while one is dragged.
@@ -395,20 +402,76 @@ struct SharedKey {
     /// The painter's clip: the lines of the path outside it have no triangles in the mesh.
     clip: egui::Rect,
     stroke: Stroke,
+    /// Where the dash pattern starts along the path, in document units, when it is dashed.
+    dash: Option<f64>,
     pixels_per_point: f32,
     tessellation: TessellationOptions,
 }
 
+/// The length of a dash of a dashed overlay, in screen pixels.
+const DASH: f32 = 4.0;
+/// The length of the gap after each dash of a dashed overlay, in screen pixels.
+const GAP: f32 = 3.0;
+
+/// Add to `out` the dashes of `line` drawn with `s`, [`DASH`] pixels drawn and [`GAP`] left out,
+/// with the pattern started `from` pixels along it: from 0, the dashes [`Shape::dashed_line`] gives.
+pub(super) fn dashes_from(line: &[Pos2], s: Stroke, from: f64, out: &mut Vec<Shape>) {
+    let period = f64::from(DASH + GAP);
+    let phase = from.rem_euclid(period);
+    let phase = if phase.is_finite() { phase as f32 } else { 0.0 };
+    if line.len() < 2 {
+        return;
+    }
+    if phase >= DASH {
+        Shape::dashed_line_many_with_offset(line, s, &[DASH], &[GAP], DASH + GAP - phase, out);
+        return;
+    }
+    // The pattern starts within a dash: the rest of that dash is drawn, then the pattern goes on
+    // after its gap.
+    let mut left = DASH - phase;
+    for (i, w) in line.windows(2).enumerate() {
+        let len = (w[1] - w[0]).length();
+        if len >= left {
+            let cut = w[0] + (w[1] - w[0]) * (left / len);
+            let mut dash = line[..=i].to_vec();
+            dash.push(cut);
+            segments(&dash, s, out);
+            let mut rest = vec![cut];
+            rest.extend_from_slice(&line[i + 1..]);
+            Shape::dashed_line_many_with_offset(&rest, s, &[DASH], &[GAP], GAP, out);
+            return;
+        }
+        left -= len;
+    }
+    segments(line, s, out);
+}
+
+/// Add to `out` each line of `line` that has a length as its own [`Shape::LineSegment`], as
+/// [`Shape::dashed_line`] draws a dash.
+fn segments(line: &[Pos2], s: Stroke, out: &mut Vec<Shape>) {
+    out.extend(line.windows(2).filter(|w| w[0] != w[1]).map(|w| Shape::line_segment([w[0], w[1]], s)));
+}
+
 impl SharedPaths {
-    /// The mesh that draws `path` with `s` at the view `xf` with the painter `p`: the one kept in
-    /// this frame or in `last` (the last frame's) when it was built for the same, else a new one.
-    /// It is kept for the next frame.
-    fn mesh(&mut self, last: &mut HashMap<usize, SharedMesh>, path: &Arc<BezPath>, xf: &Xf, s: Stroke, p: &egui::Painter) -> Arc<Mesh> {
+    /// The mesh that draws `path` with `s`, dashed from `dash` document units along the pattern
+    /// when that is set, at the view `xf` with the painter `p`: the one kept in this frame or in
+    /// `last` (the last frame's) when it was built for the same, else a new one. It is kept for
+    /// the next frame.
+    fn mesh(
+        &mut self,
+        last: &mut HashMap<usize, SharedMesh>,
+        path: &Arc<BezPath>,
+        xf: &Xf,
+        s: Stroke,
+        dash: Option<f64>,
+        p: &egui::Painter,
+    ) -> Arc<Mesh> {
         let ctx = p.ctx();
         let key = SharedKey {
             view: xf.affine().as_coeffs(),
             clip: p.clip_rect(),
             stroke: s,
+            dash,
             pixels_per_point: ctx.pixels_per_point(),
             tessellation: ctx.tessellation_options(|o| *o),
         };
@@ -425,7 +488,16 @@ impl SharedPaths {
                 tessellator.set_clip_rect(key.clip);
                 let mut mesh = Mesh::default();
                 for line in to_screen_path(path, xf) {
-                    tessellator.tessellate_shape(Shape::line(line, s), &mut mesh);
+                    match dash {
+                        Some(from) => {
+                            let mut dashes = vec![];
+                            dashes_from(&line, s, from * xf.zoom, &mut dashes);
+                            for d in dashes {
+                                tessellator.tessellate_shape(d, &mut mesh);
+                            }
+                        }
+                        None => tessellator.tessellate_shape(Shape::line(line, s), &mut mesh),
+                    }
                 }
                 SharedMesh { path: Arc::clone(path), key, mesh: Arc::new(mesh) }
             }
@@ -476,8 +548,8 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     stroke_path(p, path, xf, s);
                 }
             }
-            Overlay::SharedPath { path, color, width } => {
-                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), p);
+            Overlay::SharedPath { path, color, width, dash } => {
+                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), *dash, p);
                 if !mesh.is_empty() {
                     p.add(Shape::mesh(mesh));
                 }
@@ -531,6 +603,29 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     p.circle_stroke(c, 8.0, Stroke::new(2.0, t.accent));
                 }
             }
+            // Shown as a tooltip by `overlay_hover_text`; nothing is drawn.
+            Overlay::HoverText { .. } => {}
+        }
+    }
+}
+
+/// The tooltips of the tool's [`Overlay::HoverText`] regions. Each region is a hover-only widget
+/// over the canvas, which keeps the clicks and drags; while the pointer rests inside a region's
+/// disc, egui shows its text, translated, after its usual tooltip delay. No tooltip shows during a
+/// canvas drag (`dragging`) or while a pointer button is down.
+pub(super) fn overlay_hover_text(ui: &egui::Ui, xf: &Xf, overlays: &[Overlay], dragging: bool) {
+    let pressed = ui.input(|i| i.pointer.any_down());
+    for (i, o) in overlays.iter().enumerate() {
+        let Overlay::HoverText { center, radius, text } = o else { continue };
+        let c = xf.to_screen(*center);
+        let r = (*radius * xf.zoom) as f32;
+        if !(r.is_finite() && r > 0.0 && c.is_finite()) {
+            continue;
+        }
+        let id = egui::Id::unique("canvas-hover-text").with(i);
+        let resp = ui.interact(egui::Rect::from_center_size(c, vec2(2.0 * r, 2.0 * r)), id, egui::Sense::hover());
+        if !dragging && !pressed && resp.hover_pos().is_some_and(|p| p.distance(c) <= r) {
+            resp.on_hover_text(crate::i18n::t(text));
         }
     }
 }

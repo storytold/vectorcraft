@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             Some("Cmd+/"),
-            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row, with its top fill's paint (type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids`, no `id` and no `target: \"contents\"`, the new fill takes that row's paint, goes right above it, and becomes the active row; appearance.duplicateItem copies a whole row. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row, with its top fill's paint (type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids`, no `id` and no `target: \"contents\"`, the new fill takes that row's paint, goes right above it, and becomes the active row; appearance.duplicateItem copies a whole row. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, what the edit changes, and the row it adds when that row becomes the line's topmost visible row of its kind)",
             has_doc,
             |s, p| add_item(s, p, true)
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             Some("Cmd+Alt+/"),
-            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row, with its top stroke's paint (else the default stroke) and that stroke's weight when it has paint, at least 1 pt. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row, with its top stroke's paint (else the default stroke) and that stroke's weight when it has paint, at least 1 pt. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, what the edit changes, and the row it adds when that row becomes the line's topmost visible row of its kind)",
             has_doc,
             |s, p| add_item(s, p, false)
         ),
@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?|id?, target?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{ids?|id?, target?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind",
             has_doc,
             clear_appearance
         ),
@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce to Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?|id?, target?} keep only one visible fill and stroke (without ids: the Appearance panel's active row in place of the topmost one of its kind; else the topmost), without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{ids?|id?, target?} keep only one visible fill and stroke (without ids: the Appearance panel's active row in place of the topmost one of its kind; else the topmost), without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, only what the edit changes)",
             has_doc,
             reduce_basic
         ),
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index: paint-order item index, ids?|id? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), tint?: 0..100, keepModel?: bool (both as paint.setFill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} edit one fill/stroke of each target object's own appearance stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index: paint-order item index, ids?|id? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), tint?: 0..100, keepModel?: bool (both as paint.setFill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} edit one fill/stroke of each target object's own appearance stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels; when their rows differ, `index` needs `aligned` and is a row of the backmost one), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, what the edit changes, and the paint, weight, opacity and blend mode it writes to the line's topmost visible row)",
             has_doc,
             set_item
         ),
@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Item",
             [],
             None,
-            "{index | indices: [..] (paint-order item indices), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} remove those fills/strokes from each target object's own stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index | indices: [..] (paint-order item indices), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} remove those fills/strokes from each target object's own stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels; when their rows differ, the indices need `aligned` and are rows of the backmost one), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, only what the edit changes)",
             has_doc,
             remove_item
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Item",
             ["Window", "Appearance"],
             None,
-            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (with several, of the lowest copy: they land together in their order; default: each right above its item; not with aligned rows of a mixed selection), contents?: count (with `to`: how many items paint below the Contents (Characters) row afterwards; default: it stays between the same items), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} copy fills/strokes with their effects, as Alt-dragging rows places them. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (with several, of the lowest copy: they land together in their order; default: each right above its item; not with aligned rows of a mixed selection), contents?: count (with `to`: how many items paint below the Contents (Characters) row afterwards; default: it stays between the same items), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} copy fills/strokes with their effects, as Alt-dragging rows places them. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels; when their rows differ, the indices need `aligned` and are rows of the backmost one), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, only what the edit changes)",
             has_doc,
             duplicate_item
         ),
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder Appearance Item",
             [],
             None,
-            "{from: paint-order item index | \"contents\", indices?: [..] (several items instead of from: they move as one block in their order, the lowest landing at `to`; a block landing next to the Contents row keeps its lowest item's side), to, contents?: count, ids?|id?, target?, aligned?: bool (refused when the targets' appearances differ, or differ from that of a graph design's art given first)} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above. On a path directly in a graph series (a series group's id stands for those paths, except with from \"contents\", which moves the group's own row), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {index: where the item landed | contents: the row's slot}",
+            "{from: paint-order item index | \"contents\", indices?: [..] (several items instead of from: they move as one block in their order, the lowest landing at `to`; a block landing next to the Contents row keeps its lowest item's side), to, contents?: count, ids?|id?, target?, aligned?: bool (refused when the targets' appearances differ, or differ from that of a graph design's art given first)} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above. On a path directly in a graph series (a series group's id stands for those paths, except with from \"contents\", which moves the group's own row), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels; moving rows of such a group whose members' rows differ is an error), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, only what the edit changes) → {index: where the item landed | contents: the row's slot}",
             has_doc,
             move_item
         ),
@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode, and with `append` its topmost visible fill and stroke rows → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode when transparency is applied, and with `append` its topmost visible fill and stroke rows of the kinds it adds; on a graph's axis line, tick mark or radar ring, its topmost visible fill and stroke rows, and when transparency is applied its object opacity and blend mode, for every line of its kind (a pick of some attributes without `append`: what it changes, and the paint, stroke weight and row transparency it applies to the topmost visible rows; with `append`: only the kinds of row it adds) → {ids}",
             has_doc,
             copy_from
         ),
@@ -147,7 +147,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show All Hidden Attributes",
             ["Window", "Appearance"],
             None,
-            "{ids?|id?, target?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {ids}",
+            "{ids?|id?, target?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden. On a path directly in a graph series (a series group's id stands for those paths and the group), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind (of a line, only what the edit changes) → {ids}",
             has_doc,
             show_all_hidden
         ),
@@ -165,7 +165,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Appearance",
             [],
             None,
-            "{source: id, target: id, copy?: bool} give `target` (a layer, group or object) the appearance (fills, strokes, effects) and transparency (opacity, blend mode, isolation, knockout) of `source`, as dragging a target circle onto another in the Layers panel does; the source is left with a cleared appearance (as appearance.clear) unless `copy` (Alt-drag). Opacity masks stay; placed gradients keep their place relative to each object's bounds. On a path directly in a graph series (a series group's id stands for those paths; as `source`, when the group has no effect, opacity, blend mode, isolation, knockout or style link of its own, the topmost one is read and a move clears them all; as `target` each takes the appearance and the group is cleared, a `source` among them keeps its look, and a `source` that is the group's only path is an error), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {source, target}",
+            "{source: id, target: id, copy?: bool} give `target` (a layer, group or object) the appearance (fills, strokes, effects) and transparency (opacity, blend mode, isolation, knockout) of `source`, as dragging a target circle onto another in the Layers panel does; the source is left with a cleared appearance (as appearance.clear) unless `copy` (Alt-drag). Opacity masks stay; placed gradients keep their place relative to each object's bounds. On a path directly in a graph series (a series group's id stands for those paths; as `source`, when the group has no effect, opacity, blend mode, isolation, knockout or style link of its own, the topmost one is read and a move clears them all; as `target` each takes the appearance and the group is cleared, a `source` among them keeps its look, and a `source` that is the group's only path is an error), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {source, target}",
             has_doc,
             transfer
         ),
@@ -538,7 +538,8 @@ pub(crate) fn design_art_in(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// `ids` with each graph series group that has no fill or stroke row of its own replaced by the paths directly inside
-/// it ([`super::graph::series_group_marks`]). A series group with rows, as a document saved earlier can hold, stays:
+/// it, and each such Axes or Legend group of a graph by the lines and labels directly inside it
+/// ([`super::graph::series_group_marks`]). A series group with rows, as a document saved earlier can hold, stays:
 /// the Appearance panel lists those rows and edits them by index.
 pub(crate) fn rowless_series_marks(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     super::graph::series_group_marks_where(d, ids, |group| group.appearance.items.is_empty())
@@ -559,8 +560,9 @@ fn holds_no_look(group: &Node) -> bool {
 }
 
 /// The objects whose appearance a command reads for `id`: a graph series group that holds nothing of its own
-/// ([`holds_no_look`]) gives the paths directly inside it, backmost first. A series group with an effect, an opacity or
-/// another attribute of its own is read itself, with that attribute.
+/// ([`holds_no_look`]) gives the paths directly inside it, backmost first, and such an Axes or Legend group of a graph
+/// the lines and labels directly inside it. A series group with an effect, an opacity or another attribute of its own is
+/// read itself, with that attribute.
 fn look_holders(d: &Document, id: NodeId) -> Vec<NodeId> {
     super::graph::series_group_marks_where(d, &[id], holds_no_look)
 }
@@ -626,11 +628,48 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     Ok(ids)
 }
 
+/// Refuse a row index given a graph's Axes or Legend group that stands for lines and labels whose stacks differ
+/// ([`rowless_series_marks`]), unless the index is `aligned`, a row of the backmost one's stack: the same index names a
+/// different row in each of them.
+pub(crate) fn check_part_rows(s: &Session, p: &Value, aligned: bool, cmd: &str) -> Result<()> {
+    if aligned {
+        return Ok(());
+    }
+    let d = &s.doc()?.doc;
+    for id in appearance_targets(s, p)? {
+        let Some(n) = d.node(id).filter(|n| n.appearance.items.is_empty()) else { continue };
+        if let Some(members) = super::graph::graph_part_members(d, n)
+            && appearances_differ(d, &members)
+        {
+            return Err(bad(
+                cmd,
+                format!("the lines and labels in graph group {} have different appearance rows: pass `aligned: true` or their ids", id.0),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Whether row `index` of `n` is the topmost visible row of its kind, the row a graph keeps for a label or line.
+fn is_top_shown(n: &Node, index: usize) -> bool {
+    let items = &n.appearance.items;
+    items.get(index).is_some_and(|it| items.iter().rposition(|o| o.is_fill() == it.is_fill() && o.visible()) == Some(index))
+}
+
+/// `ids` without the objects whose topmost visible fill and stroke rows ([`super::graph::label_rows`]) an edit left as
+/// they were (`before`: the document before it), unless `wrote` says the edit wrote one of those rows. An edit of a
+/// hidden row of a graph label or line then leaves what the graph keeps for its kind as it is.
+fn shown_rows_edited(before: &Document, d: &Document, ids: Vec<NodeId>, wrote: impl Fn(NodeId) -> bool) -> Vec<NodeId> {
+    let shown = |doc: &Document, id: NodeId| doc.node(id).map(super::graph::label_rows);
+    ids.into_iter().filter(|id| wrote(*id) || shown(before, *id) != shown(d, *id)).collect()
+}
+
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
 /// What the edit changes on the topmost visible fill and stroke of graph series marks, and on the
 /// rows and characters of graph labels, is stored on their graphs in the same step
-/// ([`capture_series_changes`], [`super::graph::capture_label_changes`]). Nothing targeted is not
+/// ([`capture_series_changes`], [`super::graph::capture_label_changes`]), and so are the rows of
+/// the graph lines it reaches ([`super::graph::capture_line_changes`]). Nothing targeted is not
 /// an edit, and when `f` leaves every target as it was, the document and its undo history stay as
 /// they are.
 ///
@@ -652,7 +691,7 @@ pub(crate) fn edit_items(
     edit_items_then(s, ids, item, of, cmd, label, fill, f, |before, d, edited| {
         let series = capture_series_changes(before, d, edited);
         // The rows `f` edited are kept by `edit_items_then`.
-        let labels = super::graph::capture_label_changes(before, d, edited, false);
+        let labels = super::graph::capture_label_changes(before, d, edited, false, None);
         Ok(series || labels)
     })
 }
@@ -670,6 +709,45 @@ pub(crate) fn edit_items_then(
     cmd: &str,
     label: &str,
     fill: bool,
+    f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
+    after: impl FnMut(&vectorcraft_doc::Document, &mut vectorcraft_doc::Document, &[NodeId]) -> Result<bool>,
+) -> Result<Vec<NodeId>> {
+    edit_items_writing_then(s, ids, item, of, cmd, label, fill, super::graph::RowWrites::NONE, f, after)
+}
+
+/// [`edit_items`] for an edit that writes the attributes `writes` says to the row of each target it edits: a graph line
+/// keeps them for its kind when that row is its topmost visible one, also when the line already showed them
+/// ([`super::graph::capture_line_row_writes`]).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn edit_items_writing(
+    s: &mut Session,
+    ids: &[NodeId],
+    item: ItemTarget,
+    of: Option<NodeId>,
+    cmd: &str,
+    label: &str,
+    fill: bool,
+    writes: super::graph::RowWrites,
+    f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
+) -> Result<Vec<NodeId>> {
+    edit_items_writing_then(s, ids, item, of, cmd, label, fill, writes, f, |before, d, edited| {
+        let series = capture_series_changes(before, d, edited);
+        let labels = super::graph::capture_label_changes(before, d, edited, false, None);
+        Ok(series || labels)
+    })
+}
+
+/// [`edit_items_then`] with the attributes `writes` says, as [`edit_items_writing`] keeps them.
+#[allow(clippy::too_many_arguments)]
+fn edit_items_writing_then(
+    s: &mut Session,
+    ids: &[NodeId],
+    item: ItemTarget,
+    of: Option<NodeId>,
+    cmd: &str,
+    label: &str,
+    fill: bool,
+    writes: super::graph::RowWrites,
     mut f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
     mut after: impl FnMut(&vectorcraft_doc::Document, &mut vectorcraft_doc::Document, &[NodeId]) -> Result<bool>,
 ) -> Result<Vec<NodeId>> {
@@ -693,6 +771,10 @@ pub(crate) fn edit_items_then(
         let mut edited = Vec::new();
         // The objects whose rows `f` edited: on type, no row means its characters.
         let mut rows = Vec::new();
+        // The objects where `f` wrote the topmost visible row of its kind.
+        let mut wrote = Vec::new();
+        // The row of each object `f` wrote: its index, else the topmost row of the kind.
+        let mut written = Vec::new();
         for (id, item) in ids.iter().zip(&per) {
             let Some(item) = item else { continue };
             let Some(n) = d.node_mut(*id) else { continue };
@@ -702,10 +784,22 @@ pub(crate) fn edit_items_then(
             if index.is_some() {
                 rows.push(*id);
             }
+            if index.is_none_or(|i| is_top_shown(n, i)) {
+                wrote.push(*id);
+            }
+            written.extend(index.or_else(|| n.appearance.items.iter().rposition(|it| it.is_fill() == fill)).map(|at| (*id, at)));
         }
         let more = after(&before, d, &edited)?;
-        let labels = super::graph::capture_label_rows(d, &rows);
-        Ok(count_changed(d, &before, &edited) + usize::from(more || labels))
+        // A graph line keeps only the attributes of its rows that the edit changed, and those it wrote (`writes`): the
+        // others stay as its kind keeps them, which the line may not show yet.
+        rows.retain(|id| !super::graph::is_graph_line(d, *id));
+        let labels = super::graph::capture_label_rows(d, &shown_rows_edited(&before, d, rows, |id| wrote.contains(&id)));
+        let mut lines = super::graph::capture_line_changes(&before, d, &edited);
+        if writes != super::graph::RowWrites::NONE {
+            let (on_fill, on_stroke) = if fill { (writes, super::graph::RowWrites::NONE) } else { (super::graph::RowWrites::NONE, writes) };
+            lines |= super::graph::capture_line_row_writes(d, &written, on_fill, on_stroke);
+        }
+        Ok(count_changed(d, &before, &edited) + usize::from(more || labels || lines))
     })?;
     Ok(aimed)
 }
@@ -714,6 +808,17 @@ pub(crate) fn edit_items_then(
 /// before the edit: once edited, a row that was equal to a row of the art of `of` no longer is.
 pub(crate) fn first_edited(s: &Session, item: ItemTarget, of: Option<NodeId>, ids: &[NodeId]) -> Option<(NodeId, ItemTarget)> {
     ids.iter().zip(item.per_target_of(s, of, ids)).find_map(|(id, it)| Some((*id, it?)))
+}
+
+/// Keep the object rows of the graph labels among `ids` for every label of their kind
+/// ([`super::graph::capture_label_rows`]), and of the graph lines among them only the attributes the edit changed
+/// ([`super::graph::capture_line_changes`]): a line's other attributes stay as its kind keeps them, which the line may
+/// not show yet. Returns whether what a graph keeps changed.
+fn capture_row_edits(before: &vectorcraft_doc::Document, d: &mut vectorcraft_doc::Document, ids: &[NodeId]) -> bool {
+    let labels: Vec<NodeId> = ids.iter().copied().filter(|id| !super::graph::is_graph_line(d, *id)).collect();
+    let labels = super::graph::capture_label_rows(d, &labels);
+    let lines = super::graph::capture_line_changes(before, d, ids);
+    labels || lines
 }
 
 /// How many of `ids` differ in `d` from `before`.
@@ -854,10 +959,13 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
             }
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
+        let lines: Vec<NodeId> = added.iter().map(|(id, _)| *id).collect();
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, added));
         super::graph::capture_series_top_paints(d, &rows);
-        super::graph::capture_label_rows(d, &ids);
+        capture_row_edits(&before, d, &ids);
+        // A graph line keeps the row it got for its kind, also when it showed that row's paint, weight and transparency.
+        super::graph::capture_line_kind_rows(d, &lines, (fill, !fill), false);
         Ok(())
     })?;
     // A fill added above the active row becomes the active row; otherwise the rows above the new
@@ -1046,7 +1154,7 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
     let mut targets: Vec<NodeId> = marks.iter().copied().filter(|id| !within.contains(id)).collect();
     if targets.is_empty() {
         if stands {
-            return Err(bad(C, "`source` is the only path in series group `target`"));
+            return Err(bad(C, "`source` is the only path, line or label that graph group `target` stands for"));
         }
         targets.push(target);
     }
@@ -1091,8 +1199,9 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         rows.extend(painted_rows(d, both_kinds(&targets)));
         let painted = super::graph::capture_series_top_paints(d, &rows);
         let object = super::graph::capture_series_object_opacity(d, &changed);
-        // The targets last: on two labels of one kind, the target's rows are the ones the kind keeps.
-        let labels = super::graph::capture_label_rows(d, &changed);
+        // The targets last: on two labels of one kind, the target's rows are the ones the kind keeps. Graph lines are
+        // taken in paint order, so the targets are captured again on their own, after a cleared source in front of them.
+        let labels = super::graph::capture_label_rows(d, &changed) | super::graph::capture_label_rows(d, &targets);
         let all: Vec<NodeId> = from.iter().chain(&targets).chain(&group).copied().collect();
         Ok(count_changed(d, &before, &all) + usize::from(kept || painted || object || labels || forgot))
     })?;
@@ -1150,7 +1259,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = capture_row_edits(&before, d, &ids);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     s.active_appearance_item = None;
@@ -1167,6 +1276,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad("appearance.setItem", "select objects or give ids"));
     }
+    check_part_rows(s, p, aligned(p, "appearance.setItem")?, "appearance.setItem")?;
     let blend = str_param(p, "blend").and_then(BlendMode::parse);
     // When every object comes out as it was (for example, when none has item `index`), the document
     // and its undo history stay as they are.
@@ -1175,6 +1285,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let per = rows_per_target(&before, of, &ids, &[idx], aligned(p, "appearance.setItem")?);
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
+        // The targets that have the row: an aligned row leaves out the members of a graph's Axes or Legend group that
+        // lack it, and the graph keeps the rows of the labels and lines it reached only.
+        let mut reached = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
             let Some(&idx) = at.first() else { continue };
             let Some(n) = d.node_mut(*id) else { continue };
@@ -1185,6 +1298,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let bounds = n.geometric_bounds();
             let Some(item) = n.appearance.items.get_mut(idx) else { continue };
+            reached.push(*id);
             let (pp, op, bl, vis, bounds) = match item {
                 AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible, bounds),
                 AppearanceItem::Stroke(st) => {
@@ -1227,8 +1341,19 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, written));
         let painted = super::graph::capture_series_top_paints(d, &rows);
-        let labels = super::graph::capture_label_rows(d, &ids);
-        Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
+        let reached = shown_rows_edited(&before, d, reached, |id| edited.iter().any(|(e, _)| *e == id));
+        let labels = capture_row_edits(&before, d, &reached);
+        // A graph line keeps what was written to its topmost visible row, also when it already showed it.
+        let tops: Vec<(NodeId, usize)> = ids.iter().zip(&per).filter_map(|(id, at)| Some((*id, *at.first()?))).collect();
+        // Only the values the edit applied: a null weight or opacity leaves the row as it is.
+        let writes = super::graph::RowWrites {
+            paint: paint.is_some(),
+            weight: p.get("weight").and_then(Value::as_f64).is_some(),
+            opacity: p.get("opacity").and_then(Value::as_f64).is_some(),
+            blend: blend.is_some(),
+        };
+        let lines = super::graph::capture_line_row_writes(d, &tops, super::graph::RowWrites { weight: false, ..writes }, writes);
+        Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels || lines))
     })?;
     if let Some(pa) = &paint {
         s.remember_paint(pa);
@@ -1256,14 +1381,20 @@ pub(super) fn item_indices(p: &Value, cmd: &str) -> Result<Vec<usize>> {
 fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = item_indices(p, "appearance.removeItem")?;
     let ids = require_targets(s, p, "appearance.removeItem")?;
+    check_part_rows(s, p, aligned(p, "appearance.removeItem")?, "appearance.removeItem")?;
     // When no object has an item at any of the indices, the document and its undo history stay as
     // they are.
     let before = s.doc()?.doc.clone();
     let of = design_reference(s, p, "appearance.removeItem")?;
     let per = rows_per_target(&before, of, &ids, &idx, aligned(p, "appearance.removeItem")?);
     super::overprint::edit_counted(s, "Remove Item", |d| {
+        // The targets that had a row to remove, as in `set_item`.
+        let mut reached = Vec::new();
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
+                if idx.iter().any(|i| *i < n.appearance.items.len()) {
+                    reached.push(*id);
+                }
                 let mut idx = idx.clone();
                 idx.sort_unstable();
                 // From the top down, so the lower indices stay valid.
@@ -1275,7 +1406,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = capture_row_edits(&before, d, &shown_rows_edited(&before, d, reached, |_| false));
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The rows removed from the active row's object, which need not come first in `ids`.
@@ -1295,6 +1426,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`contents` goes with `to`"));
     }
     let ids = require_targets(s, p, C)?;
+    check_part_rows(s, p, aligned(p, C)?, C)?;
     // Where the first target's copy landed, and where it landed on the active row's object (the
     // first selected one, not always the first target): copies placed at `to` land at a different
     // index on stacks of other lengths.
@@ -1319,6 +1451,8 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
         // showed it.
         let mut added = Vec::new();
+        // The targets that took a copy, as in `set_item`.
+        let mut reached = Vec::new();
         for (id, idx) in ids.iter().zip(&per) {
             let Some(n) = d.node_mut(*id) else { continue };
             let has_contents = n.contents_label().is_some();
@@ -1343,6 +1477,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                     ap.set_contents_at(c);
                 }
                 any = true;
+                reached.push(*id);
                 continue;
             }
             let mut idx = idx.clone();
@@ -1357,6 +1492,9 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                         added.push((*id, kind));
                     }
                     any = true;
+                    if reached.last() != Some(id) {
+                        reached.push(*id);
+                    }
                 }
             }
         }
@@ -1365,9 +1503,10 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let mut rows = top_paint_changed(&before, d, &ids);
+        let top_copies: Vec<NodeId> = added.iter().map(|(id, _)| *id).collect();
         rows.extend(painted_rows(d, added));
         super::graph::capture_series_top_paints(d, &rows);
-        super::graph::capture_label_rows(d, &ids);
+        capture_row_edits(&before, d, &shown_rows_edited(&before, d, reached, |id| top_copies.contains(&id)));
         Ok(())
     })?;
     // Rows at or above each copy move up by one (by the block, for copies placed at `to`).
@@ -1407,7 +1546,7 @@ fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &shown));
         super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &shown));
-        super::graph::capture_label_rows(d, &shown);
+        capture_row_edits(&before, d, &shown);
         Ok(shown)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
@@ -1431,6 +1570,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         return move_contents(s, &ids, to);
     }
     let ids = require_targets(s, p, C)?;
+    check_part_rows(s, p, aligned, C)?;
     // Where an aligned row would go in each of several different stacks isn't one place.
     if aligned && appearances_differ(&s.doc()?.doc, &with_reference(design_reference(s, p, C)?, &ids)) {
         return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
@@ -1457,7 +1597,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = super::graph::capture_label_changes(&before, d, &ids, true, None);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The moved row stays the active one; the rows it passed shift by one.
@@ -1503,7 +1643,7 @@ fn move_items(s: &mut Session, p: &Value, ids: &[NodeId], to: usize) -> Result<V
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, ids));
-        let labels = super::graph::capture_label_rows(d, ids);
+        let labels = super::graph::capture_label_changes(&before, d, ids, true, None);
         Ok(count_changed(d, &before, ids) + usize::from(kept || painted || labels))
     })?;
     let m = idx.len();
@@ -1536,8 +1676,8 @@ fn move_contents(s: &mut Session, ids: &[NodeId], to: usize) -> Result<Value> {
             slot.get_or_insert(n.appearance.contents_at());
         }
         slot.ok_or_else(|| bad("appearance.moveItem", "only groups, layers, type and images have a Contents (Characters) row"))?;
-        // A graph label's kind keeps where its rows paint relative to the characters.
-        let labels = super::graph::capture_label_rows(d, ids);
+        // A graph label's kind keeps where its rows paint relative to the characters, from the labels the move changed.
+        let labels = capture_row_edits(&before, d, &shown_rows_edited(&before, d, ids.to_vec(), |_| false));
         Ok(count_changed(d, &before, ids) + usize::from(labels))
     })?;
     Ok(json!({ "contents": slot }))
@@ -1804,15 +1944,45 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         let object = super::graph::capture_series_object_opacity(d, &objects);
         // Graph labels keep their new rows, characters and paragraphs per kind of label.
         // On type, only `append` adds rows and a transparency pick changes the object's opacity and blend mode; the other
-        // attributes go to the characters.
+        // attributes go to the characters. Without a transparency pick, the object opacity and blend mode a kind keeps stay,
+        // also when the label or line picked onto still shows other ones until the graph is drawn again. `append` keeps
+        // only the kinds of row it added; a row of the other kind stays as the kind keeps it.
+        let transparency = attrs.appearance.transparency;
         let rows = if append {
-            super::graph::capture_label_rows(d, &targets)
+            super::graph::capture_label_kind_rows(d, &targets, paints, transparency)
         } else {
-            attrs.appearance.transparency && super::graph::capture_label_object_opacity(d, &targets)
+            transparency && super::graph::capture_label_object_opacity(d, &targets)
         };
         // `append` adds rows and leaves the characters as they were.
         let text = !append && super::graph::capture_label_text(d, &targets, kept_text, kept_para)?;
-        Ok(count_changed(d, &before, &targets) + usize::from(kept || painted || object || rows || text))
+        // A graph line is a path: a whole pick and `append` write its rows. A pick of some attributes keeps those it
+        // changed, and the rest stay as its kind keeps them, which the line may not show yet. Row attributes the graph
+        // does not keep (overprint, caps, joins, miter limit, dashes) leave what its kind keeps as it is.
+        let lines = match (rows_written, transparency) {
+            _ if append => super::graph::capture_line_kind_rows(d, &targets, paints, transparency),
+            (true, true) => super::graph::capture_line_rows(d, &targets),
+            (true, false) => super::graph::capture_line_fill_stroke_rows(d, &targets),
+            (false, _) => {
+                // The topmost row of each kind, which the pick wrote: what it wrote is kept also when the line showed it.
+                let tops: Vec<(NodeId, usize)> = targets
+                    .iter()
+                    .filter_map(|id| d.node(*id).map(|n| (*id, &n.appearance.items)))
+                    .flat_map(|(id, items)| {
+                        [true, false].into_iter().filter_map(move |kind| items.iter().rposition(|it| it.is_fill() == kind).map(|at| (id, at)))
+                    })
+                    .collect();
+                // A transparency pick applies the row's opacity and blend mode together.
+                let on_fill = super::graph::RowWrites { paint: fill.color, weight: false, opacity: opacities.0, blend: opacities.0 };
+                let on_stroke = super::graph::RowWrites {
+                    paint: stroke.color,
+                    weight: stroke.weight && source_has(false),
+                    opacity: opacities.1,
+                    blend: opacities.1,
+                };
+                super::graph::capture_line_changes(&before, d, &targets) | super::graph::capture_line_row_writes(d, &tops, on_fill, on_stroke)
+            }
+        };
+        Ok(count_changed(d, &before, &targets) + usize::from(kept || painted || object || rows || text || lines))
     })?;
     Ok(finish(s, &targets))
 }

@@ -12,7 +12,9 @@
 //! conversion leaves unchanged (an sRGB profile) keeps its JPEG data. A black-and-white image whose
 //! converted levels are grey is compressed as greyscale. A colour image the Output settings also
 //! convert to their destination ([`Pixels`]) goes from its profile to sRGB, then to the
-//! destination; a grey one keeps its profile there, as grey pixels are not converted.
+//! destination, and so does one converted from its profile to an RGB destination whose untagged
+//! images keep their numbers (Preserve Numbers); a grey one keeps its profile there, as grey
+//! pixels are not converted.
 //!
 //! CMYK images ([`ImageBlob::cmyk`]) stay CMYK: a CMYK JPEG already as asked is embedded as it is
 //! when its numbers are kept; the others' ink amounts are resampled, converted when the Output
@@ -325,15 +327,23 @@ pub(crate) struct Recoded {
     pub unconverted: bool,
 }
 
-/// How [`recode`] converts a gray or RGB image that carries an ICC profile to sRGB (Convert to
-/// Destination, [`crate::output::ColorOut::image_srgb_intent`]): the destination when it is sRGB,
-/// else the step before the image's [`Pixels`] conversion.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct ToSrgb {
+/// How [`recode`] converts a gray or RGB image that carries an ICC profile to sRGB
+/// ([`crate::output::ColorOut::image_srgb_intent`]): the destination when it is sRGB, else the
+/// step before the image's [`Pixels`] conversion.
+#[derive(Clone, Copy)]
+pub(crate) struct ToSrgb<'a> {
     /// The rendering intent of the conversion.
     pub intent: Intent,
     /// 16-bit samples may be written (PDF 1.5 and later).
     pub sixteen_bit: bool,
+    /// The colour output whose [`crate::output::ColorOut::tagged_pixels`] then convert a colour
+    /// image converted from its profile, when other colour images are not converted (`recode`'s
+    /// `convert`): to an RGB destination whose untagged images keep their numbers (Preserve
+    /// Numbers). Its table is built when the first such image needs it.
+    pub then: Option<&'a crate::output::ColorOut>,
+    /// Gray images are converted too: with an sRGB destination
+    /// ([`crate::output::ColorOut::converts_grey_images`]). In the others they keep their profile.
+    pub grey: bool,
 }
 
 /// What happens to the ICC profile a gray or RGB image carries
@@ -521,13 +531,15 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
-/// they carry when `profiles` keeps it ([`SourceProfiles::Keep`]); with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
-/// instead ([`ToSrgb`]), and colour ones then by `convert`; grey ones that `convert` leaves as
-/// they are keep their profile. `interpolate` lets viewers smooth it. An image that can't be
-/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB. When
-/// `convert` was to convert its colors, it is [`Recoded::unconverted`] if its header can't be read
-/// (it may be in color) or its pixels are beyond the decode allowance; a color image whose pixel
-/// data can't be read is not.
+/// they carry when `profiles` keeps it ([`SourceProfiles::Keep`]); with `to_srgb`, pixels in a
+/// gray or RGB profile other than sRGB are converted from it to sRGB instead ([`ToSrgb`]), and
+/// colour ones then by `convert`, or without it by the conversion `to_srgb` gives
+/// ([`ToSrgb::then`]); grey ones keep their profile unless the destination is sRGB
+/// ([`ToSrgb::grey`]). `interpolate` lets viewers smooth it. An image that can't be decoded is
+/// kept as it is, with a warning when its pixels were to be converted to sRGB. When `convert`
+/// was to convert its colors, it is [`Recoded::unconverted`] if its header can't be read (it may
+/// be in color) or its pixels are beyond the decode allowance; a color image whose pixel data
+/// can't be read is not.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
@@ -545,8 +557,9 @@ pub(crate) fn recode(
     use ExtendedColorType as T;
     let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
     // Pixels in a profile they are converted from are decoded, whatever the Compression settings.
-    // Grey pixels, which `convert` leaves as they are, keep their profile when it converts.
-    let to_srgb = to_srgb.filter(|_| !(grey && convert.is_some()));
+    // Grey pixels keep their profile unless the destination is sRGB ([`ToSrgb::grey`]).
+    let then = to_srgb.and_then(|t| t.then);
+    let to_srgb = to_srgb.filter(|t| !grey || t.grey);
     // Converted to the destination as sRGB, as before, when the profile can't be read.
     let mut note = None;
     let source = match to_srgb.and_then(|t| Some((source_profile(bytes, if grey { *b"GRAY" } else { *b"RGB " })?, t))) {
@@ -589,6 +602,8 @@ pub(crate) fn recode(
         Ok(img) => img,
         Err(limited) => return Recoded { unconverted: limited && convert.is_some(), ..keep },
     };
+    // Converted from its profile: then by `convert`, else by the conversion `to_srgb` gives.
+    let mut from_profile = false;
     if let Some((p, t)) = &source {
         let srgb = match into_srgb(img, p, t.intent) {
             Some(s) => Some(s),
@@ -606,8 +621,9 @@ pub(crate) fn recode(
                 if kind == Kind::Mono && !bilevel(&srgb) {
                     (kind, rule) = (Kind::Gray, self::rule(c, Kind::Gray));
                 }
+                from_profile = true;
                 // Written as it is only when nothing converts it further.
-                let as_is = kept(&rule, dims, size, jpeg) && convert.is_none();
+                let as_is = kept(&rule, dims, size, jpeg) && convert.is_none() && then.is_none();
                 // A JPEG kept as JPEG whose samples the conversion leaves unchanged (an sRGB
                 // profile): its JPEG data, without the profile (and, with `Remove`, without its
                 // segments: encoded again when those can't be taken out).
@@ -632,6 +648,7 @@ pub(crate) fn recode(
             },
         };
     }
+    let convert = if from_profile { convert.or_else(|| then.and_then(crate::output::ColorOut::tagged_pixels)) } else { convert };
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
     // destination's.
     let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };

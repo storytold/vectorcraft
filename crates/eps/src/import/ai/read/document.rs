@@ -336,6 +336,7 @@ fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
 /// those the swatches take.
 pub fn palette(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> Option<PaletteSwatches> {
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
@@ -396,6 +397,7 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> 
     // Brush objects are plug-in objects: data without one isn't read again.
     memchr::memmem::find(data, b"BeginPluginObject")?;
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The brushes come before the art, so an error in the art leaves them read.
     let _ = r.run();
     let (mut lib, unread) = r.brush_library()?;
@@ -449,6 +451,7 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool, names: &mut obj::Names) -
         return (vec![], 1.0);
     }
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     r.large_canvas = large_canvas.then_some(1.0);
     // The styles come before the art, so an error in the art leaves them read.
     let _ = r.run();
@@ -482,6 +485,7 @@ pub struct Symbols {
 pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
     crate::import::ai::find(data, b"BeginSymbol")?;
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The symbols come before the art, so an error in the art leaves them read.
     let _ = r.run();
     r.check_symbols();
@@ -536,10 +540,20 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
     Some(Symbols { symbols, images, swatches, canvas_scale: r.canvas_scale, own_size: r.symbols_own_size })
 }
 
+/// A reader of all of `data` for what doesn't depend on how its art draws (its artboards, its
+/// variable library): it checks no envelope and no stroke with aligned dashes against its drawn
+/// look, so it spends none of the import's checks ([`super::MAX_CHECKED`],
+/// [`super::MAX_DASH_CHECKS`]), which are the layers' reader's.
+fn reader_aside(data: &[u8]) -> Reader<'_> {
+    let mut r = Reader::new(data);
+    (r.envelope_checks, r.dash_checks) = (0, 0);
+    r
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8], names: &mut obj::Names) -> (Vec<(String, Rect)>, Option<usize>) {
-    let mut r = Reader::new(data);
+    let mut r = reader_aside(data);
     r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
@@ -608,7 +622,7 @@ pub fn variables(data: &[u8], names: &mut obj::Names) -> VariableRead {
     if crate::import::ai::find(data, b"variableSets").is_none() {
         return VariableRead::default();
     }
-    let mut r = Reader::new(data);
+    let mut r = reader_aside(data);
     r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     if r.variables.present {
@@ -923,12 +937,17 @@ impl<'a> Reader<'a> {
     }
 
     /// Art space → where the art being read goes: the document, or while a pattern's definition is
-    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space.
+    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space,
+    /// except an envelope's contents in its dictionary (its `AIDeformArtKey` block), which are in the
+    /// canvas's space, y down (in the symbol's space in a file without a template box).
     pub(crate) fn space(&mut self) -> Affine {
         if self.pattern.is_some() {
             FLIP
         } else if self.symbol.is_some() {
-            Affine::IDENTITY
+            match self.canvas_origin() {
+                Some(o) if !self.envelope_blocks.is_empty() => Affine::translate(-o.to_vec2()),
+                _ => Affine::IDENTITY,
+            }
         } else {
             self.ensure_space()
         }
@@ -1380,6 +1399,7 @@ impl<'a> Reader<'a> {
             unread: self.unread,
             unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
+            type_clips: self.type_clips.clone(),
             restyled: self.restyled,
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
@@ -1392,6 +1412,7 @@ impl<'a> Reader<'a> {
                 spent: self.envelope_spent,
                 page,
                 alone: None,
+                type_clips: self.type_clips,
             },
             styles_read,
             text_patterns,
@@ -1955,6 +1976,20 @@ impl LibraryWalk {
     }
 }
 
+/// Whether an XML node in `o` or the dictionaries it holds has a value or a type
+/// (`xmlnode-nodevalue`, `xmlnode-nodetype`). `seen` counts the dictionaries looked at; past
+/// [`MAX_LIBRARY_NODES`] of them, or deeper than [`MAX_DEPTH`], the library is taken to hold some.
+fn holds_values(o: &Obj, seen: &mut usize, depth: usize) -> bool {
+    *seen = seen.saturating_add(1);
+    if *seen > MAX_LIBRARY_NODES || depth > MAX_DEPTH {
+        return true;
+    }
+    if o.ty == "XMLNode" && (o.get("xmlnode-nodevalue").is_some() || o.get("xmlnode-nodetype").is_some()) {
+        return true;
+    }
+    o.items().any(|c| holds_values(c, seen, depth + 1))
+}
+
 /// The library of the `variableSets` element `sets` (see [`variable_library`]).
 fn read_variable_sets(sets: &Obj) -> VariableRead {
     let mut walk = LibraryWalk::default();
@@ -1974,5 +2009,34 @@ fn read_variable_sets(sets: &Obj) -> VariableRead {
     if walk.nodes > MAX_LIBRARY_NODES {
         return VariableRead { variables: Variables::default(), bindings: vec![], bindings_skipped: 0, skipped: 1, present: true };
     }
+    if vars == Variables::default() && walk.bindings.is_empty() && !holds_values(sets, &mut 0, 0) {
+        // The empty library a file can keep: nodes with names and nothing else (no value, no
+        // type). There is nothing in it to list, so nothing was left out.
+        walk.skipped = 0;
+    }
     VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    /// An XML node holding `child` (when given) and nothing else: no value, no type.
+    fn node(child: Option<Obj>) -> Obj {
+        let children = Obj { ty: "Array".into(), content: child.map(|c| V::Obj(Rc::new(c))).into_iter().collect(), ..Obj::default() };
+        Obj { ty: "XMLNode".into(), entries: vec![(Some("xmlnode-children".into()), vec![V::Obj(Rc::new(children))])], ..Obj::default() }
+    }
+
+    /// An empty library is taken to hold values past the caps on what is looked at: nested deeper
+    /// than [`MAX_DEPTH`], or once [`MAX_LIBRARY_NODES`] dictionaries have been looked at.
+    #[test]
+    fn an_empty_library_past_the_caps_is_taken_to_hold_values() {
+        let shallow = node(Some(node(None)));
+        assert!(!holds_values(&shallow, &mut 0, 0));
+        let deep = (0..MAX_DEPTH).fold(node(None), |inner, _| node(Some(inner)));
+        assert!(holds_values(&deep, &mut 0, 0));
+        let mut seen = MAX_LIBRARY_NODES;
+        assert!(holds_values(&shallow, &mut seen, 0));
+    }
 }

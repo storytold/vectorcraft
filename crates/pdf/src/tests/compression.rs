@@ -282,7 +282,9 @@ fn a_color_image_beyond_the_allowance_for_a_conversion_is_unconverted() {
     let settings: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})).unwrap();
     let out = crate::output::ColorOut::new(&d, &settings).unwrap();
     assert!(out.pixels().is_some());
-    let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: false });
+    let then = out.converts_tagged_pixels().then_some(&out);
+    let grey = out.converts_grey_images();
+    let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: false, then, grey });
     assert!(to_srgb.is_some());
     let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
     let half = |mut bytes: Vec<u8>| {
@@ -898,7 +900,7 @@ fn convert_to_srgb_converts_tagged_images_from_their_profile() {
         png
     };
     let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
-    let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true });
+    let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true, then: None, grey: true });
     for (what, png) in [("RGB", declared(&colour(), &p3)), ("gray", declared(&colour().grayscale(), &gray))] {
         let keep = crate::images::SourceProfiles::Keep;
         let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, keep, srgb_out);
@@ -1102,4 +1104,128 @@ fn convert_to_destination_converts_tagged_images_from_their_profile() {
     assert_eq!(image_spaces(&r.bytes), device("DeviceCMYK"), "unread profile");
     let as_srgb = converted_samples(&img, to_cmyk);
     assert!(image_samples(&r.bytes).first().is_some_and(|s| samples_close(s, &as_srgb, false, 1)), "unread profile: converted as sRGB");
+}
+
+/// With Preserve Numbers, an RGB image that carries an ICC profile is converted from that profile
+/// whatever the destination, while an untagged one keeps its numbers in an RGB destination (and
+/// converts from sRGB to a CMYK one, as before): to Generic CMYK, sRGB, Wide Gamut RGB, and Wide
+/// Gamut RGB that is also the document's RGB profile, and in PDF/X-1a, which converts the same way.
+/// A gray image keeps its profile, except in an sRGB destination, where it is converted to sRGB
+/// grays. An RGB profile the CMS can't read leaves the image as it is in an RGB destination, and
+/// its numbers converted as sRGB ones to a CMYK destination, with a warning.
+#[test]
+fn preserve_numbers_converts_tagged_images_from_their_profile() {
+    use vectorcraft_color::cms::{self, ColorSettings, DISPLAY_P3, GENERIC_CMYK, Intent, SRGB, WIDE_GAMUT_RGB, icc_bytes};
+    let intent = Intent::RelativeColorimetric;
+    let settings_with =
+        |rgb: &str| std::sync::Arc::new(cms::Cms::new(&ColorSettings { intent, rgb: rgb.into(), ..ColorSettings::default() }).unwrap());
+    let (active, own) = (settings_with(SRGB), settings_with(WIDE_GAMUT_RGB));
+    let mut p3 = icc_bytes(DISPLAY_P3).unwrap().to_vec();
+    p3[8..12].copy_from_slice(&[4, 0x20, 0, 0]);
+    let p3_profile = cms::IccProfile::from_bytes(None, &p3).unwrap();
+    let from_p3 = |rgb: [u8; 3]| p3_profile.to_srgb(&rgb.map(|v| f32::from(v) / 255.0), intent).unwrap().map(|v| (v * 255.0).round() as u8);
+    let img = colour_blocks();
+    let tagged_png = doc(tagged(&img, &p3, ImageFormat::Png), "image/png");
+    let untagged_png = doc(encoded(img.clone(), ImageFormat::Png), "image/png");
+    let device = |space: &str| vec![Written { space: space.into(), icc: None, bits: 8, filter: "FlateDecode".into(), smask: false }];
+    let cmyk = cms::Cms::new(&ColorSettings { intent, cmyk: GENERIC_CMYK.into(), ..ColorSettings::default() }).unwrap();
+    let cmy = cms::ProofLut::build(|rgb| {
+        let v = cmyk.srgb_to_cmyk(rgb, intent);
+        [v[0], v[1], v[2]]
+    });
+    let black = cms::ProofLut::build(|rgb| [cmyk.srgb_to_cmyk(rgb, intent)[3], 0.0, 0.0]);
+    let wide_lut = cms::ProofLut::build(|rgb| own.srgb_to_rgb(rgb));
+    let to_cmyk = |rgb: [u8; 3]| [cmy.apply8(rgb).as_slice(), &black.apply8(rgb)[..1]].concat();
+    let to_wide = |rgb: [u8; 3]| wide_lut.apply8(rgb).to_vec();
+    let to_srgb = |rgb: [u8; 3]| rgb.to_vec();
+    type ToDest<'a> = &'a dyn Fn([u8; 3]) -> Vec<u8>;
+    // Each case: what, the color settings, the export settings, the space images are written in,
+    // how an sRGB pixel converts to the destination, and whether untagged images keep their numbers.
+    type Case<'a> = (&'a str, &'a std::sync::Arc<cms::Cms>, Value, &'a str, ToDest<'a>, bool);
+    let cases: [Case<'_>; 5] = [
+        ("CMYK", &active, json!({"output": {"conversion": "preserveNumbers", "destination": GENERIC_CMYK}}), "DeviceCMYK", &to_cmyk, false),
+        ("sRGB", &active, json!({"output": {"conversion": "preserveNumbers", "destination": SRGB}}), "DeviceRGB", &to_srgb, true),
+        ("Wide Gamut", &active, json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}}), "DeviceRGB", &to_wide, true),
+        ("own RGB", &own, json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}}), "DeviceRGB", &to_wide, true),
+        (
+            "PDF/X-1a",
+            &active,
+            json!({"standard": "pdfX1a", "compatibility": "1.3", "output": {"destination": GENERIC_CMYK}}),
+            "DeviceCMYK",
+            &to_cmyk,
+            false,
+        ),
+    ];
+    for (what, color, settings, space, to_dest, keeps) in cases {
+        let export = |d: &Document| {
+            let mut s: PdfSettings = serde_json::from_value(settings.clone()).unwrap();
+            s.compression.compress_text = false;
+            let r = cms::with_active((*color).clone(), || export_with_report(d, &PdfOptions { settings: s, ..Default::default() })).unwrap();
+            assert!(r.warnings.is_empty(), "{what}: {:?}", r.warnings);
+            if what == "PDF/X-1a" {
+                crate::pdfx::verify(&r.bytes, Standard::PdfX1a).unwrap_or_else(|e| panic!("{what}: {e}"));
+            }
+            (image_spaces(&r.bytes), image_samples(&r.bytes))
+        };
+        let (spaces, samples) = export(&tagged_png);
+        assert_eq!(spaces, device(space), "{what}: tagged");
+        let want = converted_samples(&img, |rgb| to_dest(from_p3(rgb)));
+        let as_numbers = converted_samples(&img, to_dest);
+        assert!(
+            samples.len() == 1 && samples_close(&samples[0], &want, false, 1),
+            "{what}: converted from the profile, {}",
+            max_diff(&samples[0], &want)
+        );
+        assert!(!samples_close(&samples[0], &as_numbers, false, 8), "{what}: not converted as its numbers");
+        let (spaces, samples) = export(&untagged_png);
+        assert_eq!(spaces, device(space), "{what}: untagged");
+        let untagged = if keeps { img.to_rgb8().into_raw() } else { as_numbers };
+        assert!(samples.len() == 1 && samples_close(&samples[0], &untagged, false, 1), "{what}: untagged, {}", max_diff(&samples[0], &untagged));
+    }
+    // With RGB colours ICC-tagged as sRGB, the tagged image is written as its sRGB samples, in an
+    // ICC-based colour space with the sRGB profile.
+    let settings = json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB, "profiles": "all"}});
+    let (spaces, pdf) = cms::with_active(active.clone(), || export_images(&tagged_png, settings));
+    let is_srgb = |icc: &[u8]| {
+        let p = cms::IccProfile::from_bytes(None, icc).unwrap();
+        [[0.2, 0.5, 0.9], [0.9, 0.1, 0.4]].iter().all(|v| p.to_srgb(v, intent).unwrap().iter().zip(v).all(|(a, b)| (a - b).abs() < 0.01))
+    };
+    assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref().is_some_and(is_srgb), "tagged as sRGB: {spaces:?}");
+    let samples = image_samples(&pdf);
+    let want = converted_samples(&img, |rgb| from_p3(rgb).to_vec());
+    assert!(samples.len() == 1 && samples_close(&samples[0], &want, false, 1), "tagged as sRGB, {}", max_diff(&samples[0], &want));
+    // A gray image keeps its gray profile, in a CMYK and in an RGB destination, and in an RGB one
+    // with RGB colours ICC-tagged as sRGB (`all` profiles, PDF/A-2b).
+    let gray = gray_profile(&[0x01CD]);
+    let gray_doc = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Tiff), "image/tiff");
+    for (what, settings) in [
+        (GENERIC_CMYK, json!({"output": {"conversion": "preserveNumbers", "destination": GENERIC_CMYK}})),
+        (WIDE_GAMUT_RGB, json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}})),
+        ("all profiles", json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB, "profiles": "all"}})),
+        ("PDF/A-2b", json!({"standard": "pdfA2b", "output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}})),
+    ] {
+        let (spaces, _) = cms::with_active(active.clone(), || export_images(&gray_doc, settings));
+        assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(gray.as_slice()), "gray, {what}: {spaces:?}");
+    }
+    // In an sRGB destination it is converted to sRGB grays and written without it.
+    let settings = json!({"output": {"conversion": "preserveNumbers", "destination": SRGB}});
+    let (spaces, _) = cms::with_active(active.clone(), || export_images(&gray_doc, settings));
+    assert!(spaces.len() == 1 && spaces[0].space == "DeviceGray" && spaces[0].icc.is_none(), "gray, sRGB: {spaces:?}");
+    // A profile the CMS can't read: the image keeps it and its numbers in an RGB destination, and
+    // its numbers are converted as sRGB ones to a CMYK destination, with a warning each.
+    let unread = icc_profile(b"RGB ", 600);
+    let unread_doc = doc(tagged(&img, &unread, ImageFormat::Png), "image/png");
+    let unread_export = |destination: &str| {
+        let mut s: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "preserveNumbers", "destination": destination}})).unwrap();
+        s.compression.compress_text = false;
+        cms::with_active(active.clone(), || export_with_report(&unread_doc, &PdfOptions { settings: s, ..Default::default() })).unwrap()
+    };
+    let r = unread_export(WIDE_GAMUT_RGB);
+    assert!(r.warnings.iter().any(|w| w.contains("the image keeps it")), "{:?}", r.warnings);
+    let spaces = image_spaces(&r.bytes);
+    assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(unread.as_slice()), "unread profile: {spaces:?}");
+    let r = unread_export(GENERIC_CMYK);
+    assert!(r.warnings.iter().any(|w| w.contains("converted to the destination as sRGB")), "{:?}", r.warnings);
+    let as_srgb = converted_samples(&img, to_cmyk);
+    assert!(image_samples(&r.bytes).first().is_some_and(|s| samples_close(s, &as_srgb, false, 1)), "unread profile, CMYK: converted as sRGB");
 }

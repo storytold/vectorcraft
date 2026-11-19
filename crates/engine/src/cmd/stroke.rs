@@ -22,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|LineArrow|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null|{custom: name} (a custom arrowhead of the arrowheads file, stroke.arrowheads.list)|{Custom: {name, path}} (a custom head with its art, as document.inspect reports one; refused when the path fills no area, parts thinner than a millionth of a head unit counting as none, or has more than 4096 anchors, more than 4096 subpaths or a point more than 64 head units from the tip) (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), widthPoints?, gradientMode? (as document.inspect reports them in strokeOptions, so those read back unchanged; ignored here: a custom profile is set with the Width tool, gradientMode with paint.editGradient), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} Without a stroke item, type takes weight, cap, join, miterLimit, align (around its glyph outlines; the type stays live) and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does). On a path directly in a graph series, the graph also stores a weight it changes on the topmost visible stroke (docs/mcp.md); on a graph label's stroke row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters the stroke options they take → {objects: how many objects took the stroke options}",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|LineArrow|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null|{custom: name} (a custom arrowhead of the arrowheads file, stroke.arrowheads.list)|{Custom: {name, path}} (a custom head with its art, as document.inspect reports one; refused when the path fills no area, parts thinner than a millionth of a head unit counting as none, or has more than 4096 anchors, more than 4096 subpaths or a point more than 64 head units from the tip) (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), widthPoints?, gradientMode? (as document.inspect reports them in strokeOptions, so those read back unchanged; ignored here: a custom profile is set with the Width tool, gradientMode with paint.editGradient), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?|id?, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} Without a stroke item, type takes weight, cap, join, miterLimit, align (around its glyph outlines; the type stays live) and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does). On a path directly in a graph series, the graph also stores a weight it changes on the topmost visible stroke (docs/mcp.md); on a graph label's stroke row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters the stroke options they take; on a graph's axis line, tick mark or radar ring, the graph stores the paint, weight, opacity and blend mode of its topmost visible fill and stroke rows that the edit changes, and the weight it writes to the topmost visible stroke, for every line of its kind, and not its caps, joins, dashes, alignment or arrowheads → {objects: how many objects took the stroke options}",
             has_doc,
             stroke_set
         ),
@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Weight Up",
             [],
             Some("Cmd+Alt+."),
-            "{ids?|id?} raise each selected stroke's weight by one step of Units › Stroke (a quarter unit below one unit, then whole units; up to 1000 pt), each from its own weight: the selected objects' active or top stroke, type's stroked characters; objects without a stroke are left alone. With nothing selected (and no ids), the weight of the next object drawn. On a path directly in a graph series, the graph also stores the new weight of the topmost visible stroke, and on a graph label the new weight of its characters' stroke or its stroke row for every label of its kind (docs/mcp.md) → {objects}",
+            "{ids?|id?} raise each selected stroke's weight by one step of Units › Stroke (a quarter unit below one unit, then whole units; up to 1000 pt), each from its own weight: the selected objects' active or top stroke, type's stroked characters; objects without a stroke are left alone. With nothing selected (and no ids), the weight of the next object drawn. On a path directly in a graph series, the graph also stores the new weight of the topmost visible stroke, and on a graph label the new weight of its characters' stroke or its stroke row for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {objects}",
             has_doc,
             |s, p| stroke_step(s, p, true)
         ),
@@ -220,8 +220,10 @@ fn own_stroke_or_leaves(s: &Session, p: &Value) -> Result<Vec<vectorcraft_doc::N
         })
     };
     let (mut out, rest): (Vec<_>, Vec<_>) = picked.into_iter().partition(own);
+    // A leaf already listed is skipped; a set keeps this linear in the number of leaves.
+    let mut seen: std::collections::HashSet<vectorcraft_doc::NodeId> = out.iter().copied().collect();
     for id in super::leaf_targets(s, &rest)? {
-        if !out.contains(&id) {
+        if seen.insert(id) {
             out.push(id);
         }
     }
@@ -307,8 +309,10 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let of = super::appearance::reference_of(s, p, item, C)?;
-    // The objects counted: with a design's art, those with a row equal to the art's.
-    let ids = edit_items(s, &ids, item, of, C, "Stroke", false, |n, index| {
+    // The objects counted: with a design's art, those with a row equal to the art's. A graph line keeps the weight
+    // given to it, also when it already showed it.
+    let writes = super::graph::RowWrites { weight: change.weight.is_some(), ..super::graph::RowWrites::NONE };
+    let ids = super::appearance::edit_items_writing(s, &ids, item, of, C, "Stroke", false, writes, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
@@ -426,6 +430,52 @@ impl Session {
         let mut nodes = vec![];
         painted(first, true, &mut nodes);
         node_stroke(nodes.first()?)
+    }
+
+    /// Do all the strokes that `stroke.set` edits without `ids` or `item` draw with a brush
+    /// ([`vectorcraft_brush::keeps_brush_size`])? If they do, a width profile changes none of
+    /// them, and the result is `Some`, holding whether any of them has a width profile. The result
+    /// is `None` when a profile changes at least one of them.
+    ///
+    /// The strokes are the ones `stroke.set` edits:
+    /// - the Appearance panel's active stroke row in each target that has an equal row
+    ///   ([`ItemTarget::per_target`]), and the top stroke in the others;
+    /// - else a selected group's own stroke;
+    /// - else the top strokes of the objects it paints ([`own_stroke_or_leaves`]).
+    ///
+    /// The art of graph designs is left out, and so are images and symbol instances without an
+    /// active row. The result is also `None` with nothing selected, with an object inside a symbol
+    /// instance selected, with type among the targets while no Appearance row is active for it,
+    /// and with a target that has no stroke row, since `stroke.set` gives such a target a plain
+    /// stroke.
+    pub fn brushed_strokes_profiled(&self) -> Option<bool> {
+        const C: &str = "stroke.set";
+        let st = self.active()?;
+        if st.selected_symbol_part().is_some() {
+            return None;
+        }
+        let p = json!({});
+        let item = item_target(self, &p, C).ok()?.of_kind(self, false);
+        let ids = if item == ItemTarget::Top { own_stroke_or_leaves(self, &p).ok()? } else { item.targets(self, &p).ok()? };
+        let mut ids = super::appearance::drop_design_art_rows(self, ids, item, false, C).ok()?;
+        if item == ItemTarget::Top {
+            ids.retain(|id| !matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
+        }
+        let mut strokes = vec![];
+        for (id, each) in ids.iter().zip(item.per_target(self, &ids)) {
+            let n = st.doc.node(*id)?;
+            let row = each?.resolve(&n.appearance, false, C).ok()?;
+            if row.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                return None;
+            }
+            strokes.push(n.appearance.stroke_at(row).filter(|s| s.brush.is_some())?);
+        }
+        if strokes.is_empty() {
+            return None;
+        }
+        // The library is read only when every stroke names a brush.
+        let lib = vectorcraft_brush::library(&st.doc);
+        strokes.iter().all(|s| vectorcraft_brush::keeps_brush_size(&lib, s)).then(|| strokes.iter().any(|s| s.profile.is_some()))
     }
 }
 
@@ -547,6 +597,10 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
         arrows_and_profile(st);
         if let Some(b) = &brush {
+            // The path's own brush settings (Options of Selected Object) go with the brush they set.
+            if st.brush != *b {
+                st.brush_options.clear();
+            }
             st.brush = b.clone();
         }
         Ok(())
@@ -672,6 +726,7 @@ fn profile_list(s: &mut Session, _: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vectorcraft_doc::NodeId;
 
     #[test]
     fn weight_steps_follow_units_and_stop_at_their_bounds() {
@@ -686,5 +741,94 @@ mod tests {
         let mm = Unit::Millimeters.to_pt(1.0);
         assert!((step_weight(mm, Unit::Millimeters, true) - 2.0 * mm).abs() < 1e-9);
         assert!((step_weight(mm, Unit::Millimeters, false) - 0.75 * mm).abs() < 1e-9);
+    }
+
+    fn run(s: &mut Session, id: &str, p: Value) -> Value {
+        s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
+    }
+
+    fn made(v: Value) -> NodeId {
+        NodeId(v["id"].as_u64().unwrap_or_else(|| panic!("no id in {v}")))
+    }
+
+    /// The targets of [`own_stroke_or_leaves`] merged by a linear search of the growing list.
+    fn listed_merge(s: &Session, p: &Value) -> Vec<NodeId> {
+        let d = &s.doc().unwrap().doc;
+        let own = |id: &NodeId| {
+            d.node(*id).is_some_and(|n| {
+                matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape() && n.appearance.stroke().is_some()
+            })
+        };
+        let (mut out, rest): (Vec<_>, Vec<_>) = super::super::targets(s, p).unwrap().into_iter().partition(own);
+        for id in super::super::leaf_targets(s, &rest).unwrap() {
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+        out
+    }
+
+    /// `stroke.set` with no `item` lists the same targets in the same order as a linear merge:
+    /// groups and layers with a stroke of their own (repeats kept), the leaves of plain groups and
+    /// layers, compound paths and compound shapes for their members, and each leaf once, also
+    /// when it is named both directly and through its group.
+    #[test]
+    fn stroke_targets_match_the_listed_merge() {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 2000, "height": 400}));
+        let base = s.doc().unwrap().doc.layers[0].id;
+        let mut x = 0.0;
+        let mut rect = |s: &mut Session| {
+            x += 120.0;
+            made(run(s, "shape.rectangle", json!({"x": x, "y": 100, "width": 100, "height": 100})))
+        };
+        let (a, b) = (rect(&mut s), rect(&mut s));
+        let plain = made(run(&mut s, "object.group", json!({"ids": [a.0, b.0]})));
+        let (c, d) = (rect(&mut s), rect(&mut s));
+        let owned = made(run(&mut s, "object.group", json!({"ids": [c.0, d.0]})));
+        run(&mut s, "appearance.addStroke", json!({"ids": [owned.0]}));
+        let (e, f) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "select.set", json!({"ids": [e.0, f.0]}));
+        let compound = made(run(&mut s, "object.compoundPath.make", json!({})));
+        let (g, h) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "select.set", json!({"ids": [g.0, h.0]}));
+        let shape = made(run(&mut s, "object.compoundShape.make", json!({})));
+        let lone = rect(&mut s);
+        let layer = made(run(&mut s, "layer.new", json!({})));
+        let (j, k) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "appearance.addStroke", json!({"ids": [layer.0]}));
+        {
+            let doc = &s.doc().unwrap().doc;
+            assert_eq!((doc.parent_of(j), doc.parent_of(k)), (Some(layer), Some(layer)), "the new layer holds the last two");
+            assert_eq!((doc.parent_of(e), doc.parent_of(g)), (Some(compound), Some(shape)));
+            assert!(doc.node(owned).unwrap().appearance.stroke().is_some() && doc.node(layer).unwrap().appearance.stroke().is_some());
+        }
+        let named = json!({"ids": [plain.0, a.0, owned.0, owned.0, c.0, e.0, compound.0, g.0, lone.0, layer.0, j.0]});
+        let cases = [
+            named.clone(),
+            json!({"ids": [j.0, h.0, f.0, b.0, plain.0, layer.0, owned.0, k.0, shape.0]}),
+            json!({"ids": [base.0, layer.0, base.0]}),
+            json!({"ids": [d.0, owned.0, base.0]}),
+            json!({"ids": []}),
+        ];
+        for p in &cases {
+            assert_eq!(own_stroke_or_leaves(&s, p).unwrap(), listed_merge(&s, p), "{p}");
+        }
+        run(&mut s, "select.set", json!({"ids": [lone.0, owned.0, f.0, plain.0, b.0, layer.0]}));
+        assert_eq!(own_stroke_or_leaves(&s, &json!({})).unwrap(), listed_merge(&s, &json!({})), "the selection");
+
+        // The edit reaches every listed target, counting a repeated one once, and leaves the other
+        // member of the group with its own stroke alone.
+        let want = listed_merge(&s, &named);
+        assert_eq!(want.iter().filter(|id| **id == owned).count(), 2, "{want:?}");
+        let distinct: std::collections::HashSet<_> = want.iter().collect();
+        let before = s.doc().unwrap().doc.node(d).unwrap().clone();
+        let r = run(&mut s, "stroke.set", json!({"ids": named["ids"], "weight": 3}));
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(r["objects"], distinct.len(), "{r} {want:?}");
+        for id in &want {
+            assert_eq!(doc.node(*id).unwrap().appearance.stroke().map(|st| st.width), Some(3.0), "{id:?}");
+        }
+        assert_eq!(doc.node(d), Some(&before), "a member reached only through its group's own stroke is left alone");
     }
 }

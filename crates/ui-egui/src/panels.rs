@@ -17,6 +17,7 @@ pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
 pub mod css_properties;
+pub mod discover;
 pub mod doc_info;
 pub mod flattener_preview;
 pub mod glyphs;
@@ -37,6 +38,7 @@ pub mod opentype;
 pub mod paragraph;
 pub mod pathfinder;
 pub mod pattern_options;
+pub mod preflight;
 pub mod properties;
 pub mod script_console;
 pub mod separations;
@@ -51,6 +53,8 @@ pub mod transform;
 pub mod transparency;
 pub mod variables;
 
+use std::sync::Arc;
+
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -62,9 +66,11 @@ use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
 use crate::{VectorcraftApp, icons};
 
-/// The first selected node (cloned), if any.
-pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    first_node(app).cloned()
+/// The first selected node, as the `Arc` the document holds, if any. It does not change with later
+/// edits: read it again after one.
+pub fn first_selected(app: &VectorcraftApp) -> Option<Arc<Node>> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| layers::node_arc(&st.doc, *id))
 }
 
 /// The radius the Live Corners of path `n` show in the panels: that of the corners the panels set
@@ -183,17 +189,21 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "colorThemes" => color_themes::show(app, ui),
         color_wheel::ID => color_wheel::show(app, ui),
         links::ID => links::show(app, ui),
+        preflight::ID => preflight::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
         three_d::ID => three_d::show(app, ui),
         script_console::ID => script_console::show(app, ui),
         learn::ID => learn::show(app, ui),
+        discover::ID => discover::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
+        crate::addons::packaging::preview::ID => crate::addons::packaging::preview::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),
+        crate::addons::units::ID => crate::addons::units::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
@@ -239,6 +249,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "attributes" => attributes::menu(app, ui),
         svg_interactivity::ID => svg_interactivity::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        color_wheel::ID => color_wheel::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
@@ -492,12 +503,14 @@ pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params:
     match phase {
         Live::Idle => {}
         Live::Dragging | Live::Released => {
-            if app.session.begin_interaction(label).is_ok() {
+            if app.begin_interaction(label).is_ok() {
                 if let Err(e) = app.session.preview(cmd, &params) {
                     app.ui.status = e.to_string();
                 }
-                if phase == Live::Released {
-                    app.session.commit_interaction().ok();
+                if phase == Live::Released
+                    && let Err(e) = app.session.commit_interaction()
+                {
+                    app.ui.status = e.to_string();
                 }
                 app.sync_views();
             } else if phase == Live::Released {
@@ -618,13 +631,16 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// "Recent Colors" header + rows of chips (the Session's recent colours, which every paint
-/// command feeds), wrapped onto as many rows as the panel's width needs; returns the one clicked,
-/// for the caller to apply. A chip drags its color as a solid paint, which the Swatches panel
-/// makes a swatch of.
-pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
+/// Rows of chips (the Session's recent colors, which every paint command feeds), wrapped onto as
+/// many rows as the panel's width needs, under a "Recent Colors" header when `heading` is set;
+/// returns the one clicked, for the caller to apply. The chips sit in a group that, without the
+/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which
+/// the Swatches panel makes a swatch of.
+pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    crate::widgets::subheader(ui, tl!("Recent Colors"));
+    if heading {
+        crate::widgets::subheader(ui, tl!("Recent Colors"));
+    }
     let width = ui.available_width();
     let colors = &app.session.recent_colors;
     // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge.
@@ -632,11 +648,22 @@ pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Col
     let rows = colors.len().div_ceil(per_row).max(1);
     let (r, _) = ui.allocate_exact_size(vec2(width, 3.0 + rows as f32 * 19.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // The chips go in a child `Ui` over the box, so screen readers find them inside its group;
+    // their ids stay under the caller's scope.
+    let scope = ui.scope_id();
+    let mut builder = egui::UiBuilder::new().max_rect(r).accessibility_role(egui::accesskit::Role::Group);
+    if !heading {
+        builder = builder.accessibility_label(tl!("Recent Colors"));
+    }
+    let ui = &mut ui.new_child(builder);
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_bounds(egui::accesskit::Rect { x0: r.min.x.into(), y0: r.min.y.into(), x1: r.max.x.into(), y1: r.max.y.into() });
+    });
     let mut chosen = None;
     for (i, c) in colors.iter().enumerate() {
         let (row, col) = (i / per_row, i % per_row);
         let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click_and_drag());
+        let resp = ui.interact(cell, scope.with(("recent", i)), Sense::click_and_drag());
         crate::widgets::drag_source(ui, &resp, || crate::widgets::PanelDrag::paint(Paint::solid(*c)));
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {
@@ -780,6 +807,10 @@ mod tests_blend;
 mod tests_brush_libraries;
 #[cfg(test)]
 mod tests_color_wheel;
+#[cfg(test)]
+mod tests_color_wheel_box;
+#[cfg(test)]
+mod tests_color_wheel_vision;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]

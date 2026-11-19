@@ -1,4 +1,4 @@
-//! File → Export → Export for Screens, laid out as Illustrator's: on the left the Artboards and
+//! File → Export → Export for Screens: on the left the Artboards and
 //! Assets tabs (thumbnails with checkboxes, in a grid or a list), Clear Selection and the prefix;
 //! on the right Select (All, a range or Full Document, Include Bleed, Include Artboard Fill), the destination (folder
 //! picker, Open Location after Export, Create Sub-folders by scale or by format; the web downloads
@@ -189,9 +189,9 @@ pub fn open(app: &mut VectorcraftApp) {
 }
 
 /// The options format `id` starts with in Format Settings: the raster options dialogs' defaults
-/// (without quality and image maps: the rows choose quality, a map is another file), the SVG
-/// Options' first-use ones (without artboards and images: a linked image is another file), or the
-/// default PDF preset.
+/// (without image maps, a map being another file, and without quality but WebP's: JPEG rows choose
+/// their quality), the SVG Options' first-use ones (without artboards and images: a linked image is
+/// another file), or the default PDF preset.
 fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
     let mut o = match (id, fileio::format(id)) {
         ("svg", _) => svg_options::first_use(),
@@ -199,8 +199,11 @@ fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
         (_, Some(f)) => png_options::defaults(app, f),
         _ => Map::new(),
     };
-    for k in ["quality", "imageMap", "useArtboards", "images"] {
+    for k in ["imageMap", "useArtboards", "images"] {
         o.remove(k);
+    }
+    if id != "webp" {
+        o.remove("quality");
     }
     o
 }
@@ -718,7 +721,7 @@ fn tiles(
                         ui.painter().galley(label_pos, galley, t.text);
                         false
                     };
-                    // The checkbox sits on the thumbnail's lower left corner, as Illustrator's.
+                    // The checkbox sits on the thumbnail's lower left corner.
                     let bx = egui::Rect::from_min_size(egui::pos2(pic.left() + 4.0, pic.bottom() - 18.0), egui::vec2(14.0, 14.0));
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bx));
                     if widgets::check_box(&mut child, &name, checked, true) || resp.clicked() || caption_clicked {

@@ -579,6 +579,11 @@ impl SwatchChoices {
             Some(v) => Ok(Self { all: one(v)?, by_name: BTreeMap::new() }),
         }
     }
+    /// Add for every conflict: each pasted swatch whose name the document gives another color
+    /// comes in renamed.
+    pub(crate) fn add_all() -> Self {
+        Self { all: SwatchChoice::Add, by_name: BTreeMap::new() }
+    }
     fn of(&self, name: &str) -> SwatchChoice {
         self.by_name.get(name).copied().unwrap_or(self.all)
     }
@@ -703,7 +708,7 @@ impl Relink {
                     self.name(Res::ParaStyle, s);
                 }
             }
-            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten() {
+            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows, &mut l.axis_rows, &mut l.ring_rows].into_iter().flatten() {
                 r.paint.fill.iter_mut().chain(r.paint.stroke.iter_mut()).for_each(|p| self.paint(p));
             }
         }
@@ -766,6 +771,8 @@ pub struct SymbolOptions {
     pub export_type: SymbolExportType,
     /// 9-slice guides (`None`: 9-slice scaling off).
     pub nine_slice: Option<SymbolNineSlice>,
+    /// Align to Pixel Grid.
+    pub pixel_aligned: bool,
 }
 
 impl SymbolOptions {
@@ -776,6 +783,7 @@ impl SymbolOptions {
             registration: d.symbol_registration(name),
             export_type: d.symbol_export_type(name),
             nine_slice: d.symbol_nine_slice(name),
+            pixel_aligned: d.symbol_pixel_aligned(name),
         }
     }
 
@@ -785,6 +793,7 @@ impl SymbolOptions {
         d.set_symbol_registration(name, self.registration);
         d.set_symbol_export_type(name, self.export_type);
         d.set_symbol_nine_slice(name, self.nine_slice);
+        d.set_symbol_pixel_aligned(name, self.pixel_aligned);
     }
 }
 

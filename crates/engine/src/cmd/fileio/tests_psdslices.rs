@@ -501,8 +501,85 @@ fn damaged_slices_never_panic() {
             let mut f = base.clone();
             f[at] = v;
             let mut s = Session::new();
-            let _ = s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)}));
-            let _ = s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)}));
+            // The engine's guard reports a panic as an internal error.
+            for r in [
+                s.execute("document.open", &json!({"name": "poster.psd", "dataBase64": b64(&f)})),
+                s.execute("document.psdInfo", &json!({"dataBase64": b64(&f)})),
+            ] {
+                assert!(!matches!(r, Err(crate::EngineError::Internal { .. })), "byte {at} set to {v}: {r:?}");
+            }
         }
     }
+}
+
+/// The PSD file `document.export` writes from `s`, with its layers or flat.
+fn export(s: &mut Session, layers: bool) -> Vec<u8> {
+    let r = s.execute("document.export", &json!({"format": "psd", "layers": layers})).unwrap();
+    vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn an_opened_files_slices_survive_a_psd_export() {
+    let link =
+        S { url: "https://example.com/", target: "_blank", message: "Go", alt: "Logo", argb: [255, 0x12, 0x34, 0x56], ..user("logo", [2, 4, 10, 8]) };
+    let plain = S { kind: 0, cell: "a < b & c", ..user("note", [10, 10, 20, 20]) };
+    let html = S { kind: 0, html: true, cell: "<b>Hi</b>", argb: [0, 1, 2, 3], ..user("", [0, 12, 6, 18]) };
+    let auto = S { origin: 0, ..user("auto", [0, 0, 20, 2]) };
+    let f = with_resource(&psd(true), 1050, &v6(&[link, plain, html, auto], &[]));
+    let (mut s, _) = open(&f, json!({}));
+    let opened = slices(&s);
+    assert_eq!(opened.len(), 3);
+    for layers in [true, false] {
+        let out = export(&mut s, layers);
+        let (again, r) = open(&out, json!({}));
+        assert!(warnings(&r).is_empty(), "{r}");
+        // The same rectangles and options; the auto slices are laid out again around them.
+        let mut got = slices(&again);
+        let mut want = opened.clone();
+        let order = |v: &mut Vec<(Rect, SliceOptions)>| v.sort_by(|a, b| a.0.y0.total_cmp(&b.0.y0).then(a.0.x0.total_cmp(&b.0.x0)));
+        order(&mut got);
+        order(&mut want);
+        assert_eq!(got, want);
+        let layout = again.doc().unwrap().doc.slice_layout();
+        assert!(layout.iter().any(|a| a.source == vectorcraft_doc::SliceSource::Auto));
+        assert_eq!(s.execute("document.psdInfo", &json!({"dataBase64": b64(&out)})).unwrap()["slices"], json!(3));
+    }
+}
+
+#[test]
+fn object_slices_are_written_as_user_slices_and_html_text_as_its_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    let rect = r["id"].as_u64().unwrap();
+    s.execute("object.slice.make", &json!({"ids": [rect]})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    s.execute("object.slice.options", &json!({"kind": "noImage", "name": "box", "text": "<i>x</i>", "background": "#00ff00"})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 100, "y": 50, "text": "A & B"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.slice.make", &json!({"ids": [t]})).unwrap();
+    s.execute("select.set", &json!({"ids": [t]})).unwrap();
+    s.execute("object.slice.options", &json!({"kind": "htmlText"})).unwrap();
+    let (again, _) = open(&export(&mut s, false), json!({}));
+    let got = slices(&again);
+    assert_eq!(got.len(), 2, "{got:?}");
+    let doc = &s.doc().unwrap().doc;
+    let rb = doc.slice_bounds(vectorcraft_doc::NodeId(rect)).unwrap();
+    let boxed = got.iter().find(|g| g.1.name == "box").unwrap();
+    // Within a pixel of the object's bounds.
+    for (a, b) in [(boxed.0.x0, rb.x0), (boxed.0.y0, rb.y0), (boxed.0.x1, rb.x1), (boxed.0.y1, rb.y1)] {
+        assert!((a - b).abs() <= 1.0, "{:?} against {rb:?}", boxed.0);
+    }
+    assert_eq!((boxed.1.kind, boxed.1.text.as_str(), boxed.1.background.as_str()), (SliceKind::NoImage, "<i>x</i>", "#00ff00"));
+    let text = got.iter().find(|g| g.1.name.is_empty()).unwrap();
+    assert_eq!((text.1.kind, text.1.text.as_str()), (SliceKind::NoImage, "A &amp; B"));
+}
+
+#[test]
+fn twenty_exported_slices_open_again_with_the_one_whose_id_is_16() {
+    let columns: Vec<S> = (0..20).map(|x| user("", [x, 0, x + 1, 20])).collect();
+    let (mut s, _) = open(&with_resource(&psd(false), 1050, &v6(&columns, &[])), json!({}));
+    assert_eq!(slices(&s).len(), 20);
+    let (again, r) = open(&export(&mut s, true), json!({}));
+    assert!(warnings(&r).is_empty(), "{r}");
+    assert_eq!(slices(&again), slices(&s));
 }

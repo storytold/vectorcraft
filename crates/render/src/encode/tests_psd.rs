@@ -1,15 +1,16 @@
 //! PSD export: the header, the layer records (names, bounds, opacity, blend modes, groups,
-//! hidden layers), the merged image, the colour models, and a reader's view of the file.
+//! hidden layers), the merged image, the colour models, the slices, and a reader's view of the
+//! file.
 
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, Color};
-use vectorcraft_doc::{Document, LayerColor, Node};
+use vectorcraft_doc::{Document, LayerColor, Node, NodeId, Slice, SliceKind, SliceOptions};
 use vectorcraft_geom::Rect;
 use vectorcraft_testkit::fixtures::DocBuilder;
 
 use super::jpeg::ColorModel;
-use super::psd::{MAX_SIDE, PsdOptions};
+use super::psd::{MAX_SIDE, MAX_SLICE_TEXT, MAX_SLICES, PsdOptions, room};
 use super::*;
 
 /// A 100 × 60 pt document: a red square on Layer 1, and on "Top" a half-opaque blue multiply
@@ -58,6 +59,8 @@ struct Rec {
     opacity: u8,
     hidden: bool,
     divider: Option<usize>,
+    /// The type tool object of a type layer.
+    type_tool: Option<Vec<u8>>,
 }
 
 /// The file: header channels, colour mode, image resources, layer count and records.
@@ -95,7 +98,7 @@ fn parse(f: &[u8]) -> Parsed<'_> {
         let end = p + 16 + u32_at(f, p + 12);
         let mut q = p + 16 + 8;
         q += (1 + f[q] as usize).next_multiple_of(4);
-        let (mut name, mut divider) = (String::new(), None);
+        let (mut name, mut divider, mut type_tool) = (String::new(), None, None);
         while q < end {
             assert_eq!(&f[q..q + 4], b"8BIM");
             let len = u32_at(f, q + 8);
@@ -103,11 +106,12 @@ fn parse(f: &[u8]) -> Parsed<'_> {
             match &f[q + 4..q + 8] {
                 b"luni" => name = String::from_utf16(&(0..u32_at(data, 0)).map(|i| u16_at(data, 4 + i * 2)).collect::<Vec<_>>()).unwrap(),
                 b"lsct" => divider = Some(u32_at(data, 0)),
+                b"TySh" => type_tool = Some(data.to_vec()),
                 _ => {}
             }
             q += 12 + len;
         }
-        out.records.push(Rec { name, rect, channels, blend, opacity, hidden: flags & 2 != 0, divider });
+        out.records.push(Rec { name, rect, channels, blend, opacity, hidden: flags & 2 != 0, divider, type_tool });
         p = end;
     }
     out
@@ -357,6 +361,373 @@ fn the_profile_and_the_size_limit() {
     assert!(err.contains(&MAX_SIDE.to_string()), "{err}");
 }
 
+/// A descriptor value as the format's specification lays it out.
+#[derive(Debug, PartialEq)]
+enum Item {
+    Text(String),
+    Enum(String, String),
+    Long(i32),
+    Doub(f64),
+    Unit(String, f64),
+    Object(String, Vec<(String, Item)>),
+    Raw(Vec<u8>),
+}
+
+/// Reads an id (a four-character code after a zero length, else a length and its bytes) at `at`.
+fn read_id(d: &[u8], at: &mut usize) -> String {
+    let n = u32_at(d, *at);
+    let len = if n == 0 { 4 } else { n };
+    let s = String::from_utf8(d[*at + 4..*at + 4 + len].to_vec()).unwrap();
+    *at += 4 + len;
+    s
+}
+
+fn read_unicode(d: &[u8], at: &mut usize) -> String {
+    let n = u32_at(d, *at);
+    let units: Vec<u16> = (0..n).map(|i| u16_at(d, *at + 4 + i * 2)).collect();
+    *at += 4 + n * 2;
+    String::from_utf16(&units).unwrap().trim_end_matches('\0').to_string()
+}
+
+/// Reads a descriptor at `at`: its class and items.
+fn read_descriptor(d: &[u8], at: &mut usize) -> (String, Vec<(String, Item)>) {
+    read_unicode(d, at);
+    let class = read_id(d, at);
+    let count = u32_at(d, *at);
+    *at += 4;
+    let mut items = vec![];
+    for _ in 0..count {
+        let key = read_id(d, at);
+        let ty = d[*at..*at + 4].to_vec();
+        *at += 4;
+        let f64_at = |at: usize| f64::from_be_bytes(d[at..at + 8].try_into().unwrap());
+        let v = match &ty[..] {
+            b"TEXT" => Item::Text(read_unicode(d, at)),
+            b"enum" => Item::Enum(read_id(d, at), read_id(d, at)),
+            b"long" => {
+                *at += 4;
+                Item::Long(u32_at(d, *at - 4) as i32)
+            }
+            b"doub" => {
+                *at += 8;
+                Item::Doub(f64_at(*at - 8))
+            }
+            b"UntF" => {
+                let unit = String::from_utf8(d[*at..*at + 4].to_vec()).unwrap();
+                *at += 12;
+                Item::Unit(unit, f64_at(*at - 8))
+            }
+            b"Objc" => {
+                let (class, items) = read_descriptor(d, at);
+                Item::Object(class, items)
+            }
+            b"tdta" => {
+                let n = u32_at(d, *at);
+                *at += 4 + n;
+                Item::Raw(d[*at - n..*at].to_vec())
+            }
+            other => panic!("unexpected item type {other:?}"),
+        };
+        items.push((key, v));
+    }
+    (class, items)
+}
+
+/// A type tool object: its transform, its text descriptor and its warp descriptor.
+struct TypeTool {
+    transform: [f64; 6],
+    text: Vec<(String, Item)>,
+    warp: (String, Vec<(String, Item)>),
+}
+
+fn type_tool(d: &[u8]) -> TypeTool {
+    assert_eq!(u16_at(d, 0), 1, "version");
+    let transform = std::array::from_fn(|i| f64::from_be_bytes(d[2 + i * 8..10 + i * 8].try_into().unwrap()));
+    assert_eq!((u16_at(d, 50), u32_at(d, 52)), (50, 16), "text and descriptor versions");
+    let mut at = 56;
+    let (class, text) = read_descriptor(d, &mut at);
+    assert_eq!(class, "TxLr");
+    assert_eq!((u16_at(d, at), u32_at(d, at + 2)), (1, 16), "warp and descriptor versions");
+    at += 6;
+    let warp = read_descriptor(d, &mut at);
+    assert_eq!(d.len(), (at + 16).next_multiple_of(2), "the four warped bounds end the block (padded to an even length)");
+    TypeTool { transform, text, warp }
+}
+
+fn item<'a>(items: &'a [(String, Item)], key: &str) -> &'a Item {
+    &items.iter().find(|(k, _)| k == key).unwrap_or_else(|| panic!("no {key}")).1
+}
+
+/// `s` as the text engine stores a string: UTF-16BE after a byte order mark.
+fn engine_string(s: &str) -> Vec<u8> {
+    [0xFE, 0xFF].into_iter().chain(s.encode_utf16().flat_map(u16::to_be_bytes)).collect()
+}
+
+fn type_node(b: &mut DocBuilder, origin: (f64, f64), text: &str, f: impl FnOnce(&mut vectorcraft_doc::TextObject)) -> Node {
+    use vectorcraft_doc::{CharStyle, NodeKind, TextObject};
+    let style = CharStyle { size: 12.0, fill: vectorcraft_color::Paint::solid(Color::rgb8(0, 0, 0)), ..CharStyle::default() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(origin.0, origin.1), text, style);
+    f(&mut t);
+    Node::new(b.alloc(), NodeKind::Text(Box::new(t)))
+}
+
+/// Layer 1: a red square, point type, a blue square.
+fn type_doc() -> Document {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.rect(Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb8(255, 0, 0), |_| {});
+    let t = type_node(&mut b, (20.0, 40.0), "Hi\nyou", |_| {});
+    b.add(t);
+    b.rect(Rect::new(60.0, 10.0, 90.0, 40.0), Color::rgb8(0, 0, 255), |_| {});
+    b.build()
+}
+
+#[test]
+fn preserve_text_writes_point_type_as_a_type_layer_between_pixel_layers() {
+    let doc = type_doc();
+    let o = RasterExportOptions { ppi: 144.0, ..opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }) };
+    let file = export(&doc, &o);
+    let p = parse(&file);
+    let rows: Vec<(&str, Option<usize>, bool)> = p.records.iter().map(|r| (r.name.as_str(), r.divider, r.type_tool.is_some())).collect();
+    assert_eq!(
+        rows,
+        [
+            ("</Layer group>", Some(3), false),
+            ("Layer 1", None, false),
+            ("Hi\nyou", None, true),
+            ("Layer 1", None, false),
+            ("Layer 1", Some(1), false),
+        ],
+        "the layer becomes a group: the art below the type, the type layer, the art above it"
+    );
+    assert_eq!(p.records[1].rect, [0, 0, 60, 60], "the red square alone, at 2 pixels a point");
+    assert_eq!(p.records[3].rect, [20, 120, 80, 180], "the blue square alone");
+    assert_ne!(p.records[2].rect, [0; 4], "the type layer keeps its pixels");
+
+    let t = type_tool(p.records[2].type_tool.as_deref().unwrap());
+    assert_eq!(t.transform, [1.0, 0.0, 0.0, 1.0, 40.0, 80.0], "the first baseline's start, in pixels");
+    assert_eq!(item(&t.text, "Txt "), &Item::Text("Hi\ryou".into()));
+    assert_eq!(item(&t.text, "Ornt"), &Item::Enum("Ornt".into(), "Hrzn".into()));
+    let Item::Object(_, bounds) = item(&t.text, "bounds") else { panic!("bounds") };
+    let [l, top, r, bottom] = ["Left", "Top ", "Rght", "Btom"].map(|k| match item(bounds, k) {
+        Item::Unit(_, v) => *v,
+        other => panic!("{other:?}"),
+    });
+    assert!(l < 4.0 && top < 0.0 && r > l && bottom > 24.0, "the ink around the baselines: {l} {top} {r} {bottom}");
+    assert_eq!(t.warp.0, "warp");
+    assert_eq!(item(&t.warp.1, "warpStyle"), &Item::Enum("warpStyle".into(), "warpNone".into()));
+
+    let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
+    let has = |needle: &[u8]| engine.windows(needle.len()).any(|w| w == needle);
+    assert!(has(&engine_string("Hi\ryou\r")), "the text ends with a paragraph break");
+    assert!(has(b"/FontSize 24.0"), "the size in pixels at 144 ppi");
+    assert!(has(b"/RunLengthArray [ 3 4 ]"), "a paragraph run per paragraph, breaks counted");
+    assert!(has(b"/RunLengthArray [ 7 ]"), "one style run over the text and the closing break");
+    assert!(has(b"/Values [ 1.0 0.0 0.0 0.0 ]"), "black");
+    assert!(has(b"/ShapeType 0"), "point type");
+    assert!(has(b"/UseFractionalGlyphWidths true"), "Fractional Widths on");
+
+    // A reader takes the file, and the merged image is the same render.
+    assert_eq!(craft_psd::PsdFile::from_bytes(&file).unwrap().layers().len(), p.records.len());
+    let plain = export(&doc, &RasterExportOptions { ppi: 144.0, ..opts(PsdOptions::default()) });
+    assert_eq!(merged(&file), merged(&plain));
+    assert_eq!(parse(&plain).records.iter().filter(|r| r.type_tool.is_some()).count(), 0, "off: no type layers");
+}
+
+#[test]
+fn type_a_type_layer_cant_draw_stays_pixels() {
+    use vectorcraft_doc::{NodeKind, TextKind};
+    use vectorcraft_geom::PathData;
+    let mut b = DocBuilder::new(100.0, 60.0);
+    let area = type_node(&mut b, (10.0, 20.0), "Area", |t| {
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&vectorcraft_geom::Shape::to_path(&Rect::new(5.0, 5.0, 60.0, 50.0), 0.1)) };
+    });
+    b.add(area);
+    let stroked = type_node(&mut b, (10.0, 50.0), "Stroked", |t| {
+        t.runs[0].style.stroke = vectorcraft_color::Paint::solid(Color::rgb8(255, 0, 0));
+        t.runs[0].style.stroke_width = 1.0;
+    });
+    b.add(stroked);
+    let kerned = type_node(&mut b, (40.0, 50.0), "Kerned", |t| t.runs[0].style.kerning = Some(50.0));
+    b.add(kerned);
+    let indented = type_node(&mut b, (70.0, 50.0), "Indented", |t| t.para.first_line_indent = 4.0);
+    b.add(indented);
+    let listed = type_node(&mut b, (10.0, 35.0), "Listed", |t| t.para.list = Some(vectorcraft_doc::text::ParaList::default()));
+    b.add(listed);
+    let system = type_node(&mut b, (40.0, 35.0), "System", |t| t.system_layout = true);
+    b.add(system);
+    let hanging = type_node(&mut b, (70.0, 35.0), "\"Hung\"", |t| t.optical_margin = true);
+    b.add(hanging);
+    let tabbed = type_node(&mut b, (10.0, 10.0), "a\tb", |t| {
+        t.para.tabs = vec![vectorcraft_doc::TabStop { position: 30.0, align: Default::default(), leader: String::new(), align_on: '.' }];
+    });
+    b.add(tabbed);
+    let leading = type_node(&mut b, (40.0, 10.0), "Auto", |t| t.para.justification.auto_leading = 150.0);
+    b.add(leading);
+    let standard = type_node(&mut b, (40.0, 20.0), "Std", |t| t.para.composer = vectorcraft_doc::Composer::StandardEveryLine);
+    b.add(standard);
+    // Hebrew: right to left from its first strong character, so Auto alignment is right. In an
+    // installed font that covers it when there is one; otherwise its font lacks it.
+    let hebrew_face = vectorcraft_text::FontDb::global().face_covering('ש');
+    let hebrew = type_node(&mut b, (70.0, 10.0), "שלום", |t| {
+        if let Some(f) = &hebrew_face {
+            (t.runs[0].style.font_family, t.runs[0].style.font_style) = (f.family.clone(), f.style.clone());
+        }
+    });
+    b.add(hebrew);
+    let tracked = type_node(&mut b, (10.0, 58.0), "Tracked", |t| t.runs[0].style.tracking = 0.5);
+    b.add(tracked);
+    let british = type_node(&mut b, (70.0, 58.0), "Colour", |t| t.runs[0].style.language = Some("en-GB".into()));
+    b.add(british);
+    // Drawn partly with a fallback font: the bundled fonts have no 縦.
+    let fallback = type_node(&mut b, (40.0, 58.0), "A縦", |_| {});
+    b.add(fallback);
+    let mut doc = b.build();
+    let with = |o: PsdOptions| export(&doc, &opts(o));
+    assert_eq!(with(PsdOptions { preserve_text: true, ..PsdOptions::default() }), with(PsdOptions::default()), "one pixel layer either way");
+
+    // An empty point type object has no text to edit.
+    let empty = Node::new(
+        doc.alloc_id(),
+        NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "", Default::default()))),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, empty).unwrap();
+    let file = export(&doc, &opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }));
+    assert!(parse(&file).records.iter().all(|r| r.type_tool.is_none()));
+}
+
+#[test]
+fn vertical_type_and_maximum_editability() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.rect(Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb8(255, 0, 0), |_| {});
+    let t = type_node(&mut b, (50.0, 10.0), "Up", |t| t.vertical = true);
+    b.add(t);
+    let hidden = type_node(&mut b, (10.0, 50.0), "Hidden", |_| {});
+    b.add(Node { visible: false, ..hidden });
+    let doc = b.build();
+    let o = opts(PsdOptions { preserve_text: true, max_editability: true, hidden_layers: true, ..PsdOptions::default() });
+    let file = export(&doc, &o);
+    let p = parse(&file);
+    let rows: Vec<(&str, bool, bool)> = p.records.iter().map(|r| (r.name.as_str(), r.type_tool.is_some(), r.hidden)).collect();
+    let square = doc.layers[0].children().unwrap()[0].display_name();
+    assert_eq!(
+        rows,
+        [("</Layer group>", false, false), (square.as_str(), false, false), ("Up", true, false), ("Hidden", true, true), ("Layer 1", false, false)],
+        "each object a layer of its own; hidden type is a hidden type layer"
+    );
+    let t = type_tool(p.records[2].type_tool.as_deref().unwrap());
+    assert_eq!(item(&t.text, "Ornt"), &Item::Enum("Ornt".into(), "Vrtc".into()));
+    let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
+    assert!(engine.windows(19).any(|w| w == b"/WritingDirection 2"), "vertical writing");
+}
+
+#[test]
+fn type_layer_keeps_fractional_widths_off() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    let t = type_node(&mut b, (10.0, 30.0), "Whole", |t| t.fractional_widths = false);
+    b.add(t);
+    let file = export(&b.build(), &opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }));
+    let p = parse(&file);
+    let record = p.records.iter().find(|r| r.type_tool.is_some()).expect("a type layer");
+    let t = type_tool(record.type_tool.as_deref().unwrap());
+    let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
+    let needle = b"/UseFractionalGlyphWidths false";
+    assert!(engine.windows(needle.len()).any(|w| w == needle), "whole-point advances, as the pixels are drawn");
+}
+
+#[test]
+fn type_layer_keeps_the_anti_aliasing_method() {
+    use vectorcraft_doc::text::TypeAntiAlias;
+    let engine_anti_alias = |doc: &Document, o: &RasterExportOptions| {
+        let file = export(doc, o);
+        let p = parse(&file);
+        let t = type_tool(p.records.iter().find_map(|r| r.type_tool.as_deref()).expect("a type layer"));
+        let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
+        let at = engine.windows(11).position(|w| w == b"/AntiAlias ").expect("AntiAlias");
+        let Item::Enum(_, method) = item(&t.text, "AntA") else { panic!("AntA") };
+        (method.clone(), engine[at + 11])
+    };
+    let o = opts(PsdOptions { preserve_text: true, ..PsdOptions::default() });
+    for (aa, key, number) in [
+        (TypeAntiAlias::None, "Anno", b'0'),
+        (TypeAntiAlias::Sharp, "AnSh", b'4'),
+        (TypeAntiAlias::Crisp, "AnCr", b'1'),
+        (TypeAntiAlias::Strong, "AnSt", b'2'),
+    ] {
+        let mut b = DocBuilder::new(100.0, 60.0);
+        let t = type_node(&mut b, (10.0, 30.0), "Edges", |t| t.anti_alias = aa);
+        b.add(t);
+        let doc = b.build();
+        assert_eq!(engine_anti_alias(&doc, &o), (key.to_string(), number), "{aa:?}");
+        let hard = RasterExportOptions { anti_alias: crate::AntiAlias::None, ..o.clone() };
+        assert_eq!(engine_anti_alias(&doc, &hard), ("Anno".to_string(), b'0'), "{aa:?} exported without anti-aliasing");
+    }
+}
+
+#[test]
+fn variation_selectors_and_joiners_need_no_glyph() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    // In English: USA, the default language, given by its tag.
+    let t = type_node(&mut b, (10.0, 30.0), "A\u{FE0F}\u{200D}B\u{E0100}", |t| t.runs[0].style.language = Some("en-US".into()));
+    b.add(t);
+    let file = export(&b.build(), &opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }));
+    assert_eq!(parse(&file).records.iter().filter(|r| r.type_tool.is_some()).count(), 1);
+}
+
+#[test]
+fn hidden_type_left_out_keeps_its_layer_whole() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.rect(Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb8(255, 0, 0), |_| {});
+    let t = type_node(&mut b, (20.0, 40.0), "Hidden", |_| {});
+    b.add(Node { visible: false, ..t });
+    b.rect(Rect::new(60.0, 10.0, 90.0, 40.0), Color::rgb8(0, 0, 255), |_| {});
+    let doc = b.build();
+    let with = |o: PsdOptions| export(&doc, &opts(o));
+    assert_eq!(with(PsdOptions { preserve_text: true, ..PsdOptions::default() }), with(PsdOptions::default()), "one pixel layer either way");
+    let shown = parse(&with(PsdOptions { preserve_text: true, hidden_layers: true, ..PsdOptions::default() }))
+        .records
+        .iter()
+        .filter(|r| r.type_tool.is_some() && r.hidden)
+        .count();
+    assert_eq!(shown, 1, "with hidden layers: a hidden type layer");
+}
+
+#[test]
+fn blending_art_keeps_its_layer_whole() {
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::AppearanceItem;
+    // The square's blend mode, on the object (`fill`: false) or on its fill.
+    let build = |blend: BlendMode, above: bool, fill: bool| {
+        let mut b = DocBuilder::new(100.0, 60.0);
+        let square = |b: &mut DocBuilder| {
+            b.rect(Rect::new(0.0, 0.0, 60.0, 40.0), Color::rgb8(255, 0, 0), |n| {
+                if !fill {
+                    n.blend = blend;
+                } else if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+                    f.blend = blend;
+                }
+            });
+        };
+        if !above {
+            square(&mut b);
+        }
+        let t = type_node(&mut b, (10.0, 30.0), "Type", |_| {});
+        b.add(t);
+        if above {
+            square(&mut b);
+        }
+        b.build()
+    };
+    let o = opts(PsdOptions { preserve_text: true, ..PsdOptions::default() });
+    for (above, fill) in [(true, false), (false, false), (true, true)] {
+        let normal = export(&build(BlendMode::Normal, above, fill), &o);
+        assert_eq!(parse(&normal).records.iter().filter(|r| r.type_tool.is_some()).count(), 1, "normal art (above: {above}): a type layer");
+        let doc = build(BlendMode::Multiply, above, fill);
+        let file = export(&doc, &o);
+        assert!(parse(&file).records.iter().all(|r| r.type_tool.is_none()), "multiplied art (above: {above}, fill: {fill}): one pixel layer");
+        assert_eq!(file, export(&doc, &opts(PsdOptions::default())));
+    }
+}
+
 #[test]
 fn long_unicode_name_is_cut_on_a_character_boundary() {
     let mut b = DocBuilder::new(100.0, 60.0);
@@ -364,4 +735,146 @@ fn long_unicode_name_is_cut_on_a_character_boundary() {
     b.rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb8(0, 0, 0), |_| {});
     let file = export(&b.build(), &opts(PsdOptions::default()));
     assert_eq!(parse(&file).records.last().unwrap().name, "a".repeat(254));
+}
+
+/// `doc()` with a user slice over (20, 5)–(50, 15) and the red square made an object slice.
+fn sliced() -> Document {
+    let mut d = doc();
+    let red = d.layers[0].children().unwrap()[0].id;
+    let user = SliceOptions {
+        name: "banner".into(),
+        url: "https://example.com/".into(),
+        target: "_blank".into(),
+        message: "Go".into(),
+        alt: "Banner".into(),
+        background: "#123456".into(),
+        ..SliceOptions::default()
+    };
+    let id = d.alloc_id();
+    d.slices.push(Slice { id, rect: Rect::new(20.0, 5.0, 50.0, 15.0), options: user });
+    let cell = SliceOptions { kind: SliceKind::NoImage, text: "<b>Hi</b>".into(), background: "matte".into(), ..SliceOptions::default() };
+    d.node_mut(red).unwrap().extras_mut().slice = Some(Box::new(cell));
+    d
+}
+
+/// The slices resource of `file` as an independent reader reads it.
+fn slices_of(file: &[u8]) -> Option<craft_psd::slices::SlicesResource> {
+    let psd = craft_psd::PsdFile::from_bytes(file).expect("a PSD a reader takes");
+    psd.resource(1050).map(|r| craft_psd::slices::SlicesResource::from_bytes(&r.data).expect("a slices resource a reader takes"))
+}
+
+#[test]
+fn slices_are_written_with_or_without_layers() {
+    let d = sliced();
+    for layers in [true, false] {
+        let file = export(&d, &opts(PsdOptions { layers, ..PsdOptions::default() }));
+        let res = slices_of(&file).expect("the slices resource");
+        assert_eq!((res.version, res.bounds, res.group_name.as_str()), (6, [5, 10, 40, 50], "Untitled-1"));
+        let s = &res.slices;
+        assert_eq!(s.len(), 2, "{s:?}");
+        // Laid out top to bottom: the user slice, then the object slice, both written as made by
+        // the user.
+        let user = &s[0];
+        assert_eq!((user.id, user.origin, user.layer_id, user.kind, user.rect), (1, 2, None, 1, [20, 5, 50, 15]));
+        assert_eq!(
+            (user.name.as_str(), user.url.as_str(), user.target.as_str(), user.message.as_str(), user.alt.as_str()),
+            ("banner", "https://example.com/", "_blank", "Go", "Banner")
+        );
+        assert_eq!(user.color, [255, 0x12, 0x34, 0x56]);
+        let cell = &s[1];
+        assert_eq!((cell.id, cell.origin, cell.kind, cell.rect), (2, 2, 0, [10, 10, 40, 40]));
+        assert_eq!((cell.name.as_str(), cell.cell_text.as_str(), cell.cell_text_is_html), ("", "<b>Hi</b>", true));
+        assert_eq!((cell.color[0], cell.color[1..].iter().any(|c| *c != 0)), (0, true), "the matte");
+        assert_eq!((cell.horizontal_align, cell.vertical_align), (0, 0));
+    }
+    // A document without slices has no slices resource.
+    assert!(slices_of(&export(&doc(), &opts(PsdOptions::default()))).is_none());
+}
+
+#[test]
+fn slices_are_cut_to_the_exported_region_in_its_pixels() {
+    let doc = sliced();
+    // The right part at 2 px a point: the user slice is cut at the region's left edge, and the red
+    // square's slice ends at that edge.
+    let o = RasterExportOptions { ppi: 144.0, ..opts(PsdOptions::default()) };
+    let file = Renderer::new().export_region(&doc, Rect::new(40.0, 0.0, 100.0, 60.0), RasterFormat::Psd, &o).unwrap();
+    let res = slices_of(&file).unwrap();
+    assert_eq!(res.slices.iter().map(|s| s.rect).collect::<Vec<_>>(), [[0, 10, 20, 30]]);
+    assert_eq!(res.bounds, [10, 0, 30, 20]);
+    // A region no slice reaches has none.
+    let file = Renderer::new().export_region(&doc, Rect::new(60.0, 30.0, 100.0, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert!(slices_of(&file).is_none());
+    // A slice thinner than a pixel keeps one pixel.
+    let mut thin = doc.clone();
+    thin.slices[0].rect = Rect::new(20.0, 5.0, 20.2, 15.0);
+    let res = slices_of(&export(&thin, &opts(PsdOptions::default()))).unwrap();
+    assert_eq!(res.slices[0].rect, [20, 5, 21, 15]);
+    // The overlap is found before the region is rounded to whole pixels: a slice inside a region
+    // that ends at 10.4 keeps its last pixel, and one past a region that ends at 10.6 isn't written.
+    let o = opts(PsdOptions::default());
+    let mut edge = doc.clone();
+    edge.slices[0].rect = Rect::new(10.1, 5.0, 10.3, 15.0);
+    edge.node_mut(edge.layers[0].children().unwrap()[0].id).unwrap().extras_mut().slice = None;
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.4, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert_eq!(slices_of(&file).unwrap().slices.iter().map(|s| s.rect).collect::<Vec<_>>(), [[9, 5, 10, 15]]);
+    edge.slices[0].rect = Rect::new(10.7, 5.0, 10.9, 15.0);
+    let file = Renderer::new().export_region(&edge, Rect::new(0.0, 0.0, 10.6, 60.0), RasterFormat::Psd, &o).unwrap();
+    assert!(slices_of(&file).is_none());
+}
+
+#[test]
+fn an_html_text_slice_writes_one_break_for_each_line_ending() {
+    use vectorcraft_doc::{CharStyle, NodeKind, TextObject};
+    use vectorcraft_geom::Point;
+    let mut d = DocBuilder::new(100.0, 60.0).build();
+    let t = TextObject::point(Point::new(10.0, 30.0), "A\r\nB\rC\nD\u{2029}E", CharStyle { size: 12.0, ..CharStyle::default() });
+    let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    n.extras_mut().slice = Some(Box::new(SliceOptions { kind: SliceKind::HtmlText, ..SliceOptions::default() }));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let res = slices_of(&export(&d, &opts(PsdOptions::default()))).unwrap();
+    assert_eq!(res.slices[0].cell_text, "A<br>B<br>C<br>D<br>E");
+}
+
+#[test]
+fn slice_ids_count_from_1_and_the_limits_are_errors() {
+    let mut doc = doc();
+    for i in 0..20 {
+        let id = doc.alloc_id();
+        let x = f64::from(i) * 5.0;
+        doc.slices.push(Slice { id, rect: Rect::new(x, 0.0, x + 5.0, 5.0), options: SliceOptions::default() });
+    }
+    let res = slices_of(&export(&doc, &opts(PsdOptions::default()))).unwrap();
+    let ids: Vec<u32> = res.slices.iter().map(|s| s.id).collect();
+    assert_eq!(ids, (1..=20).collect::<Vec<_>>());
+    let export_err = |d: &Document| {
+        Renderer::new().export_region(d, d.artboards[0].rect, RasterFormat::Psd, &opts(PsdOptions::default())).err().unwrap_or_default()
+    };
+    let mut long = doc.clone();
+    long.slices[0].options.alt = "a".repeat(MAX_SLICE_TEXT + 1);
+    let e = export_err(&long);
+    assert!(e.contains("characters"), "{e}");
+    let mut many = doc.clone();
+    many.slices = (0..=MAX_SLICES as u64)
+        .map(|i| Slice { id: NodeId(1_000_000 + i), rect: Rect::new(0.0, 0.0, 5.0, 5.0), options: SliceOptions::default() })
+        .collect();
+    let e = export_err(&many);
+    assert!(e.contains("slices"), "{e}");
+    // Not clipped to the artboard, a slice keeps bounds that aren't finite.
+    let mut bad = doc;
+    bad.slices_clip_to_artboard = false;
+    bad.slices[0].rect = Rect::new(f64::NAN, 0.0, 5.0, 5.0);
+    let e = export_err(&bad);
+    assert!(e.contains("finite"), "{e}");
+}
+
+#[test]
+fn slices_past_4_gb_are_an_error_before_they_are_written() {
+    let max = u32::MAX as usize;
+    assert_eq!(room(0, MAX_SLICE_TEXT), Ok(()));
+    assert_eq!(room(max - 4 - 2 * 10, 10), Ok(()));
+    let e = room(max - 4 - 2 * 10, 11).err().unwrap_or_default();
+    assert!(e.contains("4 GB"), "{e}");
+    assert!(room(max, 0).is_err());
+    assert!(room(0, usize::MAX).is_err());
 }

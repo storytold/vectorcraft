@@ -22,7 +22,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     keyboard::remember_field(&ctx);
     keyboard::begin_bar(&ctx);
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
-    // No application menu in the window (as in Illustrator): the bar starts at File on every
+    // No application menu in the window: the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
     let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
     let root_rows = keyboard::root_rows(&tree);
@@ -42,6 +42,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
                 let cue = root_rows.iter().find(|r| r.label == crate::i18n::t(title)).and_then(|r| r.cue.as_ref()).filter(|_| show_cues);
                 let text = keyboard::text(ui, crate::i18n::t(title), "", cue, Some(13.0));
                 let resp = ui.push_id(("menu-bar-root", *title), |ui| ui.add(egui::Button::new(text))).inner;
+                crate::palette::note_spot(ui, resp.rect, || crate::palette::SpotAt::Menu((*title).to_string()));
                 keyboard::bind_root(&ctx, title, &resp);
                 egui::Popup::menu(&resp).show(|ui| bar_menu_body(app, ui, items, &keyboard::root_path(title), &mut clicked));
                 if *title == "File" {
@@ -186,7 +187,7 @@ fn render_items_scoped(
                                     app,
                                     ui,
                                     children,
-                                    checks || only_toggles(app, children),
+                                    checks || shows_marks(app, children),
                                     Some(&keyboard::child_path(&access.key)),
                                     clicked,
                                 );
@@ -200,7 +201,7 @@ fn render_items_scoped(
                     ui.menu_button(label, |ui| {
                         widgets::menu_scroll(ui, |ui| {
                             widgets::menu_min_width(ui, 200.0);
-                            render_items(app, ui, children, checks || only_toggles(app, children), clicked);
+                            render_items(app, ui, children, checks || shows_marks(app, children), clicked);
                         });
                     });
                 }
@@ -210,8 +211,14 @@ fn render_items_scoped(
     }
 }
 
-/// Whether every item of a submenu can be on or off: a menu drawn without check marks (the canvas
-/// context menu) still shows them there, since its label alone can't say whether it is on.
+/// Whether a submenu of a menu drawn without check marks (the canvas context menu) still shows
+/// them: when every item can be on or off, or when it holds Auto Spell Check (the Spelling
+/// submenu, with Check Spelling… after it), since a toggle's label alone can't say whether it is on.
+fn shows_marks(app: &VectorcraftApp, items: &[Item]) -> bool {
+    only_toggles(app, items) || items.iter().any(|it| matches!(it, Item::Cmd(_, "edit.autoSpellCheck", _)))
+}
+
+/// Whether every item of a submenu can be on or off.
 fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
     let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
     rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
