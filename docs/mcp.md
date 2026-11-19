@@ -13711,12 +13711,14 @@ Commands:
   their corners, and type and other objects by the corners of their bounding box. It splits each curve into pieces
   until every piece's control points lie within 0.01 pt of its chord, fits the circle to the ends of the pieces, and
   makes the radius 0.01 pt larger, so the circle holds the curves themselves. A curve is split into 1,024 pieces at
-  most; a piece that still bends more counts by its control points, which can make the circle slightly larger than the
-  smallest one. `offset` (0 or more, default 0) adds space: a rectangle grows by `offset` on each side and a circle's
-  radius grows by `offset`. `each: true` draws one shape around each selected object instead of one around the whole
-  selection. The menu items Add Bounding Rectangle… and Add Bounding Circle… open a dialog with Offset (0 to 4,000,000
-  pt, default 0), One per Object (`each`, default off) and Preview; OK draws the shapes as one undo step, and Cancel
-  removes the preview without a step of history.
+  most, and one command splits its curves 1,048,576 times at most in all (with `each`, shared equally among the
+  shapes); a piece that still bends more counts by the hull of its control points cut down to its bounding box,
+  which can make the circle slightly larger than the smallest one. A path of a compound path selected on its own
+  counts as an object, as `object.transform` moves it. `offset` (0 or more, default 0) adds space: a rectangle grows
+  by `offset` on each side and a circle's radius grows by `offset`. `each: true` draws one shape around each selected
+  object instead of one around the whole selection. The menu items Add Bounding Rectangle… and Add Bounding Circle…
+  open a dialog with Offset (0 to 4,000,000 pt, default 0), One per Object (`each`, default off) and Preview; OK draws
+  the shapes as one undo step, and Cancel removes the preview without a step of history.
 
   Each shape gets the current paint and goes on top of the current layer, or of the isolated group, as other new art
   does; inside an isolated compound path it goes beside the compound path and does not join it. The new shapes are

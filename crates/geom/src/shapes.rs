@@ -371,37 +371,35 @@ pub fn circle_through_points(points: &[Point]) -> Option<(Point, f64)> {
 /// not finite are skipped; `None` when no finite point is left. One point gives a circle of
 /// radius 0 around it.
 pub fn enclosing_circle(points: &[Point]) -> Option<(Point, f64)> {
-    let mut hull = convex_hull(points.iter().copied().filter(|p| p.is_finite()).collect());
+    let mut world = convex_hull(points.iter().copied().filter(|p| p.is_finite()).collect());
     // A fixed shuffle keeps the expected work linear for any order of the points, and the same
     // points always give the same circle.
     let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
-    for i in (1..hull.len()).rev() {
+    for i in (1..world.len()).rev() {
         seed ^= seed << 13;
         seed ^= seed >> 7;
         seed ^= seed << 17;
-        hull.swap(i, (seed % (i as u64 + 1)) as usize);
+        world.swap(i, (seed % (i as u64 + 1)) as usize);
     }
     // The work is done relative to one of the points, so the rounding allowance in `holds` scales
     // with the size of the points' spread, not with their distance from the origin.
-    let origin = *hull.first()?;
-    for p in &mut hull {
-        *p = (*p - origin).to_point();
-    }
+    let origin = *world.first()?;
+    let rel = |p: &Point| (*p - origin).to_point();
     let first = Point::ORIGIN;
     let holds = |(c, r): (Point, f64), p: Point| (p - c).hypot() <= r + 1e-12 * (r + c.to_vec2().hypot());
     let diameter = |a: Point, b: Point| (a.midpoint(b), (b - a).hypot() / 2.0);
     let mut circle = (first, 0.0);
-    for (i, &pi) in hull.iter().enumerate().skip(1) {
+    for (i, pi) in world.iter().map(rel).enumerate().skip(1) {
         if holds(circle, pi) {
             continue;
         }
         circle = (pi, 0.0);
-        for (j, &pj) in hull.iter().enumerate().take(i) {
+        for (j, pj) in world.iter().map(rel).enumerate().take(i) {
             if holds(circle, pj) {
                 continue;
             }
             circle = diameter(pi, pj);
-            for &pk in &hull[..j] {
+            for pk in world[..j].iter().map(rel) {
                 if holds(circle, pk) {
                     continue;
                 }
@@ -414,10 +412,10 @@ pub fn enclosing_circle(points: &[Point]) -> Option<(Point, f64)> {
             }
         }
     }
-    // The radius reaches the farthest point exactly, whatever rounding the steps above left.
-    let center = circle.0;
-    let radius = hull.iter().map(|p| (*p - center).hypot()).fold(0.0, f64::max);
-    let center = center + origin.to_vec2();
+    // The radius reaches the farthest point from the center returned, whatever rounding the steps
+    // above and the move back from `origin` left.
+    let center = circle.0 + origin.to_vec2();
+    let radius = world.iter().map(|p| (*p - center).hypot()).fold(0.0, f64::max);
     (center.is_finite() && radius.is_finite()).then_some((center, radius))
 }
 
@@ -929,6 +927,11 @@ mod tests {
         // Small art far from the origin keeps its smallest circle.
         let far = [Point::new(1.0e12, 5.0), Point::new(1.0e12 + 1.0, 5.0)];
         assert_eq!(enclosing_circle(&far), Some((Point::new(1.0e12 + 0.5, 5.0), 0.5)));
+        // Where the center rounds on its way back from the first point, the radius still reaches
+        // every point from the center returned.
+        let wide = [Point::new(2f64.powi(53), 0.0), Point::new(2f64.powi(53) + 2.0, 0.0)];
+        let (center, r) = enclosing_circle(&wide).unwrap();
+        assert!(wide.iter().all(|p| p.distance(center) <= r), "{center:?} {r}");
         let one = Point::new(3.0, 4.0);
         assert_eq!(enclosing_circle(&[one, one, Point::new(f64::NAN, 1.0)]), Some((one, 0.0)));
         assert_eq!(enclosing_circle(&[]), None);

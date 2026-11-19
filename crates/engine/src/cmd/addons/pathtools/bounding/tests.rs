@@ -1,11 +1,11 @@
 //! Add Bounding Rectangle and Add Bounding Circle: the box and the smallest circle, the current
 //! paint and placement on top of the current layer or the isolated group, `each` and `skipped`,
-//! shapes of no size, clip groups and clipping sublayers, huge curves, and the errors that leave
-//! the document as it was.
+//! shapes of no size, clip groups and clipping sublayers, paths of compound paths, huge curves and
+//! small loops, and the errors that leave the document as it was.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Point, Rect, Vec2, shapes};
+use vectorcraft_geom::{CubicBez, Point, Rect, Vec2, shapes};
 
 use super::{CIRCLE, COMPACT_AT, Gathered, RECTANGLE};
 use crate::Session;
@@ -265,7 +265,8 @@ fn clip_groups_count_by_their_clipping_paths() {
 }
 
 /// A sublayer that clips its contents counts by its clipping path, and the hidden objects of a
-/// sublayer are left out.
+/// sublayer are left out; a sublayer inside a selected group (as an opened file can put one there)
+/// counts the same way.
 #[test]
 fn sublayers_count_by_their_clipping_path_and_shown_art() {
     let mut s = session();
@@ -296,6 +297,89 @@ fn sublayers_count_by_their_clipping_path_and_shown_art() {
     super::outline_points(&sub_node, &d.symbol_boxes(), &mut g, 0);
     let (center, r) = shapes::enclosing_circle(&g.points).unwrap();
     assert!(center.distance(Point::new(25.0, 25.0)) < 1e-9 && (r - 5.0 * 2f64.sqrt()).abs() < 1e-9, "{center:?} {r}");
+
+    let group = s
+        .edit("Group", |d, _| {
+            let layer = d.remove(sub)?;
+            let id = d.alloc_id();
+            d.insert(Some(top), usize::MAX, Node::group(id, vec![layer]))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    let b = bounds(&s, c);
+    assert!(b.center().distance(Point::new(25.0, 25.0)) < 1e-9 && (b.width() / 2.0 - (5.0 * 2f64.sqrt() + 0.01)).abs() < 1e-9, "{b:?}");
+}
+
+/// A path of a compound path selected on its own is an object, as `object.transform` moves it:
+/// the shape goes around that path only, and with `each` each selected path gets a shape. The
+/// compound path selected whole is one object.
+#[test]
+fn a_path_of_a_compound_path_selected_on_its_own_is_an_object() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    let b = rect(&mut s, 120.0, 100.0, 10.0, 20.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    let members: Vec<NodeId> = node(&s, compound).children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(members.len(), 2);
+    for kind in [RECTANGLE, CIRCLE] {
+        s.execute("select.set", &json!({"ids": [members[0].0]})).unwrap();
+        let id = id_of(&s.execute(kind, &json!({})).unwrap());
+        let (got, want) = (bounds(&s, id), bounds(&s, members[0]));
+        if kind == RECTANGLE {
+            assert!(rect_near(got, want, 1e-9), "{got:?} on {want:?}");
+        } else {
+            let d = want.width().hypot(want.height()) + 0.02;
+            assert!(got.center().distance(want.center()) < 1e-9 && (got.width() - d).abs() < 1e-9, "{got:?} around {want:?}");
+        }
+        s.execute("select.set", &json!({"ids": [members[0].0, members[1].0]})).unwrap();
+        assert_eq!(ids_of(&s.execute(kind, &json!({"each": true})).unwrap()).len(), 2, "{kind}");
+        s.execute("select.set", &json!({"ids": [compound.0]})).unwrap();
+        assert_eq!(ids_of(&s.execute(kind, &json!({"each": true})).unwrap()).len(), 1, "{kind}");
+    }
+}
+
+/// A small closed curve whose handles lie within the 0.01 pt allowance of its one anchor is not a
+/// single point: it gets a circle.
+#[test]
+fn a_small_loop_gets_a_circle() {
+    let mut s = session();
+    let lp = id_of(&s.execute("path.create", &json!({"d": "M 0 0 C 0.005 0 0 0.005 0 0"})).unwrap());
+    s.execute("select.set", &json!({"ids": [lp.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    let LiveShape::Ellipse { w, .. } = live(&s, c) else { panic!("not a circle") };
+    assert!(w > 0.02, "{w}");
+}
+
+/// Once the command has used up its halvings, a curve counts by its control points' hull cut down to
+/// its bounding box: the points stay inside both and reach no farther than the curve along either
+/// axis, while its handles may.
+#[test]
+fn a_curve_past_the_halvings_counts_by_its_hull_inside_its_bounding_box() {
+    let c = CubicBez::new((0.0, 0.0), (20.0, 400.0), (380.0, 500.0), (400.0, 0.0));
+    let b = vectorcraft_geom::kurbo::ParamCurveExtrema::bounding_box(&c);
+    let mut out = vec![];
+    super::curve_points(c, 0, &mut out, &mut 0);
+    assert!(out.len() >= 4 && out.iter().all(|p| b.inflate(1e-9, 1e-9).contains(*p)), "{out:?} in {b:?}");
+    assert!(out.iter().any(|p| (p.y - b.y1).abs() < 1e-9), "the curve's lowest point is reached: {out:?}");
+    let (center, r) = shapes::enclosing_circle(&out).unwrap();
+    for i in 0..=1000 {
+        let p = vectorcraft_geom::ParamCurve::eval(&c, f64::from(i) / 1000.0);
+        assert!(p.distance(center) <= r + 1e-9, "{p:?} outside");
+    }
+    // The handle at x = 4,000,000 stays out: the curve reaches x = 16,000,000 / 9.
+    let reach = CubicBez::new((0.0, 0.0), (4.0e6, 0.0), (0.0, 0.0), (0.0, 0.0));
+    out.clear();
+    super::curve_points(reach, 0, &mut out, &mut 0);
+    let far = out.iter().map(|p| p.x).fold(0.0, f64::max);
+    assert!((far - 16.0e6 / 9.0).abs() < 1e-6, "{far}");
+    out.clear();
+    let mut splits = 3;
+    super::curve_points(c, 0, &mut out, &mut splits);
+    assert_eq!(splits, 0);
+    assert!(out.len() > 4, "{out:?}");
 }
 
 /// In an isolated group the shape goes on top of the group's art; in an isolated compound path it
@@ -380,6 +464,25 @@ fn one_edge_past_the_canvas_edge_is_enough_to_refuse() {
         assert!(e.contains("the shape would reach past the edge of the canvas"), "{command}: {e}");
     }
     assert!(s.execute(RECTANGLE, &json!({"offset": 5})).is_ok(), "the right edge at 3,999,995 pt is inside");
+}
+
+/// A large circle close to the canvas edge, whose arcs stay curved after the most halvings, gets a
+/// circle within 0.05 pt of the farthest point of its curves, which stays inside the edge.
+#[test]
+fn a_large_circle_near_the_canvas_edge_gets_a_close_circle() {
+    let mut s = session();
+    let e = id_of(&s.execute("shape.ellipse", &json!({"x": 3_799_950.0, "y": 0.0, "width": 200_000.0, "height": 200_000.0})).unwrap());
+    s.execute("select.set", &json!({"ids": [e.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    let LiveShape::Ellipse { w, xf, .. } = live(&s, c) else { panic!("not a circle") };
+    let center = xf * Point::new(w / 2.0, w / 2.0);
+    let mut farthest: f64 = 0.0;
+    for seg in node(&s, e).path_data().unwrap().to_bezpath().segments() {
+        for i in 0..=4000 {
+            farthest = farthest.max(vectorcraft_geom::ParamCurve::eval(&seg, f64::from(i) / 4000.0).distance(center));
+        }
+    }
+    assert!(w / 2.0 >= farthest && w / 2.0 < farthest + 0.05, "radius {} for curves reaching {farthest}", w / 2.0);
 }
 
 /// The commands are dimmed while an object of a symbol instance's art is selected, which they

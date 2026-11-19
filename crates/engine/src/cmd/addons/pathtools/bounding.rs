@@ -4,9 +4,10 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, LiveShape, Node, NodeId, NodeKind, SymbolBoxes};
+use vectorcraft_geom::kurbo::ParamCurveExtrema;
 use vectorcraft_geom::{Affine, CubicBez, FillRule, ParamCurve, PathSeg, Point, Rect, shapes};
 
-use super::super::super::edit::{no_symbol_part, selected_roots};
+use super::super::super::edit::{no_symbol_part, selected_roots_to_transform};
 use super::super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or};
 use crate::sanity::rect_in_range;
 use crate::{Result, Session};
@@ -30,7 +31,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Rectangle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when an edge of a rectangle would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Rectangle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first rectangle, ids, skipped?}",
+            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out; a path of a compound path selected on its own counts as an object), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when an edge of a rectangle would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Rectangle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first rectangle, ids, skipped?}",
             whole_objects,
             bounding_rectangle
         ),
@@ -39,7 +40,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Circle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when an edge of a circle's bounding box would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Circle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first circle, ids, skipped?}",
+            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out; a path of a compound path selected on its own counts as an object), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when an edge of a circle's bounding box would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Circle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first circle, ids, skipped?}",
             whole_objects,
             bounding_circle
         ),
@@ -47,7 +48,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
 }
 
 /// Enabled with a selection that is not an object of a symbol instance's art, which
-/// [`selected_roots`] refuses.
+/// [`selected_roots_to_transform`] refuses.
 fn whole_objects(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     no_symbol_part(s)
@@ -78,7 +79,8 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     if !(offset.is_finite() && offset >= 0.0) {
         return Err(bad(c, "`offset` must be 0 or more"));
     }
-    let roots = selected_roots(s)?;
+    // The objects `object.transform` moves: a path of a compound path selected on its own is one.
+    let roots = selected_roots_to_transform(s)?;
     let d = &s.doc()?.doc;
     let symbols = d.symbol_boxes();
     let groups: Vec<Vec<NodeId>> = if each { roots.iter().map(|id| vec![*id]).collect() } else { vec![roots] };
@@ -86,8 +88,11 @@ fn add(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     // Objects that get no shape: no outline, or a shape with no size.
     let mut skipped = 0;
     let mut no_size = false;
+    // Each shape gets the same share of the halvings, so the shape around one object does not
+    // depend on the other objects.
+    let splits = TOTAL_SPLITS / groups.len().max(1);
     for ids in &groups {
-        match shape_around(d, &symbols, ids, kind, offset) {
+        match shape_around(d, &symbols, ids, kind, offset, splits) {
             Around::Shape(live) => made.push(live),
             Around::NoOutline => skipped += 1,
             Around::NoSize => {
@@ -134,8 +139,9 @@ enum Around {
     PastCanvas,
 }
 
-/// The live rectangle or circle around `ids`, grown by `offset`.
-fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64) -> Around {
+/// The live rectangle or circle around `ids`, grown by `offset`. A circle halves its curves
+/// `splits` times at most in all.
+fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind, offset: f64, splits: usize) -> Around {
     match kind {
         Kind::Rectangle => {
             let Some(r) = d.bounds_of_with(ids, false, symbols) else { return Around::NoOutline };
@@ -157,6 +163,7 @@ fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind,
         }
         Kind::Circle => {
             let mut gathered = Gathered::new();
+            gathered.splits = splits;
             for n in ids.iter().filter_map(|id| d.node(*id)) {
                 outline_points(n, symbols, &mut gathered, 0);
                 gathered.compact();
@@ -177,10 +184,10 @@ fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind,
 
 /// Adds to `out` points on the outline of `n`, as its geometric bounds measure it: the points of
 /// its paths ([`curve_points`]); the clipping path of a clip group or of a sublayer that clips its
-/// contents; the shown contents of a sublayer; the corners of an image; and the corners of the
-/// geometric bounding box of anything else. A group or layer `depth` levels below the selected
-/// object that is nested deeper than a document holds ([`vectorcraft_doc::MAX_DEPTH`]) counts by
-/// the corners of its geometric bounding box.
+/// contents; the shown contents of a sublayer (a layer that an opened file put inside a group); the
+/// corners of an image; and the corners of the geometric bounding box of anything else. A group or
+/// layer `depth` levels below the selected object that is nested deeper than a document holds
+/// ([`vectorcraft_doc::MAX_DEPTH`]) counts by the corners of its geometric bounding box.
 fn outline_points(n: &Node, symbols: &SymbolBoxes, out: &mut Gathered, depth: usize) {
     let nests = matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Compound { .. });
     if nests && depth >= vectorcraft_doc::MAX_DEPTH {
@@ -197,7 +204,7 @@ fn outline_points(n: &Node, symbols: &SymbolBoxes, out: &mut Gathered, depth: us
             for seg in path.to_bezpath().segments() {
                 match seg {
                     PathSeg::Line(l) => out.points.extend([l.p0, l.p1]),
-                    _ => curve_points(seg.to_cubic(), 0, &mut out.points),
+                    _ => curve_points(seg.to_cubic(), 0, &mut out.points, &mut out.splits),
                 }
                 out.compact();
             }
@@ -223,39 +230,86 @@ fn outline_points(n: &Node, symbols: &SymbolBoxes, out: &mut Gathered, depth: us
 }
 
 /// Adds to `out` points whose convex hull, grown by [`FLATNESS`], holds the curve `c`: the ends of
-/// pieces whose control points lie within [`FLATNESS`] of their chord, and the control points of
-/// pieces still curved after [`MAX_SPLITS`] halvings, which hold their piece. A curve with a point
-/// that is not finite adds nothing.
-fn curve_points(c: CubicBez, depth: u32, out: &mut Vec<Point>) {
+/// pieces whose control points lie within [`FLATNESS`] of their chord, and for pieces still curved
+/// after [`MAX_SPLITS`] halvings, or once `splits` is used up, the corners of [`held`]. A flat piece
+/// that ends where it starts adds its control points too, so a small loop is not taken for a single
+/// point. A curve with a point that is not finite adds nothing.
+fn curve_points(c: CubicBez, depth: u32, out: &mut Vec<Point>, splits: &mut usize) {
     if ![c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.is_finite()) {
         return;
     }
     let flat = [c.p1, c.p2].iter().all(|p| distance_to_segment(*p, c.p0, c.p3) <= FLATNESS);
     if flat {
         out.extend([c.p0, c.p3]);
-    } else if depth >= MAX_SPLITS {
-        out.extend([c.p0, c.p1, c.p2, c.p3]);
+        if c.p0 == c.p3 {
+            out.extend([c.p1, c.p2]);
+        }
+    } else if depth >= MAX_SPLITS || *splits == 0 {
+        out.extend(held(c));
     } else {
+        *splits -= 1;
         let (a, b) = c.subdivide();
-        curve_points(a, depth + 1, out);
-        curve_points(b, depth + 1, out);
+        curve_points(a, depth + 1, out, splits);
+        curve_points(b, depth + 1, out, splits);
     }
 }
+
+/// The corners of the convex hull of `c`'s control points cut down to `c`'s bounding box. Each of
+/// the two holds the curve, so the part they share holds it too. When the cut leaves nothing, which
+/// rounding can cause, it gives the box's corners.
+fn held(c: CubicBez) -> Vec<Point> {
+    let b = ParamCurveExtrema::bounding_box(&c);
+    let mut poly = shapes::convex_hull(vec![c.p0, c.p1, c.p2, c.p3]);
+    for (x, bound, below) in [(true, b.x0, false), (true, b.x1, true), (false, b.y0, false), (false, b.y1, true)] {
+        poly = clip(&poly, x, bound, below);
+    }
+    if poly.is_empty() { corners(b).to_vec() } else { poly }
+}
+
+/// The convex polygon `poly` cut at `bound` on the x axis (`x`) or the y axis: the part at or below
+/// `bound` when `below`, else at or above it.
+fn clip(poly: &[Point], x: bool, bound: f64, below: bool) -> Vec<Point> {
+    let v = |p: Point| if x { p.x } else { p.y };
+    let inside = |p: Point| if below { v(p) <= bound } else { v(p) >= bound };
+    let mut out = vec![];
+    for (&a, &b) in poly.iter().zip(poly.iter().cycle().skip(1)) {
+        if inside(a) {
+            out.push(a);
+        }
+        if inside(a) != inside(b) {
+            let mut p = a.lerp(b, (bound - v(a)) / (v(b) - v(a)));
+            if x {
+                p.x = bound;
+            } else {
+                p.y = bound;
+            }
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// How many halvings [`curve_points`] makes for one command in all, over every curve it measures;
+/// with `each`, every shape gets an equal share.
+const TOTAL_SPLITS: usize = 1 << 20;
 
 /// How many points [`outline_points`] gathers before it keeps only the corners of their convex hull.
 const COMPACT_AT: usize = 1 << 16;
 
 /// Points gathered for a circle, kept down to the corners of their convex hull whenever they grow
-/// past `limit`: only the hull decides the circle, so this bounds the memory a large selection of
-/// curves takes.
+/// past `limit`: only the hull decides the circle. The points held stay within about twice the
+/// hull's corners, and grow only with the anchors and objects measured and the [`TOTAL_SPLITS`]
+/// halvings.
 struct Gathered {
     points: Vec<Point>,
     limit: usize,
+    /// The halvings [`curve_points`] may still make ([`TOTAL_SPLITS`] at first).
+    splits: usize,
 }
 
 impl Gathered {
     fn new() -> Self {
-        Self { points: vec![], limit: COMPACT_AT }
+        Self { points: vec![], limit: COMPACT_AT, splits: TOTAL_SPLITS }
     }
 
     /// Keeps only the hull's corners once there are more than `limit` points; the next time waits
