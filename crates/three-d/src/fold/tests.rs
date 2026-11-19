@@ -913,4 +913,323 @@ proptest! {
         sorted.sort_by_key(|i| i.code);
         prop_assert_eq!(sorted, issues);
     }
+
+    /// Random fold lines fold at any amount without a panic, every pose finite and every panel
+    /// keeping its shape.
+    #[test]
+    fn random_blanks_fold_to_finite_poses(
+        segs in proptest::collection::vec((1u8..4, -50.0f64..50.0, -50.0f64..50.0, -50.0f64..50.0, -50.0f64..50.0), 1..8),
+        amount in 0.0f64..=1.0,
+    ) {
+        let kinds = [LineKind::Cut, LineKind::Crease, LineKind::PartialCut, LineKind::Perforation];
+        let mut lines: Vec<FoldLine> = segs
+            .iter()
+            .enumerate()
+            .map(|(i, &(k, a, b, c, d))| line(kinds[usize::from(k)], &[(a, b), (c, d)], false, i as u64))
+            .collect();
+        lines.push(cut(&[(-40.0, -40.0), (40.0, -40.0), (40.0, 40.0), (-40.0, 40.0)], 99));
+        let (blanks, _) = blanks(&lines, TOL);
+        for b in &blanks {
+            let Some(f) = fold(b, None, amount, TOL) else { continue };
+            prop_assert_eq!(f.panels.len(), b.panels.len());
+            prop_assert_eq!(f.order.len(), b.panels.len());
+            for p in &f.panels {
+                prop_assert!(p.pose.m.iter().flatten().chain(&p.pose.t).all(|v| v.is_finite()));
+                let n = p.pose.normal();
+                prop_assert!((n[0] * n[0] + n[1] * n[1] + n[2] * n[2] - 1.0).abs() < 1e-9);
+            }
+        }
+    }
+}
+
+/// The 3D corners of panel `i` of `b` folded as `f` places them.
+fn corners(b: &Blank, f: &Folded, i: usize) -> Vec<[f64; 3]> {
+    let rings = polygon(&b.panels[i].outline, 0.01).expect("a polygon");
+    rings.into_iter().flatten().map(|p| f.panels[i].pose.place(p)).collect()
+}
+
+fn flat_center(b: &Blank, i: usize) -> [f64; 3] {
+    let c = point_in(&b.panels[i].outline).expect("a point inside");
+    [c.x, -c.y, 0.0]
+}
+
+#[test]
+fn a_slotted_box_folds_every_panel_onto_a_face_of_the_box_with_the_print_outside() {
+    let (b, issues) = check(&notched_box());
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    let f = fold(b, None, 1.0, TOL).expect("folds");
+    // The base panel is the leftmost of the two largest body panels: x 20 to 120, y 30 to 110.
+    let base = &b.panels[f.base];
+    assert_eq!(base.outline.bounds().map(|r| (r.x0.round(), r.y0.round())), Some((20.0, 30.0)));
+    // The box: the base panel's face (z = 0), 60 deep (the narrow body panels' width).
+    let (lo, hi) = ([20.0, -110.0, -60.0], [120.0, -30.0, 0.0]);
+    let middle = [70.0, -70.0, -30.0];
+    for i in 0..b.panels.len() {
+        let points = corners(b, &f, i);
+        let face = (0..3).find_map(|k| [lo[k], hi[k]].into_iter().find(|&at| points.iter().all(|p| (p[k] - at).abs() < 1e-6)).map(|at| (k, at)));
+        let (k, at) = face.unwrap_or_else(|| panic!("panel {i} lies on no face of the box: {points:?}"));
+        for p in &points {
+            for j in 0..3 {
+                assert!(p[j] > lo[j] - 1e-6 && p[j] < hi[j] + 1e-6, "panel {i} reaches out of the box: {p:?}");
+            }
+        }
+        // The printed side faces out of the box.
+        let n = f.panels[i].pose.normal();
+        assert!((n[k].abs() - 1.0).abs() < 1e-9, "panel {i} is square to its face: {n:?}");
+        assert!(n[k] * (at - middle[k]) > 0.0, "panel {i}'s print faces out: {n:?}");
+    }
+    assert!(f.hinges.iter().all(|h| h.tree && h.closes && (h.angle - 90.0).abs() < 1e-12), "{:?}", f.hinges);
+    assert!(f.collisions.is_empty(), "the stacked flaps and the glue flap do not cross: {:?}", f.collisions);
+    assert_eq!(f.order.first(), Some(&f.base));
+    assert_eq!(f.order.len(), 13);
+}
+
+#[test]
+fn at_amount_0_the_blank_is_flat() {
+    let (b, _) = check(&notched_box());
+    let f = fold(&b[0], None, 0.0, TOL).expect("folds");
+    for p in &f.panels {
+        for (row, want) in p.pose.m.iter().zip(Pose::IDENTITY.m) {
+            assert!(row.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-12), "{:?}", p.pose);
+        }
+        assert!(p.pose.t.iter().all(|v| v.abs() < 1e-9), "{:?}", p.pose);
+    }
+}
+
+/// A 100 × 60 rectangle split by a line of `kind` at x = 60 (drawn upward when `up`), turned by
+/// `quarter` quarter turns about the origin and mirrored in x when `mirror`.
+fn two_panels(kind: LineKind, quarter: u8, mirror: bool, up: bool) -> Vec<FoldLine> {
+    let at = |(x, y): (f64, f64)| {
+        let x = if mirror { -x } else { x };
+        (0..quarter).fold((x, y), |(x, y), _| (-y, x))
+    };
+    let outline: Vec<(f64, f64)> = [(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)].into_iter().map(at).collect();
+    let (a, b) = if up { ((60.0, 60.0), (60.0, 0.0)) } else { ((60.0, 0.0), (60.0, 60.0)) };
+    vec![cut(&outline, 1), line(kind, &[at(a), at(b)], false, 2)]
+}
+
+#[test]
+fn a_crease_folds_away_from_the_print_and_a_partial_cut_toward_it_however_it_is_drawn() {
+    for quarter in 0..4 {
+        for mirror in [false, true] {
+            for up in [false, true] {
+                for (kind, sign) in [(LineKind::Crease, -1.0), (LineKind::Perforation, -1.0), (LineKind::PartialCut, 1.0)] {
+                    let case = format!("{kind:?}, {quarter} quarter turns, mirrored {mirror}, drawn up {up}");
+                    let (b, issues) = check(&two_panels(kind, quarter, mirror, up));
+                    assert!(issues.is_empty(), "{case}: {issues:?}");
+                    let b = &b[0];
+                    let f = fold(b, None, 1.0, TOL).expect("folds");
+                    let child = 1 - f.base;
+                    let h = &b.hinges[0];
+                    let hinge = [(h.from.x + h.to.x) / 2.0, -(h.from.y + h.to.y) / 2.0, 0.0];
+                    let c = flat_center(b, child);
+                    let away = [c[0] - hinge[0], c[1] - hinge[1], 0.0];
+                    let along = [h.to.x - h.from.x, h.from.y - h.to.y];
+                    let off_line = (along[0] * away[1] - along[1] * away[0]).abs() / along[0].hypot(along[1]);
+                    let placed = f.panels[child].pose.apply(c);
+                    // The child stands up out of the plane: behind it for a crease, in front of it
+                    // for a partial cut, at its distance from the hinge.
+                    assert!(placed[2] * sign > 0.0, "{case}: {placed:?}");
+                    assert!((placed[2].abs() - off_line).abs() < 1e-6, "{case}: {placed:?} {off_line}");
+                    // Its printed side faces away from the base panel after a crease, back toward
+                    // it after a partial cut.
+                    let n = f.panels[child].pose.normal();
+                    assert!((n[0] * away[0] + n[1] * away[1]) * -sign > 0.0, "{case}: {n:?}");
+                    // Half way, the child is half way round.
+                    let half = fold(b, None, 0.5, TOL).expect("folds");
+                    let z = half.panels[child].pose.normal()[2];
+                    assert!((z - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-9, "{case}: {z}");
+                }
+            }
+        }
+    }
+}
+
+/// A 100 × 100 square divided into four panels by a crease across it each way.
+fn crossed() -> Vec<FoldLine> {
+    vec![
+        cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], 1),
+        crease((50.0, 0.0), (50.0, 100.0), 2),
+        crease((0.0, 50.0), (100.0, 50.0), 3),
+    ]
+}
+
+#[test]
+fn a_loop_of_hinges_closes_when_flat_and_reports_its_gap_when_folded() {
+    let (b, issues) = check(&crossed());
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    assert_eq!((b.panels.len(), b.hinges.len()), (4, 4));
+    let folded = fold(b, None, 1.0, TOL).expect("folds");
+    let closing: Vec<&FoldedHinge> = folded.hinges.iter().filter(|h| !h.tree).collect();
+    assert_eq!(closing.len(), 1, "three hinges make the tree, one closes the loop");
+    assert!(!closing[0].closes && closing[0].gap > 10.0, "{closing:?}");
+    // The gap is measured folded all the way, whatever the amount: flat or half way, the loop is
+    // still reported open by the same gap.
+    for amount in [0.0, 0.5] {
+        let part = fold(b, None, amount, TOL).expect("folds");
+        let h = part.hinges.iter().find(|h| !h.tree).expect("a closing hinge");
+        assert!(!h.closes && (h.gap - closing[0].gap).abs() < 1e-9, "{amount}: {h:?}");
+    }
+    // The base is the top-left panel: four equal panels tie, and the highest, then leftmost, wins.
+    assert_eq!(b.panels[folded.base].outline.bounds().map(|r| (r.x0.round(), r.y0.round())), Some((0.0, 0.0)));
+}
+
+#[test]
+fn hinges_that_start_at_one_point_fold_the_same_in_any_line_order() {
+    // About the bottom-right panel, its two hinges both start at the middle of the square.
+    let lines = crossed();
+    let orders = [[0, 1, 2], [0, 2, 1], [2, 1, 0], [1, 2, 0], [1, 0, 2], [2, 0, 1]];
+    let mut seen = None;
+    for order in orders {
+        let lines: Vec<FoldLine> = order.iter().map(|&i| lines[i].clone()).collect();
+        let (b, issues) = check(&lines);
+        assert!(issues.is_empty(), "{order:?}: {issues:?}");
+        let b = &b[0];
+        let base = panel_at(b, p(75.0, 75.0)).expect("the bottom-right panel");
+        let f = fold(b, Some(base), 1.0, TOL).expect("folds");
+        let closing = f.hinges.iter().zip(&b.hinges).find(|(h, _)| !h.tree).map(|(_, h)| ((h.from.x + h.to.x) / 2.0, (h.from.y + h.to.y) / 2.0));
+        let top_left = panel_at(b, p(25.0, 25.0)).expect("the top-left panel");
+        let placed = f.panels[top_left].pose.place(p(25.0, 25.0)).map(|v| (v * 1e6).round());
+        let got = (closing, placed);
+        assert_eq!(seen.get_or_insert(got), &got, "{order:?}");
+    }
+}
+
+/// A 100 × 60 rectangle: the left 60 pt is one panel, the right is split across at y = 30, and the
+/// line between them bends by `lean` pt over its lower half.
+fn leaning(lean: f64) -> Vec<FoldLine> {
+    vec![
+        cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], 1),
+        crease((60.0, 0.0), (60.0, 30.0), 2),
+        crease((60.0, 30.0), (60.0 + lean, 60.0), 3),
+        crease((60.0, 30.0), (100.0, 30.0), 4),
+    ]
+}
+
+#[test]
+fn a_loop_closes_within_the_tolerance_or_half_a_percent_of_its_hinge() {
+    // Both right panels turn about one line, so the hinge between them closes exactly.
+    let gap = |lean: f64, amount: f64| {
+        let (b, issues) = check(&leaning(lean));
+        assert!(issues.is_empty(), "{lean}: {issues:?}");
+        let b = &b[0];
+        assert_eq!((b.panels.len(), b.hinges.len()), (3, 3));
+        let base = panel_at(b, p(30.0, 30.0)).expect("the left panel");
+        let f = fold(b, Some(base), amount, TOL).expect("folds");
+        let h = f.hinges.iter().find(|h| !h.tree).expect("a closing hinge").clone();
+        (h.closes, h.gap)
+    };
+    let (closes, at) = gap(0.0, 1.0);
+    assert!(closes && at < 1e-9, "{at}");
+    // A small lean opens it by more than the 0.1 pt tolerance but less than 0.5% of its 40 pt
+    // length (0.2 pt): still closed.
+    let (closes, at) = gap(0.1, 1.0);
+    assert!(closes && at > TOL && at <= 0.2, "{at}");
+    // A larger lean opens it past both, flat or folded.
+    for amount in [0.0, 1.0] {
+        let (closes, at) = gap(1.0, amount);
+        assert!(!closes && at > 0.2, "{amount}: {at}");
+    }
+}
+
+#[test]
+fn a_panel_no_hinge_joins_stays_flat_where_it_is() {
+    let lines = vec![
+        cut(&[(0.0, 0.0), (50.0, 0.0), (50.0, 49.95), (100.0, 49.95), (100.0, 99.95), (50.0, 99.95), (50.0, 50.0), (0.0, 50.0)], 1),
+        crease((50.0, 49.95), (50.0, 50.0), 2),
+    ];
+    let (b, _) = check(&lines);
+    let b = &b[0];
+    assert_eq!((b.panels.len(), b.hinges.len()), (2, 0));
+    let f = fold(b, None, 1.0, TOL).expect("folds");
+    let loose = 1 - f.base;
+    assert_eq!(f.panels[loose].parent, None);
+    assert_eq!(f.panels[loose].pose, Pose::IDENTITY);
+    assert_eq!(f.order, vec![f.base, loose], "the loose panel comes last");
+}
+
+#[test]
+fn a_child_of_a_notched_panel_folds_away_from_the_print() {
+    // The base is an L: a 30 × 140 strip with an 80 pt arm along its top running right to x = 300.
+    // The child, below the arm past a 2 pt slot, is hinged to the strip along x = 30.
+    let lines = vec![
+        cut(&[(0.0, 0.0), (300.0, 0.0), (300.0, 80.0), (30.0, 80.0), (30.0, 82.0), (300.0, 82.0), (300.0, 140.0), (0.0, 140.0)], 1),
+        crease((30.0, 82.0), (30.0, 140.0), 2),
+    ];
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    let base = panel_at(b, p(15.0, 110.0)).expect("the L");
+    let child = panel_at(b, p(150.0, 110.0)).expect("the child");
+    // The L's inside point lies in its arm, on the child's side of the hinge's line.
+    let inside = b.panels[base].point_inside().expect("a point inside");
+    assert!(inside.x > 30.0, "{inside:?}");
+    for (kind, sign) in [(LineKind::Crease, -1.0), (LineKind::PartialCut, 1.0)] {
+        let mut lines = lines.clone();
+        lines[1].kind = kind;
+        let (b, _) = check(&lines);
+        let f = fold(&b[0], Some(base), 1.0, TOL).expect("folds");
+        let placed = f.panels[child].pose.place(p(150.0, 110.0));
+        assert!(placed[2] * sign > 99.0, "{kind:?}: {placed:?}");
+    }
+}
+
+#[test]
+fn a_lid_folded_over_the_base_crosses_the_taller_wall_opposite() {
+    // A strip: a 120 pt lid, a 30 pt wall, the 100 pt base and a 60 pt wall, all 50 pt deep.
+    let lines = vec![
+        cut(&[(0.0, 0.0), (310.0, 0.0), (310.0, 50.0), (0.0, 50.0)], 1),
+        crease((120.0, 0.0), (120.0, 50.0), 2),
+        crease((150.0, 0.0), (150.0, 50.0), 3),
+        crease((250.0, 0.0), (250.0, 50.0), 4),
+    ];
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    let base = panel_at(b, p(200.0, 25.0)).expect("the base panel");
+    let (lid, wall) = (panel_at(b, p(60.0, 25.0)).unwrap(), panel_at(b, p(280.0, 25.0)).unwrap());
+    let f = fold(b, Some(base), 1.0, TOL).expect("folds");
+    assert_eq!(f.collisions, vec![(lid.min(wall), lid.max(wall))]);
+    // Half folded, nothing crosses yet.
+    assert!(fold(b, Some(base), 0.4, TOL).expect("folds").collisions.is_empty());
+}
+
+#[test]
+fn the_base_is_the_panel_under_a_point_and_the_same_in_any_input_order() {
+    let lines = vec![cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], 1), crease((50.0, 0.0), (50.0, 60.0), 2)];
+    let (b, _) = check(&lines);
+    assert_eq!(panel_at(&b[0], p(500.0, 500.0)), None, "a point outside every panel");
+    let right = panel_at(&b[0], p(75.0, 30.0)).expect("the right panel");
+    assert_eq!(fold(&b[0], Some(right), 1.0, TOL).expect("folds").base, right);
+    let mut reversed = lines.clone();
+    reversed.reverse();
+    let (r, _) = check(&reversed);
+    for blank in [&b[0], &r[0]] {
+        let f = fold(blank, None, 1.0, TOL).expect("folds");
+        // Equal panels: the leftmost wins.
+        assert_eq!(blank.panels[f.base].outline.bounds().map(|r| r.x0.round()), Some(0.0));
+    }
+    assert!(fold(&b[0], Some(9), 1.0, TOL).is_none(), "no panel 9");
+    assert!(fold(&b[0], None, 1.5, TOL).is_none(), "past 1");
+    assert!(fold(&b[0], None, f64::NAN, TOL).is_none());
+    assert!(fold(&Blank::default(), None, 1.0, TOL).is_none(), "no panels");
+}
+
+#[test]
+fn a_partial_cut_takes_its_own_angle_and_a_hinge_its_longest_piece_s() {
+    let (b, _) = check(&two_panels(LineKind::PartialCut, 0, false, false));
+    assert_eq!(b[0].hinges[0].angle, -90.0);
+    let (b, _) = check(&two_panels(LineKind::Perforation, 0, false, false));
+    assert_eq!(b[0].hinges[0].angle, 90.0);
+    // A crease and a short partial cut on one line: the crease is the longer piece.
+    let lines = vec![
+        cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)], 1),
+        line(LineKind::PartialCut, &[(60.0, 0.0), (60.0, 10.0)], false, 2),
+        crease((60.0, 10.0), (60.0, 60.0), 3),
+    ];
+    let (b, _) = check(&lines);
+    assert_eq!(b[0].hinges.len(), 1);
+    assert_eq!(b[0].hinges[0].angle, 90.0);
 }

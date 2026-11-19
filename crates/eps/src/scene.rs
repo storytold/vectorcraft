@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use kurbo::Shape;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
+use vectorcraft_doc::overprint::is_white;
 use vectorcraft_doc::{
     AppearanceItem, ColorMode, Document, Effect, ImageBlob, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject,
 };
@@ -213,6 +214,14 @@ impl GradientSpace {
             GradientSpace::Inks(_, n) => *n,
         }
     }
+
+    /// Whether components `c` in this space are paper white: no ink, or full light.
+    fn paper(&self, c: &[f32]) -> bool {
+        match self {
+            GradientSpace::Process(Space::Gray | Space::Rgb) => c.iter().all(|v| *v >= 1.0),
+            GradientSpace::Process(Space::Cmyk) | GradientSpace::Inks(..) => c.iter().all(|v| *v <= 0.0),
+        }
+    }
 }
 
 /// A gradient's stops as written: offsets from 0 to 1 and the components in its space.
@@ -287,6 +296,12 @@ pub(crate) struct Scene<'a> {
     max_body: usize,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// The document is a separation's plate: every color is the gray of one ink's coverage
+    /// ([`Self::on_plate`]).
+    plate: bool,
+    /// The gradient being painted overprints on a plate: where it is paper white it puts none of
+    /// the plate's ink down, and the plate below it is left as it is ([`Self::inked_spans`]).
+    keep_below: bool,
 }
 
 impl<'a> Scene<'a> {
@@ -315,7 +330,17 @@ impl<'a> Scene<'a> {
             pending: 0,
             max_body: MAX_BODY,
             nest: 0,
+            plate: false,
+            keep_below: false,
         }
+    }
+
+    /// This scene drawing a separation's plate when `plate` is true: an overprinting gradient
+    /// paints only where it puts the plate's ink down, as an overprinting solid color that puts
+    /// none down is drawn as nothing on it.
+    pub fn on_plate(mut self, plate: bool) -> Self {
+        self.plate = plate;
+        self
     }
 
     /// This scene with a page body of at most `max` bytes.
@@ -689,11 +714,18 @@ impl<'a> Scene<'a> {
                 self.line("q");
                 push_path(&mut self.body, bp);
                 self.body.push_str(clip_op(rule));
-                self.paint_area(p, bounds, bp.bounding_box());
+                self.paint_overprinting(overprint, p, bounds, bp.bounding_box());
                 self.line("Q");
             }
         }
         self.overprint_off(on);
+    }
+
+    /// [`Self::paint_area`] for a fill or stroke that overprints when `overprint` is true.
+    fn paint_overprinting(&mut self, overprint: bool, p: &Paint, bounds: Rect, area: Rect) {
+        let keep = std::mem::replace(&mut self.keep_below, self.plate && overprint);
+        self.paint_area(p, bounds, area);
+        self.keep_below = keep;
     }
 
     /// Paint all of `area` (inside the current clip) with gradient or pattern `p`, placed on
@@ -786,7 +818,7 @@ impl<'a> Scene<'a> {
                         self.line("q");
                         push_path(&mut self.body, bp);
                         self.line("strokepath W");
-                        self.paint_area(p, paint_bounds, w.reach(st, bounds));
+                        self.paint_overprinting(st.overprint, p, paint_bounds, w.reach(st, bounds));
                         self.line("Q");
                     }
                 }
@@ -1152,7 +1184,8 @@ impl<'a> Scene<'a> {
 
     /// Paint all of `area` (inside the current clip) with linear, radial, conic or diamond gradient
     /// `g`, placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
-    /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
+    /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]). Overprinting
+    /// on a plate, it is clipped to the levels where it puts ink down ([`Self::inked_spans`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
         // One mixed around the hue wheel that reflects is repeated from its curve's stops, which
@@ -1185,7 +1218,7 @@ impl<'a> Scene<'a> {
         }
         let (space, stops) = self.gradient_stops(&g.gradient);
         if !stops.windows(2).any(|w| w[1].0 > w[0].0) {
-            if let Some((_, c)) = stops.first() {
+            if let Some((_, c)) = stops.first().filter(|(_, c)| !(self.keep_below && space.paper(c))) {
                 self.set_comps(&space, c);
                 self.rect_fill(area);
             }
@@ -1193,20 +1226,47 @@ impl<'a> Scene<'a> {
         }
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
+        let spans = if g.gradient.kind == GradientKind::Conic { None } else { self.inked_spans(space, &stops, smooth) };
         match g.gradient.kind {
             GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
-            GradientKind::Diamond => self.diamond_quadrants(&geom, area, space, &stops, smooth),
+            GradientKind::Diamond => {
+                // Its levels are diamonds about the center, the square's edge at 1.
+                let frame = geom.diamond_frame();
+                if let Some(spans) = &spans {
+                    let Some(frame) = frame else {
+                        // Without a frame it is its last stop everywhere.
+                        if stops.last().is_some_and(|(_, c)| !space.paper(c)) {
+                            self.diamond_quadrants(&geom, area, space, &stops, smooth);
+                        }
+                        return;
+                    };
+                    let level = |t: f64| (t > 0.0).then(|| frame * BezPath::from_vec(diamond(t)));
+                    self.line("q");
+                    let clipped = self.clip_rings(spans, area.inflate(1.0, 1.0), level);
+                    if clipped {
+                        self.diamond_quadrants(&geom, area, space, &stops, smooth);
+                    }
+                    self.line("Q");
+                    return;
+                }
+                self.diamond_quadrants(&geom, area, space, &stops, smooth);
+            }
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
                 let inv = squash.inverse();
                 let (f, c) = (inv * geom.focal_point(), geom.start);
+                let local = inv.transform_rect_bbox(area);
                 self.line("q");
                 let _ = writeln!(self.body, "{} cm", ps::matrix(squash));
-                if smooth {
-                    self.shading(3, space, &[f.x, f.y, 0.0, c.x, c.y, r], &stops);
-                } else {
-                    self.radial_steps(f, c, r, inv.transform_rect_bbox(area), space, &stops);
+                // Its levels are circles from the focal point, at 1 the circle of radius `r`.
+                let level = |t: f64| (t > 0.0).then(|| kurbo::Circle::new(f + (c - f) * t, r * t).to_path(0.01));
+                if spans.as_ref().is_none_or(|spans| self.clip_rings(spans, local.inflate(1.0, 1.0), level)) {
+                    if smooth {
+                        self.shading(3, space, &[f.x, f.y, 0.0, c.x, c.y, r], &stops);
+                    } else {
+                        self.radial_steps(f, c, r, local, space, &stops);
+                    }
                 }
                 self.line("Q");
             }
@@ -1215,13 +1275,120 @@ impl<'a> Scene<'a> {
                 if s.distance(e) < 1e-9 {
                     e = s + Vec2::new(1.0, 0.0);
                 }
-                if smooth {
-                    self.shading(2, space, &[s.x, s.y, e.x, e.y], &stops);
+                if let Some(spans) = &spans {
+                    self.line("q");
+                    if self.clip_strips(spans, s, e, area) {
+                        self.linear(s, e, area, space, &stops, smooth);
+                    }
+                    self.line("Q");
                 } else {
-                    self.linear_steps(s, e, area, space, &stops);
+                    self.linear(s, e, area, space, &stops, smooth);
                 }
             }
         }
+    }
+
+    /// A linear gradient from `s` to `e` over `area`: a smooth shading, else stepped fills.
+    fn linear(&mut self, s: Point, e: Point, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)], smooth: bool) {
+        if smooth {
+            self.shading(2, space, &[s.x, s.y, e.x, e.y], stops);
+        } else {
+            self.linear_steps(s, e, area, space, stops);
+        }
+    }
+
+    /// Where an overprinting gradient with `stops` in `space` puts ink on a plate
+    /// ([`Self::keep_below`]): the spans of its levels outside every stretch between two stops of
+    /// paper white and outside the padding past an end painted paper white, in order, an end
+    /// padding with ink unbounded. The padding takes the end stop's color when stepped and the
+    /// end stretch's color when `smooth` ([`Self::shading`]); the two differ when two stops share
+    /// the end's offset. `None` when the gradient puts ink everywhere or does not overprint on a
+    /// plate; empty when it puts none down.
+    fn inked_spans(&self, space: &GradientSpace, stops: &[(f64, Vec<f32>)], smooth: bool) -> Option<Vec<(f64, f64)>> {
+        if !self.keep_below {
+            return None;
+        }
+        let stretches: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
+        let (first, last) = (stretches.first()?, stretches.last()?);
+        let (start, end) = if smooth { (&first[0].1, &last[1].1) } else { (&stops.first()?.1, &stops.last()?.1) };
+        let (before, after) = (space.paper(start), space.paper(end));
+        let mut blank: Vec<(f64, f64)> = vec![];
+        let mut add = |a: f64, b: f64| match blank.last_mut() {
+            Some(l) if l.1 >= a => l.1 = l.1.max(b),
+            _ => blank.push((a, b)),
+        };
+        if before {
+            add(f64::NEG_INFINITY, first[0].0);
+        }
+        for w in &stretches {
+            if space.paper(&w[0].1) && space.paper(&w[1].1) {
+                add(w[0].0, w[1].0);
+            }
+        }
+        if after {
+            add(last[1].0, f64::INFINITY);
+        }
+        if blank.is_empty() {
+            return None;
+        }
+        let mut inked = vec![];
+        let mut from = f64::NEG_INFINITY;
+        for (a, b) in blank {
+            if a > from {
+                inked.push((from, a));
+            }
+            from = b;
+        }
+        if from < f64::INFINITY {
+            inked.push((from, f64::INFINITY));
+        }
+        Some(inked)
+    }
+
+    /// Clip to the parts of `area` where a linear gradient from `s` to `e` has a level in `spans`:
+    /// a strip across the gradient for each. False, with nothing written, when no span reaches
+    /// into `area`.
+    fn clip_strips(&mut self, spans: &[(f64, f64)], s: Point, e: Point, area: Rect) -> bool {
+        let d = e - s;
+        let len = d.hypot();
+        // Gradient space: x along the gradient (0 to 1), y across it in points.
+        let frame = Affine::new([d.x, d.y, -d.y / len, d.x / len, s.x, s.y]);
+        let local = frame.inverse().transform_rect_bbox(area.inflate(1.0, 1.0));
+        let mut bp = BezPath::new();
+        for &(a, b) in spans {
+            let (a, b) = (a.max(local.x0), b.min(local.x1));
+            if a < b {
+                bp.extend((frame * Rect::new(a, local.y0, b, local.y1).to_path(0.1)).iter());
+            }
+        }
+        self.clip_path(&bp, FillRule::NonZero)
+    }
+
+    /// Clip to the levels in `spans` of a gradient whose level `t` is bounded by `level(t)` (a
+    /// closed path holding every lower level; `None` for a level without area): for each span
+    /// the ring between its levels, an unbounded end at `outer`, even-odd. False, with nothing
+    /// written, when no span has area.
+    fn clip_rings(&mut self, spans: &[(f64, f64)], outer: Rect, level: impl Fn(f64) -> Option<BezPath>) -> bool {
+        let mut bp = BezPath::new();
+        for &(a, b) in spans {
+            let edge = if b.is_finite() { level(b) } else { Some(outer.to_path(0.1)) };
+            let Some(edge) = edge else { continue };
+            bp.extend(edge.iter());
+            if let Some(inner) = level(a).filter(|_| a.is_finite()) {
+                bp.extend(inner.iter());
+            }
+        }
+        self.clip_path(&bp, FillRule::EvenOdd)
+    }
+
+    /// Clip to `bp` by `rule`. False, with nothing written, when `bp` is empty.
+    fn clip_path(&mut self, bp: &BezPath, rule: FillRule) -> bool {
+        if bp.elements().is_empty() {
+            return false;
+        }
+        push_path(&mut self.body, bp);
+        self.body.push_str(clip_op(rule));
+        true
     }
 
     /// A conic gradient as [`CONIC_WEDGE_COUNT`] solid wedges about its center covering `area`
@@ -1243,13 +1410,33 @@ impl<'a> Scene<'a> {
             Some(w) => w[1].1.clone(),
             None => stops.last().map_or_else(Vec::new, |s| s.1.clone()),
         };
-        for (pts, t) in geom.conic_wedges(area, g.conic_wedge_count(CONIC_WEDGE_COUNT), true) {
+        let count = g.conic_wedge_count(CONIC_WEDGE_COUNT);
+        // Overprinting on a plate: clipped to the wedges that put ink down, each up to the next.
+        let clipped = self.keep_below && {
+            let wedges = geom.conic_wedges(area, count, false);
+            let inked: Vec<_> = wedges.iter().filter(|(_, t)| !space.paper(&at(spread(*t)))).collect();
+            if inked.is_empty() {
+                return;
+            }
+            inked.len() < wedges.len() && {
+                let mut bp = BezPath::new();
+                for (pts, _) in inked {
+                    bp.extend(BezPath::from_vec(polygon(pts)).iter());
+                }
+                self.line("q");
+                self.clip_path(&bp, FillRule::NonZero)
+            }
+        };
+        for (pts, t) in geom.conic_wedges(area, count, true) {
             self.set_comps(space, &at(spread(t)));
             for (i, p) in pts.iter().enumerate() {
                 push_nums(&mut self.body, &[p.x, p.y]);
                 self.line(if i == 0 { "newpath moveto" } else { "lineto" });
             }
             self.line("closepath fill");
+        }
+        if clipped {
+            self.line("Q");
         }
     }
 
@@ -1442,20 +1629,68 @@ impl<'a> Scene<'a> {
         let field = g.freeform_on(b).model_field(spread_scale(b));
         let q = |v: f32| (unit(v) * 255.0).round() as u8;
         let (w, h) = (u32::from(cols), u32::from(rows));
+        // Overprinting on a plate: the cells of paper white put none of the ink down, so they are
+        // left out, as clear pixels at Level 3 and outside a clip of the other cells at Level 2.
+        let blank: Option<Vec<bool>> = self.keep_below.then(|| field.grid(area, cols, rows).map(|(c, _)| is_white(&Paint::solid(c))).collect());
+        let blank = blank.filter(|b| b.contains(&true));
+        if blank.as_ref().is_some_and(|b| !b.contains(&false)) {
+            return;
+        }
+        let keyed = self.o.level == Level::Three;
+        let clear = |i: usize, a: u8| if keyed && blank.as_ref().is_some_and(|b| b[i]) { 0 } else { a };
         let image = if field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray)) {
             let inks: Vec<u8> = field
                 .grid(area, cols, rows)
-                .flat_map(|(color, a)| {
+                .enumerate()
+                .flat_map(|(i, (color, a))| {
                     let [c, m, y, k] = color.to_cmyk();
-                    [q(c), q(m), q(y), q(k), q(a)]
+                    [q(c), q(m), q(y), q(k), clear(i, q(a))]
                 })
                 .collect();
             self.encode_inks(&inks, w, h)
         } else {
-            let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+            let rgba: Vec<u8> =
+                field.display_grid(area, cols, rows).enumerate().flat_map(|(i, (c, a))| [q(c[0]), q(c[1]), q(c[2]), clear(i, q(a))]).collect();
             self.encode_image(&rgba, w, h)
         };
         let Some(image) = image else { return };
+        let cells = blank.filter(|_| !keyed).map(|b| {
+            let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
+            let mut bp = BezPath::new();
+            for (row, line) in b.chunks(usize::from(cols)).enumerate() {
+                let mut col = 0;
+                while col < line.len() {
+                    let start = col;
+                    while col < line.len() && !line[col] {
+                        col += 1;
+                    }
+                    if col > start {
+                        let (y0, y1) = (area.y0 + row as f64 * ch, area.y0 + (row + 1) as f64 * ch);
+                        bp.extend(Rect::new(area.x0 + start as f64 * cw, y0, area.x0 + col as f64 * cw, y1).to_path(0.1).iter());
+                    }
+                    col += 1;
+                }
+            }
+            bp
+        });
+        if let Some(bp) = &cells {
+            // Each row's run of cells is a rectangle of five path elements, about 60 bytes.
+            if self.size().saturating_add(bp.elements().len().saturating_mul(12)).saturating_add(image.inline_len) > self.max_body {
+                self.warn(TOO_LARGE);
+                return;
+            }
+            self.line("q");
+            self.clip_path(bp, FillRule::NonZero);
+        }
+        self.place_field(image, place);
+        if cells.is_some() {
+            self.line("Q");
+        }
+    }
+
+    /// Place freeform gradient image `image` on the unit square mapped by `place`, drawn from an
+    /// image already kept when one is encoded the same.
+    fn place_field(&mut self, image: ImageCode, place: Affine) {
         let key = image.content_key();
         let found =
             self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
@@ -1847,6 +2082,19 @@ fn image_code(prelude: String, dict: String, filter: &'static str, op: &'static 
     let mut code = ImageCode { prelude, dict, filter, op, ascii: ps::ascii85(&data), data, uses: 0, inline_len: 0, ref_len: 0 };
     code.inline_len = code.prelude.len() + INLINE_SOURCE.len() + code.dict.len() + code.inline_read().len() + code.ascii.len();
     code
+}
+
+/// The closed polygon through `pts`.
+fn polygon(pts: &[Point]) -> Vec<kurbo::PathEl> {
+    let mut els: Vec<kurbo::PathEl> =
+        pts.iter().enumerate().map(|(i, p)| if i == 0 { kurbo::PathEl::MoveTo(*p) } else { kurbo::PathEl::LineTo(*p) }).collect();
+    els.push(kurbo::PathEl::ClosePath);
+    els
+}
+
+/// The square with corners (±`t`, 0) and (0, ±`t`).
+fn diamond(t: f64) -> Vec<kurbo::PathEl> {
+    polygon(&[Point::new(t, 0.0), Point::new(0.0, t), Point::new(-t, 0.0), Point::new(0.0, -t)])
 }
 
 /// `a` to `b` at `t`.

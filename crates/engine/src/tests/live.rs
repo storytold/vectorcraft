@@ -1629,9 +1629,9 @@ fn cmyk_mesh(create: Value) -> (Session, NodeId) {
     (s, a)
 }
 
-/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` operands, and the
-/// corner colours of its gradient meshes, which are patch shadings, as PDF import reads them
-/// back), and its warnings.
+/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` and DeviceCMYK
+/// `c m y k k` operands, and the corner colours of its gradient meshes, which are patch shadings,
+/// as PDF import reads them back), and its warnings.
 fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
     let v = s.execute("document.exportPdf", &json!({"standard": "pdfX4", "compression": {"compressText": false}})).unwrap();
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
@@ -1644,6 +1644,11 @@ fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
                 let nums: Vec<f32> = words[..i].iter().rev().map_while(|x| x.parse().ok()).collect();
                 // A pattern (`/P0 scn`) has no colour of its own.
                 if !nums.is_empty() {
+                    out.push(nums.into_iter().rev().collect());
+                }
+            } else if *w == "k" {
+                let nums: Vec<f32> = words[..i].iter().rev().take(4).map_while(|x| x.parse().ok()).collect();
+                if nums.len() == 4 {
                     out.push(nums.into_iter().rev().collect());
                 }
             }
