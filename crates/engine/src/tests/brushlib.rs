@@ -214,11 +214,29 @@ fn vector_packs_marks_are_editable_and_survive_a_saved_library() {
         assert!(art_paths(&sc.art).len() >= 2, "{} has no editable vector mark", b.name);
         let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
         assert!(pieces.len() >= 3, "{} does not repeat along a path", b.name);
+        // The black marks take a non-black stroke color as their fill.
+        let teal = vectorcraft_color::Color::rgb(0.1, 0.6, 0.5);
+        let stroke = vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(teal), 1.0);
+        let mut fills = vec![];
+        for piece in vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &stroke) {
+            piece.walk(&mut |c| {
+                if c.path_data().is_some() {
+                    fills.push(c.appearance.fill().map(|f| f.paint.clone()));
+                }
+            });
+        }
+        assert!(!fills.is_empty(), "{} draws no paths", b.name);
+        for fill in fills {
+            let Some(vectorcraft_color::Paint::Solid { color, .. }) = fill else { panic!("{} draws a path without a solid fill: {fill:?}", b.name) };
+            let (got, want) = (color.to_rgb(), teal.to_rgb());
+            assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "{} fills {got:?}, not the stroke color {want:?}", b.name);
+        }
         let before = undo_len(&s);
         let added = run(&mut s, "brush.addFromLibrary", json!({"library": "vector-packs", "name": b.name, "apply": true, "ids": [line]}));
         assert_eq!(strs(&added["added"]), [b.name.as_str()]);
         assert_eq!(added["applied"], json!([line]));
         assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(line)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
     }
     let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
     let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
