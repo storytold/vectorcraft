@@ -1481,6 +1481,10 @@ antiAlias	Sharp	Nítido
 	Add Color Tool	Ferramenta Adicionar cor
 	Remove Color Tool	Ferramenta Remover cor
 	Remove Color	Remover cor
+	Set As Base Color	Definir como cor base
+	Select Shade	Selecionar tonalidade
+	Add New Color	Adicionar nova cor
+	Set Current Color As Base Color	Definir cor atual como cor base
 	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
@@ -2369,6 +2373,10 @@ antiAlias	Sharp	Nítido
 	Preserve Alpha Transparency	Preservar Transparência Alfa
 	Preserve Appearance and Overprints	Preservar Aparência e Sobreimpressões
 	Preserve CMYK Numbers	Preservar Números CMYK
+	Preserve RGB Numbers	Preservar Números RGB
+	Device to Simulate:	Dispositivo a Simular:
+	Simulate Paper Color	Simular Cor do Papel
+	Simulate Black Ink	Simular Tinta Preta
 	Preserve Editing Capabilities	Preservar Capacidades de Edição
 	Preserve Lightness	Preservar Luminosidade
 	Preserve Overprints and Spot Colors	Preservar Sobreimpressões e Cores Spot
@@ -4675,6 +4683,7 @@ axis	Both	Ambos
 @msg	no native format	sem formato nativo
 @msg	no pages	sem páginas
 @msg	no pattern `{name}`	nenhum padrão `{name}`
+@msg	art painted with `{name}` can't be its tile	uma arte pintada com `{name}` não pode ser o ladrilho dele
 @msg	no perspective grid preset named `{name}`	nenhuma predefinição de grade de perspectiva chamada `{name}`
 @msg	no plug-in {0} is installed	o plug-in {0} não está instalado
 @msg	no plug-in {id} is installed	o plug-in {id} não está instalado
@@ -6435,6 +6444,7 @@ effect	Regular	Regular
 	Arrow	Seta
 	Arrow (open)	Seta (aberta)
 	Barbed	Farpada
+arrowhead	Feather	Pena
 	Half Arrow (left)	Meia Seta (esquerda)
 	Half Arrow (right)	Meia Seta (direita)
 	Concave	Côncava
@@ -6462,6 +6472,7 @@ effect	Regular	Regular
 	Kite	Pipa
 	Triangle to Bar	Triângulo para Barra
 	Oval	Oval
+	Line Arrow	Seta de Linha
 	Complementary	Complementar
 	Complementary 2	Complementar 2
 	Split Complementary	Complementar Dividida
@@ -8314,6 +8325,7 @@ breakText	Glyphs	Glifos
 	Remove Strokes	Remover Traçados
 	Place Brush Art	Colocar Arte do Pincel
 	Replace Brush Art	Substituir Arte do Pincel
+	Replace Pattern Art	Substituir Arte do Padrão
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
 	Apply to Strokes	Aplicar aos Traçados
 	Leave Strokes	Manter Traçados
@@ -10789,6 +10801,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Engraving	Gravura
+	Fine Hatching	Hachuras finas
+	Dense Hatching	Hachuras densas
+	Tapered Hatching	Hachuras afiladas
+	Broken Hatching	Hachuras interrompidas
 	Image Brush	Pincéis de imagem
 	Soft Bloom	Flor suave
 	Halftone Field	Campo de meios-tons

@@ -363,6 +363,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.pattern.done",
     "object.pattern.edit",
     "object.pattern.make",
+    "object.pattern.replaceArt",
     "object.puppetWarp",
     "object.puppetWarp.pins",
     "object.rasterize",

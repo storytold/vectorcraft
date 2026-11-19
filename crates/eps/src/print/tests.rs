@@ -2,7 +2,7 @@
 //! reader reads back.
 
 use vectorcraft_color::{
-    Color, Freeform, FreeformPoint, Gradient, GradientGeom, GradientKind, GradientPaint, GradientSpread, GradientStop, Paint, Swatch,
+    Color, Freeform, FreeformPoint, Gradient, GradientGeom, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint, Swatch,
 };
 use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind, StrokeGradientMode, TextObject};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2, shapes};
@@ -308,6 +308,32 @@ fn an_overprinting_diamond_gradient_without_a_frame_keeps_the_ink_below_on_a_pos
             (*name, overprinting(gradient(GradientKind::Diamond, stops, flat, GradientSpread::Pad), Paint::None), cyan.clone(), "Cyan")
         })
         .collect();
+    assert_keeps_the_ink_below(&cases);
+}
+
+#[test]
+fn an_overprinting_gradient_with_stops_written_between_its_stops_keeps_the_ink_below_on_a_postscript_plate() {
+    // None of the cyan from 0.3 to 0.6: the stops written between those two stops (along a
+    // Perceptual or hue mix, or at a Classic gradient's off-centre midpoint) are paper white too.
+    let (inked, none) = (Color::cmyk(0.6, 0.3, 0.0, 0.0), Color::cmyk(0.0, 0.3, 0.0, 0.0));
+    let stops = [(0.0, inked), (0.3, none), (0.6, none), (1.0, inked)];
+    let c = Point::new(100.0, 50.0);
+    let around = GradientGeom { start: c, end: c + Vec2::new(70.0, -20.0), aspect: 0.7, focal: None };
+    let across = GradientGeom { start: Point::new(30.0, 40.0), end: Point::new(170.0, 60.0), aspect: 1.0, focal: None };
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let shapes = [(GradientKind::Linear, across, "linear"), (GradientKind::Radial, around, "radial"), (GradientKind::Diamond, around, "diamond")];
+    let mut cases = vec![];
+    for method in [GradientMethod::Classic, GradientMethod::Perceptual, GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        for (kind, geom, shape) in shapes {
+            let mut fill = gradient(kind, &stops, geom, GradientSpread::Pad);
+            if let Paint::Gradient(g) = &mut fill {
+                g.gradient.method = method;
+                g.gradient.stops[1].midpoint = 0.3;
+            }
+            cases.push((format!("{shape}, {}", method.label()), overprinting(fill, Paint::None), cyan.clone(), "Cyan"));
+        }
+    }
+    let cases: Vec<_> = cases.iter().map(|(name, art, under, ink)| (name.as_str(), art.clone(), under.clone(), *ink)).collect();
     assert_keeps_the_ink_below(&cases);
 }
 

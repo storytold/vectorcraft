@@ -2115,6 +2115,10 @@ antiAlias	Sharp	シャープ
 	Add Color Tool	カラー追加ツール
 	Remove Color Tool	カラー削除ツール
 	Remove Color	カラーを削除
+	Set As Base Color	ベースカラーに設定
+	Select Shade	シェードを選択
+	Add New Color	新規カラーを追加
+	Set Current Color As Base Color	現在のカラーをベースカラーに設定
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
@@ -2986,6 +2990,10 @@ diagnostics	ui	UI
 	Preserve Alpha Transparency	アルファ透明を保持
 	Preserve Appearance and Overprints	アピアランスとオーバープリントを保持
 	Preserve CMYK Numbers	CMYK 値を保持
+	Preserve RGB Numbers	RGB 値を保持
+	Device to Simulate:	シミュレートするデバイス:
+	Simulate Paper Color	用紙の色をシミュレート
+	Simulate Black Ink	インキの黒をシミュレート
 	Preserve Editing Capabilities	編集機能を保持
 	Preserve Lightness	明度を保持
 	Preserve Overprints and Spot Colors	オーバープリントと特色を保持
@@ -5193,6 +5201,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} の結果が空になりました。領域を囲まない直線などのオープンパスがあります。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	already editing a pattern	すでにパターンを編集中です
 @msg	no pattern `{name}`	パターン `{name}` が見つかりません
+@msg	art painted with `{name}` can't be its tile	`{name}` でペイントされたアートはそのタイルにできません
 @msg	not in pattern editing mode	パターン編集モードではありません
 @msg	finish editing the pattern first	先にパターンの編集を終了してください
 @msg	pattern missing	パターンが見つかりません
@@ -9528,6 +9537,36 @@ anchor	Points:	ポイント:
 @msg	`{id}` is not a colour adjustment	`{id}` はカラー補正ではありません
 @msg	missing `effect`	`effect` が指定されていません
 @msg	`params` must be an object	`params` にはオブジェクトを指定してください
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角形 (白抜き)
+	Circle (open)	円 (白抜き)
+	Square (open)	正方形 (白抜き)
+	Arrow (open)	矢印 (白抜き)
+	Barbed	かえし付き
+arrowhead	Feather	矢羽根
+	Half Arrow (left)	片矢印 (左)
+	Half Arrow (right)	片矢印 (右)
+	Double Bar	二重バー
+	Dot on Bar	バー上のドット
+	Chevron	山形
+	Plus	プラス
+	Hexagon (open)	六角形 (白抜き)
+	Tag	タグ
+	Tag (open)	タグ (白抜き)
+	Half Circle	半円
+	Drop	しずく
+	Slash	スラッシュ
+	Double Slash	二重スラッシュ
+	Diamond (open)	ひし形 (白抜き)
+	Reverse Triangle	逆三角形
+	Swallowtail	燕尾
+	Bracket	角かっこ
+	Fork	フォーク
+	Leaf	葉
+	Kite	カイト
+	Triangle to Bar	三角形からバー
+	Oval	楕円
+	Line Arrow	線矢印
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	パス精密ツール
 	Anchor Eraser Brush	アンカーポイント消去ブラシ
@@ -9818,6 +9857,7 @@ breakText	Glyphs	字形
 	Remove Strokes	線を削除
 	Place Brush Art	ブラシのアートを配置
 	Replace Brush Art	ブラシのアートを置き換え
+	Replace Pattern Art	パターンのアートを置き換え
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
 	Apply to Strokes	線に適用
 	Leave Strokes	線を保持
@@ -10427,6 +10467,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Engraving	彫刻
+	Fine Hatching	細いハッチング
+	Dense Hatching	密なハッチング
+	Tapered Hatching	先細りハッチング
+	Broken Hatching	途切れたハッチング
 	Image Brush	画像ブラシ
 	Soft Bloom	やわらかな花
 	Halftone Field	ハーフトーンの面

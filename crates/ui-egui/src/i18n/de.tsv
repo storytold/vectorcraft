@@ -1694,6 +1694,10 @@ file-filter	Templates	Vorlagen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
+	Set As Base Color	Als Grundfarbe festlegen
+	Select Shade	Schattierung auswählen
+	Add New Color	Neue Farbe hinzufügen
+	Set Current Color As Base Color	Aktuelle Farbe als Grundfarbe festlegen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -2826,6 +2830,10 @@ diagnostics	ui	Oberfläche
 	Preserve Alpha Transparency	Alphatransparenz beibehalten
 	Preserve Appearance and Overprints	Aussehen und Überdrucken beibehalten
 	Preserve CMYK Numbers	CMYK-Werte beibehalten
+	Preserve RGB Numbers	RGB-Werte beibehalten
+	Device to Simulate:	Zu simulierendes Gerät:
+	Simulate Paper Color	Papierfarbe simulieren
+	Simulate Black Ink	Schwarze Druckfarbe simulieren
 	Preserve Editing Capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve editing capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve Lightness	Helligkeit beibehalten
@@ -5290,6 +5298,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no native format	kein natives Format
 @msg	no pages	keine Seiten
 @msg	no pattern `{name}`	kein Muster `{name}`
+@msg	art painted with `{name}` can't be its tile	mit `{name}` gefärbtes Bildmaterial kann nicht dessen Kachel sein
 @msg	no perspective grid preset named `{name}`	keine Vorgabe für Perspektivenraster namens `{name}`
 @msg	no plug-in {0} is installed	es ist kein Plug-in {0} installiert
 @msg	no plug-in {id} is installed	es ist kein Plug-in {id} installiert
@@ -7601,6 +7610,36 @@ anchor	Points:	Punkte:
 @msg	`{id}` is not a colour adjustment	`{id}` ist keine Farbkorrektur
 @msg	missing `effect`	`effect` fehlt
 @msg	`params` must be an object	`params` muss ein Objekt sein
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Dreieck (offen)
+	Circle (open)	Kreis (offen)
+	Square (open)	Quadrat (offen)
+	Arrow (open)	Pfeil (offen)
+	Barbed	Mit Widerhaken
+arrowhead	Feather	Feder
+	Half Arrow (left)	Halber Pfeil (links)
+	Half Arrow (right)	Halber Pfeil (rechts)
+	Double Bar	Doppelbalken
+	Dot on Bar	Punkt auf Balken
+	Chevron	Winkel
+	Plus	Plus
+	Hexagon (open)	Sechseck (offen)
+	Tag	Etikett
+	Tag (open)	Etikett (offen)
+	Half Circle	Halbkreis
+	Drop	Tropfen
+	Slash	Schrägstrich
+	Double Slash	Doppelter Schrägstrich
+	Diamond (open)	Raute (offen)
+	Reverse Triangle	Umgekehrtes Dreieck
+	Swallowtail	Schwalbenschwanz
+	Bracket	Klammer
+	Fork	Gabel
+	Leaf	Blatt
+	Kite	Drachen
+	Triangle to Bar	Dreieck zu Balken
+	Oval	Oval
+	Line Arrow	Linienpfeil
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Pfad-Präzisionswerkzeuge
 	Anchor Eraser Brush	Ankerpunkt-Radierpinsel
@@ -7891,6 +7930,7 @@ breakText	Glyphs	Glyphen
 	Remove Strokes	Konturen entfernen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
+	Replace Pattern Art	Mustergrafik ersetzen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten
@@ -10330,6 +10370,11 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Engraving	Gravur
+	Fine Hatching	Feine Schraffur
+	Dense Hatching	Dichte Schraffur
+	Tapered Hatching	Verjüngte Schraffur
+	Broken Hatching	Unterbrochene Schraffur
 	Image Brush	Bildpinsel
 	Soft Bloom	Sanfte Blüte
 	Halftone Field	Rasterfeld

@@ -724,7 +724,7 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool; `e` while dragging a Selection or Group Selection marquee; `c` and `f` while dragging out an arc; `f`, `v`, `x` and `c` while dragging out a rectangular or polar grid). |
 | `type_text` | `{text}` | Remote only. |
 | `answer_dialog` | `{set?: [{field, value?}], action?}` | Remote only. Sets fields of the app's open dialog in the order given with one `ui.dialog.set {fields, action?}` (a missing `value` is `null`). The app stores all of them or none, then answers that same dialog with `action` in the same request: `confirm` (OK) or `cancel`. Another connection cannot open a dialog between the two steps. When the app refuses the `ui.dialog.set`, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. `set` cannot change a `__` field other than the dialog's controls held under a `__` name (such as Save PDF's `__section` or the Preferences `__search`): the `__command` and `__params` of a `confirm` or `command` dialog, and every other `__` field that holds what OK acts on, are refused with "the `<kind>` dialog cannot set protected field `<field>`", so OK runs what the dialog was opened for. `action` alone is sent as `ui.dialog.confirm` or `ui.dialog.cancel`. Give `set`, `action` or both; `set` holds at most 256 fields. `inspect_ui` shows the open dialog and its fields as `ui.dialog`. Returns `{dialog, result}`: the dialog after the fields were set (or `null`) and the reply to `confirm` or `cancel` (or `null`). After `invoke_menu` `app.quit`, `file.close` or `file.closeAll` replies `{"pending": "saveChanges"}`, `{action: "confirm"}` saves, `{set: [{field: "discard", value: true}], action: "confirm"}` closes without saving and `{action: "cancel"}` cancels the close or quit. |
-| `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. UI commands such as `view.*` and `window.*` are in `command_list` with `ui: true`; running them needs the desktop app (`--connect`). |
+| `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. UI commands such as `view.*` and `window.*` are in `command_list` with `ui: true`; running them needs the desktop app (`--connect`). The app refuses `attributes.openUrl`, `file.export.svg.browser`, `file.saveForWeb.browser` and `file.showPackage` for every control and MCP request, since each opens another app, so the headless error for them does not suggest `--connect`. |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. An app that does not send the image back writes a window capture without `path` to a file in a new folder inside the system's temporary folder (on Unix only the user can open it); the server reads the file and then removes the folder, also when the capture or the read fails. |
 | `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PICT (`.pct`/`.pic`/`.pict`, and a version 2 picture of any extension), HP-GL (`.plt`/`.hpgl`/`.hgl`/`.hpg`, and a file of an extension no other format reads that starts with plotter instructions), PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a PSD or PSB file with its layers as layers, or as its merged image through `run_command document.open` with `layers: false`; a JPEG XL file as its first frame), CDR drawings of versions 1 to 27 (`.cdr`, `.cdt`), CMX files with 32-bit coordinates (`.cmx`). Templates (`.vctemplate`, `.ait`, `.cdt`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
@@ -1237,6 +1237,15 @@ describes the second Alt-click or Option-click on the eye bringing every separat
 that plate alone). A hidden plate, another plate while one shows alone, or any plate while none is shown becomes
 the only plate shown; these cases are VectorCraft's own rules. `only` always shows just the named plate, so
 repeating it changes nothing. Neither adds an undo step.
+View › Proof Setup › Customize… (`ui.proofSetupDialog`, dialog `proofSetup`) sets the custom proof through
+`view.proofSetup`: `target` `"cmyk:<profile>"` or `"rgb:<profile>"` names any CMYK or RGB profile as the device to
+simulate (a profile that is not loaded is an error), `preserveNumbers` sends the colors' numbers in the document's
+space to the device unchanged instead of converting them with `intent` (each color as it is painted, and a placed
+CMYK image's own inks; an RGB image's pixels go through their numbers in the document's space, and transparency mixes
+the proofed colors on the device's paper), and
+`simulateBlack` shows the device's black
+as the dark gray it prints (`simulatePaper` does so too, on the paper's color; both act on CMYK devices only). The
+reply carries `preserveNumbers` and `simulateBlack` with the other proof settings.
 The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
 mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
 show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays
@@ -5341,7 +5350,7 @@ without `groupColors`, its new color then joins `group` after the new colors of 
 `recolor.randomize` and `recolor.weigh` keep such a row, and `recolor.randomize` keeps its `added`. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
 Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
-empty row does not count toward Colors. While it is empty, the dialog's Edit tab does not show it (its sliders edit
+empty row does not count toward Colors. While it is empty and not `added`, the dialog's Edit tab does not show it (its sliders edit
 the base color when the empty row is selected), the harmony rules,
 linked moves and the Color Theme Picker leave its new color as it is, and Save All Colors and a new color group saved
 from colors alone leave its new color out. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
@@ -5392,7 +5401,7 @@ objects are read. As VectorCraft's own rule, each object read weighs the same, s
 among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
 its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
 most used color in its own model. Picks that touch no art return no colors. In the Recolor Artwork dialog the picks are the `themePicks` field: the rows that aren't
-excluded and hold current colors take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
+excluded and hold current colors or were added on the Edit tab take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
@@ -5418,7 +5427,7 @@ bar sits under the Edit tab's wheel: each row with a share is a part as wide as 
 the largest first. Dragging the edge between two parts moves width between them, and when the drag ends the widths
 become the `weights` field, which moves the rows' current colors and previews the result. The New Color Group menu
 beside the link button runs `swatch.newGroup` right away, as its own undo step: Save All Colors saves the new colors
-of the rows that are not excluded and hold current colors, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
+of the rows that are not excluded, hold current colors or were added on the Edit tab, and still have one, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
 
 The Recolor Artwork dialog lists the document's color groups on its right, or under the tabs in a window too narrow
 for both ([Advanced recolor options overview](https://helpx.adobe.com/illustrator/desktop/manage-colors/learn-color-basics/edit-colors-dialog-overview.html)).
@@ -5690,9 +5699,9 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: thirteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
+Brush libraries are read-only sets of brushes: fourteen generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Pressure Sensitive with Flex Ribbon, Pulse Stroke, Round Flow and Chisel Flow, Bristle
 Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Stipple with Fine, Dense, Soft and Bold dot textures, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
-Charcoal Dust art brushes, id `dry-media`, Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, and Arrows with Solid, Open, Double, Chevron and Dashed Arrow art brushes, id `arrows`), the `.vectorcraft` files in the user library folder of the desktop app (User
+Charcoal Dust art brushes, id `dry-media`, Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, Engraving with Fine Hatching, Dense Hatching, Tapered Hatching and Broken Hatching art brushes, id `engraving`, and Arrows with Solid, Open, Double, Chevron and Dashed Arrow art brushes, id `arrows`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
@@ -5959,6 +5968,20 @@ scale leave the tile where it is. The option is off for a new pattern and works 
 details are VectorCraft's own rules; the help page says only that the option moves the tile along with the art
 (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/edit-patterns.html>).
 `pattern.list` reports it as `moveTileWithArt`. A `pattern.options` call that changes nothing records no undo step.
+
+`object.pattern.replaceArt {name, ids?}` (Replace Pattern Art) makes copies of the selected art, or of `ids`, the tile
+art of pattern `name`, as one undo step, and returns `{name}`. The pattern keeps its name, its swatch and the swatch's
+place, its tile and its options; with `sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and
+`vSpacing`. Fills and strokes name the pattern, so every object painted with it draws the new tile. The art stays on the
+canvas, selected as it was. Art that matches the tile art already records no undo step. The command is off while a
+pattern is edited ("finish editing the pattern first"), and returns an error, changing nothing, for a missing `name`, a
+pattern that does not exist, no art, and art painted with the pattern itself, directly or through the symbols, other
+patterns, graph designs and brushes it uses, or the series and label paints a graph stores. In the Swatches panel, art dragged off the canvas and released with Alt (Option on macOS) held over a
+pattern swatch runs it with that swatch's pattern; the swatch is outlined while the art is held there. Released anywhere
+else in the list, or without Alt, the art becomes a new pattern swatch as before. The help page describes replacing a
+pattern by dragging its edited tile onto the old swatch with Alt or Option held, with the pattern updated in the file
+(<https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=226>,
+archived copy). Keeping the tile, the options and the source art are VectorCraft's own rules.
 
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
@@ -6341,7 +6364,9 @@ Arrowheads… is not confined.
 
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
-`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. It
+`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. A head
+read from an Illustrator file also carries `stop`, where the stroke ends under it in head units back from the tip
+(0 to 64; without it, the stroke ends halfway along the head). It
 refuses a `path` that fills no area (non-zero rule; parts thinner than a millionth of a head unit count as none) or
 has more than 4,096 anchors, more than 4,096 subpaths or a point more than 64 head units from the tip. The help page
 [Apply stroke on an object](https://helpx.adobe.com/illustrator/using/stroke-object.html) describes defining custom
@@ -6351,6 +6376,13 @@ arrowheads in a separate arrowheads file.
 {"name":"run_command","arguments":{"command":"stroke.arrowheads.list","params":{}}}
 {"name":"run_command","arguments":{"command":"stroke.set","params":{"ids":[9],"endArrow":{"custom":"Example Arrowhead"}}}}
 ```
+
+A dimension's options (`dimension.create`, `dimension.update` and the Dimension tool's `style`) take `arrowStyle`
+(`filled`, `open`, `tick` or `none`: `Triangle`, `TriangleOpen`, `Slash` or no head) and `arrowHead`, `null` or one of
+the built-in head names `stroke.set` takes, drawn at both ends in place of the arrow style's head. The Arrow Style menu
+sets `arrowStyle` to `filled` when it sets `arrowHead`. A custom arrowhead and an unknown name are refused. Versions
+that have the stroke arrowhead but do not read `arrowHead` keep the saved arrows until they draw the dimension again,
+and then draw `arrowStyle`. Versions without the stroke arrowhead do not open the file.
 
 ## Stroke bounds and clicks
 
@@ -7364,6 +7396,25 @@ midpoint; any finite value is brought into 0 to 360). With both, the length appl
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
 and a line that would reach past the coordinate limit (±4,000,000 pt), are errors that change no line. Each call is
 one undo step.
+
+A live rectangle's Rectangle Angle and a live ellipse's Ellipse Angle are `rectangleAngle` and `ellipseAngle`
+(degrees counterclockwise, 0 for a shape drawn level; any number is read modulo 360). The help page
+(https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-live-shapes/live-shape-properties.html) lists
+both as the shape's rotation on the canvas from 0° to 360°. The rest are VectorCraft's own rules: each selected shape
+of that kind turns about its own center, keeping its size, corners and pie (an ellipse's pie turns with it), and other
+objects stay as they are. A pixel-aligned shape then goes back on the pixel grid, as after other edits, which can move
+its center or change its size. The Transform and Properties panels show the angle in each shape's Properties section,
+blank when the selected shapes of that kind differ. It is the shape's own angle: after Reset Bounding Box
+(`object.resetBoundingBox`) the Rotate field reads 0° while the shape angle keeps the turn. An angle that is not a
+number is an error and changes nothing (`null` counts as an omitted key), a shape that the turn would take past the
+coordinate limit (±4,000,000 pt) is an error that changes nothing, whether or not it is selected, and the angle the
+shape already has records no undo step; the same holds for `polygonAngle`, and the Polygon Properties angle is blank,
+too, when the selected polygons differ.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"rectangleAngle":30}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"ellipseAngle":45}}}
+```
 
 `object.setLiveShape` returns a parameter error, and leaves the document and its undo history as they were, for a key
 it does not take, at the top level (`` unknown parameter `path` ``) or in one of `items`
@@ -10444,8 +10495,8 @@ clipping mask into one layer and discards hidden layers that require merging; th
 imports one image, and Import Hidden Layers brings hidden layers in. `document.open` does the same, with
 `layers: false` for the single image and `hiddenLayers: true` for the hidden layers. The page also merges
 adjustment layers, layers with a knockout option, and layers that hold transparent pixels in some blend modes with
-the layers below them. `document.open` applies neither adjustments nor knockouts, and it merges a layer by its blend
-mode alone, as the rules below say.
+the layers below them. `document.open` does not apply adjustments, applies only shallow knockouts inside groups, and
+otherwise merges a layer by its blend mode alone, as the rules below say.
 
 The rest are VectorCraft's own rules:
 
@@ -10465,6 +10516,12 @@ The rest are VectorCraft's own rules:
   mask.
 - A Dissolve layer's partly transparent pixels are merged as opaque or transparent, opaque at the share of its
   pixels their transparency gives, in a fixed pattern that differs from layer to layer.
+- A layer or group inside a group with a Knockout value of 1 (shallow) is merged with the visible layers below it
+  in that group: where it has pixels, shaped by its layer mask, they are cleared to transparency, it is drawn there
+  at its fill opacity, and its opacity fades the result back toward them. In a Pass Through group this applies only
+  when it and the visible layers below it are in Normal mode. A knockout at 0 opacity, one that draws nothing, one
+  with nothing visible below it, and one at 0 fill that covers none of their painted pixels are not merged for the
+  knockout; one in a mode VectorCraft lacks is still merged by its mode.
 - A merged layer is named after the layers it holds, joined with ` + `.
 - A layer name the file stores only as a one-byte Pascal string, without its Unicode name, is read as Mac Roman.
 - A layer's opacity is multiplied by its fill opacity, in every blend mode. A layer that others are clipped to keeps
@@ -10476,16 +10533,21 @@ The rest are VectorCraft's own rules:
   (RGB, CMYK, Grayscale, Lab or HSB) over the canvas. One whose shape is a vector mask isn't drawn, and the layers
   clipped to it are left out.
 - Adjustment layers, fill layers that store no pixels and whose fill isn't read, layer effects that are switched on,
-  knockouts and vector masks are not applied; the `warnings` count them.
+  the other knockouts (top-level layers, clipped layers, layers that others are clipped to, Pass Through groups with
+  layers in other modes, other Knockout values, and merges that need more memory than allowed) and vector masks are
+  not applied; the `warnings` count them.
 - Layer channels may be raw, PackBits or zipped (with or without prediction) at 8, 16 and 32 bits.
 - A file without layers opens as its merged image. A file whose layers can't be read opens as its merged image
   with a warning, and when the merged image can't be read either, the file is refused with an error.
 
 Each layer's pixels must fit the memory allowed for one image, and the pixels of all the layers and masks, with the
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
-with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
-they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
-own instead of clipped.
+with a warning. A merge being tried may use the whole of that limit beyond what was read before it. The pixels and
+canvases of merges that aren't made, including knockouts that turn out to cut nothing, then count against a second
+limit of the same size instead. The
+canvases one step of a merge holds at once must also fit the memory allowed for one image; when they don't, the
+layer that needed the merge comes in alone, with a warning: in the Normal mode, as a layer of its own instead of
+clipped, or without its knockout.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}
