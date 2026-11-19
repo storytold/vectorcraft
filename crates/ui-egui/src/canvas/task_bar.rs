@@ -19,6 +19,14 @@ pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
     task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
 }
 
+/// The actions and chips the Contextual Task Bar offered where it was last drawn, before Bar
+/// Actions left any out, as More Options › Bar Actions lists them: each one's name, its id in
+/// [`TASK_BAR_ACTIONS`] or [`TASK_BAR_CHIPS`] (none: Bar Actions cannot turn it off) and whether it
+/// shows.
+pub(crate) fn task_bar_offered(ctx: &egui::Context) -> Vec<(&'static str, Option<&'static str>, bool)> {
+    ctx.data(|d| d.get_temp(task_bar_id().with("offered")).unwrap_or_default())
+}
+
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
 /// a gradient's stops or a mesh's points, which Recolor Artwork can change.
 pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
@@ -182,7 +190,10 @@ pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 /// On a blank canvas, a document with no artwork and a selection tool in use, it sits under the
 /// active artboard and offers Draw (Pencil) and Place Image.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
-/// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
+/// selection, pinned it stays put ([`crate::state::TaskBarPlace`]). More Options › Bar Actions
+/// turns each action and chip the bar offers on or off ([`TASK_BAR_ACTIONS`], [`TASK_BAR_CHIPS`]);
+/// the bar leaves out the ones that are off, and Reset Bar Actions shows them all again. With every
+/// one of them off, the bar still shows its handle and More Options, where they turn back on.
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let t = Tokens::get(ui.ctx());
     let on_artboards = app.session.tool_id() == "artboard";
@@ -351,6 +362,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let paints = chip_paints(app, ui.ctx());
     let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
+    // Every action and chip the bar offers here, with its name and its id in TASK_BAR_ACTIONS or
+    // TASK_BAR_CHIPS (none: Bar Actions cannot turn it off), for More Options › Bar Actions; the
+    // ones that are off there are left out of the bar.
+    let hidden = &app.ui.task_bar_hidden_actions;
+    let mut offered: Vec<(&'static str, Option<&'static str>)> =
+        items.iter().map(|(label, _, cmd, params)| (*label, action_id(cmd, params))).collect();
+    items.retain(|(_, _, cmd, params)| action_id(cmd, params).is_none_or(|a| !hidden.contains(a)));
     let bounds = xf.rect.shrink(8.0);
     // The canvas's width less the frame's margins and stroke.
     let room = bounds.width() - BAR_FRAME;
@@ -371,6 +389,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     .into_iter()
     .filter_map(|(shown, chip)| shown.then_some(chip))
     .collect();
+    offered.extend(chips.iter().map(|c| (c.label(shape.is_some()), Some(c.id(shape.is_some())))));
+    let chips: Vec<Chip> = chips.into_iter().filter(|c| !hidden.contains(c.id(shape.is_some()))).collect();
+    // Bar Actions reads this list through task_bar_offered while its menu is open.
+    let offered: Vec<(&'static str, Option<&'static str>, bool)> =
+        offered.into_iter().map(|(label, action)| (label, action, action.is_none_or(|a| !hidden.contains(a)))).collect();
+    ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("offered"), offered));
+    let any_hidden = !hidden.is_empty();
     let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| item_width(ui, label, cmd)).collect();
     let fidelity = app.session.tool_options()["fidelity"].as_f64();
     let font_w = fonts.then(|| {
@@ -498,6 +523,21 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                                     run = Some((cmd, json!({})));
                                 }
                             }
+                            // The actions and chips the bar offers for this selection or tool, each
+                            // checked while it shows, which turns it on or off; then Reset Bar
+                            // Actions, which shows every action again.
+                            ui.menu_button(format!("   {}", tl!("Bar Actions")), |ui| {
+                                ui.set_min_width(170.0);
+                                for (label, action, shown) in task_bar_offered(ui.ctx()) {
+                                    let Some(action) = action else { continue };
+                                    if widgets::menu_item_name(ui, bar_action_name(label), true, shown) {
+                                        run = Some(("window.taskBar.actions", json!({ "action": action })));
+                                    }
+                                }
+                            });
+                            if widgets::menu_item(ui, tl!("Reset Bar Actions"), any_hidden, false) {
+                                run = Some(("window.taskBar.resetActions", json!({})));
+                            }
                             ui.separator();
                             if widgets::menu_item(ui, tl!("Show Properties Panel"), true, false) {
                                 run = Some(("window.panel", json!({"panel": "properties"})));
@@ -579,6 +619,112 @@ impl Chip {
             Chip::Recolor | Chip::Lock => 30.0,
         }
     }
+
+    /// The chip's id in [`TASK_BAR_CHIPS`]; Lock is `shapeProperties` while it shows a basic
+    /// `shape`'s properties.
+    fn id(self, shape: bool) -> &'static str {
+        match self {
+            Chip::Fill => "fill",
+            Chip::Stroke => "stroke",
+            Chip::Recolor => "recolor",
+            Chip::Lock if shape => "shapeProperties",
+            Chip::Lock => "lock",
+        }
+    }
+
+    /// The chip's name in More Options › Bar Actions, translated.
+    fn label(self, shape: bool) -> &'static str {
+        match self {
+            Chip::Fill => tl!("Fill"),
+            Chip::Stroke => tl!("Stroke"),
+            Chip::Recolor => tl!("Recolor Artwork"),
+            Chip::Lock if shape => tl!("Shape Properties"),
+            Chip::Lock => tl!("Lock"),
+        }
+    }
+}
+
+/// The Contextual Task Bar's actions that More Options › Bar Actions turns on or off
+/// (`window.taskBar.actions {action, visible?}`): each action's id, the command its button runs and
+/// the `tool` that command names, if any. An action that is off stays out of the bar, and More
+/// Options does not list it either; turning one off changes only the bar. Every action starts on.
+pub(crate) const TASK_BAR_ACTIONS: [(&str, &str, Option<&str>); 37] = [
+    ("imageTrace", TASK_BAR_IMAGE_TRACE, None),
+    ("cropImage", "ui.cropImage", None),
+    ("removeBackground", crate::addons::image::REMOVE_BACKGROUND, None),
+    ("removeAnchorPoints", "path.removeAnchors", None),
+    ("join", "path.join", None),
+    ("cutPath", "path.cutAtAnchors", None),
+    ("convertToCorner", TASK_BAR_TO_CORNER, None),
+    ("convertToSmooth", TASK_BAR_TO_SMOOTH, None),
+    ("group", "object.group", None),
+    ("makeClippingMask", "object.clippingMask.make", None),
+    ("unite", "object.pathfinder.unite", None),
+    ("expand", "imageTrace.expand", None),
+    ("editClippingPath", "object.clippingMask.editMask", None),
+    ("releaseClippingMask", "object.clippingMask.release", None),
+    ("ungroup", "object.ungroup", None),
+    ("isolate", "object.isolate", None),
+    ("editPath", "tool.select", Some("directSelection")),
+    ("releaseCompoundPath", "object.compoundPath.release", None),
+    ("createOutlines", "type.createOutlines", None),
+    ("convertToPointType", "type.convertToPointType", None),
+    ("convertToAreaType", "type.convertToAreaType", None),
+    ("typeOnPathOptions", "type.pathOptions", None),
+    ("centerOnTop", "type.pathCenter.top", None),
+    ("centerOnBottom", "type.pathCenter.bottom", None),
+    ("dynamicText", "type.dynamicText", None),
+    ("offsetPath", "object.path.offsetPath", None),
+    ("simplify", "object.path.simplify", None),
+    ("smooth", "object.path.smooth", None),
+    ("duplicate", "edit.duplicate", None),
+    ("drawPencil", "tool.select", Some("pencil")),
+    ("placeImage", "file.place", None),
+    ("fidelity", TASK_BAR_FIDELITY, None),
+    ("smoothToolOptions", "tool.options", Some("smooth")),
+    ("resizeArtboard", TASK_BAR_ARTBOARD_OPTIONS, None),
+    ("duplicateArtboards", TASK_BAR_DUPLICATE_ARTBOARDS, None),
+    ("rearrangeArtboards", TASK_BAR_REARRANGE_ARTBOARDS, None),
+    ("exportArtboards", "file.exportForScreens", None),
+];
+
+/// The ids of the Contextual Task Bar's chips that More Options › Bar Actions turns on or off,
+/// as [`TASK_BAR_ACTIONS`] are.
+pub(crate) const TASK_BAR_CHIPS: [&str; 5] = ["fill", "stroke", "recolor", "lock", "shapeProperties"];
+
+/// Whether `id` names one of the Contextual Task Bar's actions or chips.
+pub(crate) fn is_task_bar_action(id: &str) -> bool {
+    TASK_BAR_ACTIONS.iter().any(|a| a.0 == id) || TASK_BAR_CHIPS.contains(&id)
+}
+
+/// The id in [`TASK_BAR_ACTIONS`] of the bar's item that runs `cmd` with `params`.
+fn action_id(cmd: &str, params: &serde_json::Value) -> Option<&'static str> {
+    let tool = params.get("tool").and_then(serde_json::Value::as_str);
+    TASK_BAR_ACTIONS.iter().find(|(_, c, t)| *c == cmd && *t == tool).map(|a| a.0)
+}
+
+/// The name More Options › Bar Actions lists for the bar's item `label`: without a field's colon
+/// (a full-width one too), the space some languages put before it, or a final ellipsis (`…` or
+/// `...`), in whichever order they come.
+pub(crate) fn bar_action_name(label: &str) -> &str {
+    let mut name = label.trim_end();
+    loop {
+        let rest = name.trim_end_matches([':', '：', '…']);
+        let rest = rest.strip_suffix("...").unwrap_or(rest).trim_end();
+        if rest == name {
+            return name;
+        }
+        name = rest;
+    }
+}
+
+/// Reads the Contextual Task Bar's actions and chips that are off, as kept in the preferences. Ids
+/// the bar does not have are dropped, and a value that is not a list of strings reads as none off,
+/// so the bar shows every action.
+pub(crate) fn read_hidden_task_bar_actions<'de, D: serde::Deserializer<'de>>(d: D) -> Result<std::collections::BTreeSet<String>, D::Error> {
+    let value = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
+    let ids = value.as_array().into_iter().flatten().filter_map(serde_json::Value::as_str);
+    Ok(ids.filter(|id| is_task_bar_action(id)).map(str::to_string).collect())
 }
 
 /// What a click on one of the bar's [`Chip`]s does: make the Fill (`true`) or the Stroke active and

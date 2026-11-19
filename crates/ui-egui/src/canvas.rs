@@ -28,6 +28,7 @@ mod input;
 mod outline;
 mod overlays;
 mod panes;
+mod quick_pen_bar;
 mod raster;
 mod selection_marks;
 mod task_bar;
@@ -68,12 +69,14 @@ use overlays::{
 };
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+pub(crate) use quick_pen_bar::quick_pen_bar_rect;
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub use selection_marks::SelectionMarks;
 use task_bar::task_bar;
+pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, is_task_bar_action, read_hidden_task_bar_actions};
 #[cfg(test)]
-pub(crate) use task_bar::{chip_paints, images_with_other_art};
+pub(crate) use task_bar::{bar_action_name, chip_paints, images_with_other_art, task_bar_offered};
 pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
@@ -325,7 +328,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     paint_paper(app, st, ui, &painter, &xf, rect, (&t, app.outline_view()));
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
-    let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = (app.ui.view.grid_shown() && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -358,8 +361,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     poll_worker(app, ui, key.doc);
     // With `waits_for_still` set (the web build, which has no render worker), a heavy document is
     // not rendered while only the view changes: the frame shown is drawn reprojected below, and the
-    // first frame after the view has been still for STILL_SECS renders.
+    // first frame after the view has been still for STILL_SECS renders. An edit meanwhile is drawn
+    // into the frame shown ([`edit_in_frame_shown`]).
     let wait = if app.canvas.waits_for_still {
+        edit_in_frame_shown(app, &key, &doc, &effects, &drawn, (mask_view, smooth_images));
         let slow = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some();
         still_wait(&mut app.canvas.still, app.canvas.key.as_ref(), &key, slow, ui.input(|i| i.time))
     } else {
@@ -413,7 +418,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
         }
         artboard_outlines(app, ui, &painter, &xf, &t);
-        if app.ui.view.guides {
+        if app.ui.view.guides_shown() {
             guide_lines(app, &painter, &xf, rect, &t);
         }
         nine_slice_overlay(app, &painter, &xf);
@@ -460,6 +465,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
+        // The Quick Pen toolbar gives way to a drag as the task bar does.
+        quick_pen_bar::quick_pen_bar(app, ui, &xf);
         contour_bar::contour_bar(app, ui, &xf);
         // After the task bar, which the row of character alternates keeps clear of.
         alternates_bar::alternates_bar(app, ui, &xf);
@@ -896,7 +903,7 @@ fn cache_key(
         outline: app.outline_view(),
         trim: app.ui.view.trim_view,
         templates: app.ui.view.templates,
-        guides: app.ui.view.guides,
+        guides: app.ui.view.guides_shown(),
         ppp,
         hidden: vec![],
         rot: v.rotation,
@@ -1095,7 +1102,7 @@ fn frame_options(
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
         trim: app.ui.view.trim_view,
         hide_templates: !app.ui.view.templates,
-        hide_guides: !app.ui.view.guides,
+        hide_guides: !app.ui.view.guides_shown(),
         tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
             let [r, g, b, _] = c.to_rgba8(1.0);
             [r, g, b]
@@ -1149,6 +1156,72 @@ struct Frame<'a> {
 /// shows the document's paper without the art: about a frame at 60 Hz.
 pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::from_millis(16);
 
+/// Draw `region` of `frame` again, into the texture of the frame shown, which then shows `frame`'s
+/// key: only the document changed since the frame shown, in that part of it
+/// ([`changed_pixels`]). `None`: nothing in view changed. `last_ms` stays the whole frame's.
+fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]>) {
+    let Frame { key, doc, effects, view, opts, pixel, .. } = frame;
+    let t0 = now_ms();
+    if region.is_none() {
+        // Nothing in view to draw again: what was made to measure the edit isn't drawn.
+        app.canvas.renderer.let_go_of_measured();
+    }
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
+    if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
+        let renderer = &mut app.canvas.renderer;
+        let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * *view;
+        let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, opts));
+        let width = part.width;
+        crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
+        let color = color_image(&part);
+        let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
+        tex.set_partial([x0 as usize, y0 as usize], color, options);
+        app.canvas.moved |= app.canvas.renderer.stats.moved > 0;
+    }
+    app.canvas.key = Some((*key).clone());
+    app.canvas.shown = Some(((*doc).clone(), opts.clone()));
+    app.perf.render_ms = now_ms() - t0;
+}
+
+/// With `waits_for_still` set (the web build) and the last render slow, an edit while the view
+/// moves (a tool's drag that scrolls the view at an edge of the canvas, or a wheel scroll during a
+/// drag) is drawn into the frame shown, at the view it was rendered for: the part the edit changed
+/// only ([`changed_pixels`]). The frame shown then stays drawn reprojected with the view, and the
+/// canvas renders whole once the view has been still for [`STILL_SECS`], as for a view change
+/// without an edit (#8688). When more than the view and the document differ from the frame shown,
+/// or the edit changed more than half of it, nothing is drawn here: the frame renders whole.
+fn edit_in_frame_shown(
+    app: &mut VectorcraftApp,
+    key: &CacheKey,
+    doc: &std::sync::Arc<vectorcraft_doc::Document>,
+    effects: &vectorcraft_plugins::deferred::Deferrals,
+    drawn: &View,
+    (mask_view, smooth_images): (Option<vectorcraft_doc::NodeId>, bool),
+) {
+    let slow = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some();
+    let Some(shown) = app.canvas.key.clone().filter(|_| slow) else { return };
+    let at_shown = CacheKey {
+        zoom: shown.zoom,
+        cx: shown.cx,
+        cy: shown.cy,
+        w: shown.w,
+        h: shown.h,
+        ppp: shown.ppp,
+        rot: shown.rot,
+        pixel: shown.pixel,
+        ..key.clone()
+    };
+    if at_shown == shown || at_shown == *key || shown.pixel.is_some() != key.pixel.is_some() {
+        return;
+    }
+    let v = View { center: Point::new(shown.cx, shown.cy), zoom: shown.zoom, rotation: shown.rot, ..*drawn };
+    let (w, h, view) = frame_view(at_shown.pixel, (at_shown.w, at_shown.h), &v, at_shown.ppp);
+    let opts = frame_options(app, &at_shown, mask_view, smooth_images);
+    if let Some(region) = changed_pixels(app, &at_shown, doc, &opts, view, w, h) {
+        draw_changed(app, &Frame { key: &at_shown, doc, effects, size: (w, h), view, opts, pixel: at_shown.pixel }, region);
+    }
+}
+
 fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let Frame { key, doc, effects, size: (w, h), view, opts, pixel } = frame;
     // Frames that would be slow on this thread (the last one took over 8 ms) go
@@ -1172,27 +1245,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
         // rendered again, here, into the texture. `last_ms` stays the whole frame's.
-        (_, _, Some(region)) => {
-            let t0 = now_ms();
-            if region.is_none() {
-                // Nothing in view to draw again: what was made to measure the edit isn't drawn.
-                app.canvas.renderer.let_go_of_measured();
-            }
-            if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
-                let renderer = &mut app.canvas.renderer;
-                let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * view;
-                let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, &opts));
-                let width = part.width;
-                crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
-                let color = color_image(&part);
-                let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
-                tex.set_partial([x0 as usize, y0 as usize], color, options);
-                app.canvas.moved |= app.canvas.renderer.stats.moved > 0;
-            }
-            app.canvas.key = Some(key.clone());
-            app.canvas.shown = Some((doc.clone(), opts.clone()));
-            app.perf.render_ms = now_ms() - t0;
-        }
+        (_, _, Some(region)) => draw_changed(app, &Frame { key, doc, effects, size: (w, h), view, opts, pixel }, region),
         (Some(worker), true, None) => {
             // The worker draws the frame: what this thread's renderer made to measure the edit
             // isn't drawn here.

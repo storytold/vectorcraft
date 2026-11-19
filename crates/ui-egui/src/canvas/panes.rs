@@ -554,7 +554,7 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     let xf = Xf::at(rect, &v, ui_zoom);
     let painter = ui.painter_at(rect);
     paint_paper(app, st, ui, &painter, &xf, rect, (&t, v.outline));
-    let grid_look = app.ui.view.grid.then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = app.ui.view.grid_shown().then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);
@@ -587,7 +587,7 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     if shows_artboards(app) {
         artboard_edges(app, &st.doc, (&painter, &xf, &t), (v.artboard, dim_on_canvas(&t, v.outline)), |_| false);
     }
-    if app.ui.view.guides {
+    if app.ui.view.guides_shown() {
         guides_of(app, st, (&painter, &xf, &t), rect);
     }
     if app.ui.view.edges {

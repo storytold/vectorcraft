@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint",
             [],
             None,
-            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too). Without item and ids, the Appearance panel's active item stands in when it is of that kind → {changed: objects}",
+            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too). Without item and ids, the Appearance panel's active item stands in when it is of that kind. A whole Live Paint group (also its contents with `item`) takes the fill flags on its faces and the stroke flags on its edges, and its hidden source paths keep theirs → {changed: objects}",
             has_doc,
             set_overprint
         ),
@@ -135,7 +135,7 @@ fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            let ids = it.targets(s, p)?;
+            let ids = it.targets_for(s, p, fill)?;
             let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
             Ok((fill, it, ids))
         })
