@@ -1503,13 +1503,16 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
         // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
         // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
         // own fills and strokes paint ([`image_paint`]) except in outline mode.
-        NodeKind::Image(im) => {
+        NodeKind::Image(_) => {
+            // The frame joins the image's corners ([`Node::image_frame`]); a plain image is picked
+            // inside by its bounds, without building it.
             if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
-                use vectorcraft_geom::kurbo::Shape;
-                let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
-                frame.apply_affine(im.xf);
-                if stroke_contains(&frame, 0.0, opt.tol, p) {
+                if n.image_frame().is_some_and(|frame| stroke_contains(&frame, 0.0, opt.tol, p)) {
                     return Some(HitKind::Outline);
+                }
+            } else if let Some(frame) = n.is_distorted_image().then(|| n.image_frame()).flatten() {
+                if fill_contains(&frame, FillRule::NonZero, p) || stroke_contains(&frame, 0.0, opt.tol, p) {
+                    return Some(HitKind::Bounds);
                 }
             } else if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);

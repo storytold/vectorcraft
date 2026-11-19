@@ -445,7 +445,7 @@ impl Session {
     /// selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
-        if self.tool_id() == super::paint::LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return Some(self.new_art_stroke());
         }
         if let Some(part) = st.selected_symbol_part() {

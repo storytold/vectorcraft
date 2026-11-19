@@ -3274,9 +3274,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit type set in fonts that aren't available?	要编辑使用了不可用字体的文字吗？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处加断字连字符，没有连字符则从不断字，与语言和大小写无关。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及通过“确定”设置新文件夹时载入，安全模式除外；请求权限的增效工具只在您授予权限后载入。Web 版不载入任何增效工具。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	“大”为滤镜或命令增效工具的每次运行提供至少 2.5 亿条指令，时间限制不变；“正常”保留增效工具自己的预算。实时效果、导出器和导入器保留各自的预算。
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与语言和大小写无关。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	“正常”保留每个增效工具自身的限制；选择“大”时，增效工具的滤镜或命令除处理其输入所需的指令外，至少可运行 2.5 亿条指令。时间限制不变。
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效工具的对象滤镜每次运行可使用的指令数；“大”比“正常”允许更多，60 秒的时间限制不变。重型滤镜保留自己的预算。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
@@ -3288,13 +3292,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具栏中把每个工具组的名称显示在其工具上方；关闭此项后，各组依次排列，中间没有任何内容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	从现在起，打开或新建的文档以标签页打开；关闭此项后，每个文档在浮动窗口中打开。已打开的文档保持原位。
 	Makes the document tabs taller and their names larger.	让文档标签页更高，标签上的名称更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 变量优先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏或 VECTORCRAFT_TITLEBAR 变量选择了标题栏。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或缩小界面；在相同缩放比例下，画布上的图稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 绘制的工具指针随界面缩放一起变大变小；关闭此项后，指针保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	界面的语言；“自动”使用系统的语言。选择一种语言后，对话框会立即切换到该语言。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有开启此项时，动画缩放才会起作用；关闭此项后，动画缩放显示为灰色，缩放不带动画。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滚轮缩放时会平滑过渡，缩放工具在你向侧面拖动或按住不放时进行缩放；关闭此项后，缩放工具缩放到你拖过的区域。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	从下次启动起，桌面版通过这类图形处理器显示画布；图稿始终在 CPU 上绘制。“自动”在 Windows 和 macOS 上优先使用集成图形处理器。Web 版不使用此项。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	从下次启动起，在图形驱动程序允许时，窗口显示每一帧而不等待显示器刷新，最多每秒 240 帧。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	从下次启动起，桌面版使用这类图形处理器绘制；“自动”优先使用驱动显示器的图形处理器。Web 版不使用此项。
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	从下次启动起，窗口不等待显示器刷新就显示帧，每秒最多 240 帧；关闭时由显示器决定帧的节奏。启动时设置的呈现模式优先。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每个文档保留的最大撤销步骤数；调低后，单击“确定”时会删除最早的步骤。步骤占用过多内存时也可能更早被删除。
@@ -3313,6 +3319,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	“打开最近文件”和主页屏幕最多列出这么多最近文件；为 0 时不列出，但 VectorCraft 仍会记住最多 30 个。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	打开文档时，显示已保存预览的链接 EPS 图像会保留该预览，而不重新读取 EPS 文件；已更改的文件仍按“更新链接”处理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素预览中，图像以平滑方式绘制；关闭此项后，像素边缘清晰锐利。像素预览之外，图像始终平滑显示。
+	PDF Text	PDF 文本
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	打开或嵌入的 PDF 中的文本以可编辑文本导入，或以轮廓导入，在没有其字体的电脑上看起来也一样。
+	Linked pages show the file's own text.	链接的页面显示文件本身的文本。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	链接文件更改时，“自动”会重新读取，“修改时询问”会先询问你，“手动”则保持不变并在状态栏显示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，“从模板新建…”和“存为模板…”打开时所在的文件夹；留空则使用文档文件夹中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	“编辑原稿”用系统中该类型的默认应用打开链接文件；关闭此项后，若已安装 PhotoCraft，链接的栅格图像会在 PhotoCraft 中打开。
@@ -5349,6 +5358,10 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	对象 {_1} 是经过透视扭曲或自由变形的图像，此命令不适用于它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	无法这样扭曲图像 {_1}：其角点不会构成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	无法这样扭曲图像 {_1}：其角点会越过扭曲的地平线
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	无法这样扭曲图像 {_1}：其角点会太靠近，无法进行透视映射
 @msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
@@ -10598,6 +10611,10 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Leaf Vine	叶藤
+	Blossom Chain	花链
+	Pennant Garland	旗帜花环
+	Lantern String	灯笼串
 	Orbit Lines	轨道线
 	Petal Garland	花瓣花环
 	Lattice Braid	格纹编织
