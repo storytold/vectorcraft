@@ -15,6 +15,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cancel::{self, CancelToken};
 use vectorcraft_engine::cmd::clipboard::{Clipboard, Flavour, ImageRead, read_image};
 use vectorcraft_engine::cmd::place::{PlaceRead, QueueRead};
 use vectorcraft_engine::file_access::ScopeHandle;
@@ -154,6 +155,7 @@ enum Pasted {
 
 /// Files being read for Place.
 pub struct Pending {
+    pub(crate) id: u64,
     /// The file's name ("photo.tif"; the names joined with ", " for the place cursor's files).
     pub(crate) name: String,
     /// What the status bar shows ("Placing photo.tif").
@@ -167,13 +169,15 @@ pub struct Pending {
     /// [`crate::place::drop_files`]'s do).
     dropped: bool,
     /// Whether it is a paste's bitmap ([`adopt_for_paste`]) rather than a file.
-    paste: bool,
+    pub(crate) paste: bool,
     /// The number of the paste's chain ([`Placing::chains`]).
     chain: Option<u64>,
     done: Receiver<Result<Read, String>>,
     /// The automation roots in force when the read started, kept in force when it is placed: a
     /// DXF placed against an artboard that changed meanwhile is read again then.
     scope: ScopeHandle,
+    token: CancelToken,
+    pub hidden: bool,
 }
 
 /// A read waiting for the thread that reads the files.
@@ -198,6 +202,7 @@ pub struct Placing {
     latest_chain: HashMap<u64, u64>,
     /// The number the next chain takes.
     next_chain: u64,
+    pub next_id: u64,
     /// The thread that reads the files, one at a time in the order they were started: started with
     /// the first read, it ends when the app does.
     reader: Option<Sender<Job>>,
@@ -389,6 +394,8 @@ fn spawn_labeled(
     let completion = scope.clone();
     #[cfg(test)]
     let reading = app.placing.reading.clone();
+    let token = CancelToken::new();
+    let raised = token.clone();
     let job: Job = Box::new(move || {
         #[cfg(test)]
         {
@@ -396,7 +403,7 @@ fn spawn_labeled(
             reading[1].fetch_max(now, std::sync::atomic::Ordering::SeqCst);
         }
         let r = scope
-            .run(|| vectorcraft_engine::guard::catch_panic(read))
+            .run(|| vectorcraft_engine::guard::catch_panic(|| cancel::scope(&raised, None, read)))
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
         #[cfg(test)]
         reading[0].fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
@@ -421,7 +428,22 @@ fn spawn_labeled(
         let _ = reader.send(job);
         app.placing.reader = Some(reader);
     }
-    app.placing.pending.push(Pending { name, label: label.clone(), doc, reverts, dropped, paste: chain.is_some(), chain, done, scope: completion });
+    app.placing.next_id += 1;
+    let id = app.placing.next_id;
+    app.placing.pending.push(Pending {
+        id,
+        name,
+        label: label.clone(),
+        doc,
+        reverts,
+        dropped,
+        paste: chain.is_some(),
+        chain,
+        done,
+        scope: completion,
+        token,
+        hidden: false,
+    });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(Some(json!({ "background": true, "status": status })))
@@ -768,6 +790,77 @@ pub(crate) fn confirm_swatch_paste(
     }
     finish_chain(app, waiting.chain);
     result
+}
+
+/// The progress window's Cancel: the files being read for Place aren't placed.
+pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
+    let mut cancelled = 0;
+    let mut i = 0;
+    while i < app.placing.pending.len() {
+        if !app.placing.pending[i].paste {
+            let p = app.placing.pending.remove(i);
+            p.token.cancel();
+            if app.ui.status == format!("{}…", p.label) {
+                app.ui.status.clear();
+            }
+            if let Some(chain) = p.chain
+                && !app.placing.swatch_paste.as_ref().is_some_and(|waiting| waiting.chain == chain)
+            {
+                finish_chain(app, chain);
+            }
+            cancelled += 1;
+        } else {
+            i += 1;
+        }
+    }
+    json!({ "cancelled": cancelled })
+}
+
+/// Can any placed file being read be cancelled?
+pub fn can_cancel(app: &VectorcraftApp) -> bool {
+    app.placing.pending.iter().any(|p| !p.paste)
+}
+
+/// Is a placed file being read that the progress window shows?
+pub fn any_shown(app: &VectorcraftApp) -> bool {
+    app.placing.pending.iter().any(|p| !p.paste && !p.hidden)
+}
+
+/// The progress window of the first file being read for Place, once that has been read for
+/// [`crate::export_progress::DELAY`]: a quick place doesn't flash it. Not while a dialog or another
+/// progress window (an export, a heavy plug-in filter, an Image Trace, an open) is open: never two modals at once.
+pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let shown: Vec<&Pending> = app.placing.pending.iter().filter(|p| !p.paste && !p.hidden).collect();
+    let Some(first) = shown.first() else { return };
+    let now = ctx.input(|i| i.time);
+    let since = ctx.data_mut(|m| {
+        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("placing-seen"), || (first.id, now));
+        if seen.0 != first.id {
+            *seen = (first.id, now);
+        }
+        seen.1
+    });
+    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
+    let other = exporting || crate::plugin_runs::any_shown(app) || crate::trace_runs::any_shown(app) || crate::opening::any_shown(app);
+    if now - since < crate::export_progress::DELAY || app.ui.dialog.is_some() || other {
+        return;
+    }
+    let heading = format!("{}…", crate::i18n::msg(&first.label));
+    let more = shown.len() - 1;
+    let t = crate::theme::Tokens::get(ctx);
+    let pressed = crate::export_progress::window_cancel(ctx, "placing-progress", &heading, |ui| {
+        crate::export_progress::indeterminate(ui, tl!("Reading the file…"));
+        if more > 0 {
+            ui.add_space(6.0);
+            let queued = crate::i18n::tn(more as u64, "{n} more file waiting", "{n} more files waiting");
+            ui.label(egui::RichText::new(queued).size(11.5).color(t.text_dim));
+        }
+    });
+    if pressed == Some(crate::export_progress::Pressed::Cancel)
+        && let Err(e) = app.run("file.cancelPlace", json!({}))
+    {
+        app.status(e);
+    }
 }
 
 #[cfg(test)]

@@ -10426,7 +10426,6 @@ digits	Hindi	Hindi
 @msg	names is empty	names är tom
 @msg	no artboard {artboard} (0-based; the document has {_1})	ingen rityta {artboard} (räknat från 0; dokumentet har {_1})
 @msg	no brush named `{n}`	ingen pensel med namnet `{n}`
-@msg	no colour group `{group}`	ingen färggrupp `{group}`
 @msg	no export preset `{name}` (see document.exportPresets.list)	ingen exportförinställning `{name}` (se document.exportPresets.list)
 @msg	no formats to export	inga format att exportera
 @msg	no perspective grid preset named `{n}`	ingen förinställning för perspektivrutnät med namnet `{n}`

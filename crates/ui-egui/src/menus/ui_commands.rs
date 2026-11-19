@@ -1664,6 +1664,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.cancelPlace",
+        "Cancel Place",
+        "",
+        "{} stop placing every file being read in the background (its progress window's Cancel): the files aren't placed → {cancelled: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",

@@ -241,6 +241,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
+        "file.cancelPlace" => crate::placing::can_cancel(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
