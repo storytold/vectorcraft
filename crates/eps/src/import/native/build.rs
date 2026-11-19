@@ -329,6 +329,7 @@ pub(super) fn build_weighing(
         unread,
         unread_elsewhere,
         slot_names,
+        type_clips,
         restyled,
         placeholders,
         placed_elsewhere,
@@ -527,14 +528,15 @@ pub(super) fn build_weighing(
     let mut made = vec![];
     let mut filled = std::collections::HashMap::new();
     fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![], &mut filled);
+    clip_by_type(&mut layers, &type_clips, &filled);
     doc.layers = layers;
     made.sort();
-    let threaded_frames: BTreeSet<NodeId> =
-        made.chunk_by(|a, b| a.0 == b.0).filter(|thread| thread.len() > 1).flatten().map(|(_, _, id)| *id).collect();
+    let threads = threads_of(&made);
+    let threaded_frames: BTreeSet<NodeId> = threads.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
     if !unread.is_empty() {
         let Some(frame) = frame.as_ref() else { return Err(unread_error(&unread)) };
         let mut copied = BTreeSet::new();
-        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &threaded_frames, &mut copied)?;
+        let kinds = replace_unread(&mut doc, frame, &unread, &unread_elsewhere, &held_frames(&infos, &stories, &threads), &mut copied)?;
         // With the text objects filled, the page art chosen can differ from the first try's: the
         // page's type set aside for it, and no other, must be in it.
         let all_copied = |o: &Vec<Arc<Node>>| !o.is_empty() && o.iter().all(|n| copied.contains(&n.id));
@@ -543,12 +545,8 @@ pub(super) fn build_weighing(
         }
         notes.push(format!("{}: they came in as the page's art", kinds.join(", ")));
     }
-    // A story in several frames is threaded type: its frames in order (the first holds the story).
-    for thread in made.chunk_by(|a, b| a.0 == b.0) {
-        if thread.len() > 1 {
-            doc.text_threads.push(thread.iter().map(|(_, _, id)| *id).collect());
-        }
-    }
+    // The frames still threaded: a blank story's frame an unread object left alone isn't.
+    let threaded_frames = add_threads(&mut doc, threads, &threaded_frames, !unread.is_empty());
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
     let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
@@ -1483,7 +1481,9 @@ fn slot_content(
 ) -> Result<(Vec<Content>, bool), String> {
     let made = make_slots(infos, stories, template, to_doc, notes);
     if let Some(own) = own.filter(|_| readable_all(infos, &made)) {
-        return Ok((made_only(infos, made, [own, pages[1]], notes), true));
+        let mut content = made_only(infos, stories, made, [own, pages[1]], notes);
+        settle_blank_stories(infos, stories, template, to_doc, &mut content, notes);
+        return Ok((content, true));
     }
     // The page's type is matched with every text object whose type isn't made, and weighed against
     // where every made one draws: that has its limits (the slots of type that looks draw are within
@@ -1492,7 +1492,100 @@ fn slot_content(
     if open > MAX_SLOTS || infos.len().saturating_mul(pages[0].len()) > MAX_PAIRS {
         return Err("it has too many text objects".into());
     }
-    Ok((plan(infos, stories, made, template, to_doc, pages, notes), false))
+    let mut content = plan(infos, stories, made, template, to_doc, pages, notes);
+    settle_blank_stories(infos, stories, template, to_doc, &mut content, notes);
+    Ok((content, false))
+}
+
+/// The threads of the text objects `made` (story, frame and id of each, sorted): each story in
+/// several frames, with its frames in order (the first holds the story).
+fn threads_of(made: &[(u32, usize, NodeId)]) -> Vec<(u32, Vec<NodeId>)> {
+    made.chunk_by(|a, b| a.0 == b.0)
+        .filter(|thread| thread.len() > 1)
+        .map(|thread| (thread[0].0, thread.iter().map(|(_, _, id)| *id).collect()))
+        .collect()
+}
+
+/// The frames of `threads` that an unread object can't take with it: those of a blank story's thread
+/// hold no type, so they may go.
+fn held_frames(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], threads: &[(u32, Vec<NodeId>)]) -> BTreeSet<NodeId> {
+    let blank: BTreeSet<u32> =
+        infos.iter().zip(stories).filter(|(_, s)| s.as_ref().is_some_and(|s| s.is_blank())).filter_map(|(i, _)| i.story).collect();
+    threads.iter().filter(|(story, _)| !blank.contains(story)).flat_map(|(_, ids)| ids.iter().copied()).collect()
+}
+
+/// `threads` as `doc`'s text threads, and the frames of the threads added. With `replaced` (unread
+/// objects were replaced by page art), the frames they took with them (`frames` that `doc` no longer
+/// has, only a blank story's) are left out, and so is a thread left with one frame.
+fn add_threads(doc: &mut Document, threads: Vec<(u32, Vec<NodeId>)>, frames: &BTreeSet<NodeId>, replaced: bool) -> BTreeSet<NodeId> {
+    let present = replaced.then(|| doc.index_paths(frames.iter().copied()));
+    let mut threaded = BTreeSet::new();
+    for (_, mut ids) in threads {
+        if let Some(present) = &present {
+            ids.retain(|id| present.contains_key(id));
+        }
+        if ids.len() > 1 {
+            threaded.extend(ids.iter().copied());
+            doc.text_threads.push(ids);
+        }
+    }
+    threaded
+}
+
+/// The slots of blank stories (nothing but spaces and line ends) that neither the text document nor
+/// the page fills: blank point type draws nothing and has nothing to keep, so it is left out without
+/// a note, as VectorCraft's Type tool discards empty point type (#85, #154); blank area type and
+/// type on a path come in as an empty text object with their frame or path, as the Type tool keeps
+/// such an empty frame, also where the page's type went to another text object (`Merged`). An empty
+/// frame draws nothing, so the page can't show it: it is kept without being weighed against the
+/// page (`prune_unseen` would take it out), and so are the later frames of its thread, which the
+/// text document makes empty. Type that a look draws is left as it is.
+fn settle_blank_stories(
+    infos: &[SlotInfo],
+    stories: &[Option<Arc<Story>>],
+    template: Option<(f64, f64)>,
+    to_doc: Affine,
+    content: &mut [Content],
+    notes: &mut Vec<String>,
+) {
+    // The stories whose first frame came in as an empty frame: their later frames stay with it.
+    let mut kept = BTreeSet::new();
+    for ((story, info), c) in stories.iter().zip(infos).zip(content.iter_mut()) {
+        let Some(story) = story.as_ref().filter(|s| s.is_blank() && info.look.is_none()) else { continue };
+        let unfilled = match c {
+            Content::Empty => true,
+            Content::Page(parts) => parts.is_empty(),
+            _ => false,
+        };
+        if story.blank_point(info.frame) {
+            if unfilled {
+                *c = Content::Merged;
+            }
+        } else if (unfilled || matches!(c, Content::Merged))
+            && let Some((node, region)) = template.and_then(|t| super::plan::blank_frame(info, story, t, to_doc))
+        {
+            *c = Content::Made(node, region.filter(|_| info.shown), true);
+            kept.extend(info.story);
+            // Its paragraphs' settings are read as made type's are, with the same notes.
+            for (left_out, note) in [
+                (story.tabs_left_out(), crate::import::ate::TABS_LEFT_OUT),
+                (story.kinsoku_sets_left_out(), crate::import::ate::KINSOKU_SETS_LEFT_OUT),
+            ] {
+                if left_out && !notes.iter().any(|n| n == note) {
+                    notes.push(note.into());
+                }
+            }
+        }
+    }
+    for (info, c) in infos.iter().zip(content.iter_mut()) {
+        if let Content::Made(_, _, seen) = c
+            && info.frame > 0
+            && info.look.is_none()
+            && info.story.is_some_and(|s| kept.contains(&s))
+        {
+            *seen = true;
+        }
+    }
 }
 
 /// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
@@ -2152,6 +2245,30 @@ fn unmark(nodes: &mut [Arc<Node>], shown: bool, prints: bool, found: &mut Vec<(N
         {
             unmark(c, shown, prints, found);
         }
+    }
+}
+
+/// Make the clipping groups in `layers` that their type clips ([`Structure::type_clips`]) clip by it,
+/// where its slot became one text object (`filled`). The page shows that type by what it clips, so
+/// it is never weighed as type the page doesn't draw ([`prune_unseen`]).
+fn clip_by_type(
+    layers: &mut [Arc<Node>],
+    type_clips: &std::collections::HashMap<NodeId, NodeId>,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+) {
+    let one = |slot: NodeId| {
+        filled.get(&slot).and_then(|f| match f.objects.as_slice() {
+            [id] => Some(*id),
+            _ => None,
+        })
+    };
+    let mut seen = |n: &mut Node| {
+        if let Some(name) = n.name.as_deref().and_then(|m| m.strip_prefix(MADE)) {
+            n.name = (!name.is_empty()).then(|| name.to_string());
+        }
+    };
+    for l in layers {
+        ai::clip_by_type(Arc::make_mut(l), type_clips, &one, &mut seen);
     }
 }
 

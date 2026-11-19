@@ -12,6 +12,9 @@ use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, 
 
 /// Dispatch canvas pointer, keyboard and drop events through the active document view.
 pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    if let Some(feed) = app.services.stylus.as_ref() {
+        feed.bind_repaint(ui.ctx());
+    }
     // A modal dialog takes the canvas's presses, finger taps, long touches and view navigation, from the frame it opens.
     let modal = crate::panel_docking::modal_open(app, ui.ctx());
     let (pointer, m, space, hover) = wheel_view(app, ui, resp, rect, modal);
@@ -53,7 +56,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     });
     // What a hover means besides where the pointer is on screen: the tool, the canvas, the view
     // (scrolled, zoomed or turned by the wheel, a gesture, keys or a command) and the document and
-    // selection as they are (another tab, an edit, an undo). Under a still pointer, a tool switched
+    // selection as they are (another tab, an edit, an undo), and the pen's orientation. Under a still pointer, a tool switched
     // to is hovered at once, and when the rest changes, a tool that asks for it
     // ([`Session::tool_wants_rehover`]) is hovered again where the pointer is.
     let context = HoverContext {
@@ -62,13 +65,14 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         center: v.center,
         zoom: v.zoom,
         rotation: v.rotation,
+        pen: pen_pose(app, &xf),
         doc: app.session.active().map(|st| (st.uid, st.revision)),
     };
-    let (tool_switched, context_changed) = ui.data_mut(|d| {
+    let (tool_switched, context_changed, pen_changed) = ui.data_mut(|d| {
         let id = egui::Id::unique("canvas-hover-context");
         let prev = d.get_temp::<HoverContext>(id);
         d.insert_temp(id, context);
-        prev.map_or((false, false), |prev| (prev.tool != context.tool, prev != context))
+        prev.map_or((false, false, false), |prev| (prev.tool != context.tool, prev != context, prev.pen != context.pen))
     });
 
     if app.ui.screen_mode == 3 && matches!(drag, None | Some(Drag::Present | Drag::Gesture)) {
@@ -137,7 +141,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
         && !(pointer.primary_down() && ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id()).is_some()))
-        && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
+        && (pointer.is_moving()
+            || mods_changed
+            || !was_over
+            || tool_switched
+            || (context_changed && app.session.tool_wants_rehover())
+            || (pen_changed && context.tool == "paintbrush"))
     {
         let ev = PointerEvent {
             kind: PointerKind::Move,
@@ -145,7 +154,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             mods: mods(m, space),
             backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
             pressure: 1.0,
-            pen: None,
+            pen: pen_pose(app, &xf),
         };
         dispatch(app, &ev, view);
     }
