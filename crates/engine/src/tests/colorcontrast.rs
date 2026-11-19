@@ -275,6 +275,34 @@ fn an_instances_opacity_for_a_group_of_its_art_applies_once() {
     assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
 }
 
+/// A selected 50 % black square in a 50 % group, over a 50 % white square, all in a Difference group
+/// over gray: the inner group's opacity applies to the black square only, and the white beside the
+/// inner group counts once in the alpha the Difference group takes the gray back out by.
+#[test]
+fn a_groups_opacity_leaves_out_the_art_beside_it_in_a_blending_group() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#8c8c8c"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let white = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let black = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let inner = id(s.execute("object.group", &json!({"ids": [black.0]})).unwrap());
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    s.execute("object.group", &json!({"ids": [white.0, inner.0]})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    s.active_mut().unwrap().selection.objects = vec![black];
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    // The canvas pixel is rounded to 8 bits, which moves this dark gray's ratio by up to 0.04; with
+    // the white counted twice the answer is 3.15.
+    assert!((ratio(&r) - drawn).abs() < 0.05, "{r} against {drawn} ({p:?})");
+}
+
 /// An object that isolates its blending, with a white Multiply fill over a blue one, over red: the
 /// white multiplies with the blue row below it.
 #[test]

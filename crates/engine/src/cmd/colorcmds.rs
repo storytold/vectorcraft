@@ -1062,7 +1062,8 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
     let sampled = below && opacity.is_none();
     // A level with a blend mode that does not isolate draws what is inside it over the art below it,
     // then takes that art back out by the alpha of what it holds drawn alone, and blends the rest:
-    // `alone` is that alpha for the nearest such level around, from the levels inside it so far.
+    // `alone` is the alpha of what the next level out holds drawn alone. Each level's opacity
+    // applies to what it holds, and the art beside it in the level around it adds to the alpha once.
     let blends = |a: &Step| a.blend != BlendMode::Normal && !a.isolate;
     let mut x = (shown(&color), 1.0f32);
     let mut alone = 1.0f32;
@@ -1081,10 +1082,10 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
             None if step.hide.is_none() && full.is_empty() => (against, 1.0),
             _ => read(scope.map(|a| &a.within))?,
         };
-        // The alpha of the art below the level inside the nearest blending level around it (none
-        // for a given background).
-        let inner = match above.iter().take_while(|a| !a.isolate).find(|a| blends(a)) {
-            Some(group) if sampled => read(Some(&group.within))?.1,
+        // The alpha of the art below the level inside the level around it, while a blending level
+        // lies further out (none for a given background).
+        let inner = match above.first() {
+            Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => read(Some(&around.within))?.1,
             _ => 0.0,
         };
         let source = if !blends(step) {
