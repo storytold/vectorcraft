@@ -11161,11 +11161,11 @@ fn a_gradients_br_is_not_a_brush() {
 
 /// The Brush Options codes for how a Calligraphic brush's values vary: Tilt, Bearing and Rotation
 /// are the pen's other channels (#372: a 6D Art Pen brush varies its diameter with the pressure,
-/// its roundness with the bearing and its angle with the barrel's rotation). The stylus wheel isn't
-/// read: it varies at random, as an unknown code does.
+/// its roundness with the bearing and its angle with the barrel's rotation), and code 3 is an
+/// airbrush pen's finger wheel. An unknown code varies at random.
 #[test]
 fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
-    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, Tilt};
+    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, StylusWheel, Tilt};
     let modes = |params: &str| {
         let d = brush::parse_tool_object(brush::Tool::Calligraphic, "Pen", params).unwrap();
         let brush::DraftKind::Calligraphic(c) = d.kind else { panic!("{d:?}") };
@@ -11173,8 +11173,9 @@ fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
     };
     assert_eq!(modes("1 51 69 13 57 -346 14 2 5 6 0"), [Rotation, Bearing, Pressure]);
     assert_eq!(modes("1 2 6 40 60 -30 10 4 4 4 0"), [Tilt, Tilt, Tilt]);
-    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [Random, Random, Random], "the stylus wheel");
-    assert_eq!(modes("1 4 4 50 50 10 10 3 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
+    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [StylusWheel, StylusWheel, StylusWheel], "the stylus wheel");
+    assert_eq!(modes("1 2 6 40 60 -30 10 7 9 7 0"), [Random, Random, Random], "unknown codes");
+    assert_eq!(modes("1 4 4 50 50 10 10 7 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
 }
 
 /// A 6D Art Pen brush: diameter 4 to 8 with the pressure, roundness 30 to 50 with the bearing and
@@ -11594,6 +11595,39 @@ fn an_art_brush_with_options_comes_in_brushed_with_them() {
     assert!(filled(&along, 50.0, -2.0) && filled(&along, 90.0, 2.0) && !filled(&along, 10.0, 2.0), "along: the narrow block at the end");
 }
 
+/// A path whose Art brush tints its art with a stroke color linked to a swatch (Tints, a spot
+/// color) comes in brushed: the brush draws the art in tints of that swatch, linked to it, so the
+/// spot ink stays on its plate.
+#[test]
+fn an_art_brush_tinting_with_a_spot_color_comes_in_brushed_in_tints_of_it() {
+    let def = format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", RIBBON));
+    let style = art_style("Ribbon", 1.0, &STRETCHED, "").replace("0 1 1 0 1 0 0 XA", "0 0 0 0 1 0.5 0 (Brand orange) 0 1 XK");
+    let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, not its look: {a:#?}");
+    let st = a[0].appearance.stroke().cloned().unwrap();
+    assert_eq!(st.brush.as_deref(), Some("Ribbon"));
+    let Paint::Solid { swatch: Some(swatch), .. } = &st.paint else { panic!("a swatch: {:?}", st.paint) };
+    assert_eq!(swatch, "Brand orange");
+    let lib = vectorcraft_brush::library(&r.doc);
+    let ribbon = lib.iter().find(|b| b.name == "Ribbon").unwrap();
+    let line = kurbo::BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(0.0, 0.0)), kurbo::PathEl::LineTo(Point::new(100.0, 0.0))]);
+    let mut fills = vec![];
+    for n in vectorcraft_brush::stroke_pieces(&r.doc, ribbon, &line, &st) {
+        n.walk(&mut |c| {
+            if let Some(f) = c.appearance.fill() {
+                fills.push(f.paint.clone());
+            }
+        });
+    }
+    // The art is black: each piece is the swatch at the stroke's own tint.
+    assert!(!fills.is_empty());
+    for p in &fills {
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "Brand orange" && (*tint - 1.0).abs() < 1e-6), "{p:?}");
+    }
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// An Art brushed path keeps its drawn look when the brush wouldn't draw it the way the file does:
 /// its settings differ from the brush's, the brush's are ones VectorCraft doesn't draw as the file
 /// does, its art isn't read, or the brush isn't one the panel keeps.
@@ -11621,7 +11655,6 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
     let cases = [
         ("a switch written as another kind", good.clone(), art_style("Ribbon", 1.0, &malformed, "")),
         ("art in a pattern", format!("{dots}{patterned}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON)), plain_style.clone()),
-        ("tints of a swatch's ink", good.clone(), plain_style.replace("0 1 1 0 1 0 0 XA", "0 0 0 0 1 0.5 0 (Brand orange) 0 1 XK")),
         (
             "art with no length",
             format!(

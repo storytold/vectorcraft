@@ -29,6 +29,7 @@ const RESET_UNITS: &str = "__resetUnits";
 const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
 
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
+    crate::original_editor::open(app);
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
     fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
@@ -230,6 +231,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.view.smart_guides = d.fields.get("__smartGuides").and_then(Value::as_bool).unwrap_or(app.ui.view.smart_guides);
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
+    crate::original_editor::commit(app);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
     app.prefs_changed = true;
@@ -338,6 +340,10 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
         app.canvas.key = None;
         ctx.data_mut(|d| d.insert_temp(id, Some(want)));
     }
+    // Cards show only with Show Tool Tips on: an open card goes away as soon as tool tips are turned off.
+    let p = &app.session.prefs;
+    let cards = crate::toolbar::card::CardPrefs { on: p.show_tool_cards && p.show_tool_tips, animated_zoom: crate::canvas::animated_zoom(p) };
+    crate::toolbar::card::set_prefs(ctx, cards);
     let z = app.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32;
     if (ctx.zoom_factor() - z).abs() > 1e-3 {
         ctx.set_zoom_factor(z);
@@ -468,6 +474,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     app.ui.dialog = Some(d);
     if cancel {
+        crate::original_editor::cancel(app);
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
@@ -557,6 +564,27 @@ impl DescribedRows {
     }
 }
 
+/// Whether the checkbox of the setting `key` is enabled, for a setting that acts only while
+/// another setting allows it and is dimmed otherwise. `None` for every other setting.
+fn bool_enabled(d: &Dialog, key: &str) -> Option<bool> {
+    match key {
+        // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+        // is off: dimmed while it is on.
+        "ctrlWheelScrollsSideways" => Some(!d.bool("zoomWithMouseWheel")),
+        // Units › Numbers Without Units Are Points only tells points from picas: dimmed
+        // unless a unit is Picas.
+        "numbersWithoutUnitsArePoints" => Some(picas_in_use(d)),
+        // General › Show Tool Cards replaces the tool tips: dimmed while Show Tool Tips is off.
+        "showToolCards" => Some(d.bool("showToolTips")),
+        // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
+        "animatedZoom" => Some(d.bool("gpuPerformance")),
+        // Type › Show samples on white draws the samples that Enable in-menu font previews
+        // shows: dimmed while previews are off.
+        "fontSamplesOnWhite" => Some(d.bool("fontPreview")),
+        _ => None,
+    }
+}
+
 /// The fields of the category `cat`. → The rows under the pointer and with the keyboard focus.
 fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) -> DescribedRows {
     let t = Tokens::get(ui.ctx());
@@ -596,25 +624,10 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         let top = ui.cursor().top();
         let mark = found_mark(ui, d, sp.key);
+        let enabled = bool_enabled(d, sp.key);
         match sp.kind {
-            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
-            // is off: dimmed while it is on.
-            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
-                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Units › Numbers Without Units Are Points only tells points from picas: dimmed
-            // unless a unit is Picas.
-            PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
-                ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
-            PrefKind::Bool if sp.key == "animatedZoom" => {
-                ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Type › Show samples on white draws the samples that Enable in-menu font previews
-            // shows: dimmed while previews are off.
-            PrefKind::Bool if sp.key == "fontSamplesOnWhite" => {
-                ui.add_enabled_ui(d.bool("fontPreview"), |ui| bool_row(ui, d, sp.key, sp.label));
+            PrefKind::Bool if enabled.is_some() => {
+                ui.add_enabled_ui(enabled == Some(true), |ui| bool_row(ui, d, sp.key, sp.label));
             }
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
@@ -657,15 +670,13 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
+            PrefKind::Bool if sp.key == "editOriginalSystemDefaults" => {
+                bool_row(ui, d, sp.key, sp.label);
+                crate::original_editor::show(ui, app, d);
+            }
             // The desktop app only: the web build has no display profile to read. A note says
             // which profile the canvas is drawn through, or why none.
-            PrefKind::Bool if sp.key == "monitorProfileDisplay" => {
-                if !cfg!(target_arch = "wasm32") {
-                    bool_row(ui, d, sp.key, sp.label);
-                    let note = app.display_profile.note(d.bool(sp.key));
-                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
-                }
-            }
+            PrefKind::Bool if sp.key == "monitorProfileDisplay" => monitor_profile_row(ui, app, d, sp.key, sp.label, &t),
             // The desktop app only: it sets the window's present mode when it starts, so a note
             // says the change applies at the next start.
             PrefKind::Bool if sp.key == "lowLatencyDrawing" => desktop_startup_bool_row(ui, d, sp.key, sp.label, &t),
@@ -867,6 +878,14 @@ fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &
             d.fields.insert(key.into(), json!(o.0));
         }
     });
+}
+
+fn monitor_profile_row(ui: &mut egui::Ui, app: &VectorcraftApp, d: &mut Dialog, key: &str, label: &str, t: &theme::Tokens) {
+    if !cfg!(target_arch = "wasm32") {
+        bool_row(ui, d, key, label);
+        let note = app.display_profile.note(d.bool(key));
+        ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
+    }
 }
 
 /// The row of the number preference `key` within `range`: a slider for Interface Scaling, a field
