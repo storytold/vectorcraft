@@ -27,8 +27,12 @@
 //! Brush Options' Key Color eyedropper sets `brushKeyColor` and `stop`: the next click samples into
 //! the open dialog (`brushKeyColor` UI request) and switches back.
 //!
-//! Escape ends either pick without sampling and switches back to that tool. With neither pick
+//! Escape ends an armed pick without sampling and switches back to that tool. With no pick
 //! armed, Escape is left to the application.
+//!
+//! Image Trace's Ignore Color eyedropper passes its bound document point to the panel, which
+//! samples the original image pixels and ends the pick only when a color is accepted. A miss
+//! stays armed; this tool changes neither paint nor selection.
 
 use std::collections::HashSet;
 
@@ -51,6 +55,8 @@ pub struct EyedropperTool {
     text_selection: crate::text::TypeTool,
     /// Brush Options › Key Color (Hue Shift): sample into the dialog, then [`Self::stop`].
     brush_key_color: bool,
+    /// Image Trace > Ignore Color: the panel's opaque document/object/revision binding.
+    image_trace_ignore_color: Option<Value>,
     /// The gradient mesh points the tool switched from had picked, each a mesh and a point index.
     mesh_points: Vec<(NodeId, usize)>,
 }
@@ -512,6 +518,11 @@ impl Tool for EyedropperTool {
         if ev.kind != PointerKind::Down {
             return vec![];
         }
+        if let Some(binding) = &self.image_trace_ignore_color {
+            // The panel knows whether this hits an opaque source pixel. It clears the binding
+            // and restores the previous tool only after accepting a color, not on a miss.
+            return vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "point": [ev.pos.x, ev.pos.y] }))];
+        }
         let opts = sample_options(cx);
         if self.brush_key_color {
             let Some(c) = sample_color_at(cx, ev.pos) else { return vec![] };
@@ -573,6 +584,9 @@ impl Tool for EyedropperTool {
         if let Some(o) = options.as_object_mut() {
             o.insert("stop".into(), json!(self.stop));
             o.insert("brushKeyColor".into(), json!(self.brush_key_color));
+            if let Some(binding) = &self.image_trace_ignore_color {
+                o.insert("imageTraceIgnoreColor".into(), binding.clone());
+            }
             if !self.mesh_points.is_empty() {
                 let points: Vec<Value> = self.mesh_points.iter().map(|(id, index)| json!({"id": id.0, "index": index})).collect();
                 o.insert("meshPoints".into(), Value::Array(points));
@@ -587,6 +601,7 @@ impl Tool for EyedropperTool {
         match key {
             "stop" => self.stop = value.as_str().map(str::to_string),
             "brushKeyColor" => self.brush_key_color = value.as_bool().unwrap_or(false),
+            "imageTraceIgnoreColor" => self.image_trace_ignore_color = (!value.is_null()).then(|| value.clone()),
             "meshPoints" => self.mesh_points = crate::meshedit::points_of(value),
             "textSelection" => self.text_selection.set_option(key, value),
             _ => {}
@@ -621,11 +636,14 @@ impl Tool for EyedropperTool {
         Cursor::Eyedropper
     }
 
-    /// Escape ends a gradient stop's or Key Color's pick without sampling and switches back to the
-    /// tool that armed it.
+    /// Escape ends the armed pick without sampling; Image Trace receives its cancellation reply.
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key != ToolKey::Escape || !self.picking() {
             return vec![];
+        }
+        if let Some(binding) = self.image_trace_ignore_color.take() {
+            let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
+            return vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "cancel": true })), Action::SwitchTool(back)];
         }
         let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
         self.brush_key_color = false;
@@ -648,9 +666,9 @@ impl Tool for EyedropperTool {
 }
 
 impl EyedropperTool {
-    /// Is a one-shot pick armed (a gradient stop's or Brush Options' Key Color)?
+    /// Is a gradient stop, Brush Key Color or Image Trace Ignore Color pick armed?
     fn picking(&self) -> bool {
-        self.stop.is_some() || self.brush_key_color
+        self.stop.is_some() || self.brush_key_color || self.image_trace_ignore_color.is_some()
     }
 }
 
@@ -867,6 +885,96 @@ mod tests {
             vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&Color::WHITE) })), Action::SwitchTool("selection".into())]
         );
         assert_eq!(t.options(), json!({ "stop": null, "brushKeyColor": false }));
+    }
+
+    #[test]
+    fn image_trace_sampling_keeps_forwarding_its_binding_until_the_panel_accepts_a_color() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let binding = json!({"doc": 7, "target": id.0, "revision": 11});
+        for mods in [Mods::default(), Mods { alt: true, ..Default::default() }, Mods { alt: true, shift: true, ..Default::default() }] {
+            let mut t = EyedropperTool::default();
+            t.set_option("stop", &json!("gradient"));
+            t.set_option("imageTraceIgnoreColor", &binding);
+            assert_eq!(t.options()["imageTraceIgnoreColor"], binding);
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Move, -25.5, 400.25)).is_empty());
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, -25.5, 400.25)).is_empty());
+            assert_eq!(
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, -25.5, 400.25).with_mods(mods)),
+                vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [-25.5, 400.25]}))]
+            );
+            assert_eq!(t.options()["imageTraceIgnoreColor"], binding, "a point is only a request until the panel accepts its source color");
+            assert_eq!(t.options()["stop"], "gradient");
+            assert!(t.claims_key(&cx, ToolKey::Escape));
+            assert!(t.ends_on_escape(&cx));
+            let next = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 20.0));
+            assert_eq!(next, vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [10.0, 20.0]}))]);
+            t.set_option("imageTraceIgnoreColor", &Value::Null);
+            t.set_option("stop", &Value::Null);
+            assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+            assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        }
+    }
+
+    #[test]
+    fn image_trace_escape_cancels_its_binding_and_restores_the_tool_once() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let binding = json!({"doc": 7, "target": id.0, "revision": 11});
+        let mut t = EyedropperTool::default();
+        assert!(!t.claims_key(&cx, ToolKey::Escape));
+        assert!(!t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        t.set_option("stop", &json!("selection"));
+        t.set_option("imageTraceIgnoreColor", &binding);
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert!(t.ends_on_escape(&cx));
+        assert!(!t.claims_key(&cx, ToolKey::Enter));
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty());
+        assert_eq!(t.options()["imageTraceIgnoreColor"], binding);
+        assert!(t.drop_press(&cx).is_empty(), "a dropped press leaves this pick waiting too");
+        assert_eq!(t.options()["imageTraceIgnoreColor"], binding);
+        assert_eq!(
+            t.key(&cx, ToolKey::Escape, Mods::default()),
+            vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "cancel": true})), Action::SwitchTool("selection".into())]
+        );
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+        assert!(!t.claims_key(&cx, ToolKey::Escape));
+        assert!(!t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        // A binding without a saved tool still claims its one Escape and returns to Selection.
+        t.set_option("imageTraceIgnoreColor", &binding);
+        assert!(t.claims_key(&cx, ToolKey::Escape) && t.ends_on_escape(&cx));
+        assert_eq!(
+            t.key(&cx, ToolKey::Escape, Mods::default()),
+            vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "cancel": true})), Action::SwitchTool("selection".into())]
+        );
+        assert!(!t.claims_key(&cx, ToolKey::Escape) && !t.ends_on_escape(&cx));
+    }
+
+    #[test]
+    fn clearing_image_trace_sampling_preserves_existing_brush_and_stop_options() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = EyedropperTool::default();
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("selection"));
+        let original = t.options();
+        t.set_option("imageTraceIgnoreColor", &json!({"doc": 7, "target": 8, "revision": 11}));
+        t.set_option("imageTraceIgnoreColor", &Value::Null);
+        assert_eq!(t.options(), original);
+        // Clearing Trace leaves the ordinary Brush pick armed, including its upstream Escape.
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert!(t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty());
+        assert_eq!(t.options(), original);
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)),
+            vec![Action::Dialog("brushKeyColor".into(), json!({"color": color_json(&Color::WHITE)})), Action::SwitchTool("selection".into())]
+        );
     }
 
     /// The hex of the colour a `paint.sampleColor` action samples.

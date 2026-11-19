@@ -115,6 +115,7 @@
 	Add to Selection	Zur Auswahl hinzufügen
 	Add to Swatches	Zu Farbfeldern hinzufügen
 	Add Used Colors	Verwendete Farben hinzufügen
+	Add Selected Colors	Ausgewählte Farben hinzufügen
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
 	Plug-in Instruction Budget	Anweisungsbudget für Plug-ins
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
@@ -214,6 +215,10 @@ font-technology	Variable	Variabel
 	Arc	Bogen
 	Arc Lower…	Bogen unten…
 	Arc Tool	Bogen-Werkzeug
+	Three-Point Arc Tool	Dreipunkt-Bogen-Werkzeug
+	Three-Point Arc	Dreipunkt-Bogen
+	Arc too large	Bogen zu groß
+	Third Point Sets Direction	Dritter Punkt gibt die Richtung an
 	Arc Upper…	Bogen oben…
 	Arch…	Torbogen…
 	Arc…	Bogen…
@@ -1694,6 +1699,10 @@ file-filter	Templates	Vorlagen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
+	Set As Base Color	Als Grundfarbe festlegen
+	Select Shade	Schattierung auswählen
+	Add New Color	Neue Farbe hinzufügen
+	Set Current Color As Base Color	Aktuelle Farbe als Grundfarbe festlegen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -2826,6 +2835,11 @@ diagnostics	ui	Oberfläche
 	Preserve Alpha Transparency	Alphatransparenz beibehalten
 	Preserve Appearance and Overprints	Aussehen und Überdrucken beibehalten
 	Preserve CMYK Numbers	CMYK-Werte beibehalten
+	Preserve RGB Numbers	RGB-Werte beibehalten
+	Device to Simulate:	Zu simulierendes Gerät:
+	Simulate Paper Color	Papierfarbe simulieren
+	Simulate Black Ink	Schwarze Druckfarbe simulieren
+	Load…	Laden…
 	Preserve Editing Capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve editing capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve Lightness	Helligkeit beibehalten
@@ -3329,6 +3343,7 @@ digits	Malayalam	Malayalam
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist; Text, der bereits in einem Dokument steht, behält seine Sprache.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In Absätzen mit eingeschalteter Silbentrennung wird ein aufgeführtes Wort nur an den darin eingegebenen Bindestrichen getrennt oder gar nicht, wenn es keine hat, unabhängig von Sprache und Groß- und Kleinschreibung.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In der Desktop-Version werden die .wasm-Plug-ins in diesem Ordner beim Start geladen und wenn Sie hier mit einem neuen Ordner auf OK klicken, außer im abgesicherten Modus; die Webversion lädt sie nicht.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Wie viele Anweisungen jeder Lauf eines Objektfilters aus einem Plug-in verwenden darf; „Groß“ erlaubt mehr als „Normal“, bei derselben Grenze von 60 Sekunden. Aufwendige Filter behalten ihr eigenes Budget.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die erste Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Die zweite Wahl für das Arbeitsvolume: Startup, None oder ein Ordnerpfad; VectorCraft speichert sie, verwendet aber noch keine Arbeitsvolumes.
 	How light or dark the interface is.	Wie hell oder dunkel die Benutzeroberfläche ist.
@@ -3347,6 +3362,7 @@ digits	Malayalam	Malayalam
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	„Animierter Zoom“ funktioniert nur, solange dies eingeschaltet ist; ausgeschaltet ist „Animierter Zoom“ abgeblendet und das Zoomen wird nicht animiert.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Der Zoom mit dem Mausrad gleitet weich, und das Zoom-Werkzeug zoomt, während Sie seitwärts ziehen oder es gedrückt halten; ausgeschaltet zoomt es auf den Bereich, über den Sie ziehen.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Ab dem nächsten Start zeichnet die Desktop-Version mit dieser Art von Grafikprozessor; „Automatisch“ bevorzugt den, der den Bildschirm ansteuert. Die Webversion verwendet sie nicht.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Ab dem nächsten Start zeigt das Fenster Bilder, ohne auf die Bildwiederholung des Bildschirms zu warten, höchstens 240 pro Sekunde; aus, gibt der Bildschirm den Takt vor. Ein beim Start festgelegter Darstellungsmodus hat Vorrang.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Die Höchstzahl der Rückgängig-Schritte, die jedes Dokument behält; eine kleinere Zahl entfernt beim Klick auf OK die ältesten Schritte. Schritte können auch früher entfallen, wenn sie zu viel Speicher belegen.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Zeigt beim Ziehen, wie sich das Bildmaterial ändert; ausgeschaltet folgen Umrisse dem Ziehen, und das Bildmaterial ändert sich beim Loslassen. Eine Hilfslinie aus dem Lineal bewegt sich beim Ziehen immer mit.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Wie viele Worker-Threads das Bildmaterial zeichnen; -1 verwendet einen weniger als die Kerne, die VectorCraft nutzen darf, höchstens 8, und 0 keinen. Die Webversion verwendet nie einen.
@@ -3373,6 +3389,10 @@ digits	Malayalam	Malayalam
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft speichert diese Wahl, aber Kopieren und Ausschneiden verwenden noch kein Format der älteren Vektorzwischenablage.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	„Pfade beibehalten“ oder „Aussehen und Überdrucken beibehalten“ für die ältere Vektorzwischenablage; VectorCraft speichert die Wahl, verwendet sie aber noch nicht.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	„Formatierung beibehalten“ behält die Stile von Text aus einem Textobjekt in VectorCraft beim Einfügen in ein Textobjekt; „Nur Text beibehalten“ gibt ihm den Stil der Einfügestelle.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	„Alle Schwarztöne als tiefes Schwarz anzeigen“ zeigt reines CMYK-Schwarz (nur schwarze Farbe mit 100 %) auf der Arbeitsfläche als RGB-Schwarz; „Alle Schwarztöne genau anzeigen“ wandelt es über den CMYK-Arbeitsfarbraum um.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	„Alle Schwarztöne als tiefes Schwarz ausgeben“ zeichnet reines CMYK-Schwarz in RGB- und Graustufen-Rasterexporten und bei „Als Bitmap drucken“ als RGB-Schwarz; Vektorexporte, CMYK-JPEG, -TIFF und -PSD und anderes Drucken ändert es nicht.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Auf einem Touchscreen wird zum Touch-Arbeitsbereich gewechselt; beim Ausschalten oder wenn kein Touchscreen mehr erkannt wird, kehrt es zum vorherigen Arbeitsbereich zurück.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Tippen mit zwei Fingern auf die Arbeitsfläche macht rückgängig oder wechselt im Touch-Arbeitsbereich zwischen Auswahl- und Zeichenwerkzeugen, Tippen mit drei Fingern wiederholt; beides wirkt nicht im Präsentationsmodus.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Neuer Text erhält diese Sprache, solange die Sprache unter „Dokument einrichten“ Englisch: USA ist und [Normales Zeichenformat] keine Sprache festlegt; Text, der bereits in einem Dokument steht, behält seine Sprache.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In Absätzen mit Silbentrennung wird ein aufgeführtes Wort nur an seinen eingegebenen Bindestrichen getrennt, ohne solche gar nicht, unabhängig von Groß- und Kleinschreibung; koreanische Wörter erhalten keinen Trennstrich, Wörter indischer Sprachen keine Trennung in einer Zeichengruppe.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
@@ -3619,6 +3639,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Recent Commands	Zuletzt verwendete Befehle
 	No recent commands	Keine zuletzt verwendeten Befehle
+	Type to search commands, tools, panels and effects	Tippen, um Befehle, Werkzeuge, Bedienfelder und Effekte zu suchen
 	Search commands	Befehle suchen
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
@@ -5244,6 +5265,10 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	a guide has no curvature circle	eine Hilfslinie hat keinen Krümmungskreis
 @msg	the circle that matches the path there would reach past the canvas	der Kreis, der dort zum Pfad passt, würde über die Arbeitsfläche hinausreichen
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
+@msg	`at` must be "start" or "end"	`at` muss „start“ oder „end“ sein
+@msg	give exactly one of `through` and `toward`	geben Sie genau eines von `through` und `toward` an
+@msg	no arc fits these points: two are the same or all three lie on one line	zu diesen Punkten passt kein Bogen: zwei sind gleich oder alle drei liegen auf einer Linie
+@msg	give `at` only with `toward`	geben Sie `at` nur zusammen mit `toward` an
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
 @msg	no artboard {i} (0-based; the document has {_1})	keine Zeichenfläche {i} (Zählung ab 0; das Dokument hat {_1})
@@ -5290,6 +5315,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no native format	kein natives Format
 @msg	no pages	keine Seiten
 @msg	no pattern `{name}`	kein Muster `{name}`
+@msg	art painted with `{name}` can't be its tile	mit `{name}` gefärbtes Bildmaterial kann nicht dessen Kachel sein
 @msg	no perspective grid preset named `{name}`	keine Vorgabe für Perspektivenraster namens `{name}`
 @msg	no plug-in {0} is installed	es ist kein Plug-in {0} installiert
 @msg	no plug-in {id} is installed	es ist kein Plug-in {id} installiert
@@ -7601,6 +7627,36 @@ anchor	Points:	Punkte:
 @msg	`{id}` is not a colour adjustment	`{id}` ist keine Farbkorrektur
 @msg	missing `effect`	`effect` fehlt
 @msg	`params` must be an object	`params` muss ein Objekt sein
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	Dreieck (offen)
+	Circle (open)	Kreis (offen)
+	Square (open)	Quadrat (offen)
+	Arrow (open)	Pfeil (offen)
+	Barbed	Mit Widerhaken
+arrowhead	Feather	Feder
+	Half Arrow (left)	Halber Pfeil (links)
+	Half Arrow (right)	Halber Pfeil (rechts)
+	Double Bar	Doppelbalken
+	Dot on Bar	Punkt auf Balken
+	Chevron	Winkel
+	Plus	Plus
+	Hexagon (open)	Sechseck (offen)
+	Tag	Etikett
+	Tag (open)	Etikett (offen)
+	Half Circle	Halbkreis
+	Drop	Tropfen
+	Slash	Schrägstrich
+	Double Slash	Doppelter Schrägstrich
+	Diamond (open)	Raute (offen)
+	Reverse Triangle	Umgekehrtes Dreieck
+	Swallowtail	Schwalbenschwanz
+	Bracket	Klammer
+	Fork	Gabel
+	Leaf	Blatt
+	Kite	Drachen
+	Triangle to Bar	Dreieck zu Balken
+	Oval	Oval
+	Line Arrow	Linienpfeil
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Pfad-Präzisionswerkzeuge
 	Anchor Eraser Brush	Ankerpunkt-Radierpinsel
@@ -7891,6 +7947,7 @@ breakText	Glyphs	Glyphen
 	Remove Strokes	Konturen entfernen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
+	Replace Pattern Art	Mustergrafik ersetzen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten
@@ -10330,6 +10387,16 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Paint	Farbe
+	Flat Sweep	Flacher Schwung
+	Dry Drag	Trockener Zug
+	Loaded Stroke	Satter Pinselstrich
+	Fan Sweep	Fächerschwung
+	Engraving	Gravur
+	Fine Hatching	Feine Schraffur
+	Dense Hatching	Dichte Schraffur
+	Tapered Hatching	Verjüngte Schraffur
+	Broken Hatching	Unterbrochene Schraffur
 	Image Brush	Bildpinsel
 	Soft Bloom	Sanfte Blüte
 	Halftone Field	Rasterfeld

@@ -1531,6 +1531,10 @@ lighting	Light	Světlo
 	Add Anchor Point Tool	Nástroj Přidat kotevní bod
 	Anchor Point Tool	Nástroj Kotevní bod
 	Arc Tool	Nástroj Oblouk
+	Three-Point Arc Tool	Nástroj Oblouk třemi body
+	Three-Point Arc	Oblouk třemi body
+	Arc too large	Oblouk je příliš velký
+	Third Point Sets Direction	Třetí bod určuje směr
 	Area Graph Tool	Nástroj Plošný graf
 	Area Type Tool	Nástroj Text v oblasti
 	Artboard Tool	Nástroj Pracovní plocha
@@ -3108,6 +3112,11 @@ digits	Malayalam	Malajálamské
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:
 	Preserve CMYK Numbers	Zachovat hodnoty CMYK
+	Preserve RGB Numbers	Zachovat hodnoty RGB
+	Device to Simulate:	Simulované zařízení:
+	Simulate Paper Color	Simulovat barvu papíru
+	Simulate Black Ink	Simulovat černou barvu
+	Load…	Načíst…
 	Previous page	Předchozí stránka
 	Print Layers:	Tisknout vrstvy:
 	Print Preset:	Přednastavení tisku:
@@ -3185,6 +3194,10 @@ digits	Malayalam	Malajálamské
 	Add Color Tool	Nástroj Přidat barvu
 	Remove Color Tool	Nástroj Odstranit barvu
 	Remove Color	Odstranit barvu
+	Set As Base Color	Nastavit jako základní barvu
+	Select Shade	Vybrat odstín
+	Add New Color	Přidat novou barvu
+	Set Current Color As Base Color	Nastavit aktuální barvu jako základní
 	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
@@ -4438,6 +4451,7 @@ theme	Appearance	Motiv
 	Add to Graphic Styles	Přidat do grafických stylů
 	Graphic Style Library	Knihovna grafických stylů
 	Add Used Colors	Přidat použité barvy
+	Add Selected Colors	Přidat vybrané barvy
 	Delete Swatch	Odstranit položku vzorníku
 	Duplicate Swatch	Duplikovat položku vzorníku
 	Merge Swatches	Sloučit položky vzorníku
@@ -4736,6 +4750,7 @@ font-technology	Variable	Variabilní
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
+	Type to search commands, tools, panels and effects	Pište pro hledání příkazů, nástrojů, panelů a efektů
 	Dashed Line	Čárkovaná čára
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…
@@ -4858,6 +4873,7 @@ font-technology	Variable	Variabilní
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nový text dostane tento jazyk, dokud je jazyk v Nastavení dokumentu Angličtina: USA; text, který už v dokumentu je, si ponechá svůj jazyk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	V odstavcích se zapnutou volbou Dělit slova se uvedené slovo dělí jen u spojovníků, které v něm napíšete, nebo nikde, pokud žádné nemá, bez ohledu na jazyk a velikost písmen.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	V desktopové verzi se zásuvné moduly .wasm z této složky načtou při spuštění a po klepnutí na OK s novou složkou zde, kromě nouzového režimu; webová verze je nenačítá.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Kolik instrukcí smí použít každé spuštění filtru objektů ze zásuvného modulu; Velké povoluje víc než Normální při stejném limitu 60 sekund. Náročné filtry si ponechají vlastní rozpočet.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	První volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Druhá volba odkládacího disku: Startup, None nebo cesta ke složce; VectorCraft ji uloží, ale odkládací disky zatím nepoužívá.
 	How light or dark the interface is.	Jak světlé nebo tmavé je rozhraní.
@@ -4876,6 +4892,7 @@ font-technology	Variable	Variabilní
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animované zvětšení funguje, jen když je toto zapnuto; při vypnutí je Animované zvětšení zašedlé a zvětšování není animované.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zvětšení kolečkem plynule dojede a Nástroj Lupa zvětšuje, když táhnete do strany nebo ho podržíte; při vypnutí Nástroj Lupa zvětší oblast, přes kterou táhnete.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od příštího spuštění kreslí desktopová verze tímto druhem grafického procesoru; Automaticky dává přednost tomu, který řídí displej. Webová verze ho nepoužívá.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od příštího spuštění okno zobrazuje snímky bez čekání na obnovení displeje, nejvýše 240 za sekundu; vypnuto, tempo určuje displej. Režim zobrazení nastavený při spuštění má přednost.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Nejvyšší počet kroků zpět, které si každý dokument ponechá; nižší číslo po klepnutí na OK odstraní nejstarší kroky. Kroky mohou zmizet i dříve, když zabírají příliš paměti.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Ukazuje, jak se kresba mění, zatímco táhnete; při vypnutí sledují tažení obrysy a kresba se změní, až pustíte. Vodítko z pravítka se při tažení pohybuje vždy.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Kolik pracovních vláken kreslí kresbu; -1 použije o jedno méně, než je jader, která VectorCraft smí použít, nejvýše 8, a 0 žádné. Webová verze nepoužívá žádné.
@@ -4902,6 +4919,10 @@ font-technology	Variable	Variabilní
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft tuto volbu uloží, ale Kopírovat a Vyjmout zatím nepoužívají formát starší vektorové schránky.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Zachovat cesty nebo Zachovat vzhled a přetisky pro starší vektorovou schránku; VectorCraft volbu uloží, ale zatím ji nepoužívá.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Zachovat formátování ponechá styly textu zkopírovaného z textového objektu ve VectorCraftu při vložení do textového objektu; Zachovat prostý text mu dá styl místa, kam se vloží.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Volba „Zobrazovat všechny černé jako sytou černou“ zobrazí na plátně čistou černou CMYK (jen černou barvu na 100 %) jako černou RGB; volba „Zobrazovat všechny černé přesně“ ji převede přes pracovní prostor CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Volba „Ve výstupu všechny černé jako sytou černou“ vykreslí čistou černou CMYK jako černou RGB v rastrových exportech RGB a ve stupních šedi a při Tisknout jako bitmapu; nemění vektorové exporty, CMYK JPEG, TIFF a PSD ani jiný tisk.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Na dotykové obrazovce přepne do dotykového pracovního prostoru; vypnutí volby nebo ztráta dotykové obrazovky vrátí pracovní prostor, ze kterého přepnul.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Klepnutí dvěma prsty na plátno vrátí krok zpět, v dotykovém pracovním prostoru přepne mezi nástroji pro výběr a kreslení; klepnutí třemi prsty krok zopakuje. V režimu prezentace nefunguje ani jedno.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nový text dostane tento jazyk, dokud je jazyk v Nastavení dokumentu Angličtina: USA a [Normální styl znaků] žádný jazyk nenastavuje; text, který už v dokumentu je, si ponechá svůj jazyk.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	V odstavcích se zapnutou volbou Dělit slova se uvedené slovo dělí jen u spojovníků, které v něm napíšete, nebo nikde, pokud žádné nemá, bez ohledu na velikost písmen; korejská slova spojovník nedostanou a slova v indických jazycích se nedělí uvnitř skupiny znaků.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
@@ -5668,6 +5689,10 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	a guide has no curvature circle	vodítko nemá kružnici křivosti
 @msg	the circle that matches the path there would reach past the canvas	kružnice odpovídající cestě v tomto místě by přesáhla plátno
 @msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	`at` must be "start" or "end"	`at` musí být "start" nebo "end"
+@msg	give exactly one of `through` and `toward`	zadejte právě jeden z parametrů `through` a `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	těmto bodům neodpovídá žádný oblouk: dva jsou stejné nebo všechny tři leží na jedné přímce
+@msg	give `at` only with `toward`	parametr `at` zadejte jen s `toward`
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -5713,6 +5738,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no native format	chybí nativní formát
 @msg	no pages	žádné stránky
 @msg	no pattern `{name}`	vzorek `{name}` neexistuje
+@msg	art painted with `{name}` can't be its tile	kresba vybarvená vzorkem `{name}` nemůže být jeho dlaždicí
 @msg	no perspective grid preset named `{name}`	přednastavení perspektivní mřížky s názvem `{name}` neexistuje
 @msg	no plug-in {0} is installed	zásuvný modul {0} není nainstalován
 @msg	no plug-in {id} is installed	zásuvný modul {id} není nainstalován
@@ -6500,6 +6526,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Arrow	Šipka
 	Arrow (open)	Šipka (otevřená)
 	Barbed	S protihroty
+arrowhead	Feather	Pírko
 	Half Arrow (left)	Poloviční šipka (vlevo)
 	Half Arrow (right)	Poloviční šipka (vpravo)
 	Concave	Vkleslá
@@ -6527,6 +6554,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Kite	Deltoid
 	Triangle to Bar	Trojúhelník k příčce
 	Oval	Ovál
+	Line Arrow	Čárová šipka
 # Colour harmony rules (Color Guide, Recolor Artwork, Color Themes)
 	Complementary	Komplementární
 	Complementary 2	Komplementární 2
@@ -8295,6 +8323,7 @@ breakText	Glyphs	Glyfy
 	Remove Strokes	Odebrat tahy
 	Place Brush Art	Umístit kresbu štětce
 	Replace Brush Art	Nahradit kresbu štětce
+	Replace Pattern Art	Nahradit kresbu vzorku
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
 	Apply to Strokes	Použít na tahy
 	Leave Strokes	Ponechat tahy
@@ -10717,6 +10746,16 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Paint	Malba
+	Flat Sweep	Plochý tah
+	Dry Drag	Suchý tah
+	Loaded Stroke	Sytý tah
+	Fan Sweep	Vějířový tah
+	Engraving	Rytina
+	Fine Hatching	Jemné šrafování
+	Dense Hatching	Husté šrafování
+	Tapered Hatching	Zúžené šrafování
+	Broken Hatching	Přerušované šrafování
 	Image Brush	Obrazové štětce
 	Soft Bloom	Jemný květ
 	Halftone Field	Polotónové pole
