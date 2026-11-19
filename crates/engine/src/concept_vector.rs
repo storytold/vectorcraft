@@ -27,7 +27,8 @@ pub const MAX_STYLES: usize = 8;
 /// The most anchor points all the variations of one request may hold together.
 pub const MAX_ANCHORS: usize = 1_000_000;
 
-/// The most paths all the variations of one request may hold together.
+/// The most paths all the variations of one request may hold together, each subpath of a compound
+/// path counted as one.
 pub const MAX_PATHS: usize = 250_000;
 
 /// The most warnings a variation may carry, and the most characters in each.
@@ -229,8 +230,9 @@ fn within(p: Point, limit: f64, size: (f64, f64)) -> bool {
 }
 
 /// Checks the variations a provider returned for `request`: one per style in the order asked, at
-/// most [`MAX_PATHS`] paths and [`MAX_ANCHORS`] anchors together, each path with an anchor and a
-/// fill or a stroke, every anchor and handle finite and within one image side of the image, every
+/// most [`MAX_PATHS`] paths (each subpath of a compound path counted as one) and [`MAX_ANCHORS`]
+/// anchors together, each path with a fill or a stroke and with subpaths that each have an anchor,
+/// every anchor and handle finite and within one image side of the image, every
 /// stroke width finite, over 0 and at most the image's larger side, and at most [`MAX_WARNINGS`]
 /// warnings of at most 500 characters on each variation.
 pub fn check_result(request: &Request, variations: &[Variation]) -> Result<(), ProviderError> {
@@ -241,7 +243,8 @@ pub fn check_result(request: &Request, variations: &[Variation]) -> Result<(), P
     let side = size.0.max(size.1);
     let (mut paths, mut anchors) = (0usize, 0usize);
     for v in variations {
-        paths += v.paths.len();
+        // Each subpath of a compound path becomes an object of its own when it is inserted.
+        paths = v.paths.iter().fold(paths, |n, p| n.saturating_add(p.path.subpaths.len().max(1)));
         anchors += v.anchors();
         if anchors > MAX_ANCHORS {
             return Err(ProviderError::ResourceLimit(MAX_ANCHORS));
@@ -253,7 +256,8 @@ pub fn check_result(request: &Request, variations: &[Variation]) -> Result<(), P
             let width_ok = p.stroke.is_none_or(|(_, w)| w.is_finite() && w > 0.0 && w <= side);
             let painted = p.fill.is_some() || p.stroke.is_some();
             let points_ok = p.path.anchors().all(|(_, _, a)| [a.p, a.h_in, a.h_out].into_iter().all(|q| within(q, side, size)));
-            if !width_ok || !painted || p.path.anchor_count() == 0 || !points_ok {
+            let no_empty_subpath = !p.path.subpaths.is_empty() && p.path.subpaths.iter().all(|sp| !sp.anchors.is_empty());
+            if !width_ok || !painted || !no_empty_subpath || !points_ok {
                 return Err(ProviderError::InvalidResult);
             }
         }

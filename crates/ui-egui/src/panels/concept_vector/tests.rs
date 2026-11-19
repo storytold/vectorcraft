@@ -12,8 +12,8 @@ use vectorcraft_engine::concept_vector::{Capabilities, Provider, ProviderError, 
 use vectorcraft_geom::{PathData, Point, SubPath};
 
 use super::{
-    CANCEL, ID, OPEN, PREVIEW_H, PREVIEW_POINTS, Work, art_rect, cancel, elements, finish, generate, insert, poll, preview, preview_width, show,
-    show_job, within_budget,
+    CANCEL, GENERATE, ID, OPEN, PREVIEW_H, PREVIEW_POINTS, Work, art_rect, cancel, elements, finish, generate, insert, poll, preview, preview_width,
+    show, show_job, within_budget,
 };
 use crate::tests_labels::painted_text;
 use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
@@ -31,7 +31,7 @@ fn wait(app: &mut VectorcraftApp) {
 fn made_so_far(app: &VectorcraftApp) -> Option<usize> {
     match &app.concept_runs.running.as_ref()?.work {
         Work::Frames(_, made) => Some(made.styles_done()),
-        Work::Thread(_) => None,
+        Work::Thread(_) | Work::Queued(_) => None,
     }
 }
 
@@ -181,6 +181,116 @@ fn results_of_a_closed_document_are_no_longer_shown() {
     let text = painted_text(&mut app, show);
     assert!(!text.contains("Insert Selected"), "{text}");
     assert!(app.concept_runs.shown.is_none());
+}
+
+/// The results show only while the document they were made in is the active one: in another
+/// document neither they nor Insert Selected show, and they show again on going back.
+#[test]
+fn results_show_only_in_the_document_they_were_made_in() {
+    let mut app = app();
+    generate(&mut app).unwrap();
+    assert!(painted_text(&mut app, show).contains("Insert Selected"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let text = painted_text(&mut app, show);
+    assert!(!text.contains("Insert Selected"), "{text}");
+    assert!(app.concept_runs.job().is_some(), "the job is kept");
+    assert!(app.session.set_active(0));
+    assert!(painted_text(&mut app, show).contains("Insert Selected"));
+}
+
+/// `ui.conceptVector.generate` is the panel's Generate: it shows the ticked styles of the selection
+/// as the button does, and while they are made off the UI thread it says so.
+#[test]
+fn the_generate_command_makes_the_styles_as_the_button_does() {
+    let mut app = app();
+    app.concept_runs.styles = vec!["outline".into()];
+    assert!(menus::enabled(&app, GENERATE));
+    let v = app.run(GENERATE, json!({})).unwrap();
+    assert_eq!(v["running"], false);
+    assert_eq!(v["job"].as_u64(), app.concept_runs.job());
+    assert!(app.concept_runs.job().is_some());
+    app.concept_runs.off_the_ui_thread = true;
+    assert_eq!(app.run(GENERATE, json!({})).unwrap(), json!({"running": true}));
+    wait(&mut app);
+    app.run("select.none", json!({})).unwrap();
+    assert!(!menus::enabled(&app, GENERATE));
+}
+
+/// A provider whose every run waits until the test lets it go on, once per run.
+struct Gated(std::sync::Mutex<std::sync::mpsc::Receiver<()>>);
+
+impl Provider for Gated {
+    fn id(&self) -> &'static str {
+        "test.gated"
+    }
+    fn name(&self) -> &'static str {
+        "Gated"
+    }
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            image_input: true,
+            vector_output: true,
+            prompt: false,
+            raster_output: false,
+            offline: true,
+            styles: vec![Style { id: "g", label: "G" }],
+        }
+    }
+    fn generate(&self, r: &Request, _: Steps) -> Result<Vec<Variation>, ProviderError> {
+        self.0.lock().map_err(|_| ProviderError::Canceled)?.recv().map_err(|_| ProviderError::Canceled)?;
+        let sq = [Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+        Ok(r.styles.iter().map(|s| Variation { style: s.clone(), ..one_path(&sq, Some([0; 3]), None) }).collect())
+    }
+}
+
+/// Generate after Cancel waits for the canceled run's thread to end before it starts its own, so
+/// one thread makes styles at a time, and its results are the ones shown.
+#[test]
+fn generate_after_cancel_waits_for_the_canceled_thread() {
+    let mut app = app();
+    let (go, gate) = std::sync::mpsc::channel();
+    app.session.concept_providers_mut().register(Arc::new(Gated(std::sync::Mutex::new(gate)))).unwrap();
+    app.concept_runs.provider = "test.gated";
+    app.concept_runs.styles = vec!["g".into()];
+    app.concept_runs.off_the_ui_thread = true;
+    generate(&mut app).unwrap();
+    cancel(&mut app);
+    generate(&mut app).unwrap();
+    let queued = |app: &VectorcraftApp| matches!(app.concept_runs.running.as_ref().map(|r| &r.work), Some(Work::Queued(_)));
+    assert!(queued(&app), "the new run waits");
+    poll(&mut app);
+    assert!(queued(&app), "while the canceled thread is still going");
+    assert!(app.concept_runs.busy());
+    // The canceled run, then the new one, may go on.
+    go.send(()).unwrap();
+    go.send(()).unwrap();
+    while queued(&app) {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    wait(&mut app);
+    let job = app.concept_runs.job().expect("the new run's results are shown");
+    assert!(app.session.concept_variations(job).is_some());
+}
+
+/// A preview that leaves part of its variation out says so under it; one that draws all of it
+/// does not.
+#[test]
+fn a_preview_that_leaves_part_out_says_so() {
+    let square = [Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+    assert!(!preview(&one_path(&square, Some([0; 3]), None), "s".into(), (100, 100)).cut);
+    let many: Vec<Point> = (0..PREVIEW_POINTS + 10).map(|i| Point::new((i % 100) as f64, (i / 1000) as f64)).collect();
+    assert!(preview(&one_path(&many, Some([0; 3]), None), "s".into(), (100, 100)).cut, "one long path");
+    let mut two = one_path(&square, Some([0; 3]), None);
+    let full: Vec<Point> = (0..PREVIEW_POINTS - 1).map(|i| Point::new((i % 100) as f64, (i / 1000) as f64)).collect();
+    two.paths.insert(0, one_path(&full, Some([0; 3]), None).paths.remove(0));
+    assert!(preview(&two, "s".into(), (100, 100)).cut, "a path past the limit");
+
+    let mut app = app();
+    let v = app.run("conceptVector.generate", json!({"provider": offline::ID, "styles": ["outline"]})).unwrap();
+    show_job(&mut app, &v);
+    app.concept_runs.shown.as_mut().unwrap().previews[0].cut = true;
+    assert!(painted_text(&mut app, show).contains("The preview leaves out part of this style"));
 }
 
 /// At most eight styles: a ninth tick is refused by the command, and none is refused too.

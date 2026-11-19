@@ -8613,6 +8613,7 @@ breakText	Glyphs	Glify
 	Gray Tones	Odcienie szarości
 	Generate	Generuj
 	Insert Selected	Wstaw zaznaczone
+	The preview leaves out part of this style	Podgląd pomija część tego stylu
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Koncepcja na wektor zatrzymała się: jej wątek zakończył się bez wyników (zgłoś ten błąd)
 @msg	`detail` must be a whole number from 0 to 100	`detail` musi być liczbą całkowitą od 0 do 100
 @msg	`job` must be a job number from conceptVector.generate	`job` musi być numerem zadania z conceptVector.generate
@@ -8621,7 +8622,7 @@ breakText	Glyphs	Glify
 @msg	a provider with the id `{id}` is registered already	Dostawca o identyfikatorze `{id}` jest już zarejestrowany
 @msg	job {job} has no results to insert: it was canceled	Zadanie {job} nie ma wyników do wstawienia: zostało anulowane
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Zadanie {job} jest już nieaktualne: zmienił się jego dokument, obraz lub położenie obrazu; wygeneruj je ponownie
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Wyniki funkcji Koncepcja na wektor nie są zapisywane, więc zarejestrowane wstawienie nie zostanie odtworzone; wygeneruj je ponownie
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Zadania funkcji Koncepcja na wektor nie są zapisywane, więc zarejestrowane wstawienie ani anulowanie nie zostanie odtworzone; wygeneruj je ponownie
 @msg	missing `provider` (see conceptVector.providers)	Brak `provider` (zobacz conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Brak zadania Koncepcja na wektor {job}: nigdy nie powstało albo zostało odrzucone (zobacz conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Brak dostawcy Koncepcja na wektor `{name}` (zobacz conceptVector.providers)
@@ -8637,6 +8638,10 @@ breakText	Glyphs	Glify
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Obraz lub otaczająca go grupa ma efekty, które go przesuwają lub zmieniają jego kształt, więc wyniki nie znalazłyby się obok niego
 @msg	`output` must be "vector"	`output` musi mieć wartość "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nie przyjmuje promptu i tworzy tylko kompozycję wektorową
+@msg	`{pid}` takes no prompt	`{pid}` nie przyjmuje promptu
+@msg	`{pid}` does not take an image	`{pid}` nie przyjmuje obrazu
+@msg	`{pid}` does not make vector art	`{pid}` nie tworzy kompozycji wektorowej
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	Obraz jest na warstwie z własnymi wypełnieniami lub obrysami, które zostałyby zastosowane także do wyników
 @msg	Making the Concept to Vector styles	Tworzenie stylów Koncepcja na wektor
 	Banner Hems and Grommets…	Obszycia i oczka banera…
 	Banner Hems and Grommets	Obszycia i oczka banera

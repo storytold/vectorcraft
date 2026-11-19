@@ -32,8 +32,6 @@ Draft enhancement #5804: Preferences › File Handling can select a raster edito
 
 M4: Explicitly requested editing data keeps a single artboard larger than its 14,400 pt capped PDF page (#6865). Scores and estimates unchanged.
 
-M12 Concept to Vector (#7051): the feature is implemented in part. The built-in provider makes 1 to 5 offline Image Trace styles of one image side by side, and a request to any provider makes up to 8 variations, one per selected style. The ticked ones are inserted beside the image as one undo step, and other providers are plugged in by id. Prompt-led generation and raster output are pending. Scores and estimates unchanged.
-
 Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.
 
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.

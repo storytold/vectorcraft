@@ -8562,6 +8562,7 @@ breakText	Glyphs	Glif
 	Gray Tones	Nada abu-abu
 	Generate	Buat
 	Insert Selected	Sisipkan yang dipilih
+	The preview leaves out part of this style	Pratinjau tidak menampilkan sebagian gaya ini
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Konsep ke vektor berhenti: thread-nya berakhir tanpa hasil (harap laporkan bug ini)
 @msg	`detail` must be a whole number from 0 to 100	`detail` harus berupa bilangan bulat dari 0 sampai 100
 @msg	`job` must be a job number from conceptVector.generate	`job` harus berupa nomor tugas dari conceptVector.generate
@@ -8570,7 +8571,7 @@ breakText	Glyphs	Glif
 @msg	a provider with the id `{id}` is registered already	penyedia dengan id `{id}` sudah terdaftar
 @msg	job {job} has no results to insert: it was canceled	tugas {job} tidak memiliki hasil untuk disisipkan: tugas itu dibatalkan
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	tugas {job} tidak berlaku lagi: dokumen, gambar, atau penempatan gambarnya berubah, jadi buat lagi
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Hasil konsep ke vektor tidak disimpan, jadi sisipan yang direkam tidak diputar lagi: buat lagi
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Tugas konsep ke vektor tidak disimpan, jadi sisipan atau pembatalan yang direkam tidak diputar lagi: buat lagi
 @msg	missing `provider` (see conceptVector.providers)	`provider` tidak ada (lihat conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	tidak ada tugas konsep ke vektor {job}: tugas itu tidak pernah dibuat atau sudah dihapus (lihat conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	tidak ada penyedia konsep ke vektor `{name}` (lihat conceptVector.providers)
@@ -8586,6 +8587,10 @@ breakText	Glyphs	Glif
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	gambar atau grup di sekitarnya memiliki efek yang memindahkan atau mengubah bentuknya, sehingga hasil tidak akan berada di sampingnya
 @msg	`output` must be "vector"	`output` harus "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tidak menerima prompt dan hanya membuat karya vektor
+@msg	`{pid}` takes no prompt	`{pid}` tidak menerima prompt
+@msg	`{pid}` does not take an image	`{pid}` tidak menerima gambar
+@msg	`{pid}` does not make vector art	`{pid}` tidak membuat karya vektor
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	gambar berada di lapisan yang memiliki isian atau stroke sendiri, yang juga akan diterapkan pada hasil
 @msg	Making the Concept to Vector styles	Membuat gaya konsep ke vektor
 	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
 	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk

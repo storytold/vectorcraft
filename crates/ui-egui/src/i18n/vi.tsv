@@ -8458,6 +8458,7 @@ breakText	Glyphs	Glyph
 	Gray Tones	Tông xám
 	Generate	Tạo
 	Insert Selected	Chèn mục đã chọn
+	The preview leaves out part of this style	Bản xem trước bỏ qua một phần của kiểu này
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Ý tưởng thành vector đã dừng: luồng của nó kết thúc mà không có kết quả (vui lòng báo cáo lỗi này)
 @msg	`detail` must be a whole number from 0 to 100	`detail` phải là số nguyên từ 0 đến 100
 @msg	`job` must be a job number from conceptVector.generate	`job` phải là số tác vụ từ conceptVector.generate
@@ -8466,7 +8467,7 @@ breakText	Glyphs	Glyph
 @msg	a provider with the id `{id}` is registered already	Đã đăng ký một nhà cung cấp có ID `{id}`
 @msg	job {job} has no results to insert: it was canceled	Tác vụ {job} không có kết quả để chèn: tác vụ đã bị hủy
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Tác vụ {job} không còn hiệu lực: tài liệu, ảnh hoặc vị trí ảnh của nó đã thay đổi, hãy tạo lại
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Kết quả Ý tưởng thành vector không được lưu, nên thao tác chèn đã ghi sẽ không phát lại, hãy tạo lại
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Tác vụ Ý tưởng thành vector không được lưu, nên thao tác chèn hoặc hủy đã ghi sẽ không phát lại, hãy tạo lại
 @msg	missing `provider` (see conceptVector.providers)	Thiếu `provider` (xem conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Không có tác vụ Ý tưởng thành vector {job}: tác vụ chưa từng được tạo hoặc đã bị loại bỏ (xem conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Không có nhà cung cấp Ý tưởng thành vector `{name}` (xem conceptVector.providers)
@@ -8482,6 +8483,10 @@ breakText	Glyphs	Glyph
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Ảnh hoặc một nhóm chứa ảnh có hiệu ứng di chuyển hoặc biến dạng ảnh, nên kết quả sẽ không nằm cạnh ảnh
 @msg	`output` must be "vector"	`output` phải là "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` không nhận lời nhắc và chỉ tạo hình vector
+@msg	`{pid}` takes no prompt	`{pid}` không nhận lời nhắc
+@msg	`{pid}` does not take an image	`{pid}` không nhận ảnh
+@msg	`{pid}` does not make vector art	`{pid}` không tạo hình vector
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	Ảnh nằm trên một lớp có tô hoặc nét riêng, chúng cũng sẽ áp dụng cho kết quả
 @msg	Making the Concept to Vector styles	Đang tạo kiểu Ý tưởng thành vector
 	Banner Hems and Grommets…	Viền gấp và khoen băng rôn…
 	Banner Hems and Grommets	Viền gấp và khoen băng rôn

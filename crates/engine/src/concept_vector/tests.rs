@@ -79,6 +79,8 @@ struct Fake {
     styles: usize,
     prompt: bool,
     raster: bool,
+    image: bool,
+    vector: bool,
     answer: fn(&Request, Steps) -> Result<Vec<Variation>, ProviderError>,
 }
 
@@ -93,7 +95,7 @@ impl Provider for Fake {
     }
     fn capabilities(&self) -> Capabilities {
         let styles = FAKE_STYLES.iter().take(self.styles).map(|id| Style { id, label: id }).collect();
-        Capabilities { image_input: true, vector_output: true, prompt: self.prompt, raster_output: self.raster, offline: true, styles }
+        Capabilities { image_input: self.image, vector_output: self.vector, prompt: self.prompt, raster_output: self.raster, offline: true, styles }
     }
     fn generate(&self, request: &Request, steps: Steps) -> Result<Vec<Variation>, ProviderError> {
         (self.answer)(request, steps)
@@ -119,7 +121,7 @@ fn with_fake(s: &mut Session, fake: Fake) {
 }
 
 fn fake(answer: fn(&Request, Steps) -> Result<Vec<Variation>, ProviderError>) -> Fake {
-    Fake { id: "test.fake", styles: 10, prompt: false, raster: false, answer }
+    Fake { id: "test.fake", styles: 10, prompt: false, raster: false, image: true, vector: true, answer }
 }
 
 #[test]
@@ -232,6 +234,15 @@ fn results_are_checked_whatever_provider_made_them() {
     assert_eq!(check_result(&r, &unpainted), Err(ProviderError::InvalidResult));
     let empty = vec![ok[0].clone(), v("b", PathData::default(), Some([0, 0, 0]), None)];
     assert_eq!(check_result(&r, &empty), Err(ProviderError::InvalidResult));
+    // Every subpath with an anchor, each subpath counted as a path.
+    let mut hollow = sq(0.0);
+    hollow.subpaths.push(SubPath::polyline(&[], false));
+    let hollow = vec![ok[0].clone(), v("b", hollow, Some([0, 0, 0]), None)];
+    assert_eq!(check_result(&r, &hollow), Err(ProviderError::InvalidResult));
+    let mut split = sq(0.0);
+    split.subpaths.extend(std::iter::repeat_n(split.subpaths[0].clone(), MAX_PATHS));
+    let split = vec![ok[0].clone(), v("b", split, Some([0, 0, 0]), None)];
+    assert_eq!(check_result(&r, &split), Err(ProviderError::InvalidResult));
     // Warnings bounded.
     let mut chatty = ok.clone();
     chatty[1].warnings = vec!["x".into(); MAX_WARNINGS + 1];
@@ -282,7 +293,7 @@ fn a_prompt_is_refused_by_a_provider_without_prompts_and_raster_output_by_every_
         p
     };
     let e = generate(&mut s, p(json!({"prompt": "a dragon"}))).unwrap_err().to_string();
-    assert!(e.contains("takes no prompt and makes vector art only"), "{e}");
+    assert!(e.contains("takes no prompt"), "{e}");
     assert!(generate(&mut s, p(json!({"prompt": "  "}))).is_ok());
     assert!(generate(&mut s, p(json!({"output": "vector"}))).is_ok());
     for output in ["svg", "raster"] {
@@ -306,6 +317,28 @@ fn a_prompt_is_refused_by_a_provider_without_prompts_and_raster_output_by_every_
     }
     with_fake(&mut s, Fake { prompt: true, ..fake(echo) });
     assert!(generate(&mut s, json!({"provider": "test.fake", "styles": ["s0"], "prompt": " a dragon "})).is_ok());
+}
+
+/// A provider that cannot run a request is refused with the capability it lacks: an image as
+/// input, vector art as output, or a prompt.
+#[test]
+fn a_provider_is_refused_with_the_capability_it_lacks() {
+    let refused = |fake: Fake, prompt: Option<&str>| {
+        let (mut s, _) = doc_with(&art());
+        let id = fake.id;
+        with_fake(&mut s, fake);
+        let mut p = json!({"provider": id, "styles": ["s0"]});
+        if let Some(t) = prompt {
+            p["prompt"] = json!(t);
+        }
+        generate(&mut s, p).unwrap_err().to_string()
+    };
+    let e = refused(Fake { image: false, prompt: true, ..fake(squares) }, None);
+    assert!(e.contains("`test.fake` does not take an image"), "{e}");
+    let e = refused(Fake { vector: false, prompt: true, raster: true, ..fake(squares) }, Some("a dragon"));
+    assert!(e.contains("`test.fake` does not make vector art"), "{e}");
+    let e = refused(Fake { raster: true, ..fake(squares) }, Some("a dragon"));
+    assert!(e.ends_with("`test.fake` takes no prompt"), "{e}");
 }
 
 #[test]
@@ -605,11 +638,67 @@ fn a_recorded_insert_does_not_play_again() {
     let (before, depth) = (s.doc().unwrap().doc.clone(), undo_len(&s));
     let insert = json!({"job": job, "variations": ["outline"]});
     let e = s.replay("conceptVector.insert", &insert).unwrap_err().to_string();
-    assert!(e.contains("a recorded insert does not play again"), "{e}");
+    assert!(e.contains("a recorded insert or cancel does not play again"), "{e}");
     assert!(s.doc().unwrap().doc == before && undo_len(&s) == depth);
     assert!(!s.replaying());
     s.execute("conceptVector.insert", &insert).unwrap();
     assert_eq!(undo_len(&s), depth + 1);
+}
+
+/// A recorded cancel, alone or as a step of a recorded batch, does not play again either: its job
+/// number may name another job of this session, which stays as it is.
+#[test]
+fn a_recorded_cancel_does_not_play_again() {
+    let (mut s, _) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"]})).unwrap()["job"].as_u64().unwrap();
+    let cancel = json!({"job": job});
+    let e = s.replay("conceptVector.cancel", &cancel).unwrap_err().to_string();
+    assert!(e.contains("a recorded insert or cancel does not play again"), "{e}");
+    let batch = json!({"commands": [{"command": "conceptVector.cancel", "params": cancel}]});
+    assert!(s.replay("command.batch", &batch).is_err());
+    assert!(s.concept_variations(job).is_some(), "the job is not canceled");
+    s.execute("conceptVector.cancel", &cancel).unwrap();
+    assert!(s.concept_variations(job).is_none());
+}
+
+/// When a script ends, the jobs it worked on take in what the app did meanwhile: a job the app
+/// canceled stays canceled, and one the app made is kept.
+#[test]
+fn a_script_keeps_what_the_app_did_to_the_jobs_meanwhile() {
+    let (mut s, img) = doc_with(&art());
+    let p = json!({"provider": ID, "styles": ["outline"], "id": img.0});
+    let job = generate(&mut s, p.clone()).unwrap()["job"].as_u64().unwrap();
+    // The script's copy, from before the app canceled the job and made another.
+    let working = s.concept_jobs_snapshot();
+    let from = s.next_concept_job();
+    s.execute("conceptVector.cancel", &json!({"job": job})).unwrap();
+    let made = generate(&mut s, p).unwrap()["job"].as_u64().unwrap();
+    let app = s.concept_jobs_snapshot();
+    s.restore_concept_jobs(working);
+    s.merge_concept_jobs(app, from);
+    assert!(s.concept_variations(job).is_none(), "the app's cancel stands");
+    assert!(s.concept_variations(made).is_some(), "the app's job is kept");
+}
+
+/// A script that fails leaves the jobs as they were: those it made are dropped, and a job it
+/// canceled, or whose document it closed, is kept. A script that ends without an error keeps
+/// what it did.
+#[test]
+fn a_failed_script_leaves_the_jobs_as_they_were() {
+    let (mut s, img) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let generate_step = format!("vc.run('conceptVector.generate', {{provider: '{ID}', styles: ['outline'], id: {}}});", img.0);
+    let run = |s: &mut Session, body: &str| s.execute("script.run", &json!({"source": body}));
+    assert!(run(&mut s, &format!("{generate_step} throw new Error('stop');")).is_err());
+    assert!(s.concept_variations(job + 1).is_none(), "the job the script made is dropped");
+    assert!(run(&mut s, &format!("vc.run('conceptVector.cancel', {{job: {job}}}); throw new Error('stop');")).is_err());
+    assert!(s.concept_variations(job).is_some(), "the cancel is undone");
+    assert!(run(&mut s, "vc.run('file.close', {index: 0}); throw new Error('stop');").is_err());
+    assert_eq!(s.documents().len(), 1);
+    assert!(s.concept_variations(job).is_some(), "the closed document's job is back with it");
+    run(&mut s, &generate_step).unwrap();
+    assert!(s.concept_variations(job).is_some());
+    assert_eq!(s.execute("conceptVector.results", &json!({"job": job + 2})).unwrap()["state"], "done", "a script that ends keeps its job");
 }
 
 /// The bounds of object `id` in the document.
@@ -877,6 +966,71 @@ fn insert_keeps_out_of_a_group_or_layer_with_effects_of_its_own() {
     let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
     assert!(e.contains("effects of its own"), "{e}");
     assert!(s.doc().unwrap().doc == before);
+}
+
+/// On a layer with a fill or a stroke of its own, which would paint over the results, insert is
+/// refused and changes nothing.
+#[test]
+fn insert_refuses_an_image_on_a_layer_with_fills_or_strokes_of_its_own() {
+    for item in ["appearance.addFill", "appearance.addStroke"] {
+        let (mut s, img) = doc_with(&art());
+        let layer = s.doc().unwrap().doc.parent_of(img).unwrap();
+        s.execute(item, &json!({"ids": [layer.0]})).unwrap();
+        let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+        let (before, depth) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+        let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
+        assert!(e.contains("a layer with fills or strokes of its own"), "{item}: {e}");
+        assert!(s.doc().unwrap().doc == before && undo_len(&s) == depth, "{item}");
+    }
+}
+
+/// For an image attached to a path in an Objects on Path group, the results go beside the group:
+/// the group's members, and where they sit on the path, stay as they are.
+#[test]
+fn insert_puts_the_results_outside_an_objects_on_path_group() {
+    let (mut s, img) = doc_with(&art());
+    let path = s.execute("shape.line", &json!({"x1": 100, "y1": 600, "x2": 900, "y2": 600})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.objectsOnPath.attach", &json!({"path": path, "ids": [img.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let group = d.parent_of(img).unwrap();
+    assert!(vectorcraft_doc::objects_on_path::is_objects_on_path(d.node(group).unwrap()));
+    let (layer, before) = (d.parent_of(group).unwrap(), d.node(group).unwrap().clone());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(NodeId(r["ids"][0].as_u64().unwrap())), Some(layer), "beside the group, not in it");
+    assert!(*d.node(group).unwrap() == before, "the group and its members are unchanged");
+}
+
+/// For an image in a Live Paint group with the default Gap Options, the results go beside the
+/// group, whose members stay as they are.
+#[test]
+fn insert_puts_the_results_outside_a_live_paint_group() {
+    use vectorcraft_tools::builder::{LIVE_PAINT_PREFIX, SOURCES_NAME, is_live_paint};
+    let (mut s, img) = doc_with(&art());
+    let other = s.execute("shape.rectangle", &json!({"x": 120, "y": 120, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, other]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let group = s.doc().unwrap().doc.parent_of(img).unwrap();
+    s.edit("live paint", |d, _| {
+        let mut sources = Node::group(d.alloc_id(), vec![]);
+        sources.name = Some(SOURCES_NAME.into());
+        sources.visible = false;
+        d.insert(Some(group), 2, sources)?;
+        if let Some(g) = d.node_mut(group) {
+            g.name = Some(LIVE_PAINT_PREFIX.into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(is_live_paint(d.node(group).unwrap()) && d.node(group).unwrap().extras().live_paint_gaps.is_none());
+    let (layer, before) = (d.parent_of(group).unwrap(), d.node(group).unwrap().clone());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(NodeId(r["ids"][0].as_u64().unwrap())), Some(layer), "beside the group, not in it");
+    assert!(*d.node(group).unwrap() == before, "the group is unchanged");
 }
 
 /// An effect that moves or reshapes the image, on a group around it or on the image itself, shows

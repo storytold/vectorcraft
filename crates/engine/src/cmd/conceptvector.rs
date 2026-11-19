@@ -81,6 +81,12 @@ impl Session {
         }
     }
 
+    /// The document ([`crate::DocState::uid`]) job `job` was made in; `None` for a job this session
+    /// does not keep.
+    pub fn concept_job_doc(&self, job: u64) -> Option<u64> {
+        self.concept.jobs.iter().find(|j| j.id == job).map(|j| j.doc)
+    }
+
     /// The jobs, for a batch to put back when a step fails. Job numbers are not reused.
     pub(crate) fn concept_jobs_snapshot(&self) -> VecDeque<Job> {
         self.concept.jobs.clone()
@@ -89,6 +95,37 @@ impl Session {
     /// Puts back the jobs that [`Self::concept_jobs_snapshot`] took.
     pub(crate) fn restore_concept_jobs(&mut self, jobs: VecDeque<Job>) {
         self.concept.jobs = jobs;
+    }
+
+    /// Exchanges the jobs with `jobs`: a script works on a copy of them, which becomes the
+    /// session's only when the script ends without an error.
+    pub(crate) fn swap_concept_jobs(&mut self, jobs: &mut VecDeque<Job>) {
+        std::mem::swap(&mut self.concept.jobs, jobs);
+    }
+
+    /// The number the next job gets.
+    pub(crate) fn next_concept_job(&self) -> u64 {
+        self.concept.next
+    }
+
+    /// Takes in what the app did to the jobs while a script ran, `others` being the jobs as the app
+    /// left them: a job canceled there is canceled here too, and the jobs numbered `from` or higher
+    /// that this session does not keep (those the app made) are added. Then keeps the
+    /// [`KEEP_JOBS`] newest of open documents.
+    pub(crate) fn merge_concept_jobs(&mut self, others: VecDeque<Job>, from: u64) {
+        for j in others {
+            match self.concept.jobs.iter_mut().find(|k| k.id == j.id) {
+                Some(k) if matches!(j.outcome, Outcome::Canceled) => k.outcome = Outcome::Canceled,
+                Some(_) => {}
+                None if j.id >= from => self.concept.jobs.push_back(j),
+                None => {}
+            }
+        }
+        self.concept.jobs.make_contiguous().sort_by_key(|j| j.id);
+        self.prune_concept_jobs();
+        while self.concept.jobs.len() > KEEP_JOBS {
+            self.concept.jobs.pop_front();
+        }
     }
 
     /// Drops the jobs of document `doc` (its `uid`), when it closes.
@@ -117,6 +154,20 @@ fn shown_image(n: &Node) -> Option<&ImageObject> {
         },
         _ => None,
     }
+}
+
+/// Is `n` a group whose members are made or placed from data it holds (a graph, an Objects on
+/// Path, Shaper, dimension, flare or Live Paint group, a compound shape), so that a member added
+/// to it would be placed again, replaced or combined with the others?
+fn generated(n: &Node) -> bool {
+    let e = n.extras();
+    e.graph.is_some()
+        || e.objects_on_path.is_some()
+        || e.shaper.is_some()
+        || e.dimension.is_some()
+        || e.flare.is_some()
+        || e.compound_shape
+        || vectorcraft_tools::builder::is_live_paint(n)
 }
 
 const NO_SOURCE: &str = "select one image or an unexpanded Image Trace object";
@@ -166,14 +217,13 @@ impl ConceptRun {
             s.concept.registry.get(name).ok_or_else(|| bad(C, format!("no Concept to Vector provider `{name}` (see conceptVector.providers)")))?;
         let (caps, pid, provider) = (&found.capabilities, found.id, Arc::clone(&found.provider));
         let styles_error = || bad(C, format!("`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)"));
+        // The count is checked before any id is copied or scanned for repeats.
         let styles: Vec<String> = match p.get("styles") {
-            Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(styles_error)?,
+            Some(Value::Array(a)) if (1..=MAX_STYLES).contains(&a.len()) => {
+                a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(styles_error)?
+            }
             _ => return Err(styles_error()),
         };
-        // Checks the count before the scan for repeats.
-        if styles.is_empty() || styles.len() > MAX_STYLES {
-            return Err(styles_error());
-        }
         let known = |id: &String| caps.styles.iter().any(|st| st.id == id);
         let unique = styles.iter().enumerate().all(|(i, id)| !styles.get(..i).unwrap_or_default().contains(id));
         if !unique || !styles.iter().all(known) {
@@ -185,9 +235,14 @@ impl ConceptRun {
             None | Some("vector") => Output::Vector,
             Some(_) => return Err(bad(C, "`output` must be \"vector\"")),
         };
-        let unsupported = (prompt.is_some() && !caps.prompt) || !caps.vector_output;
-        if unsupported || !caps.image_input {
-            return Err(bad(C, format!("`{pid}` takes no prompt and makes vector art only")));
+        if !caps.image_input {
+            return Err(bad(C, format!("`{pid}` does not take an image")));
+        }
+        if !caps.vector_output {
+            return Err(bad(C, format!("`{pid}` does not make vector art")));
+        }
+        if prompt.is_some() && !caps.prompt {
+            return Err(bad(C, format!("`{pid}` takes no prompt")));
         }
         let detail = match p.get("detail") {
             None => 50,
@@ -412,8 +467,15 @@ fn results(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(job_json(&s.concept.registry, j))
 }
 
+/// The error of an insert or cancel played from recorded steps: a job lives only in this session,
+/// and a job number from another one may name other results.
+const REPLAYED: &str = "Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again";
+
 fn cancel(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "conceptVector.cancel";
+    if s.replaying() {
+        return Err(bad(C, REPLAYED));
+    }
     let job = job_param(C, p)?;
     let at = job_index(s, C, job)?;
     if let Some(j) = s.concept.jobs.get_mut(at) {
@@ -438,27 +500,27 @@ fn appearance_of(p: &cv::VectorPath, unit: f64) -> Appearance {
 
 fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "conceptVector.insert";
-    // A job lives only in this session, and a job number from another one may name other results.
     if s.replaying() {
-        return Err(bad(C, "Concept to Vector results are not saved, so a recorded insert does not play again: generate again"));
+        return Err(bad(C, REPLAYED));
     }
     let job = job_param(C, p)?;
     let at = job_index(s, C, job)?;
     let list_error = || bad(C, format!("`variations` must list different style ids of job {job}"));
-    let chosen: Vec<String> = match p.get("variations") {
-        Some(Value::Array(a)) if !a.is_empty() => a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(list_error)?,
+    let listed = match p.get("variations") {
+        Some(Value::Array(a)) if !a.is_empty() => a,
         _ => return Err(list_error()),
     };
     let stale = || bad(C, format!("job {job} no longer applies: its document, image or image placement changed, so generate again"));
     let (doc, source, image, bytes, picked, label_of) = {
         let j = s.concept.jobs.get(at).ok_or_else(|| no_job(C, job))?;
         let Outcome::Done(all) = &j.outcome else { return Err(bad(C, format!("job {job} has no results to insert: it was canceled"))) };
-        // Checks the count before the scan for repeats.
-        if chosen.len() > all.len() {
+        // The count is checked before the ids are read or scanned for repeats.
+        if listed.len() > all.len() {
             return Err(list_error());
         }
+        let chosen: Vec<&str> = listed.iter().map(Value::as_str).collect::<Option<_>>().ok_or_else(list_error)?;
         let unique = chosen.iter().enumerate().all(|(i, id)| !chosen.get(..i).unwrap_or_default().contains(id));
-        let mut picked: Vec<Variation> = all.iter().filter(|v| chosen.contains(&v.style)).cloned().collect();
+        let mut picked: Vec<Variation> = all.iter().filter(|v| chosen.contains(&v.style.as_str())).cloned().collect();
         if !unique || picked.len() != chosen.len() {
             return Err(list_error());
         }
@@ -480,9 +542,10 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The results go above the outermost group around the image that clips or masks it, so that
     // it hides none of them, and above the outermost envelope, blend, repeat or other live object,
-    // and the outermost group with effects or fills and strokes of its own, so that its content
-    // and the place its effects measure from stay as they are. A layer that clips or masks its
-    // art, or has effects of its own, leaves them nowhere to go. An effect that moves or reshapes
+    // the outermost group whose members it makes or places ([`generated`]), and the outermost
+    // group with effects or fills and strokes of its own, so that its content and the place its
+    // effects measure from stay as they are. A layer that clips or masks its art, or has effects,
+    // fills or strokes of its own, leaves them nowhere to go. An effect that moves or reshapes
     // the image, its own or a group's around it, shows it away from its placement, which the
     // results are placed by.
     let ancestry = st.doc.ancestry(source).ok_or_else(stale)?;
@@ -504,7 +567,11 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         if n.is_layer() && !n.appearance.effects.is_empty() {
             return Err(bad(C, "the image is on a layer with effects of its own, which would apply to the results"));
         }
-        let live = !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. });
+        // A layer's fills and strokes paint over its members, the results included.
+        if n.is_layer() && !n.appearance.items.is_empty() {
+            return Err(bad(C, "the image is on a layer with fills or strokes of its own, which would apply to the results"));
+        }
+        let live = !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) || generated(n);
         if !n.is_layer() && (masked || live || styled || matches!(n.kind, NodeKind::Group { clip: true, .. })) {
             anchor = id;
         }
@@ -560,6 +627,8 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     // paints nothing of its own is measured by its members (an opacity mask only hides them); one
     // that clips, by its members after the clipping path, cut to what it paints.
     let mut obstacles: Vec<Rect> = vec![src];
+    // One lookup of the symbols for the whole walk, so each symbol's art is measured once.
+    let symbols = st.doc.symbol_boxes();
     let mut stack: Vec<(&Arc<Node>, Option<Rect>)> = st.doc.layers.iter().map(|l| (l, None)).collect();
     while let Some((node, within)) = stack.pop() {
         if !node.visible {
@@ -569,7 +638,7 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             Some(w) => Some(b.intersect(w)).filter(|i| i.width() > 0.0 && i.height() > 0.0),
             None => Some(b),
         };
-        let painted = || vectorcraft_render::painted_bounds(&st.doc, node).and_then(cut);
+        let painted = || vectorcraft_render::painted_bounds_with(&symbols, node).and_then(cut);
         if node.id == source {
             obstacles.extend(painted());
             continue;
@@ -584,7 +653,7 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             if clips && let Some(path) = node.children().into_iter().flatten().next() {
                 let paint = path.clip_paint();
                 for part in [paint.fill, paint.stroke].into_iter().flatten() {
-                    if let Some(b) = vectorcraft_render::painted_bounds(&st.doc, &part).and_then(cut) {
+                    if let Some(b) = vectorcraft_render::painted_bounds_with(&symbols, &part).and_then(cut) {
                         obstacles.push(b);
                     }
                 }
@@ -702,7 +771,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Generate Concept to Vector Styles",
             [],
             None,
-            "{id?: image or unexpanded Image Trace object (default: the one selected object), provider: id (conceptVector.providers; no other provider is used in its place), styles: [style id…] (1 to 8 different ids of that provider), detail?: 0-100 (50: how much of the image's detail each style keeps), prompt?: text (an error for a provider without prompts unless empty), output?: \"vector\" (the only output; any other value is an error)} one variation of the image for each style, kept by this session as a job and not put in the document; an object that is locked or hidden, itself or by a layer or group around it, or on a locked artboard, is refused → {job, provider, source: id, state: \"done\", variations: [{style, label, paths, anchors, bounds: [x0,y0,x1,y1] in the image's pixels, warnings: [text…]}]}",
+            "{id?: image or unexpanded Image Trace object (default: the one selected object), provider: id (conceptVector.providers; no other provider is used in its place), styles: [style id…] (1 to 8 different ids of that provider), detail?: 0-100 (50: how much of the image's detail each style keeps), prompt?: text (an error for a provider without prompts unless empty), output?: \"vector\" (the only output; any other value is an error)} one variation of the image for each style, kept by this session as a job and not put in the document; a provider that takes no image, makes no vector art or takes no prompt when one is given is refused with that reason; an object that is locked or hidden, itself or by a layer or group around it, or on a locked artboard, is refused → {job, provider, source: id, state: \"done\", variations: [{style, label, paths, anchors, bounds: [x0,y0,x1,y1] in the image's pixels, warnings: [text…]}]}",
             has_doc,
             generate
         ),
@@ -720,7 +789,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Concept to Vector Job",
             [],
             None,
-            "{job} drop a job's variations, so that it can't be inserted; canceling it again does the same → {job, state: \"canceled\"}",
+            "{job} drop a job's variations, so that it can't be inserted; canceling it again does the same; an error when it plays from recorded steps (an action, a replayed journal or a step of a replayed batch), since jobs are not saved → {job, state: \"canceled\"}",
             has_doc,
             cancel
         ),
@@ -729,7 +798,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask or effects of its own, or it or a group around it has effects that move or reshape it, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object, the outermost group whose members it makes or places (a graph, an Objects on Path, Shaper, dimension, flare or Live Paint group, a compound shape) and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask, or effects, fills or strokes of its own, or it or a group around it has effects that move or reshape it, and when it plays from recorded steps (an action or a replayed journal), since jobs are not saved →{ids: the groups, selected}",
             has_doc,
             insert
         ),

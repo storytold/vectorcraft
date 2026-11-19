@@ -10183,6 +10183,7 @@ theme	Appearance	अपीयरेंस
 	Gray Tones	ग्रे टोन
 	Generate	बनाएँ
 	Insert Selected	चुने हुए डालें
+	The preview leaves out part of this style	प्रीव्यू में इस स्टाइल का कुछ हिस्सा छूट गया है
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	कॉन्सेप्ट से वेक्टर रुक गया: उसका थ्रेड बिना परिणाम के समाप्त हुआ (कृपया इस बग की रिपोर्ट करें)
 @msg	`detail` must be a whole number from 0 to 100	`detail` 0 से 100 तक पूरी संख्या होना चाहिए
 @msg	`job` must be a job number from conceptVector.generate	`job` conceptVector.generate से मिला जॉब नंबर होना चाहिए
@@ -10191,7 +10192,7 @@ theme	Appearance	अपीयरेंस
 @msg	a provider with the id `{id}` is registered already	ID `{id}` वाला प्रदाता पहले से पंजीकृत है
 @msg	job {job} has no results to insert: it was canceled	जॉब {job} में डालने के लिए कोई परिणाम नहीं है: इसे रद्द किया गया था
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	जॉब {job} अब लागू नहीं होता: उसका दस्तावेज़, इमेज या इमेज का स्थान बदल गया, इसलिए फिर से बनाएँ
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	कॉन्सेप्ट से वेक्टर के परिणाम सेव नहीं होते, इसलिए रिकॉर्ड किया गया इंसर्ट फिर से नहीं चलता: फिर से बनाएँ
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	कॉन्सेप्ट से वेक्टर के जॉब सेव नहीं होते, इसलिए रिकॉर्ड किया गया इंसर्ट या रद्द करना फिर से नहीं चलता: फिर से बनाएँ
 @msg	missing `provider` (see conceptVector.providers)	`provider` नहीं दिया गया (conceptVector.providers देखें)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	कॉन्सेप्ट से वेक्टर जॉब {job} नहीं है: यह कभी नहीं बना या हटा दिया गया (conceptVector.results देखें)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	कॉन्सेप्ट से वेक्टर प्रदाता `{name}` नहीं है (conceptVector.providers देखें)
@@ -10207,6 +10208,10 @@ theme	Appearance	अपीयरेंस
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	इमेज या उसके आसपास के समूह में ऐसे इफ़ेक्ट हैं जो उसे खिसकाते या उसका आकार बदलते हैं, इसलिए परिणाम उसके बगल में नहीं आएँगे
 @msg	`output` must be "vector"	`output` "vector" होना चाहिए
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` प्रॉम्प्ट नहीं लेता और केवल वेक्टर आर्ट बनाता है
+@msg	`{pid}` takes no prompt	`{pid}` प्रॉम्प्ट नहीं लेता
+@msg	`{pid}` does not take an image	`{pid}` इमेज नहीं लेता
+@msg	`{pid}` does not make vector art	`{pid}` वेक्टर आर्ट नहीं बनाता
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	इमेज अपने फ़िल या स्ट्रोक वाली लेयर पर है, जो परिणामों पर भी लागू हो जाएँगे
 @msg	Making the Concept to Vector styles	कॉन्सेप्ट से वेक्टर स्टाइल बनाई जा रही हैं
 	Banner Hems and Grommets…	बैनर हेम और आईलेट…
 	Banner Hems and Grommets	बैनर हेम और आईलेट

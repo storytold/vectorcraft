@@ -10645,6 +10645,7 @@ breakText	Glyphs	Glifler
 	Gray Tones	Gri Tonlar
 	Generate	Oluştur
 	Insert Selected	Seçilenleri Ekle
+	The preview leaves out part of this style	Önizleme bu stilin bir kısmını göstermiyor
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Konseptten Vektöre durdu: iş parçacığı sonuç vermeden sona erdi (lütfen bu hatayı bildirin)
 @msg	`detail` must be a whole number from 0 to 100	`detail` 0 ile 100 arasında bir tam sayı olmalıdır
 @msg	`job` must be a job number from conceptVector.generate	`job` conceptVector.generate tarafından verilen bir iş numarası olmalıdır
@@ -10653,7 +10654,7 @@ breakText	Glyphs	Glifler
 @msg	a provider with the id `{id}` is registered already	`{id}` kimlikli bir sağlayıcı zaten kayıtlı
 @msg	job {job} has no results to insert: it was canceled	{job} işinin eklenecek sonucu yok: iptal edildi
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} işi artık geçerli değil: belgesi, görüntüsü veya görüntünün yerleşimi değişti; yeniden oluşturun
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Konseptten Vektöre sonuçları kaydedilmez, bu yüzden kaydedilmiş bir ekleme yeniden oynatılmaz; yeniden oluşturun
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Konseptten Vektöre işleri kaydedilmez, bu yüzden kaydedilmiş bir ekleme veya iptal yeniden oynatılmaz; yeniden oluşturun
 @msg	missing `provider` (see conceptVector.providers)	`provider` eksik (bkz. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	{job} numaralı Konseptten Vektöre işi yok: hiç yapılmadı veya atıldı (bkz. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	`{name}` adlı Konseptten Vektöre sağlayıcısı yok (bkz. conceptVector.providers)
@@ -10669,6 +10670,10 @@ breakText	Glyphs	Glifler
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Görüntünün veya onu içeren bir grubun onu taşıyan ya da yeniden şekillendiren efektleri var, bu yüzden sonuçlar görüntünün yanına yerleşmez
 @msg	`output` must be "vector"	`output` "vector" olmalıdır
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` istem almaz ve yalnızca vektör çizim yapar
+@msg	`{pid}` takes no prompt	`{pid}` istem almaz
+@msg	`{pid}` does not take an image	`{pid}` görüntü almaz
+@msg	`{pid}` does not make vector art	`{pid}` vektör çizim yapmaz
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	Görüntü, sonuçlara da uygulanacak kendi dolgu veya konturları olan bir katmanda
 @msg	Making the Concept to Vector styles	Konseptten Vektöre stilleri yapılıyor
 	Banner Hems and Grommets…	Afiş Kenar Kıvırma ve Kuşgözleri…
 	Banner Hems and Grommets	Afiş Kenar Kıvırma ve Kuşgözleri

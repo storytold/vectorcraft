@@ -4673,30 +4673,35 @@ already walks Image Trace. Short agent entry points:
 - Concept to Vector: `conceptVector.providers` lists the providers that `conceptVector.generate` can call by id, with
   their styles. The built-in `offline.traceStyles` makes the styles `outline`, `inkLines`, `flatColor`, `detailedColor`
   and `grayTones` with Image Trace on this computer; it takes no prompt and makes vector art only. A provider is used
-  only when it is named: an unknown one, or a non-empty `prompt` that it does not support, is an error, and no other
-  provider is used in its place. Results are vector art, so `output` other than `"vector"` is an error for every
-  provider.
+  only when it is named: an unknown one is an error, and so is one that takes no image, makes no vector art, or does
+  not support a non-empty `prompt`, each with that reason; no other provider is used in its place. Results are vector
+  art, so `output` other than `"vector"` is an error for every provider.
   `conceptVector.generate {id?, provider, styles: [style id…], detail?: 0-100, prompt?, output?: "vector"}` makes one
   variation of the image (or unexpanded Image Trace object) for each of 1 to 8 different styles and keeps them as a job of
   the session; it does not change the document and is not journaled. A source that is locked or hidden, itself or by a
   layer or group around it, or that is on a locked artboard, is refused. Results are
   checked whatever provider made them: one variation per style in the order asked, every point finite and near the
-  image, at most 250,000 paths and 1,000,000 anchor points in all. The reply lists each variation's `style`, `label`,
+  image, every subpath with an anchor point, at most 250,000 paths (each subpath of a compound path counted as one)
+  and 1,000,000 anchor points in all. The reply lists each variation's `style`, `label`,
   `paths`, `anchors`, `bounds` in the image's pixels and `warnings` (for example that a large image was traced scaled
   down to 16 megapixels). `conceptVector.results {job}` returns the job again, and `conceptVector.cancel {job}` drops
-  its variations. The session keeps the 4 newest jobs until their document closes.
+  its variations. The session keeps the 4 newest jobs until their document closes. A script that ends with an error,
+  like a batch, leaves the jobs as they were: the jobs it made are dropped, and a job it canceled, or whose document it
+  closed, is kept.
   `conceptVector.insert {job, variations: [style id…]}` puts a group of each chosen variation, named after its style and
   in the provider's order, to the right of the image, each the image's size with 24 pt between them, moved further
   right past other visible art, also where a variation reaches past its image-sized box (the next one then starts 24
   pt past what it paints); it is one undo step and selects the groups. A variation with no paths is left out, and when
   every chosen one has none, nothing changes (no undo step, `ids` empty). The groups go above the outermost clip group or
   opacity-masked group around the image, so that it does not hide them, and above the outermost envelope, blend,
-  repeat or other live object, and the outermost group with effects or fills and strokes of its own, around it, whose
-  content stays as it is. It is an error when the job was canceled or dropped, when its document is not the active
-  one, when the object, its pixels or its placement changed, when the object is now locked or hidden, or when it is
-  on a layer with a clipping mask, an opacity mask or effects of its own, or when the object or a group around it has
-  effects that move or reshape it (Transform, a warp), which show the image away from its placement. Jobs are not
-  saved, so an insert played from recorded steps (an action, or a journal played again) is an error too. Example, where insert takes the `job`
+  repeat or other live object, the outermost group whose members it makes or places (a graph, an Objects on Path,
+  Shaper, dimension, flare or Live Paint group, a compound shape), and the outermost group with effects or fills and strokes of its
+  own, around it, whose content stays as it is. It is an error when the job was canceled or dropped, when its document
+  is not the active one, when the object, its pixels or its placement changed, when the object is now locked or hidden,
+  or when it is on a layer with a clipping mask, an opacity mask, or effects, fills or strokes of its own, or when the
+  object or a group around it has effects that move or reshape it (Transform, a warp), which show the image away from
+  its placement. Jobs are not saved, so an insert or a cancel played from recorded steps (an action, a journal played
+  again, or a step of a batch played again) is an error too. Example, where insert takes the `job`
   that generate returned (job numbers count up through the session, so 1 only for its first job):
 
   ```json
@@ -4705,7 +4710,10 @@ already walks Image Trace. Short agent entry points:
   ```
 
   In the app, `ui.conceptVector` opens the Concept to Vector panel, which runs the same commands; Generate runs off the
-  UI thread with a progress bar and Cancel, and `ui.conceptVector.cancel` does what Cancel does.
+  UI thread with a progress bar and Cancel. `ui.conceptVector.generate` does what Generate does and returns
+  `{running: true}` while the styles are made, else `{running: false, job}`; `ui.conceptVector.cancel` does what Cancel
+  does. A Generate after a Cancel starts once the canceled run's thread has ended. The panel shows a job's results only
+  while the document it was made in is the active one, and a preview that leaves part of its variation out says so.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group?|id?}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of

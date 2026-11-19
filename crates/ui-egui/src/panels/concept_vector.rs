@@ -5,7 +5,8 @@
 //! The panel calls the built-in provider ([`offline::ID`]), whose styles are made with Image Trace
 //! on this computer: its prompt field is disabled and it makes vector art only. Generate prepares
 //! the request at once (`conceptVector.generate`'s checks) and runs the provider on a thread of its
-//! own ([`ConceptRuns`]); a new Generate cancels the one running. Results from another provider
+//! own ([`ConceptRuns`]); a new Generate cancels the one running and starts once that run's
+//! thread has ended, so one thread makes styles at a time. Results from another provider
 //! are named as that provider names its styles. The results stay in this session
 //! until Insert Selected puts the ticked ones in the document as one undo step
 //! (`conceptVector.insert`). The web build has no thread for it, so it makes one part a frame
@@ -31,6 +32,9 @@ pub const ID: &str = "conceptVector";
 
 /// The UI command that opens the panel for the selected image.
 pub const OPEN: &str = "ui.conceptVector";
+
+/// The UI command of the panel's Generate: it makes the ticked styles of the selection.
+pub const GENERATE: &str = "ui.conceptVector.generate";
 
 /// The UI command of the panel's Cancel: it stops the styles being made.
 pub const CANCEL: &str = "ui.conceptVector.cancel";
@@ -59,6 +63,9 @@ enum Work {
     Thread(Receiver<Done>),
     /// On the UI thread, one part a frame ([`ConceptRun::run_part`]), where no thread can run it.
     Frames(Box<ConceptRun>, PartRun),
+    /// Waiting for the thread of a canceled run to end before it starts on a thread of its own, so
+    /// that one thread makes styles at a time.
+    Queued(Box<ConceptRun>),
 }
 
 /// A Generate running.
@@ -79,11 +86,16 @@ struct Preview {
     /// `image`, once drawn.
     texture: Option<egui::TextureHandle>,
     warnings: Vec<String>,
+    /// Part of the variation is left out of `image` ([`PREVIEW_POINTS`]).
+    cut: bool,
 }
 
 /// The job the panel shows.
 struct Shown {
     job: u64,
+    /// The document the job was made in ([`vectorcraft_engine::DocState::uid`]): the results show
+    /// only while it is the active one.
+    doc: u64,
     previews: Vec<Preview>,
     /// The styles ticked for Insert Selected.
     picked: Vec<String>,
@@ -94,7 +106,11 @@ pub struct ConceptRuns {
     styles: Vec<String>,
     detail: u8,
     running: Option<Running>,
+    /// The thread of a canceled run, until it ends.
+    stopping: Option<Receiver<Done>>,
     shown: Option<Shown>,
+    /// The provider Generate calls: the built-in one, or another in unit tests.
+    pub(crate) provider: &'static str,
     /// Set by unit tests whose app makes styles off the UI thread.
     pub(crate) off_the_ui_thread: bool,
     /// Set by unit tests whose app makes styles one a frame, as the web build does.
@@ -107,7 +123,9 @@ impl Default for ConceptRuns {
             styles: offline::STYLES.iter().map(|s| s.id.to_string()).collect(),
             detail: 50,
             running: None,
+            stopping: None,
             shown: None,
+            provider: offline::ID,
             off_the_ui_thread: false,
             by_frames: false,
         }
@@ -128,7 +146,7 @@ impl ConceptRuns {
 
 /// The params of `conceptVector.generate` for the panel's settings.
 fn params(app: &VectorcraftApp) -> Value {
-    json!({ "provider": offline::ID, "styles": app.concept_runs.styles, "detail": app.concept_runs.detail })
+    json!({ "provider": app.concept_runs.provider, "styles": app.concept_runs.styles, "detail": app.concept_runs.detail })
 }
 
 /// Whether the panel can make styles of the selection; else why not.
@@ -162,25 +180,10 @@ pub fn generate(app: &mut VectorcraftApp) -> Result<(), String> {
     let steps = Arc::new([AtomicU64::new(0), AtomicU64::new(run.style_count() as u64)]);
     let work = if frames {
         Work::Frames(Box::new(run), PartRun::default())
+    } else if worker_ended(&mut app.concept_runs) {
+        spawn(run, &token, &steps)?
     } else {
-        let (tx, done) = channel();
-        let stop = token.clone();
-        let counts = Arc::clone(&steps);
-        std::thread::Builder::new()
-            .name("vectorcraft-concept".into())
-            .spawn(move || {
-                let [done_now, total_now] = &*counts;
-                let report = |done: u64, total: u64| {
-                    done_now.store(done, Ordering::Relaxed);
-                    total_now.store(total, Ordering::Relaxed);
-                    !stop.is_cancelled()
-                };
-                let made = run.run(&report);
-                // The app may have quit meanwhile: nothing to hand it to.
-                let _ = tx.send((run, made));
-            })
-            .map_err(|e| e.to_string())?;
-        Work::Thread(done)
+        Work::Queued(Box::new(run))
     };
     app.concept_runs.running = Some(Running { token, steps, work });
     if let Some(ctx) = &app.ui_ctx {
@@ -190,15 +193,60 @@ pub fn generate(app: &mut VectorcraftApp) -> Result<(), String> {
     Ok(())
 }
 
+/// Starts `run` on a thread of its own, which stops once `token` is canceled and counts the styles
+/// made in `steps`.
+fn spawn(run: ConceptRun, token: &CancelToken, steps: &Arc<[AtomicU64; 2]>) -> Result<Work, String> {
+    let (tx, done) = channel();
+    let stop = token.clone();
+    let counts = Arc::clone(steps);
+    std::thread::Builder::new()
+        .name("vectorcraft-concept".into())
+        .spawn(move || {
+            let [done_now, total_now] = &*counts;
+            let report = |done: u64, total: u64| {
+                done_now.store(done, Ordering::Relaxed);
+                total_now.store(total, Ordering::Relaxed);
+                !stop.is_cancelled()
+            };
+            let made = run.run(&report);
+            // The app may have quit, or the run was canceled: nothing to hand it to.
+            let _ = tx.send((run, made));
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(Work::Thread(done))
+}
+
+/// Whether no canceled run's thread is still going: it has handed back its results, which are
+/// dropped, or ended.
+fn worker_ended(runs: &mut ConceptRuns) -> bool {
+    let ended = runs.stopping.as_ref().is_none_or(|rx| !matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+    if ended {
+        runs.stopping = None;
+    }
+    ended
+}
+
 /// Cancel: the run stops at its next check (on the web, before its next part), and its results
-/// are dropped.
+/// are dropped. A run on a thread is kept track of until its thread ends, and the next Generate
+/// waits for that.
 pub fn cancel(app: &mut VectorcraftApp) {
     if let Some(r) = app.concept_runs.running.take() {
         r.token.cancel();
+        if let Work::Thread(rx) = r.work {
+            app.concept_runs.stopping = Some(rx);
+        }
         if app.ui.status == format!("{}…", crate::i18n::msg(LABEL)) {
             app.ui.status.clear();
         }
     }
+}
+
+/// `ui.conceptVector.generate`, the panel's Generate: makes the ticked styles of the selection
+/// with the panel's Detail → `{running: true}` while they are made off the UI thread (or one part
+/// a frame on the web), else `{running: false, job}` with the job shown.
+pub fn generate_run(app: &mut VectorcraftApp) -> Result<Value, String> {
+    generate(app)?;
+    Ok(if app.concept_runs.busy() { json!({ "running": true }) } else { json!({ "running": false, "job": app.concept_runs.job() }) })
 }
 
 /// `ui.conceptVector.cancel`, the panel's Cancel: stops the styles being made, and says so in the
@@ -219,9 +267,21 @@ pub fn poll(app: &mut VectorcraftApp) {
     if app.ui.dialog.is_some() || app.session.in_interaction() {
         return;
     }
+    // A run waiting for a canceled run's thread starts once that thread has ended.
+    if matches!(app.concept_runs.running.as_ref().map(|r| &r.work), Some(Work::Queued(_))) {
+        if !worker_ended(&mut app.concept_runs) {
+            return;
+        }
+        let Some(Running { token, steps, work: Work::Queued(run) }) = app.concept_runs.running.take() else { return };
+        match spawn(*run, &token, &steps) {
+            Ok(work) => app.concept_runs.running = Some(Running { token, steps, work }),
+            Err(e) => app.status(e),
+        }
+        return;
+    }
     let Some(r) = app.concept_runs.running.as_mut() else { return };
     let ended = match &mut r.work {
-        Work::Thread(_) => None,
+        Work::Thread(_) | Work::Queued(_) => None,
         Work::Frames(run, made) => {
             let stop = r.token.clone();
             match run.run_part(made, &|_, _| !stop.is_cancelled()) {
@@ -278,6 +338,7 @@ fn finish(app: &mut VectorcraftApp, token: &CancelToken, done: Option<Done>) {
 /// each named as the job names its style: by the name its provider gives the style.
 fn show_job(app: &mut VectorcraftApp, job: &Value) {
     let Some(id) = job["job"].as_u64() else { return };
+    let Some(doc) = app.session.concept_job_doc(id) else { return };
     let Some((variations, (w, h))) = app.session.concept_variations(id) else { return };
     let listed = job["variations"].as_array().map(Vec::as_slice).unwrap_or_default();
     let label_of = |style: &str| listed.iter().find(|v| v["style"] == style).and_then(|v| v["label"].as_str());
@@ -289,7 +350,7 @@ fn show_job(app: &mut VectorcraftApp, job: &Value) {
         })
         .collect();
     let picked = previews.iter().map(|p| p.style.clone()).collect();
-    app.concept_runs.shown = Some(Shown { job: id, previews, picked });
+    app.concept_runs.shown = Some(Shown { job: id, doc, previews, picked });
 }
 
 /// A preview's width in points, `height` high, for an image `aspect` wide per unit high.
@@ -440,8 +501,14 @@ fn within_budget<'a>(
     els.take_while(move |el| left.get() > 0 || matches!(el, vectorcraft_geom::PathEl::ClosePath))
 }
 
+/// How many elements [`elements`] makes of `path`.
+fn element_count(path: &vectorcraft_geom::PathData) -> usize {
+    path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).map(|sp| 1 + sp.segment_count() + usize::from(sp.closed)).sum()
+}
+
 /// Variation `v` of an image `size` pixels big: its paths painted in order, each path's fill and
-/// then its stroke, stopping after [`PREVIEW_POINTS`] points in all.
+/// then its stroke, stopping after [`PREVIEW_POINTS`] points in all, and whether that left part of
+/// it out ([`Preview::cut`]).
 fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
     let (w, h) = (f64::from(size.0.max(1)), f64::from(size.1.max(1)));
     let aspect = (w / h) as f32;
@@ -449,15 +516,19 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
     let left = std::cell::Cell::new(PREVIEW_POINTS);
     let at = |q: vectorcraft_geom::Point| Pos2::new((q.x / w) as f32, (q.y / h) as f32);
     let rgb = |[r, g, b]: [u8; 3]| Color32::from_rgb(r, g, b);
+    let cut = std::cell::Cell::new(false);
     for p in &v.paths {
         if left.get() == 0 {
+            cut.set(true);
             break;
         }
         let mut rings: Vec<Vec<Pos2>> = vec![];
         let mut ring: Vec<Pos2> = vec![];
+        let taken = std::cell::Cell::new(0usize);
+        let els = elements(&p.path).inspect(|_| taken.set(taken.get() + 1));
         // `flatten` takes an element only after the points of the one before, and makes a bounded
         // number of each curve, so the elements past the points left are neither made nor flattened.
-        vectorcraft_geom::flatten(within_budget(elements(&p.path), &left), (w.max(h) / 400.0).max(0.25), |el| {
+        vectorcraft_geom::flatten(within_budget(els, &left), (w.max(h) / 400.0).max(0.25), |el| {
             let q = match el {
                 vectorcraft_geom::PathEl::MoveTo(q) => {
                     if ring.len() > 1 {
@@ -482,8 +553,13 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
             if left.get() > 0 {
                 left.set(left.get() - 1);
                 ring.push(at(q));
+            } else {
+                cut.set(true);
             }
         });
+        if taken.get() < element_count(&p.path) {
+            cut.set(true);
+        }
         if ring.len() > 1 {
             rings.push(ring);
         }
@@ -496,7 +572,7 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
             stroke_rings(&mut image, &rings, px, rgb(c), p.square_caps);
         }
     }
-    Preview { style: v.style.clone(), label, aspect, image, texture: None, warnings: v.warnings.clone() }
+    Preview { style: v.style.clone(), label, aspect, image, texture: None, warnings: v.warnings.clone(), cut: cut.get() }
 }
 
 /// Insert Selected: the ticked variations go to the right of the image, as one undo step.
@@ -574,7 +650,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let can = ready.is_ok() && count > 0;
         let resp = ui.add_enabled_ui(can, |ui| widgets::flat_button_fit(ui, "Generate", 90.0)).inner;
         if resp.clicked()
-            && let Err(e) = generate(app)
+            && let Err(e) = app.run(GENERATE, json!({}))
         {
             app.status(e);
         }
@@ -585,13 +661,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     show_results(app, ui);
 }
 
-/// The comparison strip of the job shown, with a tick on each and Insert Selected. Nothing, and
-/// the job is no longer shown, once the session has dropped it (its document closed).
+/// The comparison strip of the job shown, with a tick on each and Insert Selected, while the
+/// document it was made in is the active one. Nothing, and the job is no longer shown, once the
+/// session has dropped it (its document closed).
 fn show_results(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.concept_runs.job().is_some_and(|job| app.session.concept_variations(job).is_none()) {
         app.concept_runs.shown = None;
     }
-    let Some(Shown { previews, picked, .. }) = &mut app.concept_runs.shown else { return };
+    let active = app.session.active().map(|d| d.uid);
+    let Some(Shown { previews, picked, doc, .. }) = &mut app.concept_runs.shown else { return };
+    if active != Some(*doc) {
+        return;
+    }
     ui.separator();
     egui::ScrollArea::horizontal().id_salt("concept-vector-strip").show(ui, |ui| {
         ui.horizontal_top(|ui| {
@@ -604,6 +685,9 @@ fn show_results(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if on {
                             picked.push(p.style.clone());
                         }
+                    }
+                    if p.cut {
+                        ui.label(egui::RichText::new(tl!("The preview leaves out part of this style")).small());
                     }
                     for w in &p.warnings {
                         ui.label(egui::RichText::new(w).small());

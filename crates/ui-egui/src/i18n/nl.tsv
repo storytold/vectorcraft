@@ -10616,6 +10616,7 @@ breakText	Glyphs	Glyphs
 	Gray Tones	Grijstinten
 	Generate	Maken
 	Insert Selected	Selectie invoegen
+	The preview leaves out part of this style	De voorvertoning laat een deel van deze stijl weg
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Concept naar vector is gestopt: de thread is beëindigd zonder resultaten (meld deze bug alsjeblieft)
 @msg	`detail` must be a whole number from 0 to 100	`detail` moet een geheel getal van 0 tot 100 zijn
 @msg	`job` must be a job number from conceptVector.generate	`job` moet een taaknummer van conceptVector.generate zijn
@@ -10624,7 +10625,7 @@ breakText	Glyphs	Glyphs
 @msg	a provider with the id `{id}` is registered already	er is al een aanbieder met de id `{id}` geregistreerd
 @msg	job {job} has no results to insert: it was canceled	taak {job} heeft geen resultaten om in te voegen: de taak is geannuleerd
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	taak {job} geldt niet meer: het document, de afbeelding of de plaatsing van de afbeelding is gewijzigd, dus maak de resultaten opnieuw
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Resultaten van Concept naar vector worden niet bewaard, dus een opgenomen invoeging wordt niet opnieuw afgespeeld: maak ze opnieuw
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Taken van Concept naar vector worden niet bewaard, dus een opgenomen invoeging of annulering wordt niet opnieuw afgespeeld: maak ze opnieuw
 @msg	missing `provider` (see conceptVector.providers)	`provider` ontbreekt (zie conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	geen taak {job} van Concept naar vector: de taak is nooit gemaakt of is verwijderd (zie conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	geen aanbieder `{name}` voor Concept naar vector (zie conceptVector.providers)
@@ -10640,6 +10641,10 @@ breakText	Glyphs	Glyphs
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	de afbeelding of een groep eromheen heeft effecten die haar verplaatsen of vervormen, zodat de resultaten er niet naast zouden komen
 @msg	`output` must be "vector"	`output` moet "vector" zijn
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` gebruikt geen prompt en maakt alleen vectorillustraties
+@msg	`{pid}` takes no prompt	`{pid}` gebruikt geen prompt
+@msg	`{pid}` does not take an image	`{pid}` gebruikt geen afbeelding
+@msg	`{pid}` does not make vector art	`{pid}` maakt geen vectorillustraties
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	de afbeelding staat op een laag met eigen vullingen of contouren, die ook op de resultaten zouden worden toegepast
 @msg	Making the Concept to Vector styles	De stijlen voor Concept naar vector worden gemaakt
 	Banner Hems and Grommets…	Bannerzomen en zeilringen…
 	Banner Hems and Grommets	Bannerzomen en zeilringen

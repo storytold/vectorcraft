@@ -8872,6 +8872,7 @@ breakText	Glyphs	Glyfy
 	Gray Tones	Odstíny šedi
 	Generate	Vytvořit
 	Insert Selected	Vložit vybrané
+	The preview leaves out part of this style	Náhled vynechává část tohoto stylu
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Koncept na vektor se zastavil: jeho vlákno skončilo bez výsledků (nahlaste prosím tuto chybu)
 @msg	`detail` must be a whole number from 0 to 100	`detail` musí být celé číslo od 0 do 100
 @msg	`job` must be a job number from conceptVector.generate	`job` musí být číslo úlohy z conceptVector.generate
@@ -8880,7 +8881,7 @@ breakText	Glyphs	Glyfy
 @msg	a provider with the id `{id}` is registered already	Poskytovatel s ID `{id}` je již zaregistrován
 @msg	job {job} has no results to insert: it was canceled	Úloha {job} nemá žádné výsledky k vložení: byla zrušena
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Úloha {job} již neplatí: změnil se její dokument, obraz nebo umístění obrazu; vytvořte ji znovu
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	Výsledky nástroje Koncept na vektor se neukládají, takže se zaznamenané vložení znovu nepřehraje: vytvořte je znovu
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Úlohy nástroje Koncept na vektor se neukládají, takže se zaznamenané vložení ani zrušení znovu nepřehraje: vytvořte je znovu
 @msg	missing `provider` (see conceptVector.providers)	Chybí `provider` (viz conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Úloha Koncept na vektor {job} neexistuje: nikdy nevznikla nebo byla zahozena (viz conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Poskytovatel Koncept na vektor `{name}` neexistuje (viz conceptVector.providers)
@@ -8896,6 +8897,10 @@ breakText	Glyphs	Glyfy
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Obraz nebo skupina kolem něj má efekty, které ho posouvají nebo mění jeho tvar, takže výsledky by nebyly vedle něj
 @msg	`output` must be "vector"	`output` musí být "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nepřijímá výzvu a vytváří jen vektorovou grafiku
+@msg	`{pid}` takes no prompt	`{pid}` nepřijímá výzvu
+@msg	`{pid}` does not take an image	`{pid}` nepřijímá obraz
+@msg	`{pid}` does not make vector art	`{pid}` nevytváří vektorovou grafiku
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	Obraz je ve vrstvě s vlastními výplněmi nebo tahy, které by se použily i na výsledky
 @msg	Making the Concept to Vector styles	Vytvářejí se styly Koncept na vektor
 	Banner Hems and Grommets…	Lemy a průchodky banneru…
 	Banner Hems and Grommets	Lemy a průchodky banneru

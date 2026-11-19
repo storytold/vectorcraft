@@ -11014,6 +11014,7 @@ font-script	Japanese	იაპონური
 	Gray Tones	ნაცრისფერი ტონები
 	Generate	შექმნა
 	Insert Selected	მონიშნულის ჩასმა
+	The preview leaves out part of this style	გადახედვა ამ სტილის ნაწილს გამოტოვებს
 @msg	Concept to Vector stopped: its thread ended without results (please report this bug)	„კონცეფციიდან ვექტორამდე“ შეჩერდა: მისი ნაკადი შედეგების გარეშე დასრულდა (გთხოვთ, შეგვატყობინოთ ამ შეცდომის შესახებ)
 @msg	`detail` must be a whole number from 0 to 100	`detail` უნდა იყოს მთელი რიცხვი 0-დან 100-მდე
 @msg	`job` must be a job number from conceptVector.generate	`job` უნდა იყოს conceptVector.generate-ის დავალების ნომერი
@@ -11022,7 +11023,7 @@ font-script	Japanese	იაპონური
 @msg	a provider with the id `{id}` is registered already	მომწოდებელი ID-ით `{id}` უკვე რეგისტრირებულია
 @msg	job {job} has no results to insert: it was canceled	{job} დავალებას ჩასასმელი შედეგები არ აქვს: ის გაუქმდა
 @msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} დავალება აღარ მოქმედებს: შეიცვალა მისი დოკუმენტი, გამოსახულება ან გამოსახულების განთავსება; შექმენით ხელახლა
-@msg	Concept to Vector results are not saved, so a recorded insert does not play again: generate again	კონცეფციიდან ვექტორამდე შედეგები არ ინახება, ამიტომ ჩაწერილი ჩასმა ხელახლა არ შესრულდება; შექმენით ხელახლა
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	კონცეფციიდან ვექტორამდე დავალებები არ ინახება, ამიტომ ჩაწერილი ჩასმა ან გაუქმება ხელახლა არ შესრულდება; შექმენით ხელახლა
 @msg	missing `provider` (see conceptVector.providers)	`provider` აკლია (იხ. conceptVector.providers)
 @msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	„კონცეფციიდან ვექტორამდე“ დავალება {job} არ არსებობს: არასდროს შექმნილა ან გაუქმდა (იხ. conceptVector.results)
 @msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	„კონცეფციიდან ვექტორამდე“ მომწოდებელი `{name}` არ არსებობს (იხ. conceptVector.providers)
@@ -11038,6 +11039,10 @@ font-script	Japanese	იაპონური
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	გამოსახულებას ან მის გარშემო მყოფ ჯგუფს აქვს ეფექტები, რომლებიც მას ანაცვლებს ან ფორმას უცვლის, ამიტომ შედეგები მის გვერდით არ აღმოჩნდებოდა
 @msg	`output` must be "vector"	`output` უნდა იყოს "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` მოთხოვნას არ იღებს და მხოლოდ ვექტორულ გრაფიკას ქმნის
+@msg	`{pid}` takes no prompt	`{pid}` მოთხოვნას არ იღებს
+@msg	`{pid}` does not take an image	`{pid}` გამოსახულებას არ იღებს
+@msg	`{pid}` does not make vector art	`{pid}` ვექტორულ გრაფიკას არ ქმნის
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	გამოსახულება საკუთარი შევსებების ან კონტურების მქონე ფენაზეა, რომლებიც შედეგებზეც გავრცელდებოდა
 @msg	Making the Concept to Vector styles	იქმნება „კონცეფციიდან ვექტორამდე“ სტილები
 	Banner Hems and Grommets…	ბანერის ნაკეცები და ლუვერები…
 	Banner Hems and Grommets	ბანერის ნაკეცები და ლუვერები

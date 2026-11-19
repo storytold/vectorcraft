@@ -986,6 +986,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open the Concept to Vector panel for the selected image or unexpanded Image Trace object; an error when the selection is not one such object, unlocked and shown (engine: conceptVector.generate / conceptVector.insert)",
     ),
     (
+        "ui.conceptVector.generate",
+        "Generate Concept to Vector Styles",
+        "",
+        "{} make the styles ticked in the Concept to Vector panel of the selected image or unexpanded Image Trace object, with the panel's Detail (the panel's Generate; engine: conceptVector.generate), and show them in the panel; off the UI thread in the app, one part a frame on the web; a run going is canceled first, and the new one starts once its thread has ended → {running: true} while they are made, else {running: false, job}",
+    ),
+    (
         "ui.conceptVector.cancel",
         "Cancel Concept to Vector",
         "",
