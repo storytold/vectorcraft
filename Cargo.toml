@@ -11,6 +11,7 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
+craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46" }
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46", default-features = false, features = ["interpret", "write"] }
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46" }

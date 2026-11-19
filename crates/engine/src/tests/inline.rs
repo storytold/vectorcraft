@@ -579,6 +579,9 @@ fn same_as_full_pass(full: &mut Session, fast: &mut Session, step: &dyn Fn(&mut 
 /// natural size or anything else a symbol is measured with checks them all.
 #[test]
 fn refreshing_only_changed_trees_matches_the_full_pass() {
+    // Both sessions lay out type, and the test rescans the fonts: a font another test adds between
+    // the full pass and the fast one would change how the type resolves in only one of them.
+    let _fonts = crate::adding_fonts();
     let setup = |s: &mut Session| {
         circle_symbol(s, "Tap", 10.0);
         circle_symbol(s, "Dot", 6.0);

@@ -458,6 +458,13 @@ fn a_nested_rows_tooltip_names_what_holds_it() {
     // A row in the layers says only its file.
     let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png"});
     assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
+    // The labels take the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (symbols, mask) = (crate::i18n::tr(fr, "Symbols"), crate::i18n::tr(fr, "Opacity Mask"));
+    assert_eq!(french, format!("/x/a.png\n{symbols}\u{a0}: Mark\n{mask}\u{a0}: 7"));
 }
 
 /// The tooltip of an image in the opacity mask of an object inside a symbol names that object,

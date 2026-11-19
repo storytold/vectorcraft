@@ -734,6 +734,10 @@ arrowhead	Target	Diana
 	Cusp	Punta
 	Straight segment	Segment recte
 	Circle too large	El cercle és massa gran
+	Show Radii	Mostra els radis
+	Show Diameter	Mostra el diàmetre
+	Anchors at Standard Positions	Punts d’ancoratge en posicions estàndard
+	Third Point by Dragging	Tercer punt arrossegant
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -891,6 +895,10 @@ arrowhead	Target	Diana
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Document Colors	Mostra els colors del document
+	Document Colors	Colors del document
+	Selection Colors	Colors de la selecció
+@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Show Harmony	Mostra l’harmonia
 	Harmony Rule	Regla d’harmonia
 	Harmony color	Color de l’harmonia
@@ -1222,6 +1230,10 @@ arrowhead	Target	Diana
 	Delete Guide	Suprimeix la guia
 	Delete Guides	Suprimeix les guies
 	Delete Image Trace Preset	Suprimeix el preajust de traçat d’imatge
+	Tracing Presets…	Preajustos de traçat…
+	Import Image Trace Presets	Importa preajustos de traçat d’imatge
+	Export Image Trace Presets	Exporta els preajustos de traçat d’imatge
+	Replace the saved presets that have these names?	Voleu substituir els preajustos desats que tenen aquests noms?
 	Delete Layer	Suprimeix la capa
 	Delete Library	Suprimeix la biblioteca
 	Delete Library Group	Suprimeix el grup de biblioteca
@@ -3458,6 +3470,13 @@ digits	Malayalam	Malaiàlam
 	Pen Tool	Eina de ploma
 	Quick Pen Tool	Eina de ploma ràpida
 	Quick Pen	Ploma ràpida
+	Quick Pen Toolbar	Barra d’eines de la ploma ràpida
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc de cantonada aguda
+	Flip Arc	Inverteix l’arc
+	Hide Toolbar	Amaga la barra d’eines
+	Pin Toolbar Position	Fixa la posició de la barra d’eines
+	Reset Toolbar Position	Restableix la posició de la barra d’eines
 	Pencil	Llapis
 	Pencil Tool	Eina de llapis
 	Pentagram	Pentagrama
@@ -3985,6 +4004,11 @@ digits	Malayalam	Malaiàlam
 	Edit Arrowheads	Edita les puntes de fletxa
 	Edit Arrowheads…	Edita les puntes de fletxa…
 	Reload Arrowheads	Torna a carregar les puntes de fletxa
+	Bevels	Bisells
+	Edit Bevels	Edita els bisells
+	Edit Bevels…	Edita els bisells…
+	{name} (document)	{name} (document)
+	Reload Bevels	Torna a carregar els bisells
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
@@ -7264,7 +7288,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
-@msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel ha de ser none, un de {_1}, o custom amb {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom necessita {BEVEL_PROFILE}, els punts del bisell
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} ha de ser una cadena
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} ha de tenir de 2 a {most} punts [x, y], cada proporció entre 0 i 1, des de [0, 0] (la vora de la tapa) fins a [1, 1] (la paret lateral)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} no pot construir un sòlid a partir de la instància del símbol «{symbol}»: la il·lustració del símbol no està disponible
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: el traçat de retall és massa complex per retallar-hi la il·lustració
@@ -8946,6 +8973,11 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Vector Packs	Paquets vectorials
+	Compass Rose	Rosa dels vents
+	Botanical Sprig	Branqueta botànica
+	Facet Diamond	Diamant facetat
+	Tide Crest	Cresta de l'onada
 	Leaf Vine	Enfiladissa de fulles
 	Blossom Chain	Cadena de flors
 	Pennant Garland	Garlanda de banderins

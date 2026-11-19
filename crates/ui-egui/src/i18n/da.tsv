@@ -432,7 +432,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
-@msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel skal være none, en af {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kræver {BEVEL_PROFILE}, facettens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} skal være en streng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} skal være 2 til {most} punkter [x, y], hver andel mellem 0 og 1, fra [0, 0] (dækfladens kant) til [1, 1] (sidevæggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan ikke danne et legeme af forekomsten af symbolet "{symbol}": symbolets grafik er ikke tilgængelig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: beskæringskurven er for kompleks til at skære grafikken med
@@ -3532,6 +3535,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
 	Show Harmony	Vis harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifarve
@@ -4693,6 +4700,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Omdøb forudindstilling
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
+	Tracing Presets…	Vektoriseringsforudindstillinger…
+	Import Image Trace Presets	Importér forudindstillinger til billedsporing
+	Export Image Trace Presets	Eksportér forudindstillinger til billedsporing
+	Replace the saved presets that have these names?	Vil du erstatte de gemte forudindstillinger med disse navne?
 	Method:	Metode:
 	Pad	Forlæng
 	Repeats	Gentagelser
@@ -6772,6 +6783,13 @@ theme	Appearance	Udseende
 	Pen Tool	Pen-værktøj
 	Quick Pen Tool	Hurtigpen-værktøj
 	Quick Pen	Hurtigpen
+	Quick Pen Toolbar	Hurtigpennens værktøjslinje
+	Continuous Arc	Fortløbende bue
+	Sharp Corner Arc	Bue med skarpt hjørne
+	Flip Arc	Vend bue
+	Hide Toolbar	Skjul værktøjslinjen
+	Pin Toolbar Position	Fastgør værktøjslinjens placering
+	Reset Toolbar Position	Nulstil værktøjslinjens placering
 	Picas	Pica
 	Portuguese	Portugisisk
 	Preserve Appearance and Overprints	Bevar udseende og overprint
@@ -6887,6 +6905,11 @@ theme	Appearance	Udseende
 	Edit Arrowheads	Redigér pilespidser
 	Edit Arrowheads…	Redigér pilespidser…
 	Reload Arrowheads	Genindlæs pilespidser
+	Bevels	Facetter
+	Edit Bevels	Redigér facetter
+	Edit Bevels…	Redigér facetter…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Genindlæs facetter
 	Stroke Options	Konturindstillinger
 	Width Profiles	Breddeprofiler
 	Apply Graphic Style	Anvend grafikstil
@@ -7407,6 +7430,10 @@ font-technology	Variable	Variable
 	Cusp	Spids
 	Straight segment	Lige segment
 	Circle too large	Cirklen er for stor
+	Show Radii	Vis radier
+	Show Diameter	Vis diameter
+	Anchors at Standard Positions	Ankerpunkter i standardpositioner
+	Third Point by Dragging	Tredje punkt ved træk
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -10832,6 +10859,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Vector Packs	Vektorpakker
+	Compass Rose	Kompasrose
+	Botanical Sprig	Botanisk kvist
+	Facet Diamond	Facetteret diamant
+	Tide Crest	Bølgetop
 	Leaf Vine	Bladranke
 	Blossom Chain	Blomsterkæde
 	Pennant Garland	Vimpelguirlande

@@ -489,6 +489,10 @@ font-technology	Variable	Değişken
 	Cusp	Sivri nokta
 	Straight segment	Düz segment
 	Circle too large	Daire çok büyük
+	Show Radii	Yarıçapları Göster
+	Show Diameter	Çapı Göster
+	Anchors at Standard Positions	Standart Konumlarda Bağlantı Noktaları
+	Third Point by Dragging	Sürükleyerek Üçüncü Nokta
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle
@@ -595,6 +599,10 @@ font-technology	Variable	Değişken
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Document Colors	Belge Renklerini Göster
+	Document Colors	Belge Renkleri
+	Selection Colors	Seçim Renkleri
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
 	Show Harmony	Uyumu Göster
 	Harmony Rule	Uyum Kuralı
 	Harmony color	Uyum rengi
@@ -1733,6 +1741,10 @@ font-technology	Variable	Değişken
 	Rename Preset	Ön Ayarı Yeniden Adlandır
 	Save Image Trace Preset	Görüntü İzleme Ön Ayarını Kaydet
 	Delete Image Trace Preset	Görüntü İzleme Ön Ayarını Sil
+	Tracing Presets…	İzleme Ön Ayarları…
+	Import Image Trace Presets	Görüntü İzleme Ön Ayarlarını İçe Aktar
+	Export Image Trace Presets	Görüntü İzleme Ön Ayarlarını Dışa Aktar
+	Replace the saved presets that have these names?	Bu adlara sahip kayıtlı ön ayarlar değiştirilsin mi?
 	Image Trace Presets	Görüntü İzleme Ön Ayarları
 	Image:	Resim:
 	Images:	Görseller:
@@ -2575,6 +2587,13 @@ shape	Open	Açık
 	Pen Tool	Kalem Aracı
 	Quick Pen Tool	Hızlı Kalem Aracı
 	Quick Pen	Hızlı Kalem
+	Quick Pen Toolbar	Hızlı Kalem Araç Çubuğu
+	Continuous Arc	Sürekli Yay
+	Sharp Corner Arc	Keskin Köşeli Yay
+	Flip Arc	Yayı Çevir
+	Hide Toolbar	Araç Çubuğunu Gizle
+	Pin Toolbar Position	Araç Çubuğu Konumunu Sabitle
+	Reset Toolbar Position	Araç Çubuğu Konumunu Sıfırla
 	Pencil	Kalem
 	Pencil Tool	Kurşun Kalem Aracı
 	per slice	dilim başına
@@ -3013,6 +3032,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Ok Uçlarını Düzenle
 	Edit Arrowheads…	Ok Uçlarını Düzenle…
 	Reload Arrowheads	Ok Uçlarını Yeniden Yükle
+	Bevels	Eğimler
+	Edit Bevels	Eğimleri Düzenle
+	Edit Bevels…	Eğimleri Düzenle…
+	{name} (document)	{name} (belge)
+	Reload Bevels	Eğimleri Yeniden Yükle
 	Reset Rotate View	Döndürme Görünümünü Sıfırla
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
@@ -6158,7 +6182,10 @@ lighting	Light	Işık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Eksen Etrafında Döndür, Şişir veya Döndür)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
-@msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel; none, {_1} değerlerinden biri veya {BEVEL_PROFILE} ile custom olmalıdır
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom için {BEVEL_PROFILE}, yani eğimin noktaları gerekir
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} bir dize olmalıdır
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}, 2 ile {most} arasında [x, y] noktası olmalıdır; her oran 0 ile 1 arasında, [0, 0] (uç yüzeyin kenarı) ile [1, 1] (yan duvar) arasında
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}, “{symbol}” sembolünün örneğinden katı oluşturamaz: sembolün resmi kullanılamıyor
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık
@@ -10728,6 +10755,11 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Vector Packs	Vektör Paketleri
+	Compass Rose	Pusula Gülü
+	Botanical Sprig	Botanik Dal
+	Facet Diamond	Fasetli Elmas
+	Tide Crest	Dalga Tepesi
 	Leaf Vine	Yapraklı sarmaşık
 	Blossom Chain	Çiçek zinciri
 	Pennant Garland	Bayrak süsü
