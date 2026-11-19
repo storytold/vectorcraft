@@ -433,27 +433,31 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     ui.set_min_width(210.0);
     ui.set_max_width(240.0);
     let mut clicked: Option<(&'static str, Value)> = None;
-    for it in menu_items() {
-        match it {
-            crate::menus::Item::Sep => {
-                ui.separator();
-            }
-            crate::menus::Item::Cmd(label, id, p) => {
-                // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
-                let label = crate::menus::display_label(app, id, label);
-                let text = match crate::menus::checked(app, id, &p) {
-                    Some(true) => format!("✓  {label}"),
-                    Some(false) => format!("     {label}"),
-                    None => format!("     {label}"),
-                };
-                if ui.add(egui::Button::new(text).min_size(egui::vec2(220.0, 0.0))).clicked() {
-                    clicked = Some((id, if p.is_null() { json!({}) } else { p }));
-                    ui.close();
+    // With many saved workspaces the menu is taller than a short window: it scrolls, as the
+    // Window menu does.
+    crate::widgets::menu_scroll(ui, |ui| {
+        for it in menu_items() {
+            match it {
+                crate::menus::Item::Sep => {
+                    ui.separator();
                 }
+                crate::menus::Item::Cmd(label, id, p) => {
+                    // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
+                    let label = crate::menus::display_label(app, id, label);
+                    let text = match crate::menus::checked(app, id, &p) {
+                        Some(true) => format!("✓  {label}"),
+                        Some(false) => format!("     {label}"),
+                        None => format!("     {label}"),
+                    };
+                    if ui.add(egui::Button::new(text).min_size(egui::vec2(220.0, 0.0))).clicked() {
+                        clicked = Some((id, if p.is_null() { json!({}) } else { p }));
+                        ui.close();
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
-    }
+    });
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, id, p);
     }
@@ -774,6 +778,42 @@ mod tests {
         for n in ["Essentials", "Essentials Classic", "Painting", "Typography", "Layout", "Tracing", "Web", "Automation", TOUCH] {
             assert!(find(&ui, n).is_some(), "{n}");
         }
+    }
+
+    /// With 30 saved workspaces the app bar's workspace menu is taller than a 600 pt window: it
+    /// stops above the window's bottom edge and scrolls, and with room to spare it shows whole.
+    #[test]
+    fn the_workspace_menu_scrolls_inside_a_short_window() {
+        use crate::{Services, VectorcraftApp};
+        use vectorcraft_engine::Session;
+
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        for i in 0..30 {
+            save_as(&mut app.ui, &format!("Workspace {i:02}")).unwrap();
+        }
+        sync(&app.ui);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let id = egui::Id::unique("test-workspace-menu");
+        let mut rect = |height: f32| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                let mut out = ctx.run_ui(input, |ui| {
+                    egui::Area::new(id).fixed_pos(egui::pos2(900.0, 30.0)).show(ui.ctx(), |ui| {
+                        egui::containers::menu::menu_style(ui.style_mut());
+                        popup(&mut app, ui);
+                    });
+                });
+                out.textures_delta.clear();
+            }
+            ctx.memory(|m| m.area_rect(id)).unwrap()
+        };
+        let short = rect(600.0);
+        assert!(short.bottom() <= 600.0, "the workspace menu ends at {} in a 600 pt window", short.bottom());
+        let tall = rect(3000.0);
+        assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());
+        assert!(tall.bottom() < 3000.0);
     }
 
     #[test]
