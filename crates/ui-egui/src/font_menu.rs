@@ -13,9 +13,12 @@
 //! they look to it ([`vectorcraft_text::FontDb::similar_families`]), that family first and without the Recent
 //! Fonts section, until the ≈ chip under the filters clears it or the menu closes. The Font
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
-//! in-menu font previews and Font Preview Size turn the samples off or size the rows. The menu lays
-//! out its filters on the same five rows wherever it opens. However narrow its field, it opens at
-//! least wide enough for those rows and for a family name up to 220 points wide with its sample
+//! in-menu font previews and Font Preview Size turn the samples off or size the rows. While the
+//! samples are shown, a row under the filters sets Font Preview Size to Small, Medium or Large
+//! ([`apply_preview_size`]), which sizes the rows of every font menu, and the list stays on the
+//! rows it showed. The menu lays out its filters on the same five rows wherever it opens, with the
+//! size row under them while the samples are shown. However narrow its field, it opens at least
+//! wide enough for those rows and for a family name up to 220 points wide with its sample
 //! beside it, up to 60% of the window; each sample fills its row's height. Recently used families
 //! appear first, in the order they were last applied, within the same search and filters as the
 //! remaining families. In the Character and Properties panels and the Control bar,
@@ -185,11 +188,7 @@ impl Default for MenuLook<'static> {
 
 impl<'a> MenuLook<'a> {
     pub fn of(app: &'a VectorcraftApp) -> Self {
-        let row = match app.session.prefs.font_preview_size.as_str() {
-            "small" => 20.0,
-            "large" => 32.0,
-            _ => ROW,
-        };
+        let row = preview_row(&app.session.prefs.font_preview_size);
         Self {
             samples: app.session.prefs.font_preview,
             on_white: app.session.prefs.font_samples_on_white,
@@ -211,6 +210,22 @@ impl<'a> MenuLook<'a> {
 
 /// Height of a row, in points (Font Preview Size: Medium).
 const ROW: f32 = 24.0;
+/// Font Preview Size's values (Preferences › Type), each with the row height it gives.
+const PREVIEW_SIZES: [(&str, f32); 3] = [("small", 20.0), ("medium", ROW), ("large", 32.0)];
+
+/// The row height of Font Preview Size `size`: Medium's for a value it does not have.
+fn preview_row(size: &str) -> f32 {
+    PREVIEW_SIZES.iter().find(|(key, _)| *key == size).map_or(ROW, |(_, row)| *row)
+}
+
+/// The label of Font Preview Size `size`, as Preferences names it.
+fn preview_size_label(size: &str) -> &'static str {
+    match size {
+        "small" => tl!("Small"),
+        "large" => tl!("Large"),
+        _ => tl!("Medium"),
+    }
+}
 /// Width of the star at the end of a family's row.
 const STAR: f32 = 18.0;
 /// Width of the Show Similar Fonts button before the star.
@@ -453,6 +468,9 @@ struct MenuState {
     header: f32,
     /// The width of the widest row of filters without wrapping, last frame.
     filters: f32,
+    /// The rows' height last frame, and how far down the list its view began, in rows. At a new
+    /// height (Font Preview Size) the list scrolls back to the same row.
+    scrolled: Option<(f32, f32)>,
     /// The families the wheel steps through, listed at its first notch over the closed field and
     /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order. The Document filter's families are kept the same way: a
@@ -500,10 +518,10 @@ impl Filters {
 
 /// The families the type in `doc` is set in, lowercase and by the name the menu lists them under
 /// ([`vectorcraft_text::FontDb::canonical`]): the runs of every text object in the layers, symbols,
-/// patterns and graph designs, hidden, locked and masked ones included, with a composite font named
-/// as such. A pattern being edited is read from its editing layer only. Each run's family is looked
-/// up with its style, so a family and style split from a PostScript name (`Honoka`, `Mincho`) find
-/// the installed font of that name. Styles no type uses are left out.
+/// patterns, graph designs and stored scatter brushes, hidden, locked and masked ones included, with
+/// a composite font named as such. A pattern being edited is read from its editing layer only. Each
+/// run's family is looked up with its style, so a family and style split from a PostScript name
+/// (`Honoka`, `Mincho`) find the installed font of that name. Styles no type uses are left out.
 fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Document) -> HashSet<String> {
     // Each family and style once, so a document with many runs in a few fonts looks each one up
     // once.
@@ -530,6 +548,14 @@ fn document_families(db: &vectorcraft_text::FontDb, doc: &vectorcraft_doc::Docum
     let designs = doc.graph_designs.iter().map(|g| &*g.art);
     for n in doc.layers.iter().map(|l| &**l).chain(doc.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(designs) {
         vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
+    }
+    // A scatter brush draws copies of its art's type along a stroke; art and pattern brushes drop
+    // type when they bend their art. Malformed library entries are skipped.
+    let brushes = doc.unknown.get(vectorcraft_brush::DOC_KEY).map(vectorcraft_brush::parse_library).unwrap_or_default();
+    for b in &brushes {
+        if let vectorcraft_brush::BrushKind::Scatter(s) = &b.kind {
+            vectorcraft_doc::swatches::walk_with_masks(&s.art, &mut add);
+        }
     }
     named.iter().flat_map(|(f, styles)| styles.iter().map(move |s| db.canonical(f, s).0.to_lowercase())).collect()
 }
@@ -1307,7 +1333,7 @@ fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id,
         ui.memory_mut(|m| m.request_focus(field.with("edit")));
     }
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-    let refilter = filters(ui, st, &t, look.document.is_some());
+    let refilter = filters(ui, st, &t, look.document.is_some(), look.samples.then_some(look.row));
     let added = added_families(db, st, look);
     // On the system clock, the list is drawn again when a family's 30 days end.
     if let (Some(at), None) = (added.as_ref().and_then(|a| a.recheck_at), look.clock)
@@ -1440,9 +1466,11 @@ fn filter_rows() -> [Vec<Chip>; 5] {
 }
 
 /// The filters on their rows ([`filter_rows`]): a row wraps only where the menu is narrower than
-/// it. The Document filter is unavailable without a `document`. Records in `st` the width of the
-/// widest row unwrapped; whether a filter changed.
-fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool) -> bool {
+/// it. The Document filter is unavailable without a `document`. With `row` (the rows' height while
+/// samples are shown), a row under them offers Font Preview Size's values, the one of that height
+/// selected; a click on one asks for it ([`apply_preview_size`]). Records in `st` the width of the
+/// widest row unwrapped, the size row included; whether a filter changed.
+fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool, row: Option<f32>) -> bool {
     let mut refilter = false;
     let mut widest = 0.0_f32;
     for row in filter_rows() {
@@ -1489,6 +1517,31 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool) -> bool 
                 }
                 refilter = true;
             }
+            widest = widest.max(width);
+        });
+    }
+    if let Some(row) = row {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let gap = ui.spacing().item_spacing.x;
+            let text = |s: &str| egui::RichText::new(s).size(FILTER_SIZE);
+            let mut width = ui.label(text(tl!("Font Preview Size")).color(t.text_dim)).rect.width();
+            // Screen readers find the three sizes in a radio group named after the row.
+            let group = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::RadioGroup).accessibility_label(tl!("Font Preview Size"));
+            ui.scope_builder(group, |ui| {
+                for (size, height) in PREVIEW_SIZES {
+                    let on = (height - row).abs() < 0.5;
+                    let label = preview_size_label(size);
+                    let resp = ui.selectable_label(on, text(label));
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, label));
+                    width += gap + resp.rect.width();
+                    if resp.clicked() {
+                        ui.data_mut(|d| d.insert_temp(preview_size_id(), size));
+                        // A focused button is activated by Enter; the list must not read it as a pick.
+                        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                    }
+                }
+            });
             widest = widest.max(width);
         });
     }
@@ -1679,8 +1732,16 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         let place = egui::Rect::from_min_size(egui::pos2(left, top + i as f32 * row_h), vec2(width, row_h));
         ui.scroll_to_rect_animation(place, align, egui::style::ScrollAnimation::none());
     };
+    // At a new row height (Font Preview Size, set from the menu), the view stays on the rows it
+    // showed: the scroll offset is in points.
+    let at = (ui.clip_rect().top() - top) / row_h;
+    let kept = st.scrolled.filter(|&(h, _)| !opening && (h - row_h).abs() > 0.5).map(|(_, at)| at);
+    st.scrolled = Some((row_h, kept.unwrap_or(at)));
     if let Some((i, align)) = scroll_target(st, &rows, opening, keyed) {
         scroll_to(ui, i, align);
+    } else if let Some(at) = kept {
+        let place = egui::Rect::from_min_size(egui::pos2(left, top + at * row_h), vec2(width, row_h));
+        ui.scroll_to_rect_animation(place, Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;
@@ -2027,6 +2088,31 @@ fn open_id() -> egui::Id {
     egui::Id::unique("font-menu-open")
 }
 
+/// The id under which a font menu keeps the Font Preview Size its buttons asked for, until
+/// [`apply_preview_size`] sets it.
+fn preview_size_id() -> egui::Id {
+    egui::Id::unique("font-menu-preview-size")
+}
+
+/// Set the Font Preview Size (Preferences › Type) that a font menu's Small, Medium or Large button
+/// asked for in the last pass, which sizes the rows of every font menu, and have the host write the
+/// preferences file as it does when Preferences is confirmed. Nothing runs when it is already that
+/// size; a saved value that is none of the sizes is replaced. The shell calls it at the start of
+/// each frame.
+pub(crate) fn apply_preview_size(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(size) = ctx.data_mut(|d| d.remove_temp::<&'static str>(preview_size_id())) else { return };
+    if app.session.prefs.font_preview_size == size {
+        return;
+    }
+    match app.run("prefs.set", json!({"key": "fontPreviewSize", "value": size})) {
+        Ok(_) => {
+            crate::prefs_dialog::snapshot(app);
+            app.prefs_changed = true;
+        }
+        Err(e) => app.ui.status = e,
+    }
+}
+
 /// Undo a preview whose menu is gone (its panel wasn't drawn: the text was deselected, the panel
 /// closed) or is closing (Escape, a press outside the menu), before anything else sees this
 /// frame's input: the canvas must not act inside the preview's interaction (a drag would be
@@ -2057,7 +2143,8 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
         FontPick::Preview(f, style) => {
             if !previewing {
                 crate::panels::character::end_typing(app);
-                if app.session.begin_interaction("Font").is_err() {
+                if let Err(e) = app.begin_interaction("Font") {
+                    app.status(e);
                     return;
                 }
                 crate::panels::set_pstate(ctx, PREVIEWING, true);

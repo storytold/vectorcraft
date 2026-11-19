@@ -125,9 +125,14 @@ fn apply_transform_moving_guides(
     let d = &s.doc()?.doc;
     let paths = d.index_paths(ids.iter().copied());
     let none = paths.is_empty() && !has_guides;
+    // A move of direct-selected anchors may re-map the handles beside them (`interpolate`).
+    let mut interpolate = None;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
+        if c[..4] == [1.0, 0.0, 0.0, 1.0] {
+            interpolate = Some(crate::cmd::path::interpolates_handles(s, p, label)?);
+        }
         if xf != Affine::IDENTITY {
-            crate::cmd::path::transform_anchors(s, label, xf, sc)?;
+            crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?;
         }
         ids
     } else if none || (!copy && xf == Affine::IDENTITY) {
@@ -195,6 +200,9 @@ fn apply_transform_moving_guides(
             options["strokes"] = json!(sc.strokes);
             options["corners"] = json!(!sc.keep_corners);
         }
+        if let Some(on) = interpolate {
+            options["interpolate"] = json!(on);
+        }
         st.last_transform = Some(LastTransform::Matrix(xf, options));
         st.last_perspective = None;
     }
@@ -248,7 +256,7 @@ fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
 
 pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
-    check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
+    check_switches(p, &["anchors", "releaseOutside", "interpolate"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
     // An object selected in a symbol instance's art stays where the symbol puts it: the selection
     // is left as it is, and the reply's warning goes to the status bar.
@@ -292,6 +300,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.move")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.move")?;
+    check_switches(p, &["interpolate"], "object.move")?;
     let ids = selected_roots_to_transform(s)?;
     apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p, true)
 }
@@ -311,7 +320,7 @@ pub(crate) fn along_constrain_angle(dx: f64, dy: f64, deg: f64) -> (f64, f64) {
 pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.nudge")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.nudge")?;
-    check_switches(p, &["big"], "object.nudge")?;
+    check_switches(p, &["big", "interpolate"], "object.nudge")?;
     let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
     let (dx, dy) = (f64_or(p, "dx", 0.0) * k, f64_or(p, "dy", 0.0) * k);
     // Guides keep to the page's axes; art and anchors move along the constrain angle's.
@@ -322,7 +331,7 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns") }));
+        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
     }
     if s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
@@ -360,13 +369,20 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.scale")?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let sx = f64_req(p, "sx", "object.scale")? / 100.0;
-    let sy = f64_or(p, "sy", sx * 100.0) / 100.0;
-    if sx == 0.0 || sy == 0.0 {
-        return Err(bad("object.scale", "scale must be non-zero"));
-    }
+    let sx = f64_req(p, "sx", "object.scale")?;
+    let (sx, sy) = scale_factors(sx, f64_or(p, "sy", sx)).map_err(|e| bad("object.scale", e))?;
     let frame = basis_frame(s, p, "object.scale", &ids)?;
     apply_transform(s, "Scale", ids, about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), p, true)
+}
+
+/// The factors `object.scale` applies for `sx` and `sy` in percent, or the error it returns when
+/// either factor is 0.
+pub fn scale_factors(sx: f64, sy: f64) -> std::result::Result<(f64, f64), String> {
+    let (sx, sy) = (sx / 100.0, sy / 100.0);
+    if sx == 0.0 || sy == 0.0 {
+        return Err("scale must be non-zero".into());
+    }
+    Ok((sx, sy))
 }
 
 /// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
@@ -393,16 +409,7 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
     // A named axis is the bounding box's own (see [`basis_frame`]); an angle is a line on the page.
-    let named = match p.get("axis") {
-        Some(Value::String(a)) if a == "horizontal" => Some(Affine::scale_non_uniform(1.0, -1.0)),
-        Some(Value::Number(_)) => None,
-        None | Some(Value::Null) => Some(Affine::scale_non_uniform(-1.0, 1.0)),
-        Some(Value::String(a)) if a == "vertical" => Some(Affine::scale_non_uniform(-1.0, 1.0)),
-        Some(v) => {
-            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
-            return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
-        }
-    };
+    let named = reflect_axis(p.get("axis")).map_err(|e| bad("object.reflect", e))?;
     let m = match named {
         Some(m) => basis_frame(s, p, "object.reflect", &ids)?.conjugate(m),
         None => {
@@ -414,22 +421,76 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
 }
 
+/// The reflection `object.reflect` applies for its `axis` param: the matrix for a named axis
+/// (`"vertical"`, the default, or `"horizontal"`), in the bounding box's frame; `None` for an angle,
+/// which is a line on the page; or the error for any other value.
+pub fn reflect_axis(axis: Option<&Value>) -> std::result::Result<Option<Affine>, String> {
+    match axis {
+        Some(Value::String(a)) if a == "horizontal" => Ok(Some(Affine::scale_non_uniform(1.0, -1.0))),
+        Some(Value::Number(_)) => Ok(None),
+        None | Some(Value::Null) => Ok(Some(Affine::scale_non_uniform(-1.0, 1.0))),
+        Some(Value::String(a)) if a == "vertical" => Ok(Some(Affine::scale_non_uniform(-1.0, 1.0))),
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            Err(format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`"))
+        }
+    }
+}
+
+/// Angles closer than this many degrees to ±90 or ±270, or to 0 or ±180, count as those angles. It
+/// is far above the rounding error of an angle up to 359° and below any angle a field shows.
+const SHEAR_ANGLE_TOLERANCE: f64 = 1e-9;
+
+/// The slant `object.shear` applies for `angle` in degrees: its tangent, and 0 for 0 and ±180. An
+/// angle outside -359 to 359, or ±90 or ±270, is an error.
+pub fn shear_tangent(angle: f64) -> std::result::Result<f64, String> {
+    if !(-359.0..=359.0).contains(&angle) {
+        return Err(format!("`angle` must be from -359 to 359 degrees, not {angle}"));
+    }
+    // ±90 and ±270 slant an edge onto the shear axis: their tangent is unbounded.
+    let flat = angle.rem_euclid(180.0);
+    if (flat - 90.0).abs() < SHEAR_ANGLE_TOLERANCE {
+        return Err(format!("`angle` cannot be {angle}: ±90 and ±270 degrees have no shear"));
+    }
+    // 0 and ±180 have no slant, but the tangent of ±180° in radians is about 1e-16, not 0.
+    Ok(if flat < SHEAR_ANGLE_TOLERANCE || 180.0 - flat < SHEAR_ANGLE_TOLERANCE { 0.0 } else { angle.to_radians().tan() })
+}
+
 pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], "object.shear")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.shear")?;
+    let t = shear_tangent(f64_or(p, "angle", 0.0)).map_err(|e| bad("object.shear", e))?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
-    let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
-    let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
+    let horizontal = Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]);
+    // A named axis, or a line on the page at an angle in degrees, counter-clockwise from horizontal.
+    let m = match p.get("axis") {
+        None | Some(Value::Null) => horizontal,
+        Some(Value::String(a)) if a == "horizontal" => horizontal,
+        Some(Value::String(a)) if a == "vertical" => Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]),
+        Some(Value::Number(n)) if n.as_f64().is_some_and(|a| (-SHEAR_AXIS_MAX..=SHEAR_AXIS_MAX).contains(&a)) => {
+            // y is down, so the page's counter-clockwise angle turns the other way on screen.
+            let r = -n.as_f64().unwrap_or(0.0).to_radians();
+            Affine::rotate(r) * horizontal * Affine::rotate(-r)
+        }
+        Some(v) => {
+            let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+            let range = format!("from -{SHEAR_AXIS_MAX} to {SHEAR_AXIS_MAX}");
+            return Err(bad("object.shear", format!("axis must be \"horizontal\", \"vertical\" or an angle in degrees {range}, not `{given}`")));
+        }
+    };
     apply_transform(s, "Shear", ids, about(o, m), p, true)
 }
+
+/// The largest angle, either way from horizontal, of the axis `object.shear` takes in degrees.
+const SHEAR_AXIS_MAX: f64 = 359.0;
 
 /// The last transform on the selection, with the options `last_transform` keeps for it; an option
 /// that `p` sets to true or false (a recorded Transform Again's) takes precedence. A Transform
 /// Each is repeated by running it again (its transform is per object, about each one's bounds).
 pub(super) fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transformAgain")?;
+    check_switches(p, &["interpolate"], "object.transformAgain")?;
     if let Some(again) = s.doc()?.last_perspective.clone() {
         return crate::cmd::distortcmds::transform_again(s, &again);
     }

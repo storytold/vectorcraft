@@ -248,6 +248,15 @@ impl Tool for ContourTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        match key {
+            "corners" if value.as_str().and_then(Corners::parse).is_some() => Ok(()),
+            "corners" => Err("`corners` must be one of `sharp`, `round`, `square`".into()),
+            "miterLimit" => crate::option_check::number(key, value, 1.0, 500.0),
+            _ => Err(crate::option_check::unknown(key)),
+        }
+    }
+
     fn busy(&self) -> bool {
         self.drag.is_some()
     }

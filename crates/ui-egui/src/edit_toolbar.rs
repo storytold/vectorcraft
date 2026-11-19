@@ -532,7 +532,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let inner = ui.available_width() - 10.0;
                 for (cat, gs) in groups() {
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(format!("{}:", tl!(cat))).size(12.0).color(t.text_strong));
+                    ui.label(egui::RichText::new(crate::i18n::colon(tl!(cat))).size(12.0).color(t.text_strong));
                     ui.add_space(4.0);
                     for g in gs {
                         // A flyout group: its tools framed together, as one toolbar button holds them.

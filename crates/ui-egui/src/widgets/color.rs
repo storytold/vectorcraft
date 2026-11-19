@@ -12,7 +12,7 @@ pub enum Live {
 }
 
 /// A colour slider with a gradient track (`track(t)` gives the colour at 0..1) and a triangular
-/// thumb below it, like Illustrator's Color panel. Returns the new normalized value and the phase.
+/// thumb below it, as in the Color panel. Returns the new normalized value and the phase.
 pub fn color_slider(ui: &mut Ui, id: impl std::hash::Hash, value: f32, width: f32, track: &dyn Fn(f32) -> Color32) -> (Option<f32>, Live) {
     color_slider_named(ui, id, "", value, width, track)
 }
@@ -141,7 +141,7 @@ pub fn color_slider_stepped(
 ) -> (Option<f32>, Live, Option<f64>) {
     let id = id_with(ui.scope_id(), id);
     let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, track);
-    let stepped = slider_keys(ui, &resp, shown);
+    let stepped = slider_keys(ui, &resp, shown, false);
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
@@ -152,19 +152,27 @@ pub fn color_slider_stepped(
 /// `shown`'s units that a key or an action gives.
 pub fn stepped_area(ui: &Ui, resp: &Response, name: &str, shown: Option<SliderValue>) -> Option<f64> {
     slider_info(ui, resp, name, shown.clone());
-    slider_keys(ui, resp, shown)
+    slider_keys(ui, resp, shown, false)
+}
+
+/// Gives the keyboard focus to the control `id` of [`stepped_area`] as a click or a drag on it
+/// does, with no focus outline until a key steps it, for a control whose pointer input another
+/// response reads.
+pub(crate) fn focus_by_pointer(ui: &Ui, id: egui::Id) {
+    ui.memory_mut(|m| m.request_focus(id));
+    ui.data_mut(|d| d.insert_temp(id.with("focused-by-pointer"), true));
 }
 
 /// The focus, keys, actions and focus outline of [`color_slider_stepped`] on the control `resp`:
-/// the number a key or an action gives.
-fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f64> {
+/// the number a key or an action gives. With `always`, a key or an action that leaves the number
+/// as it was still gives it.
+fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>, always: bool) -> Option<f64> {
     let id = resp.id;
     // Focus a click or a drag gave shows no outline until a key steps the rail: the outline tells
     // a keyboard user where the focus is, and after a drag it only framed the rail.
     let by_pointer = id.with("focused-by-pointer");
     if resp.drag_started() || resp.clicked() {
-        resp.request_focus();
-        ui.data_mut(|d| d.insert_temp(by_pointer, true));
+        focus_by_pointer(ui, id);
     }
     let focused = ui.memory(|m| m.has_focus(id));
     if !focused {
@@ -177,7 +185,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
-        rail_step(ui, id, focused, &s)
+        rail_step(ui, id, focused, always, &s)
     });
     if stepped.is_some() {
         ui.data_mut(|d| d.remove_temp::<bool>(by_pointer));
@@ -190,8 +198,9 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 }
 
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
-/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
-fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
+/// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was, unless
+/// `always` and a key or an action came.
+fn rail_step(ui: &Ui, id: egui::Id, focused: bool, always: bool, s: &SliderValue) -> Option<f64> {
     use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
@@ -208,6 +217,8 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     };
     // Home or End: an end of the range, which also replaces a number past it.
     let mut end = false;
+    // A key or an action came this frame.
+    let mut asked = false;
     if focused {
         // The arrows step the rail and do not move the focus. egui keeps the filter only when the
         // rail also had the focus in the frame before, and applies it from the next frame; until
@@ -235,6 +246,7 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
                     }
                     _ => return true,
                 }
+                asked = true;
                 false
             });
         });
@@ -246,8 +258,9 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
     let mut exact = false;
     ui.input(|i| {
-        let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
-        v = by(v, n).clamp(lo, hi);
+        let (up, down) = (i.num_accesskit_action_requests(id, Action::Increment), i.num_accesskit_action_requests(id, Action::Decrement));
+        asked |= up + down > 0;
+        v = by(v, up as f64 - down as f64).clamp(lo, hi);
         // The last set-value request this frame.
         let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
             Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
@@ -260,9 +273,10 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             v = shown.clamp(lo.min(s.value), hi.max(s.value));
             end = true;
             exact = true;
+            asked = true;
         }
     });
-    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
+    (v != from || (end && v != s.value) || (always && asked)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
@@ -499,23 +513,68 @@ pub fn channel_slider_valued(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live) {
+    let id = id_with(ui.scope_id(), id);
+    let (_, picked, phase) = channel_rail(ui, id, name, shown, value, true, size, track);
+    (picked, phase)
+}
+
+/// [`channel_slider_valued`] that also responds to the keyboard and to screen readers' actions as
+/// the rail of [`color_slider_stepped`] does: a click or a drag gives it the keyboard focus, and
+/// while it has the focus ↑ and → raise the number `shown` holds and ↓ and ← lower it. When not
+/// `marked`, the rail draws no arrows and screen readers read 0, as [`hue_ring`] does, while the
+/// keys and actions still step from `shown` and give a number even when it equals `shown`'s, as
+/// [`color_field`] does. Returns the new value from 0 to 1 that a click or a
+/// drag gives, its phase, and the number in `shown`'s units that a key or an action gives.
+#[allow(clippy::too_many_arguments)]
+pub fn channel_slider_stepped(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live, Option<f64>) {
+    let id = id_with(ui.scope_id(), id);
+    let read = if marked { shown.clone() } else { shown.as_ref().map(|s| SliderValue { value: 0.0, text: None, ..s.clone() }) };
+    let (resp, picked, phase) = channel_rail(ui, id, name, read, value, marked, size, track);
+    let stepped = slider_keys(ui, &resp, shown, !marked);
+    (picked, phase, stepped.filter(|_| picked.is_none()))
+}
+
+/// The vertical rail of [`channel_slider_valued`] with the id `id`, with its arrows at `value`
+/// when `marked`: its response, the new value from 0 to 1 that a click or drag gives and the
+/// phase.
+#[allow(clippy::too_many_arguments)]
+fn channel_rail(
+    ui: &mut Ui,
+    id: egui::Id,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    let resp = ui.interact(rect, id, Sense::click_and_drag());
     let bar = rect.shrink2(vec2(6.0, 0.0));
     gradient_strip(ui, bar, (bar.height() / 2.0).ceil().max(2.0) as usize, true, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let y = bar.bottom() - value.clamp(0.0, 1.0) * bar.height();
     let fill = if resp.dragged() || resp.hovered() { t.text_strong } else { t.icon };
-    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)].into_iter().filter(|_| marked) {
         let tip = pos2(x + d * 5.0, y);
         ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
     }
     slider_info(ui, &resp, name, shown);
-    match pointer_phase(&resp) {
+    let (picked, phase) = match pointer_phase(&resp) {
         Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
         None => (None, Live::Idle),
-    }
+    };
+    (resp, picked, phase)
 }
 
 /// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it

@@ -96,6 +96,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert("printer".into(), json!(default));
     fields.insert("toFile".into(), json!(!printers["service"].as_bool().unwrap_or(false)));
     fields.insert("__printers".into(), printers);
+    app.ui.print_direct_pdf = false;
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
@@ -217,7 +218,16 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = None;
         return Ok(json!({ "settings": settings }));
     }
-    let r = crate::print::run(app, &json!({ "settings": settings, "printer": d.str("printer"), "toFile": d.bool("toFile") }))?;
+    let direct_pdf = app.ui.print_direct_pdf;
+    let r = crate::print::run(
+        app,
+        &json!({
+            "settings": settings,
+            "printer": d.str("printer"),
+            "toFile": d.bool("toFile"),
+            "directPdf": direct_pdf,
+        }),
+    )?;
     app.ui.dialog = None;
     Ok(r)
 }
@@ -251,7 +261,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(500.0);
             ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(14.0)).color(t.text_strong));
-            egui::ScrollArea::vertical().id_salt(("print", section)).max_height(360.0).auto_shrink([false, false]).show(ui, |ui| match section {
+            let list_h = super::modal::list_height(ui, 360.0);
+            egui::ScrollArea::vertical().id_salt(("print", section)).max_height(list_h).auto_shrink([false, false]).show(ui, |ui| match section {
                 "Marks and Bleed" => super::save_pdf::marks_and_bleeds(app, ui, d),
                 "Output" => output(ui, d, &preview),
                 "Graphics" => graphics(ui, d),
@@ -371,6 +382,11 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             app.status(e);
         }
     });
+    if service && cfg!(windows) {
+        let to_file = d.bool("toFile");
+        ui.add_enabled(!to_file, egui::Checkbox::new(&mut app.ui.print_direct_pdf, "Send PDF directly (bypass driver)"));
+        note(ui, "Writes the print-ready PDF to the printer's TCP/IP RAW port, for PCL-only drivers that change the custom page size.");
+    }
 }
 
 /// `print.preview` of `settings` (an error when they can't print), cached until they or the

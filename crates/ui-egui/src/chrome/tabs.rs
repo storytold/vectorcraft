@@ -364,8 +364,10 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                     ui.painter().rect_filled(crumb_rect, 3.0, t.hover);
                 }
                 if resp.clicked() {
-                    if crumb.is_layer {
-                        nav_cmd = Some(("object.exitIsolation", json!({})));
+                    // The top-level layer's crumb leaves isolation mode; a sublayer's or a group's
+                    // crumb isolates that level.
+                    if crumb.is_layer && i == 0 {
+                        nav_cmd = Some(("object.exitIsolation", json!({ "all": true })));
                     } else if let Some(target) = crumb.id {
                         nav_cmd = Some(("object.isolate", json!({ "id": target.0 })));
                     }
@@ -401,7 +403,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         if bresp.clicked() {
             pattern_cmd = pattern_cmd.or(pattern_edit.as_ref().map(|_| "object.pattern.done"));
             if pattern_cmd.is_none() {
-                // Up one level: the isolated object's parent, or out of isolation mode from a layer.
+                // Up one level: the isolated object's parent group, or `object.exitIsolation`, which
+                // goes from an isolated sublayer to its parent layer and otherwise leaves isolation mode.
                 nav_cmd = Some(match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
                     Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
                     None => ("object.exitIsolation", json!({})),

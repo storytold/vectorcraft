@@ -33,7 +33,7 @@ pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egu
     let ir = egui::Rect::from_center_size(r.left_center() + vec2(h * 0.35 + icon / 2.0, 0.0), vec2(icon, icon));
     if large {
         // The theme's accent, as the primary buttons use it, so the call to action matches the
-        // rest of the window (and PhotoCraft's, #4684); Discord's colour stays on the app-bar icon.
+        // rest of the window (#4684); Discord's colour stays on the app-bar icon.
         let t = Tokens::get(ui.ctx());
         let fill = if resp.hovered() { t.accent } else { t.accent_strong };
         ui.painter().rect_filled(r, CornerRadius::same((h / 2.0) as u8), fill);
@@ -77,7 +77,7 @@ pub fn links(app: &mut VectorcraftApp, ui: &mut Ui) {
     links_in(app, ui, false);
 }
 
-/// [`links`] for a centred column (the Home screen's, as PhotoCraft's, #4684): the Discord button
+/// [`links`] for a centred column (the Home screen's, #4684): the Discord button
 /// and the links, each in the middle.
 pub fn links_centered(app: &mut VectorcraftApp, ui: &mut Ui) {
     links_in(app, ui, true);

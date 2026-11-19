@@ -36,7 +36,7 @@ use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title}
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
-/// The application bar's height, in points (compact, as in PhotoCraft).
+/// The application bar's height, in points (compact).
 pub const APP_BAR_HEIGHT: f32 = 32.0;
 /// The brand mark's side.
 const MARK: f32 = 18.0;
@@ -110,7 +110,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 gap: ui.spacing().item_spacing.x,
                 community: crate::community::discord_width(ui, false),
             });
-            let (switcher, ws_w, learn, discord) = (fit.switcher, fit.switcher_w, fit.learn, fit.community);
+            let (switcher, ws_w, arrange, learn, discord) = (fit.switcher, fit.switcher_w, fit.arrange, fit.learn, fit.community);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -128,6 +128,11 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.run("help.safeMode", json!({})).ok();
                 }
                 ui.add_space(8.0);
+            }
+            // Arrange Documents: Consolidate All Windows and the Tile layouts.
+            if arrange {
+                let resp = widgets::icon_button(ui, "layout-grid", tl!("Arrange Documents"), app.ui.tiled, BAR_ICON);
+                egui::Popup::menu(&resp).show(|ui| arrange_documents_popup(app, ui));
             }
             // Search → command palette (its shortcut opens it too).
             let with_shortcut = |text: &str| match &field.shortcut {
@@ -181,7 +186,34 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The side of the app bar's square icon buttons (the search icon, Explore tutorials).
+/// The Arrange Documents menu ([`menus::arrange_documents_items`]): each item as the Window menu
+/// shows it, grayed out while its command can't run, the Tile layout the panes show checked.
+fn arrange_documents_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.set_min_width(200.0);
+    let mut clicked = None;
+    for it in menus::arrange_documents_items() {
+        match it {
+            menus::Item::Sep => {
+                ui.separator();
+            }
+            menus::Item::Cmd(label, id, p) => {
+                let Some((enabled, checked)) = menus::shown_state(app, id, &p) else { continue };
+                let label = crate::i18n::t_id(id, label);
+                let text = if checked == Some(true) { format!("✓  {label}") } else { format!("     {label}") };
+                if ui.add_enabled(enabled, egui::Button::new(text).min_size(vec2(200.0, 0.0))).clicked() {
+                    clicked = Some((id, if p.is_null() { json!({}) } else { p }));
+                    ui.close();
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some((id, p)) = clicked {
+        menus::invoke(app, id, p);
+    }
+}
+
+/// The side of the app bar's square icon buttons (the search icon, Arrange Documents, Explore tutorials).
 const BAR_ICON: f32 = 28.0;
 /// The narrowest the workspace switcher gets.
 const MIN_SWITCHER: f32 = 64.0;
@@ -225,6 +257,8 @@ struct RightGroup {
     switcher_w: f32,
     /// How the search shows.
     search: Search,
+    /// Whether Arrange Documents shows.
+    arrange: bool,
     /// Whether Explore tutorials shows.
     learn: bool,
     /// Whether the community button shows.
@@ -232,8 +266,8 @@ struct RightGroup {
 }
 
 /// The right-hand group for the room it has. As the room runs short, the community button goes first
-/// (it is also under Help), then Explore tutorials (also Window › Learn), then the search field becomes the
-/// search icon, then the workspace switcher narrows to [`MIN_SWITCHER`], then the icon goes. In Safe
+/// (it is also under Help), then Explore tutorials (also Window › Learn), then Arrange Documents (also Window ›
+/// Arrange), then the search field becomes the search icon, then the workspace switcher narrows to [`MIN_SWITCHER`], then the icon goes. In Safe
 /// Mode the label's width is taken first, and the switcher (also under Window › Workspace) goes when
 /// a minimal one does not fit.
 fn fit_right_group(w: &RightWidths) -> RightGroup {
@@ -254,10 +288,12 @@ fn fit_right_group(w: &RightWidths) -> RightGroup {
         Search::Hidden => 0.0,
     };
     let switcher_w = w.switcher.min(room - 8.0 - search_w).max(MIN_SWITCHER);
-    let learn_end = switcher_w + 8.0 + search_w + w.gap + w.icon;
-    let learn = field && room >= learn_end;
+    let arrange_end = switcher_w + 8.0 + search_w + w.gap + w.icon;
+    let arrange = field && room >= arrange_end;
+    let learn_end = arrange_end + w.gap + w.icon;
+    let learn = arrange && room >= learn_end;
     let community = learn && room >= learn_end + 10.0 + w.gap + w.community;
-    RightGroup { switcher, switcher_w, search, learn, community }
+    RightGroup { switcher, switcher_w, search, arrange, learn, community }
 }
 
 /// The app bar's search field: a button drawn as a field. The command palette's popup holds the
