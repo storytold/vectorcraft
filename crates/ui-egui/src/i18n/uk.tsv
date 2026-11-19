@@ -652,6 +652,8 @@ font-technology	Variable	Варіативні
 	Contextual Task Bar	Контекстна панель завдань
 	Pin Bar Position	Закріпити положення панелі
 	Reset Bar Position	Скинути положення панелі
+	Bar Actions	Дії панелі
+	Reset Bar Actions	Скинути дії панелі
 	Resize	Змінити розмір
 	Contrast	Контраст
 	Control	Панель керування
@@ -10397,6 +10399,11 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Paint	Фарба
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухий протяг
+	Loaded Stroke	Густий мазок
+	Fan Sweep	Віяловий мазок
 	Engraving	Гравіювання
 	Fine Hatching	Тонке штрихування
 	Dense Hatching	Щільне штрихування

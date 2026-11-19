@@ -809,6 +809,8 @@
 	Contextual Task Bar	Kontextový panel úloh
 	Pin Bar Position	Připnout polohu panelu
 	Reset Bar Position	Obnovit polohu panelu
+	Bar Actions	Akce panelu
+	Reset Bar Actions	Obnovit akce panelu
 	Resize	Změnit velikost
 	Tools	Nástroje
 	Toolbars	Panely nástrojů
@@ -10746,6 +10748,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Paint	Malba
+	Flat Sweep	Plochý tah
+	Dry Drag	Suchý tah
+	Loaded Stroke	Sytý tah
+	Fan Sweep	Vějířový tah
 	Engraving	Rytina
 	Fine Hatching	Jemné šrafování
 	Dense Hatching	Husté šrafování

@@ -654,6 +654,8 @@ font-technology	Variable	Вариативные
 	Contextual Task Bar	Контекстная панель задач
 	Pin Bar Position	Закрепить положение панели
 	Reset Bar Position	Сбросить положение панели
+	Bar Actions	Действия панели
+	Reset Bar Actions	Сбросить действия панели
 	Resize	Изменить размер
 	Contrast	Контраст
 	Control	Control
@@ -10802,6 +10804,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Paint	Краска
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухой протяг
+	Loaded Stroke	Густой мазок
+	Fan Sweep	Веерный мазок
 	Engraving	Гравировка
 	Fine Hatching	Тонкая штриховка
 	Dense Hatching	Плотная штриховка

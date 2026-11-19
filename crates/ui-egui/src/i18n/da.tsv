@@ -3507,6 +3507,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Contextual Task Bar	Kontekstuel opgavelinje
 	Pin Bar Position	Fastgør linjens placering
 	Reset Bar Position	Nulstil linjens placering
+	Bar Actions	Linjens handlinger
+	Reset Bar Actions	Nulstil linjens handlinger
 	Tools	Værktøjer
 	Toolbars	Værktøjslinjer
 	Advanced	Avanceret
@@ -10808,6 +10810,11 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Paint	Maling
+	Flat Sweep	Fladt strøg
+	Dry Drag	Tørt træk
+	Loaded Stroke	Fyldigt strøg
+	Fan Sweep	Viftestrøg
 	Engraving	Gravering
 	Fine Hatching	Fin skravering
 	Dense Hatching	Tæt skravering

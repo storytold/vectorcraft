@@ -603,6 +603,8 @@ antiAlias	Sharp	锐利
 	Contextual Task Bar	上下文任务栏
 	Pin Bar Position	固定任务栏位置
 	Reset Bar Position	重置任务栏位置
+	Bar Actions	任务栏操作
+	Reset Bar Actions	重置任务栏操作
 	Resize	调整大小
 	Contrast	对比
 	Control	控制栏
@@ -10589,6 +10591,11 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Paint	绘画
+	Flat Sweep	平刷
+	Dry Drag	干拖
+	Loaded Stroke	厚涂笔触
+	Fan Sweep	扇形笔触
 	Engraving	雕刻
 	Fine Hatching	细线排线
 	Dense Hatching	密集排线

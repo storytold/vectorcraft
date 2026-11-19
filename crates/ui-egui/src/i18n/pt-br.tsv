@@ -601,6 +601,8 @@ antiAlias	Sharp	Nítido
 	Contextual Task Bar	Barra de Tarefas Contextual
 	Pin Bar Position	Fixar Posição da Barra
 	Reset Bar Position	Redefinir Posição da Barra
+	Bar Actions	Ações da Barra
+	Reset Bar Actions	Redefinir Ações da Barra
 	Resize	Redimensionar
 	Control	Controle
 	Convert	Converter
@@ -10818,6 +10820,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Paint	Pintura
+	Flat Sweep	Pincelada plana
+	Dry Drag	Arrasto seco
+	Loaded Stroke	Traço carregado
+	Fan Sweep	Pincelada em leque
 	Engraving	Gravura
 	Fine Hatching	Hachuras finas
 	Dense Hatching	Hachuras densas

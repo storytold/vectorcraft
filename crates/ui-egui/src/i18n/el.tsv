@@ -610,6 +610,8 @@ font-technology	Variable	Μεταβλητές
 	Contextual Task Bar	Γραμμή εργασιών βάσει περιβάλλοντος
 	Pin Bar Position	Σταθεροποίηση θέσης γραμμής
 	Reset Bar Position	Επαναφορά θέσης γραμμής
+	Bar Actions	Ενέργειες γραμμής
+	Reset Bar Actions	Επαναφορά ενεργειών γραμμής
 	Resize	Αλλαγή μεγέθους
 	Contrast	Αντίθεση
 	Control	Έλεγχος
@@ -8895,6 +8897,11 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Paint	Ζωγραφική
+	Flat Sweep	Επίπεδη πινελιά
+	Dry Drag	Στεγνό σύρσιμο
+	Loaded Stroke	Γεμάτη πινελιά
+	Fan Sweep	Βεντάλια
 	Engraving	Χαρακτική
 	Fine Hatching	Λεπτή διαγράμμιση
 	Dense Hatching	Πυκνή διαγράμμιση

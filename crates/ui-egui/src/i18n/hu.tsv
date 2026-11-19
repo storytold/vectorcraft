@@ -3788,6 +3788,8 @@ mark-style	Japanese	Japán
 	Reset all Revolve settings to their defaults.	A tengely körüli forgatás minden beállítását visszaállítja az alapértékre.
 	Reset Automation	Automation visszaállítása
 	Reset Bar Position	Sáv helyének visszaállítása
+	Bar Actions	Sáv műveletei
+	Reset Bar Actions	Sáv műveleteinek visszaállítása
 	Reset Bounding Box	Befoglaló keret visszaállítása
 	Rotate Bounding Box	Befoglaló keret elforgatása
 	Rotate Bounding Box…	Befoglaló keret elforgatása…
@@ -10735,6 +10737,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Paint	Festék
+	Flat Sweep	Lapos húzás
+	Dry Drag	Száraz húzás
+	Loaded Stroke	Telített ecsetvonás
+	Fan Sweep	Legyezővonás
 	Engraving	Metszet
 	Fine Hatching	Finom vonalkázás
 	Dense Hatching	Sűrű vonalkázás

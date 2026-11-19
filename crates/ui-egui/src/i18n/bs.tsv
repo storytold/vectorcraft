@@ -797,6 +797,8 @@
 	Contextual Task Bar	Kontekstna traka zadataka
 	Pin Bar Position	Položaj prikvačene trake
 	Reset Bar Position	Vrati položaj trake na početno
+	Bar Actions	Radnje trake
+	Reset Bar Actions	Vrati radnje trake na početno
 	Resize	Promijeni veličinu
 	Tools	Alati
 	Toolbars	Trake s alatima
@@ -7941,6 +7943,11 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Paint	Boja
+	Flat Sweep	Ravni potez
+	Dry Drag	Suhi potez
+	Loaded Stroke	Bogati potez
+	Fan Sweep	Lepezasti potez
 @msg	`at` must be "start" or "end"	`at` mora biti "start" ili "end"
 @msg	give exactly one of `through` and `toward`	navedite tačno jedno od `through` i `toward`
 @msg	no arc fits these points: two are the same or all three lie on one line	nijedan luk ne odgovara ovim tačkama: dvije su iste ili sve tri leže na jednoj pravoj

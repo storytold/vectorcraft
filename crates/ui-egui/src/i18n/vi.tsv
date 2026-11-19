@@ -3566,6 +3566,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset all 3D settings to their defaults.	Đặt lại tất cả cài đặt 3D về mặc định.
 	Reset all Revolve settings to their defaults.	Đặt lại tất cả cài đặt Revolve về mặc định.
 	Reset Bar Position	Đặt lại vị trí thanh
+	Bar Actions	Thao tác của thanh
+	Reset Bar Actions	Đặt lại thao tác của thanh
 	Reset Bounding Box	Đặt lại hộp bao
 	Rotate Bounding Box	Xoay hộp bao
 	Rotate Bounding Box…	Xoay hộp bao…
@@ -8594,6 +8596,11 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Paint	Sơn
+	Flat Sweep	Nét quét phẳng
+	Dry Drag	Nét kéo khô
+	Loaded Stroke	Nét cọ đậm
+	Fan Sweep	Nét quét hình quạt
 	Engraving	Khắc nét
 	Fine Hatching	Nét gạch mảnh
 	Dense Hatching	Nét gạch dày

@@ -839,6 +839,8 @@ digits	Malayalam	말라얄람어
 	Contextual Task Bar	상황별 작업 표시줄
 	Pin Bar Position	표시줄 위치 고정
 	Reset Bar Position	표시줄 위치 재설정
+	Bar Actions	표시줄 동작
+	Reset Bar Actions	표시줄 동작 재설정
 	Resize	크기 조절
 	Tools	도구
 	Toolbars	도구 모음
@@ -10384,6 +10386,11 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Paint	페인트
+	Flat Sweep	평평한 붓질
+	Dry Drag	마른 붓질
+	Loaded Stroke	두터운 붓질
+	Fan Sweep	부채꼴 붓질
 	Engraving	판화
 	Fine Hatching	가는 해칭
 	Dense Hatching	촘촘한 해칭
