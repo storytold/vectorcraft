@@ -894,7 +894,13 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap()["sliders"], json!("none"));
     assert_eq!(app.run("ui.colorWheel", json!({"sliders": "hsl"})).unwrap_err(), "`sliders` must be none or oklch");
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
-    assert_eq!(got, json!({"view": "box", "channel": "red", "opacity": false, "hexField": false, "sliders": "oklch", "vision": false}));
+    assert_eq!(
+        got,
+        json!({
+            "view": "box", "channel": "red", "opacity": false, "hexField": false, "sliders": "oklch",
+            "harmony": false, "harmonyRule": "complementary", "vision": false
+        })
+    );
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hsl"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none or oklch");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
@@ -905,12 +911,21 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
 #[test]
 fn ui_color_wheel_keeps_a_key_given_as_null() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let set = json!({"view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch", "vision": true});
+    let set = json!({
+        "view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch",
+        "harmony": true, "harmonyRule": "triad", "vision": true
+    });
     let all = app.run("ui.colorWheel", set.clone()).unwrap();
     assert_eq!(all, set);
-    for key in ["view", "channel", "opacity", "hexField", "sliders", "vision"] {
+    for key in ["view", "channel", "opacity", "hexField", "sliders", "harmony", "harmonyRule", "vision"] {
         assert_eq!(app.run("ui.colorWheel", json!({ key: null })).unwrap(), all, "{key}: null");
     }
     let got = app.run("ui.colorWheel", json!({"view": null, "channel": "blue", "opacity": null, "hexField": false})).unwrap();
-    assert_eq!(got, json!({"view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch", "vision": true}));
+    assert_eq!(
+        got,
+        json!({
+            "view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch",
+            "harmony": true, "harmonyRule": "triad", "vision": true
+        })
+    );
 }

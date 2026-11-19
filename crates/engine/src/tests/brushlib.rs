@@ -114,44 +114,50 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "bristle-brushes",
             "pattern-borders",
             "scatter-shapes",
+            "stipple",
             "game-trails",
             "energy-beams",
             "dry-media",
             "tech-circuit",
-            "arrows"
+            "engraving",
+            "arrows",
+            "image-brush"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
+    // Looked up by id, so a library added to the list does not shift these checks.
+    let entry = |id: &str| libs.iter().find(|l| l["id"] == id).unwrap();
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
     assert_eq!(
         lib["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Notched Ribbon", "Double Line", "Wave", "Teardrop", "Striped Ribbon"]
     );
-    assert_eq!(libs[0]["count"].as_u64(), Some(5));
+    assert_eq!(entry("art-ribbons")["count"].as_u64(), Some(5));
     let trails = run(&mut s, "brush.library", json!({"library": "game-trails"}));
     assert_eq!(
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[7]["count"].as_u64(), Some(4));
+    assert_eq!(entry("game-trails")["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[8]["count"].as_u64(), Some(4));
+    assert_eq!(entry("energy-beams")["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((entry("dry-media")["name"].as_str(), entry("dry-media")["count"].as_u64()), (Some("Dry Media"), Some(4)));
     let arrows = run(&mut s, "brush.library", json!({"library": "Arrows"}));
     assert_eq!(
         arrows["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
     );
-    assert_eq!((libs[11]["name"].as_str(), libs[11]["count"].as_u64()), (Some("Arrows"), Some(5)));
+    assert_eq!((entry("arrows")["name"].as_str(), entry("arrows")["count"].as_u64()), (Some("Arrows"), Some(5)));
+    assert_eq!((entry("stipple")["name"].as_str(), entry("stipple")["count"].as_u64()), (Some("Stipple"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -166,10 +172,12 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("bristle-brushes", "bristle"),
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
+        ("stipple", "scatter"),
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
         ("arrows", "art"),
+        ("image-brush", "scatter"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
@@ -200,6 +208,43 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
 }
 
+#[test]
+fn image_brush_stamps_draw_and_carry_their_pixels_when_added_and_saved() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "image-brush").unwrap();
+    let names = ["Soft Bloom", "Halftone Field", "Solar Grain", "Color Flecks"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    assert_eq!(lib.doc.images.len(), 4);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Scatter(sc) = &b.kind else { panic!("{} is not a scatter brush", b.name) };
+        let NodeKind::Image(image) = &sc.art.kind else { panic!("{} has no image stamp", b.name) };
+        assert!(lib.doc.images.get(&image.key).is_some_and(|blob| blob.bytes.starts_with(b"\x89PNG\r\n\x1a\n")));
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
+        assert!(pieces.len() >= 3 && pieces.iter().all(|p| matches!(p.kind, NodeKind::Image(_))), "{}", b.name);
+        // A short accent shows at least one stamp at a 1 pt stroke.
+        let short = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(10.0), &black_stroke());
+        assert!(!short.is_empty() && short.iter().all(|p| matches!(p.kind, NodeKind::Image(_))), "{} on a 10 pt line", b.name);
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "image-brush", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert!(doc(&s).images.contains_key(&image.key), "{} pixels were not copied", b.name);
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    let mut saved_brushes = vectorcraft_brush::library(&reopened);
+    for brush in &mut saved_brushes {
+        if let BrushKind::Scatter(sc) = &mut brush.kind {
+            sc.art.id = NodeId(0); // Loaded image art is given a fresh document node ID.
+        }
+    }
+    assert_eq!(saved_brushes, lib.brushes);
+    assert_eq!(reopened.images, lib.doc.images);
+}
+
 /// Every path of brush art `n`: (anchors, opacity).
 fn art_paths(n: &vectorcraft_doc::Node) -> Vec<(usize, f32)> {
     let mut out = vec![];
@@ -226,6 +271,78 @@ fn line_to(x: f64) -> vectorcraft_geom::BezPath {
 
 fn black_stroke() -> vectorcraft_doc::StrokeLayer {
     vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+}
+
+#[test]
+fn engraving_library_draws_fine_parallel_strokes_and_survives_save() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "engraving").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Engraving"), Some("builtIn"), Some(4)));
+    let (_, lib) = cmd::brushlib::library(&s, "Engraving").unwrap();
+    for b in &lib.brushes {
+        for length in [2.0, 200.0] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at {length} pt", b.name);
+        }
+    }
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "engraving", "name": "Fine Hatching", "apply": true, "ids": [path]}));
+    assert_eq!(strs(&added["added"]), ["Fine Hatching"]);
+    assert_eq!(added["applied"], json!([path]));
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": ["Fine Hatching"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::find(&reopened, "Fine Hatching").unwrap(), lib.brushes[0]);
+}
+
+#[test]
+fn stipple_library_draws_dot_textures_and_survives_save() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "stipple").unwrap();
+    let names: Vec<&str> = lib.brushes.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Fine Stipple", "Dense Stipple", "Soft Stipple", "Bold Stipple"]);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Scatter(scatter) = &b.kind else { panic!("{} is not a scatter brush", b.name) };
+        assert_eq!(scatter.colorization, vectorcraft_brush::Colorization::Tints);
+        assert!(scatter.spacing.0 > 0.0 && scatter.spacing.1 >= scatter.spacing.0);
+        // A red stroke: the black dots take it as their color, and Soft Stipple's dots stay translucent.
+        let red = vectorcraft_color::Color::rgb(0.8, 0.1, 0.2);
+        let stroke = vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(red), 1.0);
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(200.0), &stroke);
+        let points = anchors(&pieces.iter().collect::<Vec<_>>());
+        assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        let mut dots = vec![];
+        for piece in &pieces {
+            piece.walk(&mut |c| {
+                if c.path_data().is_some() {
+                    let fill = c.appearance.fill().unwrap_or_else(|| panic!("a {} dot has no fill", b.name));
+                    dots.push((fill.paint.color(), fill.opacity));
+                }
+            });
+        }
+        assert!(!dots.is_empty(), "{}", b.name);
+        for (color, opacity) in dots {
+            let rgb = color.unwrap_or_else(|| panic!("a {} dot is not a solid color", b.name)).to_rgb();
+            assert!(rgb.iter().zip(red.to_rgb()).all(|(a, e)| (a - e).abs() < 1e-4), "{} dot is {rgb:?}, not the stroke color", b.name);
+            if b.name == "Soft Stipple" {
+                assert!(opacity > 0.0 && opacity < 1.0, "Soft Stipple dot opacity {opacity}");
+            } else {
+                assert_eq!(opacity, 1.0, "{}", b.name);
+            }
+        }
+        let before = undo_len(&s);
+        let result = run(&mut s, "brush.addFromLibrary", json!({"library": "stipple", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&result["added"]), [b.name.as_str()]);
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
 #[test]

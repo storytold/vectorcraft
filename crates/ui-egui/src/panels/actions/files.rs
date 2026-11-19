@@ -1,7 +1,7 @@
 //! Action set files: the Actions panel menu's Save Actions…, Load Actions… and Replace Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 6, "name",
-//! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 7, "name",
+//! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?, "automaticAlignTo"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
 //! with `{"message", "allowContinue"}`. A Select Object step is the command `select.byNote` with
 //! `{"note", "caseSensitive", "wholeWord"}`, and a Select Path step is the command `select.storedPath`
@@ -13,7 +13,9 @@
 //! stop, sets with Select Object steps use version 4, sets with Select Path steps use version 5 and
 //! sets with View menu steps ([`crate::menus::plays_in_app`]), whose params are an object, use
 //! version 6 so older builds refuse them rather than fail at that step. Other sets use version 1, and
-//! earlier version 1 to 5 files still work.
+//! earlier version 1 to 6 files still work. Automatic Align playback, whether the action enables it or
+//! a stored step explicitly uses `object.align` with `to: "auto"`, requires version 7, including in
+//! excluded steps, recorded batches and recorded Batch runs, so older builds cannot silently lose that choice.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
 //! `actionSet.read`), a Set Selection step as a Select Object step.
 
@@ -66,6 +68,8 @@ struct FileAction {
     key: Option<super::FunctionKey>,
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::deserialize_color")]
     color: Option<String>,
+    #[serde(default, rename = "automaticAlignTo", skip_serializing_if = "is_false")]
+    automatic_align_to: bool,
 }
 
 /// A step of an action in an action set file: a command id and its params, as `command.batch`
@@ -79,7 +83,7 @@ struct FileStep {
     excluded: bool,
 }
 
-fn is_false(value: &bool) -> bool {
+pub(super) fn is_false(value: &bool) -> bool {
     !value
 }
 
@@ -197,6 +201,20 @@ fn folder_pref_in(command: &str, params: &Value) -> Option<String> {
     }
 }
 
+/// Whether the raw step stores automatic Align semantics, including in excluded recorded batches and
+/// in the steps of a recorded Batch run (`action.batch`).
+fn automatic_align_in(command: &str, params: &Value) -> bool {
+    match command {
+        "object.align" => params.get("to").and_then(Value::as_str) == Some("auto"),
+        "command.batch" | "action.batch" => params.get("commands").and_then(Value::as_array).is_some_and(|steps| {
+            steps.iter().any(|step| {
+                automatic_align_in(step.get("command").and_then(Value::as_str).unwrap_or_default(), step.get("params").unwrap_or(&Value::Null))
+            })
+        }),
+        _ => false,
+    }
+}
+
 /// `set` as the text of an action set file.
 pub fn write_set(set: &ActionSet) -> String {
     let actions = set
@@ -212,6 +230,7 @@ pub fn write_set(set: &ActionSet) -> String {
                 .collect(),
             key: a.key,
             color: a.color.clone(),
+            automatic_align_to: a.automatic_align_to,
         })
         .collect();
     let steps = || set.actions.iter().flat_map(|a| &a.steps);
@@ -219,7 +238,10 @@ pub fn write_set(set: &ActionSet) -> String {
     let has_select_path = steps().any(|(command, params)| !select_paths_in(command, params).is_empty());
     let has_stop = steps().any(|(command, params)| !stops_in(command, params).is_empty());
     let has_ui_step = steps().any(|(command, params)| !ui_steps_in(command, params).is_empty());
+    let has_automatic_align =
+        set.actions.iter().any(|a| a.automatic_align_to || a.steps.iter().any(|(command, params)| automatic_align_in(command, params)));
     let version = match (has_select_path, has_select_object, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        _ if has_automatic_align => 7,
         _ if has_ui_step => 6,
         (true, ..) => 5,
         (false, true, ..) => 4,
@@ -240,7 +262,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1..=6) {
+    if !matches!(f.version, 1..=7) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -270,7 +292,13 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
         .into_iter()
         .map(|a| {
             let excluded_steps = a.steps.iter().enumerate().filter_map(|(i, step)| step.excluded.then_some(i)).collect();
-            Action { key: a.key, color: a.color, excluded_steps, ..Action::new(a.name, a.steps.into_iter().map(|s| (s.command, s.params)).collect()) }
+            Action {
+                key: a.key,
+                color: a.color,
+                automatic_align_to: a.automatic_align_to,
+                excluded_steps,
+                ..Action::new(a.name, a.steps.into_iter().map(|s| (s.command, s.params)).collect())
+            }
         })
         .collect();
     let set_name = if f.name.trim().is_empty() { name.to_string() } else { f.name };

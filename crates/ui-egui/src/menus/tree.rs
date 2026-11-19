@@ -457,6 +457,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Find Font…", "type.findFont"),
                 c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
+                c("Kinsoku Shori Settings…", crate::dialogs::kinsoku_sets::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -581,7 +582,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
+                        c("Customize…", "ui.proofSetupDialog"),
                     ],
                 ),
                 c("Proof Colors", "view.proofColors"),
@@ -714,6 +715,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
                 panel("Production Preflight", crate::panels::preflight::ID),
+                panel("Retype", crate::panels::retype::ID),
                 panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
