@@ -1609,10 +1609,11 @@ impl DirectSelectionTool {
                 self.snapped = snapped(q.to_vec2(), input.to_vec2(), ev.mods.shift, &guides);
                 self.guides = guides;
                 drag.handle = q;
-                drag.independent = ev.mods.alt;
-                drag.symmetric = self.mirrors(ev);
             }
         }
+        // Alt and Cmd/Ctrl take effect on every event, while Space is held too.
+        drag.independent = ev.mods.alt;
+        drag.symmetric = self.mirrors(ev);
         drag.last = p;
         drag.space = ev.mods.space;
         let mut params = json!({

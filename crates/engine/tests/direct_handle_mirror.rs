@@ -145,6 +145,26 @@ fn direct_handle_cmd_mirror_holds_through_a_space_translation() {
     pointer(&mut s, PointerKind::Up, next, cmd());
 }
 
+#[test]
+fn direct_handle_modifiers_changed_during_a_space_translation_apply_at_once() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    press_handle(&mut s, Point::new(180.0, 100.0));
+    pointer(&mut s, PointerKind::Drag, Point::new(180.0, 160.0), cmd());
+    let moved = Point::new(200.0, 190.0);
+    pointer(&mut s, PointerKind::Drag, moved, Mods { space: true, ..cmd() });
+    handles(anchor(&s, id), Point::new(40.0, 70.0), moved, AnchorKind::Smooth);
+    // Releasing Cmd while Space is held gives the opposite handle its own length again.
+    pointer(&mut s, PointerKind::Drag, moved, Mods { space: true, ..Mods::default() });
+    let a = anchor(&s, id);
+    near(a.p, Point::new(120.0, 130.0));
+    handles(a, Point::new(80.0, 100.0), moved, AnchorKind::Smooth);
+    // Alt while Space is held leaves the opposite handle where the translation put it.
+    pointer(&mut s, PointerKind::Drag, moved, Mods { space: true, alt: true, ..cmd() });
+    handles(anchor(&s, id), Point::new(70.0, 130.0), moved, AnchorKind::Corner);
+    pointer(&mut s, PointerKind::Up, moved, Mods { alt: true, ..cmd() });
+}
+
 #[derive(Debug, PartialEq)]
 struct Snapshot {
     document: Value,
