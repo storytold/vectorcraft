@@ -691,3 +691,89 @@ mod tests {
         assert_eq!(closest(Line::new((0.0, 0.0), (10.0, 0.0)), Line::new((5.0, -5.0), (5.0, 5.0))), (Vec2::ZERO, Point::new(5.0, 0.0)));
     }
 }
+
+#[cfg(test)]
+mod review_597185_before {
+    use super::*;
+    use vectorcraft_geom::kurbo::BezPath;
+
+    fn polygon(segments: usize) -> PathData {
+        let mut path = BezPath::new();
+        path.move_to((0.0, 0.0));
+        for i in 1..segments {
+            path.line_to((i as f64, (i % 2) as f64));
+        }
+        path.close_path();
+        let path = PathData::from_bezpath(&path);
+        assert_eq!(path.to_bezpath().segments().count(), segments, "CONTROL: exact finite cap-boundary fixture");
+        path
+    }
+
+    fn rectangle() -> PathData {
+        vectorcraft_geom::shapes::rectangle(Rect::new(195.0, 100.0, 205.0, 200.0))
+    }
+
+    #[test]
+    fn review_4626304603_oversized_region_keeps_capacity_for_later_simple_contact() {
+        let simple = vectorcraft_geom::shapes::rectangle(Rect::new(30000.0, 100.0, 30004.0, 200.0));
+        let probe = Point::new(30004.5, 150.0); // Strictly inside inflated bounds: independent of4610.
+        let expected = Point::new(30004.0, 150.0);
+        let mut ordinary = Contours::default();
+        ordinary.push(&simple, None);
+        assert_eq!(ordinary.nearest(probe, 1.0), Some(expected), "CONTROL: the simple later region is a valid contact");
+        let mut full = Contours::default();
+        full.push(&polygon(super::super::targets::BUDGET), None);
+        assert_eq!(full.segments, super::super::targets::BUDGET, "CONTROL: the stored cap is retained");
+        full.push(&simple, None);
+        assert_eq!(full.segments, super::super::targets::BUDGET);
+        assert!(full.nearest(probe, 1.0).is_none(), "CONTROL: a genuinely full collector still stops");
+        let oversized = polygon(super::super::targets::BUDGET + 1);
+        let mut contours = Contours::default();
+        contours.push(&oversized, None);
+        assert!(contours.is_empty(), "CONTROL: an oversized region is discarded atomically");
+        assert_eq!(contours.segments, 0);
+        contours.push(&simple, None);
+        assert_eq!(contours.nearest(probe, 1.0), Some(expected), "REGRESSION: a discarded oversized region must not hide a later fitting region");
+        assert_eq!(contours.segments, 4);
+        let mut reversed = Contours::default();
+        reversed.push(&simple, None);
+        reversed.push(&oversized, None);
+        assert_eq!(reversed.nearest(probe, 1.0), Some(expected), "existing stored contacts survive an oversized later region");
+        assert!(reversed.segments <= super::super::targets::BUDGET);
+    }
+
+    #[test]
+    fn review_4626304610_point_tolerance_includes_the_maximum_boundary() {
+        let mut contours = Contours::default();
+        contours.push(&rectangle(), None);
+        assert_eq!(contours.nearest(Point::new(208.5, 150.0), 4.0), Some(Point::new(205.0, 150.0)), "CONTROL: ordinary interior reach");
+        assert_eq!(contours.nearest(Point::new(191.0, 150.0), 4.0), Some(Point::new(195.0, 150.0)), "CONTROL: minimum boundary already works");
+        assert!(contours.nearest(Point::new(209.001, 150.0), 4.0).is_none(), "CONTROL: outside the exact tolerance remains excluded");
+        assert_eq!(
+            contours.nearest(Point::new(209.0, 150.0), 4.0),
+            Some(Point::new(205.0, 150.0)),
+            "REGRESSION: maximum boundary has the same inclusive tolerance"
+        );
+        assert_eq!(contours.nearest(Point::new(200.0, 204.0), 4.0), Some(Point::new(200.0, 200.0)));
+    }
+
+    #[test]
+    fn review_4626304610_trajectory_tolerance_includes_the_maximum_boundary() {
+        let mut contours = Contours::default();
+        contours.push(&rectangle(), None);
+        let query = |p, dir| contours.on_line(p, dir, p, 4.0, false);
+        assert_eq!(
+            query(Point::new(208.5, 150.0), Vec2::new(1.0, 0.0)),
+            Some(Point::new(205.0, 150.0)),
+            "CONTROL: ordinary finite trajectory contact"
+        );
+        assert_eq!(query(Point::new(191.0, 150.0), Vec2::new(1.0, 0.0)), Some(Point::new(195.0, 150.0)), "CONTROL: minimum boundary");
+        assert!(query(Point::new(209.001, 150.0), Vec2::new(1.0, 0.0)).is_none(), "CONTROL: outside tolerance");
+        assert_eq!(
+            query(Point::new(209.0, 150.0), Vec2::new(1.0, 0.0)),
+            Some(Point::new(205.0, 150.0)),
+            "REGRESSION: maximum boundary must reach the exact intersection"
+        );
+        assert_eq!(query(Point::new(200.0, 204.0), Vec2::new(0.0, 1.0)), Some(Point::new(200.0, 200.0)));
+    }
+}

@@ -1524,3 +1524,132 @@ fn stroke_review_nonuniform_type_stroke_origin() {
         }
     }
 }
+
+// Additive to crates/tools/src/guides/tests.rs on exact c39.
+// These cases use only APIs already present in that Before source.
+fn review_597185_path(d: &mut Document, points: &[Point], width: Option<f64>) {
+    let mut path = BezPath::new();
+    path.move_to(points[0]);
+    for point in &points[1..] {
+        path.line_to(*point);
+    }
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    if let Some(width) = width {
+        appearance.set_fill(vectorcraft_color::Paint::None);
+        appearance.stroke_mut().unwrap().width = width;
+    } else {
+        path.close_path();
+        appearance.set_stroke(vectorcraft_color::Paint::None);
+    }
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&path), appearance)).unwrap();
+}
+
+fn review_597185_vertical(d: &mut Document, x: f64) {
+    review_597185_path(d, &[Point::new(x, -1000.0), Point::new(x, 2000.0)], Some(0.5));
+}
+
+fn review_597185_anchor(d: &mut Document, at: Point) {
+    review_597185_path(d, &[at, Point::new(-20.0, 50.0), Point::new(-20.0, 60.0)], None);
+}
+
+fn review_597185_scale(d: &Document, on: bool, h: Handle, raw: Point) -> (Point, Vec<Overlay>) {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: on, snapping_tolerance: 4.0, ..cx(d, &selection, &paint) };
+    let r = Rect::new(0.0, 0.0, 10.0, if h == Handle::Right { 20.0 } else { 10.0 });
+    let a = crate::bbox::scale_for_drag(r, h, raw, false, false);
+    let (a, guides) = Targets::for_scale(&c).snap_scale(&OrientedBox::aligned(r), h, a, false, false, 4.0);
+    (a * h.pos(r), guides)
+}
+
+fn review_597185_stroke_label(guides: &[Overlay]) -> bool {
+    guides.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "stroke edge"))
+}
+
+#[test]
+fn review_597185_distant_stroke_does_not_enable_plain_constrained_path() {
+    let run = |triangle: bool, stroke: Option<f64>, on: bool| {
+        let mut d = Document::new(2000.0, 1200.0);
+        if triangle {
+            review_597185_path(&mut d, &[Point::new(480.0, 200.0), Point::new(540.0, 500.0), Point::new(700.0, 200.0)], None);
+        }
+        if let Some(x) = stroke {
+            review_597185_path(&mut d, &[Point::new(x, 100.0), Point::new(x, 400.0)], Some(20.0));
+        }
+        let (selection, paint) = (Selection::default(), paint());
+        let c = ToolContext { smart_guides: true, snap_to_stroke_edges: on, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+        let leave = Leave::segment(&c, Point::new(400.0, 300.0), true);
+        Targets::for_drawing(&d, &[], None, None).styled(&c).with_stroke_edges(&c, &[], None).snap_from(Point::new(498.0, 300.0), Some(&leave), 4.0)
+    };
+    // Ordinary OFF behavior, an empty painted channel, and a genuine in-reach painted edge.
+    assert_eq!(run(true, Some(1100.0), false).0, Point::new(498.0, 300.0));
+    assert_eq!(run(true, None, true).0, Point::new(498.0, 300.0));
+    let (q, guides) = run(false, Some(510.0), true);
+    assert!(q.distance(Point::new(500.0, 300.0)) < 1e-7 && review_597185_stroke_label(&guides), "{q:?}: {guides:?}");
+    let (q, guides) = run(true, Some(1100.0), true);
+    assert_eq!(q, Point::new(498.0, 300.0), "an unrelated painted stroke must not enable a plain-path intersection: {guides:?}");
+}
+
+#[test]
+fn review_597185_bbox_constrained_tries_farther_feasible_stroke() {
+    let raw = Point::new(0.5, 10.0);
+    let mut valid = Document::new(2000.0, 1200.0);
+    review_597185_vertical(&mut valid, 2.75);
+    let (q, guides) = review_597185_scale(&valid, true, Handle::Right, raw);
+    assert!((q.x - 2.5).abs() < 1e-7 && review_597185_stroke_label(&guides), "valid painted control: {q:?} {guides:?}");
+    let mut anchor = valid.clone();
+    review_597185_anchor(&mut anchor, Point::new(3.0, 10.0));
+    let (q, guides) = review_597185_scale(&anchor, true, Handle::Right, raw);
+    assert!((q.x - 3.0).abs() < 1e-7 && !review_597185_stroke_label(&guides), "valid anchor keeps priority: {q:?} {guides:?}");
+    let mut pair = valid.clone();
+    review_597185_vertical(&mut pair, -0.5);
+    assert_eq!(review_597185_scale(&pair, false, Handle::Right, raw).0, raw, "OFF control");
+    let (q, guides) = review_597185_scale(&pair, true, Handle::Right, raw);
+    assert!(
+        (q.x - 2.5).abs() < 1e-7 && review_597185_stroke_label(&guides),
+        "the nearer flipping stroke must not hide a feasible contact: {q:?} {guides:?}"
+    );
+}
+
+#[test]
+fn review_597185_bbox_rejected_anchor_still_tries_stroke() {
+    let raw = Point::new(0.5, 10.0);
+    let mut valid = Document::new(2000.0, 1200.0);
+    review_597185_vertical(&mut valid, 2.25);
+    let (q, guides) = review_597185_scale(&valid, true, Handle::BottomRight, raw);
+    assert!((q.x - 2.0).abs() < 1e-7 && review_597185_stroke_label(&guides), "valid painted control: {q:?} {guides:?}");
+    let mut anchor = valid.clone();
+    review_597185_anchor(&mut anchor, Point::new(3.0, 10.0));
+    let (q, guides) = review_597185_scale(&anchor, true, Handle::BottomRight, raw);
+    assert!((q.x - 3.0).abs() < 1e-7 && !review_597185_stroke_label(&guides), "valid anchor keeps priority: {q:?} {guides:?}");
+    let mut pair = valid.clone();
+    review_597185_anchor(&mut pair, Point::new(-0.5, 10.0));
+    assert_eq!(review_597185_scale(&pair, false, Handle::BottomRight, raw).0, raw, "OFF control");
+    let (q, guides) = review_597185_scale(&pair, true, Handle::BottomRight, raw);
+    assert!(
+        (q.x - 2.0).abs() < 1e-7 && review_597185_stroke_label(&guides),
+        "a sign-invalid anchor must not suppress the painted channel: {q:?} {guides:?}"
+    );
+}
+
+#[test]
+fn review_597185_bbox_free_domain_uses_same_original_segment() {
+    let mut d = Document::new(2000.0, 1200.0);
+    let normal = Vec2::new(-2.0, 1.0) / 5.0f64.sqrt();
+    // One actual painted edge is y=2x+11. Its unrestricted nearest point is
+    // sign-invalid; the feasible interval belongs to that SAME original edge.
+    review_597185_path(&mut d, &[Point::new(-10.0, -9.0) + normal * 20.0, Point::new(10.0, 31.0) + normal * 20.0], Some(40.0));
+    let raw = Point::new(0.5, 10.0);
+    assert_eq!(review_597185_scale(&d, false, Handle::BottomRight, raw).0, raw, "OFF control");
+    let (q, guides) = review_597185_scale(&d, true, Handle::BottomRight, Point::new(1.0, 13.5));
+    assert!(
+        q.x > 0.0 && (q.y - (2.0 * q.x + 11.0)).abs() < 1e-6 && review_597185_stroke_label(&guides),
+        "already-feasible painted control: {q:?} {guides:?}"
+    );
+    let (q, guides) = review_597185_scale(&d, true, Handle::BottomRight, raw);
+    assert!(q.x > 0.0 && q.x < 5e-4 && (q.y - 11.0).abs() < 1e-3, "OPEN sign boundary without a new minimum-scale floor: {q:?} {guides:?}");
+    assert!(
+        (q.y - (2.0 * q.x + 11.0)).abs() < 1e-6 && review_597185_stroke_label(&guides),
+        "contact must stay on the original painted edge: {q:?} {guides:?}"
+    );
+}

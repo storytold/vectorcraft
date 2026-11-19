@@ -911,3 +911,115 @@ fn review_4625304019_moving_peer_art_is_excluded_but_original_copies_remain_targ
         "REGRESSION: all moving peer artwork must be excluded; no stationary contour holds the raw delta: {v}"
     );
 }
+
+fn review_462630_resize(d: &vectorcraft_doc::Document, start: Point, end: Point, stroke_edges: bool) -> Value {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext {
+        smart_guides: true,
+        snap_to_stroke_edges: stroke_edges,
+        snapping_tolerance: 4.0,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        ..cx(d, &selection, &paint)
+    };
+    let mut tool = ArtboardTool::default();
+    tool.set_option("scaleArt", &json!(false));
+    tool.pointer(&c, &ev(PointerKind::Down, start.x, start.y));
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, end.x, end.y));
+    assert!(actions.iter().any(|action| matches!(action, Action::Preview(id, _) if id == "artboard.setProps")), "a real handle resize must preview");
+    preview_params(&actions)
+}
+
+fn review_462630_bounds(value: &Value, expected: Rect) {
+    for (key, expected) in ["x", "y", "width", "height"].into_iter().zip([expected.x0, expected.y0, expected.width(), expected.height()]) {
+        let actual = value[key].as_f64().unwrap();
+        assert!((actual - expected).abs() <= 1e-6, "{key}: expected {expected}, got {actual}: {value}");
+    }
+}
+
+fn review_462630_floor_scene(edge: f64) -> vectorcraft_doc::Document {
+    let mut doc = vectorcraft_doc::Document::new(22000.0, 1000.0);
+    doc.artboards[0].rect = Rect::new(0.0, 0.0, 20000.0, 1000.0);
+    review_462530_stroke(&mut doc, edge - 10.0, 20.0, -1000.0, 2000.0);
+    doc
+}
+
+#[test]
+fn review_597185_4626304652_artboard_accepts_the_exact_solver_minimum_scale() {
+    let start = Point::new(20000.0, 500.0);
+    let raw = Point::new(2.25, 500.0);
+    let above = review_462630_resize(&review_462630_floor_scene(2.5), start, raw, true);
+    review_462630_bounds(&above, Rect::new(0.0, 0.0, 2.5, 1000.0));
+    let below = review_462630_resize(&review_462630_floor_scene(1.5), start, raw, true);
+    review_462630_bounds(&below, Rect::new(0.0, 0.0, 2.25, 1000.0));
+    let doc = review_462630_floor_scene(2.0);
+    let off = review_462630_resize(&doc, start, raw, false);
+    review_462630_bounds(&off, Rect::new(0.0, 0.0, 2.25, 1000.0));
+    let exact = review_462630_resize(&doc, start, raw, true);
+    review_462630_bounds(&exact, Rect::new(0.0, 0.0, 2.0, 1000.0));
+}
+
+fn review_462630_corner_scene() -> vectorcraft_doc::Document {
+    let mut doc = vectorcraft_doc::Document::new(500.0, 500.0);
+    doc.artboards[0].rect = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let intercept = 11.0 - 14.0 / std::f64::consts::SQRT_2;
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    appearance.set_fill(vectorcraft_color::Paint::None);
+    appearance.stroke_mut().unwrap().width = 14.0;
+    let layer = doc.layers[0].id;
+    let node = vectorcraft_doc::Node::path(
+        doc.alloc_id(),
+        vectorcraft_geom::shapes::line(Point::new(-100.0, -100.0 + intercept), Point::new(20.0, 20.0 + intercept)),
+        appearance,
+    );
+    doc.insert(Some(layer), 0, node).unwrap();
+    doc
+}
+
+#[test]
+fn review_597185_4626304623_artboard_finds_the_feasible_part_of_one_contour_segment() {
+    let doc = review_462630_corner_scene();
+    let start = Point::new(20.0, 20.0);
+    let control = review_462630_resize(&doc, start, Point::new(2.0, 13.0), true);
+    review_462630_bounds(&control, Rect::new(0.0, 0.0, 2.0, 13.0));
+    let raw = Point::new(2.0, 10.0);
+    let off = review_462630_resize(&doc, start, raw, false);
+    review_462630_bounds(&off, Rect::new(0.0, 0.0, 2.0, 10.0));
+    let feasible = review_462630_resize(&doc, start, raw, true);
+    review_462630_bounds(&feasible, Rect::new(0.0, 0.0, 1.0, 12.0));
+    assert!(feasible["width"].as_f64().unwrap() >= 1.0 && feasible["height"].as_f64().unwrap() >= 1.0);
+    assert!(
+        (feasible["height"].as_f64().unwrap() - feasible["width"].as_f64().unwrap() - 11.0).abs() <= 1e-6,
+        "the final corner is on the actual painted side"
+    );
+}
+
+fn review_462630_anchor_scene(anchor: f64) -> vectorcraft_doc::Document {
+    let mut doc = vectorcraft_doc::Document::new(500.0, 500.0);
+    doc.artboards[0].rect = Rect::new(0.0, 0.0, 20.0, 20.0);
+    review_462530_stroke(&mut doc, -8.5, 20.0, -1000.0, 2000.0); // right painted edge1.5
+    let mut triangle = vectorcraft_geom::BezPath::new();
+    triangle.move_to((anchor, 10.0));
+    triangle.line_to((-50.0, -30.0));
+    triangle.line_to((-50.0, 50.0));
+    triangle.close_path();
+    let appearance =
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0);
+    let layer = doc.layers[0].id;
+    let node = vectorcraft_doc::Node::path(doc.alloc_id(), vectorcraft_geom::PathData::from_bezpath(&triangle), appearance);
+    doc.insert(Some(layer), usize::MAX, node).unwrap();
+    doc
+}
+
+#[test]
+fn review_597185_4626304646_invalid_artboard_anchor_does_not_block_a_valid_stroke_contact() {
+    let start = Point::new(20.0, 20.0);
+    let raw = Point::new(2.0, 10.0);
+    let valid = review_462630_resize(&review_462630_anchor_scene(1.25), start, raw, true);
+    review_462630_bounds(&valid, Rect::new(0.0, 0.0, 1.25, 10.0));
+    let doc = review_462630_anchor_scene(0.5);
+    let off = review_462630_resize(&doc, start, raw, false);
+    review_462630_bounds(&off, Rect::new(0.0, 0.0, 0.5, 10.0));
+    let stroke = review_462630_resize(&doc, start, raw, true);
+    review_462630_bounds(&stroke, Rect::new(0.0, 0.0, 1.5, 10.0));
+}

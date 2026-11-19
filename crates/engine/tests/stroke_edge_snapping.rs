@@ -672,3 +672,99 @@ fn review_462530_plain_path_contact_does_not_take_the_stroke_ruler_guard() {
         );
     }
 }
+
+// Append to crates/engine/tests/stroke_edge_snapping.rs; exact c39 Before APIs only.
+fn review_597185_free_scale_and_undo(f: &mut Fixture) -> Rect {
+    choose_moving(f);
+    f.view.smart_guides = false;
+    f.session.select_tool("scale", f.view).unwrap();
+    let origin = Point::new(500.0, 500.0);
+    let grab = Point::new(600.0, 600.0);
+    let raw = Point::new(500.001, 500.03);
+    // A public click sets the reference, while Smart Guides cannot move that click.
+    event(f, PointerKind::Down, origin, Mods::default());
+    event(f, PointerKind::Up, origin, Mods::default());
+    f.view.smart_guides = true;
+    let state = f.session.doc().unwrap();
+    let before = state.doc.clone();
+    let selected = state.selection.clone();
+    let history = (state.history.undo.len(), state.history.redo.len());
+    let old = state.doc.node(f.moving).unwrap().clone();
+    assert_eq!(selected.objects, vec![f.moving]);
+    assert!(selected.anchors.is_empty());
+    assert_eq!(old.geometric_bounds().unwrap(), Rect::new(500.0, 500.0, 600.0, 600.0));
+    event(f, PointerKind::Down, grab, Mods::default());
+    event(f, PointerKind::Drag, raw, Mods::default());
+    assert!(f.session.tool_busy(), "the ordinary free Scale drag must be active");
+    let preview = f.session.doc().unwrap().doc.node(f.moving).unwrap().clone();
+    assert_ne!(&preview, &old, "the live preview must actually scale the selected art");
+    event(f, PointerKind::Up, raw, Mods::default());
+    assert!(!f.session.tool_busy(), "release must finish the actual free Scale gesture");
+    let state = f.session.doc().unwrap();
+    let now = state.doc.node(f.moving).unwrap();
+    let bounds = now.geometric_bounds().unwrap();
+    assert_eq!(now, &preview, "release commits the observed preview, including a negative scale");
+    assert_eq!(now.appearance, old.appearance);
+    assert_eq!(state.selection, selected);
+    let mut untouched = (*state.doc).clone();
+    *untouched.node_mut(f.moving).unwrap() = old;
+    assert_eq!(untouched, *before, "only the selected art changes; targets and resources stay exact");
+    assert_eq!((state.history.undo.len(), state.history.redo.len()), (history.0 + 1, 0));
+    f.session.execute("edit.undo", &json!({})).unwrap();
+    let state = f.session.doc().unwrap();
+    assert_eq!(state.doc, before, "one ordinary Undo restores all geometry, paint and resources");
+    assert_eq!(state.selection, selected);
+    assert_eq!((state.history.undo.len(), state.history.redo.len()), (history.0, 1));
+    bounds
+}
+
+#[test]
+fn review_597185_free_scale_keeps_all_four_feasible_contact_regions() {
+    // Controls precede the regressions. The negative case distinguishes the existing
+    // solver's FOUR feasible regions from a new current-sign-only restriction.
+    for (name, on, edge, expected) in [
+        ("OFF positive-gap control", false, 0.025, Rect::new(500.0, 500.0, 500.01, 500.03)),
+        ("OFF negative-gap control", false, 0.015, Rect::new(500.0, 500.0, 500.01, 500.03)),
+        ("ON already-feasible nearest control", true, 0.06, Rect::new(500.0, 500.0, 500.02, 500.04)),
+        ("ON positive same-segment region", true, 0.025, Rect::new(500.0, 500.0, 500.01, 500.015)),
+        ("ON negative same-segment region", true, 0.015, Rect::new(499.99, 500.0, 500.0, 500.025)),
+    ] {
+        let mut f = fixture(Some(on));
+        review_462530_clear_fixture(&mut f);
+        // A centered 10pt stroke on x+y=C has actual parallel painted edges at
+        // C +/- 5*sqrt(2). Its near edge is x+y=1000+edge; endpoints/caps are remote.
+        let center_sum = 1000.0 + edge + 5.0 * std::f64::consts::SQRT_2;
+        let d = format!("M-500 {}L2500 {}", center_sum + 500.0, center_sum - 2500.0);
+        f.target = NodeId(f.session.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap());
+        choose_target(&mut f);
+        f.session.execute("paint.setFill", &json!({"none": true})).unwrap();
+        f.session.execute("paint.setStroke", &json!({"color": "#101010"})).unwrap();
+        f.session.execute("stroke.set", &json!({"weight": 10.0, "align": "center"})).unwrap();
+        let actual = Point::new(500.01, 500.03);
+        let target = f.session.doc().unwrap().doc.node(f.target).unwrap();
+        assert!(target.path_data().unwrap().nearest(actual).unwrap().4 > 4.0, "{name}: source centerline must not explain the snap");
+        let painted = outline(&f);
+        let nearest = painted.nearest(actual).unwrap().3;
+        let expected_nearest = Point::new(500.01 + (edge - 0.04) / 2.0, 500.03 + (edge - 0.04) / 2.0);
+        assert!(
+            nearest.distance(expected_nearest) < 1e-7,
+            "{name}: independently rendered near-edge position/sign: {nearest:?} vs {expected_nearest:?}"
+        );
+        let contact = if edge == 0.015 {
+            Point::new(499.99, 500.025)
+        } else if edge == 0.025 {
+            Point::new(500.01, 500.015)
+        } else {
+            Point::new(500.02, 500.04)
+        };
+        assert!(painted.nearest(contact).unwrap().4 < 1e-7, "{name}: the expected constrained contact must lie on the real painted edge");
+        f.moving = rectangle(&mut f.session, 500.0, 500.0, 100.0, 100.0);
+        choose_moving(&mut f);
+        f.session.execute("paint.setFill", &json!({"color": "#202020"})).unwrap();
+        f.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        let bounds = review_597185_free_scale_and_undo(&mut f);
+        for (a, e) in [(bounds.x0, expected.x0), (bounds.y0, expected.y0), (bounds.x1, expected.x1), (bounds.y1, expected.y1)] {
+            assert!((a - e).abs() < 1e-7, "{name}: actual {bounds:?}, expected {expected:?}");
+        }
+    }
+}
