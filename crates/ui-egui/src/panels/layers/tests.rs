@@ -816,12 +816,15 @@ fn isolation_opens_the_isolated_row_and_keeps_drops_inside_it() {
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
     assert_eq!(circles.len(), 4, "the sublayer's row opens");
     // Rectangle a onto the upper edge of the sublayer's row: not above it, outside the sublayer.
-    drag(&mut app, &ctx, egui::pos2(150.0, circles[3].y), egui::pos2(150.0, circles[0].y - ROW_MEDIUM * 0.4), false);
+    let primary = egui::PointerButton::Primary;
+    let dragged = drag_by(&mut app, &ctx, egui::pos2(150.0, circles[3].y), egui::pos2(150.0, circles[0].y - ROW_MEDIUM * 0.4), false, primary);
+    assert!(dragged, "the drag started");
     assert_eq!(parent(&app, a), Some(sub));
     // The sublayer into the empty space under the rows: it stays in Layer 1.
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
     assert_eq!(circles.len(), 4);
-    drag(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::pos2(150.0, circles[3].y + 3.0 * ROW_MEDIUM), false);
+    let dragged = drag_by(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::pos2(150.0, circles[3].y + 3.0 * ROW_MEDIUM), false, primary);
+    assert!(dragged, "the drag started");
     assert_eq!(parent(&app, sub), Some(layer));
     // Rectangle a onto the middle of the group's row: into it.
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
@@ -829,7 +832,7 @@ fn isolation_opens_the_isolated_row_and_keeps_drops_inside_it() {
     let (from, to) = (at(&app, a), at(&app, g));
     drag(&mut app, &ctx, egui::pos2(150.0, from.y), egui::pos2(150.0, to.y), false);
     assert_eq!(parent(&app, a), Some(g));
-    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
     assert_eq!(circles.len(), 6, "every row again");
 }
@@ -916,8 +919,190 @@ fn isolation_keeps_new_layers_to_the_rows_listed() {
     assert!(!new_layer_unlisted(st, true, false), "a new sublayer goes inside it");
     app.run("ui.newLayer", json!({"sublayer": true})).unwrap();
     assert!(app.ui.dialog.is_some());
+    // Exit Isolation Mode on the sublayer isolates its layer, beside which a new layer would go.
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(new_layer_unlisted(app.session.active().unwrap(), false, true));
     app.session.execute("object.exitIsolation", &json!({})).unwrap();
     assert!(!new_layer_unlisted(app.session.active().unwrap(), false, true));
+}
+
+/// With Show Layers Only on, an isolated group or object is still listed as the top row, without
+/// the art inside it, and its row can be renamed.
+#[test]
+fn isolation_with_show_layers_only_lists_the_isolated_group_or_object() {
+    let (mut app, [_, sub, g, _, a, _]) = nested();
+    let opts = PanelOptions { layers_only: true, ..Default::default() };
+    let listed = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        list_rows(&st.doc, st.isolation, &st.layers_open, &opts, "", &Filter::default()).iter().map(|r| r.node.id).collect::<Vec<_>>()
+    };
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(listed(&app), [g], "the group's row, without its art");
+    let st = app.session.active().unwrap();
+    assert!(listed_when_opened(&st.doc, st.isolation, &st.layers_open, &opts, "", &Filter::default(), g));
+    app.session.execute("object.isolate", &json!({"id": a.0})).unwrap();
+    assert_eq!(listed(&app), [a]);
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    assert_eq!(listed(&app), [sub], "a sublayer with no sublayers inside lists itself alone");
+}
+
+/// Click the item of the Layers panel menu whose text ends with `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let draw = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text().ends_with(label) => Some(t.visual_bounding_rect()),
+            _ => None,
+        })
+    };
+    let Some(r) = draw(app, vec![]) else { panic!("no menu item {label}") };
+    for e in [egui::Event::PointerMoved(r.center()), button(r.center(), true), button(r.center(), false)] {
+        draw(app, vec![e]);
+    }
+}
+
+/// In isolation mode the panel menu's Duplicate Selection copies only the rows the panel lists, Hide
+/// Others is off, and with a group isolated so is Locate Layer, whose layer row is not listed.
+#[test]
+fn isolation_keeps_the_panel_menu_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let top = NodeId(app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // A row left highlighted outside the sublayer before the panel shows again.
+    app.session.active_mut().unwrap().layer_rows = vec![c, b];
+    click_menu_item(&mut app, &ctx, "Duplicate Selection");
+    let count = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().children().unwrap().len();
+    assert_eq!(count(&app, layer), 2, "rectangle c, outside the sublayer, is not copied");
+    assert_eq!(count(&app, g), 2, "rectangle b is copied");
+    click_menu_item(&mut app, &ctx, "Hide Others");
+    assert!(app.session.active().unwrap().doc.node(top).unwrap().visible, "the layer outside the isolated art still shows");
+    app.ui.layers_panel.layers_only = true;
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    app.session.active_mut().unwrap().layer_rows = vec![];
+    click_menu_item(&mut app, &ctx, "Locate Layer");
+    assert!(rows_of(&app).is_empty(), "the sublayer holding the group is not highlighted");
+}
+
+/// OK in Delete Selection's question deletes nothing when isolation mode started while it asked and
+/// a row it asked about is outside the isolated art.
+#[test]
+fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
+    let (mut app, [_, sub, g, ..]) = nested();
+    let uid = app.session.active().unwrap().uid;
+    app.session.active_mut().unwrap().layer_rows = vec![sub];
+    assert!(app.run("ui.layerDelete", json!({})).unwrap().is_null(), "it asks first");
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let ok = json!({"ids": [sub.0], "doc": uid, "confirmed": true});
+    let err = app.run("ui.layerDelete", ok.clone()).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert!(app.session.active().unwrap().doc.node(sub).is_some(), "nothing was deleted");
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    app.run("ui.layerDelete", ok).unwrap();
+    assert!(app.session.active().unwrap().doc.node(sub).is_none());
+}
+
+/// A document first shown in isolation mode opens its isolated row, also when the panel showed
+/// another document last; shown again with its isolation mode unchanged, it opens nothing.
+#[test]
+fn isolation_opens_the_isolated_row_of_each_document() {
+    let (mut app, [_, _, g, ..]) = nested();
+    let ctx = egui::Context::default();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert!(app.session.active().unwrap().layers_open.contains(g), "the isolated group's row opens");
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    app.session.execute("document.activate", &json!({"index": 1})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert!(!app.session.active().unwrap().layers_open.contains(g), "a row closed in isolation mode stays closed");
+}
+
+/// In isolation mode an Alt-drag of the isolated row onto itself shows no place to drop and copies
+/// nothing, and a guide dragged since before isolation mode began goes to no layer outside the
+/// isolated art.
+#[test]
+fn isolation_keeps_drops_on_the_isolated_row_inside_it() {
+    let (mut app, [layer, sub, g, ..]) = nested();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 50, "layer": layer.0})).unwrap();
+    let ctx = egui::Context::default();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // Rows: Sub, g, b, a.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let nodes = |app: &VectorcraftApp| {
+        let mut n = 0;
+        app.session.active().unwrap().doc.walk(|_| n += 1);
+        n
+    };
+    let before = nodes(&app);
+    // The boxes drawn around a row that would take the drop, in one frame with Alt held.
+    let boxes = |app: &mut VectorcraftApp, e: egui::Event| {
+        let events = vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT), e];
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let accent = Tokens::get(&ctx).accent;
+        out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.width == 2.0 && r.stroke.color == accent)).count()
+    };
+    let (from, to) = (egui::pos2(150.0, circles[0].y - 6.0), egui::pos2(150.0, circles[0].y + 2.0));
+    boxes(&mut app, egui::Event::PointerMoved(from));
+    boxes(&mut app, button(from, true));
+    boxes(&mut app, egui::Event::PointerMoved(from + vec2(0.0, 6.0)));
+    let shown = boxes(&mut app, egui::Event::PointerMoved(to)) + boxes(&mut app, egui::Event::PointerMoved(to + vec2(1.0, 0.0)));
+    assert!(egui::DragAndDrop::has_any_payload(&ctx), "the drag started");
+    assert_eq!(shown, 0, "no box around the isolated row");
+    boxes(&mut app, button(to, false));
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(nodes(&app), before, "nothing was copied");
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
+    // Rows: Layer 1, its guide (no target circle), Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let guide_row = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    frame(&mut app, &ctx, vec![button(guide_row, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(guide_row + vec2(0.0, 6.0))], false);
+    // Over the group's row the guide would go to the sublayer holding it.
+    let over = egui::pos2(150.0, circles[2].y);
+    let shown = boxes(&mut app, egui::Event::PointerMoved(over)) + boxes(&mut app, egui::Event::PointerMoved(over + vec2(1.0, 0.0)));
+    assert!(shown > 0, "a box around the group's row");
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // Rows: g, b.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let over = egui::pos2(150.0, circles[0].y);
+    let shown = boxes(&mut app, egui::Event::PointerMoved(over)) + boxes(&mut app, egui::Event::PointerMoved(over + vec2(1.0, 0.0)));
+    assert!(egui::DragAndDrop::has_any_payload(&ctx), "the guide is still dragged");
+    assert_eq!(shown, 0, "no box around the isolated group's row, outside which its sublayer is");
+    frame(&mut app, &ctx, vec![button(over, false)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].layer, Some(layer), "the guide stays on Layer 1");
+}
+
+/// In isolation mode Alt-clicking or Ctrl/Cmd+Alt-clicking an eye, or Alt-clicking a lock, changes
+/// no layer outside the isolated art.
+#[test]
+fn isolation_keeps_alt_clicks_on_eyes_and_locks_inside_it() {
+    let (mut app, [_, sub, ..]) = nested();
+    let top = NodeId(app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let click = |app: &mut VectorcraftApp, at: egui::Pos2, mods: egui::Modifiers| click_with(app, &ctx, at, mods);
+    let (eye, lock) = (egui::pos2(12.0, circles[0].y), egui::pos2(37.0, circles[0].y));
+    click(&mut app, eye, egui::Modifiers::ALT);
+    click(&mut app, eye, egui::Modifiers::ALT | egui::Modifiers::COMMAND);
+    click(&mut app, lock, egui::Modifiers::ALT);
+    let st = app.session.active().unwrap();
+    let t = st.doc.node(top).unwrap();
+    assert!(t.visible && !t.locked && !matches!(t.kind, NodeKind::Layer { preview: false, .. }), "the layer outside the isolated art is unchanged");
 }
 
 // ---- rows at every depth (layers, sublayers, groups, objects) ----

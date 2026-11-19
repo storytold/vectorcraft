@@ -257,14 +257,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.data_mut(|d| d.insert_temp(key("seen-current"), current));
     }
     // Entering isolation mode opens the isolated row, now the top row, and scrolls to it; leaving it
-    // opens the rows around the row that was isolated and scrolls to that row. Showing another
-    // document changes neither.
-    let uid = app.session.active().map(|st| st.uid);
-    let isolated = app.session.active().and_then(|st| st.isolation).filter(|i| doc.node(*i).is_some());
-    let seen_isolated: Option<(Option<u64>, Option<NodeId>)> = ui.data(|d| d.get_temp(key("seen-isolation")));
-    if seen_isolated != Some((uid, isolated)) {
-        let was = seen_isolated.filter(|(u, _)| *u == uid).and_then(|(_, i)| i);
-        if seen_isolated.is_none_or(|(u, _)| u == uid) {
+    // opens the rows around the row that was isolated and scrolls to that row. Each document's
+    // isolation mode is followed on its own: a document first shown in isolation mode opens its
+    // isolated row, and showing again a document whose isolation mode did not change opens nothing.
+    if let Some(uid) = app.session.active().map(|st| st.uid) {
+        let isolated = app.session.active().and_then(|st| st.isolation).filter(|i| doc.node(*i).is_some());
+        let mut seen: std::collections::HashMap<u64, Option<NodeId>> = ui.data(|d| d.get_temp(key("seen-isolation"))).unwrap_or_default();
+        let was = seen.get(&uid).copied();
+        if was != Some(isolated) {
             match isolated {
                 Some(root) => {
                     if let Some(st) = app.session.active_mut() {
@@ -273,14 +273,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     reveal = Some(root);
                 }
                 None => {
-                    if let Some(was) = was.filter(|i| doc.node(*i).is_some()) {
+                    if let Some(was) = was.flatten().filter(|i| doc.node(*i).is_some()) {
                         open_around(app, &doc, &[was]);
                         reveal = Some(was);
                     }
                 }
             }
+            seen.insert(uid, isolated);
+            ui.data_mut(|d| d.insert_temp(key("seen-isolation"), seen));
         }
-        ui.data_mut(|d| d.insert_temp(key("seen-isolation"), (uid, isolated)));
     }
     // With Locate Selected Objects on, an object selected anew outside the panel (below).
     let located = newly_selected(app, ui).filter(|_| !highlighted);

@@ -126,7 +126,8 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     // With Show Layers Only on, Locate Object becomes Locate Layer: it highlights the layer row.
     let layers_only = view.opts.layers_only;
     let locate = if layers_only { tl!("Locate Layer") } else { tl!("Locate Object") };
-    if widgets::icon_button(&mut child, "search", locate, false, 24.0).clicked() {
+    let locate_ok = !layers_only || super::rows::locate_layer_listed(doc, view.root);
+    if widgets::icon_button_enabled(&mut child, "search", locate, false, locate_ok, 24.0).clicked() {
         actions.push(("layer.locate".into(), json!({ "layersOnly": layers_only })));
     }
 }
@@ -165,7 +166,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut items: Vec<Option<MenuItem>> = vec![
         Some(("New Layer…", "ui.newLayer", json!({}), new_layer_ok, false)),
         Some(("New Sublayer…", "ui.newLayer", json!({"sublayer": true}), current.is_some() && new_sublayer_ok, false)),
-        Some(("Duplicate Selection", "layer.duplicate", json!({}), duplicate_ok, false)),
+        // The rows listed, so no highlighted row outside the isolated art is copied.
+        Some(("Duplicate Selection", "layer.duplicate", json!({"ids": targets.iter().map(|i| i.0).collect::<Vec<_>>()}), duplicate_ok, false)),
         Some(("Delete Selection", "ui.layerDelete", json!({}), !targets.is_empty(), false)),
         Some(("Options for Selection…", "ui.layerOptions", json!({}), !targets.is_empty(), false)),
         None,
@@ -181,7 +183,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     items.extend([
         None,
         Some(if layers_only {
-            ("Locate Layer", "layer.locate", json!({"layersOnly": true}), has_sel, false)
+            ("Locate Layer", "layer.locate", json!({"layersOnly": true}), has_sel && super::rows::locate_layer_listed(&doc, st.isolation), false)
         } else {
             ("Locate Object", "layer.locate", json!({}), has_sel, false)
         }),
@@ -199,28 +201,29 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         None,
         Some(("Template", "layer.template", json!({}), !layers_in.is_empty(), template)),
     ]);
-    // Each pair reads by state: Hide Others while another layer shows, else Show All Layers.
+    // Each pair reads by state: Hide Others while another layer shows, else Show All Layers. In
+    // isolation mode the other layers are outside the isolated art, so the pairs are off.
     let any_other = |f: &dyn Fn(&Node) -> bool| others.iter().any(|l| f(l));
     items.push(Some(if any_other(&|l| l.visible) {
-        ("Hide Others", "layer.hideOthers", json!({}), true, false)
+        ("Hide Others", "layer.hideOthers", json!({}), !isolated, false)
     } else {
-        ("Show All Layers", "layer.showAll", json!({}), all_layers.iter().any(|l| !l.visible), false)
+        ("Show All Layers", "layer.showAll", json!({}), !isolated && all_layers.iter().any(|l| !l.visible), false)
     }));
     items.push(Some(if any_other(&|l| !matches!(l.kind, NodeKind::Layer { preview: false, .. })) {
-        ("Outline Others", "layer.outlineOthers", json!({}), true, false)
+        ("Outline Others", "layer.outlineOthers", json!({}), !isolated, false)
     } else {
         (
             "Preview All Layers",
             "layer.previewAll",
             json!({}),
-            all_layers.iter().any(|l| matches!(l.kind, NodeKind::Layer { preview: false, .. })),
+            !isolated && all_layers.iter().any(|l| matches!(l.kind, NodeKind::Layer { preview: false, .. })),
             false,
         )
     }));
     items.push(Some(if any_other(&|l| !l.locked) {
-        ("Lock Others", "layer.lockOthers", json!({}), true, false)
+        ("Lock Others", "layer.lockOthers", json!({}), !isolated, false)
     } else {
-        ("Unlock All Layers", "layer.unlockAll", json!({}), all_layers.iter().any(|l| l.locked), false)
+        ("Unlock All Layers", "layer.unlockAll", json!({}), !isolated && all_layers.iter().any(|l| l.locked), false)
     }));
     items.push(None);
     let remembers = doc.paste_remembers_layers;
@@ -304,8 +307,8 @@ fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// `layer.delete` takes (default: the highlighted rows, else the current layer; in isolation mode a
 /// current layer outside the isolated art is an error). When a layer or sublayer among them holds art (an object other than a
 /// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
-/// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
-/// is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// the same document (`doc`, its uid, with `confirmed`); with another document active then, or in
+/// isolation mode with one of them outside the isolated art, nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
@@ -332,6 +335,11 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             Some(if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows })
         }
     };
+    // Isolation mode can start while the question is open: OK then deletes nothing when a row it
+    // asked about is outside the isolated art.
+    if confirmed && ids.as_ref().is_some_and(|ids| ids.iter().any(|id| !in_isolated_art(st, *id))) {
+        return Err("the object is outside the isolated group".into());
+    }
     let Some(ids) = ids.filter(|_| !confirmed) else { return app.run("layer.delete", Value::Object(rows)) };
     let listed: HashSet<NodeId> = ids.iter().copied().collect();
     let mut roots = vec![];

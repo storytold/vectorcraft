@@ -266,7 +266,8 @@ pub(super) fn isolated_root(doc: &Document, id: NodeId) -> Option<(&Arc<Node>, b
 
 /// Add the rows of `n` and those open inside it to `out`; `(colour, shown)` are those of what holds
 /// it (the layer's colour, and whether it is visible). The last item of `cx` is the document's
-/// ruler guide ids by `guide.list` index.
+/// ruler guide ids by `guide.list` index. With Show Layers Only on, a group or object at `depth` 0,
+/// the isolated row in isolation mode, keeps its own row.
 pub(super) fn push_rows(
     n: &Arc<Node>,
     depth: usize,
@@ -277,7 +278,7 @@ pub(super) fn push_rows(
 ) {
     let (open_rows, opts, query, filter, all_guides) = cx;
     // A ruler guide node gets no object row: its layer lists the guide rows.
-    if n.is_ruler_guide() || (opts.layers_only && !n.is_layer()) {
+    if n.is_ruler_guide() || (opts.layers_only && depth > 0 && !n.is_layer()) {
         return;
     }
     let colour = match &n.kind {

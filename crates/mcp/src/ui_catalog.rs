@@ -1160,7 +1160,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerDelete",
         "Delete Selection",
         "",
-        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer; in isolation mode a current layer outside the isolated art is an error and nothing is deleted). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer; in isolation mode, with no row highlighted, a current layer outside the isolated art is an error and nothing is deleted). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, or in isolation mode with one of the rows outside the isolated art, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",
@@ -1172,7 +1172,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
-        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields. In isolation mode, a layer that would be outside the isolated art is an error and nothing opens",
+        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields. In isolation mode, a layer that would be outside the isolated art is an error and nothing opens; OK checks again, and with isolation mode started since, it returns the same error and makes no layer",
     ),
     (
         "ui.newArtboard",
