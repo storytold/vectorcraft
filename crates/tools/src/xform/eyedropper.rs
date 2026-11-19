@@ -16,7 +16,8 @@
 //!
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
-//! {stop}`) and switches back to that tool.
+//! {stop}`) and switches back to that tool. Armed for the Live Paint Bucket, a click once its stop
+//! is no longer selected ends the pick without sampling and switches back to the bucket.
 //!
 //! Gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso before switching
 //! to the Eyedropper stay picked (its `meshPoints` option), and go back to one of those tools
@@ -536,6 +537,15 @@ impl Tool for EyedropperTool {
             self.stop = None;
             return vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)];
         }
+        // A pick for a stop of the Live Paint Bucket's gradient (the default paint's) ends without
+        // sampling once that stop is no longer selected (a Cmd-click selected another object) or no
+        // longer there (another paint was chosen): the click switches back.
+        let bucket_paint = if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke };
+        let bucket_stop = cx.gradient_stop.filter(|i| matches!(bucket_paint, Paint::Gradient(g) if *i < g.gradient.stops.len()));
+        if self.stop.as_deref() == Some("livePaintBucket") && bucket_stop.is_none() {
+            self.stop = None;
+            return vec![Action::SwitchTool("livePaintBucket".into())];
+        }
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
         // A plain click on a selected gradient mesh gives the fill color to the point there, else
         // to the four points of the patch there.
@@ -658,6 +668,10 @@ impl Tool for EyedropperTool {
     /// A dropped press (a long or canceled touch) leaves an armed pick waiting for its click.
     fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
+    }
+
+    fn returns_to(&self) -> Option<&str> {
+        self.stop.as_deref().filter(|_| !self.brush_key_color && self.image_trace_ignore_color.is_none())
     }
 
     /// Escape is the tool's while a pick is armed, so it switches back and ends nothing else.
@@ -838,6 +852,27 @@ mod tests {
             ]
         );
         assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
+        // Armed for the Live Paint Bucket with its stop no longer selected, a click ends the pick.
+        cx.gradient_stop = None;
+        t.set_option("stop", &json!("livePaintBucket"));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
+        assert_eq!(t.returns_to(), None);
+        // So does a click once the default paint has no such stop (here, a solid fill).
+        cx.gradient_stop = Some(1);
+        assert!(!matches!(cx.paint.fill, Paint::Gradient(_)));
+        t.set_option("stop", &json!("livePaintBucket"));
+        assert_eq!(t.returns_to(), Some("livePaintBucket"));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
+        // Neither a Key Color pick nor an Image Trace ignored-color pick is a gradient stop's.
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("livePaintBucket"));
+        assert_eq!(t.returns_to(), None);
+        let mut t = EyedropperTool::default();
+        t.set_option("imageTraceIgnoreColor", &json!({"dialog": "imageTrace"}));
+        t.set_option("stop", &json!("livePaintBucket"));
+        assert_eq!(t.returns_to(), None);
     }
 
     /// #8024: Escape ends a gradient stop's pick and a Key Color pick without sampling and
