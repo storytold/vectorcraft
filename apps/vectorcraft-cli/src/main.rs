@@ -246,12 +246,14 @@ fn with_stores(mut h: Headless) -> Headless {
     prefs_dir::attach_script_data(&mut h.session);
     prefs_dir::attach_metadata_templates_dir(&mut h.session);
     prefs_dir::attach_new_doc_profiles(&mut h.session);
+    prefs_dir::attach_proof_setups(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
     prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);
     prefs_dir::attach_arrowheads(&mut h.session);
+    prefs_dir::attach_bevels(&mut h.session);
     h
 }
 

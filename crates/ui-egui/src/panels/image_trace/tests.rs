@@ -635,6 +635,106 @@ fn holding_the_eye_button_shows_the_source_image_until_released() {
     frame(&mut app, &ctx, vec![press(false)]);
 }
 
+/// In the Split view the panel shows a Divider slider that screen readers find by its name and
+/// value; with the keyboard focus on it, → moves the divider a percent, one undo step a press.
+/// It is not shown in any other view.
+#[test]
+fn the_divider_slider_names_and_moves_the_split_views_divider() {
+    use egui::accesskit::Role;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = traced_app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
+    let slider_id = egui::Id::unique("trace-split-slider-id");
+    let nodes = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect::<Vec<_>>()).unwrap_or_default()
+    };
+    let divider =
+        |tree: &[egui::accesskit::Node]| tree.iter().find(|n| n.role() == Role::Slider && n.label() == Some("Divider")).map(|n| n.numeric_value());
+    nodes(&mut app, vec![]);
+    assert_eq!(divider(&nodes(&mut app, vec![])), None, "no divider in the Tracing Result view");
+    app.run("imageTrace.setView", json!({"view": "split", "split": 0.3})).unwrap();
+    nodes(&mut app, vec![]);
+    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(30.0)));
+    let id = ctx.data(|d| d.get_temp::<egui::Id>(slider_id)).expect("the slider's id");
+    ctx.memory_mut(|m| m.request_focus(id));
+    nodes(&mut app, vec![]);
+    let steps = app.session.active().unwrap().history.undo.len();
+    let right = Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    nodes(&mut app, vec![right.clone()]);
+    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.31);
+    nodes(&mut app, vec![right]);
+    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.32);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 2, "one undo step a press");
+    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(32.0)));
+}
+
+/// A divider between whole percents (as a canvas drag or an agent sets it) stays as it is while
+/// the panel shows, with no undo step; dragging the Divider slider sets it as one undo step.
+#[test]
+fn the_divider_slider_keeps_an_exact_divider_and_a_drag_is_one_undo_step() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = traced_app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
+    let run = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    app.run("imageTrace.setView", json!({"view": "split", "split": 0.3025})).unwrap();
+    let steps = app.session.active().unwrap().history.undo.len();
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.3025, "the panel leaves the divider as it is");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
+    let rect = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-split-slider-rect"))).expect("the slider's rect");
+    let at = |f: f32| Pos2::new(rect.left() + rect.width() * f, rect.center().y);
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(&mut app, vec![Event::PointerMoved(at(0.3)), button(at(0.3), true)]);
+    for f in [0.4, 0.6, 0.8] {
+        run(&mut app, vec![Event::PointerMoved(at(f))]);
+    }
+    run(&mut app, vec![button(at(0.8), false)]);
+    run(&mut app, vec![]);
+    let split = first_selected(&app).unwrap().trace_split();
+    assert!(split > 0.6, "the drag moved the divider: {split}");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step for the drag");
+}
+
+/// Properties shows the Divider slider of the selected Image Trace object in the Split view only,
+/// with its name and value for screen readers.
+#[test]
+fn properties_shows_the_divider_slider_in_the_split_view() {
+    use egui::accesskit::Role;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = traced_app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
+    let divider = |app: &mut VectorcraftApp| {
+        let mut found = None;
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                crate::panels::properties::show(app, ui);
+            });
+            out.textures_delta.clear();
+            let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            found = nodes.iter().find(|(_, n)| n.role() == Role::Slider && n.label() == Some("Divider")).map(|(_, n)| n.numeric_value());
+        }
+        found
+    };
+    assert_eq!(divider(&mut app), None, "no divider in the Tracing Result view");
+    app.run("imageTrace.setView", json!({"view": "split", "split": 0.4})).unwrap();
+    assert_eq!(divider(&mut app), Some(Some(40.0)));
+}
+
 /// With another object first in the selection, the eye button and the panel menu's Release
 /// act on the selected Image Trace object.
 #[test]
@@ -1663,7 +1763,8 @@ fn lookup_fixture() -> (VectorcraftApp, std::collections::HashMap<&'static str, 
 /// The panel's lookup gives what putting the whole selection in paint order gave, field for field,
 /// for every kind of selection: images in either selection order, an Image Trace object with its
 /// own image, a clipping group named Image Trace, nested groups, hidden and locked images, two
-/// layers, repeated ids, ids the document lacks, and nothing selected. The result kept for a
+/// layers, repeated ids, ids the document lacks, and nothing selected. Selected ancestors with
+/// their descendants have separate canonical-root expectations below. The result kept for a
 /// revision follows each change of the selection, an edit, Undo and a switch of document.
 #[test]
 fn the_target_lookup_matches_sorting_the_whole_selection() {
@@ -1679,10 +1780,8 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
         &["trace image", "trace"],
         &["rect", "trace image"],
         &["clip"],
-        &["clip", "clipped"],
         &["rect", "clipped"],
         &["outer"],
-        &["outer", "deep"],
         &["inner", "rect"],
         &["deep", "back"],
         &["hidden", "locked"],
@@ -1736,6 +1835,37 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
     let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     assert_eq!(find_target(&none), target_sorting_everything(&none));
     assert_eq!(target(&none, &ctx), Target::default());
+}
+
+/// Trace only accepts selected roots: a selected parent blocks its image descendant.
+/// Missing implicit-selection ids are dropped, while explicit ids are validated.
+#[test]
+fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
+    let (mut app, ids) = lookup_fixture();
+    let ctx = egui::Context::default();
+    for (parent, child) in [("clip", "clipped"), ("outer", "deep")] {
+        select_as_is(&mut app, &[ids[parent], ids[child]]);
+        let uid = app.session.active().unwrap().uid;
+        let expected = Target { object: Some((uid, ids[parent])), ..Default::default() };
+        assert_eq!(find_target(&app), expected, "the selected {parent} supplies metadata, not its pruned image");
+        assert_eq!(target(&app, &ctx), expected);
+        assert_eq!(target(&app, &ctx), expected, "the canonical result is also cached");
+        assert!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).is_err());
+        let document = app.session.active().unwrap().doc.clone();
+        assert!(app.run("imageTrace.make", json!({})).is_err(), "Trace rejects that non-image root");
+        assert_eq!(app.session.active().unwrap().doc, document);
+        select_as_is(&mut app, &[ids[child]]);
+        assert_eq!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).unwrap(), ids[child], "the image alone remains eligible");
+    }
+    let stale = NodeId(u64::MAX);
+    select_as_is(&mut app, &[stale, ids["front"]]);
+    assert_eq!(target(&app, &ctx).object.map(|(_, id)| id), Some(ids["front"]), "implicit stale entries do not hide a valid image");
+    assert_eq!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).unwrap(), ids["front"]);
+    let explicit = json!({"ids": [stale.0, ids["front"].0]});
+    let document = app.session.active().unwrap().doc.clone();
+    assert!(vectorcraft_engine::cmd::image_trace_target(&app.session, &explicit).is_err(), "explicit missing ids are invalid");
+    assert!(app.run("imageTrace.make", explicit).is_err());
+    assert_eq!(app.session.active().unwrap().doc, document);
 }
 
 /// The panel and its menu look the object Trace acts on up once for each revision of the document,

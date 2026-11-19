@@ -6,6 +6,23 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// A one-shot Image Trace Ignore Color sampler, bound to the unchanged selected source.
+#[derive(Clone, Debug)]
+pub struct TraceIgnoreSampler {
+    pub doc: u64,
+    pub target: vectorcraft_doc::NodeId,
+    pub revision: u64,
+    pub back: String,
+}
+
+/// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
+#[derive(Clone, Debug)]
+pub struct BrushKeyColorPick {
+    pub doc: u64,
+    pub back: String,
+    pub press: Option<Point>,
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -227,6 +244,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::panels::discover::ID, "VectorCraft Help…", "search"),
+    (crate::panels::retype::ID, "Retype", "type"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
@@ -274,6 +292,10 @@ pub struct ViewFlags {
     pub trim_view: bool,
     /// View → Hide/Show Corner Widget (live corner widgets on rectangles).
     pub corner_widgets: bool,
+    /// The Control bar's Hide/Show Shape Widgets with a shape tool: selected live shapes' corner, pie
+    /// and side widgets with the Selection tool and the shape tools.
+    #[serde(default = "yes")]
+    pub shape_widgets: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
     /// View → Snap to Glyph.
@@ -314,6 +336,7 @@ impl Default for ViewFlags {
             edges: true,
             trim_view: false,
             corner_widgets: true,
+            shape_widgets: true,
             snap_to_pixel: false,
             snap_to_glyph: false,
             text_threads: true,
@@ -323,6 +346,19 @@ impl Default for ViewFlags {
             auto_spell_check: false,
             templates: true,
         }
+    }
+}
+
+impl ViewFlags {
+    /// Whether the ruler guides and guide paths draw: View › Show Guides, unless Trim View hides
+    /// them while it is on (#8363). `guides` keeps the choice, so they come back as they were.
+    pub fn guides_shown(&self) -> bool {
+        self.guides && !self.trim_view
+    }
+
+    /// Whether the grid draws: View › Show Grid, unless Trim View hides it while it is on (#8363).
+    pub fn grid_shown(&self) -> bool {
+        self.grid && !self.trim_view
     }
 }
 
@@ -436,6 +472,9 @@ pub struct UiState {
     pub learn: crate::panels::learn::View,
     #[serde(skip)]
     pub discover: crate::panels::discover::View,
+    /// The Retype panel's list of matching fonts and its sample settings, kept while the app runs.
+    #[serde(skip)]
+    pub retype: crate::panels::retype::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -464,6 +503,9 @@ pub struct UiState {
     pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Smaller cells and panel width for the main Tools panel, independent of its column count.
+    #[serde(default)]
+    pub toolbar_compact: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
     #[serde(default)]
     pub toolbar_advanced: bool,
@@ -473,6 +515,18 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Contextual Task Bar's actions (`canvas::TASK_BAR_ACTIONS`) that More Options › Bar
+    /// Actions has off (`window.taskBar.actions`); none: the bar shows every action it offers.
+    #[serde(deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
+    pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
+    /// Window › Quick Pen Toolbar: the Quick Pen tool shows its toolbar on the canvas. Hide Toolbar
+    /// turns it off until the tool is selected again. Not saved.
+    #[serde(skip, default = "yes")]
+    pub quick_pen_bar: bool,
+    /// Where the Quick Pen toolbar was dragged or pinned. Not saved: the toolbar starts beside the
+    /// drawing at every launch.
+    #[serde(skip)]
+    pub quick_pen_bar_place: QuickPenBarPlace,
     /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
     /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
     #[serde(default)]
@@ -580,6 +634,8 @@ pub struct UiState {
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    #[serde(skip)]
+    pub brush_key_color_pick: Option<BrushKeyColorPick>,
     /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
     /// the order they came.
     #[serde(skip)]
@@ -616,6 +672,11 @@ pub struct UiState {
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
+    /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
+    /// so that the palette starts at its first row the next time it is drawn, even when it closed
+    /// and opened again before then. Not saved.
+    #[serde(skip)]
+    pub palette_toggled: bool,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
     /// the app always starts in Normal Screen Mode, with its menus and panels (#472: a saved
     /// Presentation Mode came back on restart with no way out).
@@ -727,12 +788,19 @@ pub struct UiState {
     /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
     #[serde(default)]
     pub recent_commands: Vec<String>,
+    /// How many times each command was picked in Help › Search Commands, which ranks the commands
+    /// picked most often first among results that match as well.
+    #[serde(default, deserialize_with = "crate::palette::deserialize_command_uses")]
+    pub command_uses: crate::palette::CommandUses,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Native-picker-only raster editor; never exposed as an engine preference or dialog field.
+    #[serde(default)]
+    pub original_editor: crate::OriginalEditorChoice,
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
@@ -787,7 +855,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
+    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
+    /// out-of-gamut shading and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
@@ -830,6 +899,11 @@ pub struct UiState {
     /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,
+    /// The proof view the Proof Setup dialog found, and the view its preview shows on the canvas,
+    /// while the preview shows. When another dialog takes its place, [`crate::dialogs::settle`]
+    /// puts the first view back, unless the view has changed from the preview since.
+    #[serde(skip)]
+    pub proof_preview: Option<(Value, vectorcraft_render::proof::ProofView)>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -844,6 +918,9 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
+    #[serde(default)]
+    pub hpgl_options: Value,
     /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
     /// dialog opens on them (#1152).
     #[serde(default)]
@@ -858,6 +935,10 @@ pub struct UiState {
     /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
     #[serde(default)]
     pub recolor_preserve: Value,
+    /// The open Recolor Artwork dialog's own history of color edits (Undo Changes and Redo
+    /// Changes), empty again each time the dialog opens.
+    #[serde(skip)]
+    pub recolor_history: crate::dialogs::recolor::History,
     /// The Simplify dialog's fields confirmed last with "Open this dialog with these settings next
     /// time" ticked (null: not ticked): Object › Path › Simplify opens the dialog on them instead
     /// of the Simplify slider.
@@ -896,6 +977,9 @@ pub struct UiState {
     /// panel's eye button is held down ([`vectorcraft_render::RenderOptions::trace_source`]).
     #[serde(skip)]
     pub trace_hold_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// Ignore Color's one-shot canvas sampler; independent of the eye button's press lifetime.
+    #[serde(skip)]
+    pub trace_ignore_sampler: Option<TraceIgnoreSampler>,
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
@@ -1075,6 +1159,25 @@ pub struct ToolbarEdits {
     pub advanced: Option<Vec<ToolbarCategory>>,
 }
 
+/// Where the Quick Pen toolbar sits once its handle has moved it (`window.quickPenToolbar.pin`,
+/// `window.quickPenToolbar.reset`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct QuickPenBarPlace {
+    /// More Options › Pin Toolbar Position: the toolbar stays where it is on the canvas instead of
+    /// following the drawing.
+    pub pinned: bool,
+    /// Where a pinned toolbar's top-left corner sits from the canvas's top-left (none when it was
+    /// pinned before it ever showed, until it is drawn). Unpinning leaves it for the next frame to
+    /// turn into `offset`.
+    pub pin_at: Option<egui::Vec2>,
+    /// Where the toolbar was last drawn, from the canvas's top-left: where pinning holds it.
+    pub shown_at: Option<egui::Vec2>,
+    /// How far an unpinned toolbar was dragged from its place, the document (`DocState::uid`) it
+    /// was moved in, and whether it was beside a path being drawn then (false: resting with no path
+    /// being drawn). It applies only in that document and that kind of place.
+    pub offset: Option<(u64, bool, egui::Vec2)>,
+}
+
 /// Where the Contextual Task Bar sits once its handle has moved it (`window.taskBar.pin`,
 /// `window.taskBar.reset`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -1206,6 +1309,7 @@ impl Default for UiState {
             constrain_pie_angle: false,
             learn: Default::default(),
             discover: Default::default(),
+            retype: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),
@@ -1216,9 +1320,13 @@ impl Default for UiState {
             control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
+            toolbar_compact: false,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            task_bar_hidden_actions: Default::default(),
+            quick_pen_bar: true,
+            quick_pen_bar_place: QuickPenBarPlace::default(),
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
@@ -1250,6 +1358,7 @@ impl Default for UiState {
             tab_hid: None,
             view: ViewFlags::default(),
             dialog: None,
+            brush_key_color_pick: None,
             told: vec![],
             answering_control: false,
             flyout: None,
@@ -1262,6 +1371,7 @@ impl Default for UiState {
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
+            palette_toggled: false,
             screen_mode: 0,
             tiled: false,
             tile_layout: crate::canvas::TileLayout::Grid,
@@ -1291,8 +1401,10 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             recent_commands: vec![],
+            command_uses: Default::default(),
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
+            original_editor: Default::default(),
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
@@ -1317,14 +1429,17 @@ impl Default for UiState {
             pending_fonts: vec![],
             fonts_dialog: None,
             stopped_plugin: None,
+            proof_preview: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            hpgl_options: Value::Null,
             offset_path: Value::Null,
             smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
+            recolor_history: Default::default(),
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
@@ -1334,6 +1449,7 @@ impl Default for UiState {
             psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
+            trace_ignore_sampler: None,
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             attributes_panel: Default::default(),

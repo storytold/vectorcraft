@@ -10,8 +10,9 @@
 //! Guides and Snap to Point: it shows no Smart Guides, hovering or drawing, and its ends follow the
 //! hand. Snap to Grid and Snap to Pixel still move its ends (`grid_snaps`). The Paintbrush records the pen pressure of each point (a stroke a pen
 //! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
-//! the pen's tilt and barrel rotation where the pen reads them (`[x, y, pressure, tiltX, tiltY,
-//! rotation]` points, `null` for what a point lacks) for brushes that vary with them. The Blob
+//! the pen's tilt, barrel rotation and airbrush finger wheel where the pen reads them (`[x, y,
+//! pressure, tiltX, tiltY, rotation, wheel]` points, `null` for what a point lacks) for brushes
+//! that vary with them. The Blob
 //! Brush and Eraser also record pressure when their Size varies with Pressure, and the Eraser
 //! records the pressure, tilt and rotation that its Angle, Roundness and Size variations follow;
 //! while it erases, its tip outline at the pointer takes the angle, roundness and size the pen
@@ -104,8 +105,8 @@ pub struct GestureTool {
     /// The pen pressure of each of `points` (the Paintbrush, the Blob Brush with Size on Pressure,
     /// and the Eraser with any of its variations on Pressure).
     pressures: Vec<f32>,
-    /// The pen's tilt and rotation at each of `points` (the Paintbrush, and the Eraser with any of
-    /// its variations on Tilt, Bearing or Rotation).
+    /// The pen's tilt, rotation and wheel at each of `points` (the Paintbrush, and the Eraser with
+    /// any of its variations on Tilt, Bearing or Rotation).
     poses: Vec<Option<PenPose>>,
     active: bool,
     began: bool,
@@ -962,7 +963,8 @@ impl GestureTool {
         self.id != "pencil" || self.live_preview
     }
 
-    /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
+    /// Add a stroke sample, with the pen's pressure, tilt, rotation and wheel of the event `ev`
+    /// there.
     fn push(&mut self, p: Point, ev: &PointerEvent) {
         if let Some(last) = self.points.last() {
             self.length += last.distance(p);
@@ -970,7 +972,8 @@ impl GestureTool {
         self.points.push(p);
         let modes = self.tip_modes();
         // The poses go out beside the pressures (`stroke_json`), so a stroke that keeps one keeps both.
-        let posed = self.id == "paintbrush" || modes.iter().any(|m| matches!(m, Variation::Tilt | Variation::Bearing | Variation::Rotation));
+        let posed = self.id == "paintbrush"
+            || modes.iter().any(|m| matches!(m, Variation::Tilt | Variation::Bearing | Variation::Rotation | Variation::StylusWheel));
         if posed || modes.contains(&Variation::Pressure) {
             self.pressures.push(ev.pressure);
             self.light |= ev.pressure < 1.0;
@@ -1122,7 +1125,7 @@ impl GestureTool {
             let Some(name) = vectorcraft_brush::current(cx.doc) else { return vec![] };
             let Some(brush) = vectorcraft_brush::find(cx.doc, &name) else { return vec![] };
             let BrushKind::Bristle(bristle) = brush.kind else { return vec![] };
-            let [pressure, tilt, bearing, rotation] = super::pen_controls(pressure, Some(pose), super::pen_bearing(pose));
+            let [pressure, tilt, bearing, rotation, _] = super::pen_controls(pressure, Some(pose), super::pen_bearing(pose));
             let size = bristle.size.max(0.1) * cx.paint.stroke_width.max(0.0) * (0.5 + pressure) * (1.25 - 0.5 * tilt);
             if size <= 0.0 {
                 return vec![];
@@ -1274,6 +1277,7 @@ impl GestureTool {
             Variation::Tilt => posed && self.poses.iter().flatten().any(|q| q.tilt.is_some()),
             Variation::Bearing => posed && self.bearings.iter().any(Option::is_some),
             Variation::Rotation => posed && self.poses.iter().flatten().any(|q| q.rotation.is_some()),
+            Variation::StylusWheel => posed && self.poses.iter().flatten().any(|q| q.wheel.is_some()),
             Variation::Fixed | Variation::Random => false,
         };
         if self.smoothing {
@@ -1314,7 +1318,7 @@ impl GestureTool {
             let (a, b) = ((a - 0.5) * 360.0, (b - 0.5) * 360.0);
             0.5 + vectorcraft_geom::normalize_deg(a + vectorcraft_geom::normalize_deg(b - a) / 2.0) / 360.0
         };
-        self.tip_of_controls([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, turn(a[2], b[2]), turn(a[3], b[3])])
+        self.tip_of_controls([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, turn(a[2], b[2]), turn(a[3], b[3]), (a[4] + b[4]) / 2.0])
     }
 
     /// What each of the variation modes Pressure, Tilt, Bearing and Rotation reads at point `i` of
@@ -1323,7 +1327,7 @@ impl GestureTool {
     /// the bearing of the last point up to it that the pen leaned 1° or more at, or before the
     /// first such point the bearing of that first one. What the release does not read
     /// ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½, the values themselves.
-    fn controls_of_point(&self, i: usize) -> [f64; 4] {
+    fn controls_of_point(&self, i: usize) -> [f64; 5] {
         let pressure = if self.reads_pressures() { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
         let (pose, bearing) = if self.reads_poses() {
             (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten().or(self.first_bearing))
@@ -1352,7 +1356,7 @@ impl GestureTool {
     /// The Eraser's angle, roundness and size where its tip outline shows: while it erases, each
     /// value on a mode that follows the pen goes from the value less its Variation to the value
     /// plus it as the pen reads now (the pressure once the pen has pressed less than fully, the
-    /// tilt and rotation of the last point, and the bearing of the last point the pen leaned 1° or
+    /// tilt, rotation and wheel of the last point, and the bearing of the last point the pen leaned 1° or
     /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
     /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
     fn tip_now(&self) -> [f64; 3] {
@@ -1373,7 +1377,7 @@ impl GestureTool {
 
     /// The tip's angle, roundness and size where the modes Pressure, Tilt, Bearing and Rotation
     /// read `controls` (0..1 each, [`super::pen_controls`]).
-    fn tip_of_controls(&self, controls: [f64; 4]) -> [f64; 3] {
+    fn tip_of_controls(&self, controls: [f64; 5]) -> [f64; 3] {
         let base = [self.angle, self.roundness, self.size];
         let variations = [self.angle_variation, self.roundness_variation, self.size_variation];
         let mut out = base;
@@ -1383,6 +1387,7 @@ impl GestureTool {
                 Variation::Tilt => controls[1],
                 Variation::Bearing => controls[2],
                 Variation::Rotation => controls[3],
+                Variation::StylusWheel => controls[4],
                 Variation::Fixed | Variation::Random => continue,
             };
             // The size goes past a nib's 1296 pt, as `path.eraseRegion` sweeps it.
@@ -1392,20 +1397,28 @@ impl GestureTool {
         [angle, roundness.clamp(1.0, 100.0), size.max(super::MIN_BRUSH_SIZE)]
     }
 
-    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation]` when a pen read its tilt or
-    /// rotation anywhere along it (`null` for what a point lacks, and for the pressure of a stroke
+    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation, wheel]` when a pen read its
+    /// wheel anywhere along it, else `[x, y, pressure, tiltX, tiltY, rotation]` when it read its
+    /// tilt or rotation anywhere (`null` for what a point lacks, and for the pressure of a stroke
     /// pressed fully all along), else `[x, y, pressure]` when a pen pressed less than fully
     /// anywhere (a mouse always presses fully), else `[x, y]`.
     fn stroke_json(&self) -> Value {
         let n = self.points.len();
         let pressed = self.pressures.len() == n && self.pressures.iter().any(|p| *p < 1.0);
-        let posed = self.poses.len() == n && self.poses.iter().flatten().any(|q| q.tilt.is_some() || q.rotation.is_some());
+        let poses = || self.poses.iter().flatten();
+        let wheeled = self.poses.len() == n && poses().any(|q| q.wheel.is_some());
+        let posed = wheeled || (self.poses.len() == n && poses().any(|q| q.tilt.is_some() || q.rotation.is_some()));
         let round = |v: f32, k: f64| (f64::from(v) * k).round() / k;
         if posed {
             let points = self.points.iter().zip(&self.pressures).zip(&self.poses).map(|((p, f), q)| {
                 let q = q.unwrap_or_default();
                 let (tilt, rotation) = (q.tilt.map(|t| t.map(|v| round(v, 100.0))), q.rotation.map(|r| round(r, 100.0)));
-                json!([p.x, p.y, pressed.then(|| round(*f, 1000.0)), tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+                let pressure = pressed.then(|| round(*f, 1000.0));
+                if wheeled {
+                    json!([p.x, p.y, pressure, tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation, q.wheel.map(|w| round(w, 1000.0))])
+                } else {
+                    json!([p.x, p.y, pressure, tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+                }
             });
             Value::Array(points.collect())
         } else if pressed {

@@ -22,6 +22,7 @@ fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
         "view.template" => if v.templates { "Hide Template" } else { "Show Template" }.into(),
         "view.cornerWidget" => if v.corner_widgets { "Hide Corner Widget" } else { "Show Corner Widget" }.into(),
+        "view.shapeWidgets" => if v.shape_widgets { "Hide Shape Widgets" } else { "Show Shape Widgets" }.into(),
         "view.textThreads" => if v.text_threads { "Hide Text Threads" } else { "Show Text Threads" }.into(),
         "type.hiddenCharacters" => if v.hidden_chars { "Hide Hidden Characters" } else { "Show Hidden Characters" }.into(),
         "view.gradientAnnotator" => if v.gradient_annotator { "Hide Gradient Annotator" } else { "Show Gradient Annotator" }.into(),
@@ -140,7 +141,13 @@ pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
         || saved_selection_slot(id).is_some()
         || matches!(
             id,
-            "text.setStyle" | "plugin.dialog" | "file.openWith" | "window.toolbar.custom" | "svgFilter.apply" | crate::scripts_menu::COMMAND
+            "text.setStyle"
+                | "plugin.dialog"
+                | "file.openWith"
+                | "window.toolbar.custom"
+                | "svgFilter.apply"
+                | crate::scripts_menu::COMMAND
+                | crate::dialogs::proof_setup::LOAD
         )
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
@@ -283,6 +290,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Show Edges",
     "Hide Corner Widget",
     "Show Corner Widget",
+    "Hide Shape Widgets",
+    "Show Shape Widgets",
     "Hide Text Threads",
     "Show Text Threads",
     "Hide Hidden Characters",
@@ -333,11 +342,14 @@ pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
 /// data (fonts, recent files, saved views, libraries, installed plug-ins, the scripts and subfolders
-/// of the Scripts folder), the point sizes and the view angles are left out.
+/// of the Scripts folder, saved proof setups), the point sizes and the view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
     fn user_data(id: &str, params: &Value) -> bool {
-        hidden_when_disabled(id) || id.starts_with("type.recentFont") || lists_plugin(id, params) || id == crate::scripts_menu::COMMAND
+        hidden_when_disabled(id)
+            || id.starts_with("type.recentFont")
+            || lists_plugin(id, params)
+            || matches!(id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD)
     }
     fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
         for it in items {
