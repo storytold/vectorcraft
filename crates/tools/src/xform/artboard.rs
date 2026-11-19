@@ -256,7 +256,7 @@ impl ArtboardTool {
                     && reaches
             };
             let domain = || resize_contact_domain(rect, handle, current, proportional, mods.alt);
-            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, &valid) {
+            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, valid) {
                 let (q, ov) = t.snap_feasible_point(p, cx.snap_tol(), |q| valid(q, q)).unwrap_or((q, ov));
                 self.guides = ov;
                 return q;
