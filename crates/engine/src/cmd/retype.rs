@@ -502,7 +502,9 @@ impl Line {
         // (tracking is added after the glyph and after the space): the seed then places the spaces
         // from the extra less one space, shared by the two. It goes last, so a reading that fits
         // without it is kept (an untracked "a b c" has no such tracking).
-        let spaced_seed = lower.map(|e| (e - space) / 2.0);
+        // Where untracked type already draws the whole line, a space and a tracking of half its
+        // advance less draw it too: that reading is not tried.
+        let spaced_seed = lower.filter(|_| plain_miss.is_some()).map(|e| (e - space) / 2.0);
         let mut tries = vec![];
         for seed in [lower, median(extra, true), spaced_seed].into_iter().flatten() {
             let Some(measured) = measure(seed) else { continue };

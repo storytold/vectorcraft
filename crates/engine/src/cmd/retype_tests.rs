@@ -860,6 +860,16 @@ fn a_word_space_between_kerned_letters_is_read_as_a_space() {
 }
 
 #[test]
+fn an_untracked_word_is_not_read_as_spaced_letters_in_tight_tracking() {
+    // Letters, each followed by a space, at tracking of minus half a space, sit where the word's
+    // letters do.
+    let mut s = session();
+    let (_, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": "Third", "size": 24}), &[]);
+    assert_eq!(r["texts"], json!(["Third"]), "{r}");
+    assert_eq!(r["fonts"][0]["tracking"], json!(0.0), "{r}");
+}
+
+#[test]
 fn glyphs_barely_ahead_of_each_other_stay_one_line() {
     let mut s = session();
     let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": "MMMM", "size": 30}), &[json!({"tracking": -700})]);
