@@ -774,6 +774,16 @@ impl SelectionTool {
         }
     }
 
+    /// Notes where the pointer was at a press or drag ([`Self::held_at`]); → whether `ev` is a
+    /// release away from it.
+    fn note_held_at(&mut self, ev: &PointerEvent) -> bool {
+        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(ev.pos);
+        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
+            self.held_at = Some(ev.pos);
+        }
+        released_away
+    }
+
     /// On a press, notes the text the pointer is loaded with ([`Self::loaded_at_press`]); a
     /// release clears it.
     fn note_loaded_at_press(&mut self, kind: PointerKind) {
@@ -1044,10 +1054,7 @@ impl Tool for SelectionTool {
     /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
-        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(ev.pos);
-        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
-            self.held_at = Some(ev.pos);
-        }
+        let released_away = self.note_held_at(ev);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
