@@ -363,6 +363,44 @@ fn the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it() {
     assert_eq!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click in the margin applied the swatch behind it");
 }
 
+/// #8307: a sized panel without a footer (Color Wheel) keeps the same 10 pt margin. Its content
+/// is clipped where the margin starts, so the end of a list too long for the panel scrolls into
+/// view above the margin instead of under it.
+#[test]
+fn a_sized_panel_without_a_footer_scrolls_its_content_above_the_margin() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel": crate::panels::color_wheel::ID, "icon": true})).unwrap();
+    let mut layout = h.layout();
+    layout.apply(Action::ResizeGroup { panel: crate::panels::color_wheel::ID.into(), height: Some(120.0) }).unwrap();
+    h.app.ui.docking = Some(layout);
+    h.app.ui.open_panel = Some(crate::panels::color_wheel::ID.into());
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    let edge = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect;
+    let at = pos2(edge.center().x, edge.bottom() - 5.0);
+    let panel = crate::theme::Tokens::get(&h.ctx).panel;
+    // The panel's background is the smallest panel-colored rect under the margin; the window
+    // behind it is painted with the same color.
+    let is_back = |shape: &egui::Shape| matches!(shape, egui::Shape::Rect(r) if r.fill == panel && r.rect.contains(at) && r.rect.height() > 60.0);
+    let back = h
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if is_back(&c.shape) => Some(r.rect),
+            _ => None,
+        })
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+        .expect("the panel's background");
+    // Everything else clipped inside the panel is its content.
+    let content: Vec<_> = h.shapes.iter().filter(|c| !is_back(&c.shape) && back.contains_rect(c.clip_rect)).collect();
+    assert!(!content.is_empty(), "no content clipped inside the panel");
+    let margin = back.bottom() - 10.0;
+    let under: Vec<_> =
+        content.iter().filter(|c| c.clip_rect.bottom() > margin + 0.5).map(|c| (c.clip_rect, c.shape.visual_bounding_rect())).collect();
+    assert!(under.is_empty(), "content clipped below the margin's top at {margin} (clip, bounds): {under:?}");
+}
+
 #[test]
 fn a_tab_dragged_out_floats_and_comes_back_where_it_was_after_its_window_closes() {
     let mut h = Harness::new();

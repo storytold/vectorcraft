@@ -1566,7 +1566,15 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         // must remain beside those sections rather than pinning to the outer panel.
         let bottom = (!fitted && id != "properties").then_some(back.bottom() - 10.0);
         let info = egui::UiStackInfo::default().with_tag_value(crate::widgets::PANEL_FOOTER, bottom);
-        ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| {
+        // The content ends at the 10 pt margin and is clipped there: nothing scrolls behind a
+        // pinned footer into the margin (#8307), and a panel without a footer still scrolls its
+        // last row into view above it.
+        let mut body = ui.available_rect_before_wrap();
+        if let Some(bottom) = bottom {
+            body.max.y = bottom;
+        }
+        ui.scope_builder(egui::UiBuilder::new().max_rect(body).ui_stack_info(info), |ui| {
+            ui.shrink_clip_rect(body);
             if DockTab::from_id(id).is_some() {
                 crate::dock::panel_body(self.app, ui, id, width, height);
             } else {
@@ -1577,13 +1585,6 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
                 });
             }
         });
-        // The margin under a pinned footer hides what scrolls behind the footer (#8307) and,
-        // like the footer's blank space, keeps clicks and drags from reaching it.
-        if let Some(bottom) = bottom {
-            let margin = egui::Rect::from_min_max(egui::pos2(back.left(), bottom), back.max);
-            ui.painter().rect_filled(margin, 0.0, t.panel);
-            let _margin = ui.interact(margin, ui.scope_id().with(("panel-footer-margin", id)), egui::Sense::click_and_drag());
-        }
         if field_had_keyboard {
             keep_field_ending_keys(ui);
         }
