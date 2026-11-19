@@ -189,6 +189,137 @@ fn fill_area_stacks_above_the_group_that_holds_the_paths() {
     assert_eq!(members(&s, clip), before);
 }
 
+/// In isolation mode only the isolated group's paths bound areas, for the command and the tool: a
+/// click in an area that art outside the group encloses adds nothing, and the new path goes inside
+/// the group, above the path along the area.
+#[test]
+fn fill_area_stays_inside_the_isolated_group() {
+    let mut s = session();
+    let outside =
+        [line(&mut s, (200.0, 0.0), (300.0, 100.0)), line(&mut s, (300.0, 0.0), (200.0, 100.0)), line(&mut s, (190.0, 80.0), (310.0, 80.0))];
+    let lines = triangle(&mut s);
+    let ids: Vec<u64> = lines.iter().map(|l| l.0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    deselect(&mut s);
+    let members = |s: &Session| -> Vec<NodeId> { node(s, g).children().unwrap().iter().map(|n| n.id).collect() };
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [250, 70]})).is_err(), "art outside the isolated group");
+    let named: Vec<u64> = outside.iter().map(|l| l.0).collect();
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [250, 70], "ids": named})).is_err(), "named art outside it");
+    assert_eq!((undo_len(&s), stack(&s), members(&s)), (undo, kids.clone(), lines.to_vec()));
+
+    let v = ViewInfo::default();
+    s.select_tool("fillArea", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 250.0, 70.0), v).unwrap();
+    assert!(
+        !s.overlays(v).iter().any(|o| matches!(o, Overlay::Path { color: [0xff, 0x2a, 0x2a], .. })),
+        "no area outside the isolated group is outlined"
+    );
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 70.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 70.0), v).unwrap();
+    assert_eq!((undo_len(&s), stack(&s), members(&s)), (undo, kids.clone(), lines.to_vec()));
+
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 70.0), v).unwrap();
+    let red = s.overlays(v).into_iter().filter(|o| matches!(o, Overlay::Path { color: [0xff, 0x2a, 0x2a], .. })).count();
+    assert_eq!(red, 1, "the isolated group's area is outlined");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 70.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 70.0), v).unwrap();
+    let new = s.doc().unwrap().selection.objects[0];
+    assert_eq!(s.doc().unwrap().doc.parent_of(new), Some(g));
+    assert_eq!(members(&s), [lines.as_slice(), &[new]].concat());
+    assert_eq!(stack(&s), kids);
+    assert!((area(&s, new) - 900.0).abs() < 1.0, "{}", area(&s, new));
+
+    // An isolated object that no longer exists counts as no isolation, for the tool as for the
+    // command: the area outside the group fills.
+    s.doc_mut().unwrap().isolation = Some(NodeId(999_999));
+    s.pointer(&PointerEvent::new(PointerKind::Move, 250.0, 70.0), v).unwrap();
+    let red = s.overlays(v).into_iter().filter(|o| matches!(o, Overlay::Path { color: [0xff, 0x2a, 0x2a], .. })).count();
+    assert_eq!(red, 1, "the area outside the group is outlined");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 70.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 70.0), v).unwrap();
+    let new = s.doc().unwrap().selection.objects[0];
+    assert_eq!(s.doc().unwrap().doc.parent_of(new), s.doc().unwrap().doc.default_layer());
+}
+
+/// While a compound path is isolated, Fill Area finds no area, for the command and the tool, and
+/// changes nothing: the compound path cannot hold the new path. The same goes for an isolated
+/// Objects on Path group, a group with a Transform effect and a group that is a clipping mask.
+#[test]
+fn fill_area_finds_nothing_while_a_compound_path_is_isolated() {
+    let mut s = session();
+    let outer = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let inner = rect(&mut s, 25.0, 25.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    deselect(&mut s);
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [10, 10]})).is_ok(), "the ring fills outside isolation");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().isolation = Some(c);
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [10, 10]})).is_err());
+    let v = ViewInfo::default();
+    s.select_tool("fillArea", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 10.0, 10.0), v).unwrap();
+    assert!(!s.overlays(v).iter().any(|o| matches!(o, Overlay::Path { color: [0xff, 0x2a, 0x2a], .. })));
+    s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), v).unwrap();
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+
+    // An Objects on Path group moves its members along the path, so a new path in it would not
+    // stay where the area is.
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    let b = rect(&mut s, 100.0, 0.0, 40.0, 40.0);
+    let path = line(&mut s, (0.0, 200.0), (300.0, 200.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = id_of(&s.execute("object.objectsOnPath.attach", &json!({"path": path.0})).unwrap());
+    deselect(&mut s);
+    let c = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap().center();
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [c.x, c.y]})).is_ok(), "the square fills outside isolation");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().isolation = Some(g);
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [c.x, c.y]})).is_err());
+    assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+
+    // A group with a Transform effect moves what is in it, so a new path in it would not be drawn
+    // where the area is.
+    let mut s = session();
+    let lines = triangle(&mut s);
+    let ids: Vec<u64> = lines.iter().map(|l| l.0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 100}, "ids": [g.0], "item": null})).unwrap();
+    deselect(&mut s);
+    s.doc_mut().unwrap().isolation = Some(g);
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70]})).is_err());
+    assert_eq!((undo_len(&s), stack(&s), node(&s, g).children().unwrap().len()), (undo, kids, 3));
+
+    // A group that is a clipping mask clips and is not painted, so it takes no new path.
+    let mut s = session();
+    let back = rect(&mut s, -20.0, -20.0, 140.0, 140.0);
+    let edge = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [back.0, edge.0]})).unwrap();
+    let clip = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [edge.0]})).unwrap();
+    let mask = id_of(&s.execute("object.group", &json!({})).unwrap());
+    // A filled square drawn in the mask group bounds an area of its own.
+    s.doc_mut().unwrap().isolation = Some(mask);
+    let square = rect(&mut s, 10.0, 10.0, 80.0, 80.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(square), Some(mask));
+    deselect(&mut s);
+    let first = node(&s, clip).children().unwrap()[0].id;
+    assert_eq!(first, mask, "the group is the clipping mask");
+    let (undo, kids) = (undo_len(&s), stack(&s));
+    let members = node(&s, mask).children().unwrap().len();
+    assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70]})).is_err());
+    assert_eq!((undo_len(&s), stack(&s), node(&s, mask).children().unwrap().len()), (undo, kids, members));
+}
+
 /// The new path goes directly above the front-most object along the area, not above art that
 /// lies elsewhere, and paths on other layers bound areas too.
 #[test]

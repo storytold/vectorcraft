@@ -14,8 +14,9 @@ pub struct EnclosedArea {
     /// The area's outline, as a Shape Builder merge of that one region makes it.
     pub path: PathData,
     /// The object directly in a layer that holds the front-most path along the area (its outline
-    /// touches the area's outline, or it covers the area): the new path goes directly above it, so
-    /// it never goes inside a group, a Live Paint group, a Shaper group or a clipping group.
+    /// touches the area's outline, or it covers the area), or in isolation mode the object directly
+    /// in the isolated object: the new path goes directly above it, so it never goes inside a group,
+    /// a Live Paint group, a Shaper group or a clipping group other than the isolated one.
     pub above: NodeId,
 }
 
@@ -99,19 +100,85 @@ fn within(inner: &Rect, outer: &Rect) -> bool {
     inner.x0 >= outer.x0 && inner.x1 <= outer.x1 && inner.y0 >= outer.y0 && inner.y1 <= outer.y1
 }
 
-/// The object directly in a layer (or sublayer) that holds `id`: `id` itself when a layer holds it.
-fn outermost(doc: &Document, id: NodeId) -> NodeId {
+/// The object directly in `scope` (the isolated object in isolation mode), or else directly in a
+/// layer (or sublayer), that holds `id`: `id` itself when `scope` or a layer holds it, or when `id`
+/// is `scope`.
+fn outermost(doc: &Document, id: NodeId, scope: Option<NodeId>) -> NodeId {
     let Some(line) = doc.ancestry(id) else { return id };
-    let layer = line.iter().rposition(|a| doc.node(*a).is_some_and(|n| n.is_layer()));
-    layer.and_then(|k| line.get(k + 1)).copied().unwrap_or(id)
+    let k = match scope {
+        Some(s) => line.iter().rposition(|a| *a == s),
+        None => line.iter().rposition(|a| doc.node(*a).is_some_and(|n| n.is_layer())),
+    };
+    k.and_then(|k| line.get(k + 1)).copied().unwrap_or(id)
+}
+
+/// Does `n` make, move or combine the art in it itself, so that a new path in it would not stay as
+/// Fill Area adds it: a Live Paint group, a compound shape, a Shaper group, a graph, an Image Trace
+/// result, a dimension, a flare or an Objects on Path group.
+fn managed(n: &Node) -> bool {
+    let e = n.extras();
+    super::lookup::is_live_paint(n)
+        || n.is_compound_shape()
+        || e.shaper.is_some()
+        || e.graph.is_some()
+        || e.trace.is_some()
+        || e.dimension.is_some()
+        || e.flare.is_some()
+        || e.objects_on_path.is_some()
+}
+
+/// The roots the Fill Area tool and `shapeBuilder.copyRegion` find areas among, with the isolated
+/// object the new path goes into ([`AreaFinder::new`]'s `scope`), for `isolation` (the document's
+/// isolated object) and `named` (the objects or layers named; None: every layer). In isolation mode
+/// only the isolated layer or group's paths count: of `named`, the ones inside it, with the
+/// isolated object in place of one that holds it. An isolated object that no longer exists counts
+/// as no isolation. None while an object that is not a layer or a group is isolated (a compound
+/// path or a single path), a layer or group with a live effect, a group that is [`managed`] or a
+/// clipping mask, or one inside such an object or inside another object that is not a layer or a
+/// group (an envelope): no area is found then.
+pub fn fill_area_roots(doc: &Document, isolation: Option<NodeId>, named: Option<&[NodeId]>) -> Option<(Vec<NodeId>, Option<NodeId>)> {
+    let Some(iso) = isolation.filter(|i| doc.node(*i).is_some()) else {
+        return Some((named.map_or_else(|| every_layer(doc), <[NodeId]>::to_vec), None));
+    };
+    let line = doc.ancestry(iso)?;
+    // Every object from the layer down to the isolated one is a layer or a plain group: an
+    // envelope, a blend or another object that draws its contents its own way does not hold
+    // the new path as drawn.
+    // A layer or group with a live effect (a Transform effect moves what is in it) draws the new
+    // path elsewhere than the area.
+    let plain =
+        |a: &Node| (a.is_layer() || (matches!(a.kind, NodeKind::Group { .. }) && !managed(a))) && !a.appearance.effects.iter().any(|e| e.visible);
+    if !line.iter().all(|a| doc.node(*a).is_some_and(plain)) {
+        return None;
+    }
+    // A clipping group or clipped layer's first member is its mask, which clips and is not painted.
+    let in_mask = line.windows(2).any(|w| {
+        let [p, m] = w else { return false };
+        doc.node(*p).is_some_and(|p| p.clips() && p.children().and_then(|c| c.first()).is_some_and(|f| f.id == *m))
+    });
+    if in_mask {
+        return None;
+    }
+    let Some(named) = named else { return Some((vec![iso], Some(iso))) };
+    let mut out = vec![];
+    for r in named {
+        if line.contains(r) {
+            out.push(iso);
+        } else if doc.ancestry(*r).is_some_and(|a| a.contains(&iso)) {
+            out.push(*r);
+        }
+    }
+    Some((out, Some(iso)))
 }
 
 impl AreaFinder {
     /// The finder over the paths of `roots` (layers or objects) that the Shape Builder takes:
     /// visible, unlocked paths, compound paths and Live Paint faces and edges that draw, not on a
     /// locked artboard. Gaps up to `gap` close, and with `open_filled_as_closed` a filled open path
-    /// bounds an area as if an invisible edge closed it.
-    pub fn new(doc: &Document, roots: &[NodeId], gap: f64, open_filled_as_closed: bool) -> Self {
+    /// bounds an area as if an invisible edge closed it. With `scope` (the isolated object in
+    /// isolation mode), an area's new path goes directly above the object in `scope` that holds the
+    /// front-most path along it, so it stays inside the isolated object.
+    pub fn new(doc: &Document, roots: &[NodeId], scope: Option<NodeId>, gap: f64, open_filled_as_closed: bool) -> Self {
         let roots = sorted_roots(doc, roots);
         let (shapes, leaves) = shape_builder_shapes(doc, &roots, open_filled_as_closed);
         let editable = doc.editable();
@@ -121,7 +188,7 @@ impl AreaFinder {
             .filter(|(_, l)| editable(l.id))
             .filter_map(|(s, l)| {
                 let b = s.path.bounds()?;
-                Some((s, b, outermost(doc, l.id)))
+                Some((s, b, outermost(doc, l.id, scope)))
             })
             .collect();
         let total = inputs.iter().map(|(_, b, _)| *b).reduce(|a, b| a.union(b));
@@ -281,8 +348,8 @@ pub struct FillAreaTool {
     /// The finder for the document as it is, with the key it was made for. Away while a search
     /// runs on another thread.
     finder: Option<(FinderKey, AreaFinder)>,
-    /// The area under the pointer, with the document revision it was found in.
-    hover: Option<((u64, u64), EnclosedArea)>,
+    /// The area under the pointer, with the key of the finder that found it.
+    hover: Option<(FinderKey, EnclosedArea)>,
     /// Where the pointer last moved over the canvas.
     at: Option<Point>,
     /// A hover search running on another thread.
@@ -293,8 +360,9 @@ pub struct FillAreaTool {
     pressing: bool,
 }
 
-/// The document revision, the gap and the open-filled rule an [`AreaFinder`] was made with.
-type FinderKey = ((u64, u64), f64, bool);
+/// The document revision, the gap, the open-filled rule and the isolated object an [`AreaFinder`]
+/// was made with.
+type FinderKey = ((u64, u64), f64, bool, Option<NodeId>);
 
 /// A search for the area under `p` on another thread, which hands back the finder it took.
 struct HoverJob {
@@ -346,21 +414,26 @@ impl FillAreaTool {
     }
 
     fn finder_key(&self, cx: &ToolContext) -> FinderKey {
-        (cx.revision, self.gap(), self.open_filled_as_closed())
+        (cx.revision, self.gap(), self.open_filled_as_closed(), cx.isolation)
     }
 
-    /// The finder for the document as `cx` has it, made again when the key changed.
+    /// The finder for the document as `cx` has it, made again when the key changed. In isolation
+    /// mode it takes only the isolated object's paths, as the command does.
     fn take_finder(&mut self, cx: &ToolContext) -> AreaFinder {
         let key = self.finder_key(cx);
         match self.finder.take() {
             Some((k, f)) if k == key => f,
-            _ => AreaFinder::new(cx.doc, &every_layer(cx.doc), key.1, key.2),
+            _ => {
+                // An isolated object Fill Area does not work in gives a finder of no paths.
+                let (roots, scope) = fill_area_roots(cx.doc, key.3, None).unwrap_or_default();
+                AreaFinder::new(cx.doc, &roots, scope, key.1, key.2)
+            }
         }
     }
 
     /// The hover area when it is current and holds `p`.
     fn hover_holding(&self, cx: &ToolContext, p: Point) -> Option<&EnclosedArea> {
-        self.hover.as_ref().filter(|(rev, a)| *rev == cx.revision && path_contains(&a.path, FillRule::NonZero, p)).map(|(_, a)| a)
+        self.hover.as_ref().filter(|(k, a)| *k == self.finder_key(cx) && path_contains(&a.path, FillRule::NonZero, p)).map(|(_, a)| a)
     }
 
     /// The area under `p`, found here and now (a click). A search running on another thread is
@@ -407,7 +480,7 @@ impl FillAreaTool {
                 Err(f) => finder = *f,
             }
         }
-        self.hover = finder.find(p).map(|a| (key.0, a));
+        self.hover = finder.find(p).map(|a| (key, a));
         self.finder = Some((key, finder));
     }
 
@@ -440,7 +513,7 @@ impl FillAreaTool {
         }
         // The area found serves wherever the pointer moved meanwhile, as long as it holds it.
         let at = self.at;
-        self.hover = area.filter(|a| current && at.is_some_and(|p| path_contains(&a.path, FillRule::NonZero, p))).map(|a| (job.key.0, a));
+        self.hover = area.filter(|a| current && at.is_some_and(|p| path_contains(&a.path, FillRule::NonZero, p))).map(|a| (job.key, a));
         if let Some(p) = at
             && self.hover.is_none()
             && (p != job.p || !current)
@@ -494,7 +567,7 @@ impl Tool for FillAreaTool {
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         self.hover
             .iter()
-            .filter(|(rev, _)| *rev == cx.revision)
+            .filter(|(k, _)| *k == self.finder_key(cx))
             .map(|(_, a)| Overlay::Path { path: a.path.to_bezpath(), color: HIGHLIGHT_RED, width: 3.0, dashed: false })
             .collect()
     }

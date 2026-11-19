@@ -195,18 +195,22 @@ pub(super) fn sb_copy_region(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = paint_param(s, p, "stroke", C)?.unwrap_or_else(|| s.paint.stroke.clone());
     let look = s.new_art_look(fill, stroke, s.paint.stroke_width);
     let area = {
-        let d = &s.doc()?.doc;
-        let roots = match named_ids(p)? {
+        let st = s.doc()?;
+        let d = &st.doc;
+        let named = match named_ids(p)? {
             Some(ids) => {
                 if let Some(bad_id) = ids.iter().find(|i| d.node(**i).is_none()) {
                     return Err(EngineError::NoNode(*bad_id));
                 }
                 // An object listed with a layer or group that holds it counts once.
-                outermost(d, ids)
+                Some(outermost(d, ids))
             }
-            None => b::every_layer(d),
+            None => None,
         };
-        b::AreaFinder::new(d, &roots, gap, open_filled_as_closed).find(pt)
+        // In isolation mode only the isolated layer or group's paths bound areas, and the new path
+        // goes inside it.
+        b::fill_area_roots(d, st.isolation, named.as_deref())
+            .and_then(|(roots, scope)| b::AreaFinder::new(d, &roots, scope, gap, open_filled_as_closed).find(pt))
     };
     let Some(area) = area else { return Err(EngineError::Other("Fill Area: no enclosed area under the pointer".into())) };
     let id = s.edit("Fill Area", |d, sel| {

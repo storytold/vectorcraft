@@ -13228,7 +13228,13 @@ Double-clicking the Fill Area tool opens the Shape Builder Tool Options (`tool.o
 The new path takes the current fill, stroke and stroke weight (`fill` and `stroke` override the paints), goes directly
 above the front-most object along the area (one whose outline touches the area's outline, or that covers it) and is
 selected. When a group, Live Paint group, Shaper group or clipping group holds that object, the new path goes above the
-outermost group in its layer, not inside it, and the group keeps its members. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
+outermost group in its layer, not inside it, and the group keeps its members. In isolation mode only the paths in
+the isolated layer or group bound areas, for the tool's hover and click and for the command (with `ids`, only the
+paths of the listed objects that are in it), and the new path goes inside the isolated layer or group, directly above
+the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
+or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or
+Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or
+inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
 step; a `gap` outside 0 to 72 is an error. It returns `{id, above}`. The command looks for the area among the paths
 near the point first. When the paths together have more than 65,536 segments and the paths near the point do not
 enclose it, the point counts as in no enclosed area.

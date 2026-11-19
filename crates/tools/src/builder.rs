@@ -34,7 +34,7 @@ mod lookup;
 mod map;
 
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
-pub use fill_area::{AreaFinder, EnclosedArea, FillAreaTool, every_layer};
+pub use fill_area::{AreaFinder, EnclosedArea, FillAreaTool, every_layer, fill_area_roots};
 #[cfg(test)]
 use live_paint::LpHover;
 pub use live_paint::{
