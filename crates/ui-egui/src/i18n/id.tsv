@@ -1405,6 +1405,7 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tampilan roda
 	Box View	Tampilan kotak
+	Show Out-of-Gamut Colors	Tampilkan warna di luar gamut
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna

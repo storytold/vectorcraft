@@ -549,6 +549,7 @@ antiAlias	Sharp	Nítido
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Exibição em Roda
 	Box View	Exibição em Caixa
+	Show Out-of-Gamut Colors	Mostrar Cores Fora do Gamut
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores

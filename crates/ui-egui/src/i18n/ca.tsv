@@ -887,6 +887,7 @@ arrowhead	Target	Diana
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Visualització de roda
 	Box View	Visualització de quadre
+	Show Out-of-Gamut Colors	Mostra els colors fora de gama
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
