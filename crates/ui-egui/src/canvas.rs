@@ -490,7 +490,6 @@ fn reset_ignore_sampler_clicks(ui: &Ui, id: egui::Id) {
 /// Reclassify only the two clicks whose raw history can still contain a consumed pick.
 /// Other widgets' clicks count too, as they do in egui; its pointer state stays untouched.
 fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool) {
-    let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
     let (clicked, primary, at, time) = ui.input(|i| {
         // A hover move after the release is not the position egui put in its click history.
         let at = i.events.iter().rev().find_map(|event| match event {
@@ -508,6 +507,11 @@ fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool) {
         return;
     }
     let Some(at) = at else { return };
+    record_ignore_sampler_click(ui, id, at, time, primary);
+}
+
+fn record_ignore_sampler_click(ui: &Ui, id: egui::Id, at: Pos2, time: f64, primary: bool) {
+    let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
     ui.data_mut(|data| {
         let history_id = id.with("image-trace-clicks");
         let Some(mut clicks) = data.remove_temp::<IgnoreSamplerClicks>(history_id) else { return };
@@ -551,20 +555,126 @@ fn clear_ignore_sampler_gesture(ui: &Ui, id: egui::Id) {
     });
 }
 
-fn begin_ignore_sampler_pointer(ui: &Ui, id: egui::Id, cancelled: bool) -> bool {
-    let (pressed, released, down) = ui.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_released(), i.pointer.primary_down()));
-    if pressed {
-        // A fresh press replaces the complete sampler gesture if its release was not observed.
-        if ignore_sampler_owns_primary(ui, id) {
-            clear_ignore_sampler_gesture(ui, id);
+#[derive(Clone, Copy)]
+struct IgnoreSamplerRelease {
+    button: egui::PointerButton,
+    at: Pos2,
+    clicked: bool,
+}
+
+#[derive(Default)]
+struct IgnoreSamplerPointer {
+    owned: bool,
+    replaced: bool,
+    ordinary_pressed: bool,
+    consumed_release: bool,
+    releases: Vec<IgnoreSamplerRelease>,
+}
+
+/// Attribute a fresh press after an owned release before egui's per-frame flags lose their order.
+fn ignore_sampler_pointer_frame(ui: &Ui, id: egui::Id, cancelled: bool) -> IgnoreSamplerPointer {
+    let owned = ignore_sampler_owns_primary(ui, id);
+    if !owned && !cancelled {
+        return IgnoreSamplerPointer::default();
+    }
+    let (distance, duration) = ui.ctx().options(|o| (o.input_options.max_click_dist, o.input_options.max_click_duration));
+    ui.input(|i| {
+        let mut frame = IgnoreSamplerPointer { owned, ..Default::default() };
+        let mut first_press_owned = cancelled;
+        let mut press = None;
+        let mut moved = false;
+        let mut primary_pressed = false;
+        for event in &i.events {
+            match event {
+                egui::Event::PointerMoved(at) => {
+                    if let Some((_, origin)) = press {
+                        moved |= Pos2::distance(origin, *at) > distance;
+                    }
+                }
+                egui::Event::PointerButton { pos, button, pressed, .. } => {
+                    if *pressed {
+                        press = Some((*button, *pos));
+                        moved = false;
+                        if *button == egui::PointerButton::Primary {
+                            primary_pressed = true;
+                            frame.replaced |= frame.owned;
+                            // An observed old Up ends that cancelled sequence; without it,
+                            // a fresh invalid press keeps the existing cancellation gate.
+                            frame.owned = first_press_owned && !frame.consumed_release;
+                            first_press_owned = false;
+                            frame.ordinary_pressed |= !frame.owned;
+                        }
+                    } else {
+                        // A fresh primary click needs its own Down, not an earlier owned click.
+                        // Slop/origin are shared by buttons in egui; each press resets them, and
+                        // a release clears its press time. In-frame presses have the same time.
+                        let clicked = ignore_sampler_release_clicked(press, moved, primary_pressed, *button, duration);
+                        ignore_sampler_release(&mut frame, *button, *pos, clicked);
+                        if *button == egui::PointerButton::Primary {
+                            primary_pressed = false;
+                        }
+                        press = None;
+                    }
+                }
+                _ => {}
+            }
         }
-        if cancelled {
-            ui.data_mut(|data| data.insert_temp(ignore_sampler_primary_id(id), true));
+        frame
+    })
+}
+
+fn ignore_sampler_release_clicked(
+    press: Option<(egui::PointerButton, Pos2)>,
+    moved: bool,
+    primary_pressed: bool,
+    button: egui::PointerButton,
+    duration: f64,
+) -> bool {
+    let matched = if button == egui::PointerButton::Primary { primary_pressed } else { press.is_some_and(|(b, _)| b == button) };
+    matched && !moved && (press.is_none() || !matches!(duration.partial_cmp(&0.0), Some(std::cmp::Ordering::Less)))
+}
+
+fn ignore_sampler_release(frame: &mut IgnoreSamplerPointer, button: egui::PointerButton, at: Pos2, clicked: bool) {
+    if button == egui::PointerButton::Primary && frame.owned {
+        frame.consumed_release = true;
+        frame.releases.clear();
+    } else if frame.consumed_release {
+        frame.releases.push(IgnoreSamplerRelease { button, at, clicked });
+    }
+}
+
+fn ignore_sampler_frame_clicks(ui: &Ui, id: egui::Id, frame: &IgnoreSamplerPointer, consumed: bool) {
+    if !frame.consumed_release || !frame.ordinary_pressed {
+        ignore_sampler_clicks(ui, id, consumed);
+        return;
+    }
+    // Consume the old sequence, then classify only subsequent ordinary releases. A new Down
+    // still reaches the tool when the last release belongs to the consumed sequence.
+    reset_ignore_sampler_clicks(ui, id);
+    ui.data_mut(|data| data.insert_temp(id.with("image-trace-click-count"), 0u8));
+    let time = ui.input(|i| i.time);
+    for release in &frame.releases {
+        let primary = release.button == egui::PointerButton::Primary;
+        if release.clicked {
+            record_ignore_sampler_click(ui, id, release.at, time, primary);
+        } else if primary {
+            ui.data_mut(|data| data.insert_temp(id.with("image-trace-click-count"), 0u8));
         }
     }
-    let consumed = ignore_sampler_owns_primary(ui, id) && (pressed || released || down);
-    ignore_sampler_clicks(ui, id, consumed);
-    consumed
+}
+
+fn begin_ignore_sampler_pointer(ui: &Ui, id: egui::Id, cancelled: bool) -> (bool, bool) {
+    let frame = ignore_sampler_pointer_frame(ui, id, cancelled);
+    if frame.replaced {
+        // This also replaces an abandoned sampler Down whose release was not observed.
+        clear_ignore_sampler_gesture(ui, id);
+    }
+    if frame.owned {
+        ui.data_mut(|data| data.insert_temp(ignore_sampler_primary_id(id), true));
+    }
+    let consumed = frame.owned && ui.input(|i| i.pointer.primary_pressed() || i.pointer.primary_released() || i.pointer.primary_down());
+    ignore_sampler_frame_clicks(ui, id, &frame, consumed);
+    (consumed, frame.ordinary_pressed)
 }
 
 fn end_ignore_sampler_pointer(ui: &Ui, id: egui::Id) {
@@ -589,8 +699,8 @@ fn observe_hidden_ignore_sampler_pointer(app: &VectorcraftApp, ui: &Ui, home_sho
 
 /// A sampler press keeps its release, even if its Down completes or its binding expires held.
 fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
-    let consumed = begin_ignore_sampler_pointer(ui, resp.id, cancelled);
-    if !consumed && (!cancelled || !ui.input(|i| i.pointer.any_pressed())) {
+    let (consumed, ordinary_pressed) = begin_ignore_sampler_pointer(ui, resp.id, cancelled);
+    if !consumed && (ordinary_pressed || !cancelled || !ui.input(|i| i.pointer.any_pressed())) {
         canvas_input(app, ui, resp, rect);
     }
     end_ignore_sampler_pointer(ui, resp.id);

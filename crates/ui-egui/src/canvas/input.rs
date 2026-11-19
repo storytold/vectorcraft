@@ -136,7 +136,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             drag_held(app, ui, &f, d, p);
         } else {
             // The drag ends where its button went up: the moves after the release in this frame are hover.
-            drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
+            drag_released(app, ui, &f, d, release_pos(ui, button, false).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
@@ -189,14 +189,14 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     if !super::ignore_sampler_owns_primary(ui, resp.id)
         && super::primary_click_count(ui, resp) == 2
         && !f.modal
-        && let Some(p) = at
+        && let Some(p) = release_pos(ui, egui::PointerButton::Primary, true).or(at)
     {
         double_click(app, ui, &f, p);
     }
     if !super::ignore_sampler_owns_primary(ui, resp.id)
         && super::primary_click_count(ui, resp) == 3
         && !f.modal
-        && let Some(p) = at
+        && let Some(p) = release_pos(ui, egui::PointerButton::Primary, true).or(at)
     {
         triple_click(app, ui, &f, p);
     }
@@ -638,13 +638,14 @@ fn triple_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     dispatch(app, &ev, view);
 }
 
-/// Where `button` went up in this frame, if it did.
-fn release_pos(ui: &Ui, button: egui::PointerButton) -> Option<Pos2> {
+/// Where `button` went up: the first release ends a drag, the last classifies this frame's click.
+fn release_pos(ui: &Ui, button: egui::PointerButton, last: bool) -> Option<Pos2> {
     ui.input(|i| {
-        i.events.iter().find_map(|e| match e {
+        let mut releases = i.events.iter().filter_map(|e| match e {
             egui::Event::PointerButton { pos, button: b, pressed: false, .. } if *b == button => Some(*pos),
             _ => None,
-        })
+        });
+        if last { releases.next_back() } else { releases.next() }
     })
 }
 

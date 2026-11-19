@@ -171,28 +171,17 @@ thread_local! {
     static TARGET_LOOKUPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
-/// The object Trace acts on: the first selected image or Image Trace object in paint order, as
-/// `imageTrace.make` takes it, else the first selected object. Only the selected images and Image
-/// Trace objects are put in paint order.
+/// The image or Image Trace object `imageTrace.make` takes from the selected roots, else the
+/// first selected non-traceable object's metadata. Release and Expand keep their own selection scope.
 fn find_target(app: &VectorcraftApp) -> Target {
     let Some(st) = app.session.active() else { return Target::default() };
     #[cfg(test)]
     TARGET_LOOKUPS.with(|n| n.set(n.get() + 1));
-    let mut any_trace = false;
-    let traceable: Vec<NodeId> = st
-        .selection
-        .objects
-        .iter()
-        .copied()
-        .filter(|id| {
-            st.doc.node(*id).is_some_and(|n| {
-                let trace = is_trace(n);
-                any_trace |= trace;
-                trace || matches!(n.kind, NodeKind::Image(_))
-            })
-        })
-        .collect();
-    let node = st.doc.paint_order(traceable).into_iter().find_map(|id| st.doc.node(id)).or_else(|| first_node(app));
+    let any_trace = st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace));
+    let node = vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null)
+        .ok()
+        .and_then(|id| st.doc.node(id))
+        .or_else(|| first_node(app).filter(|n| !is_trace(n) && !matches!(n.kind, NodeKind::Image(_))));
     let Some(n) = node else { return Target { any_trace, ..Target::default() } };
     Target {
         object: Some((st.uid, n.id)),
@@ -388,6 +377,15 @@ fn sampled_ignore_color(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampl
         return None;
     }
     let pixel = image.xf.inverse() * point;
+    if !pixel.x.is_finite()
+        || !pixel.y.is_finite()
+        || pixel.x < 0.0
+        || pixel.y < 0.0
+        || pixel.x >= f64::from(image.width.max(1))
+        || pixel.y >= f64::from(image.height.max(1))
+    {
+        return None;
+    }
     let [r, g, b, alpha] = doc.images.get(&image.key)?.sample_object(pixel.x, pixel.y, (image.width, image.height), 1)?;
     (alpha != 0).then(|| format!("#{r:02x}{g:02x}{b:02x}"))
 }
@@ -431,9 +429,9 @@ pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     }
     set_pstate(&ctx, "image-trace", st);
     ctx.request_repaint();
-    // The old deferred SwitchTool ran after the panel accepted the color. Keep that order and
-    // fresh tool choice; a miss above has no switch request and remains armed.
-    app.select_tool(&s.back);
+    // Complete the temporary tool without treating its return as a fresh explicit tool choice.
+    // A miss above has no switch request and remains armed.
+    app.return_to_tool(&s.back);
 }
 
 /// The selected Image Trace object's View row (Control bar, Properties).

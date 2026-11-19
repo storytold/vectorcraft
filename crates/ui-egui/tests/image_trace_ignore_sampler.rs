@@ -1061,3 +1061,260 @@ fn review_followup_release_position_survives_a_later_hover_move() {
     assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the fresh pair uses release positions, not subsequent hover positions");
 }
+
+fn review_596866_button(at: Pos2, pressed: bool) -> Event {
+    Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+fn review_596866_owned_release_then_press(coalesced: bool) {
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.ui.trace_ignore_sampler.is_none());
+    assert!(ctx.input(|i| i.pointer.primary_down()));
+    let document = app.session.active().unwrap().doc.clone();
+    let paint = app.session.paint.clone();
+    let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
+    if coalesced {
+        frame_at(&mut app, &ctx, start + step, vec![review_596866_button(at, false), review_596866_button(at, true)]);
+        assert!(ctx.input(|i| i.pointer.primary_released() && i.pointer.primary_pressed() && i.pointer.primary_down()));
+    } else {
+        review_gesture_release(&mut app, &ctx, at, start + step);
+        assert_eq!(app.session.active().unwrap().selection.objects, Vec::<NodeId>::new(), "CONTROL: the owned Up remains consumed");
+        review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    }
+    let before_release = review_gesture_observation(&app, &ctx);
+    review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
+    let after_release = review_gesture_observation(&app, &ctx);
+    assert!(after_release.0 && !after_release.1, "the owned prefix and one fresh click form egui's raw Double");
+    assert!(
+        before_release.2 == vec![group] && before_release.3.is_none() && after_release.2 == vec![group] && after_release.3.is_none(),
+        "coalesced={coalesced}: the first fresh click must select without isolation: before={before_release:?}, after={after_release:?}"
+    );
+    assert_eq!(app.session.active().unwrap().doc, document);
+    assert_eq!(app.session.paint, paint);
+    assert_eq!((app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len()), history);
+    if !coalesced {
+        review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
+        review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
+        assert_eq!(app.session.active().unwrap().isolation, Some(group), "CONTROL: the second fresh click still isolates");
+    }
+}
+
+#[test]
+fn review_596866_owned_up_then_new_down_in_one_frame_keeps_the_next_click_single() {
+    review_596866_owned_release_then_press(false);
+    review_596866_owned_release_then_press(true);
+}
+
+#[test]
+fn review_596866_second_corrected_release_uses_its_release_position() {
+    let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
+    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
+
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let hover = review_gesture_screen(&app, &ctx, Point::new(340.0, 250.0));
+    assert!(at.distance(hover) > ctx.options(|o| o.input_options.max_click_dist));
+    let expected = review_gesture_state(&app);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    assert_eq!(review_gesture_state(&app), expected, "the stale prefix is consumed");
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![group]);
+    assert_eq!(app.session.active().unwrap().isolation, None, "the first fresh click is single");
+    review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
+    frame_at(&mut app, &ctx, start + 7.0 * step, vec![review_596866_button(at, false), Event::PointerMoved(hover)]);
+    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(hover));
+    assert_eq!(
+        app.session.active().unwrap().isolation,
+        Some(group),
+        "the corrected Double belongs to its release on the group, not the later blank hover"
+    );
+}
+
+fn review_596866_bound_point(app: &VectorcraftApp, target: NodeId) -> Point {
+    let state = app.session.active().unwrap();
+    let node = state.doc.node(target).unwrap();
+    let original = node.children().and_then(|children| children.first()).map_or(node, |child| child.as_ref());
+    let NodeKind::Image(image) = &original.kind else { panic!("the retained binding has a source image") };
+    image.xf * Point::new(f64::from(image.width) * 0.25, f64::from(image.height) * 0.5)
+}
+
+fn review_596866_source_image(app: &VectorcraftApp, target: NodeId) -> NodeId {
+    let state = app.session.active().unwrap();
+    let node = state.doc.node(target).unwrap();
+    let original = node.children().and_then(|children| children.first()).map_or(node, |child| child.as_ref());
+    assert!(matches!(original.kind, NodeKind::Image(_)), "the retained binding has an original source image");
+    original.id
+}
+
+fn review_596866_pick_binding(app: &mut VectorcraftApp, ctx: &egui::Context) -> NodeId {
+    click_control(app, ctx, SAMPLE_TIP);
+    let target = app.ui.trace_ignore_sampler.as_ref().unwrap().target;
+    let source = review_596866_source_image(app, target);
+    let point = review_596866_bound_point(app, target);
+    let at = review_gesture_screen(app, ctx, point);
+    let (start, step) = review_gesture_times(ctx);
+    review_gesture_press(app, ctx, at, start);
+    review_gesture_release(app, ctx, at, start + step);
+    settle(app, ctx);
+    assert!(app.ui.trace_ignore_sampler.is_none(), "an opaque original pixel completes the pick");
+    source
+}
+
+fn review_596866_ignore_color(app: &VectorcraftApp, source: NodeId) -> Value {
+    let doc = &app.session.active().unwrap().doc;
+    assert!(matches!(doc.node(source).unwrap().kind, NodeKind::Image(_)), "retrace retains the original source image identity");
+    let trace = doc.node(doc.parent_of(source).unwrap()).unwrap();
+    assert_eq!(trace.children().unwrap().first().unwrap().id, source, "the source remains the trace's first child");
+    trace.extras().trace.as_ref().expect("the source's current parent is an Image Trace")["params"]["ignoreColor"].clone()
+}
+
+fn review_596866_nested_trace_selection() -> (VectorcraftApp, egui::Context, NodeId, NodeId) {
+    let (mut app, ctx) = fixture(true, [37, 83, 149], true);
+    let first = selected(&app).id;
+    let parent = review_gesture_enclose_source(&mut app, first);
+    let bytes = {
+        let state = app.session.active().unwrap();
+        let original = state.doc.node(first).unwrap().children().unwrap()[0].as_ref();
+        let NodeKind::Image(image) = &original.kind else { panic!("the first trace retains its input") };
+        state.doc.images[&image.key].bytes.clone()
+    };
+    app.run(
+        "file.place",
+        json!({"name": "second-sampler-source.png", "dataBase64": vectorcraft_format::base64_encode(&bytes), "link": false, "at": [280, 150]}),
+    )
+    .unwrap();
+    app.run("imageTrace.make", json!({"preset": "Default", "params": {"mode": "blackAndWhite", "threshold": 127, "noise": 1, "ignoreWhite": false}}))
+        .unwrap();
+    let second = selected(&app).id;
+    assert_ne!(first, second);
+    app.run("select.set", json!({"ids": [parent.0, first.0, second.0]})).unwrap();
+    settle(&mut app, &ctx);
+    let state = app.session.active().unwrap();
+    assert_eq!(state.selection.objects, vec![parent, first, second], "CONTROL: the public selection keeps the ordinary ancestor and nested trace");
+    assert!(state.doc.node(parent).unwrap().extras().trace.is_none(), "the selected ancestor is not itself traceable");
+    assert_eq!(state.doc.paint_order([first, second]), vec![first, second], "the nested trace precedes the top-level trace");
+    (app, ctx, first, second)
+}
+
+#[test]
+fn review_596866_preview_retraces_the_retained_sampler_binding() {
+    let (mut control, control_ctx) = fixture(true, [37, 83, 149], true);
+    let control_source = review_596866_pick_binding(&mut control, &control_ctx);
+    assert_eq!(review_596866_ignore_color(&control, control_source), "#255395", "CONTROL: a single trace receives its sampled color");
+
+    let (mut app, ctx, first, second) = review_596866_nested_trace_selection();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    let bound = app.ui.trace_ignore_sampler.as_ref().unwrap().target;
+    assert!(bound == first || bound == second);
+    let other = if bound == first { second } else { first };
+    let other_before = app.session.active().unwrap().doc.node(other).unwrap().clone();
+    let bound_source = review_596866_source_image(&app, bound);
+    assert_ne!(review_596866_ignore_color(&app, bound_source), "#255395", "CONTROL: the sample must change the bound trace's stored color");
+    let point = review_596866_bound_point(&app, bound);
+    let at = review_gesture_screen(&app, &ctx, point);
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    review_gesture_release(&mut app, &ctx, at, start + step);
+    settle(&mut app, &ctx);
+    let bound_color = review_596866_ignore_color(&app, bound_source);
+    let other_after = app.session.active().unwrap().doc.node(other).cloned();
+    assert!(
+        bound_color == "#255395" && other_after.as_ref() == Some(&other_before),
+        "Preview must update only retained sampler target {bound:?}: bound_color={bound_color}, other_changed_or_missing={}",
+        other_after.as_ref() != Some(&other_before)
+    );
+}
+
+fn review_596866_grid_visible(app: &VectorcraftApp) -> bool {
+    vectorcraft_tools::distort::perspective::PerspectiveGrid::current(&app.session.active().unwrap().doc).visible
+}
+
+fn review_596866_hidden_grid_fixture() -> (VectorcraftApp, egui::Context) {
+    let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+    app.select_tool("perspectiveGrid");
+    assert!(review_596866_grid_visible(&app), "CONTROL: a deliberate fresh tool choice shows the grid");
+    app.run("perspective.grid.show", json!({"visible": false})).unwrap();
+    settle(&mut app, &ctx);
+    assert_eq!(app.session.tool_id(), "perspectiveGrid");
+    assert!(!review_596866_grid_visible(&app));
+    (app, ctx)
+}
+
+#[test]
+fn review_596866_successful_pick_preserves_a_hidden_perspective_grid() {
+    let (mut control, _) = review_596866_hidden_grid_fixture();
+    let revision = control.session.active().unwrap().revision;
+    control.select_tool("perspectiveGrid");
+    assert!(review_596866_grid_visible(&control), "CONTROL: explicitly choosing the tool again still shows the grid");
+    assert!(control.session.active().unwrap().revision > revision);
+
+    let (mut app, ctx) = review_596866_hidden_grid_fixture();
+    let expected = review_gesture_state(&app);
+    let source = review_596866_pick_binding(&mut app, &ctx);
+    assert_eq!(app.session.tool_id(), "perspectiveGrid");
+    let observed = review_gesture_state(&app);
+    let visible = review_596866_grid_visible(&app);
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(review_596866_ignore_color(&app, source), "#255395", "CONTROL: the valid Preview-off pick really changed the panel draft");
+    assert!(!visible, "returning from the temporary sampler must not show the hidden grid");
+    assert_eq!(observed, expected, "the Preview-off pick must not change document, selection, revision, history or paint");
+}
+
+fn review_596866_coalesced_fresh_suffix(dragged: bool) {
+    let (mut app, ctx, point, group) = review_gesture_group_fixture();
+    click_control(&mut app, &ctx, SAMPLE_TIP);
+    app.run("select.none", json!({})).unwrap();
+    let at = review_gesture_screen(&app, &ctx, point);
+    let distance = ctx.options(|o| o.input_options.max_click_dist);
+    let away = at + vec2(distance + 8.0, 0.0);
+    assert!(away.distance(at) > distance && app.canvas_rect.unwrap().contains(away));
+    let (start, step) = review_gesture_times(&ctx);
+    review_gesture_press(&mut app, &ctx, at, start);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(app.ui.trace_ignore_sampler.is_none() && ctx.input(|i| i.pointer.primary_down()));
+    let mut events = vec![review_596866_button(at, false), review_596866_button(at, true)];
+    if dragged {
+        events.extend([Event::PointerMoved(away), Event::PointerMoved(at)]);
+    }
+    events.push(review_596866_button(at, false));
+    frame_at(&mut app, &ctx, start + step, events);
+    assert!(ctx.input(|i| i.pointer.primary_pressed() && i.pointer.primary_released() && !i.pointer.primary_down()));
+    assert!(ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)), "the old owned release really contributed a raw click");
+    assert_eq!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), !dragged, "only the valid fresh suffix is a second raw click");
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the fresh Down still selects the group");
+    assert_eq!(app.session.active().unwrap().isolation, None, "neither the first fresh click nor an out-and-back drag may isolate");
+    // The ordinary tool receives its Up in the next empty frame; no document/history oracle
+    // forbids legitimate drag completion work.
+    frame_at(&mut app, &ctx, start + 2.0 * step, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, None);
+    review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
+    review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
+    if dragged {
+        assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![group]);
+        assert_eq!(app.session.active().unwrap().isolation, None, "the invalid suffix must not advance ordinary click history");
+        review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
+        review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
+    }
+    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert_eq!(app.session.active().unwrap().isolation, Some(group), "the second qualifying ordinary click still isolates: dragged={dragged}");
+}
+
+#[test]
+fn review_596866_coalesced_fresh_release_qualifies_its_own_click() {
+    review_596866_coalesced_fresh_suffix(false);
+    review_596866_coalesced_fresh_suffix(true);
+}
