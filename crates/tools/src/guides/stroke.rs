@@ -5,7 +5,35 @@ use super::{Affine, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, S
 use super::{HashSet, ToolContext};
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, QueryPaintKind};
 use vectorcraft_geom::kurbo::ParamCurveExtrema;
+use vectorcraft_geom::kurbo::common::{solve_cubic, solve_quadratic};
 use vectorcraft_geom::{FillRule, PathData};
+
+/// A caller's feasible handle positions, in local coordinates. Contour contacts are mapped
+/// after subtracting the carried-point offset; the original curve remains the snap target.
+#[derive(Clone, Debug)]
+pub(crate) struct ContactDomain {
+    pub(crate) to_local: Affine,
+    pub(crate) regions: Vec<DomainRect>,
+}
+
+/// One local rectangle. Infinite bounds are allowed; open edges are x0, y0, x1, y1.
+#[derive(Clone, Debug)]
+pub(crate) struct DomainRect {
+    pub(crate) bounds: Rect,
+    pub(crate) open: [bool; 4],
+}
+
+impl DomainRect {
+    fn contains(&self, p: Point) -> bool {
+        let b = self.bounds;
+        (p.x > b.x0 || !self.open[0] && p.x == b.x0)
+            && (p.y > b.y0 || !self.open[1] && p.y == b.y0)
+            && (p.x < b.x1 || !self.open[2] && p.x == b.x1)
+            && (p.y < b.y1 || !self.open[3] && p.y == b.y1)
+    }
+}
+
+const NEAREST_ACCURACY: f64 = 1e-6;
 
 #[derive(Default)]
 pub(super) struct Contours {
@@ -35,7 +63,7 @@ impl Contours {
         let remaining = super::targets::BUDGET.saturating_sub(self.segments);
         let segments: Vec<_> = path.segments().take(remaining + 1).collect();
         if segments.len() > remaining {
-            self.exhausted = true;
+            // Regions are atomic. Skipping one that does not fit leaves room for later regions.
             return;
         }
         if !segments.is_empty() {
@@ -51,17 +79,45 @@ impl Contours {
 
     /// Choose the nearest permitted contact, rather than rejecting the winner afterward.
     pub(super) fn nearest_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<Point> {
+        self.nearest_with_domain(p, tol, None, Vec2::ZERO, valid)
+    }
+
+    /// Supplement a rejected nearest point with the caller's explicit feasible portions of the
+    /// original segment. With no domain the existing query has no additional allocation or work.
+    pub(super) fn nearest_with_domain(
+        &self,
+        p: Point,
+        tol: f64,
+        domain: Option<&ContactDomain>,
+        offset: Vec2,
+        valid: impl Fn(Point) -> bool,
+    ) -> Option<Point> {
         if !finite_point(p) || !tol.is_finite() || tol < 0.0 {
             return None;
         }
+        let domain = domain
+            .filter(|d| d.to_local.as_coeffs().iter().all(|n| n.is_finite()) && offset.x.is_finite() && offset.y.is_finite())
+            .map(|d| DomainQuery::new(d, offset));
         self.contours
             .iter()
-            .filter(|c| c.bounds.inflate(tol, tol).contains(p))
+            .filter(|c| contains_closed(c.bounds.inflate(tol, tol), p))
             .flat_map(|c| &c.segments)
-            .map(|s| (s, s.nearest(p, 1e-6)))
-            .filter(|(s, n)| n.distance_sq <= tol * tol && valid(s.eval(n.t)))
-            .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
-            .map(|(s, n)| s.eval(n.t))
+            .filter_map(|s| {
+                let n = s.nearest(p, NEAREST_ACCURACY);
+                if n.distance_sq <= tol * tol {
+                    let q = s.eval(n.t);
+                    if valid(q) {
+                        // Preserve the ordinary solver's accepted point, including a caller's numeric collar.
+                        Some((n.distance_sq, q))
+                    } else {
+                        domain.as_ref().and_then(|d| d.nearest(*s, p, tol * tol, &valid))
+                    }
+                } else {
+                    None
+                }
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, q)| q)
     }
 
     /// Actual intersections with the permitted trajectory, never a projection
@@ -81,7 +137,7 @@ impl Contours {
         let line = Line::new(center - u * tol, center + u * tol);
         self.contours
             .iter()
-            .filter(|c| c.bounds.inflate(tol, tol).contains(near))
+            .filter(|c| contains_closed(c.bounds.inflate(tol, tol), near))
             .flat_map(|c| &c.segments)
             .flat_map(|s| intersections(*s, line))
             .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(u) >= 0.0) && valid(*q))
@@ -132,6 +188,160 @@ impl Contours {
         }
         best
     }
+}
+
+/// Prepared once per query: a four-region domain shares its finite axis boundaries.
+struct DomainQuery<'a> {
+    domain: &'a ContactDomain,
+    offset: Vec2,
+    xs: Vec<f64>,
+    ys: Vec<f64>,
+}
+
+impl<'a> DomainQuery<'a> {
+    fn new(domain: &'a ContactDomain, offset: Vec2) -> Self {
+        let (mut xs, mut ys) = (vec![], vec![]);
+        for r in &domain.regions {
+            let b = r.bounds;
+            if b.x0 <= b.x1 && b.y0 <= b.y1 {
+                xs.extend([b.x0, b.x1].into_iter().filter(|v| v.is_finite()));
+                ys.extend([b.y0, b.y1].into_iter().filter(|v| v.is_finite()));
+            }
+        }
+        for bounds in [&mut xs, &mut ys] {
+            bounds.sort_by(f64::total_cmp);
+            bounds.dedup_by(|a, b| *a == *b);
+        }
+        Self { domain, offset, xs, ys }
+    }
+
+    fn contains(&self, contact: Point) -> bool {
+        let p = self.domain.to_local * (contact - self.offset);
+        finite_point(p) && self.domain.regions.iter().any(|r| r.contains(p))
+    }
+
+    fn nearest(&self, seg: PathSeg, p: Point, tol_sq: f64, valid: &impl Fn(Point) -> bool) -> Option<(f64, Point)> {
+        let local = self.domain.to_local * Affine::translate(-self.offset) * seg;
+        if !local.is_finite() {
+            return None;
+        }
+        let mut cuts = vec![0.0, 1.0];
+        for &x in &self.xs {
+            axis_cuts(local, x, true, &mut cuts);
+        }
+        for &y in &self.ys {
+            axis_cuts(local, y, false, &mut cuts);
+        }
+        cuts.sort_by(f64::total_cmp);
+        cuts.dedup_by(|a, b| *a == *b);
+        let mut best: Option<(f64, Point)> = None;
+        let mut consider = |q: Point| {
+            let distance = q.distance_squared(p);
+            if finite_point(q) && self.contains(q) && distance <= tol_sq && valid(q) && best.is_none_or(|b| distance < b.0) {
+                best = Some((distance, q));
+            }
+        };
+        // Closed singleton domains and tangencies need not have a feasible neighboring interval.
+        for &t in &cuts {
+            consider(seg.eval(t));
+        }
+        for interval in cuts.windows(2) {
+            let (Some(&a), Some(&b)) = (interval.first(), interval.last()) else { continue };
+            let middle = a + (b - a) * 0.5;
+            if middle == a || middle == b || !self.contains(seg.eval(middle)) {
+                continue;
+            }
+            let n = seg.subsegment(a..b).nearest(p, NEAREST_ACCURACY);
+            if !n.t.is_finite() || !(0.0..=1.0).contains(&n.t) {
+                continue;
+            }
+            let t = a + (b - a) * n.t;
+            let q = seg.eval(t);
+            if self.contains(q) {
+                consider(q);
+            } else if t == a || t == b {
+                // An open interval may have only an infimum at its excluded endpoint. Find an
+                // actual interior curve point within the ordinary solver's geometric accuracy.
+                if let Some(q) = self.interior(seg, p, tol_sq, t, middle) {
+                    consider(q);
+                }
+            }
+        }
+        best
+    }
+
+    fn interior(&self, seg: PathSeg, p: Point, tol_sq: f64, endpoint: f64, middle: f64) -> Option<Point> {
+        let end = seg.eval(endpoint);
+        if !finite_point(end) {
+            return None;
+        }
+        let (mut outside, mut inside) = (endpoint, middle);
+        for _ in 0..64 {
+            let q = seg.eval(inside);
+            if self.contains(q) && q.distance(end) <= NEAREST_ACCURACY && q.distance_squared(p) <= tol_sq {
+                return Some(q);
+            }
+            let t = outside + (inside - outside) * 0.5;
+            if t == outside || t == inside {
+                break;
+            }
+            if self.contains(seg.eval(t)) {
+                inside = t;
+            } else {
+                outside = t;
+            }
+        }
+        let q = seg.eval(inside);
+        (self.contains(q) && q.distance(end) <= NEAREST_ACCURACY && q.distance_squared(p) <= tol_sq).then_some(q)
+    }
+}
+
+/// Analytic intersections with an infinite axis boundary. Normalizing coordinates keeps the
+/// polynomial coefficients finite without changing the boundary or adding a tolerance floor.
+fn axis_cuts(seg: PathSeg, bound: f64, x_axis: bool, cuts: &mut Vec<f64>) {
+    let points = match seg {
+        PathSeg::Line(l) => [l.p0, l.p1, l.p1, l.p1],
+        PathSeg::Quad(q) => [q.p0, q.p1, q.p2, q.p2],
+        PathSeg::Cubic(c) => [c.p0, c.p1, c.p2, c.p3],
+    };
+    let values = points.map(|p| if x_axis { p.x } else { p.y });
+    if let PathSeg::Line(_) = seg {
+        let [a, b, _, _] = values;
+        let (distance, span) = (bound - a, b - a);
+        if distance.is_finite() && span.is_finite() {
+            if span != 0.0 {
+                let t = distance / span;
+                if t.is_finite() && (0.0..=1.0).contains(&t) {
+                    cuts.push(t);
+                }
+            }
+            return;
+        }
+    }
+    let scale = values.iter().fold(bound.abs(), |s, v| s.max(v.abs()));
+    if scale == 0.0 || !scale.is_finite() {
+        return;
+    }
+    let [a, b, c, d] = values.map(|v| v / scale);
+    let k = bound / scale;
+    let mut add = |t: f64| {
+        if t.is_finite() && (0.0..=1.0).contains(&t) {
+            cuts.push(t);
+        }
+    };
+    match seg {
+        PathSeg::Line(_) => {
+            if b != a {
+                add((k - a) / (b - a));
+            }
+        }
+        PathSeg::Quad(_) => solve_quadratic(a - k, 2.0 * (b - a), a - 2.0 * b + c).into_iter().for_each(add),
+        PathSeg::Cubic(_) => solve_cubic(a - k, 3.0 * (b - a), 3.0 * (a - 2.0 * b + c), -a + 3.0 * b - 3.0 * c + d).into_iter().for_each(add),
+    }
+}
+
+fn contains_closed(r: Rect, p: Point) -> bool {
+    p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1
 }
 
 /// The exact finite line-segment case avoids the iterative curve-pair solver's
@@ -775,5 +985,78 @@ mod review_597185_before {
             "REGRESSION: maximum boundary must reach the exact intersection"
         );
         assert_eq!(query(Point::new(200.0, 204.0), Vec2::new(0.0, 1.0)), Some(Point::new(200.0, 200.0)));
+    }
+}
+
+#[cfg(test)]
+mod review_597185_domain_after {
+    use super::*;
+    use vectorcraft_geom::kurbo::{CubicBez, QuadBez};
+
+    fn contour(seg: PathSeg) -> Contours {
+        Contours { contours: vec![Contour { bounds: seg.bounding_box(), segments: vec![seg] }], segments: 1, exhausted: false }
+    }
+
+    fn domain(bounds: Rect, open: [bool; 4]) -> ContactDomain {
+        ContactDomain { to_local: Affine::IDENTITY, regions: vec![DomainRect { bounds, open }] }
+    }
+
+    #[test]
+    fn review_4626304623_line_searches_its_feasible_interior_and_maps_handle_offset() {
+        let contours = contour(PathSeg::Line(Line::new((-5.0, 6.0), (10.0, 21.0))));
+        let p = Point::new(2.0, 10.0);
+        let valid = |q: Point| q.x >= 1.0 && q.y >= 1.0;
+        let region = domain(Rect::new(1.0, 1.0, f64::INFINITY, f64::INFINITY), [false; 4]);
+        assert!(contours.nearest(p, 4.0).unwrap().distance(Point::new(0.5, 11.5)) < 1e-12, "ordinary nearest remains unchanged");
+        let q = contours.nearest_with_domain(p, 4.0, Some(&region), Vec2::ZERO, valid).unwrap();
+        assert!(q.distance(Point::new(1.0, 12.0)) < 1e-8, "the permitted point lies inside the ORIGINAL line segment: {q:?}");
+        assert!((q.y - q.x - 11.0).abs() < 1e-12 && valid(q));
+        let mapped = contour(PathSeg::Line(Line::new((10.0, 0.0), (14.0, 0.0))));
+        let region = ContactDomain {
+            to_local: Affine::scale(2.0),
+            regions: vec![DomainRect { bounds: Rect::new(4.0, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY), open: [false; 4] }],
+        };
+        let q = mapped.nearest_with_domain(Point::new(10.0, 0.5), 3.0, Some(&region), Vec2::new(10.0, 0.0), |q| q.x >= 12.0).unwrap();
+        assert_eq!(q, Point::new(12.0, 0.0), "world contact minus carried offset is mapped into local handle space");
+    }
+
+    #[test]
+    fn review_4626304623_cubic_domain_clips_original_parameter_intervals() {
+        // x=8*t^3, y=t: a genuine cubic with the domain boundary at t=.5.
+        let seg = PathSeg::Cubic(CubicBez::new((0.0, 0.0), (0.0, 1.0 / 3.0), (0.0, 2.0 / 3.0), (8.0, 1.0)));
+        let contours = contour(seg);
+        let region = domain(Rect::new(1.0, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY), [false; 4]);
+        let q = contours.nearest_with_domain(Point::new(0.0, 0.5), 2.0, Some(&region), Vec2::ZERO, |q| q.x >= 1.0).unwrap();
+        assert!(q.distance(Point::new(1.0, 0.5)) <= NEAREST_ACCURACY);
+        assert!((q.x - 8.0 * q.y.powi(3)).abs() < 1e-10, "contact stays on the original cubic, not a domain edge");
+    }
+
+    #[test]
+    fn review_4626304623_closed_tangent_singleton_is_not_lost() {
+        let contours = contour(PathSeg::Quad(QuadBez::new((0.0, -1.0), (1.0, 1.0), (2.0, -1.0))));
+        let region = domain(Rect::new(f64::NEG_INFINITY, 0.0, f64::INFINITY, 0.0), [false; 4]);
+        let p = Point::new(0.5, 0.25);
+        assert!(contours.nearest(p, 1.0).unwrap().y < 0.0, "CONTROL: unrestricted nearest is not the singleton contact");
+        assert_eq!(contours.nearest_with_domain(p, 1.0, Some(&region), Vec2::ZERO, |q| q.y == 0.0), Some(Point::new(1.0, 0.0)));
+    }
+
+    #[test]
+    fn review_4626304623_open_endpoint_stays_open_with_bounded_numeric_contact() {
+        let contours = contour(PathSeg::Line(Line::new((0.0, 0.0), (2.0, 0.0))));
+        let region = domain(Rect::new(1.0, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY), [true, false, false, false]);
+        let q = contours.nearest_with_domain(Point::new(0.0, 0.0), 2.0, Some(&region), Vec2::ZERO, |q| q.x > 1.0).unwrap();
+        assert!(q.x > 1.0 && q.x - 1.0 <= NEAREST_ACCURACY && q.y == 0.0, "the open boundary is never closed or moved: {q:?}");
+        assert!(
+            contours.nearest_with_domain(Point::new(0.0, 0.0), 1.0, Some(&region), Vec2::ZERO, |q| q.x > 1.0).is_none(),
+            "an excluded infimum exactly at tolerance is not an eligible contact"
+        );
+        let p = Point::new(0.99999995, 0.0);
+        let ordinary = contours.nearest(p, 1.0).unwrap();
+        assert!(ordinary.x < 1.0);
+        assert_eq!(
+            contours.nearest_with_domain(p, 1.0, Some(&region), Vec2::ZERO, |q| q.x >= 0.9999999),
+            Some(ordinary),
+            "a callback-accepted ordinary nearest point keeps its exact numeric-collar priority"
+        );
     }
 }

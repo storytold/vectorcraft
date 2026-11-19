@@ -37,7 +37,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, scale_for_drag};
-use crate::guides::{DrawSnap, Leave, Targets};
+use crate::guides::{ContactDomain, DomainRect, DrawSnap, Leave, Targets};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
@@ -243,7 +243,7 @@ impl ArtboardTool {
                 let [sx, _, _, sy, _, _] = snapped.as_coeffs();
                 let [before_x, _, _, before_y, _, _] = current.as_coeffs();
                 let bounds = snapped.transform_rect_bbox(rect);
-                let valid_scale = [(sx, before_x), (sy, before_y)].iter().all(|(s, before)| s.abs() > 1e-4 && s * before > 0.0);
+                let valid_scale = [(sx, before_x), (sy, before_y)].iter().all(|(s, before)| s.abs() >= 1e-4 && s * before > 0.0);
                 let placed = snapped * handle.pos(rect);
                 let bleed = placed_bleed_offset(cx, rect, handle, snapped);
                 let reaches = placed.distance(contact) <= 1e-6 || (placed + bleed).distance(contact) <= 1e-6;
@@ -254,7 +254,10 @@ impl ArtboardTool {
                     && valid_scale
                     && reaches
             };
-            if let Some((q, ov)) = t.snap_stroke_point_with_filter(p, at, stroke_offsets, along, cx.snap_tol(), valid) {
+            let domain = || {
+                if !proportional && handle.is_corner() { corner_contact_domain(rect, handle, current, mods.alt) } else { None }
+            };
+            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, valid) {
                 self.guides = ov;
                 return q;
             }
@@ -345,6 +348,36 @@ fn placed_bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle, transform: 
     let at = Point::new(if sx < 0.0 { 1.0 - p.x } else { p.x }, if sy < 0.0 { 1.0 - p.y } else { p.y });
     let placed = Handle::ALL.into_iter().find(|h| h.pos(unit) == at).unwrap_or(handle);
     bleed_offset(cx, rect, placed)
+}
+
+/// Exact reachable free-corner handle positions in the current scale-sign quadrant.
+/// The contour query translates each contact back by its own handle/bleed offset.
+fn corner_contact_domain(rect: Rect, handle: Handle, current: Affine, from_center: bool) -> Option<ContactDomain> {
+    let origin = if from_center { rect.center() } else { handle.opposite().pos(rect) };
+    let d0 = handle.pos(rect) - origin;
+    let (width, height) = (rect.width(), rect.height());
+    if !rect.is_finite()
+        || !width.is_finite()
+        || width <= 0.0
+        || !height.is_finite()
+        || height <= 0.0
+        || d0.x.abs() <= 1e-9
+        || d0.y.abs() <= 1e-9
+        || !current.as_coeffs().iter().all(|value| value.is_finite())
+    {
+        return None;
+    }
+    let [sx, _, _, sy, _, _] = current.as_coeffs();
+    let minimum = Vec2::new(d0.x.abs() * (MIN_SIDE / width).max(1e-4), d0.y.abs() * (MIN_SIDE / height).max(1e-4));
+    let limits = |direction: f64, minimum: f64| {
+        if direction > 0.0 { (minimum, f64::INFINITY) } else { (f64::NEG_INFINITY, -minimum) }
+    };
+    let (x0, x1) = limits(sx * d0.x, minimum.x);
+    let (y0, y1) = limits(sy * d0.y, minimum.y);
+    Some(ContactDomain {
+        to_local: Affine::translate(-origin.to_vec2()),
+        regions: vec![DomainRect { bounds: Rect::new(x0, y0, x1, y1), open: [false; 4] }],
+    })
 }
 
 /// How far outside the middle of an edge its add button sits, in screen pixels: past the handle

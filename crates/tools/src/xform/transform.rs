@@ -23,7 +23,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::target_overlays;
 use crate::bbox::rotate_for_drag;
-use crate::guides::{PickSnap, PointSnap, Targets};
+use crate::guides::{ContactDomain, DomainRect, PickSnap, PointSnap, Targets};
 use crate::select::{matrix_json, selection_bounds, selection_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Readout, Tool, ToolContext, ToolKey};
 
@@ -335,6 +335,34 @@ impl TransformTool {
                     (false, true) => Some((frame * Point::new(1.0, 0.0)).to_vec2()),
                     (false, false) => None,
                 }
+            },
+            || {
+                if ev.mods.shift {
+                    return None;
+                }
+                let frame = OrientedBox { angle, rect: Rect::ZERO }.to_doc();
+                let to_local = frame.inverse() * Affine::translate(-d.origin.to_vec2());
+                let from = to_local * d.pick;
+                if from.x.abs() <= 1e-6 || from.y.abs() <= 1e-6 {
+                    return None;
+                }
+                let minimum = Vec2::new(from.x.abs() * 1e-4, from.y.abs() * 1e-4);
+                // The solver permits either sign on each free axis, not just the current sign.
+                let regions = [-1.0, 1.0]
+                    .into_iter()
+                    .flat_map(|x| {
+                        [-1.0, 1.0].into_iter().map(move |y| DomainRect {
+                            bounds: Rect::new(
+                                if x > 0.0 { minimum.x } else { f64::NEG_INFINITY },
+                                if y > 0.0 { minimum.y } else { f64::NEG_INFINITY },
+                                if x < 0.0 { -minimum.x } else { f64::INFINITY },
+                                if y < 0.0 { -minimum.y } else { f64::INFINITY },
+                            ),
+                            open: [false; 4],
+                        })
+                    })
+                    .collect();
+                Some(ContactDomain { to_local, regions })
             },
             |p| self.solve(angle, d.origin, d.pick, p, ev.mods.shift, d.bounds).0 * d.pick,
         )

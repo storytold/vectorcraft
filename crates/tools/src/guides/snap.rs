@@ -1,7 +1,7 @@
 use super::targets::{Targets, span};
 use super::{
-    Affine, GlyphSnap, GuideStyle, Handle, HitOptions, Line, NodeId, OrientedBox, Overlay, ParamCurve, ParamCurveDeriv, ParamCurveNearest, PathSeg,
-    Point, Rect, ScreenFrame, ToolContext, Vec2, constrain_angle_from, hit_test,
+    Affine, ContactDomain, GlyphSnap, GuideStyle, Handle, HitOptions, Line, NodeId, OrientedBox, Overlay, ParamCurve, ParamCurveDeriv,
+    ParamCurveNearest, PathSeg, Point, Rect, ScreenFrame, ToolContext, Vec2, constrain_angle_from, hit_test,
 };
 use crate::PixelOp;
 
@@ -185,6 +185,7 @@ impl PointSnap {
         cx: &ToolContext,
         p: Point,
         along: impl FnOnce() -> Option<Vec2>,
+        domain: impl FnOnce() -> Option<ContactDomain>,
         place: impl Fn(Point) -> Point,
     ) -> (Point, Vec<Overlay>) {
         if !cx.snap_to_stroke_edges || !cx.smart_guides || cx.snaps_to_pixel(PixelOp::Scaling) || cx.snap_to_grid {
@@ -192,7 +193,7 @@ impl PointSnap {
         }
         let Some((targets, tol)) = &self.targets else { return self.snap(cx, p) };
         let actual = place(p);
-        targets.snap_scaled_point(p, actual, along(), cx.tol(*tol), |contact| {
+        targets.snap_scaled_point(p, actual, along(), cx.tol(*tol), domain, |contact| {
             let placed = place(contact);
             contact.x.is_finite()
                 && contact.y.is_finite()

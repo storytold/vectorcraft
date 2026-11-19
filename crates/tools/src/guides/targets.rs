@@ -1,7 +1,7 @@
 use super::snap::{Leave, meeting, seg_direction, touch_params};
 use super::{
-    Affine, Arc, BezPath, Document, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
-    ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
+    Affine, Arc, BezPath, ContactDomain, Document, DomainRect, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind,
+    OrientedBox, Overlay, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -807,12 +807,17 @@ impl Targets {
         actual: Point,
         along: Option<Vec2>,
         tol: f64,
+        domain: impl FnOnce() -> Option<ContactDomain>,
         valid_contact: impl Fn(Point) -> bool,
     ) -> (Point, Vec<Overlay>) {
-        if self.nearest_point(raw, tol).is_some() || self.crossing(raw, tol).is_some() || self.on_segment(raw, tol).is_some() {
+        if self.nearest_point(raw, tol).is_some_and(|(q, _)| valid_contact(q))
+            || self.crossing(raw, tol).is_some()
+            || self.on_segment(raw, tol).is_some()
+        {
             return self.snap_from_inner(raw, None, tol, false);
         }
-        if let Some((contact, guides)) = self.snap_stroke_point_with_filter(raw, actual, &[], along, tol, |handle, _| valid_contact(handle)) {
+        if let Some((contact, guides)) = self.snap_stroke_point_with_domain((raw, actual), &[], along, tol, domain, |handle, _| valid_contact(handle))
+        {
             return (contact, guides);
         }
         // A missed or infeasible constrained contact must not fall back to a free stroke snap.
@@ -1129,22 +1134,11 @@ impl Targets {
         if !l2.is_finite() || l2 == 0.0 {
             return None;
         }
-        if let Some((q, kind)) = self.nearest_point(near, tol) {
-            let s = (q - at).dot(dir) / l2;
-            if !ray || s >= 0.0 {
-                return Some((at + dir * s, kind));
-            }
+        // A legacy anchor belongs to the ordinary slide route, not this painted channel.
+        if self.nearest_point(near, tol).is_some() {
+            return None;
         }
-        let u = dir / l2.sqrt();
-        let line = Line::new(near - u * tol, near + u * tol);
-        let genuine = self
-            .segments
-            .iter()
-            .filter(|(b, _)| b.inflate(tol, tol).contains(near))
-            .flat_map(|(_, s)| s.intersect_line(line).into_iter().map(move |h| s.eval(h.segment_t)))
-            .filter(|q| q.distance(near) <= tol && (!ray || (*q - at).dot(dir) >= 0.0))
-            .min_by(|a, b| a.distance(near).total_cmp(&b.distance(near)));
-        genuine.map(|q| (q, Kind::Edge)).or_else(|| self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge)))
+        self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
     }
 
     pub(crate) fn snap_stroke_along(&self, p: Point, dir: Vec2, tol: f64) -> Option<(Point, Vec<Overlay>)> {
@@ -1302,7 +1296,8 @@ impl Targets {
         self.snap_stroke_point_with_filter(legacy_at, at, offsets, along, tol, |_, _| true)
     }
 
-    /// Keep only feasible handle/contact pairs before the contour query chooses its nearest.
+    /// Test compatibility route without an analytic free-contact domain.
+    #[cfg(test)]
     pub(crate) fn snap_stroke_point_with_filter(
         &self,
         legacy_at: Point,
@@ -1312,16 +1307,31 @@ impl Targets {
         tol: f64,
         valid: impl Fn(Point, Point) -> bool,
     ) -> Option<(Point, Vec<Overlay>)> {
-        if !self.stroke_points || self.stroke_contours.is_empty() || self.nearest_point(legacy_at, tol).is_some() {
+        self.snap_stroke_point_with_domain((legacy_at, at), offsets, along, tol, || None, valid)
+    }
+
+    /// Keep feasible handle/contact pairs before choosing the nearest painted contact.
+    pub(crate) fn snap_stroke_point_with_domain(
+        &self,
+        at: (Point, Point),
+        offsets: &[Vec2],
+        along: Option<Vec2>,
+        tol: f64,
+        domain: impl FnOnce() -> Option<ContactDomain>,
+        valid: impl Fn(Point, Point) -> bool,
+    ) -> Option<(Point, Vec<Overlay>)> {
+        let (legacy_at, at) = at;
+        if !self.stroke_points || self.stroke_contours.is_empty() || self.nearest_point(legacy_at, tol).is_some_and(|(q, _)| valid(q, q)) {
             return None;
         }
+        let domain = domain();
         let mut best: Option<(f64, Point, Point)> = None;
         for offset in std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()) {
             let probe = at + offset;
             let accept = |contact: Point| valid(contact - offset, contact);
             let contact = match along {
                 Some(dir) => self.stroke_contours.on_line_with(probe, dir, probe, tol, false, accept),
-                None => self.stroke_contours.nearest_with(probe, tol, accept),
+                None => self.stroke_contours.nearest_with_domain(probe, tol, domain.as_ref(), offset, accept),
             };
             let Some(q) = contact else { continue };
             let distance = q.distance_squared(probe);
@@ -1734,11 +1744,20 @@ impl Targets {
     }
 
     /// Direct scale contacts in priority order: anchors/centres, then stroke contours.
-    fn scale_contact_candidates(&self, base: Point, dir: Vec2, near: Point, tol: f64) -> [Option<(f64, Point, Kind, u8)>; 2] {
+    fn scale_contact_candidates(
+        &self,
+        base: Point,
+        dir: Vec2,
+        near: Point,
+        tol: f64,
+        valid: impl Fn(f64) -> bool,
+    ) -> [Option<(f64, Point, Kind, u8)>; 2] {
         let l2 = dir.hypot2();
         let anchor = if l2 > 1e-18 { self.nearest_point(near, tol).map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0)) } else { None };
         let stroke = if l2.is_finite() && l2 > 0.0 {
-            self.stroke_contours.on_line(base, dir, near, tol, false).map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
+            self.stroke_contours
+                .on_line_with(base, dir, near, tol, false, |q| valid((q - base).dot(dir) / l2))
+                .map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
         } else {
             None
         };
@@ -1781,11 +1800,44 @@ impl Targets {
             // y, or both.
             let p = to_doc * (a * handle.pos(r));
             let (hx, hy) = (nearest(p, true), nearest(p, false));
-            let on = self
-                .nearest_point(p, tol)
-                .or_else(|| self.stroke_contours.nearest(p, tol).map(|q| (q, Kind::StrokeEdge)))
-                .map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
-            for (tx, ty, at) in on.into_iter().chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
+            let valid_contact = |q: Point| {
+                let local = to_local * q;
+                valid((local.x - origin.x) / d0.x, sx) && valid((local.y - origin.y) / d0.y, sy)
+            };
+            let anchor = self.nearest_point(p, tol);
+            let stroke = if anchor.is_some_and(|(q, _)| valid_contact(q)) || self.stroke_contours.is_empty() {
+                None
+            } else {
+                // The existing corner solver accepts the current OPEN sign region, with no
+                // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
+                let to_local = Affine::translate(-origin.to_vec2()) * to_local;
+                let local = to_local * p;
+                let mut bounds = Rect::new(local.x - tol, local.y - tol, local.x + tol, local.y + tol);
+                let mut open = [false; 4];
+                if d0.x * sx > 0.0 && bounds.x0 <= 0.0 {
+                    bounds.x0 = 0.0;
+                    open[0] = true;
+                } else if d0.x * sx < 0.0 && bounds.x1 >= 0.0 {
+                    bounds.x1 = 0.0;
+                    open[2] = true;
+                }
+                if d0.y * sy > 0.0 && bounds.y0 <= 0.0 {
+                    bounds.y0 = 0.0;
+                    open[1] = true;
+                } else if d0.y * sy < 0.0 && bounds.y1 >= 0.0 {
+                    bounds.y1 = 0.0;
+                    open[3] = true;
+                }
+                let regions = if d0.x != 0.0 && d0.y != 0.0 && bounds.x0 < bounds.x1 && bounds.y0 < bounds.y1 {
+                    vec![DomainRect { bounds, open }]
+                } else {
+                    vec![]
+                };
+                let domain = ContactDomain { to_local, regions };
+                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, valid_contact).map(|q| (q, Kind::StrokeEdge))
+            };
+            let direct = anchor.into_iter().chain(stroke).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
+            for (tx, ty, at) in direct.chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
                 if tx.is_none() && ty.is_none() {
                     continue;
                 }
@@ -1818,10 +1870,11 @@ impl Targets {
             let travel = (e.0 * d0.x).hypot(e.1 * d0.y);
             // The snap so far: its `s`, whether it only lines up (an anchor or centre comes first),
             // how far it moves the handle, and where it lands.
+            let eligible = |s: f64| valid(s, s0) && (s - s0).abs() * travel <= 2.0 * tol;
             let mut best: Option<(f64, u8, f64, Snap)> = None;
             let mut consider = |s: f64, priority: u8, found: Snap| {
                 let moved = (s - s0).abs() * travel;
-                if valid(s, s0) && moved <= 2.0 * tol && best.as_ref().is_none_or(|k| (priority, moved) < (k.1, k.2)) {
+                if eligible(s) && best.as_ref().is_none_or(|k| (priority, moved) < (k.1, k.2)) {
                     best = Some((s, priority, moved, found));
                 }
             };
@@ -1831,7 +1884,7 @@ impl Targets {
                 let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
                 let p = base + dir * s0;
                 // Direct contacts precede lining up with a target's x or y.
-                for (s, q, kind, priority) in self.scale_contact_candidates(base, dir, p, tol).into_iter().flatten() {
+                for (s, q, kind, priority) in self.scale_contact_candidates(base, dir, p, tol, eligible).into_iter().flatten() {
                     consider(s, priority, (None, None, Some((q, kind))));
                 }
                 for (is_x, b, d) in [(true, base.x, dir.x), (false, base.y, dir.y)] {
