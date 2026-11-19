@@ -695,6 +695,7 @@ impl PlaceJob {
     /// the renderers' image store for the first frame that draws them
     /// ([`super::links::readable_and_kept`]).
     pub fn read(self) -> Result<PlaceRead> {
+        crate::cancel::check()?;
         let (mut loaded, slices) = load_sliced(&self.params, PLACE, self.target, true)?;
         let linked = loaded.link.is_some() && bool_or(&self.params, "link", true);
         match &mut loaded.art {
