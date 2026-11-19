@@ -915,6 +915,13 @@ fn with_nothing_selected_it_lists_what_new_art_gets() {
     for want in ["No Selection: Fancy".to_string(), effect_label("stylize.dropShadow"), "Opacity: 50%".into(), "Dashed".into()] {
         assert!(shown.contains(&want), "{want} in {shown:?}");
     }
+    // The style name follows the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let shown = frame(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: Fancy", crate::i18n::tr(fr, "No Selection"));
+    assert!(shown.contains(&want), "{want} in {shown:?}");
 }
 
 /// Both stroke rows expose named Weight inputs, and the drop-shadow effect names its Blur input and
