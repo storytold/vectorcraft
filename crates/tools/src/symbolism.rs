@@ -11,9 +11,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Shape};
 
 use crate::draw2::{FEEDBACK, GestureTool, points_json};
-use crate::{
-    Action, Cursor, MAX_STROKE_SAMPLES, Mods, Overlay, PREVIEW_ALL_UNTIL, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, previews_at,
-};
+use crate::{Action, Cursor, MAX_STROKE_SAMPLES, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, previews_at};
 
 /// Create a symbolism tool or the brush-aware Paintbrush (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -30,10 +28,6 @@ pub const METHODS: [&str; 3] = ["userDefined", "average", "random"];
 
 /// The values of each Symbol Sprayer option in the Symbolism Tools Options.
 pub const SPRAY_MODES: [&str; 2] = ["average", "userDefined"];
-
-/// The smallest change of pen pressure, with Use Pressure Pen, that a drag sample within a step of
-/// the last point gives that point. VectorCraft's own value.
-const PRESSURE_STEP: f64 = 0.05;
 
 /// The Symbol Sprayer options: (tool option, key in `symbol.spray`'s `attributes`).
 pub const SPRAY_ATTRIBUTES: [(&str, &str); 6] = [
@@ -80,41 +74,26 @@ pub struct SymbolismTool {
     pub affects_density: bool,
 }
 
+/// Checks the Symbolism Tools Options in `values` before `tool.setOption` sets any, when `tool` is
+/// a symbolism tool, with the tool's own checks ([`Tool::check_option`]): a number out of its
+/// range, `method` that is not one of [`METHODS`], a Symbol Sprayer option that is not one of
+/// [`SPRAY_MODES`], and `usePressure`, `showBrush`, `proportional` or `affectsDensity` that is not
+/// true or false are errors. Ok for every other tool, and for a key the tool does not report
+/// (`tool.setOption` refuses that one as an unknown option). Saved settings go to the tool's
+/// `set_option` instead, which skips a value it cannot read.
+pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if !tool.starts_with("symbol") || create(tool).is_none() {
+        return Ok(());
+    }
+    let tool = SymbolismTool::new(tool);
+    let known = tool.options();
+    values.iter().filter(|(key, _)| known.get(key.as_str()).is_some()).try_for_each(|(key, v)| tool.check_option(key, v))
+}
+
 /// `v` as one of `allowed`, when it is one.
 fn one_of(v: &Value, allowed: &[&'static str]) -> Option<&'static str> {
     let s = v.as_str()?;
     allowed.iter().copied().find(|a| *a == s)
-}
-
-/// Check the Symbolism Tools Options `values` that `tool.setOption` sets on symbolism tool `tool`:
-/// a value of the wrong kind, or a `method` or Symbol Sprayer option that is not one of its names,
-/// is an error (stored preferences are not checked: an unknown value there keeps the default).
-/// Other tools' options pass.
-pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
-    if !crate::settings::SYMBOLISM.contains(&tool) {
-        return Ok(());
-    }
-    let names = |allowed: &[&str]| match allowed {
-        [a, b] => format!("{a} or {b}"),
-        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
-        [] => String::new(),
-    };
-    for (key, v) in values {
-        let error = match key.as_str() {
-            "diameter" | "intensity" | "density" => (!v.as_f64().is_some_and(f64::is_finite)).then(|| format!("`{key}` must be a number")),
-            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => (!v.is_boolean()).then(|| format!("`{key}` must be true or false")),
-            "symbol" | "style" => (!(v.is_string() || v.is_null())).then(|| format!("`{key}` must be a name or null")),
-            "method" => one_of(v, &METHODS).is_none().then(|| format!("`method` must be {}, not {v}", names(&METHODS))),
-            _ if SPRAY_ATTRIBUTES.iter().any(|(k, _)| k == key) => {
-                one_of(v, &SPRAY_MODES).is_none().then(|| format!("`{key}` must be {}, not {v}", names(&SPRAY_MODES)))
-            }
-            _ => None,
-        };
-        if let Some(e) = error {
-            return Err(e);
-        }
-    }
-    Ok(())
 }
 
 impl SymbolismTool {
@@ -182,7 +161,8 @@ impl SymbolismTool {
                 v["color"] = serde_json::to_value(c).unwrap_or(Value::Null);
                 v["keepModel"] = json!(true);
             }
-            if let Some(s) = &self.style {
+            // A style the document no longer has (a deleted one) is left out: the default style applies.
+            if let Some(s) = self.style.as_ref().filter(|s| cx.doc.graphic_styles.iter().any(|g| g.name == **s)) {
                 v["style"] = json!(s);
             }
             return ("symbol.spray".into(), v);
@@ -263,28 +243,16 @@ impl Tool for SymbolismTool {
             PointerKind::Drag if self.active => {
                 // Sprayer: thin the samples to a fraction of the brush; others: every few pixels.
                 let step = if self.id == "symbolSprayer" { (self.diameter * 0.15).max(cx.tol(3.0)) } else { cx.tol(3.0) };
+                // With Use Pressure Pen a change of pressure of at least 0.05 is kept where the pen
+                // stays (the Sprayer does not use the pressure).
+                let pressed = self.use_pressure && self.id != "symbolSprayer";
+                let thinned = self.points.last().is_some_and(|(l, f)| l.distance(p) < step && !(pressed && (sample.1 - f).abs() >= 0.05));
                 // Each preview carries every point so far: a long drag stops growing and previews less often.
-                let full = self.points.len() >= MAX_STROKE_SAMPLES;
-                let near = self.points.last().is_some_and(|(l, _)| l.distance(p) < step);
-                let pressed = match self.points.last_mut().filter(|_| full || near) {
-                    // With Use Pressure Pen, the last point takes a pressure change made within a step of it.
-                    Some(last) if near && self.use_pressure && (sample.1 - last.1).abs() >= PRESSURE_STEP => {
-                        last.1 = sample.1;
-                        true
-                    }
-                    Some(_) => return vec![],
-                    None => {
-                        self.points.push(sample);
-                        false
-                    }
-                };
-                // A pressure change adds no point: past the points that all preview, it waits for the
-                // next preview or the release, so a long stroke is not sent again for each change.
-                if !previews_at(self.points.len()) || (pressed && self.points.len() > PREVIEW_ALL_UNTIL) {
-                    // A changed pressure on a point already shown leaves the preview out of date.
-                    if pressed {
-                        self.previewed = 0;
-                    }
+                if self.points.len() >= MAX_STROKE_SAMPLES || thinned {
+                    return vec![];
+                }
+                self.points.push(sample);
+                if !previews_at(self.points.len()) {
                     return vec![];
                 }
                 self.previewed = self.points.len();
@@ -324,8 +292,9 @@ impl Tool for SymbolismTool {
         let ring = |radius: f64, dashed| Overlay::Path { path: kurbo::Circle::new(p, radius).to_path(0.1), color: FEEDBACK, width: 1.0, dashed };
         let mut v = vec![ring(self.diameter / 2.0, false)];
         // The intensity: a dashed ring that fills the brush at 10. A pen's pressure sets it instead
-        // with Use Pressure Pen, so no ring is drawn then.
-        if !self.use_pressure && self.intensity < 10.0 {
+        // with Use Pressure Pen, so no ring is drawn then. The Symbol Sprayer uses neither, so it
+        // draws no ring.
+        if self.id != "symbolSprayer" && !self.use_pressure && self.intensity < 10.0 {
             v.push(ring(self.diameter / 2.0 * self.intensity / 10.0, true));
         }
         v
@@ -381,13 +350,14 @@ impl Tool for SymbolismTool {
     }
     fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
         use crate::option_check as c;
+        let must_be = |names: &[&str]| format!("`{key}` must be one of {}", names.join(", "));
         match key {
             "diameter" => c::number(key, v, 2.0, 2000.0),
             "intensity" | "density" => c::number(key, v, 1.0, 10.0),
             "symbol" | "style" => c::string_or_null(key, v),
             "usePressure" | "showBrush" | "proportional" | "affectsDensity" => c::boolean(key, v),
-            "method" => c::one_of(key, v, &METHODS),
-            _ if SPRAY_ATTRIBUTES.iter().any(|(k, _)| *k == key) => c::one_of(key, v, &SPRAY_MODES),
+            "method" => one_of(v, &METHODS).map(drop).ok_or_else(|| must_be(&METHODS)),
+            k if SPRAY_ATTRIBUTES.iter().any(|(a, _)| *a == k) => one_of(v, &SPRAY_MODES).map(drop).ok_or_else(|| must_be(&SPRAY_MODES)),
             _ => Err(c::unknown(key)),
         }
     }
@@ -614,55 +584,6 @@ mod tests {
         assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
     }
 
-    /// With Use Pressure Pen, a pressure change within a step of the last point gives that point the
-    /// new pressure and previews it; a smaller change, or one without the option, adds nothing.
-    #[test]
-    fn a_pressure_change_in_place_is_kept() {
-        let (d, _) = doc_with_rect();
-        let (s, p) = (Selection::default(), paint());
-        let cx = cx(&d, &s, &p);
-        let at = |kind, x: f64, pressure: f32| PointerEvent { pressure, ..PointerEvent::new(kind, x, 5.0) };
-        for use_pressure in [true, false] {
-            let mut t = SymbolismTool::new("symbolSizer");
-            t.set_option("usePressure", &json!(use_pressure));
-            t.pointer(&cx, &at(PointerKind::Down, 5.0, 0.0));
-            let a = t.pointer(&cx, &at(PointerKind::Drag, 6.0, 0.8));
-            if use_pressure {
-                let [Action::Preview(_, v)] = a.as_slice() else { panic!("{a:?}") };
-                assert_eq!(v["points"], json!([[5.0, 5.0, f64::from(0.8f32)]]));
-                assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, 6.5, 0.82)), vec![]);
-            } else {
-                assert_eq!(a, vec![]);
-            }
-            assert_eq!(t.pointer(&cx, &at(PointerKind::Up, 6.5, 0.0)), vec![Action::Commit]);
-        }
-    }
-
-    /// Once a drag has its most points, a pressure change away from the last point leaves that
-    /// point's pressure as it was.
-    #[test]
-    fn a_pressure_change_away_from_the_last_point_of_a_full_drag_is_not_kept() {
-        let (d, _) = doc_with_rect();
-        let (s, p) = (Selection::default(), paint());
-        let cx = cx(&d, &s, &p);
-        let at = |kind, x: f64, pressure: f32| PointerEvent { pressure, ..PointerEvent::new(kind, x, 5.0) };
-        let mut t = SymbolismTool::new("symbolSizer");
-        t.set_option("usePressure", &json!(true));
-        t.pointer(&cx, &at(PointerKind::Down, 0.0, 0.5));
-        t.points = (0..MAX_STROKE_SAMPLES).map(|i| (Point::new(50.0 * i as f64, 5.0), 0.5)).collect();
-        let far = 50.0 * (MAX_STROKE_SAMPLES + 10) as f64;
-        assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, far, 1.0)), vec![]);
-        assert_eq!((t.points.len(), t.points.last().map(|(_, pressure)| *pressure)), (MAX_STROKE_SAMPLES, Some(0.5)));
-        // Within a step of the last point the change is kept, and the long stroke is not previewed
-        // again for it: the release sends it.
-        let last = 50.0 * (MAX_STROKE_SAMPLES - 1) as f64;
-        assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, last + 1.0, 1.0)), vec![]);
-        assert_eq!(t.points.last().map(|(_, pressure)| *pressure), Some(1.0));
-        let a = t.pointer(&cx, &at(PointerKind::Up, last + 1.0, 0.0));
-        assert!(matches!(a.first(), Some(Action::Preview(_, v)) if v["points"].as_array().map(Vec::len) == Some(MAX_STROKE_SAMPLES)), "{}", a.len());
-        assert_eq!(a.last(), Some(&Action::Commit));
-    }
-
     /// A drag begun with Shift sends `shift` with the Shifter, Sizer, Stainer and Styler, and only
     /// with them; one begun without it sends none.
     #[test]
@@ -696,6 +617,35 @@ mod tests {
         }
     }
 
+    /// With Use Pressure Pen a drag sample where the pen stays is kept when the pressure changes;
+    /// without it, or with the same pressure, the drag keeps thinning the samples by distance.
+    #[test]
+    fn a_pressure_change_where_the_pen_stays_is_kept() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let stroke = |use_pressure: bool, pressures: [f32; 3]| {
+            let mut t = SymbolismTool::new("symbolSizer");
+            t.set_option("usePressure", &json!(use_pressure));
+            let at = |kind, pressure| PointerEvent { pressure, ..PointerEvent::new(kind, 5.0, 5.0) };
+            let events =
+                [(PointerKind::Down, pressures[0]), (PointerKind::Drag, pressures[1]), (PointerKind::Drag, pressures[2]), (PointerKind::Up, 0.0)];
+            // The points of the last preview, the one the drag commits.
+            let mut last = Value::Null;
+            for (kind, pressure) in events {
+                for a in t.pointer(&cx, &at(kind, pressure)) {
+                    if let Action::Preview(_, v) = a {
+                        last = v["points"].clone();
+                    }
+                }
+            }
+            last
+        };
+        assert_eq!(stroke(true, [0.0, 1.0, 1.0]), json!([[5.0, 5.0, 0.0], [5.0, 5.0, 1.0]]));
+        assert_eq!(stroke(true, [0.5, 0.52, 0.5]), json!([[5.0, 5.0, 0.5]]));
+        assert_eq!(stroke(false, [0.0, 1.0, 1.0]), json!([[5.0, 5.0]]));
+    }
+
     /// The Sprayer sends its six options as `attributes`, and the fill color only while Stain is
     /// User Defined.
     #[test]
@@ -724,7 +674,8 @@ mod tests {
     }
 
     /// Show Brush Size and Intensity: the brush's outline with a dashed ring for the intensity
-    /// inside it; no ring with Use Pressure Pen or at intensity 10, and nothing with it off.
+    /// inside it; no ring with Use Pressure Pen, at intensity 10 or for the Symbol Sprayer, and
+    /// nothing with it off.
     #[test]
     fn show_brush_size_and_intensity_draws_the_brush() {
         let (d, _) = doc_with_rect();
@@ -750,6 +701,10 @@ mod tests {
         assert_eq!(rings(&t), [(80.0, false)]);
         t.set_option("showBrush", &json!(false));
         assert!(t.overlays(&cx).is_empty());
+        // The Symbol Sprayer uses neither Intensity nor pen pressure: the outline only.
+        let mut t = SymbolismTool::new("symbolSprayer");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 50.0, 50.0));
+        assert_eq!(rings(&t), [(80.0, false)]);
     }
 
     #[test]

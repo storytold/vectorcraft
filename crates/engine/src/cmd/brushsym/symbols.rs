@@ -1,5 +1,5 @@
 use super::dynamic::{fit_overrides, type_id, type_param};
-use super::symbolism::{Grid, Look, Mean, Method, look, mean, method_param, record_set_density, spacing, spray_modes, wrap_angle};
+use super::symbolism::{Grid, Mean, Method, Sides, look, mean, method_param, natural_side, record_set_density, spacing, spray_modes, wrap_angle};
 use super::{
     Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
     SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_param, ids_json, json,
@@ -988,7 +988,14 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         Some(c) => crate::cmd::paint::new_color(s, p, c),
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };
+    if let Some(v) = p.get("style").filter(|v| !v.is_string()) {
+        return Err(bad(C, format!("`style` must be a graphic style's name, not {v}")));
+    }
     let style = style_paint(&st.doc, p);
+    // Style: User Defined uses the style `style` names, so one the document does not have is an error.
+    if let Some(n) = str_param(p, "style").filter(|n| !modes.style && !st.doc.graphic_styles.iter().any(|g| g.name == *n)) {
+        return Err(bad(C, format!("unknown graphic style `{n}`")));
+    }
     let size = natural_size(&st.doc, &name);
     let set = st.selection.objects.first().copied().filter(|id| st.selection.len() == 1 && st.doc.node(*id).is_some_and(is_symbol_set));
     // Only a new Symbol Set needs a layer that takes new art.
@@ -1015,12 +1022,27 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         }
         return Ok(json!({ "count": n }));
     }
-    // Keep instances at least this far apart along the stroke (denser = closer).
-    let min_gap = size.0.max(size.1) * scale * spacing(density);
+    let side = natural_side(&st.doc, &name);
+    // The symbol's longest side as drawn at its own size: its art's, when it has no recorded size.
+    let recorded = stored_natural_size(&st.doc, &name).filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0);
+    let extent = match recorded {
+        Some((w, h)) => w.max(h),
+        None => {
+            let art = st.doc.symbol_art_bounds(&name).map(|r| r.width().max(r.height()));
+            art.filter(|e| e.is_finite() && *e > 0.0).unwrap_or(size.0.max(size.1))
+        }
+    };
+    // The scale a new instance is placed at, before the User Defined size jitter. Size: Average is
+    // the mean size on the page under the brush, of any symbol, or the symbol's own size with none
+    // there (not `scale`).
+    let placed_scale = |near: Option<&Mean>| {
+        if modes.size { near.map(|m| m.size / side).filter(|k| k.is_finite() && *k > 0.0).unwrap_or(1.0) } else { scale }
+    };
     // The instances the selected set has, for the values a new one takes as their average.
     let existing = set.filter(|_| modes.any_average()).map(|g| {
         let d = &st.doc;
-        let looks = d.node(g).and_then(|n| n.children()).into_iter().flatten().filter_map(|c| look(d, c)).collect();
+        let mut sides = Sides::new();
+        let looks = d.node(g).and_then(|n| n.children()).into_iter().flatten().filter_map(|c| look(d, c, &mut sides)).collect();
         Grid::new(looks, radius)
     });
     // Each instance to add: where, the mean of the set's instances under the brush there, and the
@@ -1030,6 +1052,9 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
         let (jx, jy, _) = jitter(i, *q);
         let c = Point::new(q.x + jx * radius * 0.5, q.y + jy * radius * 0.5);
         let near = existing.as_ref().and_then(|g| g.mean(*q, radius, modes.scrunch));
+        // Keep instances at least this far apart along the stroke (denser = closer), by the size
+        // the instance is placed at.
+        let min_gap = extent * placed_scale(near.as_ref()) * spacing(density);
         // Scrunch: Average spaces new instances as the ones under the brush are spaced.
         let gap = near.as_ref().and_then(|m| m.gap).filter(|_| modes.scrunch).unwrap_or(min_gap);
         if placed.last().is_some_and(|(l, ..)| l.distance(c) < gap) && i > 0 {
@@ -1046,8 +1071,8 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
             let (_, _, js) = jitter(i + 7, *c);
             let near = near.as_ref();
             // User Defined: the symbol's own size, turned the way the stroke runs, opaque, stained
-            // with the fill color and given the style, each in full.
-            let k = near.filter(|_| modes.size).map_or(scale, |m| m.scale) * (1.0 + js * 0.1);
+            // with the fill color and given the style, each in full. Size: Average has no size jitter.
+            let k = if modes.size { placed_scale(near) } else { scale * (1.0 + js * 0.1) };
             let angle = if modes.spin { near.map_or(0.0, |m| m.angle) } else { along.map_or(0.0, |v| v.atan2()) };
             let turn = Affine::translate(c.to_vec2()) * Affine::rotate(angle) * Affine::translate(-c.to_vec2());
             let id = d.alloc_id();
@@ -1181,8 +1206,9 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let spread = affects_density && !shift;
     // No undo step when no instance changes (none under the brush, or Average with each at the mean).
-    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |before, d| {
+    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |orig, d| {
         let mut touched = std::collections::BTreeSet::new();
+        let mut sides = Sides::new();
         for (j, (q, pressure)) in pts.iter().enumerate() {
             let delta = if j > 0 { *q - pts[j - 1].0 } else { Vec2::ZERO };
             // Use Pressure Pen: the pen's pressure at the point is the intensity there.
@@ -1191,8 +1217,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
             let target = (method == Method::Average)
                 .then(|| {
                     let under = |n: &&Node| instance_center(n).is_some_and(|c| c.distance(*q) <= radius);
-                    let looks: Vec<_> = candidates.iter().filter_map(|id| d.node(*id).filter(under).and_then(|n| look(d, n))).collect();
-                    mean(&looks.iter().collect::<Vec<_>>(), *q, None)
+                    let looks: Vec<_> = candidates.iter().filter_map(|id| d.node(*id).filter(under).and_then(|n| look(d, n, &mut sides))).collect();
+                    mean(&looks.iter().collect::<Vec<_>>(), *q, false)
                 })
                 .flatten();
             for id in &candidates {
@@ -1205,26 +1231,34 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 if w <= 0.0 {
                     continue;
                 }
-                // Average and the Shift forms of the Stainer and the Styler read the instance's look,
-                // and Average has no mean of instances without one. The other changes need only its
-                // center, so an instance without a size (one whose transform flattens it) still moves.
-                let Some(cur) = look_if(d, *id, method == Method::Average || recolor.is_some()) else { continue };
                 // Shift with the Symbol Stainer or the Symbol Styler: the instance keeps the amount
                 // of its stain or style, and its paint moves toward the color or the style. An
-                // instance without one is left as it is.
+                // instance without one, or without a size, is left as it is.
                 if let Some((to, step)) = &recolor {
-                    if recolor_keeping_amount(d, *id, cur.and_then(|l| l.fill), to, step * w) {
+                    let fill = d.node(*id).and_then(|n| look(d, n, &mut sides)).and_then(|l| l.fill);
+                    if recolor_keeping_amount(d, *id, fill, to, step * w) {
                         touched.insert(*id);
                     }
                     continue;
                 }
+                // Average needs the instance's own values, so it leaves an instance without a size
+                // as it is; the other methods change it as before.
+                // The instance's own values are read for Average only.
+                let own = (method == Method::Average).then(|| d.node(*id).and_then(|n| look(d, n, &mut sides))).flatten();
+                let avg = match (method, &target, own) {
+                    (Method::Average, Some(t), Some(cur)) => Some((t, cur)),
+                    // No mean under the brush (every instance there without a size), or none of
+                    // its own.
+                    (Method::Average, ..) => continue,
+                    _ => None,
+                };
                 // Average leaves an instance that already has the mean as it is.
-                let at_mean = target.as_ref().zip(cur.as_ref()).is_some_and(|(t, cur)| match tool.as_str() {
+                let at_mean = avg.as_ref().is_some_and(|(t, cur)| match tool.as_str() {
                     "scrunch" => {
                         let out = (c - t.middle).hypot();
                         out <= 1e-9 || (t.reach - out).abs() < 1e-9
                     }
-                    "size" => (t.scale / cur.scale - 1.0).abs() < 1e-9,
+                    "size" => (t.size / cur.size - 1.0).abs() < 1e-9,
                     "spin" => wrap_angle(t.angle - cur.angle).abs() < 1e-9,
                     "stain" | "style" => {
                         (t.amount - cur.fill.as_ref().map_or(0.0, |f| f.1)).abs() < 1e-6 && (cur.fill.is_some() || t.paint.is_none())
@@ -1236,15 +1270,16 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     continue;
                 }
                 let Some(n) = d.node_mut(*id) else { continue };
-                touched.insert(*id);
+                // Counted only when it changes: Random can give an instance no share of the change.
+                let before = n.clone();
                 let about = |m: Affine| Affine::translate(c.to_vec2()) * m * Affine::translate(-c.to_vec2());
                 let share = share(*id);
                 match tool.as_str() {
                     "shift" => n.transform(Affine::translate(delta * w.min(1.0)), false),
                     "scrunch" => {
-                        let v = match &target {
+                        let v = match &avg {
                             // Toward the instances' mean distance from their middle.
-                            Some(t) => {
+                            Some((t, _)) => {
                                 let out = c - t.middle;
                                 if out.hypot() > 1e-9 { out * ((t.reach - out.hypot()) / out.hypot() * w.min(1.0)) } else { Vec2::ZERO }
                             }
@@ -1253,15 +1288,15 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         n.transform(Affine::translate(v), false);
                     }
                     "size" => {
-                        let k = match target.as_ref().zip(cur.as_ref()) {
-                            Some((t, cur)) => (t.scale / cur.scale).powf(w.min(1.0)),
+                        let k = match &avg {
+                            Some((t, cur)) => (t.size / cur.size).powf(w.min(1.0)),
                             None => (1.0 + 0.08 * w).powf(if alt { -share } else { share }),
                         };
                         // Without Proportional Resizing a drag resizes along its own direction: a
                         // level drag the width, an upright one the height. A click resizes both.
                         // The first point of a drag takes the direction to the second.
                         let along = if j > 0 { delta } else { pts.get(1).map_or(Vec2::ZERO, |(next, _)| *next - *q) };
-                        let (kx, ky) = if proportional || target.is_some() || along.hypot() <= 1e-9 {
+                        let (kx, ky) = if proportional || avg.is_some() || along.hypot() <= 1e-9 {
                             (k, k)
                         } else {
                             let level = along.x.abs() / (along.x.abs() + along.y.abs());
@@ -1276,7 +1311,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         }
                     }
                     "spin" => {
-                        let a = match (target.as_ref().zip(cur.as_ref()), method) {
+                        let a = match (&avg, method) {
                             (Some((t, cur)), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
                             // A turn either way, whichever way the drag runs.
                             (None, Method::Random) => 0.1 * w * (share - 1.0),
@@ -1284,22 +1319,23 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                             (None, _) if delta.hypot() > 1e-9 => (c - *q).cross(delta).signum() * 0.1 * w,
                             (None, _) => 0.05 * w,
                         };
-                        n.transform(about(Affine::rotate(if alt && target.is_none() { -a } else { a })), false);
+                        n.transform(about(Affine::rotate(if alt && avg.is_none() { -a } else { a })), false);
                     }
                     "stain" | "style" => {
                         let paint = if tool == "style" { style_paint.clone().unwrap_or(Paint::solid(color)) } else { Paint::solid(color) };
-                        let (paint, o) = match target.as_ref().zip(cur) {
+                        let (paint, o) = match &avg {
                             // Toward the mean amount, keeping the stain or style the instance has
                             // (one at no opacity is none).
-                            Some((t, cur)) => {
-                                let (own, cur) = cur.fill.filter(|(_, o)| *o > 0.0).map_or((None, 0.0), |(p, o)| (Some(p), o));
+                            Some((t, look)) => {
+                                let (own, cur) = look.fill.clone().filter(|(_, o)| *o > 0.0).map_or((None, 0.0), |(p, o)| (Some(p), o));
                                 (own.or(t.paint.clone()).unwrap_or(paint), (cur + (t.amount - cur) * w.min(1.0)) as f32)
                             }
+                            // Alt with the Symbol Styler removes the instance's appearance.
+                            None if tool == "style" && alt => {
+                                n.appearance.items.clear();
+                                (paint, 0.0)
+                            }
                             None => {
-                                if tool == "style" && alt {
-                                    n.appearance.items.clear();
-                                    continue;
-                                }
                                 let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
                                 // The style goes on gradually, by the brush's strength there: in
                                 // full at the center at full intensity or pressure.
@@ -1320,29 +1356,25 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     _ => {
                         let step = (0.1 * w * share) as f32;
-                        n.opacity = match &target {
-                            Some(t) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.0, 1.0),
+                        n.opacity = match &avg {
+                            // The mean may be below the 5% the Screener otherwise stops at.
+                            Some((t, _)) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.0, 1.0),
                             None if alt => (n.opacity + step).min(1.0),
                             None => (n.opacity - step).max(0.05),
                         };
                     }
                 }
+                if *n != before {
+                    touched.insert(*id);
+                }
             }
         }
-        // An instance the brush reached but left as it was (at a limit already) is not counted.
-        touched.retain(|id| d.node(*id) != before.node(*id));
+        // An instance the stroke moved away and back again, or reached but left as it was (at a
+        // limit already), is not counted.
+        touched.retain(|id| d.node(*id) != orig.node(*id));
         Ok((touched.len(), !touched.is_empty()))
     })?;
     Ok(json!({ "count": count }))
-}
-
-/// The [`Look`] of instance `id` for the symbolism tools, or None to leave the instance as it is:
-/// one without a look (no size) is left only when `needed`.
-fn look_if(d: &Document, id: NodeId, needed: bool) -> Option<Option<Look>> {
-    match d.node(id).and_then(|n| look(d, n)) {
-        None if needed => None,
-        cur => Some(cur),
-    }
 }
 
 /// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)

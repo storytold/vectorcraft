@@ -20,6 +20,7 @@ pub const SYMBOLISM: &[&str] =
 
 const ROWS: &[Row] = &[
     (&["dimension"], None, &["mode", "style"]),
+    (&[crate::quickpen::ID], None, &["action", "turn"]),
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
@@ -102,6 +103,7 @@ const ROWS: &[Row] = &[
     (&[crate::addons::extend_path::ID], None, &["mode"]),
     (&[crate::addons::corner_tool::ID], None, &["radius", "kind"]),
     (&[crate::addons::shared_edge::ID], None, &["diameter", "tolerance", "together"]),
+    (&[crate::addons::tangent_circle::ID], None, &["radius"]),
     (&[crate::addons::smart_pen::ID], None, &["next"]),
     // The kind first: a new kind resets the values after it.
     (&[crate::addons::parametric_shape::ID], None, &["kind", "count", "a", "b", "radius", "width", "height", "rotation"]),
