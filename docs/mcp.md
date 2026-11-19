@@ -5520,7 +5520,7 @@ fills and strokes above it paint over the members (characters), those below unde
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
 groups and layers. In a Live Paint group those are its faces and edges, not its hidden source paths.
-`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only. A
+`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only; a selected group left with only its hidden source paths is returned without a change. A
 fill or stroke command with an `item` and `target: "contents"` (such as `paint.setFill`, `stroke.set`,
 `paint.invert`, `paint.setGradientGeom` and `object.setOverprint`) changes the faces for a fill row and the edges for
 a stroke row. The row commands (`appearance.setItem`, `appearance.removeItem` and the others) find their rows on each

@@ -925,7 +925,16 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let cmd = if fill { "appearance.addFill" } else { "appearance.addStroke" };
-    let mut ids = require_targets(s, p, cmd)?;
+    let mut ids = row_targets(s, p, cmd)?;
+    if ids.is_empty() {
+        // A selected Live Paint group left with only its hidden source paths has nothing to edit: it is
+        // still a selection, so the edit changes nothing.
+        let roots = appearance_roots(s, p)?;
+        if targets_contents(p)? && !roots.is_empty() && !super::paint::live_paint_split(&s.doc()?.doc, &roots).2.is_empty() {
+            return ok();
+        }
+        return Err(bad(cmd, "select objects or give ids"));
+    }
     // In the contents of a Live Paint group, a new fill goes on its faces and a new stroke on its edges;
     // with no part of that kind, nothing changes.
     let skipped = contents_skipped(s, p, fill)?;

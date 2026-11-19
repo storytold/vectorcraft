@@ -4486,6 +4486,29 @@ fn live_paint_group_with_only_source_paths_leaves_new_art_alone_for_a_contents_e
     assert_eq!((s.paint.clone(), s.new_art_stroke()), (paint0, stroke0), "new art keeps its stroke");
 }
 
+/// Adding a fill or a stroke to the contents of a Live Paint group left with only its hidden source paths
+/// succeeds and changes nothing, while an empty selection is still refused.
+#[test]
+fn live_paint_group_with_only_source_paths_ignores_add_fill_and_add_stroke_of_its_contents() {
+    let mut s = session();
+    let g = live(&mut s);
+    let n = node(&s, g);
+    let parts: Vec<NodeId> = vectorcraft_tools::builder::faces(&n).iter().chain(vectorcraft_tools::builder::edges(&n).iter()).map(|p| p.id).collect();
+    s.edit("t", |d, _| {
+        d.children_mut(Some(g)).unwrap().retain(|c| !parts.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let before = node(&s, g);
+    for cmd in ["appearance.addFill", "appearance.addStroke"] {
+        s.execute(cmd, &json!({"target": "contents"})).unwrap();
+        assert_eq!(node(&s, g), before, "{cmd} changes nothing");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("appearance.addFill", &json!({"target": "contents"})).is_err(), "no selection is still refused");
+}
+
 /// A selected Live Paint group with no part of the edited kind is still a selection: a stroke edit
 /// of a group without edges, or a fill gradient edit of a group without faces, changes nothing and
 /// leaves the settings for new art as they are.
