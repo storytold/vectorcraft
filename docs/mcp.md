@@ -7256,11 +7256,17 @@ path's last point, drawn with the tool's `action` option:
 Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
 Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
 the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
-arcs after it. A click on the first point closes the path, and a click on an end of an open path goes on drawing from
-that end. Escape or Enter ends the path, and so does an edit made to it by another command. The path's points show as circles without handles, and a preview shows the
-piece the next click adds. Points snap to Smart Guides. Each piece, flip and size change is one undo step. The arc
-size of 180°, its 15° steps, the side an arc bulges to and Enter ending the path are VectorCraft's own rules. The
-tool keeps `action` and `turn` with the preferences (`tool.setOption {tool: "quickPen", key, value}`).
+arcs after it. During a drag, C and `[` `]` change the sharp-corner arc being dragged, and Alt switches its action. A
+dragged piece ends where the press is let go. A click on the first point closes the path, and a click on an end of an
+open path goes on drawing from that end. Escape or Enter ends the path, and so does an edit made to it by another
+command. An edit made by another command during a drag, to the path or to other art, also ends the path: the edit
+stays, and the piece stays as last shown. With the `realTimeDrawing` preference off, a press during which another
+command edits the document adds no piece, and the edit stays. The path's points show as circles without handles, and a
+preview shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step, together with the
+flips and size changes made during its drag, and each flip or size change made between presses is one undo step. The
+arc size of 180°, its 15° steps, the side an arc bulges to, what C and `[` `]` do during a drag and Enter ending the
+path are VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
+(`tool.setOption {tool: "quickPen", key, value}`).
 
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
