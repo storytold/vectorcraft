@@ -88,6 +88,23 @@ fn a_map_past_the_surface_count_can_still_be_removed() {
 }
 
 #[test]
+fn a_map_of_a_deleted_symbol_keeps_it_only_while_the_request_leaves_symbol_out() {
+    let (mut s, id) = setup("threeD.classicExtrude");
+    s.execute("threeD.mapArt", &json!({"surface": 1, "symbol": "Mark"})).unwrap();
+    s.execute("symbol.delete", &json!({"name": "Mark"})).unwrap();
+    let ids = json!([id.0]);
+    // Naming the deleted symbol is refused, and nothing changes.
+    let e = s.execute("threeD.mapArt", &json!({"ids": ids, "surface": 1, "symbol": "Mark", "x": 10.0})).unwrap_err().to_string();
+    assert!(e.contains("no symbol named `Mark`"), "{e}");
+    assert_eq!(params(&s, id)["mapArt"], json!([map(1, 0.0, (100.0, 100.0), 0.0)]));
+    // Leaving it out edits the map and keeps its symbol, and `symbol: null` removes the map.
+    s.execute("threeD.mapArt", &json!({"ids": ids, "surface": 1, "x": 10.0})).unwrap();
+    assert_eq!(params(&s, id)["mapArt"], json!([map(1, 10.0, (100.0, 100.0), 0.0)]));
+    s.execute("threeD.mapArt", &json!({"ids": ids, "surface": 1, "symbol": null})).unwrap();
+    assert_eq!(params(&s, id)["mapArt"], json!([]));
+}
+
+#[test]
 fn scale_to_fit_centers_the_art_and_fills_the_surface() {
     let (mut s, id) = setup("threeD.classicExtrude");
     // The cap is 100 × 100 and the symbol's art 11 × 21.

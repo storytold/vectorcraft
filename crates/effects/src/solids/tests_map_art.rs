@@ -108,6 +108,18 @@ fn the_surfaces_are_the_caps_then_each_wall_then_each_bevel() {
 }
 
 #[test]
+fn a_bevel_as_deep_as_the_solid_leaves_no_walls_and_its_bevels_take_their_maps() {
+    let (front, back) = (SurfaceKind::End(PlanarFace::Front), SurfaceKind::End(PlanarFace::Back));
+    let solid = |maps: Value| object(CLASSIC_EXTRUDE, json!({"depth": 10, "bevel": "classic", "bevelHeight": 10, "mapArt": maps}));
+    let kinds: Vec<SurfaceKind> = surfaces(&solid(json!([]))).iter().map(|s| s.kind).collect();
+    assert_eq!(kinds, [vec![front, back], vec![SurfaceKind::Bevel; 4]].concat());
+    // Seen straight on, the front bevels draw the art mapped onto them.
+    let bevels: Vec<Value> = (3..=6).map(|k| json!({"surface": k, "symbol": "Mark"})).collect();
+    let art = solid_art_in(Some(&document()), &solid(json!(bevels))).unwrap();
+    assert!(!filled(&art, RED).is_empty());
+}
+
+#[test]
 fn a_map_on_the_front_cap_draws_the_symbol_at_its_offset_scales_and_turn() {
     let d = document();
     let map = |m: Value| solid_art_in(Some(&d), &object(CLASSIC_EXTRUDE, json!({"mapArt": [m]}))).unwrap();
@@ -217,13 +229,136 @@ fn art_on_a_facet_with_a_curved_edge_is_clipped_to_that_edge() {
 }
 
 #[test]
+fn art_on_a_facet_whose_curved_edge_bows_out_covers_the_whole_facet() {
+    let quad = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+    // The facet's top edge follows a curve that bows out of the quad, up to y = -2.
+    let mut curved = BezPath::new();
+    curved.move_to((0.0, 0.0));
+    curved.curve_to((10.0 / 3.0, -8.0 / 3.0), (20.0 / 3.0, -8.0 / 3.0), (10.0, 0.0));
+    curved.line_to((10.0, 10.0));
+    curved.line_to((0.0, 10.0));
+    curved.close_path();
+    let facet = Facet {
+        contours: vec![quad.clone()],
+        depth: 0.0,
+        brightness: 1.0,
+        illumination: [1.0; 3],
+        normal: [0.0, 0.0, 1.0],
+        rgb_gradient: None,
+        outline: Some(PathData::from_bezpath(&curved)),
+        side: true,
+        away: false,
+        end: None,
+        plane: None,
+        surface: None,
+        cell: None,
+    };
+    let cell = MapCell { surface: 0, page: quad.clone(), uv: quad };
+    // Art that covers the facet and more.
+    let cover = vec![Point::new(-5.0, -5.0), Point::new(15.0, -5.0), Point::new(15.0, 15.0), Point::new(-5.0, 15.0)];
+    let whole = Rect::new(-5.0, -5.0, 15.0, 15.0);
+    let art = Unrolled {
+        polygons: vec![cover],
+        boxes: vec![whole],
+        bounds: whole,
+        rule: FillRule::NonZero,
+        paint: Paint::solid(RED),
+        opacity: 1.0,
+        blend: Default::default(),
+        place: Affine::IDENTITY,
+    };
+    let (mut budget, mut copies) = (MapBudget::default(), 0);
+    let out = cell_art(NodeId(1), &[art], &cell, &facet, &|c| c, &mut budget, &mut copies).unwrap();
+    let area: f64 = out.iter().filter_map(|n| n.path_data()).map(|p| vectorcraft_geom::kurbo::Shape::area(&p.to_bezpath()).abs()).sum();
+    let want = vectorcraft_geom::kurbo::Shape::area(&curved).abs();
+    assert!((area - want).abs() < 1e-2, "{area} drawn, {want} inside the curved edge");
+}
+
+#[test]
+fn the_bounds_tests_of_contours_away_from_a_cell_count_as_cuts() {
+    let quad = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
+    let facet = Facet {
+        contours: vec![quad.clone()],
+        depth: 0.0,
+        brightness: 1.0,
+        illumination: [1.0; 3],
+        normal: [0.0, 0.0, 1.0],
+        rgb_gradient: None,
+        outline: None,
+        side: true,
+        away: false,
+        end: None,
+        plane: None,
+        surface: None,
+        cell: None,
+    };
+    let cell = MapCell { surface: 0, page: quad.clone(), uv: quad };
+    // Small contours on either side of the cell: the piece's bounds reach across it, but no
+    // contour's own bounds do.
+    let polygons: Vec<Vec<Point>> = (0..2000)
+        .map(|k| {
+            let x = if k % 2 == 0 { -1000.0 } else { 1000.0 };
+            vec![Point::new(x, 0.0), Point::new(x + 1.0, 0.0), Point::new(x + 1.0, 1.0)]
+        })
+        .collect();
+    let boxes: Vec<Rect> = polygons.iter().filter_map(|p| box_of(p)).collect();
+    let art = Unrolled {
+        polygons,
+        boxes,
+        bounds: Rect::new(-1000.0, 0.0, 1001.0, 1.0),
+        rule: FillRule::NonZero,
+        paint: Paint::solid(RED),
+        opacity: 1.0,
+        blend: Default::default(),
+        place: Affine::IDENTITY,
+    };
+    let mut budget = MapBudget { cuts: MAX_SURFACE_CUTS - 10, ..MapBudget::default() };
+    assert!(cell_art(NodeId(1), &[art], &cell, &facet, &|c| c, &mut budget, &mut 0).is_none());
+}
+
+#[test]
 fn a_map_on_the_back_cap_reads_the_right_way_round_from_behind() {
     let d = document();
-    let n = object(CLASSIC_EXTRUDE, json!({"rotationY": 180, "mapArt": [{"surface": 1, "symbol": "Corner"}, {"surface": 2, "symbol": "Corner"}]}));
+    let n = object(CLASSIC_EXTRUDE, json!({"rotationY": 180, "mapArt": [{"surface": 1, "symbol": "Mark"}, {"surface": 2, "symbol": "Corner"}]}));
     let art = solid_art_in(Some(&d), &n).unwrap();
-    // Only the back cap is seen.
+    // Only the back cap is seen, and it carries its own map's art.
     assert_eq!(filled(&art, RED).len(), 1);
+    assert_eq!((filled(&art, BLUE).len(), filled(&art, GREEN).len()), (1, 1));
     assert!(handedness(&art) > 0.0);
+}
+
+#[test]
+fn art_past_the_shared_limits_leaves_out_the_mapped_art_of_every_solid() {
+    let mut d = document();
+    // A zigzag of half the straight sides one 3D effect's mapped art may draw.
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    for i in 1..=MAX_ELEMENTS / 2 {
+        b.line_to((i as f64 * 0.00005, (i % 2) as f64));
+    }
+    b.close_path();
+    let half = Node::path(NodeId(0), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    d.symbols.push(Symbol { dynamic: false, name: "Half".into(), art: Arc::new(half) });
+    let gray = Color::rgb(0.5, 0.5, 0.5);
+    // A group of two squares: the first solid's front is surface 1, the second's surface 7.
+    let art = |maps: Value, invisible: bool| {
+        let members =
+            vec![Arc::new(square(8, Rect::new(0.0, 0.0, 100.0, 100.0), gray)), Arc::new(square(9, Rect::new(200.0, 0.0, 300.0, 100.0), gray))];
+        let mut g = Node::group(NodeId(7), members);
+        let p = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "surface": "none", "mapInvisible": invisible, "mapArt": maps});
+        g.appearance.effects.push(crate::new_effect(CLASSIC_EXTRUDE, &p).unwrap());
+        solid_art_in(Some(&d), &g).unwrap()
+    };
+    // One solid's art fits.
+    assert!(!filled(&art(json!([{"surface": 1, "symbol": "Half"}]), false), RED).is_empty());
+    // Both together are past the limit: no solid draws its art, and with Invisible Geometry every
+    // solid's faces draw.
+    let both = json!([{"surface": 1, "symbol": "Half"}, {"surface": 7, "symbol": "Half"}]);
+    assert!(filled(&art(both.clone(), false), RED).is_empty());
+    let hidden = art(both, true);
+    assert!(filled(&hidden, RED).is_empty());
+    let faces = bounds_of(&filled(&hidden, gray));
+    assert!(faces.x0 < 1.0 && faces.x1 > 299.0, "{faces:?}");
 }
 
 #[test]
@@ -333,7 +468,7 @@ fn art_past_the_paint_copies_allowance_leaves_the_allowance_to_later_art() {
     let draw = |copies: &mut usize, budget: &mut MapBudget| {
         let mapped = crate::solids::classic::Mapped { art: &art, layout: &layout, budget, copies };
         let blend = vectorcraft_doc::color::BlendMode::Normal;
-        crate::solids::classic::surface(&n, facets.clone(), &gray, (1.0, blend), &p, Some(mapped), false).0
+        crate::solids::classic::surface(&n, &facets, &gray, (1.0, blend), &p, Some(mapped), false).0
     };
     let (mut copies, mut budget) = (0, MapBudget::default());
     assert!(!filled(&draw(&mut copies, &mut budget), RED).is_empty());
@@ -404,6 +539,53 @@ fn invisible_geometry_leaves_out_every_member_of_a_revolved_group() {
 }
 
 #[test]
+fn a_revolved_group_past_its_shared_limits_lists_no_surface() {
+    let gray = Color::rgb(0.5, 0.5, 0.5);
+    // Profiles of five anchors each; one alone fits Revolve's limits.
+    let profile = |id: u64, x: f64| {
+        let mut b = BezPath::new();
+        b.move_to((x, 0.0));
+        for i in 1..5 {
+            b.line_to((x + f64::from(i % 2), f64::from(i) * 10.0));
+        }
+        Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&b), Appearance::basic(Paint::None, Paint::solid(gray), 1.0)))
+    };
+    let group = |count: u64| {
+        let mut g = Node::group(NodeId(7), (0..count).map(|k| profile(k + 8, 100.0 + k as f64 * 0.01)).collect());
+        g.appearance.effects.push(crate::new_effect(CLASSIC_REVOLVE, &json!({})).unwrap());
+        g
+    };
+    let d = document();
+    assert_eq!(map_surfaces_at(Some(&d), &group(2), None, 0).map(|s| s.len()), Some(1));
+    // 4,000 of them together are past the anchors the members share.
+    assert!(map_surfaces_at(Some(&d), &group(4000), None, 0).is_none());
+}
+
+#[test]
+fn an_extruded_group_past_the_faces_of_one_object_lists_no_surface() {
+    // Polygons of 1,000 corners: each solid alone has about 1,000 faces.
+    let polygon = |id: u64, x: f64| {
+        let mut b = BezPath::new();
+        for i in 0..1000 {
+            let a = f64::from(i) * std::f64::consts::TAU / 1000.0;
+            let p = (x + 40.0 * a.cos(), 40.0 * a.sin());
+            if i == 0 { b.move_to(p) } else { b.line_to(p) }
+        }
+        b.close_path();
+        Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0)))
+    };
+    let group = |count: u64| {
+        let mut g = Node::group(NodeId(7), (0..count).map(|k| polygon(k + 8, k as f64 * 100.0)).collect());
+        g.appearance.effects.push(crate::new_effect(CLASSIC_EXTRUDE, &json!({"drawHiddenFaces": true})).unwrap());
+        g
+    };
+    let d = document();
+    assert!(map_surfaces_at(Some(&d), &group(2), None, 0).is_some());
+    // 200 of them together have more faces than one object draws.
+    assert!(map_surfaces_at(Some(&d), &group(200), None, 0).is_none());
+}
+
+#[test]
 fn bad_maps_are_refused() {
     let d = document();
     let check = |id: &str, p: Value| {
@@ -462,6 +644,36 @@ fn a_mapped_symbol_past_the_limits_of_a_graphics_art_is_refused() {
     let p = crate::merged_params(CLASSIC_REVOLVE, &json!({"mapArt": [{"surface": 1, "symbol": "Dense"}]}));
     let e = validate_three_d_at_in(Some(&d), &plain, CLASSIC_REVOLVE, &p, (Some(0), 0)).unwrap_err();
     assert!(e.contains("too complex"), "{e}");
+}
+
+#[test]
+fn a_mapped_symbol_whose_curves_cut_into_too_many_pieces_is_refused() {
+    let mut d = document();
+    // Large circles: a few curves each, but many straight pieces once they are cut.
+    let loops = |name: &str, count: usize| {
+        let mut b = BezPath::new();
+        for k in 0..count {
+            let r = 1e5;
+            let circle = vectorcraft_geom::kurbo::Circle::new((k as f64 * 2.1 * r, 0.0), r);
+            b.extend(vectorcraft_geom::kurbo::Shape::path_elements(&circle, 0.1));
+        }
+        let art = Node::path(NodeId(0), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+        Symbol { dynamic: false, name: name.into(), art: Arc::new(art) }
+    };
+    d.symbols.push(loops("Loop", 1));
+    d.symbols.push(loops("Loops", 400));
+    let check = |id: &str, surface: usize, symbol: &str| {
+        let p = crate::merged_params(id, &json!({"mapArt": [{"surface": surface, "symbol": symbol}]}));
+        validate_three_d_in(Some(&d), &object(id, json!({})), id, &p)
+    };
+    // Extrude & Bevel's surface 3 is a wall, and Revolve's surface 1 its side.
+    for (id, surface) in [(CLASSIC_EXTRUDE, 3), (CLASSIC_REVOLVE, 1)] {
+        assert_eq!(check(id, surface, "Loop"), Ok(()), "{id}");
+        let e = check(id, surface, "Loops").unwrap_err();
+        assert!(e.contains("too complex"), "{id}: {e}");
+    }
+    // A cap draws the curves as they are, without cutting them.
+    assert_eq!(check(CLASSIC_EXTRUDE, 1, "Loops"), Ok(()));
 }
 
 #[test]

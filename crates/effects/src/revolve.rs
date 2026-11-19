@@ -239,10 +239,15 @@ fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b:
 /// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
 /// appearance item `target` of `n` ([`validate_item_of`]).
 /// An error when the symbols that Revolve (Classic)'s Map Art in `p` places, with the symbols of
-/// `doc`, are past the limits of a graphic's art, as on Extrude & Bevel (Classic).
+/// `doc`, are past the limits of a graphic's art, as on Extrude & Bevel (Classic), or past the
+/// limits of art unrolled onto its side, its only surface.
 fn validate_map_symbols(doc: Option<&Document>, id: &str, p: &Value) -> Result<(), String> {
     match doc.filter(|_| id == CLASSIC_REVOLVE) {
-        Some(doc) => crate::solids::graphics::validate_symbols(doc, p),
+        Some(doc) => {
+            crate::solids::graphics::validate_symbols(doc, p)?;
+            // The side is surface 1, laid out about the origin; a map past it draws nothing.
+            crate::solids::graphics::validate_unrolled_symbols(doc, p, &|surface| (surface == 1).then_some(Point::ZERO))
+        }
         None => Ok(()),
     }
 }
@@ -345,7 +350,7 @@ fn check_surface(path: &PathData, b: Rect, options: Revolve, item: Option<&Appea
 
 /// `options` with one number of samples for every curve of `shapes`, the members of one group: the
 /// members share Revolve's limits.
-fn shared_options(shapes: &[Profile], options: Revolve) -> Result<Revolve, String> {
+pub(crate) fn shared_options(shapes: &[Profile], options: Revolve) -> Result<Revolve, String> {
     let samples = vectorcraft_three_d::revolve_curve_samples(shapes.iter().map(|s| &s.path), options)?;
     Ok(Revolve { curve_samples: Some(samples), ..options })
 }
@@ -529,7 +534,7 @@ fn surface(
             budget: &mut budget,
             copies: &mut copies.graphics,
         });
-        let (art, hidden) = crate::solids::classic::surface(n, facets, &paint, (opacity, blend), &p, mapped, hide);
+        let (art, hidden, _) = crate::solids::classic::surface(n, &facets, &paint, (opacity, blend), &p, mapped, hide);
         return Some((drawn, art, kept, false, hidden));
     }
     let colored = colored(&options);

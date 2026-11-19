@@ -743,7 +743,12 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
             b.cells = layout.as_ref().and_then(|(sides, spans)| {
                 let (bevel, v0, v1) = spans.get(k).copied().flatten()?;
-                let base = caps + if bevel { sides.lengths.len() } else { 0 };
+                // Without a wall span the walls are not numbered, and the bevels follow the caps.
+                let walls = has_walls(spans);
+                if !bevel && !walls {
+                    return None;
+                }
+                let base = caps + if bevel && walls { sides.lengths.len() } else { 0 };
                 let edges = sides.edges.get(r)?.iter().map(|e| e.map(|(section, u0, u1)| (base + section, u0, u1))).collect();
                 Some(BandCells { edges, across: (v0, v1) })
             });
@@ -875,10 +880,17 @@ fn band_spans(steps: &[Step], depth: f64) -> Vec<Option<(bool, f64, f64)>> {
         .collect()
 }
 
+/// Whether the bands of `spans` ([`band_spans`]) hold a wall with some width across it: a bevel as
+/// deep as the solid leaves none.
+fn has_walls(spans: &[Option<(bool, f64, f64)>]) -> bool {
+    spans.iter().flatten().any(|(bevel, from, to)| !bevel && to > from)
+}
+
 /// The numbered surfaces of the solid [`extrude`] builds from `path`, in order: the front and back
 /// caps of a solid with caps, then each side wall, ring by ring from each ring's first corner, then
 /// the bevel above each wall in the same order. A plane (no depth) has its front only, and a solid
-/// with a twist or a taper has only its caps. The facets of a solid built with
+/// with a twist or a taper has only its caps. A solid whose bevel is as deep as the solid has no
+/// walls. The facets of a solid built with
 /// [`Extrude::map_surfaces`] carry these indexes ([`MapCell`]).
 pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude) -> Result<Vec<SolidSurface>, String> {
     check_bounds(bounds)?;
@@ -894,6 +906,11 @@ pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: 
     let most = curve_pieces(path, size, bands, caps)?;
     let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
     let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
+    let edges = traced.iter().map(|r| r.points.len()).fold(0usize, usize::saturating_add);
+    if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     let mut out = vec![];
     if o.cap {
         for (step, face) in [(steps.first(), PlanarFace::Front), (steps.last(), PlanarFace::Back)] {
@@ -909,7 +926,8 @@ pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: 
     let sides = sides(&traced, wall_inset(&o));
     let spans = band_spans(&steps, o.depth);
     let across = |bevel: bool| spans.iter().flatten().filter(|s| s.0 == bevel).map(|s| s.2).fold(0.0, f64::max);
-    let kinds = [(SurfaceKind::Wall, false)].into_iter().chain(spans.iter().flatten().any(|s| s.0).then_some((SurfaceKind::Bevel, true)));
+    let walls = has_walls(&spans).then_some((SurfaceKind::Wall, false));
+    let kinds = walls.into_iter().chain(spans.iter().flatten().any(|s| s.0).then_some((SurfaceKind::Bevel, true)));
     for (kind, bevel) in kinds {
         out.extend(sides.lengths.iter().map(|l| SolidSurface { kind, width: *l, height: across(bevel), center: None }));
     }

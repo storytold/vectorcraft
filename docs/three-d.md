@@ -581,7 +581,8 @@ Rotate (Classic) and the other 3D effects take no map. The command is `threeD.ma
 
 Extrude & Bevel (Classic) numbers its surfaces through the object's solids in the order they are built (the top fill's
 solid, then each stroke's): each solid's front cap and back cap, then each side wall from corner to corner of the
-outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number.
+outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number,
+and a solid whose bevel is as deep as the solid has no walls.
 A side wall is laid out at its own length, which a bevel added around the shape makes longer than the outline. A bevel
 is laid out at the length of the wall below it, so mapped art on a bevel is stretched or squeezed along its edge
 nearer the cap. Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
@@ -597,7 +598,9 @@ is VectorCraft's own.
   Unused counts a symbol a map uses as used.
 - A map's art follows the rules and limits of a graphic's art ([Graphics](#graphics)). An object takes up to 64 maps,
   and its maps share the 400,000 path elements of one 3D effect's graphics; past that limit the object draws without
-  its mapped art. The limits and the shading of the mapped art are VectorCraft's own.
+  its mapped art. The art of the maps on walls, bevels and Revolve's side, at each map's scale and with its curves cut
+  into straight pieces, may also take at most 400,000 points together, and commands refuse art past it. The limits and the shading of the mapped art are
+  VectorCraft's own.
 
 ## Parameters (`effect.apply`, `effect.setParams`)
 

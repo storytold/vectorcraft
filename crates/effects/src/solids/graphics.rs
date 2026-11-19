@@ -211,11 +211,11 @@ pub fn missing_symbol(doc: &Document, p: &Value, old: Option<&Value>) -> Option<
 
 /// Does the art of the symbols the graphics in `p` name fit the limits? A graphic whose symbol
 /// `doc` does not have draws nothing and is not counted. With a perspective, each curve counts as
-/// the [`PERSPECTIVE_PIECES`] pieces it is cut into; without one, it counts once.
+/// the [`PERSPECTIVE_PIECES`] pieces it is cut into; without one, it counts once. The symbols Map
+/// Art places count with the graphics.
 pub fn validate_symbols(doc: &Document, p: &Value) -> Result<(), String> {
     let curve = if super::view_options(p).perspective > 0.0 { PERSPECTIVE_PIECES } else { 1 };
     let mut elements = 0usize;
-    // The symbols Map Art places count with the graphics.
     let names = mapped_graphics(p).into_iter().map(|g| g.symbol).chain(map_art::surface_maps(p).into_iter().map(|m| m.symbol));
     for name in names {
         let Some(symbol) = doc.symbols.iter().find(|s| s.name == name) else { continue };
@@ -223,6 +223,30 @@ pub fn validate_symbols(doc: &Document, p: &Value) -> Result<(), String> {
         elements = elements.saturating_add(pieces.iter().map(|p| drawn_elements(&p.path, curve)).sum());
         if elements > MAX_ELEMENTS {
             return Err("The graphics are too complex: simplify the symbols' art".into());
+        }
+    }
+    Ok(())
+}
+
+/// Does the art Map Art in `p` places on the surfaces that `unrolled` gives a flat center for (by
+/// number, from 1; [`map_art::flat_center`]), with the symbols of `doc`, fit the limits as a wall, a
+/// bevel or Revolve's side draws it: each map's art placed about that center at its scale, cut into
+/// straight pieces, at most [`MAX_ELEMENTS`] points together and within reach? A map whose symbol
+/// `doc` does not have is not counted.
+pub fn validate_unrolled_symbols(doc: &Document, p: &Value, unrolled: &dyn Fn(usize) -> Option<Point>) -> Result<(), String> {
+    const TOO_COMPLEX: &str = "The graphics are too complex: simplify the symbols' art";
+    let mut points = 0usize;
+    for m in map_art::surface_maps(p) {
+        let Some(center) = unrolled(m.surface) else { continue };
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == m.symbol) else { continue };
+        let pieces = pieces_of(doc, symbol)?;
+        let Some(bounds) = pieces.iter().filter_map(|p| p.path.bounds()).reduce(|a, b| a.union(b)) else { continue };
+        let place = m.placement(bounds, center, false);
+        for piece in &pieces {
+            straight_pieces(&(place * piece.path.to_bezpath()), &mut points).ok_or(TOO_COMPLEX)?;
+        }
+        if points > MAX_ELEMENTS {
+            return Err(TOO_COMPLEX.into());
         }
     }
     Ok(())
@@ -848,7 +872,12 @@ pub(crate) fn surface_parts<F: SurfaceFace>(
             for k in near {
                 let Some(piece) = pieces.get(k) else { continue };
                 let mut path = BezPath::new();
-                // Each contour is cut only where its own bounds reach the triangle.
+                // Each contour is cut only where its own bounds reach the triangle. Each bounds test
+                // counts as one point cut, whether or not the contour reaches it.
+                cut_points = cut_points.saturating_add(piece.boxes.len());
+                if cut_points > MAX_SURFACE_CUTS {
+                    return None;
+                }
                 for (polygon, b) in piece.polygons.iter().zip(&piece.boxes) {
                     if b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1 {
                         continue;

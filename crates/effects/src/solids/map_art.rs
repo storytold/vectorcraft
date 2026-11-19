@@ -23,8 +23,8 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 use vectorcraft_three_d::{Extrude, FaceMap, Facet, MapCell, PlanarFace, SolidSurface, SurfaceKind, View};
 
 use super::{
-    MAX_ELEMENTS, MAX_SURFACE_CUTS, MAX_SURFACE_POINTS, NotMapped, SURFACE_SEAM, Unrolled, counterclockwise, map_path, pieces_of, straight_pieces,
-    takes_seam, triangle_map,
+    MAX_ELEMENTS, MAX_SURFACE_CUTS, MAX_SURFACE_POINTS, NotMapped, SURFACE_SEAM, SURFACE_TOLERANCE, Unrolled, counterclockwise, map_path, pieces_of,
+    straight_pieces, takes_seam, triangle_map,
 };
 
 /// The effect parameter that holds the maps.
@@ -438,6 +438,22 @@ impl Mapper {
         }
     }
 
+    /// The point of the flat surface this map takes to `p` on the page. `None` where there is none.
+    fn back(&self, p: Point) -> Option<Point> {
+        let q = match self {
+            Mapper::Affine(a) => a.inverse() * p,
+            Mapper::Quad { origin, size, rows: [a, b, c, d, e, f, g, h] } => {
+                // x (g u + h v + 1) = a u + b v + c, and the same for y, solved for u and v.
+                let (m00, m01, r0) = (a - g * p.x, b - h * p.x, p.x - c);
+                let (m10, m11, r1) = (d - g * p.y, e - h * p.y, p.y - f);
+                let det = m00 * m11 - m01 * m10;
+                let (u, v) = ((r0 * m11 - m01 * r1) / det, (m00 * r1 - r0 * m10) / det);
+                Point::new(origin.x + u * size.0, origin.y + v * size.1)
+            }
+        };
+        q.is_finite().then_some(q)
+    }
+
     /// The affine map nearest this one around `p`, for gradients and patterns.
     fn local(&self, p: Point, step: f64) -> Affine {
         match self {
@@ -523,6 +539,108 @@ fn clip_convex(polygon: &[Point], window: &[Point]) -> Vec<Point> {
     out
 }
 
+/// How far `p` lies outside the convex `polygon`, wound with its inside on the positive side of each
+/// edge, across the edges for which `counts` holds: 0 or less when it lies inside them.
+fn beyond(polygon: &[Point], p: Point, counts: &dyn Fn(Point, Point) -> bool) -> f64 {
+    let mut most = f64::NEG_INFINITY;
+    for (k, &a) in polygon.iter().enumerate() {
+        let Some(&b) = polygon.get((k + 1) % polygon.len()) else { continue };
+        let length = (b - a).hypot();
+        if length > 0.0 && counts(a, b) {
+            most = most.max(-(b - a).cross(p - a) / length);
+        }
+    }
+    most
+}
+
+/// `regions` of `cell` ([`regions`]) with the edges they share with the cell's own outline moved out
+/// on the flat surface, far enough that their maps reach the outline of facet `f` where its curved
+/// edges bow out of the cell: each outline point is taken back onto the flat surface through the
+/// region's own map. The edge between two triangles stays, so the regions do not overlap. A region
+/// moves out at most four times the size of the cell, and one whose projective map would turn
+/// inside out where it reaches stays as it is. Without a curved outline, or where the outline stays
+/// inside the cell, the regions are returned unchanged.
+fn reaching_outline(regions: Vec<(Vec<Point>, Mapper)>, cell: &MapCell, f: &Facet) -> Vec<(Vec<Point>, Mapper)> {
+    let Some(outline) = f.outline.as_ref() else { return regions };
+    let Some(uv) = box_of(&cell.uv) else { return regions };
+    // The cell on the page, wound with its inside on the positive side of each edge.
+    let mut around = cell.page.clone();
+    let turn: f64 = around.iter().zip(around.iter().cycle().skip(1)).map(|(a, b)| a.to_vec2().cross(b.to_vec2())).sum();
+    if turn < 0.0 {
+        around.reverse();
+    }
+    // The points of the outline that lie outside the cell on the page, or near enough that the
+    // curve between them may: the curve strays from its flattened points by up to the tolerance,
+    // so each point counts as the corners of a square of that half width around it.
+    let mut out = vec![];
+    let outline = outline.to_bezpath();
+    let t = SURFACE_TOLERANCE;
+    vectorcraft_geom::kurbo::flatten(outline.elements().iter().copied(), t, |el| {
+        if let vectorcraft_geom::kurbo::PathEl::MoveTo(p) | vectorcraft_geom::kurbo::PathEl::LineTo(p) = el
+            && beyond(&around, p, &|_, _| true) > -2.0 * t
+        {
+            out.extend([(t, t), (t, -t), (-t, t), (-t, -t)].map(|(x, y)| p + vectorcraft_geom::Vec2::new(x, y)));
+        }
+    });
+    if out.is_empty() {
+        return regions;
+    }
+    let most = 4.0 * uv.width().hypot(uv.height());
+    let on_outline = |a: Point, b: Point| {
+        let at = |q: Point| cell.uv.iter().position(|u| *u == q);
+        let count = cell.uv.len();
+        matches!((at(a), at(b)), (Some(i), Some(j)) if (i + 1) % count == j || (j + 1) % count == i)
+    };
+    regions
+        .into_iter()
+        .map(|(window, mapper)| {
+            let reach = out.iter().filter_map(|p| mapper.back(*p)).map(|q| beyond(&window, q, &on_outline)).fold(0.0f64, f64::max);
+            if reach <= 0.0 {
+                return (window, mapper);
+            }
+            // A little past the farthest point, so the cut to the outline meets it.
+            let reach = (reach * 1.01 + 1e-9).min(most);
+            let grown = grown_window(&window, reach, &on_outline);
+            let holds = match &mapper {
+                Mapper::Affine(_) => true,
+                Mapper::Quad { origin, size, rows } => grown.iter().all(|p| {
+                    let (u, v) = ((p.x - origin.x) / size.0, (p.y - origin.y) / size.1);
+                    rows[6] * u + rows[7] * v + 1.0 > 1e-6
+                }),
+            };
+            (if holds && grown.len() == window.len() { grown } else { window }, mapper)
+        })
+        .collect()
+}
+
+/// The convex `window`, wound as [`clip_convex`] reads it, with each edge for which `moves` holds
+/// moved out by `by`, and its corners where the moved edges meet.
+fn grown_window(window: &[Point], by: f64, moves: &dyn Fn(Point, Point) -> bool) -> Vec<Point> {
+    let count = window.len();
+    // Each edge as a point on its line and its direction, moved out where it moves.
+    let lines: Vec<(Point, vectorcraft_geom::Vec2)> = (0..count)
+        .filter_map(|k| {
+            let (a, b) = (*window.get(k)?, *window.get((k + 1) % count)?);
+            let d = b - a;
+            let length = d.hypot();
+            let out = if moves(a, b) && length > 0.0 { vectorcraft_geom::Vec2::new(d.y, -d.x) * (by / length) } else { vectorcraft_geom::Vec2::ZERO };
+            Some((a + out, d))
+        })
+        .collect();
+    (0..count)
+        .filter_map(|k| {
+            let ((p1, d1), (p2, d2)) = (*lines.get((k + count - 1) % count)?, *lines.get(k)?);
+            let den = d1.cross(d2);
+            if den.abs() <= 1e-12 * d1.hypot() * d2.hypot() {
+                return Some(p2);
+            }
+            let t = (p2 - p1).cross(d2) / den;
+            let p = p1 + d1 * t;
+            p.is_finite().then_some(p)
+        })
+        .collect()
+}
+
 /// The parts of `pieces`, a map's art on its flat surface, that fall on `cell`, the cell of facet
 /// `f`, drawn on the page. `None` past the limits.
 fn cell_art(
@@ -538,16 +656,24 @@ fn cell_art(
         return Some(vec![]);
     }
     let Some(reach) = box_of(&cell.uv) else { return Some(vec![]) };
-    let apart = |b: &Rect| b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1;
-    let regions = regions(cell);
     // A facet cut after it was built, or one whose edges follow the profile's curves, draws only the
-    // part of the art inside its own outline.
+    // part of the art inside its own outline, which the regions reach where it bows out of the cell.
     let whole = f.outline.is_none() && f.contours.first() == Some(&cell.page);
+    let regions = if whole { regions(cell) } else { reaching_outline(regions(cell), cell, f) };
+    let within = regions.iter().filter_map(|(w, _)| box_of(w)).fold(reach, |a, b| a.union(b));
+    let apart = |b: &Rect| b.x1 < within.x0 || b.x0 > within.x1 || b.y1 < within.y0 || b.y0 > within.y1;
     let mut out = vec![];
     for piece in pieces.iter().filter(|p| !apart(&p.bounds)) {
+        // Each contour's bounds test counts as one point cut, whether or not the contour reaches
+        // the cell.
+        budget.cuts = budget.cuts.saturating_add(piece.boxes.len());
+        if budget.cuts > MAX_SURFACE_CUTS {
+            return None;
+        }
+        let near: Vec<&Vec<Point>> = piece.polygons.iter().zip(&piece.boxes).filter(|(_, b)| !apart(b)).map(|(p, _)| p).collect();
         let mut path = BezPath::new();
         for (window, mapper) in &regions {
-            for (polygon, _) in piece.polygons.iter().zip(&piece.boxes).filter(|(_, b)| !apart(b)) {
+            for polygon in &near {
                 budget.cuts = budget.cuts.saturating_add(polygon.len());
                 if budget.cuts > MAX_SURFACE_CUTS {
                     return None;

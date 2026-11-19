@@ -282,51 +282,52 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 /// draws no mapped art. Without `mapped`, `hide` leaves the faces out the same way, for a solid
 /// that shares Invisible Geometry with another solid's mapped art; Wireframe still draws.
 ///
-/// Returns the group and whether its faces were left out.
+/// Returns the group, whether its faces were left out, and whether `mapped` art was left out past
+/// the limits.
 pub(crate) fn surface(
     n: &Node,
-    facets: Vec<Facet>,
+    facets: &[Facet],
     source: &Paint,
     (opacity, blend): (f32, BlendMode),
     p: &Value,
     mapped: Option<Mapped<'_, '_>>,
     hide: bool,
-) -> (Node, bool) {
+) -> (Node, bool, bool) {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
     let preserve = preserves_spot_colors(p);
     let overprint = black_overprint(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
-    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(&facets)) };
+    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(facets)) };
     let paint = &paint;
     // The mapped art of each facet, and whether the faces themselves are left out. Art past the
     // limits is left out, and the faces draw; the copies and the points of art left out do not
     // count against the art of later solids.
-    let (mut parts, invisible) = match mapped.filter(|_| !wire) {
+    let (mut parts, invisible, dropped) = match mapped.filter(|_| !wire) {
         Some(m) => {
             let shaded_as = |f: &Facet, c: Color| {
                 let (tone, spec) = shading.tone(f.normal, &lights);
                 shaded(c, tone, spec, shade)
             };
             let (mut used, mut budget) = (*m.copies, m.budget.clone());
-            match m.art.parts(n.id, &facets, m.layout, &shaded_as, &mut budget, &mut used) {
+            match m.art.parts(n.id, facets, m.layout, &shaded_as, &mut budget, &mut used) {
                 Some(parts) => {
                     (*m.copies, *m.budget) = (used, budget);
-                    (parts, m.art.invisible)
+                    (parts, m.art.invisible, false)
                 }
-                None => (vec![], false),
+                None => (vec![], false, true),
             }
         }
-        None => (vec![], hide && !wire),
+        None => (vec![], hide && !wire, false),
     };
     let children = facets
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(k, face)| {
             let art = parts.get_mut(k).map(std::mem::take).unwrap_or_default();
             if !art.is_empty() || invisible {
-                let drawn = (!invisible).then(|| Arc::new(shaded_face(n, &face, paint, &shading, &lights, shade, preserve, overprint)));
+                let drawn = (!invisible).then(|| Arc::new(shaded_face(n, face, paint, &shading, &lights, shade, preserve, overprint)));
                 return Arc::new(Node::group(n.id, drawn.into_iter().chain(art).collect()));
             }
             if wire {
@@ -334,7 +335,7 @@ pub(crate) fn surface(
                 let edge = crate::lighting::seam_stroke(paint.clone(), WIRE);
                 return Arc::new(Node::path(n.id, face.path(), Appearance { items: vec![AppearanceItem::Stroke(edge)], ..Default::default() }));
             }
-            Arc::new(shaded_face(n, &face, paint, &shading, &lights, shade, preserve, overprint))
+            Arc::new(shaded_face(n, face, paint, &shading, &lights, shade, preserve, overprint))
         })
         .collect();
     let mut group = Node::group(n.id, children);
@@ -345,7 +346,7 @@ pub(crate) fn surface(
         let coverage = Node::path(n.id, vectorcraft_geom::shapes::rectangle(bounds), Appearance::basic(mask, Paint::None, 0.0));
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
-    (group, invisible)
+    (group, invisible, dropped)
 }
 
 /// One face of a solid in paint `paint` (opaque: [`surface`] masks a gradient's transparency),

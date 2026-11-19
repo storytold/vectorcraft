@@ -282,7 +282,9 @@ fn map_art(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 let mut map = effects::SurfaceMap::from_value(&given).map_err(|e| bad(C, e))?;
-                if !d.symbols.iter().any(|sym| sym.name == map.symbol) && current.as_ref().is_none_or(|m| m.symbol != map.symbol) {
+                // A map whose symbol was deleted keeps it while the request leaves `symbol` out; a
+                // symbol the request names must exist.
+                if !d.symbols.iter().any(|sym| sym.name == map.symbol) && (p.get("symbol").is_some() || current.is_none()) {
                     return Err(bad(C, format!("no symbol named `{}`", map.symbol)));
                 }
                 if fit {

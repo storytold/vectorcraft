@@ -5073,14 +5073,16 @@ Rotate (Classic) and the other 3D effects take no map.
 - `surface` is a whole number from 1 to the object's surface count. Extrude & Bevel (Classic) numbers the surfaces
   through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
   from corner to corner of the outline, then the bevel above each wall. A hollow solid (`cap` false) has no caps, so
-  its numbering starts at its first side wall. A side wall is laid out at its own length, and a bevel at the length of
+  its numbering starts at its first side wall, and a solid whose bevel is as deep as the solid has no walls, so its
+  bevels follow its caps. A side wall is laid out at its own length, and a bevel at the length of
   the wall below it. Revolve (Classic) has one surface, its swept
   side; on a group it is the side of the member with the longest profile, and the other members take no map. The
   numbering is VectorCraft's own.
 - `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map, also a map kept past the
   object's surface count; `null` with `x`, `y`,
-  `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol; a surface with
-  no map then is refused.
+  `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol, even one the
+  document no longer has; a surface with no map then is refused. A symbol the document does not have is refused when
+  `symbol` names it.
 - `x` and `y` (points, -1000000..1000000) place the center of the art from the center of the surface laid out flat,
   `scaleX` and `scaleY` (1..10000%) scale it from the symbol's own size, and `rotation` (-360..360 degrees) turns it
   counterclockwise. A new map starts at 0, 0, 100%, 100% and 0°.
