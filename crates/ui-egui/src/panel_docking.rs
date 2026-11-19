@@ -429,11 +429,27 @@ fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, 
     Ok(result)
 }
 
+/// The tab in front of the group that holds `panel` in a dock column collapsed to icons.
+fn flyout_tab(layout: &Layout<String>, panel: &str) -> Option<String> {
+    dock_columns(layout)
+        .into_iter()
+        .filter(|column| column.iconic)
+        .flat_map(|column| &column.groups)
+        .find(|group| group.panels.iter().any(|p| p == panel))
+        .and_then(|group| group.active_panel())
+        .map(|front| front.to_string())
+}
+
 /// Show `panel` as `window.panel` does, but leave it be when it can be seen already ([`visible`]):
-/// a command that opens a panel to work in (Edit › Color Settings…) never puts it away. In
-/// Presentation Mode the panel comes to the front of its group and shows when the mode ends.
+/// a command that opens a panel to work in (Edit › Color Settings…) never puts it away. A flyout
+/// keeps the name of the icon that opened it after another of its tabs is clicked, so a panel whose
+/// flyout is open with another tab in front comes to the front of it. In Presentation Mode the
+/// panel comes to the front of its group and shows when the mode ends.
 pub(crate) fn reveal_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
     if visible(&app.ui, panel) {
+        if app.ui.docking.is_some() && flyout_tab(&layout_of(&app.ui), panel).is_some_and(|front| front != panel) {
+            gesture(app, Action::Activate { panel: panel.to_string() })?;
+        }
         return Ok(json!({"open": panel}));
     }
     let id = normalize(panel).ok_or_else(|| format!("unknown panel `{panel}`"))?;
