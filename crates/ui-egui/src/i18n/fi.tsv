@@ -817,9 +817,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Ympyränäkymä
 	Box View	Ruutunäkymä
+	Show Out-of-Gamut Colors	Näytä väriavaruuden ulkopuoliset värit
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Document Colors	Näytä asiakirjan värit
+	Document Colors	Asiakirjan värit
+	Selection Colors	Valinnan värit
+@plural	Used {n} time|Used {n} times	Käytetty {n} kerran|Käytetty {n} kertaa
 	Show Harmony	Näytä harmonia
 	Harmony Rule	Harmoniasääntö
 	Harmony color	Harmonian väri
@@ -2096,6 +2101,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Nimeä esiasetus uudelleen
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
+	Tracing Presets…	Jäljityksen esiasetukset…
+	Import Image Trace Presets	Tuo kuvan jäljityksen esiasetukset
+	Export Image Trace Presets	Vie kuvan jäljityksen esiasetukset
+	Replace the saved presets that have these names?	Korvataanko tallennetut esiasetukset, joilla on nämä nimet?
 	Method:	Menetelmä:
 	Pad	Jatka
 	Repeats	Toistokerrat
@@ -4234,6 +4243,13 @@ theme	Appearance	Ulkoasu
 	Pen Tool	Kynätyökalu
 	Quick Pen Tool	Pikakynätyökalu
 	Quick Pen	Pikakynä
+	Quick Pen Toolbar	Pikakynän työkalurivi
+	Continuous Arc	Jatkuva kaari
+	Sharp Corner Arc	Terävän kulman kaari
+	Flip Arc	Käännä kaari
+	Hide Toolbar	Piilota työkalurivi
+	Pin Toolbar Position	Kiinnitä työkalurivin sijainti
+	Reset Toolbar Position	Palauta työkalurivin sijainti
 	Picas	Picat
 	Portuguese	Portugali
 	Preserve Appearance and Overprints	Säilytä ulkoasu ja päällepainatukset
@@ -4349,6 +4365,11 @@ theme	Appearance	Ulkoasu
 	Edit Arrowheads	Muokkaa nuolenkärkiä
 	Edit Arrowheads…	Muokkaa nuolenkärkiä…
 	Reload Arrowheads	Lataa nuolenkärjet uudelleen
+	Bevels	Viisteet
+	Edit Bevels	Muokkaa viisteitä
+	Edit Bevels…	Muokkaa viisteitä…
+	{name} (document)	{name} (asiakirja)
+	Reload Bevels	Lataa viisteet uudelleen
 	Stroke Options	Viivan asetukset
 	Width Profiles	Leveysprofiilit
 	Apply Graphic Style	Käytä grafiikkatyyliä
@@ -4668,6 +4689,7 @@ font-technology	Variable	Muuttuvat
 	Recent Commands	Viimeisimmät komennot
 	No recent commands	Ei viimeisimpiä komentoja
 	Type to search commands, tools, panels and effects	Kirjoita hakeaksesi komentoja, työkaluja, paneeleita ja tehosteita
+	Clear Recent Commands	Tyhjennä viimeisimmät komennot
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
@@ -4872,6 +4894,10 @@ font-technology	Variable	Muuttuvat
 	Cusp	Kärki
 	Straight segment	Suora segmentti
 	Circle too large	Ympyrä on liian suuri
+	Show Radii	Näytä säteet
+	Show Diameter	Näytä halkaisija
+	Anchors at Standard Positions	Ankkuripisteet vakiokohdissa
+	Third Point by Dragging	Kolmas piste vetämällä
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -6753,7 +6779,10 @@ mark-style	Japanese	Japanilainen
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
-@msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel-arvon on oltava none, jokin seuraavista: {_1}, tai custom yhdessä arvon {BEVEL_PROFILE} kanssa
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom tarvitsee arvon {BEVEL_PROFILE}, viisteen pisteet
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} on oltava merkkijono
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	arvossa {BEVEL_PROFILE} on oltava vähintään 2 ja enintään {most} pistettä [x, y], kukin osuus väliltä 0 ja 1, pisteestä [0, 0] (päätypinnan reuna) pisteeseen [1, 1] (sivuseinä)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ei voi muodostaa kappaletta symbolin ”{symbol}” esiintymästä: symbolin kuvitus ei ole käytettävissä
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: leikkauspolku on liian monimutkainen kuvituksen leikkaamiseen
@@ -6779,8 +6808,10 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-kohteen face-arvon on oltava front, back tai side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota, Pyöräytä ja Täytä ilmalla
 @msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	Inflate maps graphics onto its front and back, not onto a side	Täytä ilmalla sijoittaa grafiikat etu- ja takapuolelle, ei kylkeen
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekti {_1}: Täytä ilmalla -tehosteen takapuoli ottaa grafiikoita vain, kun Molemmat puolet ja Pääty ovat käytössä
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
@@ -9047,6 +9078,15 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Vector Packs	Vektoripaketit
+	Compass Rose	Kompassiruusu
+	Botanical Sprig	Kasvinoksa
+	Facet Diamond	Särmätty timantti
+	Tide Crest	Aallonharja
+	Leaf Vine	Lehtiköynnös
+	Blossom Chain	Kukkaketju
+	Pennant Garland	Viiririvistö
+	Lantern String	Lyhtyketju
 	Orbit Lines	Kiertoradan viivat
 	Petal Garland	Terälehtiköynnös
 	Lattice Braid	Ristikkopunos

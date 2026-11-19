@@ -229,11 +229,20 @@ pub(crate) fn seamed_fill(path: &vectorcraft_geom::PathData, seam: f64) -> Optio
 /// footprints. Where two facets' antialiased edges meet, the underlay fills what they leave
 /// uncovered with the neighbors' own colors, so the background does not show through. `None` unless
 /// every face is a facet a surface draws: a path filled and stroked by its seam, or a facet composed
-/// in a clip of its footprint, neither with an opacity mask.
+/// in a clip of its footprint, neither with an opacity mask. A face drawn with the parts of Inflate's
+/// graphics on it, a group of the facet and those parts, takes its facet's underlay and stays in the
+/// order with its parts, which are cut to the facet's outline, so the clip keeps them.
 pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vectorcraft_doc::Node>]) -> Option<vectorcraft_doc::Node> {
     use std::sync::Arc;
     use vectorcraft_doc::{Node, NodeKind};
-    let (clip, mut underlay) = underlay(id, faces)?;
+    let facets: Vec<Arc<Node>> = faces
+        .iter()
+        .map(|face| match &face.kind {
+            NodeKind::Group { children, clip: false } if face.extras().mask.is_none() => children.first().cloned(),
+            _ => Some(face.clone()),
+        })
+        .collect::<Option<_>>()?;
+    let (clip, mut underlay) = underlay(id, &facets)?;
     underlay.extend(faces.iter().cloned());
     Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
 }

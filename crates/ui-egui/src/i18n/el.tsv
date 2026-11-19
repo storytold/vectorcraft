@@ -477,6 +477,10 @@ font-technology	Variable	Μεταβλητές
 	Cusp	Ακίδα
 	Straight segment	Ευθύ τμήμα
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
+	Show Radii	Εμφάνιση ακτίνων
+	Show Diameter	Εμφάνιση διαμέτρου
+	Anchors at Standard Positions	Σημεία αγκύρωσης σε τυπικές θέσεις
+	Third Point by Dragging	Τρίτο σημείο με σύρσιμο
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση
@@ -565,9 +569,14 @@ font-technology	Variable	Μεταβλητές
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Προβολή τροχού
 	Box View	Προβολή τετραγώνου
+	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
+	Show Document Colors	Εμφάνιση χρωμάτων εγγράφου
+	Document Colors	Χρώματα εγγράφου
+	Selection Colors	Χρώματα επιλογής
+@plural	Used {n} time|Used {n} times	Χρησιμοποιείται {n} φορά|Χρησιμοποιείται {n} φορές
 	Show Harmony	Εμφάνιση αρμονίας
 	Harmony Rule	Κανόνας χρωματικής αρμονίας
 	Harmony color	Χρώμα αρμονίας
@@ -1816,6 +1825,10 @@ font-technology	Variable	Μεταβλητές
 	Rename Preset	Μετονομασία προεπιλογής
 	Save Image Trace Preset	Αποθήκευση προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
 	Delete Image Trace Preset	Διαγραφή προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
+	Tracing Presets…	Προεπιλογές ανίχνευσης περιγραμμάτων…
+	Import Image Trace Presets	Εισαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Export Image Trace Presets	Εξαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Replace the saved presets that have these names?	Αντικατάσταση των αποθηκευμένων προεπιλογών με αυτά τα ονόματα;
 	Image Trace Presets	Προεπιλογές ανίχνευσης περιγραμμάτων εικόνας
 	Image:	Εικόνα:
 	Images:	Εικόνες:
@@ -2167,6 +2180,13 @@ font-technology	Variable	Μεταβλητές
 	Pen Tool	Πένα (Pen Tool)
 	Quick Pen Tool	Εργαλείο γρήγορης πένας
 	Quick Pen	Γρήγορη πένα
+	Quick Pen Toolbar	Γραμμή εργαλείων γρήγορης πένας
+	Continuous Arc	Συνεχές τόξο
+	Sharp Corner Arc	Τόξο με αιχμηρή γωνία
+	Flip Arc	Αναστροφή τόξου
+	Hide Toolbar	Απόκρυψη γραμμής εργαλείων
+	Pin Toolbar Position	Σταθεροποίηση θέσης γραμμής εργαλείων
+	Reset Toolbar Position	Επαναφορά θέσης γραμμής εργαλείων
 	Pencil	Μολύβι
 	Pencil Tool	Μολύβι (Pencil Tool)
 	Percent:	Ποσοστό:
@@ -4067,6 +4087,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit Arrowheads	Επεξεργασία αιχμών βελών
 	Edit Arrowheads…	Επεξεργασία αιχμών βελών…
 	Reload Arrowheads	Επαναφόρτωση αιχμών βελών
+	Bevels	Λοξοτμήσεις
+	Edit Bevels	Επεξεργασία λοξοτμήσεων
+	Edit Bevels…	Επεξεργασία λοξοτμήσεων…
+	{name} (document)	{name} (έγγραφο)
+	Reload Bevels	Επαναφόρτωση λοξοτμήσεων
 	Reset Rotate View	Επαναφορά περιστροφής προβολής
 	Rotate View to Selection	Περιστροφή προβολής ως προς την επιλογή
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
@@ -4392,6 +4417,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
 	Type to search commands, tools, panels and effects	Πληκτρολογήστε για αναζήτηση εντολών, εργαλείων, πλαισίων και εφέ
+	Clear Recent Commands	Εκκαθάριση πρόσφατων εντολών
 	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
@@ -6235,7 +6261,10 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	το `render` πρέπει να είναι αντικείμενο που περιέχει μόνο `mode`, με τιμή shaded ή wireframe
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
-@msg	bevel must be none or one of {_1}	το bevel πρέπει να είναι none ή ένα από τα {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	το bevel πρέπει να είναι none, ένα από τα {_1} ή custom με {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	το bevel custom χρειάζεται το {BEVEL_PROFILE}, τα σημεία της λοξότμησης
+@msg	{BEVEL_NAME} must be a string	το {BEVEL_NAME} πρέπει να είναι συμβολοσειρά
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	το {BEVEL_PROFILE} πρέπει να έχει 2 έως {most} σημεία [x, y], κάθε αναλογία μεταξύ 0 και 1, από [0, 0] (η ακμή της ακραίας όψης) έως [1, 1] (το πλευρικό τοίχωμα)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: δεν μπορούν να δημιουργηθούν στερεά από αυτό το σχέδιο· οι παρουσίες συμβόλων, οι αναμείξεις και οι ομάδες αποκοπής του περιέχουν πάρα πολλά αντικείμενα
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: δεν μπορεί να δημιουργηθεί στερεό από την παρουσία του συμβόλου «{symbol}»· το σχέδιο του συμβόλου δεν είναι διαθέσιμο
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: η διαδρομή αποκοπής είναι πολύ σύνθετη για να κόψει το σχέδιο
@@ -6261,8 +6290,10 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	`{GRAPHICS}` face must be front, back or side	το face του `{GRAPHICS}` πρέπει να είναι front, back ή side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση, Περιστροφή γύρω από άξονα και Φούσκωμα
 @msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	Inflate maps graphics onto its front and back, not onto a side	Το Φούσκωμα αντιστοιχίζει τα γραφικά στην μπροστινή και την πίσω όψη, όχι σε πλευρική επιφάνεια
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	το αντικείμενο {_1}: η πίσω όψη του Φουσκώματος δέχεται γραφικά μόνο με ενεργά τα Και οι δύο πλευρές και Κλείσιμο άκρου
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη
@@ -8964,6 +8995,15 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Vector Packs	Διανυσματικά πακέτα
+	Compass Rose	Ρόδο πυξίδας
+	Botanical Sprig	Βοτανικό κλαδάκι
+	Facet Diamond	Πολυεδρικό διαμάντι
+	Tide Crest	Κορυφή κύματος
+	Leaf Vine	Κληματίδα φύλλων
+	Blossom Chain	Αλυσίδα λουλουδιών
+	Pennant Garland	Γιρλάντα σημαιών
+	Lantern String	Σειρά φαναριών
 	Orbit Lines	Τροχιακές γραμμές
 	Petal Garland	Γιρλάντα πετάλων
 	Lattice Braid	Πλεξούδα πλέγματος

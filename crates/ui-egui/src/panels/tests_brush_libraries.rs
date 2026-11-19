@@ -199,6 +199,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("bristle-brushes"),
             json!("paint"),
             json!("pattern-borders"),
+            json!("decorative"),
             json!("scatter-shapes"),
             json!("stipple"),
             json!("game-trails"),
@@ -208,7 +209,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("engraving"),
             json!("arrows"),
             json!("image-brush"),
-            json!("artistic")
+            json!("artistic"),
+            json!("vector-packs")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
@@ -249,6 +251,23 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     click(&mut app, &ctx, "Orbit Lines", Modifiers::NONE, 3.0);
     assert!(has(&app, "Orbit Lines") && !has(&app, "Facet Sweep"));
     assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Vector Packs"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("vector-packs"), Some(4)));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Compass Rose", Modifiers::NONE, 4.0);
+    assert!(has(&app, "Compass Rose") && !has(&app, "Facet Diamond"));
+    assert_eq!(undo_len(&app), undo + 1);
+    // Without brushes there is nothing to save.
+    let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
+    app.run("brush.delete", json!({ "names": all })).unwrap();
+    let entries = crate::menus::menu_entries(&app);
+    assert!(entries.iter().any(|e| under(e) && e.command.as_deref() == Some("ui.saveBrushLibrary") && !e.enabled));
+}
+
+#[test]
+fn pressure_decorative_paint_and_image_libraries_add_a_brush_in_one_step() {
+    let mut app = app();
+    let ctx = context();
     let r = app.run("window.brushLibrary", json!({"library": "Pressure Sensitive"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("pressure-sensitive"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
@@ -260,11 +279,22 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
         app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
         Some("Flex Ribbon")
     );
+    let r = app.run("window.brushLibrary", json!({"library": "Decorative"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("decorative"), Some(4)));
+    let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Leaf Vine", Modifiers::NONE, 5.0);
+    assert!(has(&app, "Leaf Vine") && !has(&app, "Lantern String"));
+    assert_eq!(undo_len(&app), undo + 1);
+    assert_eq!(
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
+        Some("Leaf Vine")
+    );
     let r = app.run("window.brushLibrary", json!({"library": "Paint"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("paint"), Some(4)));
     let path = app.run("shape.line", json!({"x1": 10, "y1": 140, "x2": 180, "y2": 140})).unwrap()["id"].as_u64().unwrap();
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 5.0);
+    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 6.0);
     assert!(has(&app, "Flat Sweep") && !has(&app, "Dry Drag"));
     assert_eq!(undo_len(&app), undo + 1);
     assert_eq!(
@@ -274,14 +304,9 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
     let undo = undo_len(&app);
-    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 6.0);
+    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 8.0);
     assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
     assert_eq!(undo_len(&app), undo + 1);
-    // Without brushes there is nothing to save.
-    let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
-    app.run("brush.delete", json!({ "names": all })).unwrap();
-    let entries = crate::menus::menu_entries(&app);
-    assert!(entries.iter().any(|e| under(e) && e.command.as_deref() == Some("ui.saveBrushLibrary") && !e.enabled));
 }
 
 #[test]

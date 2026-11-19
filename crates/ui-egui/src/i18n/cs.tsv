@@ -831,9 +831,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Zobrazení kola
 	Box View	Zobrazení čtverce
+	Show Out-of-Gamut Colors	Zobrazit barvy mimo gamut
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Document Colors	Zobrazit barvy dokumentu
+	Document Colors	Barvy dokumentu
+	Selection Colors	Barvy výběru
+@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	Show Harmony	Zobrazit harmonii
 	Harmony Rule	Pravidlo harmonie
 	Harmony color	Barva harmonie
@@ -2125,6 +2130,10 @@ digits	Malayalam	Malajálamské
 	Rename Preset	Přejmenovat přednastavení
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
+	Tracing Presets…	Přednastavení vektorizace…
+	Import Image Trace Presets	Importovat přednastavení vektorizace obrazu
+	Export Image Trace Presets	Exportovat přednastavení vektorizace obrazu
+	Replace the saved presets that have these names?	Nahradit uložená přednastavení s těmito názvy?
 	Method:	Metoda:
 	Pad	Prodloužit
 	Repeats	Počet opakování
@@ -4317,6 +4326,13 @@ theme	Appearance	Motiv
 	Pen Tool	Nástroj Pero
 	Quick Pen Tool	Nástroj Rychlé pero
 	Quick Pen	Rychlé pero
+	Quick Pen Toolbar	Panel nástrojů rychlého pera
+	Continuous Arc	Plynulý oblouk
+	Sharp Corner Arc	Oblouk s ostrým rohem
+	Flip Arc	Překlopit oblouk
+	Hide Toolbar	Skrýt panel nástrojů
+	Pin Toolbar Position	Připnout polohu panelu nástrojů
+	Reset Toolbar Position	Obnovit polohu panelu nástrojů
 	Picas	Pica
 	Portuguese	Portugalština
 	Preserve Appearance and Overprints	Zachovat vzhled a přetisky
@@ -4432,6 +4448,11 @@ theme	Appearance	Motiv
 	Edit Arrowheads	Upravit šipky
 	Edit Arrowheads…	Upravit šipky…
 	Reload Arrowheads	Znovu načíst šipky
+	Bevels	Zkosení
+	Edit Bevels	Upravit zkosení
+	Edit Bevels…	Upravit zkosení…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Znovu načíst zkosení
 	Stroke Options	Možnosti tahu
 	Width Profiles	Profily šířky
 	Apply Graphic Style	Použít grafický styl
@@ -4758,6 +4779,7 @@ font-technology	Variable	Variabilní
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
 	Type to search commands, tools, panels and effects	Pište pro hledání příkazů, nástrojů, panelů a efektů
+	Clear Recent Commands	Vymazat seznam nedávných příkazů
 	Dashed Line	Čárkovaná čára
 	Panel menu	Nabídka panelu
 	Unembed…	Zrušit vložení…
@@ -4962,6 +4984,10 @@ font-technology	Variable	Variabilní
 	Cusp	Hrot
 	Straight segment	Přímý segment
 	Circle too large	Kruh je příliš velký
+	Show Radii	Zobrazit poloměry
+	Show Diameter	Zobrazit průměr
+	Anchors at Standard Positions	Kotevní body ve standardních polohách
+	Third Point by Dragging	Třetí bod tažením
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama
@@ -6852,7 +6878,10 @@ mark-style	Japanese	Japonské
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musí být objekt obsahující pouze `mode` s hodnotou shaded nebo wireframe
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
-@msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel musí být none, jedno z {_1} nebo custom s {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom vyžaduje {BEVEL_PROFILE}, body zkosení
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} musí být řetězec
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} musí mít 2 až {most} bodů [x, y], každý podíl mezi 0 a 1, od [0, 0] (hrana čelní plochy) do [1, 1] (boční stěna)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nemůže vytvořit těleso z instance symbolu „{symbol}“: kresba symbolu není k dispozici
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ořezová cesta je příliš složitá na oříznutí kresby
@@ -6878,8 +6907,10 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafika se mapuje na typy objektu Rovina, Vysunutí, Rotační těleso a Nafouknutí
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nafouknutí mapuje grafiku na přední a zadní stranu, ne na bok
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekt {_1}: zadní strana Nafouknutí přijímá grafiku jen se zapnutými volbami Obě strany a Uzávěr
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
@@ -10815,6 +10846,15 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Vector Packs	Vektorové balíčky
+	Compass Rose	Směrová růžice
+	Botanical Sprig	Botanická větvička
+	Facet Diamond	Fazetový diamant
+	Tide Crest	Hřeben vlny
+	Leaf Vine	Listová liána
+	Blossom Chain	Květinový řetěz
+	Pennant Garland	Girlanda praporků
+	Lantern String	Řetěz luceren
 	Orbit Lines	Orbitální čáry
 	Petal Garland	Okvětní girlanda
 	Lattice Braid	Mřížkový cop

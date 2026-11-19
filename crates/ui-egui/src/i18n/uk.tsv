@@ -503,6 +503,11 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	Show Radii	Показати радіуси
+	Show Diameter	Показати діаметр
+	Anchors at Standard Positions	Опорні точки в стандартних позиціях
+	Third Point by Dragging	Третя точка перетягуванням
+	Gray	Сірий
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -606,9 +611,14 @@ font-technology	Variable	Варіативні
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вигляд «Коло»
 	Box View	Вигляд «Квадрат»
+	Show Out-of-Gamut Colors	Показати кольори поза колірним охопленням
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії
@@ -1940,6 +1950,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2839,6 +2853,13 @@ file-filter	Templates	Шаблони
 	Pen Tool	Інструмент «Перо»
 	Quick Pen Tool	Інструмент «Швидке перо»
 	Quick Pen	Швидке перо
+	Quick Pen Toolbar	Панель швидкого пера
+	Continuous Arc	Неперервна дуга
+	Sharp Corner Arc	Дуга з гострим кутом
+	Flip Arc	Відобразити дугу
+	Hide Toolbar	Сховати панель інструментів
+	Pin Toolbar Position	Закріпити положення панелі інструментів
+	Reset Toolbar Position	Скинути положення панелі інструментів
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -3286,6 +3307,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редагувати стрілки
 	Edit Arrowheads…	Редагувати стрілки…
 	Reload Arrowheads	Перезавантажити стрілки
+	Bevels	Фаски
+	Edit Bevels	Редагувати фаски
+	Edit Bevels…	Редагувати фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Перезавантажити фаски
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
 	Rotate View to Selection	Повернути вид за виділенням
@@ -3733,6 +3759,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
 	Type to search commands, tools, panels and effects	Почніть вводити для пошуку команд, інструментів, панелей та ефектів
+	Clear Recent Commands	Очистити список нещодавніх команд
 	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
@@ -6445,7 +6472,10 @@ lighting	Light	Світло
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
-@msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel має бути none, одним з: {_1}, або custom з {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom потрібен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} має бути рядком
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} має містити від 2 до {most} точок [x, y], кожна частка від 0 до 1, від [0, 0] (край торця) до [1, 1] (бічна стінка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: не вдається побудувати тіло з екземпляра символу «{symbol}»: ілюстрація символу недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: відсічний контур надто складний, щоб обрізати ним ілюстрацію
@@ -6471,8 +6501,10 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання», «Обертання» та «Надування»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надування» наносить графіку на передній і задній боки, а не на бічну поверхню
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	об’єкт {_1}: задній бік «Надування» приймає графіку лише з увімкненими параметрами «З обох боків» і «Торці»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
@@ -10466,6 +10498,15 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Vector Packs	Векторні набори
+	Compass Rose	Роза вітрів
+	Botanical Sprig	Ботанічна гілочка
+	Facet Diamond	Гранований діамант
+	Tide Crest	Гребінь хвилі
+	Leaf Vine	Листяна лоза
+	Blossom Chain	Квітковий ланцюжок
+	Pennant Garland	Гірлянда прапорців
+	Lantern String	Ланцюжок ліхтариків
 	Orbit Lines	Орбітальні лінії
 	Petal Garland	Гірлянда пелюсток
 	Lattice Braid	Ґратчасте плетіння
