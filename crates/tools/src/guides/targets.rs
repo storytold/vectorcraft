@@ -31,6 +31,9 @@ impl Kind {
     }
 }
 
+/// A direct scale contact: its factor, point, target kind and priority.
+type ScaleContact = (f64, Point, Kind, u8);
+
 /// Snap targets gathered from the document (excluding the objects being edited).
 #[derive(Default)]
 pub struct Targets {
@@ -1805,12 +1808,7 @@ impl Targets {
     }
 
     /// Direct scale contacts in priority order: anchors/centres, then stroke contours.
-    fn scale_contact_candidates(
-        &self,
-        probes: &[(Point, Vec2, Point)],
-        tol: f64,
-        valid: impl Fn(f64) -> bool,
-    ) -> Vec<[Option<(f64, Point, Kind, u8)>; 2]> {
+    fn scale_contact_candidates(&self, probes: &[(Point, Vec2, Point)], tol: f64, valid: impl Fn(f64) -> bool) -> Vec<[Option<ScaleContact>; 2]> {
         // The handle and both endpoints compete in one ranking. Paint on any of them
         // opens feasible-anchor search on all of them, not just the painted probe.
         let strokes: Vec<_> = probes

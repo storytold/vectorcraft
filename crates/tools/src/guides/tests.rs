@@ -2038,9 +2038,9 @@ fn review_597702_bbox_uses_feasible_anchor_when_only_endpoint_has_paint() {
         assert_eq!(labels(&on.1), labels(&off.1));
         assert!(!review_597185_stroke_label(&on.1));
     }
-    let paint = review_597702_bbox_document(Some(3.25), &[]);
-    review_597702_bbox_endpoint_paint(&paint);
-    let ordinary = review_597185_scale(&paint, true, Handle::Right, raw);
+    let painted_document = review_597702_bbox_document(Some(3.25), &[]);
+    review_597702_bbox_endpoint_paint(&painted_document);
+    let ordinary = review_597185_scale(&painted_document, true, Handle::Right, raw);
     assert!(
         ordinary.0.distance(Point::new(3.25, 10.0)) < 1e-7,
         "CONTROL: this real short stroke also supplies its ordinary feasible legacy center: {ordinary:?}"
