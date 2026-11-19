@@ -730,7 +730,7 @@ color parameters of the other commands still refuse `#rrggbbaa` and `#rgba`.
 `color.format {"color": "#336699", "opacity": 50, "notation": "rgb"}` answers `{"text": "rgb(51 102 153 / 50%)"}`.
 `notation` is `hex` (`#336699`), `hexAlpha` (`#33669980`, and `#336699ff` at 100 % or without `opacity`), `rgb`, `hsl`
 (`hsl(210 50% 40% / 50%)`), `oklch` (`oklch(49.93% 0.0987 250.43 / 50%)`) or `cmyk` (`C=87 M=61 Y=19 K=0` with the
-default color settings). The CSS forms are space-separated and add ` / opacity%` when the opacity is under 100;
+default color settings). The CSS forms are space-separated and add ` / opacity%` when the opacity, rounded to two decimal places, is under 100 (`99.999` writes no suffix);
 `hex` and `cmyk` leave the opacity out. Every notation but `cmyk` writes the working RGB numbers, the same numbers
 the Color panel's hex field shows, with lowercase hex digits; `oklch` is an error while the working RGB space is not
 sRGB. `hsl()` and `oklch()` give their numbers to two decimal places (chroma to four), and `oklch()` takes up to two
