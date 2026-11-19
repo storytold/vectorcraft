@@ -5,9 +5,6 @@
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Rect};
 
-/// Largest EPSI bitmap side read (pixels).
-const MAX_EPSI: usize = 8192;
-
 /// A preview's document and how the user is told about it.
 pub(super) struct Preview {
     pub document: Document,
@@ -90,40 +87,7 @@ fn metafile_doc(wmf: &[u8], frame: Rect) -> Option<Document> {
 /// The EPSI preview in `ps`'s comments (`%%BeginPreview: width height depth lines`, hex rows,
 /// 0 white and the largest value black).
 fn epsi(ps: &[u8]) -> Option<image::RgbaImage> {
-    let text = String::from_utf8_lossy(ps);
-    let mut lines = text.lines();
-    let head = lines.find_map(|l| l.strip_prefix("%%BeginPreview:"))?;
-    let n: Vec<usize> = head.split_whitespace().map_while(|w| w.parse().ok()).collect();
-    let [w, h, depth, ..] = n[..] else { return None };
-    if !(1..=MAX_EPSI).contains(&w) || !(1..=MAX_EPSI).contains(&h) || ![1, 2, 4, 8].contains(&depth) {
-        return None;
-    }
-    let row = (w * depth).div_ceil(8);
-    let mut hex = Vec::with_capacity((row * h * 2).min(ps.len()));
-    for l in lines {
-        if l.starts_with("%%EndPreview") || hex.len() >= row * h * 2 {
-            break;
-        }
-        hex.extend(l.strip_prefix('%')?.bytes().filter(u8::is_ascii_hexdigit));
-    }
-    hex.truncate(row * h * 2);
-    // A trailing half byte would decode padded with zero: the preview is cut short, so none.
-    if hex.len() % 2 != 0 {
-        return None;
-    }
-    let bytes = super::lex::hex_decode(&hex)?;
-    // A preview with its samples missing is none, not a blank image of the size it claims.
-    if bytes.len() < row * h {
-        return None;
-    }
-    let max = (1u32 << depth) - 1;
-    let mut img = image::RgbaImage::new(w as u32, h as u32);
-    for (x, y, px) in img.enumerate_pixels_mut() {
-        let bit = y as usize * row * 8 + x as usize * depth;
-        let byte = u32::from(bytes.get(bit / 8).copied().unwrap_or(0));
-        let v = (byte >> (8 - depth - bit % 8)) & max;
-        let grey = (255 - v * 255 / max) as u8;
-        *px = image::Rgba([grey, grey, grey, 255]);
-    }
-    Some(img)
+    let bitmap = craft_eps::epsi(ps)?;
+    let rgba = bitmap.gray.into_iter().flat_map(|g| [g, g, g, 255]).collect();
+    image::RgbaImage::from_raw(bitmap.width, bitmap.height, rgba)
 }
