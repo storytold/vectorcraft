@@ -3065,8 +3065,10 @@ fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
         Some(vectorcraft_geom::Shape::bounding_box(path))
     };
     let mut tool = GestureTool::new("paintbrush");
-    let at =
-        |rotation| PointerEvent { pen: Some(PenPose { tilt: Some([30.0, 0.0]), rotation }), ..PointerEvent::new(PointerKind::Move, 100.0, 50.0) };
+    let at = |rotation| PointerEvent {
+        pen: Some(PenPose { tilt: Some([30.0, 0.0]), rotation, wheel: None }),
+        ..PointerEvent::new(PointerKind::Move, 100.0, 50.0)
+    };
     assert!(bounds(&tool, &view).is_none());
     tool.pointer(&view, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
     assert!(bounds(&tool, &view).is_none(), "mouse");
@@ -3199,7 +3201,7 @@ fn the_eraser_tip_follows_its_variation_modes() {
             assert_eq!(t.check_option(k, &json!(mode.id())), Ok(()), "{k} {mode:?}");
         }
     }
-    let modes = "must be one of `fixed`, `random`, `pressure`, `tilt`, `bearing`, `rotation`";
+    let modes = "must be one of `fixed`, `random`, `pressure`, `tilt`, `bearing`, `rotation`, `stylusWheel`";
     assert_eq!(t.check_option("angleMode", &json!("wheel")), Err(format!("`angleMode` {modes}")));
     assert_eq!(t.check_option("angleVariation", &json!(181)), Err("`angleVariation` must be a number from 0 to 180".into()));
     assert_eq!(t.check_option("roundnessVariation", &json!(500)), Err("`roundnessVariation` must be a number from 0 to 100".into()));

@@ -1125,7 +1125,7 @@ impl GestureTool {
             let Some(name) = vectorcraft_brush::current(cx.doc) else { return vec![] };
             let Some(brush) = vectorcraft_brush::find(cx.doc, &name) else { return vec![] };
             let BrushKind::Bristle(bristle) = brush.kind else { return vec![] };
-            let [pressure, tilt, bearing, rotation] = super::pen_controls(pressure, Some(pose), super::pen_bearing(pose));
+            let [pressure, tilt, bearing, rotation, _] = super::pen_controls(pressure, Some(pose), super::pen_bearing(pose));
             let size = bristle.size.max(0.1) * cx.paint.stroke_width.max(0.0) * (0.5 + pressure) * (1.25 - 0.5 * tilt);
             if size <= 0.0 {
                 return vec![];
