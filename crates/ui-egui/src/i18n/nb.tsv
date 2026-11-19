@@ -296,7 +296,7 @@
 	Arc Segment Tool Options	Valg for buesegmentverktøy
 	Arc Tool	Bueverktøy
 	Arc Upper…	Øvre bue…
-	Arch…	Bue…
+	Arch…	Boge…
 	Arc…	Bue…
 	Area	Område
 	Area / Path Type	Område / banetype
@@ -1194,7 +1194,7 @@
 	Display name	Visningsnavn
 	Distance	Avstand
 	Distance:	Avstand:
-	Distort	Forvreng
+	Distort	Forvridning
 	Distort & Transform	Forvreng og transformer
 	Distort Appearance	Forvreng utseende
 	Distort Linear Gradients	Forvreng lineære gradienter
@@ -2182,7 +2182,7 @@
 	JavaScript:	JavaScript:
 	Join	Slå sammen
 	Join Our Discord	Bli med i vår Discord
-	Join Point Text	Slå sammen punkttekst
+	Join Point Text	Føy sammen punkttekst
 	Join Tool	Sammenføyingsverktøy
 	Join our Discord	Bli med i vår Discord
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Bli med i ArtCraft-fellesskapet på Discord (discord.gg/artcraft)
@@ -4399,7 +4399,7 @@
 	Visibility	Synlighet
 	W:	V:
 	Warm	Varm
-	Warp	Forvreng
+	Warp	Forvrengning
 	Water Paper	Vått papir
 	Watercolor	Akvarell
 	Wave…	Bølge…
@@ -5310,7 +5310,7 @@ swatch	[Registration]	[Passmärke]
 @msg	Switch x/y is for scatter graphs	Växla x/y gäller spridningsdiagram
 @msg	Text options: {e}	Textalternativ: {e}
 @msg	`align` is start, center or end	`align` er start, center eller end
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` må være en array av par [delbana, ankarpunkt]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` må være en array av [subpath, anchor]-par
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` må liste ankarpunktsindex (0, 1, 2…), ikke {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` må liste ankarpunktsindex (0, 1, 2…), ikke {v}
 @msg	`artboards` must be a list of artboard indices	`artboards` må være en liste med ritytsindex
@@ -5885,7 +5885,7 @@ swatch	[Registration]	[Passmärke]
 @msg	instruction budget	instruktionsbudget
 @msg	invalid `color`	ugyldig `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	ugyldig ankarindex {v}: ett icke-negativt heltall forventet
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	ugyldig ankarreferens {v}: [delbana, ankare] forventet
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ugyldig anchor-referanse {v}: forventet [subpath, anchor]
 @msg	invalid angle	ugyldig vinkel
 @msg	invalid brush: {e}	ugyldig pensel: {e}
 @msg	invalid color	ugyldig farge
@@ -5974,7 +5974,7 @@ swatch	[Registration]	[Passmärke]
 @msg	missing `{k}`	`{k}` mangler
 @msg	missing anchor	ankare mangler
 @msg	missing anchors	ankare mangler
-@msg	missing anchors [[subpath, anchor]…]	ankare mangler [[delbana, ankare]…]
+@msg	missing anchors [[subpath, anchor]…]	ankere mangler [[subpath, anchor]…]
 @msg	missing array `{key}`	arrayen `{key}` mangler
 @msg	missing case	skiftläge mangler
 @msg	missing color	farge mangler
@@ -6836,3 +6836,16 @@ swatch	[Registration]	[Passmärke]
 	{v} names no layer or sublayer	{v} names no layer or sublayer
 @msg	`{key}` must be a number, not {v}	`{key}` må være et tall, ikke {v}
 @msg	invalid object id {value}: expected a non-negative integer	ugyldig objekt-id {value}: forventet et ikke-negativt heltall
+	Chinese Big 5	Kinesisk Big 5
+	Tile All Vertically	Flislegg alle loddrett
+	Anti-aliasing Method	Kantutjevningsmetode
+	Attributes Panel Options	Alternativer for Egenskaper-panelet
+	Painted and Sketched	Malt og skissert
+	Spot Color Objects	Direktefargeobjekter
+	TIFF (Black & White)	TIFF (svart-hvitt)
+	Tool Options	Verktøyalternativer
+	Use Monitor Profile for Canvas	Bruk skjermprofil for tegneflaten
+	View Artboard Contents Only	Vis bare innholdet i tegneflaten
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klikk for å legge til en tegneflate på denne siden; Alt-klikk for å duplisere tegneflaten med innholdet
+	built in	innebygd
+	Detach	Løsne
