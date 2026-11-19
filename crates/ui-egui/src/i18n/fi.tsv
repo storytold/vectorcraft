@@ -796,6 +796,8 @@
 	Contextual Task Bar	Kontekstuaalinen tehtäväpalkki
 	Pin Bar Position	Kiinnitä palkin sijainti
 	Reset Bar Position	Palauta palkin sijainti
+	Bar Actions	Palkin toiminnot
+	Reset Bar Actions	Palauta palkin toiminnot
 	Resize	Muuta kokoa
 	Tools	Työkalut
 	Toolbars	Työkalurivit
@@ -1503,6 +1505,10 @@ lighting	Light	Valo
 	Add Anchor Point Tool	Lisää ankkuripiste -työkalu
 	Anchor Point Tool	Ankkuripistetyökalu
 	Arc Tool	Kaarityökalu
+	Three-Point Arc Tool	Kolmen pisteen kaaren työkalu
+	Three-Point Arc	Kolmen pisteen kaari
+	Arc too large	Kaari on liian suuri
+	Third Point Sets Direction	Kolmas piste määrää suunnan
 	Area Graph Tool	Aluekaaviotyökalu
 	Area Type Tool	Aluetekstityökalu
 	Artboard Tool	Piirtoalustatyökalu
@@ -4365,6 +4371,7 @@ theme	Appearance	Ulkoasu
 	Add to Graphic Styles	Lisää grafiikkatyyleihin
 	Graphic Style Library	Grafiikkatyylikirjasto
 	Add Used Colors	Lisää käytetyt värit
+	Add Selected Colors	Lisää valitut värit
 	Delete Swatch	Poista värimalli
 	Duplicate Swatch	Monista värimalli
 	Merge Swatches	Yhdistä värimallit
@@ -4564,6 +4571,11 @@ axis	Both	Molemmat
 	Image	Kuva
 	Ink	Muste
 	Lab	Lab
+	OKLCH Sliders	OKLCH-liukusäätimet
+	HSL Sliders	HSL-liukusäätimet
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Suurin kroma, jonka sRGB sisältää tällä vaaleudella ja sävyllä
+	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 	Medium	Keskitaso
 	Name	Nimi
 	None	Ei mitään
@@ -4776,9 +4788,11 @@ font-technology	Variable	Muuttuvat
 	Edit type set in fonts that aren't available?	Muokataanko tekstiä, jonka fontit eivät ole käytettävissä?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA; asiakirjassa jo oleva teksti säilyttää oman kielensä.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA eikä [Normaali merkkityyli] määritä kieltä; asiakirjassa jo oleva teksti säilyttää oman kielensä.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana tavutetaan vain siihen kirjoitettujen yhdysmerkkien kohdalta tai ei lainkaan, jos niitä ei ole, kielestä ja kirjainkoosta riippumatta.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Työpöytäversiossa tämän kansion .wasm-laajennukset ladataan käynnistettäessä ja kun napsautat OK uuden kansion kanssa tässä, paitsi vikasietotilassa; verkkoversio ei lataa niitä.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normaali säilyttää kunkin laajennuksen omat rajat; Suuri-asetuksella laajennuksen suodin tai komento voi suorittaa vähintään 250 miljoonaa käskyä syötteensä käskyjen lisäksi. Aikaraja pysyy samana.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Kuinka monta käskyä laajennuksen objektisuotimen kukin suorituskerta saa käyttää; Suuri sallii enemmän kuin Normaali samalla 60 sekunnin rajalla. Raskaat suotimet säilyttävät oman budjettinsa.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Ensimmäinen työlevyvalinta: Startup, None tai kansiopolku; VectorCraft tallentaa sen, mutta ei vielä käytä työlevyjä.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Toinen työlevyvalinta: Startup, None tai kansiopolku; VectorCraft tallentaa sen, mutta ei vielä käytä työlevyjä.
 	How light or dark the interface is.	Kuinka vaalea tai tumma käyttöliittymä on.
@@ -4796,7 +4810,10 @@ font-technology	Variable	Muuttuvat
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Käyttöliittymän kieli; Automaattinen käyttää järjestelmän kieltä. Valintaikkuna vaihtaa kielen heti, kun valitset sellaisen.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animoitu zoomaus toimii vain, kun tämä on päällä; pois päältä Animoitu zoomaus on himmennetty eikä zoomausta animoida.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Rullalla zoomaus liukuu pehmeästi, ja Zoomaustyökalu zoomaa, kun vedät sivulle tai pidät sitä painettuna; pois päältä Zoomaustyökalu zoomaa alueeseen, jonka yli vedät.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Seuraavasta käynnistyksestä alkaen työpöytäversio näyttää piirtoalueen tämän tyyppisen grafiikkasuorittimen kautta; kuvitus piirretään joka tapauksessa suorittimella. Automaattinen suosii integroitua Windowsissa ja macOS:ssä. Verkkoversio ei käytä sitä.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Seuraavasta käynnistyksestä alkaen ikkuna näyttää jokaisen kuvan odottamatta näytön virkistystä, kun grafiikkaohjain sallii sen, enintään 240 kuvaa sekunnissa.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Seuraavasta käynnistyksestä alkaen työpöytäversio piirtää tämän tyyppisellä grafiikkasuorittimella; Automaattinen suosii näyttöä ohjaavaa. Verkkoversio ei käytä sitä.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Seuraavasta käynnistyksestä alkaen ikkuna näyttää kuvat odottamatta näytön virkistystä, enintään 240 sekunnissa; pois päältä näyttö tahdittaa ne. Käynnistettäessä asetettu esitystila ohittaa sen.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Kumoamisvaiheiden enimmäismäärä, jonka kukin asiakirja säilyttää; pienempi luku poistaa vanhimmat vaiheet, kun napsautat OK. Vaiheita voi poistua aiemmin, jos ne vievät liikaa muistia.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Näyttää kuvituksen muuttuvan vetäessäsi; pois päältä ääriviivat seuraavat vetoa ja kuvitus muuttuu, kun vapautat. Viivaimen apuviiva liikkuu aina vetäessäsi.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Montako työsäiettä piirtää kuvituksen; -1 käyttää yhden vähemmän kuin VectorCraftin käytettävissä olevia ytimiä, enintään 8, ja 0 ei yhtään. Verkkoversio ei käytä koskaan yhtään.
@@ -4823,7 +4840,10 @@ font-technology	Variable	Muuttuvat
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft tallentaa tämän valinnan, mutta Kopioi ja Leikkaa eivät vielä käytä vanhan vektorileikepöydän muotoa.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Säilytä polut tai Säilytä ulkoasu ja päällepainatukset vanhalle vektorileikepöydälle; VectorCraft tallentaa valinnan, mutta ei vielä käytä sitä.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Säilytä muotoilu säilyttää VectorCraftin tekstiobjektista kopioidun tekstin tyylit, kun se liitetään tekstiobjektiin; Säilytä pelkkä teksti antaa sille liittämiskohdan tyylin.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA eikä [Normaali merkkityyli] määritä kieltä; asiakirjassa jo oleva teksti säilyttää oman kielensä.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Näytä kaikki mustat syvämustina näyttää puhtaan CMYK-mustan (pelkkä musta muste 100 %:na) RGB-mustana piirtopinnalla; Näytä kaikki mustat tarkasti muuntaa sen työ-CMYK-väriavaruuden kautta.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Tulosta kaikki mustat syvämustina piirtää puhtaan CMYK-mustan RGB-mustana RGB- ja harmaasävyrasterivienneissä ja Tulosta bittikarttana -asetuksella; se ei muuta vektorivientejä, CMYK-JPEG-, -TIFF- ja -PSD-tiedostoja eikä muuta tulostusta.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Kosketusnäytöllä vaihtaa kosketustyötilaan; asetuksen poistaminen käytöstä tai kosketusnäytön katoaminen palauttaa työtilan, josta vaihdettiin.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Kahden sormen napautus piirtopinnalla kumoaa tai vaihtaa kosketustyötilassa valinta- ja piirtotyökalujen välillä, ja kolmen sormen napautus tekee uudelleen; kumpikaan ei toimi esitystilassa.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana tavutetaan vain siihen kirjoitettujen yhdysmerkkien kohdalta tai ei lainkaan, jos niitä ei ole, kirjainkoosta riippumatta; korealaisiin sanoihin ei tule tavuviivaa, eikä intialaisten kielten sanoja tavuteta merkkiryhmän sisältä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
@@ -5600,6 +5620,10 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	a guide has no curvature circle	apuviivalla ei ole kaarevuusympyrää
 @msg	the circle that matches the path there would reach past the canvas	ympyrä, joka vastaa polkua siinä kohdassa, ylittäisi kankaan
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	`at` must be "start" or "end"	`at` on oltava "start" tai "end"
+@msg	give exactly one of `through` and `toward`	anna täsmälleen yksi parametreista `through` ja `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	näihin pisteisiin ei sovi kaarta: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
+@msg	give `at` only with `toward`	anna `at` vain yhdessä parametrin `toward` kanssa
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
 @msg	no artboard {i} (0-based; the document has {_1})	ei piirtoalustaa {i} (0-pohjainen; asiakirjassa on {_1})
@@ -6974,6 +6998,8 @@ mark-style	Japanese	Japanilainen
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
 @msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` on oltava none, oklch tai hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
@@ -8964,6 +8990,16 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Orbit Lines	Kiertoradan viivat
+	Petal Garland	Terälehtiköynnös
+	Lattice Braid	Ristikkopunos
+	Facet Sweep	Särmikäs veto
+	Artistic Brushes	Taidesiveltimet
+	Paint	Maalaus
+	Flat Sweep	Tasainen veto
+	Dry Drag	Kuiva veto
+	Loaded Stroke	Runsas siveltimenveto
+	Fan Sweep	Viuhkaveto
 	Engraving	Kaiverrus
 	Fine Hatching	Hieno viivoitus
 	Dense Hatching	Tiheä viivoitus

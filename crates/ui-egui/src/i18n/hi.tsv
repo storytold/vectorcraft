@@ -255,6 +255,7 @@
 	Add to Symbols	सिंबल्स में जोड़ें
 	Add to the Current Shortcuts	वर्तमान शॉर्टकट में जोड़ें
 	Add Used Colors	उपयोग किए रंग जोड़ें
+	Add Selected Colors	सिलेक्टेड रंग जोड़ें
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
 	Plug-in Instruction Budget	प्लग-इन निर्देश बजट
@@ -397,6 +398,10 @@ antiAlias	Sharp	शार्प
 	Arc Lower…	निचला आर्क…
 	Arc Segment Tool Options	आर्क सेगमेंट टूल ऑप्शन्स
 	Arc Tool	आर्क टूल
+	Three-Point Arc Tool	थ्री-पॉइंट आर्क टूल
+	Three-Point Arc	थ्री-पॉइंट आर्क
+	Arc too large	आर्क बहुत बड़ा है
+	Third Point Sets Direction	तीसरा पॉइंट दिशा तय करता है
 	Arc Upper…	ऊपरी आर्क…
 	Arc…	आर्क…
 	Arch…	मेहराब…
@@ -2996,6 +3001,11 @@ arrowhead	Feather	पंख
 	Knife	चाकू
 	Knockout Group	नॉकआउट समूह
 	Lab	Lab
+	OKLCH Sliders	OKLCH स्लाइडर्स
+	HSL Sliders	HSL स्लाइडर्स
+	Chroma	क्रोमा
+	The largest chroma sRGB holds at this lightness and hue	इस लाइटनेस और ह्यू पर sRGB में आने वाला सबसे अधिक क्रोमा
+	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 	Lab Spot Colors	लैब स्पॉट रंग
 	Lab Spot Colors:	लैब स्पॉट रंग:
 	Lab Values	लैब मूल्य
@@ -4570,6 +4580,8 @@ arrowhead	Feather	पंख
 	Reset all Revolve settings to their defaults.	सभी रिवॉल्व सेटिंग्स डिफ़ॉल्ट पर रीसेट करें।
 	Reset Automation	स्वचालन रीसेट करें
 	Reset Bar Position	बार स्थिति रीसेट करें
+	Bar Actions	बार क्रियाएँ
+	Reset Bar Actions	बार क्रियाएँ रीसेट करें
 	Reset Bounding Box	बाउंडिंग बॉक्स रीसेट करें
 	Rotate Bounding Box	बाउंडिंग बॉक्स घुमाएँ
 	Rotate Bounding Box…	बाउंडिंग बॉक्स घुमाएँ…
@@ -4755,9 +4767,10 @@ arrowhead	Feather	पंख
 	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसकी भाषा या केस चाहे जो हो।
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और यहाँ नया फ़ोल्डर देकर ठीक है पर क्लिक करने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; वेब संस्करण उन्हें लोड नहीं करता।
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	सामान्य हर प्लग-इन की अपनी सीमाएँ रखता है; बड़ा के साथ, प्लग-इन फ़िल्टर या कमांड अपने इनपुट के निर्देशों के अलावा कम से कम 250 मिलियन निर्देश चला सकता है। समय सीमा वही रहती है।
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	प्लग-इन के ऑब्जेक्ट फ़िल्टर का हर रन कितने निर्देश इस्तेमाल कर सकता है; बड़ा सामान्य से अधिक की अनुमति देता है, 60 सेकंड की उसी सीमा के साथ। भारी फ़िल्टर अपना बजट रखते हैं।
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	पहला स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	दूसरा स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
 	How light or dark the interface is.	इंटरफ़ेस कितना हल्का या गहरा है।
@@ -4775,7 +4788,10 @@ arrowhead	Feather	पंख
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	इंटरफ़ेस की भाषा; स्वचालित सिस्टम की भाषा इस्तेमाल करता है। आप कोई भाषा चुनते ही डायलॉग उस भाषा में बदल जाता है।
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	एनिमेटेड ज़ूम केवल तभी काम करता है जब यह चालू हो; बंद होने पर, एनिमेटेड ज़ूम धुंधला हो जाता है और ज़ूम एनिमेट नहीं होता।
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	व्हील से ज़ूम सहजता से सरकता है, और ज़ूम टूल बगल में खींचने या दबाए रखने पर ज़ूम करता है; बंद होने पर, ज़ूम टूल उस क्षेत्र पर ज़ूम करता है जिस पर आप खींचते हैं।
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर के ज़रिए कैनवास दिखाता है; आर्टवर्क हमेशा CPU पर बनता है। स्वचालित Windows और macOS पर इंटीग्रेटेड प्रोसेसर को प्राथमिकता देता है। वेब संस्करण इसका उपयोग नहीं करता।
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	अगली शुरुआत से, जहाँ ग्राफ़िक्स ड्राइवर अनुमति देता है, विंडो डिस्प्ले के रीफ़्रेश की प्रतीक्षा किए बिना हर फ़्रेम दिखाती है, अधिकतम 240 फ़्रेम प्रति सेकंड।
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर से बनाता है; स्वचालित उस प्रोसेसर को प्राथमिकता देता है जो डिस्प्ले चलाता है। वेब संस्करण इसका उपयोग नहीं करता।
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	अगली शुरुआत से, विंडो डिस्प्ले रीफ़्रेश का इंतज़ार किए बिना फ़्रेम दिखाती है, एक सेकंड में अधिकतम 240; बंद होने पर गति डिस्प्ले तय करता है। शुरुआत पर सेट किया गया प्रेज़ेंट मोड प्राथमिकता रखता है।
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	हर दस्तावेज़ अधिकतम जितने पूर्ववत चरण रखता है; कम संख्या ठीक है पर क्लिक करने पर सबसे पुराने चरण हटा देती है। ज़्यादा मेमोरी लेने पर चरण पहले भी हट सकते हैं।
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	खींचते समय आर्टवर्क को बदलते हुए दिखाता है; बंद होने पर, रूपरेखाएँ खींचने के साथ चलती हैं और छोड़ने पर आर्टवर्क बदलता है। रूलर गाइड खींचते समय हमेशा चलती है।
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	कितने वर्कर थ्रेड आर्टवर्क बनाते हैं; -1 उन कोर से एक कम उपयोग करता है जिन्हें VectorCraft उपयोग कर सकता है, अधिकतम 8, और 0 एक भी नहीं। वेब संस्करण कभी कोई उपयोग नहीं करता।
@@ -4802,6 +4818,10 @@ arrowhead	Feather	पंख
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft यह विकल्प सेव करता है, लेकिन कॉपी करें और काटें अभी विरासत वेक्टर क्लिपबोर्ड फ़ॉर्मेट का उपयोग नहीं करते।
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	विरासत वेक्टर क्लिपबोर्ड के लिए “संरक्षित पाथ” (पाथ संरक्षित रखें) या “उपस्थिति और ओवरप्रिंट को संरक्षित करें”; VectorCraft विकल्प सेव करता है, पर अभी उसका उपयोग नहीं करता।
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	स्वरूपण रखना, VectorCraft के टेक्स्ट ऑब्जेक्ट से कॉपी किया टेक्स्ट टेक्स्ट ऑब्जेक्ट में पेस्ट करने पर उसकी शैलियाँ रखता है; प्लेन टेक्स्ट रखें उसे पेस्ट की जगह की शैली देता है।
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	सभी ब्लैक्स को रिच ब्लैक के रूप में प्रदर्शित करें, कैनवास पर शुद्ध CMYK ब्लैक (केवल 100% काली स्याही) को RGB ब्लैक के रूप में दिखाता है; सभी ब्लैक्स को सटीक रूप से प्रदर्शित करें उसे कार्य CMYK स्पेस के ज़रिए बदलता है।
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	सभी ब्लैक्स को रिच ब्लैक के रूप में आउटपुट करें, RGB और ग्रेस्केल रास्टर एक्सपोर्ट और बिटमैप के रूप में प्रिंट करें में शुद्ध CMYK ब्लैक को RGB ब्लैक के रूप में बनाता है; यह वेक्टर एक्सपोर्ट, CMYK JPEG, TIFF और PSD या अन्य प्रिंटिंग को नहीं बदलता।
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	टच स्क्रीन पर टच वर्कस्पेस पर बदलता है; यह विकल्प बंद करने या टच स्क्रीन न मिलने पर पिछले वर्कस्पेस पर लौट आता है।
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	कैनवास पर दो उँगलियों का टैप पूर्ववत करता है, या टच वर्कस्पेस में सिलेक्शन और ड्रॉइंग टूल के बीच बदलता है, और तीन उँगलियों का टैप फिर से करता है; प्रस्तुति मोड में दोनों काम नहीं करते।
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है और [सामान्य कैरेक्टर स्टाइल] कोई भाषा सेट नहीं करती, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसका केस चाहे जो हो; कोरियाई शब्दों में हाइफ़न नहीं लगता, और भारतीय भाषाओं के शब्द किसी अक्षर-समूह के भीतर नहीं टूटते।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
@@ -7054,6 +7074,8 @@ arrowhead	Feather	पंख
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` को grayscale, rgb, hsb, cmyk या websafe होना चाहिए
 @msg	`view` must be wheel or box	`view` को wheel या box होना चाहिए
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch या hsl होना चाहिए
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है
@@ -8296,6 +8318,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a guide has no curvature circle	गाइड का कोई वक्रता वृत्त नहीं होता
 @msg	the circle that matches the path there would reach past the canvas	वहाँ पाथ से मेल खाने वाला वृत्त कैनवास से बाहर चला जाएगा
 @msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
+@msg	`at` must be "start" or "end"	`at` को "start" या "end" होना चाहिए।
+@msg	give exactly one of `through` and `toward`	`through` और `toward` में से ठीक एक दें
+@msg	no arc fits these points: two are the same or all three lie on one line	इन पॉइंट्स पर कोई आर्क फ़िट नहीं होता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
+@msg	give `at` only with `toward`	`at` केवल `toward` के साथ दें
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -10338,6 +10364,16 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Orbit Lines	कक्षीय रेखाएँ
+	Petal Garland	पंखुड़ी माला
+	Lattice Braid	जाली चोटी
+	Facet Sweep	पहलूदार स्ट्रोक
+	Artistic Brushes	कलात्मक ब्रश
+	Paint	चित्रकारी
+	Flat Sweep	सपाट फेरा
+	Dry Drag	सूखा घिसाव
+	Loaded Stroke	गाढ़ा ब्रश स्ट्रोक
+	Fan Sweep	पंखे जैसा फेरा
 	Engraving	नक्काशी
 	Fine Hatching	बारीक रेखांकन
 	Dense Hatching	घना रेखांकन

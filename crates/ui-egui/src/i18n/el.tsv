@@ -120,6 +120,7 @@
 	Add to Selection	Προσθήκη στην επιλογή
 	Add to Swatches	Προσθήκη στα δείγματα χρωμάτων
 	Add Used Colors	Προσθήκη των χρησιμοποιημένων χρωμάτων
+	Add Selected Colors	Προσθήκη των επιλεγμένων χρωμάτων
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
 	Plug-in Instruction Budget	Προϋπολογισμός εντολών επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
@@ -216,6 +217,10 @@ font-technology	Variable	Μεταβλητές
 	Arc	Τόξο
 	Arc Lower…	Κάτω τόξο…
 	Arc Tool	Τόξο (Arc Tool)
+	Three-Point Arc Tool	Εργαλείο τόξου τριών σημείων
+	Three-Point Arc	Τόξο τριών σημείων
+	Arc too large	Το τόξο είναι πολύ μεγάλο
+	Third Point Sets Direction	Το τρίτο σημείο ορίζει την κατεύθυνση
 	Arc Upper…	Πάνω τόξο…
 	Arch…	Αψίδα…
 	Arc…	Τόξο…
@@ -605,6 +610,8 @@ font-technology	Variable	Μεταβλητές
 	Contextual Task Bar	Γραμμή εργασιών βάσει περιβάλλοντος
 	Pin Bar Position	Σταθεροποίηση θέσης γραμμής
 	Reset Bar Position	Επαναφορά θέσης γραμμής
+	Bar Actions	Ενέργειες γραμμής
+	Reset Bar Actions	Επαναφορά ενεργειών γραμμής
 	Resize	Αλλαγή μεγέθους
 	Contrast	Αντίθεση
 	Control	Έλεγχος
@@ -1928,6 +1935,11 @@ font-technology	Variable	Μεταβλητές
 	Knife	Μαχαίρι (Knife)
 	Knockout Group	Ομάδα διάτρησης
 	Lab	Lab
+	OKLCH Sliders	Ρυθμιστικά OKLCH
+	HSL Sliders	Ρυθμιστικά HSL
+	Chroma	Χρωματική ένταση
+	The largest chroma sRGB holds at this lightness and hue	Η μεγαλύτερη χρωματική ένταση που χωρά το sRGB σε αυτή τη φωτεινότητα και απόχρωση
+	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 	Lab Spot Colors:	Πλακάτα χρώματα Lab:
 	Lab Values	Τιμές Lab
 	Landscape	Οριζόντιος προσανατολισμός
@@ -4189,9 +4201,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit type set in fonts that aren't available?	Επεξεργασία κειμένου σε γραμματοσειρές που δεν είναι διαθέσιμες;
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Εμφανίζει στον καμβά τον αριθμό κάθε τομής σε ένα πλαίσιο πάνω αριστερά της· όταν είναι απενεργοποιημένο, τα περιγράμματα των τομών εξακολουθούν να εμφανίζονται.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Το χρώμα των περιγραμμάτων των τομών χρήστη και αντικειμένου και των πλαισίων με τους αριθμούς τους· οι αυτόματες τομές χρησιμοποιούν μια πιο αχνή απόχρωσή του.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ και το [Κανονικό στυλ χαρακτήρων] δεν ορίζει γλώσσα· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Σε παραγράφους με ενεργό τον Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά που έχουν πληκτρολογηθεί σε αυτήν ή πουθενά αν δεν έχει, ανεξάρτητα από τη γλώσσα ή τα πεζά-κεφαλαία της.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Στην έκδοση για υπολογιστή, τα πρόσθετα .wasm αυτού του φακέλου φορτώνονται κατά την εκκίνηση και όταν κάνετε κλικ στο Εντάξει με νέο φάκελο εδώ, εκτός από την Ασφαλή λειτουργία· η έκδοση web δεν τα φορτώνει.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Το Κανονική διατηρεί τα δικά όρια κάθε επέκτασης· με το Μεγάλο, ένα φίλτρο ή μια εντολή επέκτασης μπορεί να εκτελέσει τουλάχιστον 250 εκατομμύρια εντολές επιπλέον εκείνων για την είσοδό του. Το χρονικό όριο μένει το ίδιο.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Πόσες εντολές μπορεί να χρησιμοποιεί κάθε εκτέλεση φίλτρου αντικειμένων επέκτασης· το Μεγάλο επιτρέπει περισσότερες από το Κανονική, με το ίδιο όριο 60 δευτερολέπτων. Τα βαριά φίλτρα κρατούν το δικό τους όριο.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η πρώτη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Η δεύτερη επιλογή δίσκου προσωρινής αποθήκευσης: Startup, None ή διαδρομή φακέλου· το VectorCraft την αποθηκεύει, αλλά δεν χρησιμοποιεί ακόμη δίσκους προσωρινής αποθήκευσης.
 	How light or dark the interface is.	Πόσο φωτεινό ή σκοτεινό είναι το περιβάλλον χρήστη.
@@ -4209,7 +4223,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Η γλώσσα του περιβάλλοντος χρήστη· το Αυτόματα χρησιμοποιεί τη γλώσσα του συστήματος. Ο διάλογος αλλάζει γλώσσα μόλις επιλέξετε μία.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Η Κινούμενη μεγέθυνση λειτουργεί μόνο όσο αυτό είναι ενεργό· όταν είναι ανενεργό, η Κινούμενη μεγέθυνση είναι αχνή και η μεγέθυνση δεν κινείται.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Η μεγέθυνση με τον τροχό γλιστρά ομαλά, και το εργαλείο Μεγέθυνση μεγεθύνει καθώς σύρετε στο πλάι ή το κρατάτε πατημένο· όταν είναι ανενεργό, μεγεθύνει στην περιοχή που σύρετε.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Από την επόμενη εκκίνηση, η έκδοση για υπολογιστή εμφανίζει τον καμβά μέσω αυτού του είδους επεξεργαστή γραφικών· το έργο σχεδιάζεται πάντα στη CPU. Το Αυτόματο προτιμά τον ενσωματωμένο σε Windows και macOS. Η έκδοση web δεν το χρησιμοποιεί.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Από την επόμενη εκκίνηση, το παράθυρο εμφανίζει κάθε καρέ χωρίς να περιμένει την ανανέωση της οθόνης, όπου το επιτρέπει το πρόγραμμα οδήγησης γραφικών, έως 240 καρέ το δευτερόλεπτο.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Από την επόμενη εκκίνηση, η έκδοση για υπολογιστή σχεδιάζει με αυτό το είδος επεξεργαστή γραφικών· το Αυτόματο προτιμά αυτόν που οδηγεί την οθόνη. Η έκδοση web δεν το χρησιμοποιεί.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Από την επόμενη εκκίνηση, το παράθυρο δείχνει τα καρέ χωρίς αναμονή για ανανέωση της οθόνης, έως 240 το δευτερόλεπτο· ανενεργό, τα ρυθμίζει η οθόνη. Υπερισχύει η λειτουργία που ορίζεται στην εκκίνηση.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Τα περισσότερα βήματα αναίρεσης που κρατά κάθε έγγραφο· μικρότερος αριθμός αφαιρεί τα παλαιότερα βήματα όταν κάνετε κλικ στο Εντάξει. Βήματα μπορεί να φύγουν και νωρίτερα αν πιάνουν πολλή μνήμη.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Δείχνει το έργο να αλλάζει όσο σύρετε· όταν είναι ανενεργό, περιγράμματα ακολουθούν τη μεταφορά και το έργο αλλάζει όταν αφήσετε. Ένας οδηγός χάρακα κινείται πάντα όσο σύρετε.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Πόσα νήματα εργασίας σχεδιάζουν το έργο· το -1 χρησιμοποιεί ένα λιγότερο από τους πυρήνες που επιτρέπονται στο VectorCraft, έως 8, και το 0 κανένα. Η έκδοση web δεν χρησιμοποιεί ποτέ.
@@ -4236,7 +4253,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	Το VectorCraft αποθηκεύει αυτή την επιλογή, αλλά η Αντιγραφή και η Αποκοπή δεν χρησιμοποιούν ακόμη μορφή του πρόχειρου διανυσμάτων παλαιού τύπου.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Διατήρηση διαδρομών ή Διατήρηση εμφάνισης και υπερεκτυπώσεων για το πρόχειρο διανυσμάτων παλαιού τύπου· το VectorCraft αποθηκεύει την επιλογή αλλά δεν τη χρησιμοποιεί ακόμη.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Η Διατήρηση μορφοποίησης κρατά τα στυλ κειμένου από αντικείμενο κειμένου του VectorCraft όταν επικολλάται σε αντικείμενο κειμένου· η Διατήρηση απλού κειμένου του δίνει το στυλ του σημείου όπου καταλήγει.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Το νέο κείμενο παίρνει αυτήν τη γλώσσα όσο η γλώσσα στη Ρύθμιση εγγράφου είναι Αγγλικά: ΗΠΑ και το [Κανονικό στυλ χαρακτήρων] δεν ορίζει γλώσσα· το κείμενο που υπάρχει ήδη σε ένα έγγραφο κρατά τη δική του γλώσσα.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Η Εμφάνιση όλων των μαύρων ως πλούσιο μαύρο δείχνει το καθαρό μαύρο CMYK (μόνο μαύρο μελάνι στο 100%) ως μαύρο RGB στον καμβά· η Ακριβής απεικόνιση όλων των μαύρων το μετατρέπει μέσω του χώρου εργασίας CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Η Απόδοση όλων των μαύρων ως πλούσιο μαύρο σχεδιάζει το καθαρό μαύρο CMYK ως μαύρο RGB στις εξαγωγές raster RGB και κλίμακας του γκρι και με την Εκτύπωση ως bitmap· δεν αλλάζει τις διανυσματικές εξαγωγές, τα CMYK JPEG, TIFF και PSD ή την άλλη εκτύπωση.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Σε οθόνη αφής μεταβαίνει στον χώρο εργασίας αφής· η απενεργοποίηση ή η απώλεια της οθόνης αφής επαναφέρει τον χώρο εργασίας που υπήρχε πριν.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Το πάτημα με δύο δάχτυλα στον καμβά κάνει αναίρεση ή, στον χώρο εργασίας αφής, εναλλάσσει εργαλεία επιλογής και σχεδίασης, και το πάτημα με τρία δάχτυλα κάνει επανάληψη· κανένα δεν λειτουργεί στη λειτουργία παρουσίασης.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Με Συλλαβισμό, μια λέξη της λίστας χωρίζεται μόνο στα ενωτικά της ή πουθενά αν δεν έχει, με πεζά ή κεφαλαία· οι κορεατικές λέξεις δεν παίρνουν ενωτικό, οι λέξεις ινδικών γλωσσών δεν χωρίζονται μέσα σε ομάδα χαρακτήρων.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
@@ -5316,6 +5336,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a guide has no curvature circle	ένας οδηγός δεν έχει κύκλο καμπυλότητας
 @msg	the circle that matches the path there would reach past the canvas	ο κύκλος που ταιριάζει με τη διαδρομή εκεί θα υπερέβαινε τον καμβά
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	`at` must be "start" or "end"	το `at` πρέπει να είναι "start" ή "end"
+@msg	give exactly one of `through` and `toward`	δώστε ακριβώς ένα από τα `through` και `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	κανένα τόξο δεν ταιριάζει σε αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	give `at` only with `toward`	δώστε το `at` μόνο μαζί με το `toward`
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
 @msg	no artboard {i} (0-based; the document has {_1})	δεν υπάρχει πίνακας σχεδίασης {i} (αρίθμηση από 0· το έγγραφο περιέχει {_1})
@@ -6969,6 +6993,8 @@ effect	Points	Σημεία
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
 @msg	`view` must be wheel or box	το `view` πρέπει να είναι wheel ή box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
+@msg	`sliders` must be none, oklch or hsl	Το `sliders` πρέπει να είναι none, oklch ή hsl
+@msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
@@ -8881,6 +8907,16 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Orbit Lines	Τροχιακές γραμμές
+	Petal Garland	Γιρλάντα πετάλων
+	Lattice Braid	Πλεξούδα πλέγματος
+	Facet Sweep	Πολυεδρική πινελιά
+	Artistic Brushes	Καλλιτεχνικά πινέλα
+	Paint	Ζωγραφική
+	Flat Sweep	Επίπεδη πινελιά
+	Dry Drag	Στεγνό σύρσιμο
+	Loaded Stroke	Γεμάτη πινελιά
+	Fan Sweep	Βεντάλια
 	Engraving	Χαρακτική
 	Fine Hatching	Λεπτή διαγράμμιση
 	Dense Hatching	Πυκνή διαγράμμιση

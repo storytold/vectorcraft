@@ -140,6 +140,7 @@
 	Add to Selection	Agregar a la selección
 	Add to Swatches	Agregar a muestras
 	Add Used Colors	Agregar colores usados
+	Add Selected Colors	Agregar colores seleccionados
 	Additional Plug-ins Folder	Carpeta de plugins adicionales
 	Plug-in Instruction Budget	Presupuesto de instrucciones de plugins
 	Additional Fonts Folder	Carpeta de fuentes adicionales
@@ -237,6 +238,10 @@ font-technology	Variable	Variables
 	Arc	Arco
 	Arc Lower…	Arco inferior…
 	Arc Tool	Herramienta Arco
+	Three-Point Arc Tool	Herramienta Arco por tres puntos
+	Three-Point Arc	Arco por tres puntos
+	Arc too large	Arco demasiado grande
+	Third Point Sets Direction	El tercer punto indica la dirección
 	Arc Upper…	Arco superior…
 	Arch…	Arcada…
 	Arc…	Arco…
@@ -651,6 +656,8 @@ font-technology	Variable	Variables
 	Contextual Task Bar	Barra de tareas contextual
 	Pin Bar Position	Fijar posición de la barra
 	Reset Bar Position	Restablecer posición de la barra
+	Bar Actions	Acciones de la barra
+	Reset Bar Actions	Restablecer acciones de la barra
 	Resize	Cambiar tamaño
 	Contrast	Contraste
 	Control	Control
@@ -2032,6 +2039,11 @@ font-technology	Variable	Variables
 	Knife	Cuchilla
 	Knockout Group	Grupo de exclusión
 	Lab	Lab
+	OKLCH Sliders	Controles deslizantes OKLCH
+	HSL Sliders	Controles deslizantes HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	El croma más alto que admite sRGB con esta luminosidad y este tono
+	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
 	Lab Spot Colors:	Tintas planas Lab:
 	Lab Values	Valores Lab
 	Landscape	Horizontal
@@ -3372,9 +3384,11 @@ digits	Malayalam	Malayálam
 	Edit type set in fonts that aren't available?	¿Editar el texto en fuentes que no están disponibles?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Muestra en el lienzo el número de cada sector en un recuadro en su esquina superior izquierda; si está desactivado, los contornos de los sectores siguen visibles.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color de los contornos de los sectores de usuario y de objeto y de los recuadros con su número; los sectores automáticos usan un tono más apagado de ese color.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	El texto nuevo toma este idioma mientras el idioma de Ajustar documento sea Inglés: Estados Unidos; el texto que ya está en un documento conserva su idioma.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El texto nuevo toma este idioma mientras el idioma de Ajustar documento sea Inglés: Estados Unidos y [Estilo de carácter normal] no defina ninguno; el texto que ya está en un documento conserva su idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	En los párrafos con Separar con guiones activado, una palabra de la lista se divide solo en los guiones escritos en ella, o en ningún punto si no tiene, sea cual sea su idioma o uso de mayúsculas.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	En la versión de escritorio, los plugins .wasm de esta carpeta se cargan al iniciar y al hacer clic en Aceptar con una carpeta nueva aquí, salvo en Modo seguro; la versión web no los carga.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal mantiene los límites propios de cada plugin; con Grande, un filtro o un comando de un plugin puede ejecutar al menos 250 millones de instrucciones además de las de su entrada. El límite de tiempo no cambia.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Cuántas instrucciones puede usar cada ejecución de un filtro de objetos de un plugin; Grande permite más que Normal con el mismo límite de 60 segundos. Los filtros pesados conservan su propio presupuesto.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La primera opción de disco de memoria virtual: Startup, None o la ruta de una carpeta; VectorCraft la guarda, pero aún no usa discos de memoria virtual.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La segunda opción de disco de memoria virtual: Startup, None o la ruta de una carpeta; VectorCraft la guarda, pero aún no usa discos de memoria virtual.
 	How light or dark the interface is.	Lo clara u oscura que es la interfaz.
@@ -3392,7 +3406,10 @@ digits	Malayalam	Malayálam
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	El idioma de la interfaz; Auto usa el idioma del sistema. El cuadro de diálogo cambia de idioma en cuanto elige uno.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	El Zoom animado solo funciona mientras esto está activado; desactivado, el Zoom animado aparece atenuado y el zoom no se anima.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	El zoom con la rueda se desliza suavemente, y la Herramienta Zoom amplía mientras arrastra de lado o la mantiene pulsada; desactivado, la Herramienta Zoom amplía el área que arrastra.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	A partir del próximo inicio, la versión de escritorio muestra el lienzo a través de este tipo de procesador gráfico; la ilustración siempre se dibuja en la CPU. Automático prefiere el integrado en Windows y macOS. La versión web no lo usa.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	A partir del próximo inicio, la ventana muestra cada fotograma sin esperar la actualización de la pantalla cuando el controlador gráfico lo permite, con un máximo de 240 fotogramas por segundo.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A partir del próximo inicio, la versión de escritorio dibuja con este tipo de procesador gráfico; Automático prefiere el que controla la pantalla. La versión web no lo usa.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A partir del próximo inicio, la ventana muestra los fotogramas sin esperar a que la pantalla se actualice, como máximo 240 por segundo; desactivado, la pantalla marca el ritmo. Un modo de presentación definido al iniciar tiene prioridad.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	El máximo de pasos de deshacer que conserva cada documento; un número menor quita los pasos más antiguos al hacer clic en Aceptar. Los pasos también pueden irse antes si ocupan demasiada memoria.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Muestra cómo cambia el arte mientras arrastra; desactivado, los contornos siguen el arrastre y el arte cambia al soltar. Una guía de regla siempre se mueve mientras arrastra.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Cuántos hilos de trabajo dibujan el arte; -1 usa uno menos que los núcleos que VectorCraft puede usar, como máximo 8, y 0 ninguno. La versión web nunca usa ninguno.
@@ -3419,7 +3436,10 @@ digits	Malayalam	Malayálam
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft guarda esta opción, pero Copiar y Cortar aún no usan ningún formato de portapapeles vectorial heredado.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Conservar trazados o Conservar apariencia y sobreimpresiones para el portapapeles vectorial heredado; VectorCraft guarda la opción, pero aún no la usa.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Mantener formato conserva los estilos del texto copiado de un objeto de texto de VectorCraft al pegarlo en un objeto de texto; Mantener texto sin formato le da el estilo del lugar donde cae.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El texto nuevo toma este idioma mientras el idioma de Ajustar documento sea Inglés: Estados Unidos y [Estilo de carácter normal] no defina ninguno; el texto que ya está en un documento conserva su idioma.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Mostrar todos los negros como negro enriquecido muestra el negro CMYK puro (solo tinta negra al 100 %) como negro RGB en el lienzo; Mostrar todos los negros con precisión lo convierte mediante el espacio CMYK de trabajo.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Imprimir todos los negros como negro enriquecido dibuja el negro CMYK puro como negro RGB en las exportaciones ráster RGB y en escala de grises y con Imprimir como mapa de bits; no cambia las exportaciones vectoriales, los JPEG, TIFF y PSD CMYK ni otras impresiones.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	En una pantalla táctil, cambia al espacio de trabajo táctil; al desactivarlo o dejar de detectarse la pantalla táctil, vuelve al espacio de trabajo anterior al cambio.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un toque con dos dedos en el lienzo deshace o, en el espacio de trabajo táctil, alterna entre herramientas de selección y de dibujo, y un toque con tres dedos rehace; ninguno funciona en el modo de presentación.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	En los párrafos con Separar con guiones activado, una palabra de la lista se divide solo en los guiones escritos en ella, o en ningún punto si no tiene, sea cual sea su uso de mayúsculas; las palabras coreanas no llevan guion, y las palabras en lenguas indias no se dividen dentro de un grupo de caracteres.
 	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
@@ -5174,6 +5194,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` debe ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` debe ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` debe ser hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` debe ser none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre
@@ -5367,6 +5389,10 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	a guide has no curvature circle	una guía no tiene círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el círculo que coincide con el trazado en ese punto excedería el lienzo
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
+@msg	`at` must be "start" or "end"	`at` debe ser "start" o "end"
+@msg	give exactly one of `through` and `toward`	indique exactamente uno de `through` y `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ningún arco se ajusta a estos puntos: dos son iguales o los tres están en una misma línea
+@msg	give `at` only with `toward`	indique `at` solo junto con `toward`
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
 @msg	no artboard {i} (0-based; the document has {_1})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {_1})
@@ -10625,6 +10651,16 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Orbit Lines	Líneas orbitales
+	Petal Garland	Guirnalda de pétalos
+	Lattice Braid	Trenza reticular
+	Facet Sweep	Trazo facetado
+	Artistic Brushes	Pinceles artísticos
+	Paint	Pintura
+	Flat Sweep	Barrido plano
+	Dry Drag	Arrastre seco
+	Loaded Stroke	Trazo cargado
+	Fan Sweep	Barrido en abanico
 	Engraving	Grabado
 	Fine Hatching	Rayado fino
 	Dense Hatching	Rayado denso
