@@ -7267,8 +7267,8 @@ Outline view draws its frame through the corners. Blends, the Eyedropper, the Co
 and the weed box of Weed Box and Lines (`addon.cutting.weed`) read the image where its corners put it. When the
 corners make a parallelogram, the image is placed by its transform as before. Otherwise the native file saves them in
 the image's `image_quad` field (top left, top right, bottom right and bottom left of its pixels, in page
-coordinates); files without the field open as before. The canvas, printing and every export except DXF and WMF draw a
-distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
+coordinates); files without the field open as before. The canvas, printing and every export except DXF, WMF and HP-GL
+(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
 printing and exports the mesh takes as many cells as it needs for the pieces to stay within 0.05 pt of the exact
 perspective at the points it checks, with cells at least 2 pt long on the corners' longest side, and each piece reaches
 0.5 pt into its neighbors. The canvas cuts the mesh for the zoom, by the view's largest stretch: within a quarter of a
@@ -7287,7 +7287,7 @@ Info (`links.info`) gives its scale and rotation there.
 Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
 Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`) and Place with
 Replace (`file.place` with `replace`) of anything but a text file refuse a distorted image with an error that names the
-distortion. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
+distortion; Place with Replace does not refuse a clipping group that holds a distorted image of a DCS file's plates. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
 Create Gradient Mesh (`object.mesh.create`) converts the other objects it is given and lists each distorted image it
 leaves as it is in `skipped`, with its `id` and the error as `reason`; with nothing else to convert, it returns that
 error. Update Links (`links.update`) puts a changed file's pixels between a distorted
