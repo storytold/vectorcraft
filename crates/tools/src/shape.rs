@@ -493,7 +493,11 @@ impl ShapeTool {
             PointerKind::Up => match self.widget.take() {
                 Some(WidgetDrag::Corner(c)) => c.finish(),
                 Some(WidgetDrag::Pie(d)) => d.finish(),
-                Some(WidgetDrag::Sides(d)) => d.finish(),
+                Some(WidgetDrag::Sides(mut d)) => {
+                    let mut out = d.drag(cx, ev.pos);
+                    out.extend(d.finish());
+                    out
+                }
                 None => vec![],
             },
             _ => vec![],

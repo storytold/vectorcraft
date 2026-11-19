@@ -45,6 +45,9 @@ pub fn specs() -> Vec<CommandSpec> {
     )]
 }
 
+#[path = "retype_fonts.rs"]
+pub(super) mod fonts;
+
 /// A shape to match: a path or compound path, in document space.
 struct Piece {
     id: NodeId,
