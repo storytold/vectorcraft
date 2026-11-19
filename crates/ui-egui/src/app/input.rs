@@ -181,6 +181,7 @@ impl VectorcraftApp {
     /// injected until the batch was actually applied, so a burst of hidden ticks cannot queue
     /// several steps of a drag or replay them together later.
     pub fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        crate::canvas::capture_pointer_before_input(ctx, raw.viewport_id);
         self.fill_raw_input(ctx, raw);
         crate::font_menu::sync_wheel_target(self, ctx, raw.viewport_id);
         crate::font_menu::take_raw_wheel(ctx, raw);

@@ -66,23 +66,27 @@ fn build(lang: crate::i18n::Lang, english_names: bool) -> Vec<Row> {
         .map(|item| {
             let parts = || item.path.iter().chain(std::iter::once(&item.label)).copied();
             let english = parts().collect::<Vec<_>>().join(" › ");
-            let shown = parts().map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ");
+            // A saved proof setup keeps its file's name.
+            let own_name = item.command == crate::dialogs::proof_setup::LOAD;
+            let path = item.path.iter().map(|s| crate::i18n::tr(lang, s));
+            let label = if own_name { item.label } else { crate::i18n::tr(lang, item.label) };
+            let shown = path.chain(std::iter::once(label)).collect::<Vec<_>>().join(" › ");
             let haystack = format!("{}\n{}\n{}", english.to_lowercase(), shown.to_lowercase(), item.command.to_lowercase());
             Row { command: item.command, params: item.params, shown, haystack }
         })
         .collect()
 }
 
-/// The rows, built again only when the language, the installed plug-ins, the font name setting or
-/// the loaded fonts change, not on every frame.
+/// The rows, built again only when the language, the installed plug-ins, the font name setting,
+/// the loaded fonts or the saved proof setups change, not on every frame.
 fn rows(app: &VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Row>> {
-    type Key = (&'static str, u64, bool, u64, bool);
+    type Key = (&'static str, u64, bool, u64, bool, u64);
     let lang = crate::i18n::current();
     let english_names = app.session.prefs.font_names_in_english;
     let db = vectorcraft_text::FontDb::global();
     // Read before building, as the Font menu does: fonts that load meanwhile build the rows again.
     let (cataloged, generation) = (db.installed_fonts_ready(), db.generation());
-    let key: Key = (lang.code(), menus::plugin_revision(), english_names, generation, cataloged);
+    let key: Key = (lang.code(), menus::plugin_revision(), english_names, generation, cataloged, crate::dialogs::proof_setup::saved_revision());
     let id = egui::Id::unique("action-insert-menu-item-rows");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, Arc<Vec<Row>>)>(id))
         && k == key
@@ -300,5 +304,34 @@ mod tests {
         }
         let shared = rows.iter().any(|r| rows.iter().any(|o| o.command == r.command && o.params != r.params));
         assert!(shared, "items that share a command are listed apart, by their params");
+    }
+
+    /// A proof setup saved while the dialog is open is listed at once, by its file's name in every
+    /// UI language.
+    #[test]
+    fn a_proof_setup_saved_meanwhile_is_listed_by_its_name() {
+        use crate::dialogs::proof_setup;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let dir = vectorcraft_testkit::TempDir::new("insert-menu-item-proof-setups");
+        app.session.attach_proof_setups(dir.join("Proof Setups"));
+        proof_setup::refresh_saved(&app, None);
+        proof_setup::wait();
+        let de = Lang::from_code("de").unwrap();
+        crate::i18n::set_current(de);
+        let listed =
+            |app: &VectorcraftApp| rows(app, &ctx).iter().filter(|r| r.command == proof_setup::LOAD).map(|r| r.shown.clone()).collect::<Vec<_>>();
+        // The installed fonts' scan, which builds the rows again when it ends, is over first.
+        vectorcraft_text::FontDb::global().menu_family_list();
+        let before = listed(&app);
+        app.run("view.proofSetup.save", json!({"name": "Group", "target": "workingCmyk"})).unwrap();
+        proof_setup::refresh_saved(&app, None);
+        proof_setup::wait();
+        let after = listed(&app);
+        crate::i18n::set_current(Lang::EN);
+        assert!(before.is_empty(), "{before:?}");
+        let view = crate::i18n::tr(de, "View");
+        let menu = crate::i18n::tr(de, "Proof Setup");
+        assert_eq!(after, [format!("{view} › {menu} › Group")]);
     }
 }

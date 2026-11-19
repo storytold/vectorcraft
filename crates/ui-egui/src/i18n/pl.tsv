@@ -1457,6 +1457,10 @@ lighting	Light	Światło
 	Add Anchor Point Tool	Narzędzie Dodaj punkt kontrolny
 	Anchor Point Tool	Narzędzie Punkt kontrolny
 	Arc Tool	Narzędzie Łuk
+	Three-Point Arc Tool	Narzędzie Łuk przez trzy punkty
+	Three-Point Arc	Łuk przez trzy punkty
+	Arc too large	Łuk jest za duży
+	Third Point Sets Direction	Trzeci punkt wyznacza kierunek
 	Area Graph Tool	Narzędzie Wykres warstwowy
 	Area Type Tool	Narzędzie Tekst akapitowy
 	Artboard Tool	Narzędzie Obszar kompozycji
@@ -3021,6 +3025,11 @@ digits	Malayalam	Malajalam
 	Place the pages with the placement again	Ponownie rozmieść strony według położenia
 	Placement:	Położenie:
 	Preserve CMYK Numbers	Zachowaj wartości CMYK
+	Preserve RGB Numbers	Zachowaj wartości RGB
+	Device to Simulate:	Symulowane urządzenie:
+	Simulate Paper Color	Symuluj kolor papieru
+	Simulate Black Ink	Symuluj czarną farbę
+	Load…	Wczytaj…
 	Previous page	Poprzednia strona
 	Print Layers:	Drukuj warstwy:
 	Print Preset:	Ustawienie drukowania:
@@ -3095,6 +3104,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Narzędzie Dodaj kolor
 	Remove Color Tool	Narzędzie Usuń kolor
 	Remove Color	Usuń kolor
+	Set As Base Color	Ustaw jako kolor bazowy
+	Select Shade	Wybierz odcień
+	Add New Color	Dodaj nowy kolor
+	Set Current Color As Base Color	Ustaw bieżący kolor jako bazowy
 	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
@@ -4165,6 +4178,8 @@ theme	Appearance	Wygląd
 	Paste Offset	Przesunięcie wklejania
 	Pattern Editing	Edycja wzorka
 	Pen Tool	Narzędzie Pióro
+	Quick Pen Tool	Narzędzie Szybkie pióro
+	Quick Pen	Szybkie pióro
 	Picas	Pica
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Zachowaj wygląd i nadruki
@@ -4297,6 +4312,7 @@ theme	Appearance	Wygląd
 	Add to Graphic Styles	Dodaj do stylów graficznych
 	Graphic Style Library	Biblioteka stylów graficznych
 	Add Used Colors	Dodaj użyte kolory
+	Add Selected Colors	Dodaj zaznaczone kolory
 	Delete Swatch	Usuń próbkę
 	Duplicate Swatch	Powiel próbkę
 	Merge Swatches	Scal próbki
@@ -4577,6 +4593,7 @@ font-technology	Variable	Zmienne
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
+	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4699,6 +4716,7 @@ font-technology	Variable	Zmienne
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nowy tekst otrzymuje ten język, dopóki językiem w Ustawieniach dokumentu jest Angielski: USA; tekst, który już jest w dokumencie, zachowuje swój język.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	W akapitach z włączoną opcją Dziel wyrazy wyraz z listy jest dzielony tylko w miejscach wpisanych w nim łączników albo wcale, jeśli ich nie ma, bez względu na język i wielkość liter.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	W wersji na komputer wtyczki .wasm z tego folderu są wczytywane przy uruchomieniu i po kliknięciu OK z nowym folderem tutaj, z wyjątkiem trybu awaryjnego; wersja internetowa ich nie wczytuje.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Ile instrukcji może zużyć każde uruchomienie filtra obiektów z wtyczki; Duże pozwala na więcej niż Normalny przy tym samym limicie 60 sekund. Ciężkie filtry zachowują własny budżet.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pierwszy wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Drugi wybór dysku roboczego: Startup, None lub ścieżka folderu; VectorCraft go zapisuje, ale jeszcze nie używa dysków roboczych.
 	How light or dark the interface is.	Jak jasny lub ciemny jest interfejs.
@@ -4717,6 +4735,7 @@ font-technology	Variable	Zmienne
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animowane powiększanie działa tylko wtedy, gdy to jest włączone; po wyłączeniu Animowane powiększanie jest wyszarzone, a powiększanie nie jest animowane.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Powiększanie kółkiem przebiega płynnie, a Narzędzie Lupka powiększa, gdy przeciągasz w bok lub je przytrzymujesz; po wyłączeniu Narzędzie Lupka powiększa obszar, przez który przeciągniesz.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Od następnego uruchomienia wersja na komputer rysuje tym rodzajem procesora graficznego; Automatycznie wybiera najpierw ten, który obsługuje ekran. Wersja internetowa go nie używa.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Od następnego uruchomienia okno pokazuje klatki bez czekania na odświeżenie ekranu, najwyżej 240 na sekundę; po wyłączeniu tempo wyznacza ekran. Tryb prezentacji ustawiony przy uruchomieniu ma pierwszeństwo.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Największa liczba kroków cofania, które zachowuje każdy dokument; mniejsza liczba usuwa najstarsze kroki po kliknięciu OK. Kroki mogą też zniknąć wcześniej, gdy zajmują zbyt dużo pamięci.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Pokazuje zmiany kompozycji podczas przeciągania; po wyłączeniu kontury podążają za przeciąganiem, a kompozycja zmienia się po puszczeniu. Linia pomocnicza z linijki zawsze porusza się podczas przeciągania.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Ile wątków roboczych rysuje kompozycję; -1 używa o jeden mniej niż rdzeni, których VectorCraft może używać, najwyżej 8, a 0 żadnego. Wersja internetowa nigdy żadnego nie używa.
@@ -4743,6 +4762,10 @@ font-technology	Variable	Zmienne
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft zapisuje ten wybór, ale Kopiuj i Wytnij nie używają jeszcze formatu starszego schowka wektorowego.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Zachowaj ścieżki lub Zachowaj wygląd i nadruki dla starszego schowka wektorowego; VectorCraft zapisuje wybór, ale jeszcze go nie używa.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Zachowaj formatowanie zachowuje style tekstu skopiowanego z obiektu tekstowego VectorCraft po wklejeniu do obiektu tekstowego; Zachowaj zwykły tekst nadaje mu styl miejsca, w które trafia.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Wyświetlaj wszystkie czernie jako czerń głęboką pokazuje czystą czerń CMYK (sam czarny atrament w 100%) na obszarze roboczym jako czerń RGB; Wyświetlaj wszystkie czernie dokładnie przekształca ją przez roboczą przestrzeń CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Wyprowadzaj wszystkie czernie jako czerń głęboką rysuje czystą czerń CMYK jako czerń RGB w rastrowych eksportach RGB i w skali szarości oraz przy Drukuj jako bitmapę; nie zmienia eksportów wektorowych, plików JPEG, TIFF i PSD CMYK ani innego drukowania.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Na ekranie dotykowym przełącza na dotykowy obszar roboczy; wyłączenie opcji lub utrata ekranu dotykowego przywraca obszar roboczy sprzed przełączenia.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Stuknięcie dwoma palcami w obszar roboczy cofa, a w dotykowym obszarze roboczym przełącza między narzędziami zaznaczania i rysowania; stuknięcie trzema palcami ponawia. Żadne nie działa w trybie prezentacji.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nowy tekst otrzymuje ten język, dopóki językiem w Ustawieniach dokumentu jest Angielski: USA, a [Normalny styl znakowy] nie ustawia języka; tekst, który już jest w dokumencie, zachowuje swój język.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	W akapitach z włączoną opcją Dziel wyrazy wyraz z listy jest dzielony tylko w miejscach wpisanych w nim łączników albo wcale, jeśli ich nie ma, bez względu na wielkość liter; wyrazy koreańskie nie dostają łącznika, a wyrazy w językach indyjskich nie są dzielone wewnątrz grupy znaków.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
@@ -5483,6 +5506,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a guide has no curvature circle	linia pomocnicza nie ma okręgu krzywizny
 @msg	the circle that matches the path there would reach past the canvas	okrąg pasujący w tym miejscu do ścieżki wykroczyłby poza płótno
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	`at` must be "start" or "end"	`at` musi mieć wartość "start" lub "end"
+@msg	give exactly one of `through` and `toward`	podaj dokładnie jeden z parametrów `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	żaden łuk nie pasuje do tych punktów: dwa są takie same albo wszystkie trzy leżą na jednej prostej
+@msg	give `at` only with `toward`	podaj `at` tylko razem z `toward`
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
 @msg	no artboard {i} (0-based; the document has {_1})	brak obszaru kompozycji {i} (numeracja od 0; dokument ma {_1})
@@ -5528,6 +5555,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no native format	brak formatu natywnego
 @msg	no pages	brak stron
 @msg	no pattern `{name}`	brak wzorka `{name}`
+@msg	art painted with `{name}` can't be its tile	kompozycja malowana wzorkiem `{name}` nie może być jego kafelkiem
 @msg	no perspective grid preset named `{name}`	brak ustawienia siatki perspektywy o nazwie `{name}`
 @msg	no plug-in {0} is installed	wtyczka {0} nie jest zainstalowana
 @msg	no plug-in {id} is installed	wtyczka {id} nie jest zainstalowana
@@ -5583,6 +5611,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`link` places a handle: give `handle`	`link` umieszcza uchwyt: podaj `handle`
 @msg	no such spine segment	brak takiego segmentu grzbietu
 @msg	no such subpath	brak takiej ścieżki podrzędnej
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` musi być listą co najwyżej 10000 fragmentów
+@msg	give either `start` for a new path or `id`, not both	podaj `start` dla nowej ścieżki albo `id`, ale nie oba
+@msg	`subpath` and `keep` need `id`	`subpath` i `keep` wymagają `id`
 @msg	no such user library	brak takiej biblioteki użytkownika
 @msg	no such view	brak takiego widoku
 @msg	no such width point	brak takiego punktu szerokości
@@ -6347,6 +6378,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Arrow	Strzałka
 	Arrow (open)	Strzałka (otwarta)
 	Barbed	Zadziorowata
+arrowhead	Feather	Pióro
 	Half Arrow (left)	Pół strzałki (lewa)
 	Half Arrow (right)	Pół strzałki (prawa)
 	Concave	Wklęsła
@@ -6374,6 +6406,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Kite	Latawiec
 	Triangle to Bar	Trójkąt z kreską
 	Oval	Owal
+	Line Arrow	Strzałka liniowa
 	Complementary	Dopełniające
 	Complementary 2	Dopełniające 2
 	Split Complementary	Rozdzielone dopełniające
@@ -8147,6 +8180,7 @@ breakText	Glyphs	Glify
 	Remove Strokes	Usuń obrysy
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
+	Replace Pattern Art	Zastąp kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -10575,6 +10609,16 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Paint	Farba
+	Flat Sweep	Płaskie pociągnięcie
+	Dry Drag	Suche przeciągnięcie
+	Loaded Stroke	Grube pociągnięcie
+	Fan Sweep	Wachlarzowy ślad
+	Engraving	Grawerowanie
+	Fine Hatching	Drobne kreskowanie
+	Dense Hatching	Gęste kreskowanie
+	Tapered Hatching	Zwężane kreskowanie
+	Broken Hatching	Przerywane kreskowanie
 	Image Brush	Pędzle obrazkowe
 	Soft Bloom	Miękki kwiat
 	Halftone Field	Pole półtonów

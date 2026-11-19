@@ -1,6 +1,7 @@
 use super::anchors::{convert_anchor, curvature, curvature_edit, remove_anchor, remove_anchors, reshape_segment};
 use super::cut::{erase_region, erase_segments, knife, split};
 use super::freehand::{blob, freehand};
+use super::quickpen::quick_pen;
 use super::smooth::{join_scrub, smooth_region};
 use super::{CommandSpec, cmd, has_anchors, has_doc, has_selection};
 
@@ -32,6 +33,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, subpath?, op: \"move\"|\"insert\"|\"extend\"|\"close\", anchor?, segment?, t?, end?: \"start\"|\"end\", from?: \"keep\"|\"smooth\"|\"corner\", corner?, x?, y?} edit a path as the Curvature tool does, its shape kept elsewhere; the anchor edited becomes the direct-selected one → {anchor}. move: anchor to x, y, re-curving only its two segments (a smooth anchor takes the Curvature tool's handles, along the circle through it and its neighbours); insert: a smooth anchor at t on segment, the shape unchanged (with x, y: then moved there); extend: an open subpath goes on from its end (default) or start to a new end at x, y, curving into it unless corner is true; close: an open subpath closes from that end. The old end bends into the new segment as from says: keep its curve (default), smooth through its neighbours, or a corner",
             has_doc,
             curvature_edit
+        ),
+        cmd!(
+            "path.quickPen",
+            "Quick Pen",
+            [],
+            None,
+            "{start?: [x, y] (a new path starts there), id? (or: draw on this path), subpath?: index (0), keep?: count (default: all its points; the points after the first `keep` are replaced), pieces?: [{x, y, action?: \"line\" (default)|\"continuousArc\"|\"sharpArc\", turn?: 1..359 degrees (180), flip?: bool}] (at most 10000), closed?: bool} draw a path of straight lines and circular arcs as the Quick Pen tool does, each piece from the path's last point to x, y: a line; a continuous arc, which leaves its start in the direction the path arrives in (with no direction, the first piece of a path, it is drawn as a sharp-corner arc; with its end straight ahead or straight behind, as a line); a sharp-corner arc, which turns through `turn` degrees and bulges to the left of the direction drawn (with flip, to the right). A piece that ends where the path does adds nothing. closed: a last piece that ends on the first point joins it, otherwise a straight segment closes the path. A new path takes the current paint (a black stroke when it has neither fill nor stroke); the path is selected, as one undo step → {id}. Without id, `start` must be given; with id, the subpath must be open and `start` is refused",
+            has_doc,
+            quick_pen
         ),
         cmd!(
             "path.removeAnchor",
