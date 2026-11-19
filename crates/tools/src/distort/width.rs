@@ -392,11 +392,11 @@ impl Tool for WidthTool {
                 if !self.is_selected(spot.owner, w.t) {
                     self.selected = Some((spot.owner, vec![w.t]));
                 }
+                // Every selected entry goes to the dialog, which opens one point (or the two
+                // halves of a discontinuous point) as `index` would.
                 let indices = self.selected_indices(cx, spot.owner);
-                let profile = stroke_of(cx.doc, spot.owner).and_then(|s| s.profile.as_ref());
-                let several = profile.is_some_and(|pr| indices.iter().any(|i| (pr.points[*i].0 - w.t).abs() > SAME_T));
                 let mut params = json!({"id": spot.owner.0, "adjustAdjoining": ev.mods.shift});
-                if several {
+                if indices.len() > 1 {
                     params["indices"] = json!(indices);
                 } else {
                     params["index"] = json!(w.index);
@@ -1118,6 +1118,19 @@ mod tests {
             t.pointer(&c2, &ev(PointerKind::Up, x, 200.0, mods));
         }
         let acts = t.pointer(&c2, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
+        let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+        assert_eq!(v["indices"], json!([1, 2, 3]));
+        // Three points at nearly one place are selected together and all go to the dialog.
+        let (mut d3, _) = doc_line();
+        let points = vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5000005, 2.0, 2.0), (0.5000009, 3.0, 3.0), (1.0, 1.0, 1.0)];
+        d3.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile = Some(WidthProfile { points });
+        let c3 = cx(&d3, &s, &p);
+        let mut t = WidthTool::default();
+        for _ in 0..2 {
+            t.pointer(&c3, &ev(PointerKind::Down, 200.0, 200.0, none));
+            t.pointer(&c3, &ev(PointerKind::Up, 200.0, 200.0, none));
+        }
+        let acts = t.pointer(&c3, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
         let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
         assert_eq!(v["indices"], json!([1, 2, 3]));
         // A click on one of the selected points, then a double-click on it later, edits that point.

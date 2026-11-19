@@ -841,6 +841,24 @@ fn double_clicking_one_of_several_selected_points_and_typing_edits_them_all() {
 }
 
 #[test]
+fn a_negative_width_typed_for_several_points_is_refused() {
+    let (mut app, id) = three_app();
+    let before = app.session.doc().unwrap().doc.clone();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, Default::default());
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    for _ in 0..5 {
+        creation_dialog_frame(&mut app, &ctx, vec![]);
+    }
+    // The blank Side 1 has the focus.
+    creation_dialog_frame(&mut app, &ctx, vec![egui::Event::Text("-3 pt".into())]);
+    creation_dialog_click(&mut app, &ctx, "OK");
+    assert!(app.ui.dialog.is_some(), "OK refuses it and the dialog stays open");
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn several_points_refuse_bad_indices() {
     let (mut app, id) = three_app();
     let before = app.session.doc().unwrap().doc.clone();
@@ -854,6 +872,7 @@ fn several_points_refuse_bad_indices() {
         json!({"id": id, "indices": 1}),
         json!({"id": id, "indices": [1, 3], "index": 1}),
         json!({"id": id, "indices": [1, 3], "t": 0.5}),
+        json!({"id": id, "index": 1, "t": 0.5}),
     ] {
         assert!(app.run("ui.widthPointEdit", p.clone()).is_err(), "{p}");
         assert!(app.ui.dialog.is_none(), "{p}");
@@ -883,5 +902,148 @@ fn several_points_refuse_bad_indices() {
         assert!(super::super::confirm(&mut app).is_err(), "{bad}");
         assert!(app.ui.dialog.is_some());
         assert_eq!(app.session.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
+fn a_total_width_above_the_side_limit_does_not_block_ok() {
+    // Two points of 60000 + 60000 pt on the 10 pt stroke: Total Width shows 120000 pt.
+    let (mut app, id) = three_app();
+    let wide = json!([[0, 1, 1], [0.25, 12000, 12000], [0.5, 0.8, 0.8], [0.75, 12000, 12000], [1, 1, 1]]);
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": wide})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["totalWidth"], json!(120000.0));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    // A side width typed in applies with the total shown.
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("linked".into(), json!(false));
+    super::super::set_field(d, "side1".into(), json!(5));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(points(&app, id), vec![(0.0, 1.0, 1.0), (0.25, 1.0, 12000.0), (0.5, 0.8, 0.8), (0.75, 1.0, 12000.0), (1.0, 1.0, 1.0)]);
+    // A value set above the limit is refused even next to the 100000 pt shown.
+    let (mut app, id) = three_app();
+    let edge = json!([[0, 1, 1], [0.25, 20000, 0.4], [0.5, 0.8, 0.8], [0.75, 20000, 1.2], [1, 1, 1]]);
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": edge})).unwrap();
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("side1".into(), json!(100000.0000005));
+    assert!(super::super::confirm(&mut app).is_err());
+}
+
+#[test]
+fn an_invalid_width_stays_for_ok_to_refuse() {
+    let (mut app, id) = three_app();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    super::super::set_field(d, "side1".into(), json!("wide"));
+    super::super::set_field(d, "side2".into(), json!("3 pt"));
+    assert_eq!(d.fields["side1"], json!("wide"));
+    assert!(super::super::confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    // Corrected, it applies with the Side 2 already set.
+    super::super::set_field(app.ui.dialog.as_mut().unwrap(), "side1".into(), json!(5));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(points(&app, id), vec![(0.0, 1.0, 1.0), (0.25, 1.0, 0.6), (0.5, 0.8, 0.8), (0.75, 1.0, 0.6), (1.0, 1.0, 1.0)]);
+}
+
+#[test]
+fn several_points_refuse_any_change_since_the_dialog_opened() {
+    let (mut app, id) = three_app();
+    // A change too small to show in the fields.
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    let nudged = json!([[0, 1, 1], [0.25, 0.8000001, 0.4], [0.5, 0.8, 0.8], [0.75, 0.4, 1.2], [1, 1, 1]]);
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": nudged})).unwrap();
+    let changed = app.session.doc().unwrap().doc.clone();
+    for field in ["side2", "discard"] {
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{field}");
+        assert_eq!(app.session.doc().unwrap().doc, changed);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    // OK with no width changed still checks the points.
+    app.run("ui.widthPointEdit", json!({"id": id, "indices": [1, 3]})).unwrap();
+    app.run("stroke.widthPoint.set", json!({"id": id, "index": 1, "t": 0.3, "left": 4, "right": 2})).unwrap();
+    assert!(super::super::confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+}
+
+/// Open a second document holding [`three_app`]'s line with the same id, and make it active.
+fn second_document(app: &mut VectorcraftApp, id: u64) {
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let other = app.run("shape.line", json!({"x1": 100, "y1": 150, "x2": 300, "y2": 150})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(other, id, "the same id in both documents");
+    app.run("stroke.set", json!({"ids": [other], "weight": 10})).unwrap();
+    let points = json!([[0, 1, 1], [0.25, 0.8, 0.4], [0.5, 0.8, 0.8], [0.75, 0.4, 1.2], [1, 1, 1]]);
+    app.run("stroke.widthProfile.set", json!({"ids": [other], "points": points})).unwrap();
+}
+
+#[test]
+fn ok_and_delete_act_only_in_the_document_the_dialog_opened_in() {
+    for opened in [json!({"indices": [1, 3]}), json!({"index": 2})] {
+        for field in ["side1", "discard"] {
+            let (mut app, id) = three_app();
+            let mut p = opened.clone();
+            p["id"] = json!(id);
+            app.run("ui.widthPointEdit", p).unwrap();
+            let d = app.ui.dialog.take();
+            second_document(&mut app, id);
+            let other = app.session.doc().unwrap().doc.clone();
+            app.ui.dialog = d;
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+            assert!(super::super::confirm(&mut app).is_err(), "{opened} {field}");
+            assert_eq!(app.session.doc().unwrap().doc, other, "{opened} {field}");
+        }
+    }
+}
+
+#[test]
+fn one_point_refuses_a_change_since_the_dialog_opened() {
+    for field in ["side1", "discard"] {
+        // A point added before the opened one moves it to the next index.
+        let (mut app, id) = app();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+        app.run("stroke.widthPoint.set", json!({"id": id, "t": 0.25, "left": 3, "right": 3})).unwrap();
+        let added = app.session.doc().unwrap().doc.clone();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{field}");
+        assert_eq!(app.session.doc().unwrap().doc, added, "{field}");
+        // The outgoing half of a discontinuous point changed.
+        let (mut app, id) = pair_app();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+        app.run("stroke.widthProfile.set", json!({"ids": [id], "points": [[0, 1, 1], [0.5, 0.8, 0.8], [0.5, 0.2, 1.2], [1, 1, 1]]})).unwrap();
+        let changed = app.session.doc().unwrap().doc.clone();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{field}");
+        assert_eq!(app.session.doc().unwrap().doc, changed, "{field}");
+        // The stroke weight changed.
+        let (mut app, id) = self::app();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+        app.run("stroke.set", json!({"ids": [id], "weight": 20})).unwrap();
+        let heavier = app.session.doc().unwrap().doc.clone();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{field}");
+        assert_eq!(app.session.doc().unwrap().doc, heavier, "{field}");
+        // A later point moved onto the opened one makes it one half of a discontinuous point.
+        let (mut app, id) = self::app();
+        app.run("stroke.widthPoint.set", json!({"id": id, "t": 0.75, "left": 3, "right": 3})).unwrap();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+        app.run("stroke.widthPoint.set", json!({"id": id, "index": 2, "t": 0.5, "left": 3, "right": 3})).unwrap();
+        let paired = app.session.doc().unwrap().doc.clone();
+        assert_eq!(points(&app, id)[1], (0.5, 0.8, 0.8), "the opened point keeps its index");
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{field}");
+        assert_eq!(app.session.doc().unwrap().doc, paired, "{field}");
     }
 }

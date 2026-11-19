@@ -30,6 +30,9 @@
 //! entry, both halves of a discontinuous point), `side1`, `side2`, `totalWidth` (null when the
 //! points differ), `linked`, `adjustAdjoining`, and with a discontinuous point `outSide1`,
 //! `outSide2`, `outTotalWidth` and `outLinked`.
+//!
+//! OK and Delete on existing points, one or several, are refused when those points changed since
+//! the dialog opened or another document is active.
 
 use egui::vec2;
 use serde_json::{Value, json};
@@ -57,6 +60,11 @@ const POINTS: &str = "__points";
 const OPEN: &str = "__open";
 /// Whether they include a discontinuous point (two sets of side widths shown).
 const DISCONTINUOUS: &str = "__discontinuous";
+/// The uid of the document the dialog opened in.
+const DOC: &str = "__doc";
+/// The place and side widths `[t, left, right]` (points) of the existing point the one-point dialog
+/// opened on, and of the outgoing half of a discontinuous point.
+const AT: &str = "__at";
 
 /// The fields of each set of side widths of several points: Side 1, Side 2, Total Width and the
 /// link, for the incoming set and the outgoing set.
@@ -72,6 +80,11 @@ fn point(app: &VectorcraftApp, id: u64, index: usize) -> Option<(f64, f64, f64)>
     let st = app.session.active()?.doc.node(NodeId(id))?.appearance.stroke()?;
     let half = st.width / 2.0;
     st.profile.as_ref()?.points.get(index).map(|&(t, l, r)| (t, l * half, r * half))
+}
+
+/// Width point `index` of `id` as [`point`] reads it, as an array.
+fn entry_at(app: &VectorcraftApp, id: u64, index: usize) -> Option<[f64; 3]> {
+    point(app, id, index).map(|(t, l, r)| [t, l, r])
 }
 
 /// The incoming and outgoing halves of the discontinuous point that width point `index` of `id`
@@ -121,12 +134,19 @@ fn shown(es: &[Entry], set: usize) -> [Option<f64>; 3] {
     [common(|e| e.left), common(|e| e.right), common(|e| e.left + e.right)]
 }
 
-/// Keep `es` as the working widths of `d`, and show them in its fields.
-fn store(d: &mut Dialog, es: &[Entry]) {
+/// Keep `es` as the working widths of `d`, and show them in its fields. A value set straight into a
+/// field other than `typed` that OK refuses, and that is not the value the field showed, stays for
+/// OK to refuse.
+fn store(d: &mut Dialog, es: &[Entry], typed: Option<&str>) {
+    let old = entries(d, POINTS);
     d.fields.insert(POINTS.into(), entries_json(es));
     let sets = if d.bool(DISCONTINUOUS) { 2 } else { 1 };
     for (set, keys) in MANY.iter().enumerate().take(sets) {
-        for (key, value) in keys.iter().zip(shown(es, set)) {
+        for ((key, value), was) in keys.iter().zip(shown(es, set)).zip(shown(&old, set)) {
+            let showed = reading(d, key).ok().flatten().zip(was).is_some_and(|(v, s)| (v - s).abs() <= SAME_WIDTH);
+            if Some(*key) != typed && number(d, key).is_err() && !showed {
+                continue;
+            }
             d.fields.insert((*key).into(), json!(value));
         }
     }
@@ -156,8 +176,8 @@ fn apply(es: &mut [Entry], set: usize, edit: Edit, linked: bool) {
     }
 }
 
-/// The number in field `key` (none when it is null or absent).
-fn number(d: &Dialog, key: &str) -> Result<Option<f64>, String> {
+/// The width in field `key`, any finite width from nothing up (none when it is null or absent).
+fn reading(d: &Dialog, key: &str) -> Result<Option<f64>, String> {
     let v = match d.fields.get(key) {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Number(n)) => n.as_f64(),
@@ -165,14 +185,25 @@ fn number(d: &Dialog, key: &str) -> Result<Option<f64>, String> {
         Some(_) => None,
     };
     match v {
-        Some(v) if v.is_finite() && (0.0..=1.0e5).contains(&v) => Ok(Some(v)),
+        Some(v) if v.is_finite() && v >= 0.0 => Ok(Some(v)),
         _ => Err("invalid stroke widths".into()),
+    }
+}
+
+/// The largest side width or Total Width a value typed in can set (points).
+const MAX_WIDTH: f64 = 1.0e5;
+
+/// The number in field `key` that a value typed in can set (none when it is null or absent).
+fn number(d: &Dialog, key: &str) -> Result<Option<f64>, String> {
+    match reading(d, key)? {
+        Some(v) if v > MAX_WIDTH => Err("invalid stroke widths".into()),
+        v => Ok(v),
     }
 }
 
 /// The widths OK sets on several points: the working widths, with any value set straight into a
 /// field (`ui.dialog.set`) that they do not show yet applied as typing it would, Total Width before
-/// the sides.
+/// the sides. A value the field shows changes nothing, even a Total Width above [`MAX_WIDTH`].
 fn edited(d: &Dialog) -> Result<Vec<Entry>, String> {
     let mut es = entries(d, POINTS);
     let sets = if d.bool(DISCONTINUOUS) { 2 } else { 1 };
@@ -180,8 +211,13 @@ fn edited(d: &Dialog) -> Result<Vec<Entry>, String> {
     for (set, shown) in before.iter().enumerate() {
         let [k1, k2, kt, kl] = MANY[set];
         for (key, at) in [(kt, 2), (k1, 0), (k2, 1)] {
-            let Some(v) = number(d, key)? else { continue };
-            if shown[at].is_some_and(|s| (s - v).abs() <= SAME_WIDTH) {
+            let Some(v) = reading(d, key)? else { continue };
+            let same = shown[at].filter(|s| (s - v).abs() <= SAME_WIDTH);
+            // Only a value above the limit that the points already have passes it.
+            if v > MAX_WIDTH && !same.is_some_and(|s| s > MAX_WIDTH) {
+                return Err("invalid stroke widths".into());
+            }
+            if same.is_some() {
                 continue;
             }
             let edit = match at {
@@ -197,7 +233,8 @@ fn edited(d: &Dialog) -> Result<Vec<Entry>, String> {
 
 /// After `ui.dialog.set` sets `field` of several points' dialog: a side width or Total Width applies
 /// as typing it does, so a value equal to the one shown still sets that side of every point (both
-/// sides with the link on). A null or unreadable value is left for OK to skip or refuse.
+/// sides with the link on). A null or unreadable value is left for OK to skip or refuse, and a value
+/// set later into another field keeps it.
 pub(super) fn note_set(d: &mut Dialog, field: &str) {
     if !d.fields.contains_key(OPEN) {
         return;
@@ -213,7 +250,7 @@ pub(super) fn note_set(d: &mut Dialog, field: &str) {
         };
         let mut es = entries(d, POINTS);
         apply(&mut es, set, edit, d.bool(keys[3]));
-        store(d, &es);
+        store(d, &es, Some(field));
         return;
     }
 }
@@ -298,13 +335,16 @@ fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Target, Stri
 fn open_several(app: &mut VectorcraftApp, id: u64, es: &[Entry], adjust: bool) {
     let discontinuous = es.iter().any(|e| e.sets != [true, true]);
     let indices: Vec<usize> = es.iter().map(|e| e.index).collect();
-    let mut d =
-        Dialog::new(KIND, json!({"id": id, "indices": indices, "adjustAdjoining": adjust, DISCONTINUOUS: discontinuous, OPEN: entries_json(es)}));
+    let doc = app.session.active().map(|st| st.uid);
+    let mut d = Dialog::new(
+        KIND,
+        json!({"id": id, "indices": indices, "adjustAdjoining": adjust, DISCONTINUOUS: discontinuous, OPEN: entries_json(es), DOC: doc}),
+    );
     for (set, keys) in MANY.iter().enumerate().take(if discontinuous { 2 } else { 1 }) {
         let linked = es.iter().filter(|e| e.sets[set]).all(|e| (e.left - e.right).abs() < 1e-9);
         d.fields.insert(keys[3].into(), json!(linked));
     }
-    store(&mut d, es);
+    store(&mut d, es, None);
     app.ui.dialog = Some(d);
 }
 
@@ -321,10 +361,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Some(v) => Some(v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or("no such width point")?),
         None => None,
     };
+    if ["index", "indices", "t"].iter().filter(|key| given(key)).count() > 1 {
+        return Err("give only one of `index`, `indices` and `t`".into());
+    }
     if let Some(indices) = p.get("indices").filter(|v| !v.is_null()) {
-        if given("index") || given("t") {
-            return Err("give only one of `index`, `indices` and `t`".into());
-        }
         match target(app, id, indices)? {
             Target::One(i) => index = Some(i),
             Target::Several(es) => {
@@ -353,7 +393,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (t, l, r)
     };
     let adjust = p.get("adjustAdjoining").and_then(Value::as_bool).unwrap_or(false);
-    let mut fields = json!({"id": id, "index": index, "t": t, "side1": l, "side2": r, "linked": (l - r).abs() < 1e-9, "adjustAdjoining": adjust});
+    let doc = app.session.active().map(|st| st.uid);
+    let at: Vec<_> = index.into_iter().chain(pair.map(|(_, out)| out)).filter_map(|i| entry_at(app, id, i)).collect();
+    let linked = (l - r).abs() < 1e-9;
+    let mut fields = json!({"id": id, "index": index, "t": t, "side1": l, "side2": r, "linked": linked, "adjustAdjoining": adjust, DOC: doc, AT: at});
     if let Some((_, out)) = pair {
         let (_, l, r) = point(app, id, out).ok_or("no such width point")?;
         for (key, value) in [
@@ -420,14 +463,14 @@ fn sides(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, keys: [&str; 3], ids: [&
 fn sides_of_several(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, set: usize) {
     let [k1, k2, kt, kl] = MANY[set];
     let ids = MANY_IDS[set];
-    let value = |key: &str| number(d, key).ok().flatten();
+    let value = |key: &str| reading(d, key).ok().flatten();
     let (s1, s2, total, linked) = (value(k1), value(k2), value(kt), d.bool(kl));
     let mut edit = None;
     grid(ui, |ui| {
         label(ui, tl!("Side 1:"));
         ui.horizontal(|ui| {
             if let Some(v) = widgets::num_field(ui, ids[0], s1, unit, 90.0) {
-                edit = Some(Edit::Side1(v));
+                edit = Some((Edit::Side1(v), k1));
             }
             if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tl!("Keep both sides the same width"), linked, 22.0).clicked() {
                 d.fields.insert(kl.into(), json!(!linked));
@@ -436,20 +479,25 @@ fn sides_of_several(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit, set: usize) {
         ui.end_row();
         label(ui, tl!("Side 2:"));
         if let Some(v) = widgets::num_field(ui, ids[1], s2, unit, 90.0) {
-            edit = Some(Edit::Side2(v));
+            edit = Some((Edit::Side2(v), k2));
         }
         ui.end_row();
         label(ui, tl!("Total Width:"));
         if let Some(v) = widgets::num_field(ui, ids[2], total, unit, 90.0) {
-            edit = Some(Edit::Total(v));
+            edit = Some((Edit::Total(v), kt));
         }
         ui.end_row();
     });
-    if let Some(edit) = edit {
+    if let Some((Edit::Side1(v) | Edit::Side2(v) | Edit::Total(v), key)) = edit
+        && !(0.0..=MAX_WIDTH).contains(&v)
+    {
+        // Not a width it can set: the field keeps it for OK to refuse.
+        d.fields.insert(key.into(), if v.is_finite() { json!(v) } else { json!(v.to_string()) });
+    } else if let Some((edit, key)) = edit {
         // Values set straight into the fields count first, so typing does not lose them.
         let mut es = edited(d).unwrap_or_else(|_| entries(d, POINTS));
         apply(&mut es, set, edit, linked);
-        store(d, &es);
+        store(d, &es, Some(key));
     }
 }
 
@@ -491,8 +539,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
+/// Whether the document the dialog opened in is still the active one.
+fn same_document(app: &VectorcraftApp, d: &Dialog) -> Result<(), String> {
+    match (d.fields.get(DOC).and_then(Value::as_u64), app.session.active()) {
+        (Some(uid), Some(st)) if st.uid == uid => Ok(()),
+        _ => Err("no such width point".into()),
+    }
+}
+
 /// `id`'s width profile and the stroke's half weight, when the points `open` are still where and as
-/// wide as when the dialog opened.
+/// wide as when the dialog opened, exactly.
 fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(WidthProfile, f64), String> {
     const NONE: &str = "no such width point";
     let st = app.session.active().and_then(|s| s.doc.node(NodeId(id))).and_then(|n| n.appearance.stroke()).ok_or(NONE)?;
@@ -506,7 +562,8 @@ fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(Widt
     }
     for o in open {
         let &(t, l, r) = profile.points.get(o.index).ok_or(NONE)?;
-        if (t - o.t).abs() > SAME_T || (l * half - o.left).abs() > SAME_WIDTH || (r * half - o.right).abs() > SAME_WIDTH {
+        // The entries were read from this profile at this weight, so an unchanged point compares equal.
+        if t != o.t || l * half != o.left || r * half != o.right {
             return Err(NONE.into());
         }
     }
@@ -578,8 +635,9 @@ fn edited_profile(app: &VectorcraftApp, id: u64, open: &[Entry], new: &[Entry], 
 fn confirm_several(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let id = d.fields.get("id").and_then(Value::as_u64).ok_or("no such width point")?;
     let open = entries(d, OPEN);
+    same_document(app, d)?;
+    opened_profile(app, id, &open)?;
     if d.bool("discard") {
-        opened_profile(app, id, &open)?;
         let indices: Vec<usize> = open.iter().map(|e| e.index).collect();
         return run_and_close(app, "stroke.widthPoint.remove", json!({"id": id, "indices": indices}));
     }
@@ -593,18 +651,38 @@ fn confirm_several(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String
     run_and_close(app, "stroke.widthProfile.set", json!({"ids": [id], "points": points}))
 }
 
+/// Whether width point `index` of the one-point dialog's stroke, and the outgoing half `out` of a
+/// discontinuous point, are still as they were when the dialog opened, and still pair.
+fn unchanged_point(app: &VectorcraftApp, d: &Dialog, index: usize, out: Option<usize>) -> Result<(), String> {
+    const NONE: &str = "no such width point";
+    let id = d.fields.get("id").and_then(Value::as_u64).ok_or(NONE)?;
+    let at: Vec<[f64; 3]> = d.fields.get(AT).cloned().and_then(|v| serde_json::from_value(v).ok()).ok_or(NONE)?;
+    let now: Vec<_> = std::iter::once(index).chain(out).map(|i| entry_at(app, id, i)).collect::<Option<_>>().ok_or(NONE)?;
+    // The widths are read at the stroke's current weight, so a changed weight changes them too, and
+    // a continuous point must still be one.
+    if now != at || halves(app, id, index) != out.map(|o| (index, o)) {
+        return Err(NONE.into());
+    }
+    Ok(())
+}
+
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.fields.contains_key(OPEN) {
         return confirm_several(app, d);
     }
     let (id, index) = (d.fields.get("id").cloned().unwrap_or_default(), d.fields.get("index").cloned().unwrap_or_default());
     let out = d.fields.get("outIndex").filter(|_| paired(d)).cloned();
+    if d.bool("discard") && index.is_null() {
+        // Deleting a prospective point discards the dialog; no document point exists yet.
+        app.ui.dialog = None;
+        return Ok(Value::Null);
+    }
+    // OK and Delete act only on the document and the points the dialog opened on.
+    same_document(app, d)?;
+    if let Some(index) = index.as_u64().and_then(|i| usize::try_from(i).ok()) {
+        unchanged_point(app, d, index, out.as_ref().and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()))?;
+    }
     if d.bool("discard") {
-        if index.is_null() {
-            // Deleting a prospective point discards the dialog; no document point exists yet.
-            app.ui.dialog = None;
-            return Ok(Value::Null);
-        }
         let p = match out {
             Some(out) => json!({"id": id, "indices": [index, out]}),
             None => json!({"id": id, "index": index}),
