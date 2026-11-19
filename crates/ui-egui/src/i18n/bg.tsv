@@ -621,6 +621,8 @@ font-technology	Variable	Променливи
 	Contextual Task Bar	Контекстна лента със задачи
 	Pin Bar Position	Закачане на позицията на лентата
 	Reset Bar Position	Нулиране на позицията на лентата
+	Bar Actions	Действия на лентата
+	Reset Bar Actions	Нулиране на действията на лентата
 	Resize	Преоразмеряване
 	Contrast	Контраст
 	Control	Контрол

@@ -3460,6 +3460,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Contextual Task Bar	Kontekstuel opgavelinje
 	Pin Bar Position	Fastgør linjens placering
 	Reset Bar Position	Nulstil linjens placering
+	Bar Actions	Linjens handlinger
+	Reset Bar Actions	Nulstil linjens handlinger
 	Tools	Værktøjer
 	Toolbars	Værktøjslinjer
 	Advanced	Avanceret

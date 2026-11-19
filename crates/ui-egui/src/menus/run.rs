@@ -639,6 +639,26 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.task_bar_place = Default::default();
             Ok(Value::Null)
         }
+        // More Options › Bar Actions: one of the bar's actions or chips on or off.
+        "window.taskBar.actions" => match (s("action").filter(|a| crate::canvas::is_task_bar_action(a)), opt_bool(p, "visible")) {
+            (None, _) => {
+                let ids = crate::canvas::TASK_BAR_ACTIONS.iter().map(|a| a.0).chain(crate::canvas::TASK_BAR_CHIPS);
+                Err(format!("`action` must be one of {}", ids.collect::<Vec<_>>().join(", ")))
+            }
+            (_, Err(e)) => Err(e),
+            (Some(action), Ok(visible)) => {
+                let hidden = &mut app.ui.task_bar_hidden_actions;
+                let visible = visible.unwrap_or_else(|| hidden.contains(&action));
+                if visible {
+                    hidden.remove(&action);
+                } else {
+                    hidden.insert(action.clone());
+                }
+                Ok(json!({ "action": action, "visible": visible }))
+            }
+        },
+        // More Options › Reset Bar Actions: every action and chip shows again.
+        "window.taskBar.resetActions" => Ok(json!(std::mem::take(&mut app.ui.task_bar_hidden_actions))),
         "window.dock" => {
             let ui = &mut app.ui;
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown

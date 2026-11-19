@@ -609,6 +609,8 @@ font-technology	Variable	可變
 	Contextual Task Bar	快捷工作列
 	Pin Bar Position	釘選工作列位置
 	Reset Bar Position	重設工作列位置
+	Bar Actions	工作列動作
+	Reset Bar Actions	重設工作列動作
 	Resize	調整大小
 	Contrast	對比
 	Control	控制

@@ -677,6 +677,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.taskBar.reset", "Reset Bar Position", "", "{} unpin the Contextual Task Bar and put it back under the selection"),
     (
+        "window.taskBar.actions",
+        "Bar Actions",
+        "",
+        "{action: \"imageTrace\"|\"cropImage\"|\"removeBackground\"|\"removeAnchorPoints\"|\"join\"|\"cutPath\"|\"convertToCorner\"|\"convertToSmooth\"|\"group\"|\"makeClippingMask\"|\"unite\"|\"expand\"|\"editClippingPath\"|\"releaseClippingMask\"|\"ungroup\"|\"isolate\"|\"editPath\"|\"releaseCompoundPath\"|\"createOutlines\"|\"convertToPointType\"|\"convertToAreaType\"|\"typeOnPathOptions\"|\"centerOnTop\"|\"centerOnBottom\"|\"dynamicText\"|\"offsetPath\"|\"simplify\"|\"smooth\"|\"duplicate\"|\"drawPencil\"|\"placeImage\"|\"fidelity\"|\"smoothToolOptions\"|\"resizeArtboard\"|\"duplicateArtboards\"|\"rearrangeArtboards\"|\"exportArtboards\"|\"fill\"|\"stroke\"|\"recolor\"|\"lock\"|\"shapeProperties\", visible?: bool} show (true), hide (false) or toggle (omitted) one of the Contextual Task Bar's actions or chips, as the bar's More Options › Bar Actions does; an action that is off stays out of the bar and out of More Options, and turning one off changes only the bar; `join` is both Connect and Join; every action starts on; kept with the preferences and with the workspace; another action, or a `visible` that is not true or false, is an error and changes nothing; returns {action, visible}",
+    ),
+    (
+        "window.taskBar.resetActions",
+        "Reset Bar Actions",
+        "",
+        "{} show every Contextual Task Bar action and chip that Bar Actions turned off, as the bar's More Options › Reset Bar Actions does; returns the ids shown again",
+    ),
+    (
         "window.dock",
         "Panels",
         "Tab",

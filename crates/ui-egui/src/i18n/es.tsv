@@ -645,6 +645,8 @@ font-technology	Variable	Variables
 	Contextual Task Bar	Barra de tareas contextual
 	Pin Bar Position	Fijar posición de la barra
 	Reset Bar Position	Restablecer posición de la barra
+	Bar Actions	Acciones de la barra
+	Reset Bar Actions	Restablecer acciones de la barra
 	Resize	Cambiar tamaño
 	Contrast	Contraste
 	Control	Control
