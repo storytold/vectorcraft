@@ -230,6 +230,37 @@ fn bracket_during_a_press_places_the_third_point_in_the_new_mode() {
     assert!(params["toward"][0].as_f64().is_some_and(|x| (x - 300.0).abs() < 1e-9) && params["at"] == "start", "{params}");
 }
 
+/// `]` pressed while the pointer hovers moves the third point the tool shows to where the new mode
+/// keeps it, so the arc shown is the arc a click there draws.
+#[test]
+fn bracket_while_hovering_shows_the_third_point_in_the_new_mode() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    let shift = Mods { shift: true, ..Mods::default() };
+    drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
+    hover(&mut t, &cx, (303.0, 250.0), shift);
+    t.key(&cx, ToolKey::BracketRight, Mods::default());
+    // The direction line from the first end: Shift keeps it upright.
+    let start = Point::new(300.0, 300.0);
+    let line = t.overlays(&cx).into_iter().find_map(|o| match o {
+        Overlay::Line { a, b, dashed: false, .. } if a == start => Some(b),
+        _ => None,
+    });
+    assert!(line.is_some_and(|b| (b.x - 300.0).abs() < 1e-9), "{line:?}");
+    let acts = click_with(&mut t, &cx, (303.0, 250.0), shift);
+    let [Action::Exec(_, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert!(params["toward"][0].as_f64().is_some_and(|x| (x - 300.0).abs() < 1e-9), "{params}");
+    // Back to through mode while hovering: the point goes back to the pointer.
+    drag(&mut t, &cx, (300.0, 300.0), &[(380.0, 300.0)], Mods::default());
+    hover(&mut t, &cx, (303.0, 250.0), shift);
+    assert!(t.pointer.is_some_and(|q| (q.x - 300.0).abs() < 1e-9), "{:?}", t.pointer);
+    t.key(&cx, ToolKey::BracketRight, Mods::default());
+    assert_eq!(t.pointer, Some(Point::new(303.0, 250.0)));
+    assert_eq!(click_with(&mut t, &cx, (303.0, 250.0), shift), through((300.0, 300.0), (380.0, 300.0), (303.0, 250.0)));
+}
+
 /// With Snap to Point, a first press that snaps to the rectangle's corner, 1.5 pt from the
 /// pointer, and moves 1.9 pt before it is let go is a click: the drag is measured from the press,
 /// not from the corner, so only the first end is placed.

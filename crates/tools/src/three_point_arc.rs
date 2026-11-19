@@ -59,7 +59,8 @@ pub struct ThreePointArcTool {
     pointer: Option<Point>,
     /// Alt was held at the last pointer event: in direction mode, the direction is at the second end.
     at_end: bool,
-    /// Where the pressed pointer was at its last event, before snapping, and the keys held then.
+    /// Where the pointer was at its last event, pressed or hovering, before snapping, and the keys
+    /// held then.
     raw: Option<(Point, Mods)>,
 }
 
@@ -150,6 +151,7 @@ impl Tool for ThreePointArcTool {
         }
         match ev.kind {
             PointerKind::Move => {
+                self.raw = Some((ev.pos, ev.mods));
                 let leave = self.leave(cx, ev.mods);
                 self.pointer = Some(self.snap.hover(cx, ev.pos, &[], leave.as_ref()));
                 vec![]
@@ -222,8 +224,14 @@ impl Tool for ThreePointArcTool {
             ToolKey::BracketRight if self.start.is_some() => {
                 self.direction = !self.direction;
                 // A press in progress: the point being placed keeps to the new mode.
-                if let (Some(_), Some((p, mods))) = (self.press, self.raw) {
-                    self.follow(cx, &PointerEvent::new(PointerKind::Drag, p.x, p.y).with_mods(mods));
+                // A hovering pointer: the third point it shows keeps to the new mode too.
+                match (self.press, self.raw) {
+                    (Some(_), Some((p, mods))) => self.follow(cx, &PointerEvent::new(PointerKind::Drag, p.x, p.y).with_mods(mods)),
+                    (None, Some((p, mods))) if self.end.is_some() && self.pointer.is_some() => {
+                        let leave = self.leave(cx, mods);
+                        self.pointer = Some(self.snap.hover(cx, p, &[], leave.as_ref()));
+                    }
+                    _ => {}
                 }
             }
             _ => {}
