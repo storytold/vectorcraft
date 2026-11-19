@@ -7425,6 +7425,10 @@ axis	Y Axis	osa Y
 	Create New Action	Vytvořit novou akci
 	Play Action	Přehrát akci
 	Action Set:	Sada akcí:
+	Choose Align To at playback	Volit „Zarovnat k“ při přehrávání
+	Align steps use the key object, key anchor or key guide when one is set.	Kroky zarovnání použijí klíčový objekt, klíčový kotevní bod nebo klíčové vodítko, je-li nastaveno.
+	With one whole object selected and no key, they use the artboard.	Při jednom celém vybraném objektu bez klíče použijí pracovní plochu.
+	Otherwise they use the selection.	Jinak použijí výběr.
 	Function Key:	Funkční klávesa:
 	Record	Zaznamenat
 	Create New Set	Vytvořit novou sadu

@@ -7079,6 +7079,10 @@ axis	Y Axis	Y 軸
 	Create New Action	建立新動作
 	Play Action	播放動作
 	Action Set:	動作組：
+	Choose Align To at playback	播放時選擇對齊目標
+	Align steps use the key object, key anchor or key guide when one is set.	設定了關鍵物件、關鍵錨點或關鍵參考線時，對齊步驟使用它。
+	With one whole object selected and no key, they use the artboard.	只選取一個完整物件且未設定關鍵項時，使用工作區域。
+	Otherwise they use the selection.	否則使用選取範圍。
 	Function Key:	功能鍵：
 	Record	錄製
 	Create New Set	建立新組

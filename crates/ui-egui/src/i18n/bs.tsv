@@ -6666,6 +6666,10 @@ axis	Y Axis	Y osa
 	Create New Action	Napravi novu akciju
 	Play Action	Reprodukuj akciju
 	Action Set:	Skup akcija:
+	Choose Align To at playback	Odaberi „Poravnaj s“ pri reprodukciji
+	Align steps use the key object, key anchor or key guide when one is set.	Koraci poravnanja koriste ključni objekt, ključnu sidrenu tačku ili ključnu vodilju kada je postavljen.
+	With one whole object selected and no key, they use the artboard.	S jednim cijelim odabranim objektom i bez ključa koriste radnu ploču.
+	Otherwise they use the selection.	Inače koriste odabir.
 	Function Key:	Funkcijska tipka:
 	Record	Snimi
 	Create New Set	Napravi novi skup

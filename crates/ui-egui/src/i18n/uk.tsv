@@ -7030,6 +7030,10 @@ axis	Y Axis	Вісь Y
 	Create New Action	Створити нову дію
 	Play Action	Відтворити дію
 	Action Set:	Набір дій:
+	Choose Align To at playback	Вибирати «Вирівнювати за» під час відтворення
+	Align steps use the key object, key anchor or key guide when one is set.	Кроки вирівнювання використовують ключовий об’єкт, ключову опорну точку або ключову напрямну, якщо їх задано.
+	With one whole object selected and no key, they use the artboard.	Якщо виділено один об’єкт повністю і ключа немає, використовується монтажна область.
+	Otherwise they use the selection.	Інакше використовується виділення.
 	Function Key:	Функціональна клавіша:
 	Record	Записати
 	Create New Set	Створити новий набір

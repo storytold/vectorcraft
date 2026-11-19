@@ -7432,6 +7432,10 @@ axis	Y Axis	Y-axel
 	Create New Action	Skapa ny åtgärd
 	Play Action	Spela upp åtgärd
 	Action Set:	Åtgärdsuppsättning:
+	Choose Align To at playback	Välj Justera mot vid uppspelning
+	Align steps use the key object, key anchor or key guide when one is set.	Justeringssteg använder nyckelobjektet, nyckelankarpunkten eller nyckelstödlinjen när en sådan är angiven.
+	With one whole object selected and no key, they use the artboard.	Med ett helt markerat objekt och ingen nyckel använder de ritytan.
+	Otherwise they use the selection.	Annars använder de markeringen.
 	Function Key:	Funktionstangent:
 	Record	Spela in
 	Create New Set	Skapa ny uppsättning

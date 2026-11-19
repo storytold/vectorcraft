@@ -7278,6 +7278,10 @@ axis	Y Axis	Oś Y
 	Create New Action	Utwórz nową operację
 	Play Action	Odtwórz operację
 	Action Set:	Zestaw operacji:
+	Choose Align To at playback	Wybieraj „Wyrównaj do” podczas odtwarzania
+	Align steps use the key object, key anchor or key guide when one is set.	Kroki wyrównania używają obiektu kluczowego, kluczowego punktu kontrolnego lub prowadnicy kluczowej, gdy jest ustawiona.
+	With one whole object selected and no key, they use the artboard.	Przy jednym zaznaczonym w całości obiekcie i braku klucza używają obszaru kompozycji.
+	Otherwise they use the selection.	W przeciwnym razie używają zaznaczenia.
 	Function Key:	Klawisz funkcyjny:
 	Record	Nagraj
 	Create New Set	Utwórz nowy zestaw

@@ -7324,6 +7324,10 @@ axis	Y Axis	Eixo Y
 	Create New Action	Criar Nova Ação
 	Play Action	Reproduzir Ação
 	Action Set:	Conjunto de Ações:
+	Choose Align To at playback	Escolher Alinhar a na reprodução
+	Align steps use the key object, key anchor or key guide when one is set.	As etapas de alinhamento usam o objeto-chave, o ponto de ancoragem-chave ou a guia-chave quando definidos.
+	With one whole object selected and no key, they use the artboard.	Com um só objeto inteiro selecionado e sem chave, usam a prancheta.
+	Otherwise they use the selection.	Caso contrário, usam a seleção.
 	Function Key:	Tecla de Função:
 	Record	Gravar
 	Create New Set	Criar Novo Conjunto

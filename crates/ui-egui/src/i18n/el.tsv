@@ -7415,6 +7415,10 @@ axis	Y Axis	Άξονας Y
 	Create New Action	Δημιουργία νέας ενέργειας
 	Play Action	Αναπαραγωγή ενέργειας
 	Action Set:	Σύνολο ενεργειών:
+	Choose Align To at playback	Επιλογή «Στοίχιση ως προς» κατά την αναπαραγωγή
+	Align steps use the key object, key anchor or key guide when one is set.	Τα βήματα στοίχισης χρησιμοποιούν το βασικό αντικείμενο, το βασικό σημείο αγκύρωσης ή τον βασικό οδηγό, όταν έχει οριστεί.
+	With one whole object selected and no key, they use the artboard.	Με ένα ολόκληρο επιλεγμένο αντικείμενο χωρίς βασικό, χρησιμοποιούν τον πίνακα σχεδίασης.
+	Otherwise they use the selection.	Διαφορετικά χρησιμοποιούν την επιλογή.
 	Function Key:	Πλήκτρο λειτουργίας:
 	Record	Καταγραφή
 	Create New Set	Δημιουργία νέου συνόλου

@@ -9361,6 +9361,10 @@ axis	Y Axis	Y-as
 	Create New Action	Nieuwe actie maken
 	Play Action	Actie afspelen
 	Action Set:	Actieset:
+	Choose Align To at playback	Uitlijnen op kiezen bij afspelen
+	Align steps use the key object, key anchor or key guide when one is set.	Uitlijnstappen gebruiken het sleutelobject, het sleutelankerpunt of de sleutelhulplijn als die is ingesteld.
+	With one whole object selected and no key, they use the artboard.	Met één volledig geselecteerd object en geen sleutel gebruiken ze het tekengebied.
+	Otherwise they use the selection.	Anders gebruiken ze de selectie.
 	Function Key:	Functietoets:
 	Record	Opnemen
 	Create New Set	Nieuwe set maken

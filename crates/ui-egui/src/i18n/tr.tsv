@@ -9315,6 +9315,10 @@ axis	Y Axis	Y ekseni
 	Create New Action	Yeni Eylem Oluştur
 	Play Action	Eylemi Oynat
 	Action Set:	Eylem Seti:
+	Choose Align To at playback	Oynatma sırasında hizalama hedefini seç
+	Align steps use the key object, key anchor or key guide when one is set.	Hizalama adımları, ayarlıysa anahtar nesneyi, anahtar bağlantı noktasını veya anahtar kılavuzu kullanır.
+	With one whole object selected and no key, they use the artboard.	Tek bir nesnenin tamamı seçiliyken ve anahtar yokken çalışma yüzeyini kullanırlar.
+	Otherwise they use the selection.	Aksi halde seçimi kullanırlar.
 	Function Key:	İşlev Tuşu:
 	Record	Kayıt
 	Create New Set	Yeni Set Oluştur
