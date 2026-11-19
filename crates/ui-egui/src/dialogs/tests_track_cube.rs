@@ -216,3 +216,40 @@ fn map_art_surfaces_follow_the_active_document() {
     assert_ne!(first, second, "the two objects' solids differ in size");
     assert_eq!(Some(first.as_ref()), own.as_ref(), "the first document's surfaces");
 }
+
+/// Map Art's surface number reads typed text as other number fields do: `1+2` shows surface 3.
+#[test]
+fn the_map_art_surface_field_takes_field_arithmetic() {
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    app.run("path.create", json!({"d": "M50 50L150 50L150 150L50 150Z"})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let mut d = app.ui.dialog.take().unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    assert!(surfaces(&app, &ctx, &d).unwrap().len() >= 3, "the extruded square has at least 3 surfaces");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+    let frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| map_art_controls(&app, ui, d));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    frame(&mut d, vec![]);
+    let nodes = frame(&mut d, vec![]);
+    let field = nodes
+        .iter()
+        .find(|(_, n)| n.role() == egui::accesskit::Role::SpinButton && n.label() == Some("Surface"))
+        .and_then(|(_, n)| n.bounds())
+        .expect("the Surface field is drawn");
+    let at = pos2(((field.x0 + field.x1) / 2.0) as f32, ((field.y0 + field.y1) / 2.0) as f32);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut d, vec![egui::Event::PointerMoved(at), button(true)]);
+    frame(&mut d, vec![button(false)]);
+    frame(&mut d, vec![]);
+    frame(&mut d, vec![egui::Event::Text("1+2".into())]);
+    frame(&mut d, vec![enter]);
+    frame(&mut d, vec![]);
+    assert_eq!(shown_surface(&d, 99), 3, "1+2 shows surface 3");
+}

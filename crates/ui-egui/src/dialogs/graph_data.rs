@@ -379,14 +379,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             dec = on.then_some(2);
         }
         let mut n = dec.unwrap_or(2);
-        if ui.add_enabled(on, egui::DragValue::new(&mut n).range(0..=MAX_DECIMALS)).changed() {
+        let field = egui::DragValue::new(&mut n).range(0..=MAX_DECIMALS).custom_parser(widgets::typed_number);
+        if ui.add_enabled(on, field).changed() {
             dec = Some(n);
         }
         d.fields.insert("decimals".into(), json!(dec));
         ui.add_space(12.0);
         widgets::dim_label(ui, tl!("Column Width:"));
         let mut w = d.fields.get("width").and_then(Value::as_u64).unwrap_or(7);
-        let r = ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH));
+        let r = ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH).custom_parser(widgets::typed_number));
         // A value entered with Enter sets every column, also when it is the width shown. Leaving the
         // field without a new value keeps the columns' own widths.
         if r.changed() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
@@ -899,6 +900,60 @@ mod tests {
         frame(&mut app, vec![enter]);
         frame(&mut app, vec![]);
         assert_eq!((digits(&app, 1), digits(&app, c), digits(&app, 0)), (7, 7, 7), "Column Width sets every column");
+    }
+
+    /// Cell Style's Number of Decimals and Column Width read typed text as other number fields do:
+    /// `1+2` is 3 decimals and `4x3` is 12 digits.
+    #[test]
+    fn cell_style_fields_take_field_arithmetic() {
+        let (mut app, _) = app_with("a,b\n1,2", "column");
+        open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("decimals".into(), json!(2));
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out =
+                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+        };
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        // The spin button right of the label `name`.
+        let field_after = |app: &mut VectorcraftApp, name: &str| {
+            let nodes = frame(app, vec![]);
+            let label = nodes
+                .iter()
+                .find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))
+                .and_then(|(_, n)| n.bounds())
+                .unwrap_or_else(|| panic!("the {name} label is drawn"));
+            let field = nodes
+                .iter()
+                .filter(|(_, n)| n.role() == egui::accesskit::Role::SpinButton)
+                .filter_map(|(_, n)| n.bounds())
+                .filter(|b| b.x0 >= label.x1 && b.y0 < label.y1 && b.y1 > label.y0)
+                .min_by(|a, b| a.x0.total_cmp(&b.x0))
+                .unwrap_or_else(|| panic!("the {name} field is drawn"));
+            egui::pos2(((field.x0 + field.x1) / 2.0) as f32, ((field.y0 + field.y1) / 2.0) as f32)
+        };
+        for (name, typed) in [("Number of Decimals:", "1+2"), ("Column Width:", "4x3")] {
+            let at = field_after(&mut app, name);
+            frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+            frame(&mut app, vec![button(at, false)]);
+            frame(&mut app, vec![]);
+            frame(&mut app, vec![egui::Event::Text(typed.into())]);
+            frame(&mut app, vec![enter.clone()]);
+            frame(&mut app, vec![]);
+        }
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.fields.get("decimals"), Some(&json!(3)), "1+2 decimals");
+        assert_eq!((col_digits(d, 0), col_digits(d, 1)), (12, 12), "4x3 digits for every column");
     }
 
     #[test]

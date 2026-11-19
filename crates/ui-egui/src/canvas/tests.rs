@@ -14332,6 +14332,46 @@ fn the_contour_bar_sets_corners_and_bakes() {
     assert!(offsets(&app).is_empty(), "baked");
 }
 
+/// The Contour bar's distance reads typed text as a length field does: `4x3` is 12 pt, `2 mm` is
+/// 2 mm and `−3` (a minus sign) is -3 pt, applied when Enter ends the typing.
+#[test]
+fn the_contour_bar_distance_takes_field_arithmetic() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
+    app.select_tool("contour");
+    app.session.execute("addon.contour.set", &json!({"offset": 8, "corners": "round"})).unwrap();
+    let ctx = egui::Context::default();
+    let offset = |app: &VectorcraftApp| {
+        let mut found = vec![];
+        app.session.active().unwrap().doc.walk(|n| {
+            if let Some(e) = n.appearance.effects.iter().find(|e| e.id == "path.offsetPath") {
+                found.push(e.params["offset"].as_f64().unwrap_or(f64::NAN));
+            }
+        });
+        found
+    };
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    // Text that does not read (`2 qq`) leaves the distance as it was.
+    let mm = 2.0 * 72.0 / 25.4;
+    for (typed, want) in [(&["4x3"][..], 12.0), (&["2 mm"], mm), (&["\u{2212}3"], -3.0), (&["2 qq"], -3.0)] {
+        contour_bar_labels(&mut app, &ctx, vec![]);
+        let labels = contour_bar_labels(&mut app, &ctx, vec![]);
+        let at = labels.iter().find(|(t, _)| t.ends_with(" pt")).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no distance in {labels:?}"));
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        contour_bar_labels(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        contour_bar_labels(&mut app, &ctx, vec![button(true), button(false)]);
+        contour_bar_labels(&mut app, &ctx, vec![]);
+        for part in typed {
+            contour_bar_labels(&mut app, &ctx, vec![egui::Event::Text((*part).into())]);
+        }
+        contour_bar_labels(&mut app, &ctx, vec![enter.clone()]);
+        contour_bar_labels(&mut app, &ctx, vec![]);
+        let got = offset(&app);
+        assert!(got.len() == 1 && (got[0] - want).abs() < 1e-6, "{typed:?}: {got:?}");
+    }
+}
+
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };

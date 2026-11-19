@@ -11924,7 +11924,8 @@ outside its range is refused with `` `warichuLines` must be a whole number from 
 `` `warichuScale` must be from 10 to 100 ``, naming the key, and an unknown alignment with the list of the values. One
 undo step; a `text.setFormat` call that changes nothing records none. `ui.warichuSettings` opens the Warichu Settings dialog on the
 values the selected characters share, a blank field where they differ; OK sends the values that changed and leaves a
-blank field's value alone. OK with a field that is not a number returns `Lines must be a number`,
+blank field's value alone. Lines and Scale given as text take the arithmetic of the app's number fields (`"1+2"`,
+`"30x2%"`); `%` is read only in Scale. OK with a field that is not a number returns `Lines must be a number`,
 `Line Gap must be a number` or `Scale must be a number` and keeps the dialog open.
 
 ```json
@@ -12928,7 +12929,10 @@ dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`
 `tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `diacriticHorizontal`, `diacriticVertical`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
-attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
+attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value. A number field
+given as text takes the arithmetic of the app's number fields (`"6x2"`, `"10+4"`); `size`, `leading`, `baseline_shift`,
+`tcyUpDown`, `tcyLeftRight` and `stroke_width` also read a unit (`"1 in"`), `%` is read only in `h_scale`, `v_scale`,
+`fill_tint` and `stroke_tint`, and `°` only in `rotation`.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of

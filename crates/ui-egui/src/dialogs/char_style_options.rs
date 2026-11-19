@@ -309,6 +309,18 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
+/// The number text typed into number field `key` reads as, with the field arithmetic: a length in
+/// points (`2 mm`) for the length fields, `%` only in the percent fields and `°` only in Character
+/// Rotation.
+fn typed_number(key: &str, text: &str) -> Option<f64> {
+    match key {
+        "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => crate::widgets::typed_points(text),
+        "h_scale" | "v_scale" | "fill_tint" | "stroke_tint" => crate::widgets::typed_number_with(text, "%"),
+        "rotation" => crate::widgets::typed_number_with(text, "°"),
+        _ => crate::widgets::typed_number(text),
+    }
+}
+
 fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
     let label = match key {
         "size" => tl!("Size"),
@@ -338,7 +350,7 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         Some(v) => {
             let n = v
                 .as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+                .or_else(|| v.as_str().and_then(|s| typed_number(key, s)))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
             // Character Style fields use the Character panel's visible ranges.
@@ -1472,6 +1484,23 @@ mod tests {
         }
         assert!(same > 0, "General draws its content again: {back:?}");
     }
+
+    /// The number fields read typed text as other number fields do: `6x2`, `10+4`, `200/2`, `45°`,
+    /// and a length with its unit. `%` and `°` only where the field takes them, and an exponent
+    /// is not read.
+    #[test]
+    fn number_fields_take_field_arithmetic() {
+        let fields = json!({"size": "6x2", "tracking": "10+4", "h_scale": "200/2%", "rotation": "45°", "fill_tint": "25*2", "leading": "1 in"});
+        let d = Dialog { kind: KIND.into(), fields: fields.as_object().unwrap().clone() };
+        for (key, want) in [("size", 12.0), ("tracking", 14.0), ("h_scale", 100.0), ("rotation", 45.0), ("fill_tint", 50.0), ("leading", 72.0)] {
+            assert_eq!(optional_number(&d, key), Ok(Some(json!(want))), "{key}");
+        }
+        for (key, text) in [("size", "12°"), ("leading", "50%"), ("tracking", "10%"), ("rotation", "45%"), ("h_scale", "1%2"), ("size", "1e3")] {
+            let d = Dialog { kind: KIND.into(), fields: json!({ key: text }).as_object().unwrap().clone() };
+            assert!(optional_number(&d, key).is_err(), "{key} {text}");
+        }
+    }
+
     #[test]
     fn unchanged_basic_fields_preserve_original_keys() {
         for attrs in [

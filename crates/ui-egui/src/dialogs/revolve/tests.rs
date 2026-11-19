@@ -903,3 +903,16 @@ fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
     dialogs::cancel(&mut h.app);
     assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
+
+/// Unitless values read typed text as other number fields do; the field's `°` or `%` only after an
+/// operand, never between two digits.
+#[test]
+fn typed_values_take_field_arithmetic() {
+    for (text, suffix, want) in [("45*2", "°", 90.0), ("45x2°", "°", 90.0), ("12,5", "", 12.5), ("50%", "%", 50.0), ("\u{2212}30", "°", -30.0)] {
+        assert_eq!(typed_value(text, suffix, None, None), Some(want), "{text}");
+    }
+    for (text, suffix) in [("1%2", "%"), ("4°5", "°"), ("8%", ""), ("30%", "°")] {
+        assert_eq!(typed_value(text, suffix, None, None), None, "{text}");
+    }
+    assert_eq!(typed_value("1 in", " pt", Some(Unit::Points), None), Some(72.0));
+}
