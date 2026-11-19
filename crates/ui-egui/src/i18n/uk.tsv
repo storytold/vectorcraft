@@ -1038,6 +1038,15 @@ font-technology	Variable	Варіативні
 	DXF Info	Відомості про DXF
 	DXF Options	Параметри DXF
 	DXF Options Dialog	Діалогове вікно «Параметри DXF»
+	HP-GL Options	Параметри HP-GL
+	HP-GL Options Dialog	Діалогове вікно «Параметри HP-GL»
+	Curve Tolerance:	Допуск кривих:
+	Origin:	Початок координат:
+	Pens:	Пера:
+	One Pen per Color	Одне перо на колір
+	Pen Table	Таблиця пер
+	Draw the Nearest Path Next	Наступним малювати найближчий контур
+	Draw Inner Paths First	Спершу малювати внутрішні контури
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Кожна сторінка друкується як одне зображення з роздільною здатністю растрових ефектів документа.
 	Earth Tones	Земляні тони
@@ -2374,6 +2383,7 @@ file-filter	Templates	Шаблони
 	Pressure	Натиск
 	Tilt	Нахил
 	Bearing	Азимут
+	Stylus Wheel	Коліщатко пера
 	Shape:	Форма:
 	Bristle Length:	Довжина щетинок:
 	Bristle Density:	Щільність щетинок:
@@ -2404,6 +2414,9 @@ file-filter	Templates	Шаблони
 	embedding for preview and print	вбудовування для перегляду й друку
 	embedding allowed	вбудовування дозволено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	невідомий тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} використання|{n} використання|{n} використань
 	substituted: shown in {family} {style} ({detail})	замінено: показано шрифтом {family} {style} ({detail})
 	missing: shown in {family} {style}	відсутній: показано шрифтом {family} {style}
 	missing	відсутній

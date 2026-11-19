@@ -16,6 +16,8 @@
 
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
+> Scissors snapping update (2026-11-11): with Alt released, hover and cuts use the Pen's path, alignment, intersection and anchor snaps (#6470). Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 Draft enhancement #5804: Preferences › File Handling can select a raster editor through the native picker, with a private draft outside engine preferences and generic dialog fields. OK saves it, Cancel discards it, and Reset restores PhotoCraft. With Use System Defaults off, a missing chosen editor falls back to PhotoCraft, then the system default; validation and launch failures are reported. Control/MCP and synthetic input cannot choose an application or run external Edit Original. Web behavior, parity scores and estimates are unchanged; macOS/Linux smoke tests remain pending.
@@ -186,6 +188,7 @@ tools, never checked side by side) isn't captured row by row.
 | Pen cursors (new path ×, continue /, close o, add +, delete −, convert ^) | done | the nib is a fountain-pen nib, tip on the hotspot, with the slit widening into the breather hole and the heel clipped square to its axis; bitmap tests at 1× and 2× pin the nib and the new-path asterisk, and in-app screenshots compare the Pen with Direct Selection |
 | Node-editing cursors: Direct Selection's white arrow with a hollow or filled square over an anchor (path unselected or selected); the Reshape Segment cursor over a curved segment (Direct Selection, Anchor Point, the Pen with Alt); the Anchor Point caret for the Pen with Alt; Group Selection's plus (also Direct Selection with Alt); a filled arrow while dragging that turns hollow on a snap; a double arrowhead for an Alt-drag copy | partial | as the public manual describes them, drawn in code; no cue over handles (none documented) |
 | Anchor Point and Curvature tools' own cursors | done | the caret on the anchor it converts; the pen nib with a curve badge |
+| Scissors hover and cuts use the Pen's path, alignment, intersection and anchor snapping (#6470) | implemented | Existing Smart Guides, Snap to Point, pixel and grid options apply; Pixel Preview turns off Smart Guides. Alt still adds an anchor without cutting, and a cut still leaves one new endpoint selected. Headless regressions: `crates/tools/src/draw2/anchor/tests.rs` and `crates/engine/tests/scissors_snap.rs`. |
 | Free Transform's Cmd/Ctrl side-shear cursor | done | two arrows passing along the side (ShearH, ShearV), instead of the resize arrow across it |
 | Live Paint Bucket cursors | partial | a filled bucket over a face a click fills, a brush over an edge it paints, an empty bucket where it paints nothing, following Paint Fills, Paint Strokes and Shift; the Eyedropper with Alt; the crosshair with Use Precise Cursors. No cursor swatch preview |
 | Cursors of their own for Lasso, Magic Wand, the freehand tools, Shaper, Measure, Print Tiling, the symbolism tools, vertical type, Scissors (over a segment and away), Mesh and Puppet Warp | partial | each tool returns its own cursor and Use Precise Cursors turns them into the crosshair; until they're drawn they borrow the crosshair, the I-beam, the Pen's add cursor or not-allowed |
@@ -624,6 +627,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-11 | minor | Files that record no units (PDF, EPS or `.ai` without ruler units, raster images, metafiles, Affinity files, importer plug-ins) open and revert in Preferences › Units › General instead of points; native, SVG and DXF files and `.ai`/EPS ruler units are kept (#5820). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Blob Brush: while painting, the preview of a round tip is the outline of the area the stroke adds, round at both ends, as the stroke it commits (#4343). Scores unchanged (estimated). |
 | 2026-11-11 | minor | #6625: path and compound-path interior hits follow enabled non-None fill rows, including lower fills beneath a top None row; hidden-only interiors miss; zero-opacity fills remain selectable. Scores and estimates unchanged. |
+| 2026-11-11 | minor | Scissors hover and cuts share Pen-style path/align/intersect/anchor snapping (#6470), retaining view options, Alt Add Anchor and cut endpoint selection; headless tool and Session regressions referenced. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Symbol libraries: Inventory Icons joins Basic Shapes, UI Frames and Map Markers as a fourth built-in library (Sword, Shield, Potion, Key, Gem; no default 9-slice). |
 | 2026-11-10 | minor | Held numeric spinner arrows keep stepping past the click timeout and stop on release (#6307). Scores and estimates unchanged. |
 | 2026-11-10 | minor | Vector Halftone Preview leaves the dots unobscured and keeps the selection box (#6369). Scores and estimates unchanged. |

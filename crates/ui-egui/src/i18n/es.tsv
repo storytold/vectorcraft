@@ -1034,6 +1034,15 @@ font-technology	Variable	Variables
 	DXF Info	Información DXF
 	DXF Options	Opciones DXF
 	DXF Options Dialog	Cuadro de diálogo Opciones DXF
+	HP-GL Options	Opciones HP-GL
+	HP-GL Options Dialog	Cuadro de diálogo Opciones HP-GL
+	Curve Tolerance:	Tolerancia de las curvas:
+	Origin:	Origen:
+	Pens:	Plumas:
+	One Pen per Color	Una pluma por color
+	Pen Table	Tabla de plumas
+	Draw the Nearest Path Next	Dibujar a continuación el trazado más cercano
+	Draw Inner Paths First	Dibujar primero los trazados interiores
 	e.g. 1-3, 5	p. ej. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Cada página se imprime como una imagen, con la resolución de efectos de rasterización del documento.
 	Earth Tones	Tonos tierra
@@ -2341,6 +2350,7 @@ font-technology	Variable	Variables
 	Pressure	Presión
 	Tilt	Inclinación
 	Bearing	Orientación
+	Stylus Wheel	Rueda del lápiz
 	Shape:	Forma:
 	Bristle Length:	Longitud de cerdas:
 	Bristle Density:	Densidad de cerdas:
@@ -2371,6 +2381,9 @@ font-technology	Variable	Variables
 	embedding for preview and print	incrustación para vista previa e impresión
 	embedding allowed	incrustación permitida
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipo desconocido
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} uso|{n} usos
 	substituted: shown in {family} {style} ({detail})	sustituida: se muestra con {family} {style} ({detail})
 	missing: shown in {family} {style}	falta: se muestra con {family} {style}
 	missing	falta

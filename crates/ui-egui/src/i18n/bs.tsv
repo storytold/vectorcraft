@@ -1122,6 +1122,15 @@ lighting	Light	Svjetlo
 	Document Raster Effects Settings Dialog	Dijalog postavki rasterskih efekata dokumenta
 	Drop Shadow	Sjena
 	DXF Options Dialog	Dijalog DXF opcija
+	HP-GL Options	HP-GL opcije
+	HP-GL Options Dialog	Dijalog HP-GL opcija
+	Curve Tolerance:	Tolerancija krivulja:
+	Origin:	Ishodište:
+	Pens:	Pera:
+	One Pen per Color	Jedno pero po boji
+	Pen Table	Tabela pera
+	Draw the Nearest Path Next	Sljedeću crtaj najbližu putanju
+	Draw Inner Paths First	Prvo crtaj unutrašnje putanje
 	Edit Toolbar	Uredi traku s alatima
 	Edit Views	Uredi poglede
 	Effect…	Efekat…
@@ -3420,6 +3429,7 @@ antiAlias	Sharp	Oštro
 	Pressure	Pritisak
 	Tilt	Nagib
 	Bearing	Smjer
+	Stylus Wheel	Kotačić olovke
 	Random	Nasumično
 	Scatter	Raspršeno
 	Color Burn	Tamnjenje boje
@@ -3549,6 +3559,9 @@ theme	Appearance	Izgled
 	embedding for preview and print	ugrađivanje za pregled i štampu
 	embedding allowed	ugrađivanje dozvoljeno
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	nepoznata vrsta
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} upotreba|{n} upotrebe|{n} upotreba
 	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
 	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
 	missing	nedostaje
