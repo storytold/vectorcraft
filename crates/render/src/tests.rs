@@ -224,6 +224,33 @@ fn hidden_and_culled() {
     assert_eq!(rr.stats.culled, 1);
 }
 
+#[test]
+fn a_render_leaves_out_every_object_of_a_large_hidden_set() {
+    // 2,000 one-pixel-wide strips; the strips in even columns are in `hidden`.
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut hidden = std::collections::HashSet::new();
+    for row in 0..20 {
+        for col in 0..100 {
+            let r = Rect::new(f64::from(col), f64::from(row * 5), f64::from(col + 1), f64::from(row * 5 + 5));
+            let n = rect_node(&mut d, r, Paint::solid(Color::BLACK), Paint::None, 0.0);
+            let id = d.insert(Some(l), usize::MAX, n).unwrap();
+            if col % 2 == 0 {
+                hidden.insert(id);
+            }
+        }
+    }
+    assert_eq!(hidden.len(), 1_000);
+    let opts = RenderOptions { hidden, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    for row in 0..20 {
+        for col in 0..100 {
+            let want = if col % 2 == 0 { [0, 0, 0, 0] } else { [0, 0, 0, 255] };
+            assert_eq!(r.pixel(col, row * 5 + 2), want, "column {col}, row {row}");
+        }
+    }
+}
+
 /// A document with symbol "Far" holding a red rectangle `art`, and an instance of it moved by
 /// (-50, -50): its 20 × 20 square, (-60, -60) to (-40, -40), lies outside a view of the page.
 fn far_instance(art: Rect) -> Document {
@@ -839,6 +866,79 @@ fn trace_source_applies_the_hidden_image_mask() {
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
     assert_eq!(img.pixel(30, 50), [255, 0, 0, 255]);
     assert_eq!(img.pixel(70, 50), [255, 255, 255, 255]);
+}
+
+/// The Split view draws the source image left of its divider and the traced shapes right of it,
+/// along the image's own width (also when the image is turned), with traced art past any of the
+/// image's edges drawn whatever the divider, in the same frames a renderer that keeps its caches
+/// draws, and in a zoomed and scrolled view and a turned view; exports draw the tracing result.
+#[test]
+fn split_view_draws_the_source_on_one_side_of_the_divider_and_the_result_on_the_other() {
+    use vectorcraft_doc::{ImageBlob, ImageObject};
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let red = |p: [u8; 4]| p[0] > 200 && p[1] < 60 && p[2] < 60;
+    let blue = |p: [u8; 4]| p[2] > 200 && p[0] < 60;
+    // A red 80 × 80 source image at 10, 10, turned a half turn about its center when `turned`, with
+    // a blue traced square over all of it.
+    for turned in [false, true] {
+        let mut d = Document::new(100.0, 100.0);
+        d.images.insert("red".into(), ImageBlob::new("image/png", png.clone()));
+        let turn = if turned { Affine::rotate_about(std::f64::consts::PI, kurbo::Point::new(50.0, 50.0)) } else { Affine::IDENTITY };
+        let xf = turn * Affine::translate((10.0, 10.0)) * Affine::scale(80.0);
+        let im = ImageObject { key: "red".into(), width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        let mut source = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+        source.visible = false;
+        let shape = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+        // Traced art past the image's right edge on the page (a stroke along it, say).
+        let past = rect_node(&mut d, Rect::new(92.0, 46.0, 98.0, 54.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+        // And above the image's top edge, near its left edge.
+        let above = rect_node(&mut d, Rect::new(14.0, 2.0, 26.0, 8.0), Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0);
+        let mut g = Node::group(d.alloc_id(), vec![Arc::new(source), Arc::new(shape), Arc::new(past), Arc::new(above)]);
+        let id = g.id;
+        g.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "split", "split": 0.25 })));
+        d.insert(Some(d.layers[0].id), 0, g).unwrap();
+        let screen = RenderOptions { trace_views: true, background: Some([255; 4]), ..Default::default() };
+        let export = RenderOptions { background: Some([255; 4]), ..Default::default() };
+        let mut kept = Renderer::new();
+        for split in [0.25, 0.0, 1.0, 0.25] {
+            if let Some(n) = d.node_mut(id) {
+                n.extras_mut().trace = Some(Box::new(serde_json::json!({ "view": "split", "split": split })));
+            }
+            // The divider in page space: 30 across from the image's left edge, or from its right
+            // edge on the page once the image is turned.
+            let at = if turned { 90.0 - 80.0 * split } else { 10.0 + 80.0 * split };
+            // The view: as is, zoomed in twice and scrolled, and turned a half turn about the page's
+            // middle; `px` finds the pixel showing page point (x, y).
+            let views: [(Affine, u32); 3] = [
+                (Affine::IDENTITY, 100),
+                (Affine::translate((5.0, 7.0)) * Affine::scale(2.0), 210),
+                (Affine::rotate_about(std::f64::consts::PI, kurbo::Point::new(50.0, 50.0)), 100),
+            ];
+            for (view, size) in views {
+                let px = |r: &Rendered, x: f64, y: f64| {
+                    let q = view * kurbo::Point::new(x, y);
+                    r.pixel(q.x.floor() as u32, q.y.floor() as u32)
+                };
+                for r in [kept.render(&d, size, size, view, &screen), Renderer::new().render(&d, size, size, view, &screen)] {
+                    for x in [12.5, 30.5, 48.5, 52.5, 70.5, 88.5] {
+                        let p = px(&r, x, 50.5);
+                        let source = if turned { x > at } else { x < at };
+                        assert!(if source { red(p) } else { blue(p) }, "turned {turned}, split {split}, view {view:?}, x = {x}: {p:?}");
+                    }
+                    assert_eq!(px(&r, 5.5, 50.5), [255; 4], "nothing outside the image");
+                    // The art past the image's edges shows on either side of the divider.
+                    let green = |p: [u8; 4]| p[1] > 200 && p[0] < 60 && p[2] < 60;
+                    for (x, y) in [(95.5, 50.5), (20.5, 5.5)] {
+                        let p = px(&r, x, y);
+                        assert!(green(p), "turned {turned}, split {split}, view {view:?}, ({x}, {y}): {p:?}");
+                    }
+                }
+            }
+            let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &export);
+            assert!([12u32, 50, 88].iter().all(|x| blue(r.pixel(*x, 50))), "exports draw the result");
+        }
+    }
 }
 
 #[test]
