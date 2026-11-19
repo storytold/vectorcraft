@@ -479,15 +479,26 @@ impl<'p> Builder<'p> {
         self.push_node(n);
     }
 
+    /// Finish the open line of type ([`Self::end_text`]) and the outlines it was kept as, before
+    /// something else is drawn: a path, an image, a Type 3 glyph's art, or a change of blend mode
+    /// or soft mask. Nothing is drawn between a text-showing operator's fill pass and its stroke
+    /// pass, so no stroke drawn after this goes over a glyph finished before it either: the
+    /// glyphs of lines finished before their stroke pass could end are forgotten
+    /// ([`Self::park_text`]). It also finishes a line no stroke can go over as the next line
+    /// starts ([`Self::park_text`]): a fill pass whose glyphs a stroke can go over parks each of
+    /// its lines instead, so that is never in the middle of one that left such glyphs behind.
     pub(super) fn flush_text(&mut self) {
         if self.end_text() {
             self.flush_glyphs();
         }
+        self.lost = None;
     }
 
     /// Finish the open line of type, after the lines parked before it ([`Self::park_text`]).
     /// `true`: the open line was kept as outlines instead ([`reshaped`]), which are left open as
-    /// the glyph run for an outline drawn next to join.
+    /// the glyph run for an outline drawn next to join. It runs in the middle of a fill pass when
+    /// one of its glyphs is kept as an outline: the glyphs of lines finished past the most kept
+    /// before it are not forgotten there, as they are by [`Self::flush_text`].
     pub(super) fn end_text(&mut self) -> bool {
         self.settle_strokes();
         self.release_parked(usize::MAX);
@@ -665,21 +676,31 @@ impl<'p> Builder<'p> {
     fn replayed(&self, held: &[HeldStroke]) -> Option<Vec<(usize, usize)>> {
         let (head, rest) = held.split_first()?;
         let mut work = 0usize;
-        // The glyphs filled from `at` on, up to as many as there are strokes held.
-        let left = |(slot, i): (usize, usize)| {
-            (slot..=self.parked.len())
-                .filter_map(|s| self.line_at(s).map(|line| line.filled_len().saturating_sub(if s == slot { i } else { 0 })))
-                .fold(0usize, |n, len| n.saturating_add(len).min(held.len()))
+        // The glyphs filled from `at` on, up to as many as there are strokes held, each line
+        // looked at counted as work.
+        let left = |(slot, i): (usize, usize), work: &mut usize| {
+            let mut n = 0usize;
+            for s in slot..=self.parked.len() {
+                if n >= held.len() {
+                    break;
+                }
+                *work = work.saturating_add(1);
+                if let Some(line) = self.line_at(s) {
+                    n = n.saturating_add(line.filled_len().saturating_sub(if s == slot { i } else { 0 }));
+                }
+            }
+            n.min(held.len())
         };
         let mut start = self.last_fill(None, head);
         while let Some(first) = start {
             start = self.last_fill(Some(first), head);
             work = work.saturating_add(1);
+            // Too few glyphs filled after it for the strokes held: not where the pass starts.
+            let short = left(first, &mut work) < held.len();
             if work > MAX_REPLAY_WORK {
                 return None;
             }
-            // Too few glyphs filled after it for the strokes held: not where the pass starts.
-            if left(first) < held.len() {
+            if short {
                 continue;
             }
             let mut places = Vec::with_capacity(held.len());
