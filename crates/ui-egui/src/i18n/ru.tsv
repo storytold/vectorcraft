@@ -10834,6 +10834,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Vector Packs	Векторные наборы
+	Compass Rose	Роза ветров
+	Botanical Sprig	Ботаническая ветвь
+	Facet Diamond	Гранёный бриллиант
+	Tide Crest	Гребень волны
 	Leaf Vine	Лиственная лоза
 	Blossom Chain	Цветочная цепочка
 	Pennant Garland	Гирлянда флажков

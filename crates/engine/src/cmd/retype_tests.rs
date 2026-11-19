@@ -751,6 +751,224 @@ fn turned_near_matched_round_glyphs_keep_the_line_turn() {
 }
 
 #[test]
+fn several_lines_become_one_area_type_object() {
+    let mut s = session();
+    let text = "First line\nSecond one\nThird";
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 24}), &[]);
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["area"], json!(true), "{r}");
+    assert_eq!(r["fonts"][0]["leading"], json!(null), "Auto leading gives the lines' spacing: {r}");
+    let t = text_of(&s, r["ids"][0].as_u64().unwrap());
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert_eq!(t.plain_text(), text);
+    assert_same_places(&before, &t);
+}
+
+#[test]
+fn lines_a_quarter_of_the_size_apart_join_and_closer_ones_do_not() {
+    // At 20 pt, 5 pt is the least leading that joins lines.
+    // 4.9999999 pt is 5 pt to the rounding of the outlines' positions.
+    for (leading, objects) in [(5.0, 1), (4.9999999, 1), (4.9, 2)] {
+        let mut s = session();
+        let text = "One\nTwo";
+        let (_, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 20}), &[json!({"leading": leading})]);
+        assert_eq!(r["texts"].as_array().unwrap().len(), objects, "{leading}: {r}");
+    }
+}
+
+#[test]
+fn a_two_glyph_line_takes_the_tracking_of_the_lines_around_it() {
+    let mut s = session();
+    let text = "MMM\nMM\nMMM";
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 24}), &[json!({"tracking": 50})]);
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["tracking"], json!(50.0), "{r}");
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn lines_keep_their_leading_and_alignment() {
+    for justify in ["left", "center", "right"] {
+        let mut s = session();
+        let text = "Wide first line\nmid\nlast one";
+        let (before, r) = retyped(&mut s, json!({"x": 300, "y": 100, "text": text, "size": 20, "justify": justify}), &[json!({"leading": 31})]);
+        assert_eq!(r["texts"], json!([text]), "{justify}: {r}");
+        assert!(near(r["fonts"][0]["leading"].as_f64().unwrap(), 31.0, 1e-3), "{justify}: {r}");
+        assert_eq!(r["fonts"][0]["area"], json!(true), "{justify}: {r}");
+        let t = text_of(&s, r["ids"][0].as_u64().unwrap());
+        assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }), "{justify}");
+        assert_eq!(t.para.justify, before.para.justify, "{justify}");
+        assert_same_places(&before, &t);
+    }
+}
+
+#[test]
+fn a_long_block_near_auto_leading_keeps_its_own_leading() {
+    // 24.001 pt is Auto's 24 pt within a ten-thousandth of the size per line, but 250 lines
+    // move the last one a quarter of a point.
+    let mut s = session();
+    let text = vec!["ab"; 250].join("\n");
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 40, "text": text, "size": 20}), &[json!({"leading": 24.001})]);
+    assert_eq!(r["texts"], json!([text]), "{}", r["fonts"].as_array().map_or(0, |f| f.len()));
+    assert!(near(r["fonts"][0]["leading"].as_f64().unwrap(), 24.001, 1e-4), "{}", r["fonts"][0]);
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn a_long_block_at_auto_leading_of_a_fractional_size_keeps_auto() {
+    // Auto leading of 20.002 pt is 24.0024 pt, finer than the thousandth of a point the leading
+    // between two lines is read to.
+    let mut s = session();
+    // Six hundred lines: read to a thousandth, each gap would be 0.0004 pt short, and the last
+    // line 0.24 pt off.
+    let text = vec!["ab"; 600].join("\n");
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 40, "text": text, "size": 20.002}), &[]);
+    assert_eq!(r["texts"], json!([text]), "{}", r["fonts"].as_array().map_or(0, |f| f.len()));
+    assert_eq!(r["fonts"][0]["leading"], json!(null), "{}", r["fonts"][0]);
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn a_long_block_at_a_leading_finer_than_a_thousandth_keeps_it() {
+    // 23.9996 pt read to a thousandth is 24 pt, Auto for 20 pt type: over 600 lines the last one
+    // would be 0.24 pt off.
+    let mut s = session();
+    let text = vec!["ab"; 600].join("\n");
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 40, "text": text, "size": 20}), &[json!({"leading": 23.9996})]);
+    assert_eq!(r["texts"], json!([text]), "{}", r["fonts"].as_array().map_or(0, |f| f.len()));
+    assert!(near(r["fonts"][0]["leading"].as_f64().unwrap(), 23.9996, 1e-6), "{}", r["fonts"][0]);
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn a_block_whose_first_gap_is_a_little_off_stays_one_object() {
+    // The second line moved up 0.004 pt: its gap read alone, carried over 100 lines, would put
+    // the last one 0.4 pt off.
+    let mut s = session();
+    let text = ["ab"; 100].join("\n");
+    let id = s.execute("text.create", &json!({"x": 40, "y": 40, "text": text, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "leading": 24.004})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let kids = children_of(&s, g);
+    s.execute("select.set", &json!({"ids": kids[2..4]})).unwrap();
+    s.execute("object.move", &json!({"dx": 0, "dy": -0.004})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!([text]), "{}", r["fonts"].as_array().map_or(0, |f| f.len()));
+    assert!(near(r["fonts"][0]["leading"].as_f64().unwrap(), 24.004, 1e-3), "{}", r["fonts"][0]);
+}
+
+#[test]
+fn lines_whose_frame_would_pass_the_coordinate_limit_stay_point_type() {
+    let mut s = session();
+    let text = "Wide line\nWide";
+    let id = s.execute("text.create", &json!({"x": 3_999_000, "y": 100, "text": text, "size": 20})).unwrap()["id"].as_u64().unwrap();
+    let right = s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap().x1;
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // The ink ends 2 pt short of the limit; Convert To Area Type's slack would reach past it.
+    s.execute("object.move", &json!({"dx": vectorcraft_doc::MAX_COORD - 2.0 - right, "dy": 0})).unwrap();
+    let before = text_of(&s, id);
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["area"], json!(false), "{r}");
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn a_line_type_cannot_join_ends_the_block_there() {
+    // The fourth line keeps a fraction of a unit of tracking that the others do not: joined, it
+    // moves, so the lines before it stay one object and the lines after it join again.
+    let mut s = session();
+    let line = "M".repeat(40);
+    let text = [line.as_str(); 6].join("\n");
+    let start = 3 * 41;
+    let (before, r) =
+        retyped(&mut s, json!({"x": 20, "y": 40, "text": text, "size": 20}), &[json!({"start": start, "end": start + 40, "tracking": 0.6})]);
+    let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+    assert_eq!(texts.len(), 3, "{texts:?} {}", r["fonts"]);
+    assert_eq!(texts.join("\n"), text);
+    let places: Vec<kurbo::Point> = r["ids"].as_array().unwrap().iter().flat_map(|id| glyph_places(&text_of(&s, id.as_u64().unwrap()))).collect();
+    let want = glyph_places(&before);
+    assert_eq!(places.len(), want.len());
+    for (x, y) in places.iter().zip(&want) {
+        assert!(x.distance(*y) < 0.05, "{x:?} vs {y:?}");
+    }
+}
+
+/// The glyphs of the outline groups `others` moved to the end of group `g`, in order, and the
+/// emptied groups removed.
+fn into_one_group(s: &mut Session, g: u64, others: &[u64]) {
+    s.edit("test", |d, _| {
+        for o in others {
+            let kids: Vec<_> = d.node(NodeId(*o)).unwrap().children().unwrap().to_vec();
+            d.remove(NodeId(*o))?;
+            for k in kids {
+                let at = d.node(NodeId(g)).unwrap().children().unwrap().len();
+                d.insert(Some(NodeId(g)), at, (*k).clone())?;
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn lines_that_do_not_stack_as_a_paragraph_stay_apart() {
+    let mut s = session();
+    // Far apart, then lined up at nothing.
+    let a = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Top", "size": 20}));
+    let b = outlined(&mut s, json!({"x": 40, "y": 300, "text": "Far", "size": 20}));
+    let c = outlined(&mut s, json!({"x": 75, "y": 324, "text": "Askew", "size": 20}));
+    into_one_group(&mut s, a, &[b, c]);
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["Top", "Far", "Askew"]), "{r}");
+    assert!(r["fonts"].as_array().unwrap().iter().all(|f| f["area"] == json!(false)), "{r}");
+}
+
+#[test]
+fn a_shape_between_lines_keeps_them_apart() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB\nCD", "size": 30}));
+    let rect = s.execute("shape.rectangle", &json!({"x": 30, "y": 60, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap();
+    s.edit("test", |d, _| {
+        let n = d.node(NodeId(rect)).unwrap().clone();
+        d.remove(NodeId(rect))?;
+        d.insert(Some(NodeId(g)), 2, n)?;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["AB", "CD"]), "the rectangle is painted between the lines: {r}");
+}
+
+#[test]
+fn tracked_lines_keep_their_tracking_and_spaces() {
+    let mut s = session();
+    let text = "SPACED OUT\nTITLE";
+    let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 24}), &[json!({"tracking": 400})]);
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["tracking"], json!(400.0), "{r}");
+    assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+}
+
+#[test]
+fn a_short_line_takes_the_tracking_of_its_block() {
+    // One glyph has no gap to measure tracking by: it joins the tracked lines.
+    for text in ["TITLE\nB", "B\nTITLE", "TITLE\nB\nTITLE"] {
+        let mut s = session();
+        let (before, r) = retyped(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 24}), &[json!({"tracking": 400})]);
+        assert_eq!(r["texts"], json!([text]), "{r}");
+        assert_eq!(r["fonts"][0]["tracking"], json!(400.0), "{r}");
+        assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+    }
+}
+
+#[test]
 fn unevenly_tracked_type_still_becomes_type() {
     let mut s = session();
     // Less than half a space more after e: no gap can be read as a word space.
@@ -1418,4 +1636,113 @@ fn overlapping_translucent_glyphs_are_not_tracked_into_one_object() {
     // Each glyph composites on its own over the one it overlaps, as the outlines did.
     assert_eq!(r["texts"], json!(["M", "M", "M", "M"]), "{r}");
     assert!(r["fonts"].as_array().unwrap().iter().all(|f| f["tracking"] == json!(0.0)), "{r}");
+}
+
+#[test]
+fn translucent_gradient_or_stroked_lines_stay_apart() {
+    for case in ["opacity", "blend", "gradient", "stroke"] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "One\nTwo", "size": 30}));
+        let kids = children_of(&s, g);
+        match case {
+            "gradient" => {
+                let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+                s.execute("paint.setFill", &json!({"gradient": gradient, "ids": kids})).unwrap();
+            }
+            "stroke" => {
+                s.execute("paint.setStroke", &json!({"color": "#ff0000", "ids": kids})).unwrap();
+            }
+            _ => {
+                s.edit("test", |d, _| {
+                    for k in &kids {
+                        let n = d.node_mut(NodeId(*k)).unwrap();
+                        if case == "opacity" {
+                            n.opacity = 0.5;
+                        } else {
+                            n.blend = vectorcraft_color::BlendMode::Multiply;
+                        }
+                    }
+                    Ok(())
+                })
+                .unwrap();
+            }
+        }
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        assert_eq!(r["texts"], json!(["One", "Two"]), "{case}: one object would composite or fill the lines as one: {r}");
+    }
+}
+
+#[test]
+fn lines_stay_point_type_past_the_text_wrap_limit_of_their_layer() {
+    // A Text Wrap object above the lines that moves no glyph, on their layer or on another one,
+    // with the limit lowered to nothing: only on their layer does it count.
+    for same_layer in [true, false] {
+        let mut s = session();
+        let text = "First line\nSecond one";
+        let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": text, "size": 24})).unwrap()["id"].as_u64().unwrap();
+        let before = text_of(&s, id);
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        if !same_layer {
+            // Area type below the Text Wrap object on the other layer: work there, none on this one.
+            s.execute("layer.new", &json!({})).unwrap();
+            let other = s.execute("text.create", &json!({"x": 450, "y": 300, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+            s.execute("type.convertToAreaType", &json!({"ids": [other]})).unwrap();
+        }
+        let rect = s.execute("shape.rectangle", &json!({"x": 500, "y": 330, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.textWrap.make", &json!({"ids": [rect]})).unwrap();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        super::WRAP_LIMIT.with(|c| c.set(0));
+        let r = s.execute("type.retype", &json!({}));
+        super::WRAP_LIMIT.with(|c| c.set(super::MAX_WRAP_WORK));
+        let r = r.unwrap();
+        assert_eq!(r["texts"], json!([text]), "{r}");
+        assert_eq!(r["fonts"][0]["area"], json!(!same_layer), "{same_layer}: {r}");
+        assert_same_places(&before, &text_of(&s, r["ids"][0].as_u64().unwrap()));
+    }
+}
+
+#[test]
+fn empty_subpaths_of_a_text_wrap_object_count_as_wrap_work() {
+    // Each one is copied into the wrap shapes of the area type below it.
+    let mut s = session();
+    let t = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "Area", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    s.execute("type.convertToAreaType", &json!({"ids": [t]})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.textWrap.make", &json!({"ids": [rect]})).unwrap();
+    let base = vectorcraft_doc::text::wrap_copy_units(&s.doc().unwrap().doc);
+    let file_work = vectorcraft_doc::text::wrap_work(&s.doc().unwrap().doc);
+    s.edit("test", |d, _| {
+        if let NodeKind::Path { path, .. } = &mut d.node_mut(NodeId(rect)).unwrap().kind {
+            for _ in 0..100 {
+                path.subpaths.push(vectorcraft_geom::SubPath::new(vec![], true));
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert!(vectorcraft_doc::text::wrap_copy_units(&s.doc().unwrap().doc) >= base + 100);
+    // The count file import and the `.ai` editing copy use stays anchors and shapes only.
+    assert_eq!(vectorcraft_doc::text::wrap_work(&s.doc().unwrap().doc), file_work);
+}
+
+#[test]
+fn lines_under_a_text_wrap_object_stay_point_type() {
+    let mut s = session();
+    let text = "First line\nSecond one";
+    let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": text, "size": 24})).unwrap()["id"].as_u64().unwrap();
+    let before = text_of(&s, id);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    // Above the outlines, over the end of both lines: area type would wrap round it.
+    let rect = s.execute("shape.rectangle", &json!({"x": 90, "y": 70, "width": 60, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.textWrap.make", &json!({"ids": [rect]})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["fonts"][0]["area"], json!(false), "{r}");
+    let t = text_of(&s, r["ids"][0].as_u64().unwrap());
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::Point));
+    assert_same_places(&before, &t);
 }

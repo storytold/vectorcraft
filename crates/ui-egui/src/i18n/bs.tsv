@@ -7966,6 +7966,11 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Vector Packs	Vektorski paketi
+	Compass Rose	Ruža kompasa
+	Botanical Sprig	Botanička grančica
+	Facet Diamond	Fasetirani romb
+	Tide Crest	Vrh vala
 	Leaf Vine	Lisnata loza
 	Blossom Chain	Cvjetni lanac
 	Pennant Garland	Girlanda zastavica
