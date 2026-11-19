@@ -26,6 +26,7 @@ use std::sync::Arc;
 use kurbo::{BezPath, Point, Vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_geom::FillRule;
 use vectorcraft_text::FontDb;
 use vectorcraft_text::retype::{GlyphMatch, RetypeIndex};
 
@@ -45,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's size, is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions; with a tolerance, within it); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches, or when tolerance is not a number from 0 to 0.05",
+        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live point text: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line, with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line splits where its type would not draw the outlines' glyphs in their places (tracking, manual spacing, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts, fonts: [{family, style, size, score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape matches, or when tolerance is not a number from 0 to 0.05",
         has_selected_path,
         retype
     )]
@@ -64,6 +65,10 @@ struct Piece {
     /// art must stay painted after it: the line ends here.
     after_barrier: bool,
     path: BezPath,
+    /// The shape is filled by the nonzero rule, not the even-odd rule.
+    nonzero: bool,
+    /// The shape has a visible fill: a shape that only has a stroke paints no area to compare.
+    filled: bool,
     appearance: Appearance,
     /// The shape's own transparency, which the new type takes.
     opacity: f32,
@@ -87,11 +92,13 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
         *barrier = true;
         return;
     }
-    let piece = |path: BezPath, after_barrier: bool| Piece {
+    let piece = |path: BezPath, after_barrier: bool, rule: FillRule| Piece {
         id: n.id,
         parent,
         after_barrier,
         path,
+        nonzero: rule == FillRule::NonZero,
+        filled: n.appearance.fill().is_some_and(|f| f.visible && !f.paint.is_none()),
         appearance: (*n.appearance).clone(),
         opacity: n.opacity,
         blend: n.blend,
@@ -104,8 +111,10 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
             }
         }
         // Only closed shapes can be glyphs: an open path stroked along a glyph's outline is not one.
-        NodeKind::Path { path, clipping: false, guide: false, .. } if path.is_closed() => out.push(piece(path.to_bezpath(), std::mem::take(barrier))),
-        NodeKind::Compound { children, .. } => {
+        NodeKind::Path { path, rule, clipping: false, guide: false, .. } if path.is_closed() => {
+            out.push(piece(path.to_bezpath(), std::mem::take(barrier), *rule))
+        }
+        NodeKind::Compound { children, rule } => {
             let mut path = BezPath::new();
             for c in children {
                 match &c.kind {
@@ -117,7 +126,7 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
                     }
                 }
             }
-            out.push(piece(path, std::mem::take(barrier)));
+            out.push(piece(path, std::mem::take(barrier), *rule));
         }
         // Live type, images, clip groups and the rest stay, and the type after them stays after them.
         _ => *barrier = true,
@@ -692,13 +701,27 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             RetypeIndex::build_near(db, candidate_faces(db, d, &fonts), &wanted, &near_wanted)
         };
         // Exact matches first; near ones, when allowed, only for a path with none.
-        let find = |path: &BezPath, part: bool, near: bool| {
-            let exact = if part { index.matches_either_way(path) } else { index.all_matches(path) };
-            if exact.is_empty() && near { index.near_matches(path, tolerance) } else { exact }
+        // With a visible fill, a glyph is kept only when it paints the area the shape paints under
+        // the shape's fill rule (`fill` is `Some(nonzero)`).
+        let find = |path: &BezPath, part: bool, near: bool, fill: Option<bool>| {
+            let painted = |ms: Vec<GlyphMatch>, tol: f64| -> Vec<GlyphMatch> {
+                match fill {
+                    Some(nonzero) => ms.iter().filter_map(|m| index.painted_agrees(m, path, nonzero, tol)).collect(),
+                    None => ms,
+                }
+            };
+            let exact = painted(if part { index.matches_either_way(path) } else { index.all_matches(path) }, 0.0);
+            if exact.is_empty() && near { painted(index.near_matches(path, tolerance), tolerance) } else { exact }
         };
         // Each shape's parts (one, unless it holds several glyphs), each with its candidates.
         let found: Vec<Vec<Vec<GlyphMatch>>> =
-            pieces.iter().zip(&groups).map(|(pc, g)| if pc.keeps_outline { vec![] } else { parts(&pc.path, g, &find) }).collect();
+            pieces
+                .iter()
+                .zip(&groups)
+                .map(|(pc, g)| {
+                    if pc.keeps_outline { vec![] } else { parts(&pc.path, g, &|p, part, near| find(p, part, near, pc.filled.then_some(pc.nonzero))) }
+                })
+                .collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];

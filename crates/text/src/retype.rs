@@ -106,6 +106,11 @@ pub struct GlyphMatch {
     pub contours: usize,
     /// Other poses the glyph fits the shape in equally (a glyph that looks the same turned).
     pub alts: Vec<Pose>,
+    /// The leftover distance of each of [`Self::alts`], in the same order.
+    pub alt_residuals: Vec<f64>,
+    /// The leftover distance of the glyph's own pose: [`Self::residual`] is the least over all its
+    /// poses, which orders the matches.
+    pub pose_residual: f64,
 }
 
 /// Where and how a glyph lies: its size, turn and origin.
@@ -134,11 +139,14 @@ impl GlyphMatch {
 
     /// This match in each pose it fits: its own first, then [`Self::alts`].
     pub fn poses(&self) -> impl Iterator<Item = GlyphMatch> + '_ {
-        let own = Pose { scale: self.scale, angle: self.angle, origin: self.origin };
-        std::iter::once(own).chain(self.alts.iter().copied()).map(move |p| GlyphMatch {
+        let own = (Pose { scale: self.scale, angle: self.angle, origin: self.origin }, self.pose_residual);
+        let alts = self.alts.iter().copied().zip(self.alt_residuals.iter().copied().chain(std::iter::repeat(self.residual)));
+        std::iter::once(own).chain(alts).map(move |(p, residual)| GlyphMatch {
             scale: p.scale,
             angle: p.angle,
             origin: p.origin,
+            residual,
+            pose_residual: residual,
             ..self.clone()
         })
     }
@@ -165,6 +173,9 @@ struct Entry {
     sig: Signature,
     /// The glyph's outline in font units, for the whole-outline check.
     outline: BezPath,
+    /// Whether the glyph was indexed for its exact key: only these take part in exact matching,
+    /// and the ones indexed only for near matching ([`RetypeIndex::near_matches`]) do not.
+    exact: bool,
 }
 
 /// The glyphs of a set of faces, ready to match shapes against.
@@ -174,6 +185,8 @@ pub struct RetypeIndex {
     entries: Vec<Entry>,
     /// Entry indices by contour count, sorted by invariant.
     buckets: HashMap<usize, Vec<usize>>,
+    /// Entry indices by face id and glyph id.
+    by_glyph: HashMap<(u32, u32), usize>,
     /// The point comparisons [`Self::near_matches`] may still make, over every shape.
     near_work: AtomicU64,
 }
@@ -241,7 +254,7 @@ impl RetypeIndex {
                 if keys.contains(&key) {
                     let outline = db.outline_uncached(face, gid);
                     if let Some(sig) = signatures(&outline, false).into_iter().next() {
-                        entries.push(Entry { face: fi, gid, ch, sig, outline });
+                        entries.push(Entry { face: fi, gid, ch, sig, outline, exact: true });
                     }
                     continue;
                 }
@@ -264,7 +277,7 @@ impl RetypeIndex {
                     break 'faces;
                 }
                 if let Some(sig) = signatures(&outline, false).into_iter().next() {
-                    entries.push(Entry { face: fi, gid, ch, sig, outline });
+                    entries.push(Entry { face: fi, gid, ch, sig, outline, exact: false });
                 }
             }
         }
@@ -278,7 +291,39 @@ impl RetypeIndex {
                 x.total_cmp(&y)
             });
         }
-        RetypeIndex { faces: kept, entries, buckets, near_work: AtomicU64::new(NEAR_WORK) }
+        let by_glyph = entries.iter().enumerate().filter_map(|(i, e)| Some(((kept.get(e.face)?.id(), e.gid), i))).collect();
+        RetypeIndex { faces: kept, entries, buckets, by_glyph, near_work: AtomicU64::new(NEAR_WORK) }
+    }
+
+    /// `m` kept to the poses in which the glyph paints the area `shape` paints, the shape filled
+    /// by the nonzero rule when `nonzero` is set and by the even-odd rule otherwise, the glyph
+    /// filled by the nonzero rule. Two outlines on each other can paint different areas: a ring
+    /// whose inner contour runs the same way as its outer one, filled by the nonzero rule, has no
+    /// hole. Probes lie on both sides of the shape's outline, left out where either outline is
+    /// within reach of them. `tolerance` is the one `m` was found with (0 for an exact match). The
+    /// first pose that agrees comes first; `None` when none does.
+    pub fn painted_agrees(&self, m: &GlyphMatch, shape: &BezPath, nonzero: bool, tolerance: f64) -> Option<GlyphMatch> {
+        let Some(e) = self.by_glyph.get(&(m.face.id(), m.gid)).and_then(|i| self.entries.get(*i)) else { return Some(m.clone()) };
+        let bb = shape.bounding_box();
+        let tol = bb.width().hypot(bb.height()) * 0.5 * OUTLINE_TOLERANCE.max(3.0 * tolerance.clamp(0.0, MAX_TOLERANCE));
+        let mut agreeing = m.poses().filter(|p| {
+            let onto = Affine::new([
+                p.scale * p.angle.cos(),
+                p.scale * p.angle.sin(),
+                -p.scale * p.angle.sin(),
+                p.scale * p.angle.cos(),
+                p.origin.x,
+                p.origin.y,
+            ]);
+            paints_alike(shape, nonzero, &(onto * e.outline.clone()), tol)
+        });
+        let first = agreeing.next()?;
+        let rest: Vec<GlyphMatch> = agreeing.collect();
+        Some(GlyphMatch {
+            alts: rest.iter().map(|p| Pose { scale: p.scale, angle: p.angle, origin: p.origin }).collect(),
+            alt_residuals: rest.iter().map(|p| p.pose_residual).collect(),
+            ..first
+        })
     }
 
     /// The faces indexed.
@@ -341,6 +386,9 @@ impl RetypeIndex {
             if e.sig.invariant > hi {
                 break;
             }
+            if !e.exact {
+                continue;
+            }
             let Some(face) = self.faces.get(e.face) else { continue };
             // Each reading of the shape (its tied starting corners) that fits the glyph is a pose.
             let mut poses: Vec<(Pose, f64)> = vec![];
@@ -367,7 +415,7 @@ impl RetypeIndex {
             }
             // The upright-most pose first.
             poses.sort_by(|a, b| wrapped(a.0.angle).abs().total_cmp(&wrapped(b.0.angle).abs()));
-            let Some(((pose, _), rest)) = poses.split_first() else { continue };
+            let Some(((pose, own_residual), rest)) = poses.split_first() else { continue };
             let residual = poses.iter().map(|(_, r)| *r).fold(f64::INFINITY, f64::min);
             let m = GlyphMatch {
                 face: face.clone(),
@@ -380,6 +428,8 @@ impl RetypeIndex {
                 exact: true,
                 contours: e.sig.contours,
                 alts: rest.iter().map(|(p, _)| *p).collect(),
+                alt_residuals: rest.iter().map(|(_, r)| *r).collect(),
+                pose_residual: *own_residual,
             };
             out.push((e.face, m));
         }
@@ -408,6 +458,10 @@ impl RetypeIndex {
             return vec![];
         }
         let tolerance = tolerance.min(MAX_TOLERANCE);
+        // With no comparisons left, no shape is sampled or ranked.
+        if self.near_work.load(Ordering::Acquire) == 0 {
+            return vec![];
+        }
         let Some(s) = near_signature(shape) else { return vec![] };
         let Some(list) = self.buckets.get(&s.contours) else { return vec![] };
         let lo = s.invariant * (1.0 - NEAR_INVARIANT_SLACK);
@@ -433,9 +487,16 @@ impl RetypeIndex {
             list.iter().skip(start).filter_map(|i| self.entries.get(*i)).take_while(|e| e.sig.invariant <= hi).map(|e| (apart(e), e)).collect();
         near.sort_by(|a, b| a.0.total_cmp(&b.0));
         near.truncate(NEAR_FITS);
-        let total = self.near_work.load(Ordering::Relaxed);
-        let mut work = total.min(NEAR_SHAPE_WORK);
-        let given = work;
+        // This call's allowance comes out of the index's budget in one step, so calls that overlap
+        // never spend the same comparisons; what it leaves unspent goes back afterward.
+        let mut seen = self.near_work.load(Ordering::Acquire);
+        let mut work = loop {
+            let take = seen.min(NEAR_SHAPE_WORK);
+            match self.near_work.compare_exchange_weak(seen, seen - take, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => break take,
+                Err(now) => seen = now,
+            }
+        };
         for (_, e) in near {
             if work == 0 {
                 break;
@@ -449,6 +510,7 @@ impl RetypeIndex {
             let mut poses =
                 fits.into_iter().filter(|f| f.1 <= tolerance).filter_map(|(z, r)| Some((near_pose(e, &s, z, flat, tol)?, r))).take(MAX_NEAR_POSES);
             let Some((pose, residual)) = poses.next() else { continue };
+            let rest: Vec<(Pose, f64)> = poses.collect();
             let m = GlyphMatch {
                 face: face.clone(),
                 gid: e.gid,
@@ -459,11 +521,13 @@ impl RetypeIndex {
                 residual,
                 exact: false,
                 contours: e.sig.contours,
-                alts: poses.map(|(p, _)| p).collect(),
+                alts: rest.iter().map(|(p, _)| *p).collect(),
+                alt_residuals: rest.iter().map(|(_, r)| *r).collect(),
+                pose_residual: residual,
             };
             out.push((e.face, m));
         }
-        self.near_work.store(total.saturating_sub(given - work), Ordering::Relaxed);
+        self.near_work.fetch_add(work, Ordering::AcqRel);
         let upright = |m: &GlyphMatch| wrapped(m.angle).abs() >= 1e-3;
         out.sort_by(|a, b| {
             upright(&a.1).cmp(&upright(&b.1)).then(a.1.residual.total_cmp(&b.1.residual)).then(a.0.cmp(&b.0)).then(a.1.ch.cmp(&b.1.ch))
@@ -1047,6 +1111,42 @@ impl Flat {
     fn agrees(&self, other: &Flat) -> bool {
         self.pts.iter().all(|p| other.near(*p)) && other.pts.iter().all(|p| self.near(*p))
     }
+}
+
+/// Shape segments [`paints_alike`] probes beside, at most.
+const MAX_FILL_PROBES: usize = 512;
+
+/// Do `shape` (filled by the nonzero rule when `nonzero` is set, else by the even-odd rule) and
+/// `glyph` (filled by the nonzero rule), whose outlines lie within `tol` of each other, paint the
+/// same area? Each probe lies `1.5 tol` or `3 tol` to a side of the middle of a segment of the shape's
+/// outline; one within `tol` of either outline is skipped, so a region narrower than that is not
+/// probed. `true` when an outline is too large to probe.
+fn paints_alike(shape: &BezPath, nonzero: bool, glyph: &BezPath, tol: f64) -> bool {
+    let (Some(fs), Some(fg)) = (Flat::new(shape, tol), Flat::new(glyph, tol)) else { return true };
+    let step = fs.segs.len().div_ceil(MAX_FILL_PROBES).max(1);
+    for (s, e) in fs.segs.iter().step_by(step) {
+        let d = *e - *s;
+        let len = d.hypot();
+        if len <= 0.0 || !len.is_finite() {
+            continue;
+        }
+        let mid = s.midpoint(*e);
+        // The nearer probes reach counters and gaps too narrow for the farther ones.
+        for reach in [1.5, 3.0] {
+            let side = kurbo::Vec2::new(-d.y, d.x) * (reach * tol / len);
+            for q in [mid + side, mid - side] {
+                if fs.near(q) || fg.near(q) {
+                    continue;
+                }
+                let w = shape.winding(q);
+                let painted = if nonzero { w != 0 } else { w.rem_euclid(2) == 1 };
+                if painted != (glyph.winding(q) != 0) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }
 
 /// Do outlines `a` and `b` (in one space) lie on each other: every point of each, flattened, within
@@ -1669,6 +1769,117 @@ mod tests {
         let found: Vec<char> = index.near_matches(&shape, 0.02).iter().map(|m| m.ch).collect();
         // The Latin o or the Greek omicron, drawn the same.
         assert!(found.iter().any(|c| matches!(c, 'o' | 'ο')), "{found:?}");
+    }
+
+    /// `p` with its first curve split in two at its middle: the same outline with another key.
+    fn first_curve_split(p: &BezPath) -> BezPath {
+        let mut out = BezPath::new();
+        let (mut last, mut done) = (Point::ZERO, false);
+        for el in p.elements() {
+            match *el {
+                PathEl::CurveTo(a, b, c) if !done => {
+                    let (x, y) = kurbo::CubicBez::new(last, a, b, c).subdivide();
+                    out.curve_to(x.p1, x.p2, x.p3);
+                    out.curve_to(y.p1, y.p2, y.p3);
+                    done = true;
+                    last = c;
+                }
+                PathEl::QuadTo(a, c) if !done => {
+                    let (x, y) = kurbo::QuadBez::new(last, a, c).subdivide();
+                    out.quad_to(x.p1, x.p2);
+                    out.quad_to(y.p1, y.p2);
+                    done = true;
+                    last = c;
+                }
+                e => {
+                    out.push(e);
+                    if let PathEl::MoveTo(q) | PathEl::LineTo(q) | PathEl::QuadTo(_, q) | PathEl::CurveTo(_, _, q) = e {
+                        last = q;
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_glyph_indexed_only_for_near_matching_is_no_exact_match() {
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let gid = face.mapped_chars().iter().find(|(c, _)| *c == 'o').map(|(_, g)| *g).unwrap();
+        let split = first_curve_split(&db.outline_uncached(&face, gid));
+        let shape = Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * split;
+        assert_ne!(shape_key(&shape), shape_key(&(Affine::scale(0.04) * db.outline_uncached(&face, gid))), "another key");
+        let keys: BTreeSet<u64> = shape_key(&shape).into_iter().collect();
+        let index = RetypeIndex::build_near(db, [face], &keys, &[near_key(&shape).unwrap()]);
+        assert!(index.all_matches(&shape).is_empty(), "exact matching sees only the glyphs of the exact keys");
+        assert!(index.matches_either_way(&shape).is_empty());
+        assert!(index.near_matches(&shape, 0.02).iter().any(|m| m.ch == 'o'));
+    }
+
+    #[test]
+    fn each_pose_of_a_match_reports_its_own_residual() {
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let turn = std::f64::consts::FRAC_PI_2;
+        let m = GlyphMatch {
+            face,
+            gid: 1,
+            ch: 'o',
+            scale: 1.0,
+            angle: 0.0,
+            origin: Point::ZERO,
+            residual: 0.010,
+            exact: false,
+            contours: 1,
+            alts: vec![Pose { scale: 1.0, angle: turn, origin: Point::ZERO }],
+            alt_residuals: vec![0.010],
+            pose_residual: 0.014,
+        };
+        let seen: Vec<(f64, f64)> = m.poses().map(|p| (p.angle, p.residual)).collect();
+        assert_eq!(seen, vec![(0.0, 0.014), (turn, 0.010)]);
+    }
+
+    #[test]
+    fn a_ring_whose_contours_run_one_way_paints_no_hole() {
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let gid = face.mapped_chars().iter().find(|(c, _)| *c == 'o').map(|(_, g)| *g).unwrap();
+        let ring = db.outline_uncached(&face, gid);
+        let els = ring.elements();
+        let second = els.iter().rposition(|e| matches!(e, PathEl::MoveTo(_))).unwrap();
+        let (mut outer, mut inner) = (BezPath::new(), BezPath::new());
+        outer.extend(els[..second].iter().copied());
+        inner.extend(els[second..].iter().copied());
+        let mut same_way = outer.clone();
+        same_way.extend(inner.reverse_subpaths().iter());
+        let (ring, same_way) =
+            (Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * ring, Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * same_way);
+        let keys: BTreeSet<u64> = shape_key(&ring).into_iter().collect();
+        let index = RetypeIndex::build_near(db, [face], &keys, &[near_key(&same_way).unwrap()]);
+        // Near matching reads each contour in either direction, so the outline matches the glyph's:
+        // only what it paints tells them apart.
+        let found = index.near_matches(&same_way, 0.02);
+        assert!(found.iter().any(|m| m.ch == 'o'), "the outline matches");
+        assert!(found.iter().all(|m| index.painted_agrees(m, &same_way, true, 0.02).is_none()), "nonzero paints the counter");
+        assert!(found.iter().any(|m| index.painted_agrees(m, &same_way, false, 0.02).is_some()), "even-odd leaves it empty");
+        let found = index.all_matches(&ring);
+        assert!(found.iter().any(|m| index.painted_agrees(m, &ring, true, 0.0).is_some()), "the glyph's own windings paint a ring");
+    }
+
+    #[test]
+    fn near_matching_with_no_work_left_returns_nothing() {
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let gid = face.mapped_chars().iter().find(|(c, _)| *c == 'o').map(|(_, g)| *g).unwrap();
+        let shape = Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * simplified(&db.outline_uncached(&face, gid), 4.0);
+        let index = RetypeIndex::build_near(db, [face], &BTreeSet::new(), &[near_key(&shape).unwrap()]);
+        assert!(!index.near_matches(&shape, 0.02).is_empty());
+        let after = index.near_work.load(Ordering::Acquire);
+        assert!((NEAR_WORK - NEAR_SHAPE_WORK..NEAR_WORK).contains(&after), "one allowance at most: {after}");
+        index.near_work.store(0, Ordering::Release);
+        assert!(index.near_matches(&shape, 0.02).is_empty());
+        assert_eq!(index.near_work.load(Ordering::Acquire), 0);
     }
 
     #[test]

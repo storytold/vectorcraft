@@ -10946,7 +10946,8 @@ glyph.
 
 `type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
 an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
-glyph it is closest to when its leftover distance from that glyph, relative to the shape's size, is at most the
+glyph it is closest to when its leftover distance from that glyph, relative to the shape's outline spread (the root
+mean square distance of its sampled outline points from their center), is at most the
 tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
 and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
 and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
@@ -10958,7 +10959,9 @@ remaining groups can still all be matched, so an i's stem and dot become one i. 
 way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
 first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
 compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
-`unmatched`. Glyphs fused into one contour are not split, and a compound path of more than 256 groups or 512 contours
+`unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
+glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
+whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it. Glyphs fused into one contour are not split, and a compound path of more than 256 groups or 512 contours
 is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
 matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
 most 50 million point comparisons per shape and 2 billion per command; past them, the glyphs not yet compared are left
