@@ -2121,3 +2121,27 @@ fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
     crate::scale_effect(&mut e, 2.0);
     assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
 }
+
+#[test]
+fn a_pathfinder_effects_precision_is_a_distance_that_scales_with_the_object() {
+    for (id, _, _) in PATHFINDER_EFFECTS {
+        assert!(is_length(id, "precision", false), "{id}");
+        assert_eq!(length_range(id, "precision"), Some(PATHFINDER_EFFECT_PRECISION), "{id}");
+        assert!(!is_length(id, "removeRedundantPoints", false) && !is_length(id, "removeUnpainted", false), "{id}");
+        // Scale Strokes & Effects scales the tolerance with the geometry it is refit to.
+        let mut e = crate::new_effect(id, &json!({"precision": 0.5, "removeUnpainted": true})).unwrap();
+        crate::scale_effect(&mut e, 4.0);
+        assert_eq!(e.params["precision"].as_f64(), Some(2.0), "{id}");
+        assert_eq!(e.params["removeUnpainted"], json!(true), "{id}");
+        // An effect saved without the options scales the precision it evaluates with.
+        let mut e = crate::new_effect(id, &json!({})).unwrap();
+        crate::scale_effect(&mut e, 3.0);
+        let scaled = e.params["precision"].as_f64().unwrap_or(f64::NAN);
+        assert!((scaled - PathfinderEffectOptions::default().precision * 3.0).abs() < 1e-12, "{id}: {scaled}");
+        // A scale past the range and its inverse restore the precision, as with other distances.
+        let mut e = crate::new_effect(id, &json!({"precision": 8.0})).unwrap();
+        crate::scale_effect(&mut e, 2.0);
+        crate::scale_effect(&mut e, 0.5);
+        assert_eq!(e.params["precision"].as_f64(), Some(8.0), "{id}");
+    }
+}

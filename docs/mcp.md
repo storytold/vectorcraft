@@ -6101,6 +6101,26 @@ at the back in Minus Front, or a line in front in Minus Back), the error says so
 {"name":"run_command","arguments":{"command":"object.pathfinder.options","params":{"precision":0.1,"removeUnpainted":true}}}
 ```
 
+Each Effect › Pathfinder effect (`pathfinder.add` … `pathfinder.softMix`, not Trap) keeps Pathfinder Options of its own
+in its params: `precision` (a number, 0.001–10 pt), `removeRedundantPoints` and `removeUnpainted` (true or false), which
+mean what they mean for the panel's operations; the other operations ignore `removeUnpainted`. With `removeUnpainted`
+on, a compound shape's area counts as filled when the shape has a visible fill of its own, and Divide keeps every piece
+when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill. `effect.apply`
+fills the ones `params` leave out from the current Pathfinder Options, and the values join its journal entry. An effect
+saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
+{index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
+effect already evaluates with record no undo step and return `{ids: []}`. A precision out of range, or a switch that
+isn't true or false, is refused with an error and nothing changes. Scale Strokes & Effects scales `precision` with the
+object (0.01 when it is missing), and the stored value may then pass 10 or fall below 0.001; the effect evaluates at
+the nearest bound, and setting a precision that differs from the stored one is an edit, the bound included. In the app,
+a Pathfinder effect's name or a double-click on its row in the Appearance panel opens Pathfinder Options for it (Soft
+Mix's dialog also has Mixing Rate). A stored precision out of range opens at the bound, and OK keeps the stored value
+unless Precision is set.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"params":{"precision":1,"removeRedundantPoints":true}}}}
+```
+
 Compound shapes (the Pathfinder panel menu, and Alt-clicking a Shape Mode button): `object.compoundShape.make
 {mode?, ids?}` makes the two or more selected objects (paths, compound paths, groups, compound shapes, type, blends,
 envelopes) the members of one live compound shape, each in shape mode `mode` (`"add"`, the default, `"subtract"`,
