@@ -11052,10 +11052,48 @@ which Japanese characters may not start or end a line. **Hard** (the default; ne
 setting) keeps closing brackets, commas, full stops, middle dots, iteration marks, the prolonged sound mark ー and small
 kana off the line start, and opening brackets off the line end. **Soft** lets 々, ー and small kana start a line, as
 JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3); the rest of the set stays.
-**None** applies no kinsoku. `hard` isn't saved. One undo step.
+**None** applies no kinsoku. `hard` isn't saved. The name of a custom set of the document (`type.kinsokuSets.list`, any
+case) gives each paragraph a copy of that set, saved with the paragraph (`kinsoku_set` in `para`) beside Hard, so an
+older build reads the paragraph as Hard; a name the document has no set of fails the call and changes nothing.
+Paragraph styles carry the set; `paraStyle.new` and `paraStyle.setAttrs` given `kinsoku_set` with `kinsoku` None or Soft,
+or with a blank or built-in set name, fail and change nothing. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
+```
+
+## Kinsoku Shori Settings
+
+`type.kinsokuSets.set {sets: [{name, from?, cannotStart?, cannotEnd?, hanging?, inseparable?}]}` (Type › Kinsoku Shori
+Settings…'s OK, shown with the East Asian options) replaces the active document's custom Kinsoku Shori sets as one undo
+step, and records none when nothing changes. `cannotStart` lists the characters that never start a line, `cannotEnd`
+those that never end one, and `hanging` the punctuation that Burasagari hangs outside a line's end, each as text, one
+character after another. `inseparable` lists sequences of 2 to 16 characters that a line never breaks inside while
+Bunri-Kinshi is on. `cannotStart`, `cannotEnd` and `hanging` keep each character once, sorted; `inseparable` keeps each
+sequence once, sorted, so a sequence may repeat a character (`……`). Each category holds at most 4096 characters (a
+sequence counts each of its characters); a control or space character in a category fails the call. Names are trimmed, 1 to 128 characters, unique in any
+case and never None, Hard or Soft; a document holds at most 256 sets. These limits are VectorCraft's own. A set with
+the name of a set the document has (any case) and no `from` edits that set; `from` names the set it renames. Every
+paragraph and paragraph style using an edited set takes its new characters and name, and those using a set left out
+take Hard. An unknown key, a null value, a name used twice, a `from` the document has no set of and a sequence of one
+character fail the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
+
+`type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`), paragraph styles (`styles`) and graphs
+(`graphs`, in the paragraph attributes a graph keeps for its labels) use each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
+built-in or custom set starts with: Hard and Soft list the characters they keep off a line's start and end, the East
+Asian comma and full stop as hanging punctuation and the Bunri-Kinshi pairs; None lists nothing.
+
+Type › Kinsoku Shori Settings… opens a dialog on the document's sets: Kinsoku Set picks one, New adds a set based on
+the choice in Based on (Hard, Soft, None or a set of the dialog), Delete takes the one picked out, the four fields edit
+its categories (inseparable sequences separated by spaces), and Unicode with Add puts the character of a code point
+(`U+3001` or `3001`) into Cannot Start Line, Cannot End Line or Hanging Punctuation. Nothing changes until OK, which
+runs `type.kinsokuSets.set`; a refused set keeps the dialog open. The Paragraph panel's Kinsoku Set lists the custom
+sets after None, Hard and Soft, and its last entry opens the dialog. Importing and exporting sets is not available.
+The help page:
+https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html
+
+```json
+{"name":"run_command","arguments":{"command":"type.kinsokuSets.set","params":{"sets":[{"name":"Tight","cannotStart":"、。」ー","cannotEnd":"「（","hanging":"、。","inseparable":["——","……"]}]}}}
 ```
 
 ## Kinsoku Shori Type
@@ -11070,8 +11108,8 @@ of the character before it and by at most a tenth of that em; a line that cannot
 tab, pushes out instead. **Push Out First** pushes in
 the same way only when pushing out would leave the line more than an em, of the character before the break, short of
 its measure. **Push Out Only** (the default: new type and documents from before the setting) moves the
-character before a prohibited line start to the next line with it. With Burasagari on, an overflowing comma or full
-stop may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
+character before a prohibited line start to the next line with it. With Burasagari on, overflowing hanging punctuation
+of the Kinsoku Set may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
 does nothing. When Push In First or Push Out First is selected and a paragraph contains a prohibited line-start or
 line-end character, the whole paragraph is broken line by line, as the Single-line Composer breaks it, even if no line
 ends up pushing a character in. The setting is saved
@@ -11089,10 +11127,13 @@ on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a
 line never breaks inside an inseparable pair: two em dashes (U+2014), two horizontal ellipses (U+2026), two two-dot
 leaders (U+2025), or the upper half of a vertical kana repeat mark (U+3033 or U+3034) followed by its lower half
 (U+3035), the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08), which are VectorCraft's
-set. A chain of em dashes stays together as well. A pair is two neighboring characters, whatever their fonts and
-styles; a forced line break between them ends the line as before. Both composers, vertical type, Kinsoku Shori Type,
-hyphenation and No Break follow it, and a pair wider than the line stays whole on it. Justification adds no space inside
-a pair. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
+set for Hard and Soft. A chain of em dashes stays together as well. With a custom Kinsoku Set, the set's inseparable
+sequences (Kinsoku Shori Settings) replace these pairs: a line never breaks between two characters of an occurrence of
+one of them, such as `AB` or `あいう`, and occurrences may overlap. A custom set keeps a built-in pair together only
+when it lists that pair, as a set based on Hard or Soft does. A pair or sequence is neighboring characters, whatever
+their fonts and styles; a forced line break between them ends the line as before. Both composers, vertical type,
+Kinsoku Shori Type, hyphenation and No Break follow it, and a pair or sequence wider than the line stays whole on it.
+Justification adds no space inside a pair or sequence. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
 and the menu item is unavailable. Off by default, for new type and for paragraphs saved before the option. It is saved
 with the paragraph (`bunri_kinshi` in `para`) only when on, paragraph styles carry it (Paragraph Style Options › East
 Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
@@ -11151,9 +11192,11 @@ help page: https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-an
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /
-Force) of the selected type (or `ids`): an East Asian comma or full stop ending an area type line (、。，．, half-width
-､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
-measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
+Force) of the selected type (or `ids`): hanging punctuation ending an area type line hangs outside the frame, Regular
+only when it doesn't fit, Force always (the rest of the line then fills the measure). With the Kinsoku Sets None, Hard
+and Soft, the hanging punctuation is the East Asian comma and full stop (、。，．, half-width ､｡), and closing brackets and
+Latin punctuation don't hang. A custom Kinsoku Set hangs the characters in its `hanging` category instead (Kinsoku Shori
+Settings), closing brackets and Latin punctuation included. Point type, right-to-left and hyphenated lines are left as
 they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
 `text.create`) takes `standard`; documents from before it and imported text keep `none`, except legacy `.ai` type
 with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved. One undo step.
