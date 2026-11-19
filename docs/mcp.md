@@ -8177,7 +8177,7 @@ and a group id the bar does not have is dropped when they are read. Another `gro
 be one of …", and a `visible` that is not true or false fails with "`visible` must be true or false"; either leaves
 every group as it is. The groups and their contents are VectorCraft's own.
 `window.taskBar.actions {action, visible?}` (desktop app) turns one of the Contextual Task Bar's actions or chips on
-(`visible: true`), off (`false`) or toggles it (omitted), and returns `{action, visible}`. The actions are `imageTrace`,
+(`visible: true`), off (`false`) or toggles it (omitted or null), and returns `{action, visible}`. The actions are `imageTrace`,
 `cropImage`, `removeBackground`, `removeAnchorPoints`, `join` (Connect and Join), `cutPath`, `convertToCorner`,
 `convertToSmooth`, `group`, `makeClippingMask`, `unite`, `expand`, `editClippingPath`, `releaseClippingMask`,
 `ungroup`, `isolate`, `editPath`, `releaseCompoundPath`, `createOutlines`, `convertToPointType`, `convertToAreaType`,

@@ -1674,8 +1674,8 @@ fn bar_action_ids_are_distinct() {
     assert_eq!(runs.len(), canvas::TASK_BAR_ACTIONS.len());
 }
 
-/// An action the bar does not have, a missing one, or a `visible` that is not true or false is an
-/// error and changes nothing.
+/// An action the bar does not have, a missing one, or a `visible` that is not true, false or null is
+/// an error and changes nothing.
 #[test]
 fn bar_actions_refuse_bad_params() {
     let mut app = app();
