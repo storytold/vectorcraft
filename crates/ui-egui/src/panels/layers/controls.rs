@@ -307,8 +307,8 @@ fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// `layer.delete` takes (default: the highlighted rows, else the current layer; in isolation mode a
 /// current layer outside the isolated art is an error). When a layer or sublayer among them holds art (an object other than a
 /// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
-/// the same document (`doc`, its uid, with `confirmed`); with another document active then, or in
-/// isolation mode with one of them outside the isolated art, nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
+/// is deleted. In isolation mode a row outside the isolated art is an error, and nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
@@ -335,12 +335,17 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             Some(if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows })
         }
     };
-    // Isolation mode can start while the question is open: OK then deletes nothing when a row it
-    // asked about is outside the isolated art.
-    if confirmed && ids.as_ref().is_some_and(|ids| ids.iter().any(|id| !in_isolated_art(st, *id))) {
+    // Isolation mode can start while rows are dragged to the trash or while the question is open:
+    // nothing is deleted when a row is outside the isolated art.
+    if ids.as_ref().is_some_and(|ids| ids.iter().any(|id| !in_isolated_art(st, *id))) {
         return Err("the object is outside the isolated group".into());
     }
-    let Some(ids) = ids.filter(|_| !confirmed) else { return app.run("layer.delete", Value::Object(rows)) };
+    let ids = match ids {
+        // Confirmed without rows given: the rows the panel lists, not every highlighted row.
+        Some(ids) if confirmed && rows.is_empty() => return app.run("layer.delete", json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })),
+        Some(ids) if !confirmed => ids,
+        _ => return app.run("layer.delete", Value::Object(rows)),
+    };
     let listed: HashSet<NodeId> = ids.iter().copied().collect();
     let mut roots = vec![];
     row_roots(&st.doc.layers, &listed, &mut roots);

@@ -988,10 +988,11 @@ fn isolation_keeps_the_panel_menu_to_the_rows_listed() {
 }
 
 /// OK in Delete Selection's question deletes nothing when isolation mode started while it asked and
-/// a row it asked about is outside the isolated art.
+/// a row it asked about is outside the isolated art, and rows given outside it, as rows dropped on
+/// the trash are, are not deleted either.
 #[test]
 fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
-    let (mut app, [_, sub, g, ..]) = nested();
+    let (mut app, [_, sub, g, _, a, c]) = nested();
     let uid = app.session.active().unwrap().uid;
     app.session.active_mut().unwrap().layer_rows = vec![sub];
     assert!(app.run("ui.layerDelete", json!({})).unwrap().is_null(), "it asks first");
@@ -1000,7 +1001,16 @@ fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
     let err = app.run("ui.layerDelete", ok.clone()).unwrap_err();
     assert!(err.contains("the object is outside the isolated group"), "{err}");
     assert!(app.session.active().unwrap().doc.node(sub).is_some(), "nothing was deleted");
-    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    let err = app.run("ui.layerDelete", json!({"ids": [c.0]})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert!(app.session.active().unwrap().doc.node(c).is_some(), "the rectangle outside the group stays");
+    // OK with no rows given deletes the highlighted rows the panel lists, inside the sublayer.
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    app.session.active_mut().unwrap().layer_rows = vec![a, c];
+    app.run("ui.layerDelete", json!({"doc": uid, "confirmed": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(a).is_none() && doc.node(c).is_some(), "only the row inside the sublayer is deleted");
+    app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
     app.run("ui.layerDelete", ok).unwrap();
     assert!(app.session.active().unwrap().doc.node(sub).is_none());
 }

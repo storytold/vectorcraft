@@ -5875,8 +5875,8 @@ and `layerRows`, the rows highlighted in the panel.
   the selected items and their artwork?"; OK deletes the rows it asked about in that document, one undo step, and
   Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once; in
   isolation mode, with no row highlighted, a current layer outside the isolated art is an error and nothing is deleted,
-  and OK deletes nothing when isolation mode started while it asked and a row it asked about is outside the isolated
-  art),
+  and so is a row outside it, given as `ids` or `id`, dropped on the trash or asked about before isolation mode
+  started),
   `layer.locate {id?, layersOnly?}` (highlights the selected object's row, or with several selected the row of the
   one frontmost in the stacking order, whatever order they were selected in; an `id` locates that object instead;
   the panel opens the rows around it;
