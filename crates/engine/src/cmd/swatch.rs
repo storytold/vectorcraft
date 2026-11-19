@@ -9,7 +9,9 @@ use vectorcraft_doc::swatches::{LinkFn, PaintFn, color_name, map_node_paints, ma
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
-use super::{CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or};
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or, text_param,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -105,6 +107,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name: colour group} move its swatches to the end of the ungrouped swatches and remove the group, as one undo step → {swatches: [names]}",
             has_doc,
             swatch_ungroup
+        ),
+        cmd!(
+            "swatch.renameGroup",
+            "Color Group Options",
+            ["Window", "Swatches"],
+            None,
+            "{group: color group, name: its new name (trimmed)} rename a color group, as one undo step; its swatches, their colors and the art linked to them stay as they are. Swatches and color groups share one set of names, so a name another color group or a swatch has is an error, as is an empty name; the group's own name records no undo step. A drag still in progress becomes an undo step of its own first → {name}",
+            has_doc,
+            swatch_rename_group
         ),
         cmd!(
             "swatch.sortByKind",
@@ -1198,6 +1209,35 @@ fn swatch_ungroup(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(names)
     })?;
     Ok(json!({ "swatches": moved }))
+}
+
+fn swatch_rename_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.renameGroup";
+    let group = text_param(p, "group", C)?.ok_or_else(|| bad(C, "missing `group`"))?.to_string();
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?.trim().to_string();
+    if name.is_empty() {
+        return Err(bad(C, "`name` is empty"));
+    }
+    let d = &s.doc()?.doc;
+    if !d.swatch_groups.iter().any(|g| g.name == group) {
+        return Err(bad(C, format!("no colour group `{group}`")));
+    }
+    if name == group {
+        return Ok(json!({ "name": name }));
+    }
+    if d.swatch_name_taken(&name) {
+        return Err(bad(C, format!("a swatch or color group named `{name}` already exists")));
+    }
+    // A drag still in progress is a step of its own, so canceling or undoing it leaves the rename.
+    if !s.previewing && s.batch_stash.is_none() && s.in_interaction() {
+        super::settle_interaction(s)?;
+    }
+    s.edit("Color Group Options", |d, _| {
+        let g = d.swatch_groups.iter_mut().find(|g| g.name == group).ok_or_else(|| bad(C, format!("no colour group `{group}`")))?;
+        g.name.clone_from(&name);
+        Ok(())
+    })?;
+    Ok(json!({ "name": name }))
 }
 
 fn swatch_sort_by_kind(s: &mut Session, _: &Value) -> Result<Value> {
