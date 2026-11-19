@@ -706,9 +706,13 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str) -> Vec<u32> {
         }
         meanings.push(index.synonyms_of(t));
         let mut grades = index.grades(t, n);
-        // A word that matches only words of descriptions is still compared with the words of labels
-        // and menu paths it may be a typo of.
-        let near = if compare && grades.iter().all(|&g| g == NONE || g == DESCRIPTION_WORD) { index.typos(t) } else { vec![] };
+        // A word that matches only words of descriptions, or words with the same meaning, is still
+        // compared with the words of labels and menu paths it may be a typo of.
+        let near = if compare && grades.iter().all(|&g| matches!(g, NONE | DESCRIPTION_WORD | LABEL_SYNONYM | PATH_SYNONYM)) {
+            index.typos(t)
+        } else {
+            vec![]
+        };
         if near.is_empty() && grades.iter().all(|&g| g == NONE) && !entries.iter().any(|e| e.haystack.contains(t)) {
             compare = false;
         }
@@ -1171,6 +1175,17 @@ mod tests {
         // nearer: "abcdefgh" reads as "abcdefyy" in the first, which is then its label.
         let c = synthetic(vec![entry("Abcdefyy Zz", "tool:b"), entry("Abcdefgx › Abcdefyy", "a.one")]);
         assert_eq!(ranked(&c, "abcdefgh"), ["a.one", "tool:b"]);
+    }
+
+    /// A query word that another result matches only through a word with the same meaning is still
+    /// compared with the words it may be a typo of: "spin" means rotate, and is also one letter from
+    /// Span.
+    #[test]
+    fn a_word_with_the_same_meaning_elsewhere_still_finds_a_typo() {
+        let c = synthetic(vec![entry("Zz Rotate Canvas", "a.one"), entry("Zz Span Anchors", "b.two")]);
+        assert_eq!(ranked(&c, "spin anchors"), ["b.two"]);
+        assert_eq!(ranked(&c, "spin"), ["a.one", "b.two"], "the word with the same meaning ranks above the typo");
+        assert_eq!(ranked(&c, "spin canvas"), ["a.one"]);
     }
 
     /// A query word with a typo meets at most 32 words, the nearest first, and a long word with no
