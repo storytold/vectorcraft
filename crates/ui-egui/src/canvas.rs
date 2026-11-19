@@ -427,7 +427,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
-        overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
+        // The tooltips say what a click does, so none shows where the click does something else:
+        // while Space lends a view tool, or over an artboard's name.
+        let space = ui.input(|i| drag::space_lends_view_tools(app, i.modifiers, i.key_down(egui::Key::Space)));
+        let quiet = space || ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some();
+        overlay_hover_text(ui, &xf, &overlays, quiet, |p| artboards::artboard_name_at(app, ui, &xf, p).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
