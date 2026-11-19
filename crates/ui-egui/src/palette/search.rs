@@ -245,8 +245,6 @@ fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
     table.resize(kept.min(a.len() + 1) * width, 0);
     let place = |i: usize, j: usize| (i % kept) * width + j;
     let at = |table: &[usize], i: usize, j: usize| table.get(place(i, j)).copied().unwrap_or(usize::MAX);
-    // Each character of `a` in the rows so far, with the last row it is in.
-    let mut rows: Vec<(char, usize)> = vec![];
     for (i, &ca) in (1usize..).zip(a) {
         if let Some(first) = table.get_mut(place(i, 0)) {
             *first = i;
@@ -260,9 +258,10 @@ fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
             let mut edits = changed.min(removed).min(inserted);
             // `cb` is in row k of `a` and `ca` in column `column` of `b`: swap the two, remove the
             // characters of `a` between them and insert the characters of `b` between them. Removing
-            // more than `bound` characters goes past the bound.
-            let k = rows.iter().find(|&&(c, _)| c == cb).map_or(0, |&(_, k)| k);
-            if k > 0 && column > 0 && i - k <= bound {
+            // more than `bound` characters goes past the bound, so only the `bound` rows before this
+            // one are searched, newest first.
+            let k = (i.saturating_sub(bound).max(1)..i).rev().find(|&k| a.get(k - 1) == Some(&cb)).unwrap_or(0);
+            if k > 0 && column > 0 {
                 edits = edits.min(at(&table, k - 1, column - 1).saturating_add(i - k + (j - column - 1)));
             }
             if ca == cb {
@@ -274,10 +273,6 @@ fn edits_within(a: &[char], b: &[char], bound: usize) -> Option<usize> {
         }
         if (0..width).all(|j| at(&table, i, j) > bound) {
             return None;
-        }
-        match rows.iter_mut().find(|(c, _)| *c == ca) {
-            Some((_, row)) => *row = i,
-            None => rows.push((ca, i)),
         }
     }
     Some(at(&table, a.len(), b.len())).filter(|&e| e <= bound)
@@ -1113,6 +1108,7 @@ mod tests {
         for (a, b, bound, expected) in [
             ("group", "group", 1, Some(0)),
             ("gruop", "group", 1, Some(1)),
+            ("baab", "abab", 1, Some(1)),
             ("elipse", "ellipse", 1, Some(1)),
             ("rectange", "rectangle", 2, Some(1)),
             ("eyedroper", "eyedropper", 2, Some(1)),
