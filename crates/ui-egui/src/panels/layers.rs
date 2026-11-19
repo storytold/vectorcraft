@@ -66,13 +66,14 @@ mod model;
 mod rows;
 mod thumbs;
 
+pub(crate) use controls::new_layer_unlisted;
 use controls::{bottom_bar, filter_button};
 pub use controls::{delete, expand, menu, set_filter};
 pub(crate) use model::shown_name;
 pub use model::{Filter, ObjectKind, RowState};
 #[cfg(test)]
 use model::{Row, list_rows, painted_name};
-use model::{push_rows, rows_of_doc};
+use model::{isolated_root, push_rows, rows_of_doc};
 use rows::{drag_ghost, key, rename_id, resolve_click, row};
 #[cfg(test)]
 use thumbs::THUMBS;
@@ -171,6 +172,8 @@ struct View<'a> {
     column: Option<ColumnDrag>,
     /// The row to scroll into view.
     reveal: Option<NodeId>,
+    /// In isolation mode, the isolated node: the top row, which nothing is dropped beside.
+    root: Option<NodeId>,
     /// Preferences › Units › Identify Objects By › XML ID.
     identify_xml_id: bool,
 }
@@ -197,6 +200,17 @@ pub(crate) const ROW_KEYS: &str = "ly-keys";
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     show_thumbs_of(app.session.active().map(|st| st.uid));
+    // In isolation mode only rows inside the isolated art stay highlighted, since the panel lists
+    // no others.
+    if let Some(st) = app.session.active_mut()
+        && let Some(root) = st.isolation.filter(|i| st.doc.node(*i).is_some())
+    {
+        let doc = st.doc.clone();
+        let inside = |r: &NodeId| doc.ancestry(*r).is_some_and(|a| a.contains(&root));
+        if !st.layer_rows.iter().all(&inside) {
+            st.layer_rows.retain(&inside);
+        }
+    }
     let Some(st) = app.session.active() else { return };
     // A rename belongs to the document it started in (node ids are per document): drop it when
     // another document shows, so it can't rename that document's node with the same id.
@@ -237,15 +251,37 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if rows.is_empty()
             && let Some(layer) = current
         {
-            let around = doc.ancestry(layer).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
-            if let Some(st) = app.session.active_mut() {
-                for a in around {
-                    st.layers_open.set(a, true);
-                }
-            }
+            open_around(app, &doc, &[layer]);
             reveal = Some(layer);
         }
         ui.data_mut(|d| d.insert_temp(key("seen-current"), current));
+    }
+    // Entering isolation mode opens the isolated row, now the top row, and scrolls to it; leaving it
+    // opens the rows around the row that was isolated and scrolls to that row. Each document's
+    // isolation mode is followed on its own: a document first shown in isolation mode opens its
+    // isolated row, and showing again a document whose isolation mode did not change opens nothing.
+    if let Some(uid) = app.session.active().map(|st| st.uid) {
+        let isolated = app.session.active().and_then(|st| st.isolation).filter(|i| doc.node(*i).is_some());
+        let mut seen: std::collections::HashMap<u64, Option<NodeId>> = ui.data(|d| d.get_temp(key("seen-isolation"))).unwrap_or_default();
+        let was = seen.get(&uid).copied();
+        if was != Some(isolated) {
+            match isolated {
+                Some(root) => {
+                    if let Some(st) = app.session.active_mut() {
+                        st.layers_open.set(root, true);
+                    }
+                    reveal = Some(root);
+                }
+                None => {
+                    if let Some(was) = was.flatten().filter(|i| doc.node(*i).is_some()) {
+                        open_around(app, &doc, &[was]);
+                        reveal = Some(was);
+                    }
+                }
+            }
+            seen.insert(uid, isolated);
+            ui.data_mut(|d| d.insert_temp(key("seen-isolation"), seen));
+        }
     }
     // With Locate Selected Objects on, an object selected anew outside the panel (below).
     let located = newly_selected(app, ui).filter(|_| !highlighted);
@@ -265,7 +301,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // search or the filter can leave it out): those rows open, and its row is revealed instead of
     // the row revealed above. Otherwise nothing opens.
     let located = located.filter(|id| {
-        app.session.active().is_some_and(|st| listed_when_opened(&doc, &st.layers_open, &app.ui.layers_panel, &query, &app.ui.layers_filter, *id))
+        app.session
+            .active()
+            .is_some_and(|st| listed_when_opened(&doc, st.isolation, &st.layers_open, &app.ui.layers_panel, &query, &app.ui.layers_filter, *id))
     });
     if let Some(id) = located {
         open_around(app, &doc, &[id]);
@@ -289,6 +327,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         h: app.ui.layers_panel.row(),
         column: ui.data(|d| d.get_temp(key("column"))),
         reveal,
+        root: st.isolation.and_then(|i| isolated_root(&doc, i)).map(|(n, ..)| n.id),
         identify_xml_id: app.session.prefs.identify_objects_by == "xmlId",
     };
     let mut out = Out::default();
@@ -338,12 +377,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The column drag: live while it lasts, one undo step when the button is released.
     let released = ui.input(|i| i.pointer.any_released());
     // Layers dragged into the empty space under the last row go below the bottom layer (there is
-    // no row there to take the drop). The bottom layer itself goes there only as an Alt copy,
-    // which lands below it; moved, it would stay where it is (#8237).
+    // no row there to take the drop), except in isolation mode, where that layer is not listed.
+    // The bottom layer itself goes there only as an Alt copy, which lands below it; moved, it
+    // would stay where it is (#8237).
     let below = list_rect.top() - scrolled.inner.state.clamped_offset().y + list.len() as f32 * view.h;
     let alt = ui.input(|i| i.modifiers.alt);
     if query.is_empty()
         && !app.ui.layers_filter.is_on()
+        && view.root.is_none()
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let LayersDrag::Rows(ids) = &*drag
         && let Some(bottom) = doc.layers.first()
@@ -454,8 +495,9 @@ fn search_query(ctx: &egui::Context) -> String {
 /// `id`, as double-clicking the row's name does: Enter renames it (`layer.setProps`, one undo
 /// step), Escape leaves the name as it was. Without `id`, the row Rename names is the Layers
 /// panel's highlighted row when a row was clicked last, else the one selected object or group,
-/// else the one highlighted row, else the current layer. Several of them, or a row the panel's
-/// search, filter or Show Layers Only leaves out, is an error that opens nothing.
+/// else the one highlighted row, else the current layer. Several of them, a row the panel's
+/// search, filter or Show Layers Only leaves out, or in isolation mode an object outside the
+/// isolated art, is an error that opens nothing.
 pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("the Layers panel is not shown")?;
     let st = app.session.active().ok_or("no document open")?;
@@ -483,7 +525,10 @@ pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let doc = st.doc.clone();
     let node = doc.node(id).ok_or("no such layer or object")?;
-    if !listed_when_opened(&doc, &st.layers_open, &app.ui.layers_panel, &search_query(&ctx), &app.ui.layers_filter, id) {
+    if st.isolation.and_then(|i| isolated_root(&doc, i)).is_some_and(|(root, ..)| !doc.ancestry(id).is_some_and(|a| a.contains(&root.id))) {
+        return Err("the object is outside the isolated group".into());
+    }
+    if !listed_when_opened(&doc, st.isolation, &st.layers_open, &app.ui.layers_panel, &search_query(&ctx), &app.ui.layers_filter, id) {
         return Err("the Layers panel's search, filter or Show Layers Only hides its row".into());
     }
     let name = node.identify_label(app.session.prefs.identify_objects_by == "xmlId");
@@ -497,10 +542,19 @@ pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(json!({ "id": id.0, "name": name }))
 }
 
-/// Open the layers and groups around rows `ids`.
+/// Open the layers and groups around rows `ids`. In isolation mode only those from the isolated
+/// row down open, and nothing opens for a row outside it.
 fn open_around(app: &mut VectorcraftApp, doc: &Document, ids: &[NodeId]) {
-    let around: Vec<NodeId> =
-        ids.iter().flat_map(|r| doc.ancestry(*r).unwrap_or_default().split_last().map(|(_, a)| a.to_vec()).unwrap_or_default()).collect();
+    let root = app.session.active().and_then(|st| st.isolation).filter(|i| doc.node(*i).is_some());
+    let around: Vec<NodeId> = ids
+        .iter()
+        .flat_map(|r| {
+            let ancestry = doc.ancestry(*r).unwrap_or_default();
+            let from = root.map_or(Some(0), |i| ancestry.iter().position(|a| *a == i));
+            let parents = ancestry.split_last().map(|(_, a)| a.to_vec()).unwrap_or_default();
+            from.map(|f| parents.into_iter().skip(f).collect::<Vec<_>>()).unwrap_or_default()
+        })
+        .collect();
     if let Some(st) = app.session.active_mut() {
         for a in around {
             st.layers_open.set(a, true);
@@ -509,20 +563,37 @@ fn open_around(app: &mut VectorcraftApp, doc: &Document, ids: &[NodeId]) {
 }
 
 /// Whether [`list_rows`] gives `id` a row once the layers and groups around it are open as well as
-/// `open`. Only the rows of `id`'s top-level layer are listed.
-fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter, id: NodeId) -> bool {
+/// `open`, in isolation mode `isolation` (None: outside it). Only the rows of `id`'s top-level
+/// layer, or in isolation mode those of the isolated row, are listed.
+fn listed_when_opened(
+    doc: &Document,
+    isolation: Option<NodeId>,
+    open: &OpenRows,
+    opts: &PanelOptions,
+    query: &str,
+    filter: &Filter,
+    id: NodeId,
+) -> bool {
     let Some(ancestry) = doc.ancestry(id) else { return false };
-    let Some(layer) = doc.layers.iter().find(|l| ancestry.first() == Some(&l.id)) else { return false };
-    if doc.mask_edit.is_some_and(|m| m.layer != layer.id) {
-        return false;
-    }
     let mut open = open.clone();
     for a in ancestry.split_last().map(|(_, a)| a).unwrap_or_default() {
         open.set(*a, true);
     }
     let mut rows = vec![];
     // Only object rows are looked for, so the guide rows are left out.
-    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, &[]), &mut rows);
+    let cx = (&open, opts, query, filter, &[][..]);
+    if let Some((root, clip_path, around)) = isolation.and_then(|i| isolated_root(doc, i)) {
+        if !ancestry.contains(&root.id) {
+            return false;
+        }
+        push_rows(root, 0, clip_path, around, cx, &mut rows);
+    } else {
+        let Some(layer) = doc.layers.iter().find(|l| ancestry.first() == Some(&l.id)) else { return false };
+        if doc.mask_edit.is_some_and(|m| m.layer != layer.id) {
+            return false;
+        }
+        push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), cx, &mut rows);
+    }
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 
