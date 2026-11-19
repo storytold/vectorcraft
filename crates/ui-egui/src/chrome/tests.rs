@@ -4304,6 +4304,58 @@ fn select_similar_stays_out_while_an_image_control_is_left_out() {
     assert!(seen, "a wide bar shows the button after the image's controls");
 }
 
+/// A click on the Control bar's Linked File or Embedded label shows the Links panel, in an expanded
+/// dock and in one collapsed to icons; the label of any other object stays plain text.
+#[test]
+fn the_linked_file_and_embedded_labels_open_the_links_panel() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let img = image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 0, 0, 255]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("control-bar-image-label");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("square.png");
+    std::fs::write(&path, &png).unwrap();
+    use crate::tests_removeanchors::{at, click_control, control_frame};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let links = crate::panels::links::ID;
+    // Closes the Links panel, clicks `name` on the bar and answers whether the panel shows.
+    let click = |app: &mut crate::VectorcraftApp, name: &str| {
+        app.run("window.panel.close", json!({"panel": links})).ok();
+        app.ui.open_panel = None;
+        assert!(!crate::panel_docking::visible(&app.ui, links), "{name}: the panel is closed first");
+        let pos = at(&control_frame(app, &ctx, vec![]), name);
+        click_control(app, &ctx, pos);
+        crate::panel_docking::visible(&app.ui, links)
+    };
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let linked = app.run("file.place", json!({"path": path, "link": true})).unwrap()["ids"].clone();
+    let embedded = app.run("file.place", json!({"path": path, "link": false})).unwrap()["ids"].clone();
+    // The default layout floats Links: dock it beside Layers so that both passes reach a docked panel.
+    app.run("window.panel", json!({"panel": links})).unwrap();
+    app.run("window.panel.dock", json!({"panel": links, "onto": "layers"})).unwrap();
+    // Whether Links floats, and whether its dock column is collapsed to icons.
+    let placed = |app: &crate::VectorcraftApp| {
+        let layout = crate::panel_docking::layout_of(&app.ui);
+        (layout.floating.iter().any(|w| w.panels().any(|p| p == links)), crate::panel_docking::in_iconic_column(&layout, links))
+    };
+    for collapsed in [false, true] {
+        app.run("window.collapseDock", json!({ "collapsed": collapsed })).unwrap();
+        app.run("select.set", json!({ "ids": linked })).unwrap();
+        assert!(click(&mut app, "Linked File"), "collapsed {collapsed}, status: {}", app.ui.status);
+        assert_eq!(placed(&app), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
+        app.run("select.set", json!({ "ids": embedded })).unwrap();
+        assert!(click(&mut app, "Embedded"), "collapsed {collapsed}, status: {}", app.ui.status);
+        assert_eq!(placed(&app), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
+        app.run("select.set", json!({ "ids": [id] })).unwrap();
+        let name = crate::panels::appearance::object_label(&app);
+        assert!(!click(&mut app, name), "collapsed {collapsed}: a rectangle's label opens nothing");
+    }
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]
