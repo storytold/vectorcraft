@@ -630,6 +630,12 @@ impl Index {
         let (offset, len) = (offset as usize, usize::from(len));
         self.initials_text.get(offset..offset + len).is_some_and(|text| text.lines().any(|l| l == query))
     }
+
+    /// Does the index hold the `n` results it was built from? A catalog too large to index gets an
+    /// empty index ([`Index::build`]), which holds none.
+    fn holds(&self, n: usize) -> bool {
+        self.initials.len() == n
+    }
 }
 
 /// `query` trimmed, lowercased, with each run of whitespace made one space.
@@ -686,6 +692,7 @@ type RankKey = (bool, bool, u8, u8, u32, u8, std::cmp::Reverse<u8>, usize, u8, u
 /// or starts a word of its label, menu path, description ([`description`]) or id, shares an English
 /// stem form with a word of its label, menu path or description ("rounded corners" for Round
 /// Corners…) or means the same as a word of its label, menu path or description ("remove bg" for
+/// Remove Background…), where a word may also be text in one of its names or ids ("bg mov" for
 /// Remove Background…), or when the query is the initials of a label ("ea" for Export As…). A query
 /// word that is no word, stem form or word start of any result's label, menu path or id also
 /// matches the words of labels and menu paths it is a typo of ([`Index::typos`]); with such a word,
@@ -751,8 +758,8 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         typos.push(near);
     }
     // The index reads only the start of a longer query, so such a query matches by the substring
-    // rule, which reads all of it.
-    let fits = query.chars().count() <= INDEX_CHARS;
+    // rule, which reads all of it, as every query does in a catalog too large to index.
+    let fits = query.chars().count() <= INDEX_CHARS && index.holds(n);
     let packed: String = query.chars().filter(|c| !c.is_whitespace()).collect();
     let packed = Some(packed).filter(|p| (2..=6).contains(&p.chars().count()) && p.chars().all(char::is_alphabetic));
     let mut ranked: Vec<(RankKey, u32)> = vec![];
@@ -785,11 +792,16 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         for (k, (grades, token)) in indexed.iter().zip(&tokens).enumerate() {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
             if g == NONE {
-                all_indexed = false;
                 held &= e.haystack.contains(token);
             }
             if g > SUBSTRING && e.haystack.contains(token) {
                 g = SUBSTRING;
+            }
+            // A word that is text inside a word of the result counts as matched, so it combines
+            // with words matched through a stem form, a word of the same meaning, a typo or the
+            // description.
+            if g == NONE {
+                all_indexed = false;
             }
             let g = if initials {
                 g.min(LABEL_PREFIX)
@@ -1429,6 +1441,32 @@ mod tests {
         // holds the query word itself.
         let c = synthetic(vec![entry("Zz Color", "tool:zz"), entry("Color", "panel:color"), entry("Zz Colour", "c.three")]);
         assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
+    }
+
+    /// A word that is text inside a word of the result combines with a word matched through a word
+    /// of the same meaning, a stem form, a typo or the description, and a word that is text inside
+    /// a word of no result finds nothing.
+    #[test]
+    fn a_word_inside_a_word_combines_with_the_other_matches() {
+        let c = described(vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")], &["{} make the images transparent", ""]);
+        assert_eq!(ranked(&c, "bg remove"), ["a.one"]);
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
+        assert_eq!(ranked(&c, "bg mov"), ["a.one"], "a word of the same meaning");
+        assert_eq!(ranked(&c, "removing kgrou"), ["a.one"], "a stem form");
+        assert_eq!(ranked(&c, "transparent kgrou"), ["a.one"], "the description");
+        assert_eq!(ranked(&c, "emov backgruond"), ["a.one"], "a typo after a word inside a word");
+        assert!(ranked(&c, "bg qxq").is_empty());
+    }
+
+    /// A catalog without an index (one with more results than a posting can name) matches by the
+    /// substring rule alone: a query word whose parts are each text in a name, where the word
+    /// itself is not, finds nothing.
+    #[test]
+    fn without_an_index_only_the_substring_rule_matches() {
+        let entries = vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")];
+        let c = Catalog { list: entries, index: Index::default(), ranked: std::sync::Mutex::new(None) };
+        assert!(ranked(&c, "mov.nd").is_empty(), "{:?}", ranked(&c, "mov.nd"));
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
     }
 
     /// A query word that is an English stem form of a word of a group ("setting" of settings,

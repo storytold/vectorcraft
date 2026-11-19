@@ -836,6 +836,21 @@ fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_p
     assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
 }
 
+/// "keep" in `groupColors` leaves the group's swatch at its place as it is, without Global Adjust,
+/// and past the group's swatches it adds none.
+#[test]
+fn keep_in_group_colors_leaves_that_swatch_as_it_is() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let p = json!({"map": [], "group": "Brand", "groupColors": ["keep", "#00ff00", "keep"], "globalAdjust": {"brightness": -50}});
+    run(&mut s, "recolor.apply", p);
+    let g = &s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches;
+    let g: Vec<String> = g.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(g.len(), 2, "{g:?}");
+    assert_eq!(g[0], "#2878f0", "the kept swatch takes no Global Adjust");
+    assert_ne!(g[1], "#00ff00", "the other new color takes it");
+}
+
 /// A gradient or pattern swatch of the group keeps its place and its paint when `recolor.apply`
 /// rewrites the group: the group's colors, from the rows or from `groupColors`, go to its color
 /// swatches in order.
@@ -1405,6 +1420,26 @@ fn theme_picker_marquee_takes_the_area_and_picks_add_up() {
     let mut got = pick_theme(&mut s, json!({"picks": [over]}));
     got.sort();
     assert_eq!(got, ["rgb 0 255 0", "rgb 255 255 0"]);
+}
+
+/// A distorted image is read where its pixels are drawn, between its corners.
+#[test]
+fn theme_picker_reads_a_distorted_image_where_it_is_drawn() {
+    let mut s = session();
+    let (id, b) = halves_image(&mut s, 64, 32, [255, 0, 0, 255], [0, 0, 255, 255]);
+    let (x, y0, y1) = (b.x1 + 20.0, b.y0, b.y1);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.distort", json!({"corners": [[x + 40.0, y0], [x + 60.0, y0], [x + 100.0, y1], [x, y1]]}));
+    // The lower left of the trapezoid, outside the rectangle the image was placed in: red.
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [x + 2.0, y1 - 4.0, x + 20.0, y1 - 1.0]}]})), ["rgb 255 0 0"]);
+    // Where the image was: nothing.
+    assert!(pick_theme(&mut s, json!({"picks": [{"rect": [b.x0 + 1.0, b.y0 + 1.0, b.x1 - 1.0, b.y1 - 1.0]}]})).is_empty());
+    // A marquee reaching past the horizon its sides meet at (a quarter of its height above its
+    // top) still reads every pixel it covers.
+    let h = y1 - y0;
+    let mut both = pick_theme(&mut s, json!({"picks": [{"rect": [x - 10.0, y0 - h, x + 110.0, y1 + 1.0]}]}));
+    both.sort();
+    assert_eq!(both, ["rgb 0 0 255", "rgb 255 0 0"]);
 }
 
 /// Pixels less than half opaque are left out, and so is an image whose pixels can't be read.

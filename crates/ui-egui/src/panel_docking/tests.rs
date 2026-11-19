@@ -397,6 +397,28 @@ fn a_collapsed_dock_uses_the_flyouts_active_tab_for_thumbnail_work() {
     assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "a Properties tab under the Layers icon does not need thumbnails");
 }
 
+/// Revealing a panel whose flyout is open with another tab of its group in front brings that panel
+/// to the front and keeps the flyout open.
+#[test]
+fn reveal_brings_the_panel_to_the_front_of_its_open_flyout() {
+    let mut h = Harness::new();
+    h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+    h.app.ui.docking = Some(layout_of(&h.app.ui));
+    h.app.run("window.panel", json!({"panel": "properties"})).unwrap();
+    h.frame(vec![]);
+    gesture(&mut h.app, Action::Activate { panel: "layers".into() }).unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "the flyout is still named for its opening icon");
+    assert_eq!(flyout_tab(&layout_of(&h.app.ui), "properties").as_deref(), Some("layers"), "Layers is in front");
+    reveal_panel(&mut h.app, "properties").unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "the flyout stays open");
+    assert_eq!(flyout_tab(&layout_of(&h.app.ui), "properties").as_deref(), Some("properties"), "Properties is in front");
+    // Revealed again while in front, the panel stays as it is.
+    reveal_panel(&mut h.app, "properties").unwrap();
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"));
+}
+
 /// A Character field shortcut with the Character panel in front of its floating window brings
 /// that window forward and leaves the panel showing.
 #[test]
