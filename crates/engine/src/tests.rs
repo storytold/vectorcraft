@@ -199,6 +199,7 @@ mod swatchlib;
 mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
+mod symbolism_options;
 mod symbollib;
 mod tangent_line;
 mod targeting;

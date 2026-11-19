@@ -623,6 +623,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "symbol.replace",
     "symbol.selectInstances",
     "symbol.setCurrent",
+    "symbol.setDensity",
     "symbol.sortByName",
     "symbol.spray",
     "symbol.unused",
