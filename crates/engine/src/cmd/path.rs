@@ -499,7 +499,7 @@ fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out
         sp.anchors.get(ai).is_some_and(|a| {
             let mut linked = *a;
             linked.link_handle(out, pos, sp.has_segment(ai, !out));
-            linked == *a
+            linked == *a || ((if out { a.has_in() } else { a.has_out() }) && linked_already(a, out, pos))
         })
     });
     if unchanged {
@@ -513,6 +513,78 @@ fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out
         Ok(())
     })?;
     ok()
+}
+
+/// Whether a smooth anchor `a` already has its `out` (or incoming) handle at `pos` and its other
+/// handle exactly where [`Anchor::link_handle`] puts it for that handle at some positive length.
+/// Turning the other handle again from its stored end measures its length anew, which can round
+/// the end differently in the last bit; a handle that passes this test only gets that rounding,
+/// and any other handle is turned. `p + u * len` here is the same arithmetic as in
+/// `Anchor::link_handle`, `dir / l` included.
+fn linked_already(a: &Anchor, out: bool, pos: Point) -> bool {
+    let (moved, other) = if out { (a.h_out, a.h_in) } else { (a.h_in, a.h_out) };
+    let dir = a.p - pos;
+    let l = dir.x.hypot(dir.y);
+    if a.kind != AnchorKind::Smooth || moved != pos || !(l > 0.0 && l.is_finite()) {
+        return false;
+    }
+    let u = dir / l;
+    // The lengths that give each stored coordinate exactly; the smallest length both ranges hold
+    // is checked against the whole end.
+    let (mut lo, mut hi) = (0.0_f64, f64::INFINITY);
+    for (p, o, u) in [(a.p.x, other.x, u.x), (a.p.y, other.y, u.y)] {
+        if u == 0.0 {
+            if o != p {
+                return false;
+            }
+            continue;
+        }
+        let Some((first, last)) = lengths_onto(p, u, o) else {
+            return false;
+        };
+        (lo, hi) = (lo.max(first), hi.min(last));
+    }
+    lo <= hi && lo > 0.0 && lo.is_finite() && a.p + u * lo == other
+}
+
+/// The lengths `len` for which `p + u * len` rounds to exactly `o`, as their smallest and largest,
+/// for a `u` other than 0. The rounded sum moves the same way as `len`, so a range around the
+/// unrounded answer is widened until it brackets `o` and then halved down to each end.
+fn lengths_onto(p: f64, u: f64, o: f64) -> Option<(f64, f64)> {
+    let s = u.signum();
+    let below = |len: f64| s * (p + u * len) < s * o;
+    let above = |len: f64| s * (p + u * len) > s * o;
+    let c = (o - p) / u;
+    let mut d = (o.abs() + p.abs()).max(f64::MIN_POSITIVE) * f64::EPSILON / u.abs();
+    let mut bracket = None;
+    for _ in 0..64 {
+        if below(c - d) && above(c + d) {
+            bracket = Some((c - d, c + d));
+            break;
+        }
+        d *= 2.0;
+    }
+    let (lo, hi) = bracket?;
+    let first = halve(lo, hi, |len| !below(len)).1;
+    let last = halve(lo, hi, above).0;
+    (first <= last).then_some((first, last))
+}
+
+/// Narrows `lo..hi`, where `pred` is false at `lo` and true at `hi` and changes once between
+/// them, to two neighboring values with the same property.
+fn halve(mut lo: f64, mut hi: f64, pred: impl Fn(f64) -> bool) -> (f64, f64) {
+    for _ in 0..2200 {
+        let m = lo + (hi - lo) / 2.0;
+        if m <= lo || m >= hi {
+            break;
+        }
+        if pred(m) {
+            hi = m;
+        } else {
+            lo = m;
+        }
+    }
+    (lo, hi)
 }
 
 /// `path.moveAnchor`: one anchor to (x, y), its handles keeping their offsets (the Anchor Point
