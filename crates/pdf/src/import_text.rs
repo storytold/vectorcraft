@@ -309,27 +309,31 @@ fn may_stroke(fill: (u128, Placement, bool, Option<&str>), opaque: bool, font: u
 /// The glyphs a stroke could still go over on lines of type finished before their stroke pass
 /// could end: lines beyond the most a fill pass keeps for its stroke pass. The device isn't told
 /// where an operator starts, so a stroke pass over such a line can't be told from one over the
-/// glyphs kept: its first stroke, over a glyph finished so, may match one of them instead. Kept up
-/// to [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS), beyond which any stroke may be over one.
+/// glyphs kept: its first stroke, over a glyph finished so, may match one of them instead. The
+/// first [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS) are kept, those finished first: a stroke pass
+/// starts over its operator's first glyph, which is among them unless more glyphs than that were
+/// finished so before the operator, since the last stroke or anything else drawn (#8549). A
+/// stroke over a glyph not kept matches none, so type filled and stroked after a page of type
+/// filled only stays filled and stroked; an operator whose first glyph isn't kept and that draws
+/// it again where it drew it may have its first stroke matched to the copy, as well as it can be,
+/// not exactly.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct LostFills {
     /// Each glyph's font, placement, whether it is a glyph of an ActualText span, its text and
     /// whether its line is opaque.
     fills: Vec<(u128, Placement, bool, Option<String>, bool)>,
-    /// More glyphs than [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS) were finished so.
-    overflowed: bool,
 }
 
 impl LostFills {
-    /// The most glyphs kept, for bounded work and memory on hostile input.
+    /// The most glyphs kept, for bounded work and memory on hostile input: those after them
+    /// are not kept.
     pub const MAX_LOST_FILLS: usize = 4096;
 
-    /// Add the glyphs `line` filled that a stroke may still go over.
+    /// Add the glyphs `line` filled that a stroke may still go over, while there is room.
     pub fn add(&mut self, line: &TextLine) {
         let opaque = line.opacity >= 0.999;
         for g in line.filled.get(line.stroked..).unwrap_or_default() {
             if self.fills.len() >= Self::MAX_LOST_FILLS {
-                self.overflowed = true;
                 return;
             }
             self.fills.push((g.font, g.at, g.actual.is_some(), line.glyph_text(g).map(str::to_string), opaque));
@@ -337,10 +341,9 @@ impl LostFills {
     }
 
     /// Whether a stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over
-    /// one of the glyphs ([`TextLine::fills_at`]).
+    /// one of the glyphs kept ([`TextLine::fills_at`]).
     pub fn may_stroke(&self, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
-        self.overflowed
-            || self.fills.iter().any(|(f, a, act, t, opaque)| may_stroke((*f, *a, *act, t.as_deref()), *opaque, font, at, opacity, text, actual))
+        self.fills.iter().any(|(f, a, act, t, opaque)| may_stroke((*f, *a, *act, t.as_deref()), *opaque, font, at, opacity, text, actual))
     }
 }
 

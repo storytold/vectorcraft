@@ -15,6 +15,7 @@ pub mod catalog;
 pub mod circle;
 pub mod corners;
 pub mod cropimage;
+pub mod curvature_circle;
 pub mod cut;
 pub mod dimension;
 pub mod direct;
@@ -47,6 +48,7 @@ pub mod slice;
 pub mod symbolism;
 pub mod text;
 pub mod touchtype;
+pub mod trace_split;
 pub mod typewidget;
 pub mod xform;
 
@@ -385,6 +387,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         circle::ID => Box::new(circle::CircleTool::default()),
+        curvature_circle::ID => Box::new(curvature_circle::CurvatureCircleTool::default()),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
         other => symbolism::create(other)
@@ -630,6 +633,7 @@ pub(crate) mod testutil {
             snap_to_glyph: false,
             glyph_snap: GlyphSnap::default(),
             corner_widgets: true,
+            shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
             appearance_item: None,
@@ -677,6 +681,7 @@ pub(crate) mod testutil {
             plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
+            interaction_doc: None,
         }
     }
 

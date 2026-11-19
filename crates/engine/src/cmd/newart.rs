@@ -206,9 +206,10 @@ impl Session {
     }
 
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
-    /// the first selected object (so the last selection's once nothing is selected).
+    /// the first selected object (so the last selection's once nothing is selected). Not while the
+    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
     pub(crate) fn inherit_new_art(&mut self) {
-        if self.prefs.new_art_basic {
+        if self.prefs.new_art_basic || self.tool_id() == super::paint::LIVE_PAINT_BUCKET {
             return;
         }
         let Some(st) = self.active() else { return };
