@@ -689,6 +689,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("window.taskBar.reset", "Reset Bar Position", "", "{} unpin the Contextual Task Bar and put it back under the selection"),
     (
+        "window.taskBar.actions",
+        "Bar Actions",
+        "",
+        "{action: \"imageTrace\"|\"cropImage\"|\"removeBackground\"|\"removeAnchorPoints\"|\"join\"|\"cutPath\"|\"convertToCorner\"|\"convertToSmooth\"|\"group\"|\"makeClippingMask\"|\"unite\"|\"expand\"|\"editClippingPath\"|\"releaseClippingMask\"|\"ungroup\"|\"isolate\"|\"editPath\"|\"releaseCompoundPath\"|\"createOutlines\"|\"convertToPointType\"|\"convertToAreaType\"|\"typeOnPathOptions\"|\"centerOnTop\"|\"centerOnBottom\"|\"dynamicText\"|\"offsetPath\"|\"simplify\"|\"smooth\"|\"duplicate\"|\"drawPencil\"|\"placeImage\"|\"fidelity\"|\"smoothToolOptions\"|\"resizeArtboard\"|\"duplicateArtboards\"|\"rearrangeArtboards\"|\"exportArtboards\"|\"fill\"|\"stroke\"|\"recolor\"|\"lock\"|\"shapeProperties\", visible?: bool} show (true), hide (false) or toggle (omitted or null) one of the Contextual Task Bar's actions or chips, as the bar's More Options › Bar Actions does; an action that is off stays out of the bar and out of More Options, and turning one off changes only the bar; `join` is both Connect and Join; every action starts on; kept with the preferences and with the workspace; another action, or a `visible` that is not true, false or null, is an error and changes nothing; returns {action, visible}",
+    ),
+    (
+        "window.taskBar.resetActions",
+        "Reset Bar Actions",
+        "",
+        "{} show every Contextual Task Bar action and chip that Bar Actions turned off, as the bar's More Options › Reset Bar Actions does; returns the ids shown again",
+    ),
+    (
         "window.dock",
         "Panels",
         "Tab",
@@ -838,7 +850,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "retype.find",
         "Find Matching Fonts",
         "",
-        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does, or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more that is not true or false, is an error and leaves the list as it was; returns what retype.list returns",
+        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does (more false, omitted or null: a new search), or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more other than true, false or null, is an error and leaves the list as it was; returns what retype.list returns",
     ),
     (
         "retype.list",
@@ -1158,6 +1170,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Saturate…",
         "",
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
+    ),
+    (
+        "ui.proofSetupDialog",
+        "Customize…",
+        "",
+        "{} open View › Proof Setup › Customize (dialog `proofSetup`, fields `device` (\"workingCmyk\", \"cmyk:<profile>\" or \"rgb:<profile>\": any CMYK or RGB profile), `preserveNumbers`, `intent` (used while preserveNumbers is off), `simulatePaper` and `simulateBlack` (CMYK devices only), `preview` (on): Preview shows the proof on the canvas, OK runs view.proofSetup with these and proof: true, Cancel puts the earlier proof view back; on the desktop only, Save… writes these to a picked proof setup file with view.proofSetup.save and Load… fills them from one with view.proofSetup.read, both starting in the Proof Setups folder (Load… once a save has made it), whose setups View › Proof Setup lists below Customize…)",
     ),
     (
         "ui.indexedColorDialog",

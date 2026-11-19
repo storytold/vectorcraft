@@ -128,6 +128,7 @@ impl<'a> Reader<'a> {
             // section inside it would replace the file's own.
             if self.subreader_depth == 0 {
                 self.styles = crate::import::ai::style::art_styles_in(section, &mut self.names);
+                self.read_arrowheads();
             }
             return Ok(());
         }
@@ -398,6 +399,7 @@ impl<'a> Reader<'a> {
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.styles = std::mem::take(&mut self.styles);
+        sub.arrowheads = std::mem::take(&mut self.arrowheads);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -408,6 +410,7 @@ impl<'a> Reader<'a> {
         self.names.absorb(std::mem::take(&mut sub.names));
         self.global_names = std::mem::take(&mut sub.global_names);
         self.styles = std::mem::take(&mut sub.styles);
+        self.arrowheads = std::mem::take(&mut sub.arrowheads);
         // Unread art in the definition, hidden or not, leaves the tile incomplete.
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -429,6 +432,7 @@ impl<'a> Reader<'a> {
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.styles = std::mem::take(&mut self.styles);
+        sub.arrowheads = std::mem::take(&mut self.arrowheads);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -444,6 +448,7 @@ impl<'a> Reader<'a> {
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
         self.styles = std::mem::take(&mut sub.styles);
+        self.arrowheads = std::mem::take(&mut sub.arrowheads);
         self.names.absorb(std::mem::take(&mut sub.names));
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -597,6 +602,7 @@ impl<'a> Reader<'a> {
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.styles = std::mem::take(&mut self.styles);
+        sub.arrowheads = std::mem::take(&mut self.arrowheads);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
         sub.v7_patterns.clone_from(&self.v7_patterns);
         sub.nodes = self.nodes;
@@ -607,6 +613,7 @@ impl<'a> Reader<'a> {
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
         self.styles = std::mem::take(&mut sub.styles);
+        self.arrowheads = std::mem::take(&mut sub.arrowheads);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
         self.names.absorb(std::mem::take(&mut sub.names));
         // Art stopped by a trailer, or with an array, type, image, placed file, gradient mesh or
@@ -788,6 +795,7 @@ impl<'a> Reader<'a> {
         // version 7 form, lent.
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.styles = std::mem::take(&mut self.styles);
+        sub.arrowheads = std::mem::take(&mut self.arrowheads);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
         sub.v7_patterns = std::mem::take(&mut self.v7_patterns);
         sub.global_names = std::mem::take(&mut self.global_names);
@@ -799,6 +807,7 @@ impl<'a> Reader<'a> {
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.styles = std::mem::take(&mut sub.styles);
+        self.arrowheads = std::mem::take(&mut sub.arrowheads);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
         self.v7_patterns = std::mem::take(&mut sub.v7_patterns);
         self.global_names = std::mem::take(&mut sub.global_names);
