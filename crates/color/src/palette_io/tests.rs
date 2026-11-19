@@ -2,6 +2,9 @@ use super::*;
 use crate::{Gradient, GradientPaint, GradientStop};
 use proptest::prelude::*;
 
+const ASE_COLOR: u16 = 0x0001;
+const ASE_GROUP_END: u16 = 0xC002;
+
 #[test]
 fn gpl_blank_name_keeps_fallback() {
     let blank = "GIMP Palette\nName: \nColumns: 0\n#\n  1   2   3\tx\n";
