@@ -17,6 +17,8 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place; PICT open and place.
+//! - `cdr`: `.cdr` drawings of versions 1 to 27 and `.cdt` templates, and `.cmx` files with
+//!   32-bit coordinates, open and place.
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -28,6 +30,7 @@
 mod action_batch;
 mod affinity;
 mod batch;
+mod cdr;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
@@ -41,7 +44,7 @@ mod load;
 mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, image_clip, size_note};
 mod heifread;
-mod hpgl;
+pub mod hpgl;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -84,7 +87,7 @@ pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{
     Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,
-    read_for_open, texture_image,
+    read_for_open, read_for_open_asking, texture_image,
 };
 pub(crate) use load::{check_files_not_lossy_overwrite, check_not_lossy_overwrite, lossy_source};
 pub use load::{losses_summary, overwrite_losses};
@@ -98,7 +101,7 @@ pub use native::with_compression_pref;
 pub(crate) use pdfimport::opened_page_document;
 pub use pdfimport::{LoadOptions, page_document, pages_can_link};
 pub(crate) use psdlayers::import_active as psd_layers;
-pub use psdlayers::{PsdInfo, info as psd_info};
+pub use psdlayers::{LAYER_WARNINGS as PSD_LAYER_WARNINGS, MERGED_WARNING as PSD_MERGED_WARNING, PsdInfo, info as psd_info};
 pub(crate) use psdslices::over as psd_slices;
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
@@ -174,6 +177,10 @@ mod tests;
 mod tests_affinity;
 #[cfg(test)]
 mod tests_artboard_fill;
+#[cfg(test)]
+mod tests_cdr;
+#[cfg(test)]
+mod tests_cmx;
 #[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]
