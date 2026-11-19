@@ -6379,6 +6379,7 @@ imageTrace	Outline	Kontur
 	Arrow	Panah
 	Arrow (open)	Panah (terbuka)
 	Barbed	Berduri
+arrowhead	Feather	Bulu
 	Half Arrow (left)	Setengah panah (kiri)
 	Half Arrow (right)	Setengah panah (kanan)
 	Concave	Cekung
@@ -6406,6 +6407,7 @@ imageTrace	Outline	Kontur
 	Kite	Layang-layang
 	Triangle to Bar	Segitiga ke batang
 	Oval	Oval
+	Line Arrow	Panah garis
 	Complementary	Komplementer
 	Complementary 2	Komplementer 2
 	Split Complementary	Komplementer terpisah

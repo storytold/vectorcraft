@@ -456,6 +456,8 @@ antiAlias	Sharp	Nítid
 	Bar	Barra
 	Bar Graph Tool	Eina de gràfic de barres
 	Barbed	Amb pues
+arrowhead	Feather	Ploma
+arrowhead	Target	Diana
 	Bas Relief	Baix relleu
 	Bas Relief…	Baix relleu…
 	Base Along:	Base al llarg de:
@@ -2606,6 +2608,7 @@ digits	Malayalam	Malaiàlam
 	Limit:	Límit:
 	Limited	Limitat
 	Line	Línia
+	Line Arrow	Fletxa de línies
 	Line Art	Art lineal
 	Line Art and Text Resolution:	Resolució de l’art lineal i del text:
 	Line Breaks	Salts de línia

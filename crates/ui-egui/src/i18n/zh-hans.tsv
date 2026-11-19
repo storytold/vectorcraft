@@ -7847,6 +7847,36 @@ anchor	Points:	点：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
 @msg	missing `effect`	缺少 `effect`
 @msg	`params` must be an object	`params` 必须是对象
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圆形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭头 (空心)
+	Barbed	倒钩
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭头 (左)
+	Half Arrow (right)	半箭头 (右)
+	Double Bar	双条形
+	Dot on Bar	条形上的圆点
+	Chevron	人字形
+	Plus	加号
+	Hexagon (open)	六边形 (空心)
+	Tag	标签
+	Tag (open)	标签 (空心)
+	Half Circle	半圆
+	Drop	水滴
+	Slash	斜线
+	Double Slash	双斜线
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括号
+	Fork	叉形
+	Leaf	叶形
+	Kite	风筝形
+	Triangle to Bar	三角至条形
+	Oval	椭圆
+	Line Arrow	线条箭头
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路径精确工具
 	Anchor Eraser Brush	锚点橡皮擦画笔

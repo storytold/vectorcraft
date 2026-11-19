@@ -2032,6 +2032,7 @@ font-technology	Variable	Variabla
 	Limit to Library:	Begränsa till bibliotek:
 	Limit:	Gränsvärde:
 	Line	Linje
+	Line Arrow	Linjepil
 	Line Art and Text Resolution:	Upplösning för streckteckning och text:
 	Line Breaks	Radbrytningar
 	Line Color	Linjefärg
@@ -6400,6 +6401,7 @@ lighting	Light	Ljus
 	B5	B5
 	Bar	Lodstreck
 	Barbed	Hullingförsedd
+arrowhead	Feather	Fjäder
 	Baseline (Standard)	Baseline (standard)
 	Baseline Optimized	Baseline optimerad
 	Basic	Grundläggande

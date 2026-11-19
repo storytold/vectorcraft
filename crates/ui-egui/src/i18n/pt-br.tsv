@@ -6435,6 +6435,7 @@ effect	Regular	Regular
 	Arrow	Seta
 	Arrow (open)	Seta (aberta)
 	Barbed	Farpada
+arrowhead	Feather	Pena
 	Half Arrow (left)	Meia Seta (esquerda)
 	Half Arrow (right)	Meia Seta (direita)
 	Concave	Côncava
@@ -6462,6 +6463,7 @@ effect	Regular	Regular
 	Kite	Pipa
 	Triangle to Bar	Triângulo para Barra
 	Oval	Oval
+	Line Arrow	Seta de Linha
 	Complementary	Complementar
 	Complementary 2	Complementar 2
 	Split Complementary	Complementar Dividida

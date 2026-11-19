@@ -9528,6 +9528,36 @@ anchor	Points:	ポイント:
 @msg	`{id}` is not a colour adjustment	`{id}` はカラー補正ではありません
 @msg	missing `effect`	`effect` が指定されていません
 @msg	`params` must be an object	`params` にはオブジェクトを指定してください
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角形 (白抜き)
+	Circle (open)	円 (白抜き)
+	Square (open)	正方形 (白抜き)
+	Arrow (open)	矢印 (白抜き)
+	Barbed	かえし付き
+arrowhead	Feather	矢羽根
+	Half Arrow (left)	片矢印 (左)
+	Half Arrow (right)	片矢印 (右)
+	Double Bar	二重バー
+	Dot on Bar	バー上のドット
+	Chevron	山形
+	Plus	プラス
+	Hexagon (open)	六角形 (白抜き)
+	Tag	タグ
+	Tag (open)	タグ (白抜き)
+	Half Circle	半円
+	Drop	しずく
+	Slash	スラッシュ
+	Double Slash	二重スラッシュ
+	Diamond (open)	ひし形 (白抜き)
+	Reverse Triangle	逆三角形
+	Swallowtail	燕尾
+	Bracket	角かっこ
+	Fork	フォーク
+	Leaf	葉
+	Kite	カイト
+	Triangle to Bar	三角形からバー
+	Oval	楕円
+	Line Arrow	線矢印
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	パス精密ツール
 	Anchor Eraser Brush	アンカーポイント消去ブラシ

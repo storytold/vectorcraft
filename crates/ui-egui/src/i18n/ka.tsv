@@ -7870,6 +7870,7 @@ font-technology	Variable	ცვლადი
 	Arrow	ისარი
 	Arrow (open)	ისარი (ღია)
 	Barbed	წვეტიანი
+arrowhead	Feather	ბუმბული
 	Half Arrow (left)	ნახევარი ისარი (მარცხენა)
 	Half Arrow (right)	ნახევარი ისარი (მარჯვენა)
 	Concave	ჩაზნექილი
@@ -7897,6 +7898,7 @@ font-technology	Variable	ცვლადი
 	Kite	ფრანი
 	Triangle to Bar	სამკუთხედიდან ზოლამდე
 	Oval	ოვალი
+	Line Arrow	ხაზოვანი ისარი
 	Complementary	დამატებითი
 	Complementary 2	დამატებითი 2
 	Split Complementary	გაყოფილი დამატებითი

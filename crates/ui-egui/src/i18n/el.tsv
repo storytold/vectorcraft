@@ -1972,6 +1972,7 @@ font-technology	Variable	Μεταβλητές
 	Lighten	Φώτισμα
 	Lightness	Φωτεινότητα
 	Line	Γραμμή
+	Line Arrow	Γραμμικό βέλος
 	Line Segment Tool	Ευθύγραμμο τμήμα (Line Segment Tool)
 	Linear Gradient	Γραμμικό ντεγκραντέ
 	Lines	Γραμμές
@@ -6286,6 +6287,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 	Auto Size	Αυτόματο μέγεθος
 	Bar	Ράβδος
 	Barbed	Αγκιστρωτό
+arrowhead	Feather	Φτερό
 	Baseline (Standard)	Γραμμή βάσης (τυπική)
 	Baseline Optimized	Βελτιστοποιημένο για γραμμή βάσης
 	Black Outline	Μαύρο περίγραμμα

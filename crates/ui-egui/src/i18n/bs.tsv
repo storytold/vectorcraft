@@ -6049,6 +6049,7 @@ imageTrace	Outline	Obris
 	Arrow	Strelica
 	Arrow (open)	Strelica (otvorena)
 	Barbed	Bodljikavo
+arrowhead	Feather	Pero
 	Half Arrow (left)	Polustrelica (lijevo)
 	Half Arrow (right)	Polustrelica (desno)
 	Concave	Konkavno
@@ -6076,6 +6077,7 @@ imageTrace	Outline	Obris
 	Kite	Zmaj
 	Triangle to Bar	Trougao u traku
 	Oval	Oval
+	Line Arrow	Linijska strelica
 	Complementary	Komplementarne
 	Complementary 2	Komplementarne 2
 	Split Complementary	Podijeljene komplementarne

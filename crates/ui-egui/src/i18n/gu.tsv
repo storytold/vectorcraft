@@ -3156,6 +3156,37 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	ત્રિકોણ (ખુલ્લો)
+	Circle (open)	વર્તુળ (ખુલ્લું)
+	Square (open)	ચોરસ (ખુલ્લો)
+	Arrow (open)	તીર (ખુલ્લું)
+	Barbed	કાંટાળું
+arrowhead	Feather	પીંછું
+	Half Arrow (left)	અડધું તીર (ડાબે)
+	Half Arrow (right)	અડધું તીર (જમણે)
+	Double Bar	બેવડી પટ્ટી
+	Dot on Bar	પટ્ટી પર બિંદુ
+	Chevron	શેવરોન
+	Cross	ક્રોસ
+	Plus	પ્લસ
+	Hexagon (open)	ષટ્કોણ (ખુલ્લો)
+	Tag	ટૅગ
+	Tag (open)	ટૅગ (ખુલ્લો)
+	Half Circle	અર્ધવર્તુળ
+	Drop	ટીપું
+	Slash	સ્લૅશ
+	Double Slash	બેવડો સ્લૅશ
+	Diamond (open)	ડાયમંડ (ખુલ્લો)
+	Reverse Triangle	ઊંધો ત્રિકોણ
+	Swallowtail	અબાબીલની પૂંછડી
+	Bracket	કૌંસ
+	Fork	કાંટો
+	Leaf	પાંદડું
+	Kite	પતંગ
+	Triangle to Bar	ત્રિકોણથી પટ્ટી
+	Oval	અંડાકાર
+	Line Arrow	રેખા તીર
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
 	Common Tangents	સામાન્ય સ્પર્શરેખાઓ

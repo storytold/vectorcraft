@@ -2130,6 +2130,7 @@ file-filter	Templates	Шаблоны
 	Limit to Library:	Ограничить библиотекой:
 	Limit:	Предел:
 	Line	Линия
+	Line Arrow	Линейная стрелка
 	Line Art and Text Resolution:	Разрешение штрихового рисунка и текста:
 	Line Breaks	Разрывы строк
 	Line Color	Цвет линии
@@ -7592,6 +7593,8 @@ axis	Y Axis	Ось Y
 	Auto Size	Авторазмер
 	Bar	Черта
 	Barbed	С зазубриной
+arrowhead	Feather	Перо
+arrowhead	Target	Мишень
 	Baseline (Standard)	Базовый (стандартный)
 	Baseline Optimized	Базовый оптимизированный
 	Bicubic	Бикубическая

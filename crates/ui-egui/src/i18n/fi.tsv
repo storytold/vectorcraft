@@ -6415,6 +6415,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Arrow	Nuoli
 	Arrow (open)	Nuoli (avoin)
 	Barbed	Väkänen
+arrowhead	Feather	Sulka
 	Half Arrow (left)	Puolinuoli (vasen)
 	Half Arrow (right)	Puolinuoli (oikea)
 	Concave	Kovera
@@ -6442,6 +6443,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Kite	Leija
 	Triangle to Bar	Kolmiosta palkkiin
 	Oval	Soikio
+	Line Arrow	Viivanuoli
 	Complementary	Vastaväri
 	Complementary 2	Vastaväri 2
 	Split Complementary	Jaettu vastaväri

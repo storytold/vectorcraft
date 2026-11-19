@@ -8289,6 +8289,7 @@ imageTrace	Outline	Contour
 	Arrow	Pijl
 	Arrow (open)	Pijl (open)
 	Barbed	Weerhaak
+arrowhead	Feather	Veer
 	Half Arrow (left)	Halve pijl (links)
 	Half Arrow (right)	Halve pijl (rechts)
 	Concave	Concaaf
@@ -8316,6 +8317,7 @@ imageTrace	Outline	Contour
 	Kite	Vlieger
 	Triangle to Bar	Driehoek naar balk
 	Oval	Ovaal
+	Line Arrow	Lijnpijl
 	Complementary	Complementair
 	Complementary 2	Complementair 2
 	Split Complementary	Gesplitst complementair

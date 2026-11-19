@@ -6453,6 +6453,8 @@ effect	Regular	Regular
 	Arrow	Flecha
 	Arrow (open)	Flecha (abierta)
 	Barbed	Con púas
+arrowhead	Feather	Emplumado
+arrowhead	Target	Diana
 	Half Arrow (left)	Media flecha (izquierda)
 	Half Arrow (right)	Media flecha (derecha)
 	Concave	Cóncava
@@ -6480,6 +6482,7 @@ effect	Regular	Regular
 	Kite	Cometa
 	Triangle to Bar	Triángulo a barra
 	Oval	Óvalo
+	Line Arrow	Flecha de líneas
 	Complementary	Complementario
 	Complementary 2	Complementario 2
 	Split Complementary	Complementario dividido

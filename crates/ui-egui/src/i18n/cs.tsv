@@ -6500,6 +6500,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Arrow	Šipka
 	Arrow (open)	Šipka (otevřená)
 	Barbed	S protihroty
+arrowhead	Feather	Pírko
 	Half Arrow (left)	Poloviční šipka (vlevo)
 	Half Arrow (right)	Poloviční šipka (vpravo)
 	Concave	Vkleslá
@@ -6527,6 +6528,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 	Kite	Deltoid
 	Triangle to Bar	Trojúhelník k příčce
 	Oval	Ovál
+	Line Arrow	Čárová šipka
 # Colour harmony rules (Color Guide, Recolor Artwork, Color Themes)
 	Complementary	Komplementární
 	Complementary 2	Komplementární 2

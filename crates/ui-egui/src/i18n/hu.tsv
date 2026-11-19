@@ -409,6 +409,8 @@ font-technology	Variable	Változó
 	Bar	Vonal
 	Bar Graph Tool	Sávdiagram
 	Barbed	Szakállas
+arrowhead	Feather	Tollazat
+arrowhead	Target	Céltábla
 	Baseline	Alapvonal
 	Baseline (Standard)	Alapvonali (szabványos)
 	Baseline Optimized	Alapvonali, optimalizált
@@ -2609,6 +2611,7 @@ file-filter	Templates	Sablonok
 	Limit:	Határ:
 	Limited	Korlátozott
 	Line	Vonal
+	Line Arrow	Vonalas nyíl
 	Line Art	Vonalas rajz
 	Line Art and Text Resolution:	Vonalas grafika és szöveg felbontása:
 	Line Breaks	Sortörések

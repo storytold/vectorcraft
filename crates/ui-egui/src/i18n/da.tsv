@@ -8576,6 +8576,7 @@ imageTrace	Outline	Kontur
 	Arrow	Pil
 	Arrow (open)	Pil (åben)
 	Barbed	Modhager
+arrowhead	Feather	Fjer
 	Half Arrow (left)	Halvpil (venstre)
 	Half Arrow (right)	Halvpil (højre)
 	Concave	Konkav
@@ -8603,6 +8604,7 @@ imageTrace	Outline	Kontur
 	Kite	Drage
 	Triangle to Bar	Trekant til bjælke
 	Oval	Oval
+	Line Arrow	Stregpil
 	Complementary	Komplementær
 	Complementary 2	Komplementær 2
 	Split Complementary	Delt komplementær
