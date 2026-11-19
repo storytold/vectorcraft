@@ -554,6 +554,7 @@ fn main() -> std::process::ExitCode {
                 // File Info's metadata templates live in their own folder next to the preferences.
                 prefs_dir::attach_metadata_templates_dir(&mut session);
                 prefs_dir::attach_new_doc_profiles(&mut session);
+                prefs_dir::attach_proof_setups(&mut session);
                 prefs_dir::attach_script_data(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);

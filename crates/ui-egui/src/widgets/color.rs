@@ -1162,6 +1162,12 @@ pub struct WheelResponse {
     /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
     /// (degrees) and the saturation (or brightness) under the pointer (1 past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
+    /// A right-click on the wheel, or on a marker past its edge: the color whose marker is within
+    /// reach of it (if any), the color on whose line from the center it is (when it is on no
+    /// marker), and the hue (degrees) and saturation under the pointer.
+    pub secondary: Option<(Option<usize>, Option<usize>, [f32; 2])>,
+    /// The wheel's own response, for a right-click menu.
+    pub response: Option<egui::Response>,
 }
 
 /// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
@@ -1169,25 +1175,60 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel_of(ui, id, size, colors, base, false, WheelAxes::HueSaturation)
+    wheel_of(ui, id, size, colors, base, base, false, WheelAxes::HueSaturation)
 }
 
-/// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
-/// [`segment_color`]). The markers sit at their colors' own hue and
+/// Recolor Artwork's wheel: [`harmony_wheel`] with the base color's marker (`base`) larger and the
+/// selected color's (`selected`, when another) ringed, at the selected color's brightness, with the
+/// Brightness slider for it. With `segmented` it is drawn as solid patches (24 hues by 5
+/// saturations, each in its [`segment_color`]); the markers sit at their colors' own hue and
 /// saturation, and a drag moves them as freely as on the smooth wheel.
-pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel_of(ui, id, size, colors, base, true, WheelAxes::HueSaturation)
+#[allow(clippy::too_many_arguments)]
+pub fn recolor_wheel(
+    ui: &mut Ui,
+    id: &str,
+    size: f32,
+    colors: &[Color],
+    base: Option<usize>,
+    selected: Option<usize>,
+    segmented: bool,
+    axes: WheelAxes,
+) -> WheelResponse {
+    wheel_of(ui, id, size, colors, base, selected.or(base), segmented, axes)
 }
 
-/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. With
+/// The distance from `p` to the segment from `a` to `b`.
+fn segment_distance(p: egui::Pos2, a: egui::Pos2, b: egui::Pos2) -> f32 {
+    let ab = b - a;
+    let len2 = ab.length_sq();
+    let t = if len2 > 0.0 { ((p - a).dot(ab) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    p.distance(a + ab * t)
+}
+
+pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
+    wheel_of(ui, id, size, colors, base, base, true, WheelAxes::HueSaturation)
+}
+
+/// [`harmony_wheel`], [`recolor_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. The
+/// big marker is `base`'s, and the wheel's background and the slider under it are `selected`'s. With
 /// [`WheelAxes::HueBrightness`] the distance from the center is brightness (black at the center,
 /// full brightness at the edge, a ring of patches per 20% on the segmented wheel), the wheel is drawn
 /// at the selected colour's saturation (full without one), a marker drag sets hue and brightness,
 /// and the slider under the wheel is a Saturation slider.
-pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool, axes: WheelAxes) -> WheelResponse {
+#[allow(clippy::too_many_arguments)]
+pub fn wheel_of(
+    ui: &mut Ui,
+    id: &str,
+    size: f32,
+    colors: &[Color],
+    base: Option<usize>,
+    selected: Option<usize>,
+    segmented: bool,
+    axes: WheelAxes,
+) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
-    let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
+    let base_hsb = selected.and_then(|b| colors.get(b)).map(Color::to_hsb);
     let (radial, other) = (axes.radial(), axes.other());
     // The component the wheel does not show: the slider's value, and the wheel's background at it.
     let o = base_hsb.map_or(1.0, |c| c[other]);
@@ -1209,6 +1250,24 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
             painter.line_segment([c, p], Stroke::new(1.0, Color32::from_white_alpha(160)));
             painter.circle(p, if big { 8.0 } else { 5.5 }, crate::panels::c32(col), Stroke::new(1.5, Color32::WHITE));
             painter.circle_stroke(p, if big { 9.0 } else { 6.5 }, Stroke::new(1.0, Color32::BLACK));
+            if Some(i) == selected && selected != base {
+                painter.circle_stroke(p, 8.5, Stroke::new(1.5, t.accent));
+            }
+        }
+        // A right-click: the marker under it, or else the line from the center to a marker.
+        if resp.secondary_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
+            let dv = p - c;
+            if dv.length() <= r || near.is_some() {
+                let line = near.is_none().then(|| {
+                    let on = colors.iter().map(at).enumerate().map(|(i, m)| (i, segment_distance(p, c, m))).filter(|x| x.1 <= 4.0);
+                    on.min_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0)
+                });
+                let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+                out.secondary = Some((near.map(|x| x.0), line.flatten(), [h, (dv.length() / r).clamp(0.0, 1.0)]));
+            }
         }
         // Drag a marker: the nearest one within reach of the press.
         let drag = ui.scope_id().with((id, "drag"));
@@ -1238,6 +1297,7 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
         }
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
+        out.response = Some(resp);
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -1246,7 +1306,7 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
         ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(name).color(t.text_dim)));
         // Screen readers get the value in percent, as the Color panel's HSB fields show it.
         let shown = SliderValue::field((f64::from(o) * 100.0).round(), 0.0..=100.0, "%", 0);
-        if let (Some(b), Some(hsb)) = (base, base_hsb)
+        if let (Some(b), Some(hsb)) = (selected, base_hsb)
             && let (Some(nv), _) = color_slider_valued(ui, (id, key), name, Some(shown), o, size, &|x| {
                 let [h, s, v] = axes.hsb(hsb[0], hsb[radial], x);
                 crate::panels::c32(&Color::from_hsb(h, s, v))

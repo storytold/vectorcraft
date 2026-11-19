@@ -1156,6 +1156,7 @@ digits	Malayalam	マラヤーラム数字
 	Add Selected Artwork as One Asset	選択したアートワークを 1 つのアセットとして追加
 	Add Spine Point	スパインポイントを追加
 	Add Used Colors	使用中のカラーを追加
+	Add Selected Colors	選択したカラーを追加
 	Add to Graphic Styles	グラフィックスタイルに追加
 	Add to Profiles	プロファイルに追加
 	Add to Profiles…	プロファイルに追加…
@@ -2116,6 +2117,10 @@ antiAlias	Sharp	シャープ
 	Add Color Tool	カラー追加ツール
 	Remove Color Tool	カラー削除ツール
 	Remove Color	カラーを削除
+	Set As Base Color	ベースカラーに設定
+	Select Shade	シェードを選択
+	Add New Color	新規カラーを追加
+	Set Current Color As Base Color	現在のカラーをベースカラーに設定
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
@@ -2987,6 +2992,11 @@ diagnostics	ui	UI
 	Preserve Alpha Transparency	アルファ透明を保持
 	Preserve Appearance and Overprints	アピアランスとオーバープリントを保持
 	Preserve CMYK Numbers	CMYK 値を保持
+	Preserve RGB Numbers	RGB 値を保持
+	Device to Simulate:	シミュレートするデバイス:
+	Simulate Paper Color	用紙の色をシミュレート
+	Simulate Black Ink	インキの黒をシミュレート
+	Load…	読み込み…
 	Preserve Editing Capabilities	編集機能を保持
 	Preserve Lightness	明度を保持
 	Preserve Overprints and Spot Colors	オーバープリントと特色を保持
@@ -3388,6 +3398,7 @@ mark-style	Japanese	日本式
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) の間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。言語や大文字小文字は問いません。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	デスクトップ版では、このフォルダーの .wasm プラグインが起動時と、ここに新しいフォルダーを指定して OK をクリックしたときに読み込まれます (セーフモードを除く)。Web 版では読み込まれません。
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	プラグインのオブジェクトフィルターを 1 回実行するときに使える命令の数です。大では通常より多く使え、60 秒の制限は変わりません。重いフィルターは独自の予算を保ちます。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	1 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	2 つ目の仮想記憶ディスクの選択です。Startup、None またはフォルダーのパスを指定します。VectorCraft は保存しますが、仮想記憶ディスクはまだ使用しません。
 	How light or dark the interface is.	インターフェイスをどの程度明るく、または暗く表示するかです。
@@ -3406,6 +3417,7 @@ mark-style	Japanese	日本式
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	アニメーションズームは、これがオンのときだけ働きます。オフの場合、アニメーションズームは淡色表示になり、ズームはアニメーションしません。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ホイールによるズームはなめらかに動き、ズームツールは横にドラッグするか押したままにするとズームします。オフの場合、ズームツールはドラッグした範囲にズームします。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	次回の起動から、デスクトップ版はこの種類のグラフィックプロセッサーで描画します。自動ではディスプレイを駆動しているものが優先されます。Web 版では使われません。
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	次回の起動から、ウィンドウはディスプレイの更新を待たずにフレームを表示します。上限は毎秒 240 フレームです。オフにすると、ディスプレイがフレームの間隔を決めます。起動時に指定した表示モードが優先されます。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	各ドキュメントが保持する取り消しステップの最大数です。値を下げると、OK をクリックしたときに古いステップから削除されます。メモリを使いすぎる場合は、さらに早く削除されることがあります。
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	ドラッグ中にアートワークが変わる様子を表示します。オフの場合、ドラッグ中はアウトラインが動き、ボタンを離すとアートワークが変わります。定規ガイドはドラッグ中も常に動きます。
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	アートワークを描画するワーカースレッドの数です。-1 は VectorCraft が使えるコア数より 1 つ少なく (最大 8)、0 はワーカーを使いません。Web 版では常に使いません。
@@ -3432,6 +3444,10 @@ mark-style	Japanese	日本式
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft はこの選択を保存しますが、コピーと切り取りはまだ従来のベクタークリップボードの形式を使用しません。
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	従来のベクタークリップボードの「パスを保持」または「アピアランスとオーバープリントを保持」です。VectorCraft は選択を保存しますが、まだ使用しません。
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	「書式を保持」では、VectorCraft のテキストオブジェクトからコピーしたテキストをテキストオブジェクトに貼り付けるとスタイルを保持します。「テキストのみを保持」では、貼り付け先のスタイルになります。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	「すべてのブラックをリッチブラックで表示」では、純粋な CMYK ブラック（ブラックインキのみ 100%）をカンバス上で RGB ブラックとして表示します。「すべてのブラックを正確に表示」では、作業用 CMYK スペースを通して変換します。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	「すべてのブラックをリッチブラックで出力」では、RGB とグレースケールのラスター書き出しと「ビットマップとしてプリント」で純粋な CMYK ブラックを RGB ブラックとして描画します。ベクター書き出し、CMYK の JPEG、TIFF と PSD、その他のプリントは変わりません。
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	タッチスクリーンではタッチワークスペースに切り替えます。オフにするか、タッチスクリーンが使えなくなると、切り替える前のワークスペースに戻ります。
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	カンバスを 2 本指でタップすると取り消し、タッチワークスペースでは選択ツールと描画ツールを切り替えます。3 本指でタップするとやり直します。どちらもプレゼンテーションモードでは動作しません。
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) で、[標準文字スタイル] が言語を設定していない間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。大文字小文字は問いません。韓国語の単語にはハイフンが付かず、インドの言語の単語は文字のまとまりの途中では分割されません。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
@@ -3577,6 +3593,7 @@ mark-style	Japanese	日本式
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
+	Type to search commands, tools, panels and effects	入力してコマンド、ツール、パネル、効果を検索
 	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
@@ -5194,6 +5211,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} の結果が空になりました。領域を囲まない直線などのオープンパスがあります。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	already editing a pattern	すでにパターンを編集中です
 @msg	no pattern `{name}`	パターン `{name}` が見つかりません
+@msg	art painted with `{name}` can't be its tile	`{name}` でペイントされたアートはそのタイルにできません
 @msg	not in pattern editing mode	パターン編集モードではありません
 @msg	finish editing the pattern first	先にパターンの編集を終了してください
 @msg	pattern missing	パターンが見つかりません
@@ -9529,6 +9547,36 @@ anchor	Points:	ポイント:
 @msg	`{id}` is not a colour adjustment	`{id}` はカラー補正ではありません
 @msg	missing `effect`	`effect` が指定されていません
 @msg	`params` must be an object	`params` にはオブジェクトを指定してください
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角形 (白抜き)
+	Circle (open)	円 (白抜き)
+	Square (open)	正方形 (白抜き)
+	Arrow (open)	矢印 (白抜き)
+	Barbed	かえし付き
+arrowhead	Feather	矢羽根
+	Half Arrow (left)	片矢印 (左)
+	Half Arrow (right)	片矢印 (右)
+	Double Bar	二重バー
+	Dot on Bar	バー上のドット
+	Chevron	山形
+	Plus	プラス
+	Hexagon (open)	六角形 (白抜き)
+	Tag	タグ
+	Tag (open)	タグ (白抜き)
+	Half Circle	半円
+	Drop	しずく
+	Slash	スラッシュ
+	Double Slash	二重スラッシュ
+	Diamond (open)	ひし形 (白抜き)
+	Reverse Triangle	逆三角形
+	Swallowtail	燕尾
+	Bracket	角かっこ
+	Fork	フォーク
+	Leaf	葉
+	Kite	カイト
+	Triangle to Bar	三角形からバー
+	Oval	楕円
+	Line Arrow	線矢印
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	パス精密ツール
 	Anchor Eraser Brush	アンカーポイント消去ブラシ
@@ -9819,6 +9867,7 @@ breakText	Glyphs	字形
 	Remove Strokes	線を削除
 	Place Brush Art	ブラシのアートを配置
 	Replace Brush Art	ブラシのアートを置き換え
+	Replace Pattern Art	パターンのアートを置き換え
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
 	Apply to Strokes	線に適用
 	Leave Strokes	線を保持
@@ -10428,6 +10477,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Engraving	彫刻
+	Fine Hatching	細いハッチング
+	Dense Hatching	密なハッチング
+	Tapered Hatching	先細りハッチング
+	Broken Hatching	途切れたハッチング
 	Image Brush	画像ブラシ
 	Soft Bloom	やわらかな花
 	Halftone Field	ハーフトーンの面
