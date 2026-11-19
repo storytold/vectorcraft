@@ -4768,7 +4768,13 @@ already walks Image Trace. Short agent entry points:
   Appearance panel's active row changes. The Fill and Stroke proxies (`paint.proxies`) show those colors, never mixed, the Stroke panel shows
   that stroke as it does with nothing selected, and with New Art Has Basic Appearance off the selection's appearance
   does not replace them after a command. They are also the fill and stroke for new art, so another tool chosen
-  afterwards keeps them until a command or a new selection changes them.
+  afterwards keeps them until a command or a new selection changes them. All of this also holds while a Cmd/Ctrl-click
+  with the bucket uses the Selection tool, and while the Eyedropper samples into a stop of the bucket's gradient for
+  the Gradient panel's eyedropper (`tool.select {tool: "eyedropper"}`, then
+  `tool.setOption {tool: "eyedropper", values: {stop: "livePaintBucket"}}`): the stop
+  stays selected, and the click's `paint.sampleColor {color, stop}` recolors that stop of the bucket's gradient and
+  leaves the selection's paint as it is. Once that stop is no longer selected (a Cmd/Ctrl-click selected another
+  object), the next click ends the pick without sampling and switches back to the bucket.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the

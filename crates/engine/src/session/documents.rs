@@ -55,6 +55,7 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            back_to_bucket: false,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
