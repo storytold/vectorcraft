@@ -496,7 +496,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
     let tc = egui::pos2(r.right() - TARGET_X, r.center().y);
-    let tresp = target_circle(ui, n, tc, h, view.target.map_or(is_sel, |id| id == n.id), &mut out.actions, t);
+    let tresp = target_circle(ui, n, tc, h, shows_targeted(view, n, is_sel), &mut out.actions, t);
     let sq = egui::pos2(r.right() - SQUARE_X, r.center().y);
     if is_sel {
         let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
@@ -834,6 +834,24 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
             LayersDrag::Guides(_) => return,
         };
         out.actions.push(("layer.move".into(), json!({"ids": ids, "target": n.id.0, "place": place.id(), "copy": copy})));
+    }
+}
+
+/// Whether `n`'s target circle shows as targeted: `n` is the one target, or, with nothing
+/// targeted, it is selected. A layer is never selected itself (its art is), so with nothing
+/// targeted a layer shows as targeted while all of its visible, unlocked art is selected, as an
+/// object added to the selection from its circle does (#8646).
+fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
+    match view.target {
+        Some(id) => id == n.id,
+        None if n.is_layer() => {
+            if view.sel.is_empty() {
+                return false;
+            }
+            let art = n.layer_art(true);
+            !art.is_empty() && art.iter().all(|id| view.sel.contains(id))
+        }
+        None => is_sel,
     }
 }
 
