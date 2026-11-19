@@ -403,6 +403,10 @@ impl Tool for TransformTool {
                     // its second point.
                     self.drop_axis();
                     vec![preview(m, ev.mods.alt, ev.backquote), Action::Commit]
+                } else if d.revision != cx.revision {
+                    // The document or the selection changed since the press, as for a drag: the
+                    // release sets no reference point or Reflect axis.
+                    vec![]
                 } else if let (TransformKind::Reflect, Some(first)) = (self.kind, self.axis_first(cx)) {
                     // The second point of a Reflect axis: the selection (with Alt at the release, as
                     // for a drag, a copy) reflects across the line through both points, as one undo
@@ -1073,6 +1077,33 @@ mod tests {
         assert!(t.pointer(&moved, &ev(PointerKind::Drag, 100.0, 250.0)).is_empty());
         assert!(!t.busy());
         assert!(t.pointer(&moved, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+    }
+
+    /// A press whose document or selection changes before a release that is not a drag sets no
+    /// reference point and starts no Reflect axis, so the next click is a first click.
+    #[test]
+    fn a_reflect_press_released_after_the_document_changed_sets_nothing() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        (c.smart_guides, c.snap_to_point) = (false, false);
+        let none = Mods::default();
+        let mut moved = cx(&d, &s, &p);
+        (moved.smart_guides, moved.snap_to_point) = (false, false);
+        moved.revision = (c.revision.0, c.revision.1 + 1);
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert!(!t.ends_on_escape(&moved));
+        assert_ne!(t.reference_point(&moved), Some(Point::new(200.0, 200.0)));
+        assert!(click(&mut t, &moved, 150.0, 300.0, none).is_empty());
+        // The other transform tools set no reference point either.
+        let mut t = TransformTool::new(TransformKind::Rotate);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0)).is_empty());
+        assert!(t.pointer(&moved, &ev(PointerKind::Up, 200.0, 200.0)).is_empty());
+        assert_ne!(t.reference_point(&moved), Some(Point::new(200.0, 200.0)));
     }
 
     /// After a click sets the first point, a drag draws the axis from it (Shift in 45° steps from a
