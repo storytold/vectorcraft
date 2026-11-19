@@ -1103,3 +1103,76 @@ asynchronous_test!(split_canvas_rejects_a_bitmap_completion_between_side_renders
     let colors = s.pair().map(|texture| s.raster_at(texture, Point::new(120.0, 110.0)));
     assert_eq!(colors, [Color32::BLUE; 2], "first published pair must not mix placeholder and ready pixels");
 });
+
+// The real artboard-name press keeps ownership when its release crosses the divider.
+synchronous_test!(review_4625287675_name_release_over_divider_keeps_its_owner, {
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    s.app.run("file.new", json!({"width":320,"height":240,"artboards":2})).unwrap();
+    let v = s.app.view_mut().unwrap();
+    v.fitted = true;
+    v.center = Point::new(160.0, 120.0);
+    v.zoom = 1.5;
+    v.artboard = 1;
+    s.enable();
+    fn label_point(shape: &Shape) -> Option<Pos2> {
+        match shape {
+            Shape::Vec(shapes) => shapes.iter().find_map(label_point),
+            Shape::Text(text) if text.galley.job.text.starts_with("01 -") => Some(text.pos + text.galley.rect.center().to_vec2()),
+            _ => None,
+        }
+    }
+    let name = s.output.shapes.iter().find_map(|shape| label_point(&shape.shape)).expect("the actual first artboard name is painted");
+    assert!(s.rect().contains(name), "CONTROL: the name is inside the real canvas");
+    let divider = s.point_on_divider();
+    assert!((name.x - divider.x).abs() > 20.0, "CONTROL: the name press is away from the divider");
+    let before = s.snapshot();
+    let fraction = s.fraction();
+    s.press(name, PointerButton::Primary);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "CONTROL: a name selects on release, not press");
+    s.release(divider, PointerButton::Primary);
+    assert_eq!(s.app.view().unwrap().artboard, 0, "REGRESSION: release still completes the original name press over the divider");
+    assert_eq!(s.fraction(), fraction);
+    assert_eq!(s.snapshot(), before, "a name press changes neither artwork, selection nor Undo history");
+    s.app.view_mut().unwrap().artboard = 1;
+    let blank = s.screen(Point::new(-20.0, 100.0));
+    assert!(s.rect().contains(blank));
+    s.click(blank);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "a later canvas release must not complete a stale name press");
+    let divider = s.point_on_divider();
+    let moved = pos2(s.rect().left() + s.rect().width() * 0.7, divider.y);
+    s.press(divider, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!((s.fraction() - 0.7).abs() < 0.02, "CONTROL: the divider admits its own next press");
+    s.release(moved, PointerButton::Primary);
+});
+
+synchronous_test!(review_4625287680_divider_escape_owns_bound_command_and_repeat, {
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    s.enable();
+    s.app.run("shortcuts.set", json!({"id":"view.outline","shortcut":"Escape","force":true})).unwrap();
+    s.idle();
+    let initial_outline = s.app.ui.view.outline;
+    s.escape();
+    assert_ne!(s.app.ui.view.outline, initial_outline, "CONTROL: an idle Escape runs the legitimate configured command");
+    s.command("view.outline");
+    assert_eq!(s.app.ui.view.outline, initial_outline);
+    let before = s.snapshot();
+    let fraction = s.fraction();
+    let divider = s.point_on_divider();
+    let moved = pos2(s.rect().left() + s.rect().width() * 0.72, divider.y);
+    s.press(divider, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!((s.fraction() - fraction).abs() > 0.15, "CONTROL: a real divider drag has started");
+    s.frame(vec![key(Key::Escape, true)]);
+    assert!((s.fraction() - fraction).abs() < 1e-6, "Escape restores the divider's starting fraction");
+    assert_eq!(s.app.ui.view.outline, initial_outline, "REGRESSION: the same Escape cannot run its bound command");
+    s.frame(vec![Event::Key { key: Key::Escape, physical_key: Some(Key::Escape), pressed: true, repeat: true, modifiers: Modifiers::NONE }]);
+    assert_eq!(s.app.ui.view.outline, initial_outline, "the cancelling Escape keeps its repeat until release");
+    s.frame(vec![key(Key::Escape, false)]);
+    s.release(moved, PointerButton::Primary);
+    assert_eq!(s.snapshot(), before);
+    s.escape();
+    assert_ne!(s.app.ui.view.outline, initial_outline, "CONTROL: a fresh Escape after cancellation runs the command again");
+});

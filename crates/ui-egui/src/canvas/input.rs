@@ -28,7 +28,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let (backquote_now, backquote_before) = backquote_seen(ui);
     let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
-    if super::split::divider_input(app, ui, resp, rect, modal, space) {
+    if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() && super::split::divider_input(app, ui, resp, rect, modal, space) {
         poll_tool(app, ui, view);
         return;
     }
@@ -79,12 +79,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         let prev = d.get_temp::<HoverContext>(id);
         d.insert_temp(id, context);
         prev.map_or((false, false, false, false), |prev| {
-            (
-                prev.tool != context.tool,
-                prev != context,
-                (prev.outline, prev.pixel) != (context.outline, context.pixel),
-                prev.pen != context.pen,
-            )
+            (prev.tool != context.tool, prev != context, (prev.outline, prev.pixel) != (context.outline, context.pixel), prev.pen != context.pen)
         })
     });
 

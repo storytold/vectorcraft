@@ -564,6 +564,42 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
 /// The right-click context menu of row `n`.
 fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
     let is_multi = collect_ids.len() > 1;
+    if n.is_guide() {
+        // "Release Guide" / "Release Guides"
+        let rel_label = if is_multi { "Release Guides" } else { "Release Guide" };
+        if widgets::menu_item(ui, rel_label, true, false) {
+            out.actions.push(("view.guides.release".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Duplicate" / "Duplicate Selection"
+        let dup_label = if is_multi { "Duplicate Selection" } else { "Duplicate" };
+        if widgets::menu_item(ui, dup_label, true, false) {
+            out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Delete Guide" / "Delete Guides"
+        let del_label = if is_multi { "Delete Guides" } else { "Delete Guide" };
+        if widgets::menu_item(ui, del_label, true, false) {
+            out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        ui.separator();
+        // Lock / Unlock
+        let any_unlocked = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| !node.locked);
+        let lock_label = if any_unlocked { "Lock" } else { "Unlock" };
+        if widgets::menu_item(ui, lock_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "locked": any_unlocked })));
+            ui.close();
+        }
+        // Hide / Show
+        let any_visible = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| node.visible);
+        let hide_label = if any_visible { "Hide" } else { "Show" };
+        if widgets::menu_item(ui, hide_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "visible": !any_visible })));
+            ui.close();
+        }
+        return;
+    }
     // "Layer Options…" / "Options for Selection…" / "Options…"
     let options_label = if is_multi {
         "Options for Selection…"
@@ -587,7 +623,9 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     };
     let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
-    if widgets::menu_item_name(ui, &dup_label, true, false) {
+    // A copy of the isolated node goes beside it, outside the isolated art.
+    let dup_enabled = !view.root.is_some_and(|r| collect_ids.contains(&r.0));
+    if widgets::menu_item_name(ui, &dup_label, dup_enabled, false) {
         out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
         ui.close();
     }
@@ -602,11 +640,13 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         ui.close();
     }
     ui.separator();
+    // In isolation mode the other layers are outside the isolated art, so these pairs are off.
+    let isolated = view.root.is_some();
     // Lock Others / Unlock All Layers
     {
         let (lock_cmd, lock_params, lock_enabled) = multi_others_action(view.doc, collect_ids, false);
         let lock_label = if lock_cmd == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
-        if widgets::menu_item(ui, lock_label, lock_enabled, false) {
+        if widgets::menu_item(ui, lock_label, lock_enabled && !isolated, false) {
             out.actions.push((lock_cmd, lock_params));
             ui.close();
         }
@@ -615,7 +655,7 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
     {
         let (hide_cmd, hide_params, hide_enabled) = multi_others_action(view.doc, collect_ids, true);
         let hide_label = if hide_cmd == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
-        if widgets::menu_item(ui, hide_label, hide_enabled, false) {
+        if widgets::menu_item(ui, hide_label, hide_enabled && !isolated, false) {
             out.actions.push((hide_cmd, hide_params));
             ui.close();
         }
@@ -623,7 +663,8 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
     ui.separator();
     // Locate Object, or Locate Layer with Show Layers Only on
     let layers_only = view.opts.layers_only;
-    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+    let locate_ok = !layers_only || locate_layer_listed(view.doc, view.root);
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, locate_ok, false) {
         out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
         ui.close();
     }
@@ -706,6 +747,13 @@ fn layer_row(n: &Node, own: Option<NodeId>) -> NodeId {
     if n.is_ruler_guide() { own.unwrap_or(n.id) } else { n.id }
 }
 
+/// Whether Locate Layer can highlight a row the panel lists: outside isolation mode, or with a
+/// layer or sublayer isolated (`root`). An isolated group or object holds no layer row, and the
+/// layer holding it is not listed.
+pub(super) fn locate_layer_listed(doc: &Document, root: Option<NodeId>) -> bool {
+    root.is_none_or(|r| doc.node(r).is_some_and(Node::is_layer))
+}
+
 /// The eye and lock columns of row `n` at `r`.
 fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
     let t = &view.t;
@@ -736,11 +784,17 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
         icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.text_disabled);
     }
     let m = ui.input(|i| i.modifiers);
+    // In isolation mode the other layers are outside the isolated art: Alt-clicks change nothing.
+    let isolated = view.root.is_some();
     if er.clicked() {
         if m.alt && m.command {
-            out.actions.push(outline_others_action(view.doc, n));
+            if !isolated {
+                out.actions.push(outline_others_action(view.doc, n));
+            }
         } else if m.alt {
-            out.actions.push(others_action(view.doc, n, true));
+            if !isolated {
+                out.actions.push(others_action(view.doc, n, true));
+            }
         } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
@@ -749,7 +803,9 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
         }
     }
     if lr.clicked() && m.alt {
-        out.actions.push(others_action(view.doc, n, false));
+        if !isolated {
+            out.actions.push(others_action(view.doc, n, false));
+        }
     } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
@@ -779,8 +835,11 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Rows(ids) => ids.clone(),
         LayersDrag::Art => view.sel.iter().copied().collect(),
         LayersDrag::Guides(guides) => {
-            // Guides go to the layer of the row (the row's own, for a layer).
-            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) } {
+            // Guides go to the layer of the row (the row's own, for a layer); in isolation mode only
+            // to a layer inside the isolated art.
+            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) }
+                && view.root.is_none_or(|r| doc.ancestry(layer).is_some_and(|a| a.contains(&r)))
+            {
                 guide_drop(ui, view, guides, layer, r, resp, out);
             }
             return;
@@ -805,6 +864,16 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
+    };
+    // In isolation mode the isolated row takes a drop only inside it, so nothing leaves the isolated
+    // art or lands beside it; held over its own row, it goes nowhere.
+    let place = if view.root == Some(n.id) {
+        if !inside || beside_itself {
+            return;
+        }
+        Place::Inside
+    } else {
+        place
     };
     // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
     if place != Place::Inside

@@ -2236,6 +2236,22 @@ fn a_click_on_type_in_a_missing_font_asks_before_editing() {
     assert_eq!((tool.editing, tool.caret), (Some(id), 1));
 }
 
+/// `tool.setOption` checks each option first: the answer to the question is a whole-number token
+/// and a true or false `ok`, so a client can give it through that command.
+#[test]
+fn the_answer_to_the_missing_font_question_passes_the_option_check() {
+    let tool = TypeTool::new("type");
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": true})), Ok(()));
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": false})), Ok(()));
+    for bad in [json!({"token": "7", "ok": true}), json!({"token": 7, "ok": 1}), json!({"ok": true}), json!({"token": -1, "ok": true}), json!(null)] {
+        assert_eq!(
+            tool.check_option("missingFontEdit", &bad),
+            Err("`missingFontEdit` must be {token, ok} with a whole number and true or false".to_string()),
+            "{bad}"
+        );
+    }
+}
+
 /// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
 /// another question, or one given to a document changed since, starts nothing either.
 #[test]
