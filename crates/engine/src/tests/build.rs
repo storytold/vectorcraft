@@ -5474,6 +5474,90 @@ fn layers_drag_into_a_nested_live_paint_group_makes_the_outer_group_again() {
     assert_eq!(faces(&node(&s, outer)).len(), cut, "the outer group is made after the inner one");
 }
 
+/// A Live Paint group's sources group can't be dragged out of the group, which would leave faces
+/// and edges with no paths: the move is refused and changes nothing. A reorder within the group,
+/// and a copy dragged out, are allowed.
+#[test]
+fn layers_drag_keeps_the_sources_group_in_its_live_paint_group() {
+    use vectorcraft_tools::builder::{faces, is_live_paint, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    let src = sources(&node(&s, g)).unwrap().id;
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("layer.move", &json!({"ids": [src.0], "target": layer.0})).unwrap_err().to_string();
+    assert!(err.contains("sources group stays in the group"), "{err}");
+    let err = s.execute("node.move", &json!({"id": src.0, "parent": layer.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("sources group stays in the group"), "{err}");
+    assert!(s.doc().unwrap().doc == before.0, "nothing moved");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1);
+    s.execute("node.move", &json!({"id": src.0, "parent": g.0, "index": 99})).unwrap();
+    let n = node(&s, g);
+    assert!(is_live_paint(&n));
+    assert_eq!(sources(&n).unwrap().id, src);
+    assert_eq!(faces(&n).len(), 3);
+    s.execute("layer.move", &json!({"ids": [src.0], "target": layer.0, "copy": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(src), Some(g), "a copy leaves the sources group where it is");
+}
+
+/// A shown path dragged into a hidden group among a Live Paint group's paths stops cutting its
+/// faces, and dragged back out of it cuts them again.
+#[test]
+fn layers_drag_into_a_hidden_group_among_the_sources_makes_the_faces_again() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let first_source = |s: &Session| sources(&node(s, g)).unwrap().children().unwrap()[0].id;
+    let a = line_to_right_face(&mut s, 30.0);
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [a.0], "target": target.0, "place": "above"})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 5);
+    let b = line_to_right_face(&mut s, 70.0);
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let hidden = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.hide", &json!({"ids": [hidden.0]})).unwrap();
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [hidden.0], "target": target.0, "place": "above"})).unwrap();
+    let src = sources(&node(&s, g)).unwrap().id;
+    assert_eq!(s.doc().unwrap().doc.parent_of(hidden), Some(src));
+    assert_eq!(faces(&node(&s, g)).len(), 5, "a hidden group cuts nothing");
+    s.execute("layer.move", &json!({"ids": [a.0], "target": hidden.0, "place": "inside"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(hidden));
+    assert_eq!(faces(&node(&s, g)).len(), 3, "the path in the hidden group no longer cuts the faces");
+    let target = first_source(&s);
+    s.execute("layer.move", &json!({"ids": [a.0], "target": target.0, "place": "above"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sources(&node(&s, g)).unwrap().id));
+    assert_eq!(faces(&node(&s, g)).len(), 5, "back among the shown paths, it cuts them again");
+}
+
+/// A Live Paint group with no paths dragged into another one with none joins it: the drop is one
+/// "Merge Live Paint" step, and the group stays a Live Paint group with no faces or edges.
+#[test]
+fn layers_drag_of_an_empty_live_paint_group_into_another_joins_it() {
+    use vectorcraft_tools::builder::{edges, faces, is_live_paint, sources};
+    let mut s = session();
+    let empty = |s: &mut Session| {
+        let g = live(s);
+        let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+        for p in sources(&node(s, g)).unwrap().children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>() {
+            s.execute("layer.move", &json!({"ids": [p.0], "target": layer.0})).unwrap();
+        }
+        assert!(faces(&node(s, g)).is_empty());
+        g
+    };
+    let (g, h) = (empty(&mut s), empty(&mut s));
+    let r = s.execute("layer.move", &json!({"ids": [h.0], "target": g.0, "place": "inside"})).unwrap();
+    assert_eq!(r["ids"], json!([g.0]));
+    assert_eq!(undo_label(&s).as_deref(), Some("Merge Live Paint"));
+    let n = node(&s, g);
+    assert!(is_live_paint(&n));
+    assert!(sources(&n).unwrap().children().unwrap().is_empty());
+    assert!(faces(&n).is_empty() && edges(&n).is_empty());
+    assert!(s.doc().unwrap().doc.node(h).is_none(), "the dropped group joined");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(h).is_some());
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {
