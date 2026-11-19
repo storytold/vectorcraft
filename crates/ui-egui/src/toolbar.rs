@@ -177,7 +177,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
-            let (panel, margin) = if app.ui.toolbar_right {
+            let right_side = app.ui.toolbar_right ^ craft_ui::direction::is_rtl(ui);
+            let (panel, margin) = if right_side {
                 (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 })
             } else {
                 (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 })

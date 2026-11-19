@@ -97,8 +97,17 @@ fn plural_polish(n: u64) -> usize {
     }
 }
 
+/// Hebrew: 1 is `one`, 2 is `two`, everything else (0, 3…) is `other`.
+fn plural_hebrew(n: u64) -> usize {
+    match n {
+        1 => 0,
+        2 => 1,
+        _ => 2,
+    }
+}
+
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 29] = [
+pub static LANGUAGES: [LangInfo; 30] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web fetches a Devanagari craft-fonts face on demand.
@@ -365,6 +374,16 @@ pub static LANGUAGES: [LangInfo; 29] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Hebrew: the whole interface and status/error messages, RTL layout, and one/two/other plurals;
+    // every `he-*` and legacy `iw-*` locale resolves here.
+    LangInfo {
+        code: "he",
+        name: "עברית",
+        source: include_str!("i18n/he.tsv"),
+        plural: plural_hebrew,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
 ];
 
 impl LangInfo {
@@ -462,6 +481,10 @@ fn candidates(tag: &str) -> Vec<String> {
         // Chinese by region when no script is given.
         let script = if parts.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")) { "zh-hant" } else { "zh-hans" };
         out.insert(out.len() - 1, script.to_string());
+    }
+    if primary == "iw" {
+        // Legacy ISO 639-1 Hebrew tag resolves to `he`.
+        out.push("he".to_string());
     }
     out
 }

@@ -576,7 +576,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
     let mut copies: std::collections::HashMap<(FontFamily, String), String> = std::collections::HashMap::new();
     for f in vectorcraft_text::CRAFT_FONTS
         .iter()
-        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr"))
+        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr") || f.scripts.contains(&"Hebr"))
     {
         let name = craft_font_name(f);
         for (copy, data, families) in crate::ui_fonts::baseline_copies(fonts, &name, &FontData::from_static(f.bytes)) {
@@ -596,6 +596,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
         stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(copy));
         stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(copy));
         stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Gujr")).map(copy));
+        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Hebr")).map(copy));
     }
 }
 
@@ -661,6 +662,8 @@ pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Sc
         .into();
         s.animation_time = 0.08;
     });
+    let dir = craft_ui::direction::resolve(crate::i18n::current().code(), craft_ui::direction::Setting::Language);
+    craft_ui::direction::apply(ctx, dir);
 }
 
 #[cfg(test)]

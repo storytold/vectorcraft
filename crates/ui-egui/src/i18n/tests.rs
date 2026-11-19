@@ -2159,8 +2159,8 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 20] =
-    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
+const KEEPS_MENU_NAMES: [&str; 21] =
+    ["cs", "de", "el", "es", "fr", "he", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -6750,8 +6750,8 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
-    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da", "id",
+    "cs", "de", "el", "es", "fr", "he", "hi", "hu", "id", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant",
+    "fi", "tr", "ca", "nl", "da",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
@@ -7449,4 +7449,36 @@ fn every_catalog_names_the_digits_menus_numeral_systems() {
         }
     }
     assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
+}
+
+#[test]
+fn hebrew_locale_tags_resolve_including_legacy_iw() {
+    let he = Lang::from_code("he").expect("he registered");
+    assert_eq!(he.name(), "עברית");
+    for tag in ["he", "he-IL", "he_IL.UTF-8", "iw", "iw-IL", "iw_IL.UTF-8"] {
+        assert_eq!(lang_from_tag(tag), Some(he), "{tag}");
+    }
+}
+
+#[test]
+fn hebrew_plurals_have_three_forms() {
+    let he = Lang::from_code("he").expect("he registered");
+    let forms: Vec<usize> = [0, 1, 2, 3, 10, 21].into_iter().map(plural_hebrew).collect();
+    assert_eq!(forms, [2, 0, 1, 2, 2, 2]);
+    let (entries, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "parse errors: {errors:?}");
+    let mut count = 0;
+    for (ctx, src, tr) in &entries {
+        if ctx != "@plural" {
+            continue;
+        }
+        count += 1;
+        let parts: Vec<&str> = tr.split('|').collect();
+        assert_eq!(parts.len(), 3, "{src}");
+        let (one, other) = src.split_once('|').unwrap();
+        for (n, form) in [(1, 0), (2, 1), (0, 2), (3, 2), (21, 2)] {
+            assert_eq!(trn(he, n, one, other), parts[form].replace("{n}", &n.to_string()), "{src}: {n}");
+        }
+    }
+    assert!(count >= 13, "Hebrew plural rows missing ({count})");
 }
