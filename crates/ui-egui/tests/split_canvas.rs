@@ -1176,3 +1176,280 @@ synchronous_test!(review_4625287680_divider_escape_owns_bound_command_and_repeat
     s.escape();
     assert_ne!(s.app.outline_view(), initial_outline, "CONTROL: a fresh Escape after cancellation runs the command again");
 });
+
+// Append-only witnesses. Reuse the existing process isolation, Scene and Globals fixtures.
+fn review8211_materials_label(shape: &Shape) -> Option<Pos2> {
+    match shape {
+        Shape::Vec(children) => children.iter().find_map(review8211_materials_label),
+        Shape::Text(text) if text.galley.text() == "Materials" => Some(text.pos + text.galley.size() * 0.5),
+        _ => None,
+    }
+}
+
+impl Scene {
+    fn review8211_materials_frame(&mut self, events: Vec<Event>) {
+        self.time += 1.0 / 60.0;
+        let mut raw = RawInput {
+            events,
+            time: Some(self.time),
+            focused: true,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.size)),
+            ..Default::default()
+        };
+        self.app.raw_input_hook(&self.ctx, &mut raw);
+        let mut output = self.ctx.run_ui(raw, |ui| {
+            vectorcraft_ui_egui::shortcuts::handle(&mut self.app, ui.ctx());
+            egui::Window::new("Review mapped graphic")
+                .fixed_pos(pos2(850.0, 10.0))
+                .default_width(300.0)
+                .show(ui.ctx(), |ui| vectorcraft_ui_egui::panels::three_d::show(&mut self.app, ui));
+            canvas::show(&mut self.app, ui);
+        });
+        self.uploaded.apply(&self.ctx, &output.textures_delta);
+        output.textures_delta.clear();
+        self.output = output;
+    }
+}
+
+fn review8211_mapped_scene() -> (Scene, Pos2) {
+    let mut s = Scene::new();
+    s.size = vec2(1200.0, 700.0);
+    s.enable();
+    let mark = s.app.run("path.create", json!({"d":"M0 0L8 0L8 6L0 6Z"})).unwrap()["id"].clone();
+    s.app.run("threeD.addGraphic", json!({"name":"Review mark","ids":[mark]})).unwrap();
+    s.app.run("select.set", json!({"ids":[s.rectangle.0]})).unwrap();
+    s.app
+        .run("effect.apply", json!({"effect":vectorcraft_effects::ROTATE,"item":null,"params":{"rotationX":0.0,"rotationY":0.0,"rotationZ":0.0}}))
+        .unwrap();
+    s.app.run("threeD.mapGraphic", json!({"symbol":"Review mark"})).unwrap();
+    for _ in 0..3 {
+        s.review8211_materials_frame(vec![]);
+    }
+    let tab = s.output.shapes.iter().find_map(|s| review8211_materials_label(&s.shape)).expect("CONTROL: actual Materials tab is shown");
+    s.review8211_materials_frame(vec![Event::PointerMoved(tab)]);
+    s.review8211_materials_frame(vec![Event::PointerButton { pos: tab, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    s.review8211_materials_frame(vec![Event::PointerButton { pos: tab, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    s.review8211_materials_frame(vec![]);
+    let handle = {
+        let doc = &s.app.session.active().unwrap().doc;
+        let node = doc.node(s.rectangle).unwrap();
+        let frame = vectorcraft_effects::graphic_frame_at(Some(doc), node, None, 0).expect("CONTROL: a generated plane has a graphic frame");
+        let graphics = vectorcraft_effects::mapped_graphics(&node.appearance.effects[0].params);
+        assert_eq!(graphics.len(), 1);
+        let (at, seen) = frame.handle(&graphics[0]).expect("CONTROL: the mapped graphic has a handle");
+        assert!(seen, "CONTROL: its face is visible");
+        s.screen(at)
+    };
+    let rect = s.rect();
+    s.app.view_mut().unwrap().split.fraction = (handle.x + 35.0 - rect.left()) / rect.width();
+    s.review8211_materials_frame(vec![]);
+    let divider = pos2(s.point_on_divider().x, handle.y);
+    assert!(rect.contains(handle) && rect.contains(divider));
+    assert!((divider.x - handle.x).abs() > 20.0, "CONTROL: the new press is well away from the divider");
+    (s, handle)
+}
+
+fn review8211_graphics(s: &Scene) -> Value {
+    s.app.session.active().unwrap().doc.node(s.rectangle).unwrap().appearance.effects[0].params["graphics"].clone()
+}
+
+fn review8211_mapped_handle_case(on_divider: bool) {
+    let (mut s, handle) = review8211_mapped_scene();
+    let fraction = s.fraction();
+    let divider = pos2(s.point_on_divider().x, handle.y);
+    let graphics = review8211_graphics(&s);
+    let before = s.document();
+    let history = s.app.session.active().unwrap().history.undo.len();
+    s.review8211_materials_frame(vec![Event::PointerMoved(handle)]);
+    s.review8211_materials_frame(vec![Event::PointerButton {
+        pos: handle,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    }]);
+    s.review8211_materials_frame(vec![Event::PointerMoved(handle + vec2(12.0, 0.0))]);
+    assert_ne!(s.document(), before, "CONTROL: the real graphic handle has previewed a move");
+    assert_ne!(review8211_graphics(&s), graphics, "CONTROL: the preview changed the mapped graphic, not an ordinary object transform");
+    let release = if on_divider { divider } else { handle + vec2(24.0, 0.0) };
+    s.review8211_materials_frame(vec![Event::PointerMoved(release)]);
+    s.review8211_materials_frame(vec![Event::PointerButton {
+        pos: release,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    }]);
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    let released = s.document();
+    assert_ne!(released, before, "CONTROL: the completed handle drag changed its graphic");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "one completed handle drag is one undo step");
+    assert_eq!(s.fraction(), fraction, "a handle-owned press never moves the divider");
+    s.review8211_materials_frame(vec![Event::PointerMoved(release + vec2(15.0, 10.0))]);
+    assert_eq!(s.document(), released, "REGRESSION: a released handle cannot move again when the pointer leaves the divider");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1, "a hover after release creates no additional history");
+    assert_eq!(s.fraction(), fraction);
+}
+
+synchronous_test!(review_4626118623_mapped_handle_release_on_divider_ends_ownership, {
+    let _globals = Globals::new();
+    review8211_mapped_handle_case(false); // Legitimate ordinary release control first.
+    review8211_mapped_handle_case(true);
+});
+
+fn review8211_coalesced_handle_press(on_handle: bool) {
+    let (mut s, handle) = review8211_mapped_scene();
+    let graphics = review8211_graphics(&s);
+    let fraction = s.fraction();
+    let divider = pos2(s.point_on_divider().x, handle.y);
+    let (press, hover) = if on_handle { (handle, divider) } else { (handle + vec2(0.0, 30.0), handle) };
+    assert!((press - hover).length() > 20.0, "CONTROL: the press and later hover are distinct targets");
+    s.review8211_materials_frame(vec![Event::PointerMoved(press)]);
+    s.review8211_materials_frame(vec![
+        Event::PointerButton { pos: press, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE },
+        Event::PointerMoved(hover),
+    ]);
+    let moved = hover + vec2(12.0, 0.0);
+    s.review8211_materials_frame(vec![Event::PointerMoved(moved)]);
+    if on_handle {
+        assert_ne!(review8211_graphics(&s), graphics, "REGRESSION: a handle press must start from P even when a later move Q is on the divider");
+    } else {
+        assert_eq!(
+            review8211_graphics(&s),
+            graphics,
+            "REGRESSION: a later hover on a handle cannot turn a non-handle press into a mapped-graphic drag"
+        );
+    }
+    assert_eq!(s.fraction(), fraction, "neither non-divider press may start a divider drag from its later hover");
+    s.review8211_materials_frame(vec![Event::PointerButton {
+        pos: moved,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    }]);
+}
+
+synchronous_test!(review_4626118623_mapped_handle_uses_actual_press_before_later_divider_move, {
+    let _globals = Globals::new();
+    review8211_coalesced_handle_press(true);
+});
+
+synchronous_test!(review_4626118623_mapped_handle_does_not_start_from_later_hover, {
+    let _globals = Globals::new();
+    review8211_coalesced_handle_press(false);
+});
+
+synchronous_test!(review_4626118652_divider_drag_is_bound_to_its_document_view, {
+    let _globals = Globals::new();
+    let mut s = Scene::new();
+    s.enable();
+    s.app.view_mut().unwrap().split.fraction = 0.3;
+    assert_eq!(s.app.run("window.newWindow", json!({})).unwrap()["view"], 2);
+    s.app.view_mut().unwrap().split.fraction = 0.7;
+    assert_eq!(s.app.run("window.nextDocument", json!({})).unwrap()["view"], 1);
+    s.idle();
+    let uid = s.app.session.active().unwrap().uid;
+    let before = s.snapshot();
+    let start = s.point_on_divider();
+    let moved = pos2(s.rect().left() + s.rect().width() * 0.45, start.y);
+    s.press(start, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!((s.fraction() - 0.45).abs() < 1e-6, "CONTROL: dragging within the original view works");
+    assert_eq!(s.app.run("window.nextDocument", json!({})).unwrap()["view"], 2);
+    assert_eq!(s.app.session.active().unwrap().uid, uid, "CONTROL: this is another view of the same document");
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "CONTROL: the other view starts with its own fraction");
+    s.frame(vec![]);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "REGRESSION: a held drag from another view cannot write this view's fraction");
+    s.release(moved, PointerButton::Primary);
+    assert!((s.fraction() - 0.7).abs() < 1e-6);
+    assert_eq!(s.snapshot(), before, "view switching and divider cancellation do not alter art or history");
+    assert_eq!(s.app.run("window.nextDocument", json!({})).unwrap()["view"], 1);
+    s.idle();
+    assert!((s.fraction() - 0.45).abs() < 1e-6, "the original view retains the last value reached before switching");
+    assert_eq!(s.app.run("window.nextDocument", json!({})).unwrap()["view"], 2);
+    s.idle();
+    let fresh = s.point_on_divider();
+    let target = pos2(s.rect().left() + s.rect().width() * 0.8, fresh.y);
+    s.press(fresh, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(target)]);
+    s.release(target, PointerButton::Primary);
+    assert!((s.fraction() - 0.8).abs() < 1e-6, "CONTROL: a fresh press in the new view still drags its divider");
+    assert_eq!(s.snapshot(), before);
+});
+synchronous_test!(review_4626118640_primary_down_owns_split_mode_before_later_move, {
+    let _globals = Globals::new();
+    // Establish the real Preview/Outline fill-picking distinction before testing coalescing.
+    for (point, picks_fill) in [(Point::new(100.0, 100.0), true), (Point::new(220.0, 100.0), false)] {
+        let mut s = Scene::new();
+        s.enable();
+        s.command("view.splitOutline");
+        s.app.run("select.set", json!({"ids":[]})).unwrap();
+        s.idle();
+        let original = s.document();
+        let start = s.screen(point);
+        assert!(s.rect().contains(start));
+        s.press(start, PointerButton::Primary);
+        assert_eq!(
+            s.app.session.active().unwrap().selection.objects,
+            if picks_fill { vec![s.rectangle] } else { vec![] },
+            "CONTROL: separate-frame presses use the actual side's fill-picking mode"
+        );
+        s.release(start, PointerButton::Primary);
+        assert_eq!(s.document(), original, "CONTROL: an ordinary click does not move the artwork");
+    }
+
+    for (label, later_divider, outside_prefix) in [
+        ("Preview press then Outline hover", false, false),
+        ("Preview press then divider hover", true, false),
+        ("outside completed press then current Preview press", false, true),
+    ] {
+        let mut s = Scene::new();
+        s.enable();
+        s.command("view.splitOutline");
+        s.app.run("select.set", json!({"ids":[]})).unwrap();
+        s.idle();
+        let original = s.document();
+        let before = s.bounds();
+        let undo = s.app.session.active().unwrap().history.undo.len();
+        let fraction = s.fraction();
+        let start = s.screen(Point::new(100.0, 100.0));
+        let comparison = s.screen(Point::new(220.0, 100.0));
+        let divider = s.point_on_divider();
+        let end = s.screen(Point::new(230.0, 100.0));
+        assert!(s.rect().contains(start) && s.rect().contains(comparison) && s.rect().contains(end));
+        assert!(start.x < divider.x - 4.0 && comparison.x > divider.x + 4.0);
+        assert!(!s.app.outline_view(), "the main side starts in Preview");
+        assert_eq!(s.app.view().unwrap().split.comparison, SplitMode::Outline);
+        let later = if later_divider { divider } else { comparison };
+        let mut events = vec![];
+        if outside_prefix {
+            let outside = pos2(s.rect().left() - 20.0, start.y);
+            assert!(!s.rect().contains(outside));
+            events.extend([
+                Event::PointerMoved(outside),
+                Event::PointerButton { pos: outside, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE },
+                Event::PointerButton { pos: outside, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE },
+            ]);
+        }
+        events.extend([
+            Event::PointerMoved(start),
+            Event::PointerButton { pos: start, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE },
+            Event::PointerMoved(later),
+        ]);
+        s.frame(events);
+        assert_eq!(
+            s.app.session.active().unwrap().selection.objects,
+            vec![s.rectangle],
+            "REGRESSION: {label}: the admitted Down picks the Preview fill before the later hover"
+        );
+        assert_eq!(s.fraction(), fraction, "{label}: a later hover does not acquire the divider");
+        s.frame(vec![Event::PointerMoved(end)]);
+        s.release(end, PointerButton::Primary);
+        let after = s.bounds();
+        assert!((after.x0 - before.x0 - 130.0).abs() < 1e-6, "{label}: translation is measured from Down100, not the later hover: {after:?}");
+        assert!((after.y0 - before.y0).abs() < 1e-6, "{label}: the artwork keeps its original vertical position");
+        assert_eq!(s.app.session.active().unwrap().selection.objects, vec![s.rectangle]);
+        assert_eq!(s.fraction(), fraction, "{label}: the press remains an artwork gesture across the seam");
+        assert_eq!(s.app.session.active().unwrap().history.undo.len(), undo + 1, "{label}: one real move records one Undo step");
+        s.command("edit.undo");
+        assert_eq!(s.document(), original, "{label}: Undo restores the actual document");
+    }
+});

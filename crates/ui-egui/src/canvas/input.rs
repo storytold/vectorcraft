@@ -24,7 +24,10 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // so a tap whose press and lift come in one frame has no hover position: it presses (and
     // double-taps) where it was seen last (#491).
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
-    let view = super::split::input_view(app, ui, rect, at);
+    let press_at = super::split::primary_press_pos(ui);
+    // The Down owns its starting side; a later move in this frame is only hover.
+    let view_at = press_at.filter(|p| pointer.primary_pressed() && on_canvas(ui, resp, *p)).or(at);
+    let view = super::split::input_view(app, ui, rect, view_at);
     let (backquote_now, backquote_before) = backquote_seen(ui);
     let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
@@ -102,11 +105,11 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // (`touch_gestures` made the press a gesture, #4198). While a modal dialog is open no press
     // reaches the tools or pans, also in the frame it opens, before its backdrop covers the canvas.
     if pointer.primary_pressed()
-        && resp.hovered()
         && !f.modal
         && !middle_pan
         && drag != Some(Drag::Gesture)
-        && let Some(p) = at
+        && let Some(p) = press_at
+        && on_canvas(ui, resp, p)
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
