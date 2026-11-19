@@ -264,8 +264,7 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind, name: &s
     let is_normal = name == normal;
     let targets = dragged(sel, listed, name);
     let doomed: Vec<String> = targets.iter().filter(|s| *s != normal).cloned().collect();
-    let has_styling = text_style(app).is_some();
-    let text_selected = has_styling || selection_len(app) > 0;
+    let has_text_target = text_style(app).is_some();
 
     let options_label = crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]);
     if menu_item(ui, &options_label, !is_normal, false) {
@@ -290,12 +289,12 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind, name: &s
     }
     ui.separator();
     let redefine_label = crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]);
-    if menu_item(ui, &redefine_label, has_styling, false) {
+    if menu_item(ui, &redefine_label, has_text_target, false) {
         end_typing(app);
         app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": name }))).ok();
         ui.close();
     }
-    if menu_item(ui, tl!("Clear Overrides"), text_selected, false) {
+    if menu_item(ui, tl!("Clear Overrides"), has_text_target, false) {
         app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": name, "clearOverrides": true }))).ok();
         ui.close();
     }

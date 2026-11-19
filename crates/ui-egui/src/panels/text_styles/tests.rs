@@ -1666,3 +1666,61 @@ fn right_click_context_menu_preserves_multiselection() {
     let sel = highlighted(h.state(), &h.ctx, Kind::Char, &["[Normal Character Style]", "Style A", "Style B"]);
     assert_eq!(sel, vec!["Style A".to_string(), "Style B".to_string()], "multi-selection preserved on right-click");
 }
+
+#[test]
+fn right_click_context_menu_clear_overrides_requires_text_target() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("charStyle.new", json!({"name": "Style 1"})).unwrap();
+
+    // Select a non-text shape: rectangle
+    let rect_id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [rect_id]})).unwrap();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Char);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Right-click Style 1
+    let node = h.get_by_label("Style 1");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    let clear_overrides = h.get_by_label("   Clear Overrides");
+    let redefine = h.get_by_label("   Redefine Character Style");
+    assert!(clear_overrides.accesskit_node().is_disabled(), "Clear Overrides disabled when only a rectangle is selected");
+    assert!(redefine.accesskit_node().is_disabled(), "Redefine disabled when only a rectangle is selected");
+
+    // Close menu
+    h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    // Now select a text object
+    let text_id = h.state_mut().run("text.create", json!({"x": 10, "y": 10, "text": "Hello"})).unwrap()["id"].as_u64().unwrap();
+    h.state_mut().run("select.set", json!({"ids": [text_id]})).unwrap();
+    h.run_steps(2);
+
+    // Right-click Style 1 again
+    let node = h.get_by_label("Style 1");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    let clear_overrides = h.get_by_label("   Clear Overrides");
+    let redefine = h.get_by_label("   Redefine Character Style");
+    assert!(!clear_overrides.accesskit_node().is_disabled(), "Clear Overrides enabled when text is selected");
+    assert!(!redefine.accesskit_node().is_disabled(), "Redefine enabled when text is selected");
+}
