@@ -654,6 +654,8 @@ font-technology	Variable	Вариативные
 	Contextual Task Bar	Контекстная панель задач
 	Pin Bar Position	Закрепить положение панели
 	Reset Bar Position	Сбросить положение панели
+	Bar Actions	Действия панели
+	Reset Bar Actions	Сбросить действия панели
 	Resize	Изменить размер
 	Contrast	Контраст
 	Control	Control
