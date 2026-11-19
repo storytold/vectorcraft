@@ -371,9 +371,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // The frame renders the view at its zoom in the interface's points, as `xf` maps it.
         let drawn = v.on_screen(app.canvas_ui_zoom);
         let key = cache_key(app, ui, st, &t, &drawn, (w, h, ppp), (pixel, smooth_images, plugins, placed));
-        if app.canvas.waits_for_still {
-            edit_in_frame_shown(app, &key, &doc, &effects, &drawn, (mask_view, smooth_images));
-        }
+        edit_in_frame_shown(app, &key, &doc, &effects, &drawn, (mask_view, smooth_images));
         if needs_frame(app, ui, &key) {
             let (w, h, view) = frame_view(pixel, (w, h), &drawn, ppp);
             let opts = frame_options(app, &key, mask_view, smooth_images);
@@ -1263,6 +1261,9 @@ fn edit_in_frame_shown(
     drawn: &View,
     (mask_view, smooth_images): (Option<vectorcraft_doc::NodeId>, bool),
 ) {
+    if !app.canvas.waits_for_still {
+        return;
+    }
     let slow = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some();
     let Some(shown) = app.canvas.key.clone().filter(|_| slow) else { return };
     let at_shown = CacheKey {
