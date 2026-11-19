@@ -19,23 +19,6 @@ use crate::DocState;
 const MAX_FONTS: usize = 1_000;
 /// The longest family or style name listed or given (bytes).
 const MAX_NAME: usize = 256;
-/// The CSS generic font families (CSS Fonts Module Level 4), which SVG and HTML files name in place
-/// of a font and no font file provides; compared in any ASCII case. The list leaves out
-/// `fangsong`, which is also the family name of a Chinese font (FangSong).
-const GENERIC_FAMILIES: &[&str] = &[
-    "serif",
-    "sans-serif",
-    "monospace",
-    "cursive",
-    "fantasy",
-    "system-ui",
-    "ui-serif",
-    "ui-sans-serif",
-    "ui-monospace",
-    "ui-rounded",
-    "math",
-    "emoji",
-];
 /// The longest folder path given (bytes).
 const MAX_PATH: usize = 4096;
 /// The most files one `text.addFontFiles` copies: as many as a search keeps.
@@ -105,10 +88,10 @@ pub struct MissingFont {
 
 /// The fonts the type of `d` uses, in its layers, symbols and patterns, opacity masks included (a composite font's parts, those
 /// its characters are drawn in, in place of its name), that aren't available as named (sorted by family and style, each once whatever version its type names; at most 1000). CSS generic families such as `sans-serif`
-/// ([`GENERIC_FAMILIES`]) and names longer than 256 bytes are left out.
+/// ([`vectorcraft_text::GENERIC_FAMILIES`]) and names longer than 256 bytes are left out.
 pub fn missing_fonts(d: &Document) -> Vec<MissingFont> {
     let db = FontDb::global();
-    let generic = |family: &str| GENERIC_FAMILIES.iter().any(|g| g.eq_ignore_ascii_case(family.trim()));
+    let generic = vectorcraft_text::is_generic_family;
     let mut used: Vec<(String, String)> = super::fonts::used_fonts(d).into_iter().map(|(family, style, _)| (family, style)).collect();
     // Sorted by family and style: the versions type names of one face are neighbors.
     used.dedup();

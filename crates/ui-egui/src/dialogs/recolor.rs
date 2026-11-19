@@ -3600,7 +3600,7 @@ mod tests {
         vectorcraft_color::Swatch { name: "Fade".into(), paint, global: false, spot: false }
     }
 
-    /// With art, the preview rewrites the group being edited, its other swatch included; Save
+    /// With art, the preview rewrites the group being edited and keeps its other swatch; Save
     /// Changes is still refused, as the group is without the preview, and Cancel leaves it as it was.
     #[test]
     fn saving_a_group_with_a_swatch_that_is_not_a_color_is_refused_while_previewing() {
@@ -3623,8 +3623,9 @@ mod tests {
         d.fields.insert("rows".into(), Value::Array(rs));
         frame(&mut app, &ctx, 0.1, vec![], 0);
         assert!(app.session.in_interaction(), "the art previews");
-        let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.len());
-        assert_eq!(previewed, Some(2), "the preview's rewrite of the group leaves out its other swatch");
+        let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.clone());
+        assert_eq!(previewed.as_ref().map(Vec::len), Some(3), "the preview's rewrite of the group keeps its other swatch");
+        assert_eq!(previewed.and_then(|s| s.last().cloned()), Some(fade_swatch()), "with its paint");
         let refused: Result<(), String> = Err("color group `Mixed` holds swatches that are not colors, which Save Changes can't keep".into());
         assert_eq!(act(&mut app, &ctx, 0.2, "save"), refused);
         crate::dialogs::cancel(&mut app);
