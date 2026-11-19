@@ -599,6 +599,10 @@ font-technology	Variable	Değişken
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Document Colors	Belge Renklerini Göster
+	Document Colors	Belge Renkleri
+	Selection Colors	Seçim Renkleri
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
 	Show Harmony	Uyumu Göster
 	Harmony Rule	Uyum Kuralı
 	Harmony color	Uyum rengi

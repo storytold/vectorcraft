@@ -573,6 +573,10 @@ font-technology	Variable	Μεταβλητές
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
+	Show Document Colors	Εμφάνιση χρωμάτων εγγράφου
+	Document Colors	Χρώματα εγγράφου
+	Selection Colors	Χρώματα επιλογής
+@plural	Used {n} time|Used {n} times	Χρησιμοποιείται {n} φορά|Χρησιμοποιείται {n} φορές
 	Show Harmony	Εμφάνιση αρμονίας
 	Harmony Rule	Κανόνας χρωματικής αρμονίας
 	Harmony color	Χρώμα αρμονίας

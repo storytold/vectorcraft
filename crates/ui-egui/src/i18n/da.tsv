@@ -3535,6 +3535,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
 	Show Harmony	Vis harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifarve

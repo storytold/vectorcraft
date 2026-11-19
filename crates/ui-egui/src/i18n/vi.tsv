@@ -734,6 +734,10 @@ font-technology	Variable	Biến thiên
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Document Colors	Hiện màu của tài liệu
+	Document Colors	Màu của tài liệu
+	Selection Colors	Màu của vùng chọn
+@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Show Harmony	Hiện hài hòa màu
 	Harmony Rule	Quy tắc hài hòa màu
 	Harmony color	Màu hài hòa

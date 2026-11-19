@@ -601,6 +601,10 @@ font-technology	Variable	Variabla
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Document Colors	Visa dokumentfärger
+	Document Colors	Dokumentfärger
+	Selection Colors	Markeringens färger
+@plural	Used {n} time|Used {n} times	Används {n} gång|Används {n} gånger
 	Show Harmony	Visa harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifärg

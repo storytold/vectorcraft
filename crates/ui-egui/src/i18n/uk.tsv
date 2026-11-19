@@ -615,6 +615,10 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії

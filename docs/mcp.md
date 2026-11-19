@@ -692,8 +692,9 @@ whole cell or none of it, so a grayed cell can hold printable colors and a clear
 print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision}`,
+`highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
+or the box. Keys left out keep their values. Params that are not an object, another key or a value off
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
 and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
@@ -711,6 +712,10 @@ does: a row of four chips under the wheel or the box shows the current color thr
 and tritanopia simulations of `view.proofSetup`, and for achromatopsia as the gray with the color's CIE L*. Each
 chip reports its name and hex value to screen readers, and a click on a chip does not apply its color. `false`
 hides the row, and `null` keeps the setting. Any other value returns an error and changes nothing.
+`ui.colorWheel {"documentColors": true}` shows the Color Wheel panel's row of the colors the selection uses, or with
+nothing selected the colors of the art `select.all` takes, in the order `color.used {}` lists them. A click on a color
+applies it to the active proxy, keeping its link to a global swatch. The answer includes `documentColors`
+with the other settings, and the setting is kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

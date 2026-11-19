@@ -619,6 +619,10 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Show Harmony	Afficher l’harmonie
 	Harmony Rule	Règle d’harmonie
 	Harmony color	Couleur de l’harmonie

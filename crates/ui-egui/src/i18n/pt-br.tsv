@@ -557,6 +557,10 @@ antiAlias	Sharp	Nítido
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores
+	Show Document Colors	Mostrar Cores do Documento
+	Document Colors	Cores do Documento
+	Selection Colors	Cores da Seleção
+@plural	Used {n} time|Used {n} times	Usada {n} vez|Usada {n} vezes
 	Show Harmony	Mostrar Harmonia
 	Harmony Rule	Regra de Harmonia
 	Harmony color	Cor da harmonia

@@ -821,6 +821,10 @@
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Document Colors	Näytä asiakirjan värit
+	Document Colors	Asiakirjan värit
+	Selection Colors	Valinnan värit
+@plural	Used {n} time|Used {n} times	Käytetty {n} kerran|Käytetty {n} kertaa
 	Show Harmony	Näytä harmonia
 	Harmony Rule	Harmoniasääntö
 	Harmony color	Harmonian väri

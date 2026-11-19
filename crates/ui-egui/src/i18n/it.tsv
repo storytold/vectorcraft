@@ -621,6 +621,10 @@ font-technology	Variable	Variabili
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
+	Show Document Colors	Mostra colori del documento
+	Document Colors	Colori del documento
+	Selection Colors	Colori della selezione
+@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Show Harmony	Mostra armonia
 	Harmony Rule	Regola di armonia
 	Harmony color	Colore dell’armonia

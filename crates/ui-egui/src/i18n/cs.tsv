@@ -835,6 +835,10 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Document Colors	Zobrazit barvy dokumentu
+	Document Colors	Barvy dokumentu
+	Selection Colors	Barvy výběru
+@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	Show Harmony	Zobrazit harmonii
 	Harmony Rule	Pravidlo harmonie
 	Harmony color	Barva harmonie

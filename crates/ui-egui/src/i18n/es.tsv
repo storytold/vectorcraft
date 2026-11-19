@@ -618,6 +618,10 @@ font-technology	Variable	Variables
 	Box Channel	Canal del cuadro
 	Color box	Cuadro de color
 	Color Wheel Options	Opciones de la rueda de color
+	Show Document Colors	Mostrar colores del documento
+	Document Colors	Colores del documento
+	Selection Colors	Colores de la selección
+@plural	Used {n} time|Used {n} times	Usado {n} vez|Usado {n} veces
 	Show Harmony	Mostrar armonía
 	Harmony Rule	Regla de armonía
 	Harmony color	Color de la armonía

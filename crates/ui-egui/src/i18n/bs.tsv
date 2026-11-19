@@ -823,6 +823,10 @@
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Document Colors	Prikaži boje dokumenta
+	Document Colors	Boje dokumenta
+	Selection Colors	Boje odabira
+@plural	Used {n} time|Used {n} times	Korišteno {n} put|Korišteno {n} puta|Korišteno {n} puta
 	Show Harmony	Prikaži harmoniju
 	Harmony Rule	Pravilo harmonije
 	Harmony color	Boja harmonije

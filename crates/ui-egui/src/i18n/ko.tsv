@@ -865,6 +865,10 @@ digits	Malayalam	말라얄람어
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
+	Show Document Colors	문서 색상 표시
+	Document Colors	문서 색상
+	Selection Colors	선택 영역 색상
+@plural	Used {n} time|Used {n} times	{n}회 사용
 	Show Harmony	하모니 표시
 	Harmony Rule	하모니 규칙
 	Harmony color	하모니 색상

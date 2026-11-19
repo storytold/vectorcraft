@@ -1401,6 +1401,10 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Document Colors	Documentkleuren tonen
+	Document Colors	Documentkleuren
+	Selection Colors	Kleuren van de selectie
+@plural	Used {n} time|Used {n} times	{n} keer gebruikt|{n} keer gebruikt
 	Show Harmony	Harmonie tonen
 	Harmony Rule	Harmonieregel
 	Harmony color	Harmoniekleur

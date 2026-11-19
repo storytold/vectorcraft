@@ -594,6 +594,10 @@ font-technology	Variable	Променливи
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Show Harmony	Показване на хармонията
 	Harmony Rule	Правило за хармония
 	Harmony color	Цвят от хармонията

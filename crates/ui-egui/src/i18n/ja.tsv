@@ -872,6 +872,10 @@ digits	Malayalam	マラヤーラム数字
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
+	Show Document Colors	ドキュメントのカラーを表示
+	Document Colors	ドキュメントのカラー
+	Selection Colors	選択範囲のカラー
+@plural	Used {n} time|Used {n} times	{n} 回使用
 	Show Harmony	ハーモニーを表示
 	Harmony Rule	ハーモニールール
 	Harmony color	ハーモニーカラー

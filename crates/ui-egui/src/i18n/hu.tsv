@@ -822,6 +822,10 @@ arrowhead	Target	Céltábla
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Document Colors	Dokumentumszínek megjelenítése
+	Document Colors	Dokumentumszínek
+	Selection Colors	A kijelölés színei
+@plural	Used {n} time|Used {n} times	{n} alkalommal használva
 	Show Harmony	Harmónia megjelenítése
 	Harmony Rule	Harmóniaszabály
 	Harmony color	Harmóniaszín
