@@ -658,11 +658,13 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, ga
 /// picks it), else that of the fill or stroke item
 /// ([`vectorcraft_engine::Session::proxy_opacity`]), which nothing selected and type characters
 /// do not have. A stop or point of a gradient on type characters belongs to the gradient, so the
-/// row sets it. With nothing selected the stop or point belongs to the defaults for new art, which
-/// the row leaves alone, and an object selected in a symbol instance has no opacity the row can set.
+/// row sets it. With nothing selected, or while the Live Paint Bucket paints
+/// ([`vectorcraft_engine::Session::bucket_paints`]), the stop or point belongs to the defaults for
+/// new art, which the row leaves alone, and an object selected in a symbol instance has no opacity
+/// the row can set.
 fn shown_opacity(app: &VectorcraftApp, tgt: &Target) -> (f32, bool) {
     let stroke = !app.session.fill_active;
-    let selected = app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
+    let selected = !app.session.bucket_paints() && app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
     let point = |index: usize| match super::active_paint(app) {
         Paint::Gradient(g) => super::gradient::shown_points(&g).points.get(index).map(|p| p.opacity),
         _ => None,
@@ -700,6 +702,25 @@ fn apply_opacity(app: &mut VectorcraftApp, tgt: &Target, o: f32, phase: Live) {
     }
 }
 
+/// Panel state: whether a drag of the Show Opacity row has previewed on an open interaction and not
+/// been released.
+const OPACITY_LIVE: &str = "color-wheel-opacity-live";
+
+/// End the drag of the Show Opacity row when its row is hidden (`ui.colorWheel {opacity: false}`) or
+/// turned gray before the release: the preview is kept as one undo step and the interaction ends.
+fn end_opacity_drag(app: &mut VectorcraftApp, ui: &Ui) {
+    if !pstate::<bool>(ui.ctx(), OPACITY_LIVE) {
+        return;
+    }
+    if app.session.in_interaction()
+        && let Err(e) = app.session.commit_interaction()
+    {
+        app.status(e.to_string());
+    }
+    app.sync_views();
+    set_pstate(ui.ctx(), OPACITY_LIVE, false);
+}
+
 /// The Show Opacity row: the Transparency panel's icon, a slider whose track shows `color` from
 /// clear to solid, and a percent field. Gray when [`shown_opacity`] finds nothing to set.
 fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Color) {
@@ -724,6 +745,11 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Colo
     });
     if let Some((v, phase)) = edit.filter(|_| live) {
         apply_opacity(app, tgt, v, phase);
+        set_pstate(ui.ctx(), OPACITY_LIVE, phase == Live::Dragging);
+    }
+    // A drag whose row turned gray reports no release.
+    if !live {
+        end_opacity_drag(app, ui);
     }
 }
 
@@ -1200,6 +1226,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 set_pstate(ui.ctx(), MEMORY, Some((now, rgb, hsb)));
             }
         }
+    } else {
+        end_opacity_drag(app, ui);
     }
     let (mut picked_lch, mut picked_hsl) = (None, None);
     match app.ui.color_wheel.sliders {

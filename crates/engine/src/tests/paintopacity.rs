@@ -449,3 +449,37 @@ fn the_live_paint_bucket_answers_no_opacity() {
     assert!(s.execute("paint.setFill", &json!({"opacity": 40})).is_err());
     assert_eq!(*s.doc().unwrap().doc, *doc);
 }
+
+/// The Eyedropper armed to sample into the Live Paint Bucket's gradient works for the bucket, so
+/// the proxies answer no opacity for the selection then too, as they show no paint of its own.
+#[test]
+fn the_eyedropper_armed_for_the_bucket_answers_no_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0, "the Eyedropper alone shows the selection's");
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    assert!(s.bucket_paints());
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], Value::Null);
+}
+
+/// A `swatch` that is no name does not turn a request into an opacity alone: it is an error and
+/// leaves the document as it was.
+#[test]
+fn a_swatch_that_is_no_name_is_refused_with_an_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let doc = s.doc().unwrap().doc.clone();
+    for cmd in ["paint.setFill", "paint.setStroke"] {
+        for swatch in [json!(5), json!(true), json!(["a"]), json!({})] {
+            assert!(s.execute(cmd, &json!({"swatch": swatch, "opacity": 40})).is_err(), "{cmd} {swatch}");
+        }
+        // A null swatch names none, so the opacity goes alone.
+        s.execute(cmd, &json!({"swatch": null, "opacity": 40})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+}
