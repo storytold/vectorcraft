@@ -606,6 +606,11 @@
 	Circle	વર્તુળ
 	Circle Tool	વર્તુળ ટૂલ
 	Circle too large	વર્તુળ ખૂબ મોટું છે
+	Show Radii	ત્રિજ્યાઓ બતાવો
+	Show Diameter	વ્યાસ બતાવો
+	Anchors at Standard Positions	પ્રમાણભૂત સ્થાનો પર એન્કર બિંદુઓ
+	Third Point by Dragging	ખેંચીને ત્રીજું બિંદુ
+	Gray	રાખોડી
 	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
@@ -2187,6 +2192,8 @@
 	List Workspaces	વર્કસ્પેસની યાદી
 	Live Paint	લાઇવ પેઇન્ટ
 	Live Paint Bucket	લાઇવ પેઇન્ટ બકેટ
+	Fill Area	વિસ્તાર ભરો
+	Fill Area Tool	વિસ્તાર ભરો ટૂલ
 	Live Paint Bucket (Stroke)	લાઇવ પેઇન્ટ બકેટ (સ્ટ્રોક)
 	Live Paint Info	લાઇવ પેઇન્ટ માહિતી
 	Live Paint Selection Tool	લાઇવ પેઇન્ટ પસંદગી ટૂલ
@@ -2830,6 +2837,13 @@
 	Pen Tool	પેન ટૂલ
 	Quick Pen Tool	ક્વિક પેન ટૂલ
 	Quick Pen	ક્વિક પેન
+	Quick Pen Toolbar	ક્વિક પેન ટૂલબાર
+	Continuous Arc	સતત આર્ક
+	Sharp Corner Arc	તીક્ષ્ણ ખૂણાવાળો આર્ક
+	Flip Arc	આર્ક ફ્લિપ કરો
+	Hide Toolbar	ટૂલબાર છુપાવો
+	Pin Toolbar Position	ટૂલબાર સ્થિતિ પિન કરો
+	Reset Toolbar Position	ટૂલબાર સ્થિતિ રીસેટ કરો
 	Pencil	પેન્સિલ
 	Pencil Tool	પેન્સિલ ટૂલ
 	Percent:	ટકા:
@@ -4832,6 +4846,10 @@ arrowhead	Feather	પીંછું
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો
+	Show Document Colors	દસ્તાવેજના રંગો બતાવો
+	Document Colors	દસ્તાવેજના રંગો
+	Selection Colors	પસંદગીના રંગો
+@plural	Used {n} time|Used {n} times	{n} વાર વપરાયો|{n} વાર વપરાયો
 	Show Harmony	હાર્મની બતાવો
 	Harmony Rule	હાર્મની નિયમ
 	Harmony color	હાર્મની રંગ
@@ -5230,7 +5248,7 @@ antiAlias	Sharp	શાર્પ
 	Align On:	આના પર સંરેખિત કરો:
 	Delete Tab	ટૅબ કાઢી નાખો
 	Face	સપાટી
-	Graphics map onto the Plane, Extrude and Revolve object types.	ગ્રાફિક્સને Plane, Extrude અને Revolve પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	ગ્રાફિક્સને Plane, Extrude, Revolve અને Inflate પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
 	Justify with last line aligned center	છેલ્લી લાઇન મધ્યમાં રાખીને જસ્ટિફાઇ કરો
 	Justify with last line aligned right	છેલ્લી લાઇન જમણે રાખીને જસ્ટિફાઇ કરો
 	Leader:	લીડર:
@@ -5665,6 +5683,20 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Nature Icons	પ્રકૃતિ ચિહ્નો
+	Flower	ફૂલ
+	Tree	વૃક્ષ
+	Mountain	પર્વત
+	Ornamental	અલંકારિક
+	Scrollwork	વળાંકવાળી સજાવટ
+	Filigree Arrow	નાજુક કોતરણીવાળું તીર
+	Petal Sweep	પાંખડીઓનો વળાંક
+	Twin Curl	બેવડો વળાંક
+	Vector Packs	વેક્ટર પૅક
+	Compass Rose	દિશાસૂચક ગુલાબ
+	Botanical Sprig	વનસ્પતિ ડાળી
+	Facet Diamond	પાસાદાર હીરો
+	Tide Crest	તરંગ શિખર
 	Leaf Vine	પાંદડાની વેલ
 	Blossom Chain	ફૂલોની સાંકળ
 	Pennant Garland	ધ્વજપટ્ટીની માળા

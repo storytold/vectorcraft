@@ -489,6 +489,10 @@ font-technology	Variable	Değişken
 	Cusp	Sivri nokta
 	Straight segment	Düz segment
 	Circle too large	Daire çok büyük
+	Show Radii	Yarıçapları Göster
+	Show Diameter	Çapı Göster
+	Anchors at Standard Positions	Standart Konumlarda Bağlantı Noktaları
+	Third Point by Dragging	Sürükleyerek Üçüncü Nokta
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle
@@ -595,6 +599,10 @@ font-technology	Variable	Değişken
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Document Colors	Belge Renklerini Göster
+	Document Colors	Belge Renkleri
+	Selection Colors	Seçim Renkleri
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
 	Show Harmony	Uyumu Göster
 	Harmony Rule	Uyum Kuralı
 	Harmony color	Uyum rengi
@@ -1744,6 +1752,10 @@ font-technology	Variable	Değişken
 	Rename Preset	Ön Ayarı Yeniden Adlandır
 	Save Image Trace Preset	Görüntü İzleme Ön Ayarını Kaydet
 	Delete Image Trace Preset	Görüntü İzleme Ön Ayarını Sil
+	Tracing Presets…	İzleme Ön Ayarları…
+	Import Image Trace Presets	Görüntü İzleme Ön Ayarlarını İçe Aktar
+	Export Image Trace Presets	Görüntü İzleme Ön Ayarlarını Dışa Aktar
+	Replace the saved presets that have these names?	Bu adlara sahip kayıtlı ön ayarlar değiştirilsin mi?
 	Image Trace Presets	Görüntü İzleme Ön Ayarları
 	Image:	Resim:
 	Images:	Görseller:
@@ -1989,6 +2001,8 @@ font-technology	Variable	Değişken
 	List Workspaces	Çalışma Alanlarını Listeleme
 	Live Paint	Canlı Boyama
 	Live Paint Bucket	Canlı Boyama Kovası
+	Fill Area	Alanı Doldur
+	Fill Area Tool	Alan Doldurma Aracı
 	Live Paint Bucket (Stroke)	Canlı Boya Kovası (Strok)
 	Live Paint Info	Canlı Boyama Bilgisi
 	Live Paint Selection Tool	Canlı Boyama Seçim Aracı
@@ -2586,6 +2600,13 @@ shape	Open	Açık
 	Pen Tool	Kalem Aracı
 	Quick Pen Tool	Hızlı Kalem Aracı
 	Quick Pen	Hızlı Kalem
+	Quick Pen Toolbar	Hızlı Kalem Araç Çubuğu
+	Continuous Arc	Sürekli Yay
+	Sharp Corner Arc	Keskin Köşeli Yay
+	Flip Arc	Yayı Çevir
+	Hide Toolbar	Araç Çubuğunu Gizle
+	Pin Toolbar Position	Araç Çubuğu Konumunu Sabitle
+	Reset Toolbar Position	Araç Çubuğu Konumunu Sıfırla
 	Pencil	Kalem
 	Pencil Tool	Kurşun Kalem Aracı
 	per slice	dilim başına
@@ -4892,6 +4913,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Saved {path}	{path} kaydedildi
 @msg	Select text or click into text with the Type tool to insert glyphs	Glif eklemek için metni seçin veya Yazım aracıyla metne tıklayın
 @msg	Shape Builder: no region under the pointer	Şekil Oluşturucu: işaretçinin altında bölge yok
+@msg	Fill Area: no enclosed area under the pointer	Alanı Doldur: işaretçinin altında kapalı alan yok
 @msg	Shape Builder: select all paths you want to merge	Şekil Oluşturucu: birleştirmek istediğiniz tüm yolları seçin
 @msg	Shape Builder: select paths or compound paths	Şekil Oluşturucu: yolları veya bileşik yolları seçin
 @msg	Show All Hidden Attributes: nothing is hidden	Tüm Gizli Özellikleri Göster: hiçbir şey gizli değildir
@@ -6209,8 +6231,10 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` face değeri front, back veya side olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafikler Düzlem, Ekstrüzyon, Eksen Etrafında Döndür ve Şişir nesne türlerine eşlenir
 @msg	Revolve maps graphics onto its side: map them onto the front	Eksen Etrafında Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	Inflate maps graphics onto its front and back, not onto a side	Şişir grafikleri ön ve arka yüze eşler, yan yüze eşlemez
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	nesne {_1}: Şişir efektinin arka yüzü yalnızca Her iki taraf ve Kapak açıkken grafik alır
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
@@ -10753,6 +10777,20 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Nature Icons	Doğa simgeleri
+	Flower	Çiçek
+	Tree	Ağaç
+	Mountain	Dağ
+	Ornamental	Süslemeli
+	Scrollwork	Kıvrım süsü
+	Filigree Arrow	Telkari ok
+	Petal Sweep	Yaprakçık kıvrımı
+	Twin Curl	Çift kıvrım
+	Vector Packs	Vektör Paketleri
+	Compass Rose	Pusula Gülü
+	Botanical Sprig	Botanik Dal
+	Facet Diamond	Fasetli Elmas
+	Tide Crest	Dalga Tepesi
 	Leaf Vine	Yapraklı sarmaşık
 	Blossom Chain	Çiçek zinciri
 	Pennant Garland	Bayrak süsü

@@ -30,6 +30,15 @@ pub fn specs() -> Vec<CommandSpec> {
             colors
         ),
         cmd!(
+            query "color.used",
+            "Document Colors",
+            [],
+            None,
+            "{selection?: true (false: the objects select.all takes, also while something is selected), limit?: n (only the n most used; default all)} → {colors: [{key, hex, color: the color in its own model ({model, …}), count, swatch?: the global swatch it is linked to (from its first linked use in paint order, a plain use before a gradient stop that mixes the swatch's ink with process inks; left out when only such stops link it), tint?: 0..100 to three decimals (the percent of that swatch's color the same use stores)}] as recolor.colors lists them, selection: true when they are the selection's, uses: the uses of every color, those past limit included} the unique colors of the selection, or with nothing selected or selection false of the objects select.all takes without the hidden and locked objects inside them, most used first; the selection is left as it is",
+            has_doc,
+            used
+        ),
+        cmd!(
             "recolor.apply",
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
@@ -952,16 +961,19 @@ fn pick_theme(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"colors": colors.iter().map(key_str).collect::<Vec<_>>(), "objects": theme.objects}))
 }
 
-/// A colour the art uses: how often, and the global swatch it is linked to.
+/// A color the art uses: how often, and the global swatch of its first linked use in paint order.
 struct Used {
     color: Color,
     count: usize,
     swatch: Option<String>,
+    /// The global swatch of the first linked use that is not a gradient stop mixing the swatch's
+    /// ink with process inks, with the tint (0..1) its paint stores when the paint gives one.
+    plain: Option<(String, Option<f32>)>,
 }
 
 /// The unique colours of the objects `ids` and the objects inside them, most used first (ties by
-/// key): fills, strokes, gradient stops, text, mesh points and the tiles of the patterns used as
-/// fills or strokes. With `only`, an object not in it is left out with everything it holds.
+/// key): fills, strokes, gradient stops, text, mesh points, the tiles of the patterns used as
+/// fills or strokes, and the tiles of the patterns those tiles use. With `only`, an object not in it is left out with everything it holds.
 fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) -> Vec<Used> {
     fn read<'a>(n: &'a Node, only: Option<&BTreeSet<NodeId>>, out: &mut Vec<&'a Node>) {
         if only.is_some_and(|o| !o.contains(&n.id)) {
@@ -974,42 +986,62 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
     }
     let mut index: HashMap<ColorKey, usize> = HashMap::new();
     let mut used: Vec<(ColorKey, Used)> = vec![];
-    let mut count = |c: &Color, link: Option<&str>| {
+    let mut count_tint = |c: &Color, link: Option<&str>, tint: Option<f32>, mixed: bool| {
         let k = ColorKey::of(c);
         let i = *index.entry(k).or_insert_with(|| {
-            used.push((k, Used { color: *c, count: 0, swatch: None }));
+            used.push((k, Used { color: *c, count: 0, swatch: None, plain: None }));
             used.len() - 1
         });
         let u = &mut used[i].1;
         u.count += 1;
-        if u.swatch.is_none() {
-            u.swatch = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some())).map(str::to_string);
+        if u.swatch.is_some() && (u.plain.is_some() || mixed) {
+            return;
+        }
+        if let Some(l) = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some())) {
+            if u.swatch.is_none() {
+                u.swatch = Some(l.to_string());
+            }
+            if u.plain.is_none() && !mixed {
+                u.plain = Some((l.to_string(), tint));
+            }
         }
     };
-    // The patterns used as fills or strokes: their tiles count once each.
+    // The patterns used as fills or strokes, and the patterns their tiles use: each tile counts
+    // once, and a pattern whose tile uses itself, directly or through other patterns, counts once.
     let mut patterns: Vec<&str> = vec![];
     let mut nodes = vec![];
     for n in ids.iter().filter_map(|id| d.node(*id)) {
         read(n, only, &mut nodes);
     }
     for m in nodes {
-        for p in node_paints(m).chain(override_paints(m)) {
-            match p {
-                Paint::Solid { color, swatch, .. } => count(color, swatch.as_deref()),
-                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref())),
-                Paint::Pattern { pattern, .. } if !patterns.contains(&pattern.as_str()) => patterns.push(pattern),
-                _ => {}
-            }
-        }
-        if let NodeKind::Mesh(mesh) = &m.kind {
-            mesh.points.iter().for_each(|p| count(&p.color, None));
-        }
+        paints(m, &mut count_tint, &mut patterns);
     }
-    for def in patterns.iter().filter_map(|p| d.pattern(p)) {
-        def.art.iter().for_each(|n| node_colors(n, &mut count));
+    let mut next = 0;
+    while let Some(&name) = patterns.get(next) {
+        next += 1;
+        for a in d.pattern(name).map(|def| def.art.as_slice()).unwrap_or_default() {
+            a.walk(&mut |m| paints(m, &mut count_tint, &mut patterns));
+        }
     }
     used.sort_by(|a, b| b.1.count.cmp(&a.1.count).then(a.0.cmp(&b.0)));
     used.into_iter().map(|(_, u)| u).collect()
+}
+
+/// Count the colors `m` holds itself with `count` (the color, its swatch, the tint the paint
+/// stores, and whether it is a gradient stop that mixes the swatch's ink with process inks), and
+/// add the patterns it is painted with to `patterns`.
+fn paints<'a>(m: &'a Node, count: &mut impl FnMut(&Color, Option<&str>, Option<f32>, bool), patterns: &mut Vec<&'a str>) {
+    for p in node_paints(m).chain(override_paints(m)) {
+        match p {
+            Paint::Solid { color, swatch, tint } => count(color, swatch.as_deref(), Some(*tint), false),
+            Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref(), Some(s.tint), s.plates.is_some())),
+            Paint::Pattern { pattern, .. } if !patterns.contains(&pattern.as_str()) => patterns.push(pattern),
+            _ => {}
+        }
+    }
+    if let NodeKind::Mesh(mesh) = &m.kind {
+        mesh.points.iter().for_each(|p| count(&p.color, None, None, false));
+    }
 }
 
 /// The colors `n` shows, in paint order ([`node_colors`]), then the colors of the tiles of the
@@ -1054,30 +1086,61 @@ fn scope_ids(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<NodeId>, Option<B
     let st = s.doc()?;
     let ids = match p.get("ids") {
         Some(_) => checked_ids_param(s, p, "ids", cmd)?,
-        None if st.selection.is_empty() => {
-            let only = super::select::selectable_ids(&st.doc, st.isolation);
-            return Ok((super::select::selectable(&st.doc, st.isolation), Some(only)));
-        }
+        None if st.selection.is_empty() => return Ok(all_art(st)),
         None => st.selection.objects.clone(),
     };
     let mut seen = BTreeSet::new();
     Ok((super::edit::outermost(&st.doc, ids).into_iter().filter(|id| seen.insert(*id)).collect(), None))
 }
 
-fn colors(s: &mut Session, p: &Value) -> Result<Value> {
-    let (ids, only) = scope_ids(s, p, "recolor.colors")?;
-    let st = s.doc()?;
-    let v: Vec<Value> = used_colors(&st.doc, &ids, only.as_ref())
-        .iter()
+/// The objects Select All takes, and the objects whose colors count ([`scope_ids`] with nothing
+/// selected).
+fn all_art(st: &crate::DocState) -> (Vec<NodeId>, Option<BTreeSet<NodeId>>) {
+    let only = super::select::selectable_ids(&st.doc, st.isolation);
+    (super::select::selectable(&st.doc, st.isolation), Some(only))
+}
+
+/// The `colors` list of `recolor.colors` and `color.used` for the objects `ids` (see
+/// [`used_colors`]). Each names the swatch of its first linked use. With `with_color`, each has its
+/// color in its own model, and the swatch and tint come from its first linked use that is not a
+/// gradient stop mixing the swatch's ink with process inks (none when every linked use is one).
+fn colors_json(used: &[Used], with_color: bool) -> Vec<Value> {
+    used.iter()
         .map(|u| {
             let mut v = json!({"key": key_str(&u.color), "hex": u.color.to_hex(), "count": u.count});
-            if let Some(w) = &u.swatch {
+            if with_color {
+                v["color"] = json!(u.color);
+                if let Some((w, tint)) = &u.plain {
+                    v["swatch"] = json!(w);
+                    if let Some(t) = tint {
+                        v["tint"] = json!((f64::from(*t) * 100_000.0).round() / 1000.0);
+                    }
+                }
+            } else if let Some(w) = &u.swatch {
                 v["swatch"] = json!(w);
             }
             v
         })
-        .collect();
-    Ok(json!({ "colors": v }))
+        .collect()
+}
+
+fn colors(s: &mut Session, p: &Value) -> Result<Value> {
+    let (ids, only) = scope_ids(s, p, "recolor.colors")?;
+    let st = s.doc()?;
+    Ok(json!({ "colors": colors_json(&used_colors(&st.doc, &ids, only.as_ref()), false) }))
+}
+
+/// `color.used {selection?, limit?}`: the colors of the selection, or of the art Select All takes.
+fn used(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.used";
+    let limit = super::index_opt(p, "limit", C)?.unwrap_or(usize::MAX);
+    let selection = switch_or(p, "selection", true, C)? && !s.doc()?.selection.is_empty();
+    let (ids, only) = if selection { scope_ids(s, &json!({}), C)? } else { all_art(s.doc()?) };
+    let st = s.doc()?;
+    let used = used_colors(&st.doc, &ids, only.as_ref());
+    let uses: usize = used.iter().map(|u| u.count).sum();
+    let shown = used.get(..limit.min(used.len())).unwrap_or_default();
+    Ok(json!({ "colors": colors_json(shown, true), "selection": selection, "uses": uses }))
 }
 
 /// `recolor.weigh`'s rows as given, each with `from` as a list (a `{current: new}` map gives a

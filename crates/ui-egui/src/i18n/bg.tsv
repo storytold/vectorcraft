@@ -489,6 +489,10 @@ font-technology	Variable	Променливи
 	Circle	Кръг
 	Circle Tool	Инструмент Кръг
 	Circle too large	Кръгът е твърде голям
+	Show Radii	Показване на радиуси
+	Show Diameter	Показване на диаметър
+	Anchors at Standard Positions	Опорни точки в стандартни позиции
+	Third Point by Dragging	Трета точка чрез плъзгане
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -590,6 +594,10 @@ font-technology	Variable	Променливи
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Show Harmony	Показване на хармонията
 	Harmony Rule	Правило за хармония
 	Harmony color	Цвят от хармонията
@@ -1842,6 +1850,10 @@ font-technology	Variable	Променливи
 	Rename Preset	Преименуване на предварителна настройка
 	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
 	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
+	Tracing Presets…	Предварителни настройки за трасиране…
+	Import Image Trace Presets	Импортиране на предварителни настройки за трасиране на изображения
+	Export Image Trace Presets	Експортиране на предварителни настройки за трасиране на изображения
+	Replace the saved presets that have these names?	Да се заменят ли запазените предварителни настройки с тези имена?
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2074,6 +2086,8 @@ font-technology	Variable	Променливи
 	List Workspaces	Извеждане на работни пространства
 	Live Paint	Динамично оцветяване
 	Live Paint Bucket	Кофа за динамично оцветяване
+	Fill Area	Запълване на област
+	Fill Area Tool	Инструмент „Запълване на област“
 	Live Paint Bucket (Stroke)	Кофа за динамично оцветяване (Щрих)
 	Live Paint Info	Информация за динамично оцветяване
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
@@ -2713,6 +2727,13 @@ font-technology	Variable	Променливи
 	Pen Tool	Инструмент „Перо“
 	Quick Pen Tool	Инструмент „Бързо перо“
 	Quick Pen	Бързо перо
+	Quick Pen Toolbar	Лента на бързото перо
+	Continuous Arc	Непрекъсната дъга
+	Sharp Corner Arc	Дъга с остър ъгъл
+	Flip Arc	Обръщане на дъгата
+	Hide Toolbar	Скриване на лентата с инструменти
+	Pin Toolbar Position	Закачане на позицията на лентата с инструменти
+	Reset Toolbar Position	Нулиране на позицията на лентата с инструменти
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък
@@ -4777,6 +4798,7 @@ axis	Both	И двете
 @msg	Saved {path}	Записано: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Изберете текст или щракнете в текста с инструмента „Текст“, за да вмъкнете глифи
 @msg	Shape Builder: no region under the pointer	Инструмент за създаване на форми: няма област под показалеца
+@msg	Fill Area: no enclosed area under the pointer	Запълване на област: няма затворена област под показалеца
 @msg	Shape Builder: select paths or compound paths	Инструмент за създаване на форми: изберете пътища или съставни пътища
 @msg	Show All Hidden Attributes: nothing is hidden	Показване на всички скрити атрибути: нищо не е скрито
 @msg	Split Into Grid: select paths large enough for the grid	Разделяне на мрежа: изберете пътища, достатъчно големи за мрежата
@@ -7922,6 +7944,20 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Nature Icons	Природни икони
+	Flower	Цвете
+	Tree	Дърво
+	Mountain	Планина
+	Ornamental	Орнаментални
+	Scrollwork	Завитък
+	Filigree Arrow	Филигранна стрела
+	Petal Sweep	Венчелистен замах
+	Twin Curl	Двоен завитък
+	Vector Packs	Векторни пакети
+	Compass Rose	Роза на компаса
+	Botanical Sprig	Ботаническо клонче
+	Facet Diamond	Фасетиран ромб
+	Tide Crest	Гребен на вълна
 	Leaf Vine	Листна лоза
 	Blossom Chain	Цветна верига
 	Pennant Garland	Гирлянд от знаменца
