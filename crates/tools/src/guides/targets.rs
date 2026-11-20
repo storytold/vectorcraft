@@ -613,6 +613,24 @@ impl Targets {
     }
 
     fn collect_inner(doc: &Document, exclude: &[NodeId], skip_artboard: Option<usize>, visible: Option<Rect>, gather: Gather) -> Self {
+        Self::collect_capped(doc, exclude, skip_artboard, visible, gather, BOUNDS_BUDGET)
+    }
+
+    /// [`Self::collect`] with at most `bounds_budget` objects giving their edges and centre, so a
+    /// test can spend that budget without a document of [`BOUNDS_BUDGET`] objects.
+    #[cfg(test)]
+    pub(super) fn collect_bounds_capped(doc: &Document, bounds_budget: usize) -> Self {
+        Self::collect_capped(doc, &[], None, None, Gather::Bounds, bounds_budget)
+    }
+
+    fn collect_capped(
+        doc: &Document,
+        exclude: &[NodeId],
+        skip_artboard: Option<usize>,
+        visible: Option<Rect>,
+        gather: Gather,
+        bounds_budget: usize,
+    ) -> Self {
         let mut t = Targets::default();
         let add_rect = |t: &mut Targets, r: Rect, kind: Kind| {
             let c = r.center();
@@ -633,12 +651,13 @@ impl Targets {
                 add_rect(&mut t, doc.setup.bleed_rect(ab.rect), Kind::Bleed);
             }
         }
-        let (mut budget, mut segment_budget, mut bounds_budget) = (BUDGET, BUDGET, BOUNDS_BUDGET);
+        let (mut budget, mut segment_budget, mut bounds_budget) = (BUDGET, BUDGET, bounds_budget);
         walk_but(&doc.layers, &exclude.iter().copied().collect(), &mut |n| {
-            // The anchors and segments running out does not end the walk: the objects visited
-            // after that (the topmost, newest ones) still give their edges and centre (#8531),
-            // up to their own, larger budget.
-            if bounds_budget == 0 || n.is_container() || !n.visible {
+            // Each budget caps only its own targets: the anchors and segments running out leave
+            // the objects visited after that (the topmost, newest ones) their edges and centre
+            // (#8531), and the bounds running out leaves later paths their anchors and segments.
+            let spent = budget == 0 && segment_budget == 0 && bounds_budget == 0;
+            if spent || n.is_container() || !n.visible {
                 return;
             }
             let Some(b) = n.geometric_bounds() else { return };
@@ -666,8 +685,10 @@ impl Targets {
                     }
                 }
             }
-            add_rect(&mut t, b, Kind::Edge);
-            bounds_budget -= 1;
+            if bounds_budget > 0 {
+                add_rect(&mut t, b, Kind::Edge);
+                bounds_budget -= 1;
+            }
         });
         t.index()
     }

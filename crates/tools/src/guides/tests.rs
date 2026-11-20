@@ -35,6 +35,14 @@ fn objects_past_the_anchor_budget_keep_their_edges_and_centre() {
 }
 
 #[test]
+fn objects_past_the_bounds_budget_keep_their_anchors() {
+    let (d, _) = doc_with_rect();
+    let t = Targets::collect_bounds_capped(&d, 0);
+    assert_eq!(t.snap_point(Point::new(102.0, 99.0), 4.0).0, Point::new(100.0, 100.0), "the corner anchor");
+    assert_eq!(t.snap_guide(false, 101.0, 4.0).0, 100.0, "the anchors line up a guide");
+}
+
+#[test]
 fn snaps_to_anchor_and_alignment() {
     let (d, _) = doc_with_rect();
     let t = Targets::collect(&d, &[], None);
