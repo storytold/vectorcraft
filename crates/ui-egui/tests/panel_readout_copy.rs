@@ -376,4 +376,94 @@ fn panel_readout_double_click_release_outside_and_stale_values_do_not_auto_copy(
     for kind in ["outside", "double", "hidden", "changed"] {
         cancelled_gesture(kind);
     }
+    review_8826_motion_keeps_pending_copy();
+    for button in [PointerButton::Secondary, PointerButton::Middle] {
+        review_8826_pointer_takeover(button);
+    }
+    review_8826_accesskit_takeover(true);
+    review_8826_accesskit_takeover(false);
+}
+
+fn review_8826_motion_keeps_pending_copy() {
+    let mut a = App::new();
+    let out = a.panel("info");
+    let rect = painted(&out, "W: 37 pt").0;
+    let before = a.snapshot();
+    assert!(copies(&a.tap(rect.center())).is_empty());
+    let at = rect.center() + vec2(1.0, 0.0);
+    assert!(rect.contains(at), "ordinary motion stays over the same real readout");
+    let moved = a.frame(vec![Event::PointerMoved(at)]);
+    painted(&moved, "W: 37 pt");
+    assert!(copies(&moved).is_empty());
+    assert_eq!(copies(&a.deadline()), ["W: 37 pt"], "motion alone does not cancel an ordinary primary copy");
+    let next = a.frame(vec![]);
+    assert!(copies(&next).is_empty());
+    assert_eq!(visible_text_count(&next, COPIED), 1);
+    assert_eq!(a.snapshot(), before);
+}
+
+fn review_8826_pointer_takeover(button: PointerButton) {
+    let mut a = App::new();
+    let out = a.panel("info");
+    let at = painted(&out, "W: 37 pt").0.center();
+    let before = a.snapshot();
+    let release = a.tap(at);
+    assert!(copies(&release).is_empty());
+    painted(&release, "W: 37 pt");
+    let press = a.frame_after(a.delay() * 0.25, vec![Event::PointerButton { pos: at, button, pressed: true, modifiers: Modifiers::NONE }]);
+    assert!(copies(&press).is_empty(), "{button:?} press must not copy");
+    painted(&press, "W: 37 pt");
+    let release = a.frame(vec![Event::PointerButton { pos: at, button, pressed: false, modifiers: Modifiers::NONE }]);
+    assert!(copies(&release).is_empty(), "{button:?} release must not schedule a copy");
+    painted(&release, "W: 37 pt");
+    assert_no_delayed_copy(&mut a, &format!("{button:?} takeover"));
+    let still_shown = a.frame(vec![]);
+    painted(&still_shown, "W: 37 pt");
+    assert_eq!(visible_text_count(&still_shown, COPIED), 0, "cancelled pending copy has no confirmation");
+    assert_eq!(a.snapshot(), before, "{button:?} takeover leaves document, selection and history intact");
+}
+
+fn review_8826_readout_node(out: &egui::FullOutput, value: &str) -> egui::accesskit::NodeId {
+    let rect = painted(out, value).0;
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("actual readout accessibility tree").nodes;
+    let matches: Vec<_> = nodes
+        .iter()
+        .filter(|(_, n)| n.label() == Some(value) || n.value() == Some(value))
+        .filter(|(_, n)| n.supports_action(egui::accesskit::Action::Click))
+        .filter(|(_, n)| {
+            n.bounds()
+                .is_some_and(|b| Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)).intersects(rect))
+        })
+        .collect();
+    assert_eq!(matches.len(), 1, "one live clickable node for the painted {value:?}");
+    let (id, node) = matches[0];
+    assert_eq!(node.description(), Some("Copy"), "the actual readout advertises its copy action");
+    *id
+}
+
+fn review_8826_accesskit_takeover(same_target: bool) {
+    use egui::accesskit::{Action, ActionRequest, TreeId};
+    let mut a = App::new();
+    let out = a.panel("info");
+    let width = review_8826_readout_node(&out, "W: 37 pt");
+    let height = review_8826_readout_node(&out, "H: 40 pt");
+    assert_ne!(width, height, "the live W and H rows have distinct semantic targets");
+    let before = a.snapshot();
+    let release = a.tap(painted(&out, "W: 37 pt").0.center());
+    assert!(copies(&release).is_empty());
+    painted(&release, "W: 37 pt");
+    painted(&release, "H: 40 pt");
+    let (target_node, expected) = if same_target { (width, "W: 37 pt") } else { (height, "H: 40 pt") };
+    let activated = a.frame_after(
+        a.delay() * 0.25,
+        vec![Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node, target_tree: TreeId::ROOT, data: None })],
+    );
+    assert_eq!(copies(&activated), [expected], "the actual AccessKit target copies once immediately");
+    painted(&activated, "W: 37 pt");
+    painted(&activated, "H: 40 pt");
+    assert_no_delayed_copy(&mut a, if same_target { "same-target accessible click" } else { "different-readout accessible click" });
+    let still_shown = a.frame(vec![]);
+    painted(&still_shown, "W: 37 pt");
+    painted(&still_shown, "H: 40 pt");
+    assert_eq!(a.snapshot(), before, "accessible copy leaves document, selection and history intact");
 }

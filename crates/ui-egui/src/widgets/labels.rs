@@ -187,13 +187,18 @@ pub(crate) fn copyable_readout(
     let id = response.id.with(("pending-readout-copy", ctx.viewport_id()));
     let pass = ctx.cumulative_pass_nr();
     let mut pending = ctx.data_mut(|d| d.remove_temp::<PendingReadoutCopy>(id));
-    let pressed = ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary));
+    // A new pointer or assistive action must not be overwritten by an older delayed copy.
+    // This label's own accessible Click is still handled immediately below.
+    let pressed = ctx.input(|i| i.pointer.any_pressed());
     let interrupted = ctx.input(|i| {
         i.events.iter().any(|event| match event {
-            egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_) | egui::Event::Ime(_) => {
-                true
-            }
-            egui::Event::AccessKitActionRequest(request) => request.action == egui::accesskit::Action::SetTextSelection,
+            egui::Event::Key { .. }
+            | egui::Event::Text(_)
+            | egui::Event::Copy
+            | egui::Event::Cut
+            | egui::Event::Paste(_)
+            | egui::Event::Ime(_)
+            | egui::Event::AccessKitActionRequest(_) => true,
             _ => false,
         })
     });
