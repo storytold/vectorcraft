@@ -1449,12 +1449,20 @@ fn a_middle_click_on_a_tab_closes_it_as_the_close_box_does() {
 /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
 /// right: first, previous, next, last.
 fn navigator(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Rect> {
+    ctx.enable_accesskit();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 300.0));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
     out.textures_delta.clear();
-    let size = egui::vec2(18.0, 18.0);
-    let mut r: Vec<egui::Rect> =
-        ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
+    let names = [tl!("First Artboard"), tl!("Previous Artboard"), tl!("Next Artboard"), tl!("Last Artboard")];
+    let mut r: Vec<egui::Rect> = out
+        .platform_output
+        .accesskit_update
+        .into_iter()
+        .flat_map(|update| update.nodes)
+        .filter(|(_, node)| node.role() == egui::accesskit::Role::Button && node.label().is_some_and(|name| names.contains(&name)))
+        .filter_map(|(_, node)| node.bounds())
+        .map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        .collect();
     r.sort_by(|a, b| a.left().total_cmp(&b.left()));
     r
 }
