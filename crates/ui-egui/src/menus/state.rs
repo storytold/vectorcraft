@@ -356,6 +356,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.recolorUndo" => crate::dialogs::recolor::can_step(app, true),
         "ui.recolorRedo" => crate::dialogs::recolor::can_step(app, false),
         "ui.dialogReset" => crate::dialogs::can_reset(app),
+        "ui.preferencesApply" => crate::prefs_dialog::is_open(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),

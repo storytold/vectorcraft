@@ -250,6 +250,36 @@ fn dialog_ok_applies_prefs_and_ui_fields() {
     assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(4.0));
 }
 
+/// Apply applies the dialog's preferences and keeps it open; Cancel afterwards keeps them (#3454).
+#[test]
+fn apply_keeps_the_dialog_open_and_cancel_keeps_what_it_applied() {
+    let mut a = app();
+    open(&mut a, Some("general"));
+    let d = a.ui.dialog.as_mut().unwrap();
+    d.fields.insert("keyboardIncrement".into(), json!(4));
+    d.fields.insert("__smartGuides".into(), json!(!a.ui.view.smart_guides));
+    let guides = !a.ui.view.smart_guides;
+    click_button(&mut a, "Apply");
+    assert!(is_open(&a));
+    assert_eq!(a.session.prefs.keyboard_increment, 4.0);
+    assert_eq!(a.ui.view.smart_guides, guides);
+    assert!(a.prefs_changed);
+    // An edit after Apply is what Cancel discards.
+    a.ui.dialog.as_mut().unwrap().fields.insert("keyboardIncrement".into(), json!(5));
+    click_button(&mut a, "Cancel");
+    assert!(a.ui.dialog.is_none());
+    assert_eq!(a.session.prefs.keyboard_increment, 4.0);
+    assert_eq!(a.ui.view.smart_guides, guides);
+    assert_eq!(a.run("ui.preferencesApply", json!({})).unwrap_err(), "the Preferences dialog isn't open");
+    // A UI-only checkbox set to something other than true or false is refused, and nothing changes.
+    open(&mut a, Some("general"));
+    let d = a.ui.dialog.as_mut().unwrap();
+    d.fields.insert("keyboardIncrement".into(), json!(6));
+    d.fields.insert("__smartGuides".into(), json!("on"));
+    assert!(apply_open(&mut a).is_err());
+    assert_eq!(a.session.prefs.keyboard_increment, 4.0);
+}
+
 /// General › Show Tool Tips: off, a button held under the pointer shows no tool tip; back on,
 /// it does again (#394).
 #[test]

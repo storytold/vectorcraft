@@ -1554,6 +1554,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Simplify dialog (dialog `simplify`: tolerance (pt), angleThreshold, straightLines, showOriginal, retain: ticked, OK makes Object › Path › Simplify open this dialog with these fields next time) takes the open Simplify slider's place, at the slider's tolerance → {tolerance}; an error when the slider isn't open",
     ),
     (
+        "ui.preferencesApply",
+        "Apply",
+        "",
+        "{} the open Preferences dialog's Apply (dialog `preferences`): every preference in it is validated and applied as OK applies it, and the dialog stays open; Cancel afterwards closes it and keeps what was applied → null; an error when Preferences isn't open or a value is refused (nothing changes)",
+    ),
+    (
         "ui.dialogReset",
         "Reset",
         "",
