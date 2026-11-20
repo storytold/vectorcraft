@@ -1780,3 +1780,138 @@ fn a_second_learn_link_replaces_the_mark_and_escape_removes_it() {
     assert!(app.ui.learn_locate.is_none());
     assert!(locate_frame(&mut app, &ctx, 2.0, vec![], 1200.0).0.is_empty());
 }
+
+fn review_8758_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::accesskit::Node> {
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1400.0)));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
+        show(app, ui);
+        crate::palette::show(app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+}
+
+fn review_8758_button<'a>(nodes: &'a [egui::accesskit::Node], label: &str) -> &'a egui::accesskit::Node {
+    nodes.iter().find(|n| n.role() == Role::Button && n.label() == Some(label)).unwrap_or_else(|| panic!("toolbar button {label:?} is drawn"))
+}
+
+fn review_8758_rect(node: &egui::accesskit::Node) -> egui::Rect {
+    let b = node.bounds().unwrap();
+    egui::Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
+}
+
+fn review_8758_click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) -> Vec<egui::accesskit::Node> {
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    review_8758_frame(app, ctx, time, vec![Event::PointerMoved(at), button(true)]);
+    review_8758_frame(app, ctx, time + 0.05, vec![button(false)]);
+    review_8758_frame(app, ctx, time + 0.1, vec![])
+}
+
+fn review_8758_unchanged_content(app: &VectorcraftApp) -> Value {
+    let st = app.session.active().unwrap();
+    json!({"document": &*st.doc, "selection": format!("{:?}", st.selection),
+        "undo": st.history.undo.len(), "redo": st.history.redo.len(), "slots": slots(app)})
+}
+
+fn review_8758_edit_control(app: &mut VectorcraftApp, ctx: &egui::Context, nodes: &[egui::accesskit::Node]) {
+    let edit = review_8758_rect(review_8758_button(nodes, "Edit Toolbar"));
+    let before = slots(app);
+    review_8758_click(app, ctx, 0.2, edit.center());
+    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none(), "the existing Edit Toolbar button opens its own drawer");
+    let anchor = ctx.data(|d| d.get_temp::<egui::Rect>(crate::edit_toolbar::button_id())).unwrap();
+    assert_eq!(anchor, edit, "the drawer retains its real Edit Toolbar button anchor");
+    assert!(ctx.memory(|m| m.area_rect(crate::edit_toolbar::drawer_id())).is_some(), "the customization drawer is drawn");
+    assert_eq!(slots(app), before, "opening customization does not change tool membership");
+    assert!(before.iter().any(|(_, tools)| tools.contains(&"rectangle")));
+    app.run("toolbar.removeTool", json!({"tool": "rectangle"})).unwrap();
+    assert!(!slots(app).iter().any(|(_, tools)| tools.contains(&"rectangle")), "the existing customization command still edits the toolbar");
+    app.run("window.editToolbar", json!({})).unwrap();
+    assert!(!app.ui.tools_drawer);
+}
+
+fn review_8758_layout(double: bool) {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("window.toolbarColumns", json!({"double": double})).unwrap();
+    let ctx = reader_context();
+    crate::theme::install_fonts(&ctx);
+    review_8758_frame(&mut app, &ctx, 0.0, vec![]);
+    let nodes = review_8758_frame(&mut app, &ctx, 0.1, vec![]);
+    // Establish the existing, separately actionable customization control before the new affordance.
+    review_8758_edit_control(&mut app, &ctx, &nodes);
+    let nodes = review_8758_frame(&mut app, &ctx, 0.4, vec![]);
+    let search = review_8758_rect(review_8758_button(&nodes, "Search commands"));
+    let edit = review_8758_rect(review_8758_button(&nodes, "Edit Toolbar"));
+    let panel = ctx.data(|d| d.get_temp::<egui::Rect>(docked_rect_id())).unwrap();
+    assert!(panel.contains_rect(search) && panel.contains_rect(edit), "both controls fit the actual toolbar: {search:?}, {edit:?}, {panel:?}");
+    assert!(search.bottom() <= 1400.0 && edit.bottom() <= 1400.0, "both controls fit the window");
+    if double {
+        assert!(search.right() <= edit.left() && (search.center().y - edit.center().y).abs() < 0.01, "Search left of Edit on one row");
+    } else {
+        assert!(
+            search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01,
+            "one column keeps both controls in a fitted stack"
+        );
+    }
+    assert!(hovered_texts(&mut app, &ctx, 0.5, search.center()).iter().any(|t| t == "Search commands, tools, panels and effects"));
+    let before = review_8758_unchanged_content(&app);
+    let tool = app.session.tool_id().to_string();
+    app.ui.palette_query = "old query".into();
+    review_8758_click(&mut app, &ctx, 3.0, search.center());
+    assert!(app.ui.palette_open, "the actual toolbar button opens the existing command palette");
+    assert!(app.ui.palette_query.is_empty(), "the existing command clears the previous query");
+    assert!(ctx.egui_wants_keyboard_input(), "the palette search has keyboard input");
+    assert!(!app.ui.tools_drawer, "Search is distinct from Edit Toolbar");
+    assert_eq!(review_8758_unchanged_content(&app), before, "opening Search changes no document, history, selection or toolbar membership");
+    assert_eq!(app.session.tool_id(), tool);
+}
+
+#[test]
+fn review_8758_toolbar_search_fits_beside_edit_and_opens_the_existing_palette() {
+    for double in [true, false] {
+        review_8758_layout(double);
+    }
+}
+
+#[test]
+fn review_8758_toolbar_search_accepts_a_tool_query_and_is_disabled_over_a_dialog() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = reader_context();
+    crate::theme::install_fonts(&ctx);
+    review_8758_frame(&mut app, &ctx, 0.0, vec![]);
+    let nodes = review_8758_frame(&mut app, &ctx, 0.1, vec![]);
+    let search = review_8758_rect(review_8758_button(&nodes, "Search commands"));
+    let before = review_8758_unchanged_content(&app);
+    review_8758_click(&mut app, &ctx, 0.2, search.center());
+    assert!(app.ui.palette_open);
+    review_8758_frame(&mut app, &ctx, 0.4, vec![Event::Text("Scissors".into())]);
+    assert_eq!(app.ui.palette_query, "Scissors", "the palette's actual focused text field receives the query");
+    review_8758_frame(&mut app, &ctx, 0.5, vec![]);
+    let nodes = review_8758_frame(&mut app, &ctx, 0.6, vec![]);
+    let tool = nodes
+        .iter()
+        .find(|n| n.role() == Role::ListItem && n.label().is_some_and(|label| label.starts_with("Tool, ") && label.contains("Scissors")))
+        .expect("the actual palette lists the matching Scissors tool");
+    assert!(!tool.is_disabled());
+    review_8758_click(&mut app, &ctx, 0.7, review_8758_rect(tool).center());
+    assert_eq!(app.session.tool_id(), "scissors", "activating the real tool result chooses the tool");
+    assert!(!app.ui.palette_open, "a pick closes the palette");
+    assert_eq!(app.ui.recent_commands.first().map(String::as_str), Some("tool:scissors"));
+    assert_eq!(review_8758_unchanged_content(&app), before, "choosing a tool changes no artwork/history or toolbar membership");
+
+    // A real existing Tool Options dialog supplies the same modal guard as the app bar search.
+    open_options(&mut app, "lineSegment").unwrap();
+    let dialog = app.ui.dialog.as_ref().unwrap().kind.clone();
+    app.ui.palette_query = "keep while modal".into();
+    let nodes = review_8758_frame(&mut app, &ctx, 1.0, vec![]);
+    let search = review_8758_button(&nodes, "Search commands");
+    assert!(search.is_disabled(), "screen readers find Search disabled while a dialog is open");
+    review_8758_click(&mut app, &ctx, 1.1, review_8758_rect(search).center());
+    assert!(!app.ui.palette_open, "the disabled button cannot open the palette over a dialog");
+    assert_eq!(app.ui.palette_query, "keep while modal");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, dialog);
+    assert_eq!(review_8758_unchanged_content(&app), before);
+}

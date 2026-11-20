@@ -721,6 +721,27 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
         if show.screen_mode && widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
             app.run("view.screenMode", json!({})).ok();
         }
+        search_and_edit_buttons(app, ui, two);
+    });
+    let _ = t;
+}
+
+/// Search and Edit Toolbar share the wide footer; the narrow footer keeps their full-size buttons stacked.
+fn search_and_edit_buttons(app: &mut VectorcraftApp, ui: &mut Ui, two: bool) {
+    let mut buttons = |ui: &mut Ui| {
+        // Match the app bar's search admission and reuse its existing palette command.
+        let enabled = app.ui.dialog.is_none();
+        let open = app.ui.palette_open;
+        let search = ui
+            .add_enabled_ui(enabled, |ui| {
+                let (_, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
+                widgets::paint_icon_button_named(ui, resp, "search", tl!("Search commands"), tl!("Search commands, tools, panels and effects"), open)
+                    .clicked()
+            })
+            .inner;
+        if search && enabled {
+            app.run("help.commandPalette", json!({})).ok();
+        }
         // Edit Toolbar: the All Tools drawer opens beside the toolbar, by this button.
         let editing = |app: &VectorcraftApp| app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
         let edit = widgets::icon_button(ui, "ellipsis", "Edit Toolbar", editing(app), 26.0);
@@ -731,8 +752,16 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, cols: usiz
         if editing(app) {
             ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::button_id(), edit.rect));
         }
-    });
-    let _ = t;
+    };
+    if two {
+        ui.horizontal(|ui| {
+            let gap = ui.spacing().item_spacing.x;
+            ui.add_space(((ui.available_width() - 52.0 - gap) / 2.0).max(0.0));
+            buttons(ui);
+        });
+    } else {
+        buttons(ui);
+    }
 }
 
 /// Where `window.floatTools` puts a strip (the next one a row lower), right of the toolbar; it's
