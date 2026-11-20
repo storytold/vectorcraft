@@ -3282,7 +3282,22 @@ fn review_599512_divider_then_middle(command: &str, coalesced: bool, held: bool,
             s.frame(vec![review_597489_primary(released, true)]);
         }
     }
-    assert!((s.fraction() - 0.7).abs() < 1e-6, "the completed divider precedes Middle Down and is not suppressed by final button state");
+    assert!(
+        (s.fraction() - 0.7).abs() < 1e-6,
+        "the completed divider precedes Middle Down and is not suppressed by final button state: command={command} coalesced={coalesced} held={held} later_primary={later_primary} fraction={} tool={} rect={:?} layers(D/M/U)={:?} frame={} pass={} input(events/primary_pressed/middle_pressed/middle_down)={:?}",
+        s.fraction(),
+        s.app.session.tool_id(),
+        s.rect(),
+        [s.ctx.layer_id_at(down), s.ctx.layer_id_at(middle), s.ctx.layer_id_at(released)],
+        s.ctx.cumulative_frame_nr(),
+        s.ctx.cumulative_pass_nr(),
+        s.ctx.input(|i| (
+            i.events.clone(),
+            i.pointer.primary_pressed(),
+            i.pointer.button_pressed(PointerButton::Middle),
+            i.pointer.button_down(PointerButton::Middle)
+        ))
+    );
     if coalesced {
         review_597943_camera_eq(&s, camera);
     }
