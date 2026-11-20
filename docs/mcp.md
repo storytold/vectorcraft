@@ -5928,6 +5928,10 @@ read is an error.
 
 ## Library panels
 
+On Windows, native floating palettes use the tool-window style and stay outside Alt-Tab and
+FancyZones. Their position, size, and resizing controls remain available. The main window and
+detached document windows keep their normal window style.
+
 Each swatch, graphic style, symbol or brush library opens in a read-only panel of its own (#2603), as in Illustrator,
 and several can be open at once. `window.swatchLibrary {library}`, `window.graphicStyleLibrary {library}`,
 `window.symbolLibrary {library}` and `window.brushLibrary {library}`
