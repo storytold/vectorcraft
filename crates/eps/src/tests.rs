@@ -371,7 +371,7 @@ fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
     let hard_page = page_of(&hard_doc, &opts(&hard_doc));
     assert!(hard_page.contains("/FunctionType 3") && hard_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{hard_page}");
 
-    // All stops at the same offset falls back to a solid fill with no shfill.
+    // Two stops at the same interior offset pad to 0 and 1, emitting a hard-edge stitch at 0.5.
     let flat = Gradient::new(
         GradientKind::Linear,
         vec![GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0))],
@@ -380,7 +380,8 @@ fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
         vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(flat))), Paint::None, 0.0)]
     });
     let flat_page = page_of(&flat_doc, &opts(&flat_doc));
-    assert!(!flat_page.contains("shfill"), "{flat_page}");
+    assert!(flat_page.contains("/FunctionType 3") && flat_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{flat_page}");
+    assert!(flat_page.contains("/C0 [1 0 0] /C1 [1 0 0]") && flat_page.contains("/C0 [0 0 1] /C1 [0 0 1]"), "{flat_page}");
 
     // Zero-length linear and radial gradients still emit valid shfill geometry.
     for kind in [GradientKind::Linear, GradientKind::Radial] {
