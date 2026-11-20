@@ -2917,7 +2917,7 @@ fn review_7909_raster_group_copies_exclude_bounds_dependencies_only() {
     review_7909_copy_excluded(&d, &[owner], 255.0);
     review_7909_copy_contact(&d, &[left], 205.0);
     let mut moved = d.clone();
-    moved.node_mut(left).unwrap().transform(Affine::translate((20.0, 0.0)), Default::default());
+    moved.node_mut(left).unwrap().transform(Affine::translate((20.0, 0.0)), vectorcraft_doc::Scaling::default());
     review_7909_copy_contact(&moved, &[], 245.0);
     review_7909_copy_contact(&moved, &[left], 205.0);
     // Moving only the left member changes the group-centred copy of the right
