@@ -21,7 +21,7 @@ impl VectorcraftApp {
                 shortcuts::handle(self, ctx);
             } else {
                 // Alt held while the menu bar takes the keys (Alt+F, then Escape) is no Alt tap.
-                shortcuts::alt_tap_taken_by_menu_bar(&mut self.alt_tap, ctx);
+                self.alt_tap.taken_by_menu_bar(ctx);
             }
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in
