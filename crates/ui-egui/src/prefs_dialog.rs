@@ -218,9 +218,35 @@ pub(crate) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
     }
 }
 
-/// OK: validate and apply every preference in the dialog (nothing changes on error).
+/// OK: validate and apply every preference in the dialog, then close it (nothing changes on error).
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
+    apply_fields(app)?;
+    app.ui.dialog = None;
+    Ok(Value::Null)
+}
+
+/// Apply (`ui.preferencesApply`): validate and apply every preference in the open Preferences
+/// dialog, which stays open (nothing changes on error); Cancel then keeps what was applied.
+pub(crate) fn apply_open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    if !is_open(app) {
+        return Err("the Preferences dialog isn't open".into());
+    }
+    apply_fields(app)?;
+    Ok(Value::Null)
+}
+
+/// Whether the open dialog is Preferences.
+pub(crate) fn is_open(app: &VectorcraftApp) -> bool {
+    app.ui.dialog.as_ref().is_some_and(|d| d.kind == "preferences")
+}
+
+/// What OK and Apply share: every preference in the dialog is validated and applied.
+fn apply_fields(app: &mut VectorcraftApp) -> Result<(), String> {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
+    // `ui.dialog.set` stores any value: a UI-only checkbox that isn't true or false is refused, not dropped.
+    if let Some(key) = ["__smartGuides", "__snapToGrid", "__taskBar"].into_iter().find(|k| d.fields.get(*k).is_some_and(|v| !v.is_boolean())) {
+        return Err(format!("`{key}` must be true or false"));
+    }
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
     let document_units = d.fields.get(RESET_UNITS).is_none_or(|v| values.get("unitsGeneral") != Some(v));
@@ -232,10 +258,9 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
     crate::original_editor::commit(app);
-    app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
     app.prefs_changed = true;
-    Ok(Value::Null)
+    Ok(())
 }
 
 /// Copy the engine prefs into `UiState` so the host persists them with the UI state.
@@ -370,7 +395,7 @@ pub(crate) fn reapply(app: &mut VectorcraftApp, ctx: &egui::Context) {
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
-    let (mut ok, mut cancel, mut reset) = (false, false, false);
+    let (mut ok, mut apply, mut cancel, mut reset) = (false, false, false, false);
     let cat = d.str("__category");
     let cat = PREF_CATEGORIES.iter().find(|c| **c == cat).copied().unwrap_or(PREF_CATEGORIES[0]);
     crate::dialogs::modal::show(ctx, tl!("Preferences"), egui::Id::unique("dialog-preferences"), -20.0, 20, |ui| {
@@ -449,6 +474,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ok = true;
                 }
                 ui.add_space(8.0);
+                if widgets::secondary_button(ui, tl!("Apply")).on_hover_text(tl!("Apply the preferences and keep this dialog open")).clicked() {
+                    apply = true;
+                }
+                ui.add_space(8.0);
                 if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
                     cancel = true;
                 }
@@ -478,7 +507,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
-    } else if reset && !ok {
+    } else if apply
+        && !ok
+        && let Err(e) = apply_open(app)
+    {
+        app.status(e);
+    } else if reset && !ok && !apply {
         crate::dialogs::confirm::ask_reset_prefs(app);
     }
 }
