@@ -2169,6 +2169,8 @@ file-filter	Templates	Vorlagen
 	List Workspaces	Arbeitsbereiche auflisten
 	Live Paint	Interaktiv malen
 	Live Paint Bucket	Interaktiv-malen-Werkzeug
+	Fill Area	Fläche füllen
+	Fill Area Tool	Fläche-füllen-Werkzeug
 	Live Paint Bucket (Stroke)	Interaktiv-malen-Werkzeug (Kontur)
 	Live Paint Info	Informationen zu „Interaktiv malen“
 	Live Paint Selection Tool	Interaktiv-malen-Auswahlwerkzeug
@@ -5057,6 +5059,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Saved {path}	{path} gespeichert
 @msg	Select text or click into text with the Type tool to insert glyphs	Wählen Sie Text aus oder klicken Sie mit dem Text-Werkzeug in einen Text, um Glyphen einzufügen
 @msg	Shape Builder: no region under the pointer	Formerstellung: kein Bereich unter dem Zeiger
+@msg	Fill Area: no enclosed area under the pointer	Fläche füllen: kein geschlossener Bereich unter dem Zeiger
 @msg	Shape Builder: select all paths you want to merge	Formerstellung: Wählen Sie alle Pfade aus, die Sie zusammenfügen möchten
 @msg	Shape Builder: select paths or compound paths	Formerstellung: Wählen Sie Pfade oder zusammengesetzte Pfade aus
 @msg	Show All Hidden Attributes: nothing is hidden	Alle ausgeblendeten Attribute einblenden: Es ist nichts ausgeblendet
@@ -6475,8 +6478,10 @@ lighting	Light	Licht
 @msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` muss front, back oder side sein
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren, Kreiseln und Aufblasen abgebildet
 @msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	Inflate maps graphics onto its front and back, not onto a side	Aufblasen bildet Grafiken auf der Vorder- und Rückseite ab, nicht auf einer Seitenfläche
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	Objekt {_1}: Die Rückseite von „Aufblasen“ nimmt Grafiken nur mit aktivierten Optionen „Beidseitig“ und „Deckflächen“ auf
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
 @msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
@@ -10440,6 +10445,15 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Nature Icons	Natursymbole
+	Flower	Blume
+	Tree	Baum
+	Mountain	Berg
+	Ornamental	Ornamental
+	Scrollwork	Schnörkel
+	Filigree Arrow	Filigranpfeil
+	Petal Sweep	Blütenblattschwung
+	Twin Curl	Doppelschnörkel
 	Vector Packs	Vektorpakete
 	Compass Rose	Kompassrose
 	Botanical Sprig	Botanischer Zweig

@@ -2479,6 +2479,8 @@ antiAlias	Sharp	シャープ
 	List View	リスト表示
 	List Workspaces	ワークスペースの一覧
 	Live Paint Bucket	ライブペイントツール
+	Fill Area	領域を塗りつぶし
+	Fill Area Tool	領域塗りつぶしツール
 	Live Paint Bucket (Stroke)	ライブペイントツール (線)
 	Live Paint Info	ライブペイント情報
 	Live Paint Selection Tool	ライブペイント選択ツール
@@ -5026,6 +5028,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
+@msg	Fill Area: no enclosed area under the pointer	領域を塗りつぶし: ポインターの下に閉じた領域がありません
 @msg	Shape Builder: select all paths you want to merge	シェイプ形成ツール: 結合するパスをすべて選択してください
 @msg	Shape Builder: select paths or compound paths	シェイプ形成ツール: パスまたは複合パスを選択してください
 @msg	image data `{_1}` is missing	画像データ `{_1}` が見つかりません
@@ -6571,9 +6574,11 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` の face には front、back、side のいずれかを指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
-	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体、膨張のときにマッピングされます
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体、膨張のときにマッピングされます。
 @msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨張はグラフィックを前面と背面にマッピングします。側面にはマッピングできません
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	オブジェクト {_1}: 「膨張」の背面にグラフィックをマッピングするには「両面」と「キャップ」をオンにしてください
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
@@ -10537,6 +10542,15 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Nature Icons	自然アイコン
+	Flower	花
+	Tree	木
+	Mountain	山
+	Ornamental	装飾模様
+	Scrollwork	スクロール装飾
+	Filigree Arrow	フィリグリーの矢
+	Petal Sweep	花びらの流線
+	Twin Curl	二重カール
 	Vector Packs	ベクターパック
 	Compass Rose	羅針盤のバラ
 	Botanical Sprig	植物の小枝

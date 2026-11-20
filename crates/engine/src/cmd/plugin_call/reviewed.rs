@@ -575,6 +575,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "shape.spiral",
     "shape.star",
     "shape.threePointArc",
+    "shapeBuilder.copyRegion",
     "shapeBuilder.merge",
     "shapeBuilder.regions",
     "shaper.expand",

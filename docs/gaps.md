@@ -713,7 +713,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Libraries Menu open each library in a library panel of its own (seven original libraries generated in code,
   Basic Shapes, UI Frames with default 9-slice guides on Panel, Button and Bar, Map Markers with Pin,
   Flag, Crosshair and Checkpoint, Inventory Icons with Sword, Shield, Potion, Key and Gem, Skill Icons with
-  Attack, Defend, Heal, Buff and Ult, Weather Icons with Sun, Moon, Cloud, Rain, Thunder and Snow, and Media Controls with
+  Attack, Defend, Heal, Buff and Ult, Weather Icons with Sun, Moon, Cloud, Rain, Thunder and Snow, Nature Icons with Leaf, Flower, Tree,
+  Mountain and Wave, and Media Controls with
   Play, Pause, Stop, Skip Next, Shuffle and Repeat; User Defined; Other
   Library… reads the symbols of any document VectorCraft opens); a click
   adds a symbol to the document's Symbols with its Symbol Options and the resources it uses, as one undo

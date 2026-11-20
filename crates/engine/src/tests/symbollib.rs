@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 7, "{libs:?}");
+    assert_eq!(libs.len(), 8, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -108,6 +108,10 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     );
     assert_eq!(
         (libs[6]["id"].as_str(), libs[6]["name"].as_str(), libs[6]["category"].as_str()),
+        (Some("nature-icons"), Some("Nature Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[7]["id"].as_str(), libs[7]["name"].as_str(), libs[7]["category"].as_str()),
         (Some("media-controls"), Some("Media Controls"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
@@ -247,6 +251,35 @@ fn weather_icons_library_lists_and_places() {
             Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name
         ));
     }
+}
+
+#[test]
+fn nature_icons_library_places_and_survives_save() {
+    let mut s = session();
+    let listed = run(&mut s, "symbol.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "nature-icons").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["count"].as_u64()), (Some("Nature Icons"), Some(5)));
+    let library = run(&mut s, "symbol.library", json!({"library": "nature-icons"}));
+    let names: Vec<&str> = library["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Leaf", "Flower", "Tree", "Mountain", "Wave"]);
+    for (i, name) in names.iter().enumerate() {
+        let symbol = &library["symbols"][i];
+        let size = symbol["size"].as_array().unwrap();
+        assert!(size.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && n > 0.0)), "{name}");
+        let added = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "nature-icons", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(added["added"], json!([name]));
+        let id = NodeId(added["placed"].as_u64().unwrap());
+        assert!(matches!(doc(&s).node(id).map(|n| &n.kind), Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name));
+        assert_eq!(doc(&s).symbol_nine_slice(name), None);
+    }
+    let saved = run(&mut s, "symbol.saveLibrary", json!({"names": ["Leaf", "Flower", "Tree", "Mountain", "Wave"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(reopened.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), names);
 }
 
 #[test]
