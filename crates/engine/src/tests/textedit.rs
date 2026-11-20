@@ -4129,3 +4129,34 @@ fn new_type_takes_the_normal_character_style_fill_not_the_current_fill() {
     let made = s.execute("text.create", &json!({"x": 100, "y": 400, "text": "Green", "color": "#00ff00"})).unwrap();
     assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
 }
+
+/// A client answers the question a Type tool click asks about type in a missing font through
+/// `tool.setOption {key: "missingFontEdit", value: {token, ok}}`: OK starts the edit at the next poll.
+#[test]
+fn tool_set_option_answers_the_missing_font_question() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello", "size": 20, "font": "Missing Test Family 8408"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let (a, b) = vectorcraft_text::caret_position(&vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t), 2);
+    let at = t.xf * a.midpoint(b);
+    let mut asked = vec![];
+    for k in [PointerKind::Down, PointerKind::Up] {
+        asked.extend(s.pointer(&PointerEvent::new(k, at.x + 0.1, at.y), v).unwrap());
+    }
+    let token = asked
+        .iter()
+        .find_map(|r| match r {
+            UiRequest::Dialog(k, p) if k == "missingFontEdit" => p["token"].as_u64(),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("the missing-font question: {asked:?}"));
+    assert!(!s.tool_wants_text());
+    s.set_tool_option_cmd(&json!({"key": "missingFontEdit", "value": {"token": token, "ok": true}})).unwrap();
+    s.tool_poll(v, false).unwrap();
+    assert!(s.tool_wants_text());
+    assert_eq!(s.tool_options()["editing"], json!(id.0));
+}

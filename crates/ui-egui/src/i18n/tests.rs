@@ -438,7 +438,10 @@ fn swedish_svg_filter_spelling_and_3d_labels_are_complete() {
         ("Apply SVG Filter", "Använd SVG-filter"),
         ("Check Spelling", "Kontrollera stavning"),
         ("SVG Filter", "SVG-filter"),
-        ("Graphics map onto the Plane, Extrude and Revolve object types.", "Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel."),
+        (
+            "Graphics map onto the Plane, Extrude, Revolve and Inflate object types.",
+            "Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp.",
+        ),
     ] {
         assert_eq!(sv.catalog().plain(en), Some(want), "{en}");
     }
@@ -498,6 +501,22 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Attributes Panel Options dialog's heading and field, and the error for a count out of range.
+#[test]
+fn attributes_panel_options_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Attributes Panel Options", "Number of Recent URLs:"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let range = "`count` must be a whole number from 1 to 30";
+    assert!(message_literals().contains(range));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, range), range, "{code}");
+    }
+}
+
 /// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
 /// falling back to the plain row).
 #[test]
@@ -551,6 +570,165 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
         assert_ne!(message(lang, choose), choose, "{code}");
+    }
+}
+
+/// The Nature Icons library and its symbols display in each complete UI language.
+#[test]
+fn nature_symbol_library_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for name in ["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"] {
+            assert!(lang.catalog().plain(name).is_some(), "{} is missing {name}", lang.code);
+        }
+    }
+}
+
+/// The errors of Perspective Distort and Free Distort on an image, and of the image commands that
+/// refuse a distorted image, are in every complete-message catalog.
+#[test]
+fn distorted_image_messages_are_in_complete_catalogs() {
+    let literals = message_literals();
+    for msg in [
+        "object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on",
+        "image {_1} cannot be distorted this way: its corners would not make a convex shape",
+        "image {_1} cannot be distorted this way: its corners would cross the warp's horizon",
+        "image {_1} cannot be distorted this way: its corners would be too close together for a perspective map",
+    ] {
+        assert!(literals.contains(msg), "{msg}");
+        let shown = msg.replace("{_1}", "7");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, &shown), shown, "{code}: {msg}");
+        }
+    }
+}
+
+/// View › Proof Setup › Customize's labels.
+#[test]
+fn proof_setup_dialog_labels_are_in_complete_catalogs() {
+    let labels = [
+        "Proof Setup",
+        "Device to Simulate:",
+        "Preserve CMYK Numbers",
+        "Preserve RGB Numbers",
+        "Rendering intent:",
+        "Simulate Paper Color",
+        "Simulate Black Ink",
+        "Save…",
+        "Load…",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// The PSD Import Options dialog's labels, and the warnings and errors of opening and placing a
+/// PSD or PSB file with its layers and slices: each complete catalog translates every one, keeping
+/// its numbers, and translates a reason given inside one.
+#[test]
+fn psd_import_strings_are_in_complete_catalogs() {
+    use crate::io::opened_with_notes;
+    use vectorcraft_engine::cmd::fileio::{PSD_LAYER_WARNINGS, PSD_MERGED_WARNING};
+    let labels =
+        ["Place PSD", "PSD Import Options", "Convert Layers to Objects", "Import Hidden Layers", "Flatten Layers to a Single Image", "Import Slices"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let (nested, damaged) = ("the slices' descriptor nests too deep", "the PSD file's layer records are damaged");
+    let unread_slices = "the slices can't be read (the slices' descriptor nests too deep) and were left out";
+    let unread_layers = "the layers can't be read (the PSD file's layer records are damaged): the file was placed as its merged image";
+    let merged = PSD_MERGED_WARNING.replace("{modes}", "Hue, Luminosity");
+    let (one, many) = PSD_LAYER_WARNINGS[1];
+    let (one, many) = (one.to_string(), many.replace("{n}", "3"));
+    let mut shown: Vec<String> = PSD_LAYER_WARNINGS.iter().flat_map(|(one, many)| [one.to_string(), many.replace("{n}", "3")]).collect();
+    shown.push(merged.clone());
+    shown.extend(
+        [
+            "the file is no longer loaded",
+            unread_layers,
+            "hiddenLayers applies to a PSD file placed with layers: true",
+            "importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices",
+            "layers: a linked PSD file is placed as its flat image; leave link out or give link: false",
+            unread_slices,
+            "1 slice lies outside the canvas or has no size and was left out",
+            "3 slices lie outside the canvas or have no size and were left out",
+            "1 slice would lie outside the canvas and was left out",
+            "3 slices would lie outside the canvas and were left out",
+            "the slices' descriptor holds too many values",
+            "the slices' descriptor has a version other than 16",
+            "the slices are stored in version 9, which isn't read",
+            "the file has 10001 slices, more than the 10000 read",
+            "the slices' descriptor has no list of slices",
+            "the slices' descriptor lists something other than a slice",
+            "a slice in the slices' descriptor has no bounds",
+            "a slice's bounds in the slices' descriptor aren't numbers",
+            "a text in the slices has more than the 65536 characters read",
+            nested,
+            "the slices' descriptor has a reference of an unknown kind (abcd)",
+            "the slices' descriptor has a value of an unknown type (abcd)",
+        ]
+        .map(String::from),
+    );
+    let numbers = |s: &str| {
+        let mut all = s.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).map(String::from).collect::<Vec<_>>();
+        all.sort();
+        all
+    };
+    let (note, notes) = ("Opened with {n} note: {first}", "Opened with {n} notes: {first}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in &shown {
+            let tr = message(lang, s);
+            assert_ne!(&tr, s, "{code}");
+            assert_eq!(numbers(&tr), numbers(s), "{code}: {s} -> {tr}");
+        }
+        for (s, inner) in [(unread_slices, nested), (unread_layers, damaged)] {
+            let (tr, inner_tr) = (message(lang, s), message(lang, inner));
+            assert_ne!(inner_tr, inner, "{code}: {inner}");
+            assert!(tr.contains(&inner_tr) && !tr.contains(inner), "{code}: {s} -> {tr}");
+        }
+        assert!(message(lang, &merged).contains("Hue, Luminosity"), "{code}");
+        let opened = opened_with_notes(1, &one);
+        let (forms, _) = lang.catalog().message_forms(&opened).expect("the Open heading has a row");
+        let heading = &forms[(lang.0.plural)(1).min(forms.len() - 1)];
+        assert!(heading != note && heading != notes, "{code}");
+        assert_eq!(message(lang, &opened), fmt(heading, &[("n", "1"), ("first", &message(lang, &one))]), "{code}");
+    }
+    assert_eq!(message(de(), &many), "3 Einstellungsebenen wurden nicht angewendet");
+    assert_eq!(message(de(), &opened_with_notes(1, &one)), "Mit 1 Hinweis geöffnet: 1 Einstellungsebene wurde nicht angewendet");
+    assert_eq!(
+        message(de(), unread_slices),
+        "die Slices können nicht gelesen werden (der Deskriptor der Slices ist zu tief verschachtelt) und wurden weggelassen"
+    );
+}
+
+/// Make Compound Shape's warning for a member that adds no area, which the status bar shows and
+/// the message scan doesn't read, is translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn compound_shape_no_area_warning_is_translated() {
+    let warning = vectorcraft_engine::cmd::OPEN_PATHS_ADD_NO_AREA;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, warning), warning, "{code}");
+    }
+}
+
+/// The Save PDF dialog's Save Summary… button and `ui.pdfSummary.save`'s error when no such
+/// dialog is open.
+#[test]
+fn pdf_save_summary_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain("Save Summary…").is_some(), "{} is missing Save Summary…", lang.code);
+    }
+    let closed = "the Save PDF dialog is not open";
+    assert!(message_literals().contains(closed));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, closed), closed, "{code}");
     }
 }
 
@@ -608,6 +786,127 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// The complete catalogs that lack a row for one of `names`, with the names each lacks; `shown`
+/// tells whether a catalog shows a name translated.
+fn lacking(names: &[String], shown: impl Fn(&Catalog, &str) -> bool) -> Vec<String> {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&String> = names.iter().filter(|n| !shown(lang.catalog(), n.as_str())).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    bad
+}
+
+/// Sorted, without repeats.
+fn distinct(mut names: Vec<String>) -> Vec<String> {
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// A built-in graphic style library's panel lists its styles in the UI language, so every style of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_style_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::stylelib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        vectorcraft_doc::style_libs::STYLE_LIBRARIES
+            .iter()
+            .filter_map(|b| stylelib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 92, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// The Stroke panel and the Dimension tool's Arrow Style list the built-in arrowheads by name, so
+/// each name has a row in each complete catalog: an `arrowhead` row, or a plain one. Feather needs
+/// its `arrowhead` row, since its plain row may name the Feather effect.
+#[test]
+fn built_in_arrowhead_names_are_in_complete_catalogs() {
+    use vectorcraft_doc::Arrowhead;
+    let names = distinct(Arrowhead::ALL.iter().map(|h| h.label().to_string()).collect());
+    assert_eq!(names.len(), 41, "{names:?}");
+    // Spanish's plain Target row names a destination; its arrowhead row names the shape.
+    let es = crate::i18n::Lang::from_code("es").expect("es registered");
+    assert_eq!(crate::i18n::tr_ctx(es, "arrowhead", "Target"), "Diana");
+    let bad = lacking(&names, |c, n| c.contextual("arrowhead", n).is_some() || (n != "Feather" && c.plain(n).is_some()));
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in symbol library's panel lists its symbols in the UI language, so every symbol of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_symbol_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::symbollib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        symbollib::BUILTIN
+            .iter()
+            .filter_map(|b| symbollib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 43, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in swatch, gradient or pattern library's panel lists its swatches and color groups in
+/// the UI language, so each name has a row in each complete catalog, or is a numbered name
+/// ("Warm Gray 3") whose name before the number has one. Names that are color values (`#33cc99`,
+/// `K=35`) are shown as they are.
+#[test]
+fn built_in_library_swatch_names_are_in_complete_catalogs() {
+    use vectorcraft_color::libraries::{GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
+    use vectorcraft_engine::cmd::patternlib::{self, PATTERN_LIBRARIES};
+    let mut libs: Vec<_> = SWATCH_LIBRARIES.iter().chain(GRADIENT_LIBRARIES).filter_map(|b| builtin_library(b.id)).collect();
+    libs.extend(PATTERN_LIBRARIES.iter().filter_map(|b| patternlib::library(b.id)).map(|(_, lib)| lib));
+    assert_eq!(libs.len(), SWATCH_LIBRARIES.len() + GRADIENT_LIBRARIES.len() + PATTERN_LIBRARIES.len());
+    let all = libs.iter().flat_map(|lib| lib.iter().map(|w| w.name.clone()).chain(lib.groups.iter().map(|g| g.name.clone())).collect::<Vec<_>>());
+    let names = distinct(all.filter(|n| !n.starts_with('#') && !n.starts_with("K=")).collect());
+    assert_eq!(names.len(), 384, "{names:?}");
+    let numbered = |c: &Catalog, n: &str| {
+        n.rsplit_once(' ').is_some_and(|(head, d)| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) && c.plain(head).is_some())
+    };
+    let bad = lacking(&names, |c, n| c.plain(n).is_some() || numbered(c, n));
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A numbered built-in name shows its name before the number translated and the number as it
+/// is; a name with a row of its own uses that row, and any other name comes back unchanged.
+#[test]
+fn numbered_labels_translate_the_name_before_the_number() {
+    let fr = Lang::from_code("fr").expect("fr registered");
+    assert_eq!(numbered_label(fr, "Grays"), tr(fr, "Grays"));
+    assert_ne!(tr(fr, "Grays"), "Grays");
+    assert_eq!(numbered_label(fr, "Grays 12"), format!("{} 12", tr(fr, "Grays")));
+    for kept in ["K=35", "#33cc99", "Grays x", "Grays ", "Not A Catalog Name 3"] {
+        assert_eq!(numbered_label(fr, kept), kept);
+    }
+    assert_eq!(numbered_label(Lang::EN, "Grays 12"), "Grays 12");
+}
+
+/// General › Show Tool Cards and every tool's description on its card.
+#[test]
+fn tool_card_strings_are_in_complete_catalogs() {
+    let mut bad = vec![];
+    let descriptions = vectorcraft_tools::catalog::all_tools().filter_map(|t| vectorcraft_tools::catalog::tool_description(t.id));
+    let strings: Vec<&str> = std::iter::once("Show Tool Cards").chain(descriptions).collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&&str> = strings.iter().filter(|s| lang.catalog().plain(s).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Window › Arrange's Tile layouts and the application bar's Arrange Documents button.
 #[test]
 fn tile_layout_labels_are_in_complete_catalogs() {
@@ -625,6 +924,27 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// The note the Tangent Circle tool shows on the canvas over a segment that gives no circle.
+#[test]
+fn tangent_circle_tool_note_is_in_complete_catalogs() {
+    let label = vectorcraft_tools::addons::tangent_circle::NO_CIRCLE;
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+    }
+}
+
+/// The Artboard tool's add buttons take their tooltips from the tools crate, which the `tl!` scan
+/// does not read, so each complete catalog is checked for them here.
+#[test]
+fn artboard_add_button_tooltips_are_in_complete_catalogs() {
+    use vectorcraft_tools::xform::{EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED};
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus || COMPLETE_MESSAGES.contains(&lang.code)) {
+        for label in [EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED] {
+            assert!(lang.catalog().plain(label).is_some_and(|t| !t.is_empty() && t != label), "{} is missing {label}", lang.code);
         }
     }
 }
@@ -742,11 +1062,13 @@ fn document_info_labels_are_in_complete_catalogs() {
 
 /// The values Document Info makes and shows in the interface language: the font states and
 /// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, the counted instances, rows and columns, and
-/// the transparency settings' values.
+/// values, the names of gradients named by their kind, the counted uses, instances, rows and
+/// columns, and the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
-    const VALUES: [&str; 20] = [
+    const VALUES: [&str; 22] = [
+        "unknown type",
+        "{type}; {uses}",
         "built in",
         "embedding not allowed",
         "embedding for editing",
@@ -768,7 +1090,8 @@ fn document_info_values_are_in_complete_catalogs() {
         "Diamond gradient",
         "Freeform gradient",
     ];
-    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    const COUNTED: [(&str, &str); 4] =
+        [("{n} use", "{n} uses"), ("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
     // The transparency settings' values: the grid's sizes and color presets, on and off, and the
     // built-in flattener presets.
     let transparency = ["Small", "Medium", "Large", "On", "Off", "High Resolution", "Medium Resolution", "Low Resolution"]
@@ -806,16 +1129,15 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
 }
 
 /// Each row in the `search` context, which adds a language's words to a group of words with the same
-/// meaning for the command palette, names a group and adds single words of no other group. No
-/// catalog has to have these rows.
+/// meaning for the command palette, names a group and adds single words of no other group, and no
+/// two rows of a catalog add one word to different groups. No catalog has to have these rows.
 #[test]
 fn search_rows_name_a_group_and_add_single_words() {
     let mut bad = Vec::new();
     for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
         let (entries, _) = parse_entries(l.source);
-        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT) {
-            bad.extend(crate::palette::words::row_problems(src, tr).into_iter().map(|p| format!("{}: {p}", l.code)));
-        }
+        let rows = entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT).map(|(_, src, tr)| (src.as_str(), tr.as_str()));
+        bad.extend(crate::palette::words::catalog_problems(rows).into_iter().map(|p| format!("{}: {p}", l.code)));
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
@@ -829,6 +1151,16 @@ fn painted_and_sketched_style_names_are_in_every_catalog() {
     assert_eq!(labels.len(), 8);
     for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
         for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+#[test]
+fn paper_cutout_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("paper-cutouts").expect("built in");
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())) {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -850,6 +1182,16 @@ fn eps_option_menu_names_are_in_complete_catalogs() {
         .collect();
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// HP-GL Options' Origin menu names (drawn translated by the dropdown, not through `tl!`).
+#[test]
+fn hpgl_origin_menu_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in crate::dialogs::hpgl_options::ORIGIN_NAMES {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -2058,6 +2400,7 @@ fn toggled_labels() -> Vec<String> {
         "view.outline",
         "view.edges",
         "view.cornerWidget",
+        "view.shapeWidgets",
         "view.textThreads",
         "type.hiddenCharacters",
         "view.gradientAnnotator",
@@ -2572,6 +2915,31 @@ fn messages_translate_by_template_and_their_parts() {
     assert_eq!(message(Lang::EN, nested), nested);
 }
 
+/// Spanish shows the status and error messages of the script engine, the parameter checks, the
+/// importers and the 3D effects in Spanish, with the values, names and command ids they carry kept.
+#[test]
+fn spanish_translates_engine_import_and_parameter_messages() {
+    let es = Lang::from_code("es").expect("registered");
+    for (english, spanish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` debe ser un número entero entre 2 y 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (en el desplazamiento 12)"),
+        ("unknown mode `foo` (set, add, subtract)", "modo desconocido `foo` (set, add, subtract)"),
+        (
+            "the Word document is encrypted or protected with a password; save it without one to place it",
+            "el documento de Word está cifrado o protegido con contraseña; guárdalo sin ella para colocarlo",
+        ),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objeto 7: con una profundidad de 0 el objeto tiene una sola cara: asigna sus gráficos a la parte frontal",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "no existe la punta de flecha personalizada Fin (consulta stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` debe ser un número entero entre 1 y 6"),
+        ("the rectangle or line reaches too many paths to check", "el rectángulo o la línea alcanza demasiados trazados para comprobarlos"),
+    ] {
+        assert_eq!(message(es, english), spanish);
+    }
+}
+
 /// The note `recolor.apply` and the Edit Colors commands give when they leave out locked or hidden
 /// objects is translated whole, its counts included, in every complete-message language.
 #[test]
@@ -2826,6 +3194,19 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
     }
 }
 
+/// No catalog keeps a row for `{k} has control characters{_1}`, the single message that
+/// `file.info`'s two control character refusals replaced.
+#[test]
+fn no_catalog_keeps_the_old_file_info_control_character_row() {
+    let literals = message_literals_in(&["engine"]);
+    let old = "{k} has control characters{_1}";
+    assert!(!literals.contains(old), "the engine still makes {old:?}");
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        assert!(!entries.iter().any(|(ctx, src, _)| ctx.starts_with("@msg") && src.split('|').any(|s| s == old)), "{}: {old:?}", l.code);
+    }
+}
+
 /// The warning about an SVG's variables that aren't text shows each kind VectorCraft names in the
 /// interface language and each `trait` the file names, in backticks, as the warning writes it, the
 /// entries in their order with their counts and joined as the language joins a list, in every
@@ -2888,6 +3269,44 @@ fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
     // English shows the warning as the engine wrote it.
     let english = warning("Visibility (2), `a``b (1), c` (1)");
     assert_eq!(message(Lang::EN, &english), english);
+}
+
+/// The Retype panel's labels and the errors its commands give.
+#[test]
+fn retype_panel_strings_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Retype",
+            "Find Matching Fonts",
+            "Find more font matches",
+            "Type your text to preview",
+            "Select outlined text, then Find Matching Fonts.",
+            "No font matches the selected shapes.",
+            "Shapes past the first 2,048, or more than 16 groups deep, were not compared.",
+            "Reset Retype Panel",
+            "List Matching Fonts",
+            "Retype Preview",
+        ] {
+            if lang.catalog().plain(label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in [
+            "`count` must be a whole number from 1 to 96",
+            "`size` must be small, medium or large",
+            "`text` must be a string of at most 100 characters",
+            "Retype: select outlined text (paths or compound paths)",
+        ] {
+            if message(lang, m) == m {
+                missing.push(format!("{code} @msg {m}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
 }
 
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
@@ -3180,6 +3599,31 @@ fn a_repeated_placeholder_matches_the_same_text() {
     assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
 }
 
+/// Swedish shows the status and error messages of the script engine, the parameter checks, the
+/// importers, the 3D effects and the cutting add-on in Swedish, with the values, names and command
+/// ids they carry kept.
+#[test]
+fn swedish_translates_engine_import_and_parameter_messages() {
+    let sv = Lang::from_code("sv").expect("registered");
+    for (english, swedish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` måste vara ett heltal från 2 till 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (vid position 12)"),
+        ("unknown dither `foo` (diffusion, pattern, noise or none)", "okänd dithering `foo` (diffusion, pattern, noise eller none)"),
+        ("not a DCS file", "inte en DCS-fil"),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objekt 7: med djupet 0 har objektet en enda yta: mappa dess grafik på framsidan",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "ingen anpassad pilspets Fin (se stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` måste vara ett heltal från 1 till 6"),
+        ("the rectangle or line reaches too many paths to check", "rektangeln eller linjen når för många banor för att kunna kontrolleras"),
+        ("the hem is too deep for the banner", "fållen är för djup för bannern"),
+        ("`diameter` must be from 0.1 to 2500 pt", "`diameter` måste vara från 0,1 till 2500 pt"),
+    ] {
+        assert_eq!(message(sv, english), swedish);
+    }
+}
+
 /// Of two templates that start with text, the one with the longer text before its first
 /// placeholder matches first, so a row that wraps a message takes it before a row with more text
 /// in all whose placeholder would take part of it; a quoted name may still hold a backtick.
@@ -3416,6 +3860,50 @@ fn warped_type_note_is_translated() {
     }
 }
 
+/// The notes a CDR import adds to its warnings are translated in every complete catalog.
+/// They are constants, which the scan of message literals doesn't see.
+#[test]
+fn cdr_import_notes_are_translated() {
+    let notes = [
+        "CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out",
+        "CDR fountain, pattern, texture and PostScript fills were left out",
+        "colors in CDR color models VectorCraft doesn't read were opened as black",
+        "CDR library colors that the drawing stores only by number were opened as black spot colors",
+        "CDR outline arrowheads were left out",
+        "CDR envelopes were not applied, and the shapes under them keep their outlines",
+        "CDR lenses and object transparency were not applied, and the objects they are on show opaque",
+        "parts of the drawing nested too deeply, or past the import limits, were left out",
+        "damaged parts of the drawing were left out",
+        "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
+    }
+}
+
+/// The notes a CMX import adds to its warnings are translated in every complete catalog.
+#[test]
+fn cmx_import_notes_are_translated() {
+    let notes = [
+        "CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out",
+        "CMX fills other than uniform colors were left out",
+        "colors in CMX color models VectorCraft doesn't read were opened as black",
+        "CMX library colors that the file stores only by number were opened as black spot colors",
+        "CMX outline arrowheads were left out",
+        "CMX lenses were not applied",
+        "CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
+    }
+}
+
 /// The plug-in host's status and error messages (manifests, modules, runs and the output of
 /// importers, exporters and effects) have an `@msg` row in every complete-message catalog.
 #[test]
@@ -3628,6 +4116,22 @@ fn three_d_refusals_translate_with_their_values() {
         (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
         (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
         (refuse(vectorcraft_effects::three_d_wireframe_in(None, &rect).map(drop)), "has no 3D effect", vec![]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "wavy"}))),
+            "or custom with",
+            vec!["none", "classic", "custom", "bevelProfile"],
+        ),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom"}))),
+            "the bevel's points",
+            vec!["custom", "bevelProfile"],
+        ),
+        (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"bevelName": 3}))), "must be a string", vec!["bevelName"]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom", "bevelProfile": [[0, 0]]}))),
+            "each share between",
+            vec!["bevelProfile", "[x, y]", "[0, 0]", "[1, 1]"],
+        ),
     ];
     for (e, english, _) in &errors {
         assert!(e.starts_with("invalid parameters for `effect.apply`: ") && e.contains(english), "{e}");
@@ -3647,6 +4151,28 @@ fn three_d_refusals_translate_with_their_values() {
         assert!(label != "Extrude & Bevel" && symbol.contains(&label), "{code}: the effect's name is translated: {symbol}");
     }
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
+}
+
+/// Map Graphic's refusal of Inflate's back while Both sides or Cap is off shows in every
+/// complete-message language, with the object's number as given.
+#[test]
+fn inflate_back_refusal_translates_in_every_complete_catalog() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mark = s.execute("path.create", &json!({"d": "M300 300L310 300L310 320L300 320Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M100 100L200 100L200 200L100 200Z"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.inflate", "item": null, "params": {}})).unwrap();
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id]})).unwrap_err().to_string();
+    let english = "Inflate's back takes graphics with Both sides and Cap on";
+    assert!(e.ends_with(&format!("object {id}: {english}")), "{e}");
+    assert_eq!(message(Lang::EN, &e), e);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(english) && shown.contains(&id.to_string()) && shown.contains("`threeD.mapGraphic`"), "{code}: {e} -> {shown}");
+    }
 }
 
 /// The Blob Brush's range refusals (`path.blob` `angle`, `roundness` and `fidelity`) show in every
@@ -4628,6 +5154,21 @@ fn script_errors_are_translated() {
             }
         }
     }
+}
+
+/// A message with a value kept as it is translates the words around the value and shows the value
+/// unchanged, whatever it reads like; when the words around it cannot hold its place once, the
+/// message stays English.
+#[test]
+fn a_kept_value_is_shown_as_it_is_in_a_translated_message() {
+    let de = Lang::from_code("de").expect("registered");
+    let (before, after) = ("t.js: line 1, column 1: ", " (thrown)");
+    for kept in ["invalid array length", "", "{e}", "\u{FFFC}", "a\nb", "t.js: line 1, column 1: x (thrown)"] {
+        assert_eq!(message_keeping(de, before, kept, after), format!("t.js: Zeile 1, Spalte 1: {kept} (ausgelöst)"), "{kept:?}");
+    }
+    assert_eq!(message_keeping(de, "t.js\u{FFFC}: line 1, column 1: ", "x", after), "t.js\u{FFFC}: line 1, column 1: x (thrown)");
+    assert_eq!(message_keeping(de, "no such message ", "x", ""), "no such message x");
+    assert_eq!(message_keeping(Lang::EN, before, "invalid array length", after), "t.js: line 1, column 1: invalid array length (thrown)");
 }
 
 /// The errors a script's `$` object, its `alert`, `confirm` and `prompt` dialogs, `vc.document`,
@@ -5617,6 +6158,21 @@ fn pdfx_bleed_warning_is_translated() {
     }
 }
 
+/// The warning about art that reaches the trim edge but stops short of the bleed is translated in
+/// every complete-message catalog, for one object and for more, alone and in the status bar's note.
+#[test]
+fn short_of_bleed_warning_is_translated() {
+    for n in [1, 3, 5, 21] {
+        let w = vectorcraft_engine::cmd::fileio::pdf::short_of_bleed_warning(n).expect("a warning");
+        let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+        for code in COMPLETE_MESSAGES {
+            for shown in [message(Lang::from_code(code).expect("registered"), &w), message(Lang::from_code(code).expect("registered"), &status)] {
+                assert!(!shown.contains("trim edge") && !shown.contains("short of") && shown.contains(&n.to_string()), "{code}: {shown}");
+            }
+        }
+    }
+}
+
 /// The Shape Mode commands' warning for a selected line that encloses no area, which the status bar
 /// shows and the message scan doesn't read, and Intersect's error when such a line leaves nothing,
 /// are translated in each language of [`COMPLETE_MESSAGES`].
@@ -6053,7 +6609,8 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{v}`", &["axis"]),
     ("balance must be between 0 and 100", &["balance"]),
     ("before must name a panel", &["before"]),
-    ("bevel must be none or one of {_1}", &["bevel", "none"]),
+    ("bevel custom needs {BEVEL_PROFILE}, the bevel's points", &["bevel", "custom"]),
+    ("bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}", &["bevel", "none", "custom"]),
     ("brightness must be dark|mediumDark|mediumLight|light", &["brightness", "dark", "mediumDark", "mediumLight", "light"]),
     ("clip must be true or false", &["clip"]),
     ("collapsed must be true or false", &["collapsed"]),
@@ -6302,7 +6859,7 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da",
+    "nl", "da", "id",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the

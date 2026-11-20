@@ -1455,8 +1455,16 @@ fn masked_square(layer: bool) -> (Document, NodeId, NodeId, NodeId) {
     }
 }
 
-const SELECTING: HitOptions =
-    HitOptions { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: true, scope: None };
+const SELECTING: HitOptions = HitOptions {
+    tol: 3.0,
+    outline: false,
+    path_only: false,
+    type_path_only: false,
+    skip_guides: false,
+    clip_outlines: true,
+    area_type_interior: false,
+    scope: None,
+};
 
 /// For the selection tools a clip group's clipping path is hit on its outline, within the
 /// tolerance, before the art it clips and just outside it too; inside, the art is hit.
@@ -1748,6 +1756,41 @@ fn type_path_only_picks_type_on_its_path() {
     assert_eq!(hit(Point::new(75.0, 100.0), path_only), None, "point type: past the end of its layout");
     assert_eq!(hit(Point::new(250.0, 200.5), path_only), Some((area, HitKind::Outline)), "area type: its frame");
     assert_eq!(hit(Point::new(60.0, 339.5), path_only), Some((on_path, HitKind::Outline)), "type on a path: its path");
+}
+
+/// Area type is hit on its frame's edge and where its lines are laid out, not in the empty rest of
+/// its frame: a click there reaches the art behind, in Preview and in Outline mode (#7274). The
+/// Type tool still finds the type anywhere inside its frame.
+#[test]
+fn area_type_passes_clicks_through_its_empty_frame() {
+    use crate::{CharStyle, TextKind, TextObject};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    // A filled square behind the type, its edge at x = 150 inside the frame.
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(150.0, 150.0, 350.0, 350.0)), Appearance::default_art());
+    let square_id = square.id;
+    d.insert(Some(l), 9, square).unwrap();
+    // Area type at (100, 100): a 200 × 200 frame with one 80 wide line at its top.
+    let mut area = TextObject::point(Point::new(100.0, 100.0), "Area", CharStyle { size: 20.0, ..CharStyle::default() });
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)) };
+    area.cached_bounds = Some(Rect::new(0.0, 0.0, 80.0, 24.0));
+    area.cached_baselines = vec![(Point::new(0.0, 18.0), Point::new(80.0, 18.0))];
+    let area_id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(area_id, NodeKind::Text(Box::new(area)))).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for (opt, mode) in [(HitOptions::default(), "preview"), (outline, "outline")] {
+        let hit = |p: Point| hit_test(&d, p, opt).map(|h| h.leaf);
+        assert_eq!(hit(Point::new(140.0, 110.0)), Some(area_id), "{mode}: on the line of type");
+        assert_eq!(hit(Point::new(200.0, 100.5)), Some(area_id), "{mode}: on the frame's top edge");
+        assert_eq!(hit(Point::new(299.0, 250.0)), Some(area_id), "{mode}: on the frame's right edge");
+        assert_eq!(hit(Point::new(220.0, 130.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(120.0, 250.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(150.0, 250.0)), Some(square_id), "{mode}: the square's edge behind the empty frame");
+    }
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), HitOptions::default()).map(|h| h.leaf), Some(square_id), "the square's fill");
+    // The Type tool: anywhere inside the frame.
+    let typing = HitOptions { area_type_interior: true, ..Default::default() };
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), typing).map(|h| h.leaf), Some(area_id), "type tool: inside the frame");
 }
 
 /// Type Object Selection by Path Only with the layout's baselines: every line's for point type,

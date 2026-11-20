@@ -670,6 +670,34 @@ fn area_type() -> TextObject {
 }
 
 #[test]
+fn a_wrap_object_below_every_area_type_object_makes_no_outline() {
+    use crate::{Appearance, Document, Node, NodeKind};
+    let mut d = Document::new(300.0, 300.0);
+    let l = d.layers[0].id;
+    let wrap = |d: &mut Document, r: Rect| {
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        n.extras_mut().wrap = Some(TextWrap::default());
+        n
+    };
+    // Bottom to top: a wrap object, the area type, then a wrap object.
+    let below = wrap(&mut d, Rect::new(0.0, 0.0, 250.0, 250.0));
+    d.insert(Some(l), 9, below).unwrap();
+    let id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(id, NodeKind::Text(Box::new(area_type())))).unwrap();
+    let above = wrap(&mut d, Rect::new(60.0, 40.0, 80.0, 60.0));
+    d.insert(Some(l), 9, above).unwrap();
+    wrap::OUTLINES_MADE.with(|c| c.set(0));
+    let mut sources = 0;
+    wrap_sources(&d, |_, objects, shapes| {
+        sources += 1;
+        assert_eq!((objects.len(), shapes.len()), (1, 1));
+    });
+    assert_eq!(sources, 1);
+    assert_eq!(wrap::OUTLINES_MADE.with(|c| c.get()), 1, "only the wrap object above the type is outlined");
+}
+
+#[test]
 fn area_resizes_its_frame_and_keeps_its_type() {
     let mut t = area_type();
     assert_eq!(t.bounds(), Some(Rect::new(40.0, 40.0, 160.0, 80.0)));

@@ -98,6 +98,7 @@
 	Add to Selection	加入選取範圍
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
+	Add Selected Colors	新增所選顏色
 	Additional Plug-ins Folder	額外的增效模組資料夾
 	Plug-in Instruction Budget	增效模組指令預算
 	Additional Fonts Folder	額外的字體資料夾
@@ -197,6 +198,10 @@ font-technology	Variable	可變
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三點弧形工具
+	Three-Point Arc	三點弧形
+	Arc too large	弧形過大
+	Third Point Sets Direction	第三點指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -462,7 +467,15 @@ font-technology	Variable	可變
 	Choose…	選擇…
 	Circle	圓形
 	Circle Tool	圓形工具
+	Curvature Circle Tool	曲率圓工具
+	Cusp	尖點
+	Straight segment	直線段
 	Circle too large	圓形過大
+	Show Radii	顯示半徑
+	Show Diameter	顯示直徑
+	Anchors at Standard Positions	錨點位於標準位置
+	Third Point by Dragging	拖曳放置第三點
+	Gray	灰
 	Classic Defaults	經典預設值
 	Clean Up…	清除…
 	Clear	清除
@@ -522,6 +535,11 @@ font-technology	Variable	可變
 	Color blindness – Deuteranopia-type	色盲 – 綠色盲型
 	Color blindness – Protanopia-type	色盲 – 紅色盲型
 	Color blindness – Tritanopia-type	色盲 – 藍色盲型
+	Show Color Vision Preview	顯示色覺預覽
+	Protanopia	紅色盲
+	Deuteranopia	綠色盲
+	Tritanopia	藍色盲
+	Achromatopsia	全色盲
 	Color Burn	加深顏色
 	Color conversion:	色彩轉換：
 	Color Dodge	加亮顏色
@@ -561,9 +579,17 @@ font-technology	Variable	可變
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色輪檢視
 	Box View	方塊檢視
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Document Colors	顯示文件顏色
+	Document Colors	文件顏色
+	Selection Colors	所選物件的顏色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
+	Show Harmony	顯示色彩調和
+	Harmony Rule	色彩調和規則
+	Harmony color	調和色彩
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色
@@ -604,6 +630,8 @@ font-technology	Variable	可變
 	Contextual Task Bar	快捷工作列
 	Pin Bar Position	釘選工作列位置
 	Reset Bar Position	重設工作列位置
+	Bar Actions	工作列動作
+	Reset Bar Actions	重設工作列動作
 	Resize	調整大小
 	Contrast	對比
 	Control	控制
@@ -695,6 +723,16 @@ font-technology	Variable	可變
 	Create New Swatch…	建立新色票…
 	Create New {kind} Style	建立新的{kind}樣式
 	Create Object Mosaic…	建立物件馬賽克…
+	Create Object Mosaic	建立物件馬賽克
+	Current Size:	目前大小：
+	New Size:	新大小：
+	Tile Spacing:	拼貼間距：
+	Number of Tiles:	拼貼數量：
+	Constrain Ratio:	限制比例：
+	Result:	結果：
+	Resize Using Percentages	使用百分比調整大小
+	Delete Raster	刪除點陣圖
+	Use Ratio	使用比例
 	Create Outlines	建立外框
 	Create Path	建立路徑
 	Create PDF layers from layers and sublayers	從圖層和子圖層建立 PDF 圖層
@@ -822,6 +860,7 @@ font-technology	Variable	可變
 	Duplicate Action or Action Set	製作動作或動作組複本
 	Delete the action set “{name}” and its actions?	要刪除動作組「{name}」及其中的動作嗎？
 	Delete the selected action sets and their actions?	要刪除所選動作組及其中的動作嗎？
+	Delete all action sets and their actions?	要刪除所有動作組及其中的動作嗎？
 	Delete Theme	刪除主題
 	Delete theme	刪除主題
 	Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？
@@ -966,6 +1005,8 @@ font-technology	Variable	可變
 	Duplicate	製作複本
 	Duplicate and Offset 10 pt	製作複本並位移 10 pt
 	Duplicate Artboard	製作工作區域複本
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	按一下以在這一側新增工作區域，Alt 加按一下以製作此工作區域及其圖稿的複本
+	Click to add an artboard on this side	按一下以在這一側新增工作區域
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
 	Rename Artboards	重新命名工作區域
@@ -984,10 +1025,25 @@ font-technology	Variable	可變
 	Duplicate Symbol	製作符號複本
 	Duplicate {kind} Style	製作{kind}樣式的複本
 	Dutch	荷蘭文
+	PSD Import Options	PSD 匯入選項
+	Place PSD	置入 PSD
+	Convert Layers to Objects	將圖層轉換為物件
+	Import Hidden Layers	匯入隱藏圖層
+	Flatten Layers to a Single Image	將圖層平面化為單一影像
+	Import Slices	匯入切片
 	DXF Import Options	DXF 匯入選項
 	DXF Info	DXF 資訊
 	DXF Options	DXF 選項
 	DXF Options Dialog	DXF 選項對話框
+	HP-GL Options	HP-GL 選項
+	HP-GL Options Dialog	HP-GL 選項對話框
+	Curve Tolerance:	曲線容許度：
+	Origin:	原點：
+	Pens:	筆：
+	One Pen per Color	每種顏色一支筆
+	Pen Table	筆表
+	Draw the Nearest Path Next	接著繪製最近的路徑
+	Draw Inner Paths First	先繪製內部路徑
 	e.g. 1-3, 5	例如 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	每頁會以文件的點陣效果解析度列印為單一影像。
 	Earth Tones	大地色系
@@ -1228,6 +1284,15 @@ font-technology	Variable	可變
 	Shading Color	網底顏色
 	Black Overprint	黑色疊印
 	Draw Hidden Faces	繪製隱藏表面
+	Map Art…	貼圖…
+	Map Art	貼圖
+	First Surface	第一個表面
+	Previous Surface	上一個表面
+	Next Surface	下一個表面
+	Last Surface	最後一個表面
+	Scale to Fit	縮放以符合
+	Shade Artwork	為圖稿加上網底
+	Invisible Geometry	隱形幾何形狀
 	Eyedropper	滴管
 	Sample Color from Screen	從螢幕取樣顏色
 	This system has no screen color sampler	此系統沒有螢幕取色工具
@@ -1295,8 +1360,35 @@ font-technology	Variable	可變
 	Fill: click for swatches, Shift-click for the color mixer	填色：按一下開啟色票，按住 Shift 按一下開啟混色器
 	Find	尋找
 	Find and Replace…	尋找與取代…
+	Find and Replace	尋找與取代
+	Find:	尋找：
+	Replace With:	取代為：
+	Replace & Find	取代並尋找
+	Replace All	全部取代
+	Match Case	大小寫須相符
+	Find Whole Word	尋找全字
+	Search Backwards	反向搜尋
+	Check Hidden Layers	檢查隱藏圖層
+	Check Locked Layers	檢查鎖定圖層
+@msg	No matches found	找不到相符項目
+@msg	Matches replaced: {n}	已取代的相符項目：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	物件 {_3} 的位元組 {_1}..{_2} 處沒有 `find` 的相符項目
 	Find Font	尋找字體
 	Find Font…	尋找字體…
+	Retype	重新鍵入
+	Find Matching Fonts	尋找相符字體
+	Find more font matches	尋找更多相符字體
+	Type your text to preview	輸入要預覽的文字
+	Select outlined text, then Find Matching Fonts.	選取已轉為外框的文字，然後尋找相符字體。
+	No font matches the selected shapes.	沒有字體與所選形狀相符。
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	前 2,048 個之後的形狀，以及巢狀超過 16 層群組的形狀，未進行比較。
+	Reset Retype Panel	重設重新鍵入面板
+	List Matching Fonts	列出相符字體
+	Retype Preview	重新鍵入面板預覽
+@msg	`count` must be a whole number from 1 to 96	`count` 必須是介於 1 到 96 的整數
+@msg	`size` must be small, medium or large	`size` 必須是 small、medium 或 large
+@msg	`text` must be a string of at most 100 characters	`text` 必須是不超過 100 個字元的字串
+@msg	Retype: select outlined text (paths or compound paths)	重新鍵入：選取已轉為外框的文字（路徑或複合路徑）
 	Find Next	尋找下一個
 	Find Objects	尋找物件
 	Compare with Image	與影像比較
@@ -1329,6 +1421,7 @@ font-technology	Variable	可變
 	Fit to Selected Art	符合選取的圖稿
 	Flag…	旗形…
 	Flare	光暈
+	Edit Flare	編輯光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
 	Halo	光暈
@@ -1344,6 +1437,17 @@ font-technology	Variable	可變
 	Largest:	最大：
 	Direction:	方向：
 	Symbolism Tools Options	符號工具選項
+	Tool:	工具：
+	Symbol Set Density	符號組密度
+	Symbol Sprayer Options	符號噴灑器選項
+	Scrunch:	緊縮：
+	Spin:	旋轉：
+	Screen:	濾色：
+	Stain:	染色：
+	Symbol Sizer Options	符號縮放器選項
+	Proportional Resizing	等比例縮放
+	Resizing Affects Density	縮放影響密度
+	Show Brush Size and Intensity	顯示筆刷大小和強度
 	Symbol Set Density:	符號組密度：
 	Flat Image	平面影像
 	Flatness:	平滑度：
@@ -1609,6 +1713,10 @@ file-filter	Templates	範本
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
+	Set As Base Color	設為基色
+	Select Shade	選取色調
+	Add New Color	新增顏色
+	Set Current Color As Base Color	將目前顏色設為基色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -1625,6 +1733,8 @@ file-filter	Templates	範本
 	More Options	更多選項
 	Show Properties Panel	顯示內容面板
 	Hide Corner Widget	隱藏轉角 Widget
+	Hide Shape Widgets	隱藏形狀 Widget
+	Show Shape Widgets	顯示形狀 Widget
 	Hide Corner Widget for angles greater than	角度大於以下數值時隱藏轉角 Widget
 	Hide Edges	隱藏邊緣
 	Hide Gradient Annotator	隱藏漸層註解者
@@ -1811,6 +1921,10 @@ file-filter	Templates	範本
 	Rename Preset	重新命名預設集
 	Save Image Trace Preset	儲存影像描圖預設集
 	Delete Image Trace Preset	刪除影像描圖預設集
+	Tracing Presets…	描圖預設集…
+	Import Image Trace Presets	匯入影像描圖預設集
+	Export Image Trace Presets	匯出影像描圖預設集
+	Replace the saved presets that have these names?	要取代具有這些名稱的已儲存預設集嗎？
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -1964,10 +2078,12 @@ file-filter	Templates	範本
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` 和 `Edge` 是即時上色群組中表面和邊緣的名稱：請為路徑另取名稱
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	即時上色只接受路徑和複合路徑：請先將文字、影像和其他物件轉換為路徑
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
+@msg	Fill Area: no enclosed area under the pointer	填滿區域：指標下方沒有封閉區域
 @msg	Shape Builder: select all paths you want to merge	形狀建立：請選取要合併的所有路徑
 @msg	Shape Builder: select paths or compound paths	形狀建立：請選取路徑或複合路徑
 @msg	image data `{_1}` is missing	找不到影像資料 `{_1}`
@@ -2010,6 +2126,9 @@ file-filter	Templates	範本
 @msg	no such anchor	沒有這個錨點
 @msg	no such segment	沒有這個線段
 @msg	no such subpath	沒有這個子路徑
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必須是最多 10000 個片段的清單
+@msg	give either `start` for a new path or `id`, not both	請為新路徑指定 `start`，或指定 `id`，不可同時指定
+@msg	`subpath` and `keep` need `id`	`subpath` 與 `keep` 需要 `id`
 @msg	object {id} is not a path	物件 {id} 不是路徑
 @msg	object {id} is not a selected top-level object	物件 {id} 不是已選取的最上層物件
 @msg	nothing to redo	沒有可重做的動作
@@ -2117,7 +2236,16 @@ file-filter	Templates	範本
 @msg	no anchor points selected	未選取錨點
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` 必須是兩組或三組數字 [x, y]
 @msg	direct-select two or three anchor points, or give `points`	請以直接選取方式選取兩個或三個錨點，或提供 `points`
+@msg	the path is straight there, so no circle matches its curvature	路徑在該處是直的，因此沒有圓與其曲率相符
+@msg	the path has a cusp there, so it has no single curvature	路徑在該處有尖點，因此沒有唯一的曲率
+@msg	the path has a corner there, so it has no single curvature	路徑在該處有角點，因此沒有唯一的曲率
+@msg	a guide has no curvature circle	參考線沒有曲率圓
+@msg	the circle that matches the path there would reach past the canvas	在該處與路徑曲率相符的圓會超出畫布
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
+@msg	`at` must be "start" or "end"	`at` 必須是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 與 `toward` 必須且只能指定一個
+@msg	no arc fits these points: two are the same or all three lie on one line	沒有弧形符合這些點：有兩點相同，或三點共線
+@msg	give `at` only with `toward`	`at` 只能與 `toward` 一起指定
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
@@ -2125,9 +2253,11 @@ file-filter	Templates	範本
 @msg	no bounds	沒有邊界
 @msg	no current layer	沒有目前圖層
 @msg	no key object	沒有關鍵物件
+@msg	Align to Key Object isn't available with the Artboard tool	使用工作區域工具時無法對齊關鍵物件
 @msg	no previous transform	沒有上一次的變形
 @msg	nothing to align	沒有可對齊的內容
 @msg	select a clip group	請選取剪裁群組
+@msg	select a flare	請選取光暈
 @msg	select two or more objects to distribute	請選取兩個以上要均分的物件
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis 必須是 "vertical"、"horizontal" 或以度為單位的角度，而非 `{v}`
 @msg	give horizontal or vertical	請提供 horizontal 或 vertical
@@ -2162,6 +2292,7 @@ file-filter	Templates	範本
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 產生了空的結果：直線或其他開放路徑不圍成區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
+@msg	art painted with `{name}` can't be its tile	以 `{name}` 上色的圖稿不能作為它的拼貼
 @msg	not in pattern editing mode	不在圖樣編輯模式中
 @msg	finish editing the pattern first	請先完成圖樣編輯
 @msg	pattern missing	找不到圖樣
@@ -2224,6 +2355,7 @@ file-filter	Templates	範本
 @msg	select a stroke with a variable width	請選取寬度可變的筆畫
 @msg	the selected stroke's profile is already listed as {_1}	所選筆畫的描述檔已列為 {_1}
 @msg	a graphic style named `{to}` already exists	名為 `{to}` 的繪圖樣式已存在
+@msg	a swatch or color group named `{name}` already exists	名為 `{name}` 的色票或顏色群組已存在
 @msg	no graphic style `{name}`	沒有繪圖樣式 `{name}`
 @msg	node {_1} is not text	節點 {_1} 不是文字
 @msg	node {_1} is on a locked artboard	節點 {_1} 位於已鎖定的工作區域上
@@ -2538,6 +2670,7 @@ file-filter	Templates	範本
 @msg	onto must name a panel floating in another group	onto 必須指定浮動在另一個群組中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必須指定浮動在另一個群組中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
+@msg	give only one of `index`, `indices` and `t`	`index`、`indices` 和 `t` 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
 @msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小
@@ -2554,6 +2687,7 @@ file-filter	Templates	範本
 @msg	no file manager here	此處沒有檔案管理員
 @msg	no revert command	沒有回復指令
 @msg	the Save PDF dialog didn't open	「儲存 PDF」對話框未開啟
+@msg	the Save PDF dialog is not open	「儲存 PDF」對話框沒有開啟
 @msg	the document has never been saved	文件從未儲存過
 @msg	the export returned unreadable data	匯出傳回了無法讀取的資料
 @msg	{status} ({e})	{status} ({e})
@@ -2566,6 +2700,8 @@ file-filter	Templates	範本
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必須是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必須是 none、oklch 或 hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -2597,6 +2733,10 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	物件 {_1} 是經過透視扭曲或隨意扭曲的影像，此指令無法用於它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	無法這樣扭曲影像 {_1}：其角點不會構成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	無法這樣扭曲影像 {_1}：其角點會越過扭曲的地平線
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	無法這樣扭曲影像 {_1}：其角點會太靠近，無法進行透視對應
 @msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
@@ -2853,6 +2993,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} 個物件到達裁切線，但未延伸到出血區域
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -2986,6 +3127,26 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the HEIC or HEIF file can't be read	無法讀取 HEIC 或 HEIF 檔案
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	無法開啟 CDR {version} 繪圖：VectorCraft 讀取的版本為 1 到 27
+@msg	this CDR drawing can't be read ({why})	無法讀取此 CDR 繪圖 ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CDR 文字、點陣圖、漸變、輪廓圖、筆刷筆觸和其他物件
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	已略過 CDR 的漸層、圖樣、材質和 PostScript 填色
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft 無法讀取的 CDR 色彩模式中的顏色已以黑色開啟
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	繪圖僅以編號儲存的 CDR 色彩庫顏色已以黑色特別色開啟
+@msg	CDR outline arrowheads were left out	已略過 CDR 外框線的箭頭
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	未套用 CDR 封套，其中的形狀保留原有外框
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	未套用 CDR 透鏡和物件透明度，相關物件顯示為不透明
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略過繪圖中巢狀過深或超出讀入限制的部分
+@msg	damaged parts of the drawing were left out	已略過繪圖中損壞的部分
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CDR 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外
+@msg	this CMX file can't be read ({why})	無法讀取此 CMX 檔案 ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CMX 文字、影像、矩形、橢圓、剪裁路徑和其他物件
+@msg	CMX fills other than uniform colors were left out	已略過 CMX 中均勻色彩以外的填色
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	VectorCraft 無法讀取的 CMX 色彩模式中的顏色已以黑色開啟
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	檔案僅以編號儲存的 CMX 色彩庫顏色已以黑色特別色開啟
+@msg	CMX outline arrowheads were left out	已略過 CMX 外框線的箭頭
+@msg	CMX lenses were not applied	未套用 CMX 透鏡
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CMX 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
 @msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})
@@ -2993,6 +3154,49 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the PSD file's layer groups are nested too deeply	PSD 檔案的圖層群組巢狀過深
 @msg	a layer of the PSD file is too large to read	PSD 檔案的某個圖層過大，無法讀取
 @msg	the PSD file's layers take more memory to read than allowed	讀取 PSD 檔案的圖層所需記憶體超過允許值
+@msg	the file is no longer loaded	檔案已不再載入
+@msg	the layers can't be read ({e}): the file was placed as its merged image	無法讀取圖層 ({e})：檔案已以合併影像置入
+@msg	1 type layer came in as pixels: the text isn't editable	1 個文字圖層以像素形式匯入：文字無法編輯
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} 個文字圖層以像素形式匯入：文字無法編輯
+@msg	1 adjustment layer was not applied	未套用 1 個調整圖層
+@msg	{n} adjustment layers were not applied	未套用 {n} 個調整圖層
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	未繪製 1 個填色圖層（漸層或圖樣填色、無法讀取的顏色，或不儲存像素的形狀）
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	未繪製 {n} 個填色圖層（漸層或圖樣填色、無法讀取的顏色，或不儲存像素的形狀）
+@msg	the layer effects of 1 layer weren't drawn	未繪製 1 個圖層的圖層效果
+@msg	the layer effects of {n} layers weren't drawn	未繪製 {n} 個圖層的圖層效果
+@msg	the vector masks of 1 layer weren't applied	未套用 1 個圖層的向量遮色片
+@msg	the vector masks of {n} layers weren't applied	未套用 {n} 個圖層的向量遮色片
+@msg	the knockout of 1 layer wasn't applied	未套用 1 個圖層的去底色
+@msg	the knockout of {n} layers wasn't applied	未套用 {n} 個圖層的去底色
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	已略過 1 個圖層（隱藏的圖層以及剪裁至這些圖層的圖層）
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	已略過 {n} 個圖層（隱藏的圖層以及剪裁至這些圖層的圖層）
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	已略過 1 個剪裁至未繪製填色圖層的圖層
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	已略過 {n} 個剪裁至未繪製填色圖層的圖層
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	使用 VectorCraft 沒有的混合模式 ({modes}) 的圖層已與其下方的圖層合併
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 個使用 VectorCraft 沒有的混合模式的圖層以正常模式匯入：合併所需的記憶體超出允許範圍
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} 個使用 VectorCraft 沒有的混合模式的圖層以正常模式匯入：合併所需的記憶體超出允許範圍
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 個剪裁至下方圖層的圖層未經剪裁匯入：合併所需的記憶體超出允許範圍
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} 個剪裁至下方圖層的圖層未經剪裁匯入：合併所需的記憶體超出允許範圍
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers 適用於以 layers: true 置入的 PSD 檔案
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices：連結的 PSD 檔案會以平面影像置入；指定 link: false 即可連同切片一起嵌入
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers：連結的 PSD 檔案會以平面影像置入；請不要指定 link，或指定 link: false
+@msg	the slices can't be read ({e}) and were left out	無法讀取切片 ({e})，已略過
+@msg	1 slice lies outside the canvas or has no size and was left out	1 個切片位於畫布之外或沒有尺寸，已略過
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} 個切片位於畫布之外或沒有尺寸，已略過
+@msg	1 slice would lie outside the canvas and was left out	1 個切片會位於畫布之外，已略過
+@msg	{n} slices would lie outside the canvas and were left out	{n} 個切片會位於畫布之外，已略過
+@msg	the slices' descriptor holds too many values	切片的描述元包含的值過多
+@msg	the slices' descriptor has a version other than 16	切片的描述元版本不是 16
+@msg	the slices are stored in version {v}, which isn't read	切片以不讀取的版本 {v} 儲存
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	檔案有 {count} 個切片，超過讀取的 {MAX_SLICES} 個
+@msg	the slices' descriptor has no list of slices	切片的描述元沒有切片清單
+@msg	the slices' descriptor lists something other than a slice	切片的描述元列出了切片以外的內容
+@msg	a slice in the slices' descriptor has no bounds	切片描述元中的一個切片沒有邊界
+@msg	a slice's bounds in the slices' descriptor aren't numbers	切片描述元中一個切片的邊界不是數字
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	切片中的一段文字超過讀取的 {MAX_TEXT} 個字元
+@msg	the slices' descriptor nests too deep	切片的描述元巢狀過深
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	切片的描述元含有未知種類的參照 ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	切片的描述元含有未知類型的值 ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	無法讀取圖層 ({e})：檔案已以合併影像開啟
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
 @msg	the PSD file is cut short	PSD 檔案不完整
@@ -3158,6 +3362,11 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Knife	美工刀
 	Knockout Group	去底群組
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑桿
+	HSL Sliders	HSL 滑桿
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容納的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
 	Lab Spot Colors:	Lab 特別色：
 	Lab Values	Lab 值
 	Landscape	橫向
@@ -3269,6 +3478,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	List Workspaces	列出工作區
 	Live Paint	即時上色
 	Live Paint Bucket	即時上色油漆桶
+	Fill Area	填滿區域
+	Fill Area Tool	填滿區域工具
 	Live Paint Bucket (Stroke)	即時上色油漆桶 (筆畫)
 	Live Paint Info	即時上色資訊
 	Live Paint Selection Tool	即時上色選取工具
@@ -3410,6 +3621,15 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
+	Kinsoku Shori Settings…	Kinsoku 處理設定…
+	Kinsoku Shori Settings	Kinsoku 處理設定
+	Kinsoku Sets	Kinsoku 集清單
+	Kinsoku Set Base	Kinsoku 集基準
+	Based on:	依據：
+	Cannot Start Line	不能位於行首
+	Cannot End Line	不能位於行尾
+	Hanging Punctuation	懸掛標點
+	Inseparable Characters	不可分割字元
 	Push In First	先推入
 	Push Out First	先推出
 	Push Out Only	只推出
@@ -3454,6 +3674,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	no such spine point	沒有這個脊線點
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
 @msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
+@msg	`link` and `independent` cannot both be true	`link` 和 `independent` 不能同時為 true
+@msg	`link` places a handle: give `handle`	`link` 用於放置控制把手：請提供 `handle`
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -3478,6 +3700,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Navigate	導覽
 	Navigator	導覽器
 	Navigator Panel Options	導覽器面板選項
+	Attributes Panel Options	屬性面板選項
+	Number of Recent URLs:	最近使用的網址數量：
+@msg	`count` must be a whole number from 1 to 30	`count` 必須是 1 到 30 之間的整數
 	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
@@ -3540,6 +3765,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pressure	壓力
 	Tilt	傾斜
 	Bearing	方位
+	Stylus Wheel	光筆滾輪
 	Shape:	形狀：
 	Bristle Length:	鬃毛長度：
 	Bristle Density:	鬃毛密度：
@@ -3570,6 +3796,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	embedding for preview and print	允許內嵌以供預覽和列印
 	embedding allowed	允許內嵌
 	{file}; {embedding}	{file}；{embedding}
+	unknown type	未知類型
+	{type}; {uses}	{type}；{uses}
+@plural	{n} use|{n} uses	使用 {n} 次
 	substituted: shown in {family} {style} ({detail})	已替代：以 {family} {style} 顯示 ({detail})
 	missing: shown in {family} {style}	遺失：以 {family} {style} 顯示
 	missing	遺失
@@ -3843,6 +4072,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Overprint and Transparency Flattener Options	疊印與透明度平面化選項
 	Custom…	自訂…
 	Custom Transparency Flattener Options	自訂透明度平面化選項
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF 預設集會保留平面化預設集，但不保留「自訂…」設定。
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 檔案會將點陣化區域剪裁至其區域，「疊印」決定是否保留疊印。
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS 沒有 Alpha 透明度，「疊印」決定是否保留疊印。
 	Overprint Black…	疊印黑色…
 	Overprint Fill	疊印填色
@@ -3917,6 +4148,15 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	PDF/A files carry their own output intent.	PDF/A 檔案自帶輸出目的。
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a 檔案為 CMYK：所有顏色都會轉換至目的地 (留空：輸出目的的 CMYK 描述檔)，且不加標記。
 	Pen Tool	筆型工具
+	Quick Pen Tool	快速筆型工具
+	Quick Pen	快速筆型
+	Quick Pen Toolbar	快速筆型工具列
+	Continuous Arc	連續弧線
+	Sharp Corner Arc	尖角弧線
+	Flip Arc	翻轉弧線
+	Hide Toolbar	隱藏工具列
+	Pin Toolbar Position	釘選工具列位置
+	Reset Toolbar Position	重設工具列位置
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片
@@ -3961,6 +4201,7 @@ diagnostics	ui	介面
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
 	Replace Actions…	取代動作…
+	Clear Actions	清除動作
 	Reset Actions	重設動作
 	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
 	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
@@ -3996,6 +4237,11 @@ diagnostics	ui	介面
 	Preserve Alpha Transparency	保留 Alpha 透明度
 	Preserve Appearance and Overprints	保留外觀與疊印
 	Preserve CMYK Numbers	保留 CMYK 數值
+	Preserve RGB Numbers	保留 RGB 數值
+	Device to Simulate:	要模擬的裝置：
+	Simulate Paper Color	模擬紙張顏色
+	Simulate Black Ink	模擬黑色油墨
+	Load…	載入…
 	Preserve Editing Capabilities	保留編輯功能
 	Preserve editing capabilities	保留編輯功能
 	Preserve Lightness	保留亮度
@@ -4361,11 +4607,19 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit Arrowheads	編輯箭頭
 	Edit Arrowheads…	編輯箭頭…
 	Reload Arrowheads	重新載入箭頭
+	Bevels	斜角清單
+	Edit Bevels	編輯斜角
+	Edit Bevels…	編輯斜角…
+	{name} (document)	{name} (文件)
+	Reload Bevels	重新載入斜角
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
+	Undo Changes	復原變更
+	Redo Changes	重做變更
+@msg	Recolor Artwork is not open	「重新上色圖稿」未開啟
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
 	Prominent Colors	主要顏色
 	Save All Colors	儲存所有顏色
@@ -4409,6 +4663,8 @@ digits	Malayalam	馬來亞拉姆數字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某個鍵會執行鍵盤快速鍵中其按住欄的工具或命令；快速按下則執行其一般快速鍵。
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某個鍵多少秒後，執行其按住快速鍵而不是一般快速鍵。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
@@ -4418,6 +4674,7 @@ digits	Malayalam	馬來亞拉姆數字
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	即時矩形的屬性中為四個角顯示一個圓角半徑欄位；關閉時，每個角都有自己的欄位。
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	變形面板中的編輯所變形的內容：物件、其圖樣拼貼或兩者；預設依照變形圖樣拼貼。
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	選取一個符號實體時，變形面板使用符號的註冊點作為參考點。
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	繪製矩形、橢圓形、多邊形、星形或直線時，如果變形面板已關閉，就會開啟它。
 	Darkens the canvas outside the artboards while the Artboard tool is active.	使用工作區域工具時調暗工作區域以外的畫布。
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	調暗工作區域外的區域開啟時，用工作區域工具拖曳期間工作區域以外的區域保持變暗。
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	按一下時，指標需距離物件、錨點或控制把手多少像素以內才能選取它。
@@ -4490,8 +4747,73 @@ digits	Malayalam	馬來亞拉姆數字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指標或拖曳的點在螢幕上需離圖稿多近，智慧型參考線才會靠齊；此距離在任何縮放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	靠齊線段的端點或從中心繪製的圓，使其與附近的曲線相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
+	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處加上斷字連字號，沒有連字號則從不斷字，與語言和大小寫無關。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及透過「確定」設定新資料夾時載入，安全模式除外；要求權限的增效模組只在您授予權限後載入。網頁版不載入任何增效模組。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	「大」為濾鏡或指令增效模組的每次執行提供至少 2.5 億個指令，時間限制不變；「正常」保留增效模組自己的預算。即時效果、轉存器和匯入器保留各自的預算。
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效模組的物件濾鏡每次執行可使用的指令數；「大」比「正常」允許更多，60 秒的時間限制不變。重型濾鏡保留自己的預算。
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
+	How light or dark the interface is.	介面的明暗程度。
+	The set of colors the interface is drawn in.	繪製介面所用的一組顏色。
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	處於開啟、選取或焦點狀態的控制項顏色；當配色方案有自己的強調色時，此選單會呈灰色。
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	工作區域周圍畫布的顏色；「符合使用者介面亮度」會依亮度取得顏色。外框檢視一律將其顯示為白色。
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	從圖示開啟的面板會在按下 Esc 或按一下其外部時關閉；關閉此選項時，面板會保持開啟，直到按一下某個圖示。
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具列中將每個工具組的名稱顯示在其工具上方；關閉此選項時，各組依序排列，中間沒有任何內容。
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	從現在起，開啟或新增的文件會以分頁開啟；關閉此選項時，每份文件會在浮動視窗中開啟。已開啟的文件保持原位。
+	Makes the document tabs taller and their names larger.	讓文件頁籤更高，頁籤上的名稱更大。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 變數優先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列或 VECTORCRAFT_TITLEBAR 變數選擇了標題列。
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或縮小介面；在相同縮放比例下，畫布上的圖稿保持原有大小。
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 繪製的工具指標會隨介面縮放一起變大變小；關閉此選項時，指標保持原有大小。
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有開啟此選項時，動畫縮放才會起作用；關閉此選項時，動畫縮放會顯示為灰色，縮放不帶動畫。
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滾輪縮放時會平滑過渡，縮放工具在你向側邊拖曳或按住不放時進行縮放；關閉此選項時，縮放工具會縮放到你拖曳過的區域。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	從下次啟動起，桌面版透過這類圖形處理器顯示畫布；圖稿一律在 CPU 上繪製。「自動」在 Windows 和 macOS 上優先使用內建圖形處理器。網頁版不使用此選項。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	從下次啟動起，在圖形驅動程式允許時，視窗顯示每一影格而不等待顯示器重新整理，最多每秒 240 影格。
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	從下次啟動起，桌面版使用這類圖形處理器繪製；「自動」優先使用驅動顯示器的圖形處理器。網頁版不使用此選項。
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	從下次啟動起，視窗不等待顯示器重新整理就顯示畫面，每秒最多 240 格；關閉時由顯示器決定畫面的節奏。啟動時設定的呈現模式優先。
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每份文件保留的最大復原步驟數；調低後，按一下「確定」時會刪除最早的步驟。步驟佔用過多記憶體時也可能更早被刪除。
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖曳時顯示圖稿的變化；關閉此選項時，由外框跟隨拖曳，放開後圖稿才改變。尺標參考線在拖曳時總是跟著移動。
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	繪製圖稿的工作執行緒數；-1 使用比 VectorCraft 可用核心數少一個的執行緒，最多 8 個，0 則不使用。網頁版始終不使用。
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	從下次啟動起，在 Wayland 桌面上，X11 (XWayland) 會透過 XWayland 開啟視窗；其他選項只在連接了筆時才這樣做。
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	從下次啟動起，桌面版不等待顯示器重新整理即顯示影格，每秒最多 240 格；關閉此選項時，由顯示器控制影格的節奏。
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	較大的預算將物件濾鏡每次執行的基礎指令數提高到五倍，每個輸入位元組的額外配額不變；重型濾鏡、即時效果、匯出器和匯入器保留各自的限制。
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	在系統尚未進行轉換時，將畫布上的圖稿和工作區域轉換為顯示器的色彩描述檔；關閉此選項時，畫布以 sRGB 繪製。
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	在桌面版中，儲存到檔案時會在背景寫入，您可以繼續編輯；關閉此選項時，需等到寫入完成。
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	在桌面版中，匯出到檔案和封裝會在背景寫入，您可以繼續編輯（3D 匯出除外）；關閉此選項時，需等它們完成。
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	每隔幾分鐘，為自上次副本以來有未儲存變更的每份文件保留一份復原副本；關閉此選項時，不再定時製作副本。
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	開啟「自動儲存復原資料」時，兩份復原副本之間相隔的分鐘數。
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	在桌面版中，存放復原副本的資料夾；留空則使用 VectorCraft 自己的資料夾。網頁版將它們存放在瀏覽器中。
+	No timed recovery copies are made of documents with more than 20,000 objects.	物件超過 20,000 個的文件不會定時製作復原副本。
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	「開啟最近使用的檔案」和首頁畫面最多列出這麼多最近的檔案；設為 0 時不列出，但 VectorCraft 仍會記住最多 30 個。
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	開啟文件時，顯示已儲存預視的連結 EPS 影像會保留該預視，而不重新讀取 EPS 檔案；已變更的檔案仍依「更新連結」處理。
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素預視中，影像以平滑方式繪製；關閉此選項時，像素邊緣清晰銳利。像素預視以外，影像一律平滑顯示。
+	PDF Text	PDF 文字
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開啟或嵌入的 PDF 中的文字會以可編輯文字匯入，或以外框匯入，在沒有其字體的電腦上看起來也相同。
+	Linked pages show the file's own text.	連結的頁面顯示檔案本身的文字。
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	連結的檔案變更時，「自動」會重新讀取，「修改時詢問」會先詢問您，「手動」則保持不變並在狀態列顯示提示。
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，「從範本新增…」和「另存範本…」開啟時所在的資料夾；留空則使用文件資料夾中的 VectorCraft Templates。
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	「編輯原稿」以系統中該類型的預設應用程式開啟連結的檔案；關閉此選項時，若已安裝 PhotoCraft，連結的點陣影像會在 PhotoCraft 中開啟。
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	由舊版 VectorCraft 儲存的檔案開啟時名稱後會加上 [Converted]，「儲存」會詢問儲存位置；關閉此選項時，「儲存」會取代該檔案。
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	除非儲存時另有指定，VectorCraft 檔案和範本以壓縮形式儲存，因此較小；為無法開啟壓縮檔的版本儲存時不壓縮。
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	複製和剪下也會將圖稿的 SVG 程式碼提供給其他應用程式；在桌面版中，圖稿內嵌的影像超過 1 MiB 時，程式碼不會以文字複製。
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	在 Windows 上，複製和剪下也會將圖稿的 PDF 提供給其他應用程式；其他平台尚不複製 PDF。
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 會儲存此選項，但複製和剪下尚未使用舊版向量剪貼簿格式。
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	舊版向量剪貼簿的「保留路徑」或「保留外觀與疊印」；VectorCraft 會儲存所選項目，但尚未使用。
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	將從 VectorCraft 文字物件複製的文字貼到文字物件時，「保留格式」保留其樣式，「保留純文字」則使用貼上位置的樣式。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	「將所有黑色顯示為濃黑」在畫布上將純 CMYK 黑色（僅 100% 黑色油墨）顯示為 RGB 黑色；「精確顯示所有黑色」則透過工作 CMYK 色彩空間轉換。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	「以濃黑輸出所有黑色」在 RGB 和灰階點陣匯出和「以點陣圖列印」中將純 CMYK 黑色繪製為 RGB 黑色；不改變向量匯出、CMYK JPEG、TIFF 和 PSD 以及其他列印。
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	在觸控螢幕上切換至觸控工作區；關閉此選項或觸控螢幕不再可用時，返回切換前的工作區。
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	在畫布上雙指輕點會復原，在觸控工作區中則在選取工具和繪圖工具之間切換；三指輕點會重做。兩者在簡報模式下均無作用。
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	當文件設定的語言為英文：美國且 [正常字元樣式] 未設定語言時，新文字使用此語言；文件中已有的文字保留自己的語言。
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與大小寫無關；韓文單字不加連字號，印度語言的單字不會在字元叢集內部斷開。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件
@@ -4595,6 +4917,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Save Document Preset	儲存文件預設集
 	Preset {number}	預設集 {number}
 	Save Preset…	儲存預設集…
+	Save Summary…	儲存摘要…
 	Save Print Preset	儲存列印預設集
 	Save Recovery Data	儲存救援資料
 	Save Save for Web Preset	儲存「儲存為網頁用」預設集
@@ -4733,6 +5056,8 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
+	Clear Recent Commands	清除最近使用的指令
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
@@ -4872,6 +5197,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Brush Size	顯示筆刷大小
 	Show Center	顯示中心點
 	Show Code	顯示程式碼
+	Show in Browser	在瀏覽器中顯示
 	Show Color Groups	顯示顏色群組
 	Show Color Swatches	顯示顏色色票
 	Show Corner Widget	顯示轉角 Widget
@@ -4900,6 +5226,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Modified	顯示已修改
 	Show Note	顯示註解
 	Show Options	顯示選項
+	Show on Shape Creation	建立形狀時顯示
 	Show Recent Colors	顯示最近使用的顏色
 	Toggle RGB Percent	切換 RGB 百分比顯示
 	Show Original Path	顯示原始路徑
@@ -4927,6 +5254,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Thumbnails	顯示縮圖
 	Show Tile Edge	顯示拼貼邊緣
 	Show Tints/Shades	顯示淺色調/深色調
+	Show Tool Cards	顯示工具卡片
 	Show Tool Tips	顯示工具提示
 	Show Transparency Grid	顯示透明度格點
 	Show Video Rulers	顯示視訊尺標
@@ -5012,6 +5340,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Outlines	外框
 	Outlines with Source Image	外框（含來源影像）
 	Source Image	來源影像
+	Split View	分割檢視
+	Divider	分隔線
 	Press and hold to view the source image	按住以檢視來源影像
 	Image Trace View	影像描圖檢視
 	Snap Options	靠齊選項
@@ -5469,6 +5799,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Unembed…	取消嵌入…
 	Ungroup	解散群組
 	Ungroup Color Group	解散顏色群組
+	Color Group Options	顏色群組選項
+	Color Group Options…	顏色群組選項…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5971,6 +6303,25 @@ axis	Both	兩者
 	Preserve Embedded Profiles	保留內嵌描述檔
 	Convert to Working Space	轉換為工作空間
 	Preserve Numbers	保留數值
+	Profile Mismatches:	描述檔不符：
+	Ask When Opening	開啟時詢問
+	Ask When Pasting	貼上時詢問
+	Missing Profiles:	遺失的描述檔：
+	Embedded Profile Mismatch	內嵌描述檔不符
+	Missing Profile	遺失描述檔
+	Paste Profile Mismatch	貼上時描述檔不符
+	“{name}” is not tagged with a {model} profile.	「{name}」沒有 {model} 描述檔。
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	「{name}」的 {model} 描述檔為「{profile}」，不是 {model} 工作空間「{working}」。
+	Use the embedded profile	使用內嵌描述檔
+	Convert the colors to the working space	將色彩轉換為工作空間
+	Discard the embedded profile	捨棄內嵌描述檔
+	Leave as is	保持原狀
+	Assign the working space	指定工作空間
+	Assign profile:	指定描述檔：
+	Preserve the color numbers	保留色彩數值
+	Convert to keep the colors' appearance	轉換以保持色彩外觀
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` 只能與 `{key}`: "assign" 一起提供
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	貼上的色彩來自 {model} 描述檔為「{from}」的文件；此文件的描述檔為「{to}」。
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…
@@ -6242,7 +6593,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
-@msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必須是 none、{_1} 其中之一，或帶有 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，也就是斜角的點
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必須是字串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必須是 2 到 {most} 個 [x, y] 點，每個比例介於 0 和 1 之間，從 [0, 0]（端面的邊緣）到 [1, 1]（側壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}無法從符號「{symbol}」的實例產生實體：該符號的圖稿無法使用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪裁路徑過於複雜，無法用來剪裁圖稿
@@ -6268,9 +6622,11 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必須是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
-	Graphics map onto the Plane, Extrude and Revolve object types.	圖形會對應到「平面」、「突出」與「迴轉」物件類型。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型。
 @msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨脹會將圖形對應到正面和背面，不會對應到側面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	物件 {_1}：只有開啟「雙面」和「封口」後，膨脹的背面才能對應圖形
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
@@ -6476,6 +6832,9 @@ lighting	Light	光源
 	Continue in Background	在背景繼續
 	Cancel Export	取消匯出
 @msg	Export cancelled	已取消匯出
+	Cancel Save	取消儲存
+@plural	{n} more save waiting|{n} more saves waiting	另有 {n} 個儲存等待中
+@msg	Save canceled	已取消儲存
 # Paragraph panel menu › Justification…
 	Desired	所需
 	Word Spacing:	字間距：
@@ -6869,6 +7228,10 @@ axis	Y Axis	Y 軸
 	Create New Action	建立新動作
 	Play Action	播放動作
 	Action Set:	動作組：
+	Choose Align To at playback	播放時選擇對齊目標
+	Align steps use the key object, key anchor or key guide when one is set.	設定了關鍵物件、關鍵錨點或關鍵參考線時，對齊步驟使用它。
+	With one whole object selected and no key, they use the artboard.	只選取一個完整物件且未設定關鍵項時，使用工作區域。
+	Otherwise they use the selection.	否則使用選取範圍。
 	Function Key:	功能鍵：
 	Record	錄製
 	Create New Set	建立新組
@@ -6900,6 +7263,8 @@ axis	Y Axis	Y 軸
 	Checkpoint	檢查點
 	Inventory Icons	物品欄圖示
 	Skill Icons	技能圖示
+	Weather Icons	天氣圖示
+	Media Controls	媒體控制
 	Attack	攻擊
 	Defend	防禦
 	Heal	治療
@@ -7005,6 +7370,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	匯流排
 	Terminal Nodes	端子節點
 
+# Original arrow art brushes.
+	Arrows	箭頭筆刷
+	Solid Arrow	實心箭頭
+	Open Arrow	空心箭頭
+	Double Arrow	雙向箭頭
+	Chevron Arrow	人字紋箭頭
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪
@@ -7021,6 +7393,261 @@ axis	Y Axis	Y 軸
 	Stars	星形
 	Triangles	三角形
 	Sparkles	閃光
+	Warm Gray	暖灰
+	Cool Gray	冷灰
+	Neutrals	中性色
+	Ivory	象牙白
+	Linen	亞麻
+	Oat	燕麥
+	Greige	灰米色
+	Stone	石色
+	Taupe	灰褐
+	Slate	石板灰
+	Clay	陶土
+	Terracotta	赤陶
+	Ochre	赭石
+	Umber	棕土
+	Sand	沙色
+	Olive	橄欖
+	Moss	苔蘚
+	Rosy	玫瑰調
+	Neutral	中性
+	Golden	金黃
+	Pastel	粉彩
+	Pastel Red	粉彩紅
+	Pastel Orange	粉彩橙
+	Pastel Amber	粉彩琥珀
+	Pastel Yellow	粉彩黃
+	Pastel Lime	粉彩萊姆
+	Pastel Green	粉彩綠
+	Pastel Teal	粉彩藍綠
+	Pastel Cyan	粉彩青
+	Pastel Azure	粉彩天藍
+	Pastel Blue	粉彩藍
+	Pastel Violet	粉彩紫羅蘭
+	Pastel Magenta	粉彩洋紅
+	Soft Red	柔和紅
+	Soft Orange	柔和橙
+	Soft Amber	柔和琥珀
+	Soft Yellow	柔和黃
+	Soft Lime	柔和萊姆
+	Soft Green	柔和綠
+	Soft Teal	柔和藍綠
+	Soft Cyan	柔和青
+	Soft Azure	柔和天藍
+	Soft Blue	柔和藍
+	Soft Violet	柔和紫羅蘭
+	Soft Magenta	柔和洋紅
+	Vivid Red	鮮豔紅
+	Vivid Orange	鮮豔橙
+	Vivid Amber	鮮豔琥珀
+	Vivid Yellow	鮮豔黃
+	Vivid Lime	鮮豔萊姆
+	Vivid Green	鮮豔綠
+	Vivid Teal	鮮豔藍綠
+	Vivid Cyan	鮮豔青
+	Vivid Azure	鮮豔天藍
+	Vivid Blue	鮮豔藍
+	Vivid Violet	鮮豔紫羅蘭
+	Vivid Magenta	鮮豔洋紅
+	Deep	深色
+	Deep Red	深紅
+	Deep Orange	深橙
+	Deep Amber	深琥珀
+	Deep Yellow	深黃
+	Deep Lime	深萊姆
+	Deep Green	深綠
+	Deep Teal	深藍綠
+	Deep Cyan	深青
+	Deep Azure	深天藍
+	Deep Blue	深藍
+	Deep Violet	深紫羅蘭
+	Deep Magenta	深洋紅
+	Gold	金
+	Silver	銀
+	Bronze	青銅
+	Copper	銅
+	Brass	黃銅
+	Rose Gold	玫瑰金
+	Gunmetal	槍灰
+	Platinum	白金
+	Pewter	錫鑞
+	Ember	餘燼
+	Lagoon	潟湖
+	Dusk	黃昏
+	Clay to Teal	陶土到藍綠
+	Plum to Olive	梅紫到橄欖
+	Complementary Coral	珊瑚色，互補色
+	Split Complementary Coral	珊瑚色，分割互補色
+	Analogous Coral	珊瑚色，類似色
+	Triad Coral	珊瑚色，三色組
+	Tetrad Coral	珊瑚色，四色組
+	Pentagram Coral	珊瑚色，五角星
+	Complementary Teal	藍綠，互補色
+	Split Complementary Teal	藍綠，分割互補色
+	Analogous Teal	藍綠，類似色
+	Triad Teal	藍綠，三色組
+	Tetrad Teal	藍綠，四色組
+	Pentagram Teal	藍綠，五角星
+	Soft Spectrum	柔和光譜
+	Red to Amber	紅到琥珀
+	Orange to Yellow	橙到黃
+	Amber to Lime	琥珀到萊姆
+	Yellow to Green	黃到綠
+	Lime to Teal	萊姆到藍綠
+	Green to Cyan	綠到青
+	Teal to Azure	藍綠到天藍
+	Cyan to Blue	青到藍
+	Azure to Violet	天藍到紫羅蘭
+	Blue to Magenta	藍到洋紅
+	Violet to Red	紫羅蘭到紅
+	Magenta to Orange	洋紅到橙
+	Dawn	黎明
+	Noon	正午
+	Sunset	日落
+	Night	夜晚
+	Overcast	陰天
+	White to Black	白到黑
+	Light Grays	淺灰
+	Dark Grays	深灰
+	Warm Grays	暖灰系
+	Cool Grays	冷灰系
+	Fade to Transparent	漸隱到透明
+	White Fade	白色漸隱
+	Vignette	暈影
+	Mist	薄霧
+	Petal	花瓣
+	Fern	蕨
+	Smoke	煙
+	Honey	蜂蜜
+	Seafoam	海沫
+	Lavender	薰衣草
+	Driftwood	漂流木
+	Ink Wash	水墨
+	Tide	潮汐
+	Bloom	綻放
+	Dew	露珠
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	稜鏡紗
+	Opal Ribbon	蛋白石緞帶
+	Pearl Flash	珍珠閃光
+	Aurora Foil	極光箔
+	Iris Sheen	虹彩光澤
+	Frost Spectrum	霜之光譜
+	Silver Tide	銀潮
+	Rose Quartz Gleam	粉晶微光
+	Moonstone Shift	月光石流光
+	Violet Edge	紫羅蘭邊
+	Mint Halo	薄荷光暈
+	Amber Corona	琥珀日冕
+	Polar Glint	極地閃爍
+	Pastel Orbit	粉彩軌道
+	Coral and Navy	珊瑚色與海軍藍
+	Plum and Lime	梅紫與萊姆
+	Teal and Gold	藍綠與金
+	Indigo and Peach	靛藍與桃色
+	Forest and Rose	森林與玫瑰
+	Red Glow	紅色光暈
+	Orange Glow	橙色光暈
+	Amber Glow	琥珀光暈
+	Yellow Glow	黃色光暈
+	Lime Glow	萊姆光暈
+	Green Glow	綠色光暈
+	Teal Glow	藍綠光暈
+	Cyan Glow	青色光暈
+	Azure Glow	天藍光暈
+	Blue Glow	藍色光暈
+	Violet Glow	紫羅蘭光暈
+	Magenta Glow	洋紅光暈
+	Polka Dots	圓點
+	Vertical Stripes	直條紋
+	Horizontal Stripes	橫條紋
+	Diagonal Stripes	斜條紋
+	Checkerboard	棋盤格
+	Diamonds	菱形
+	Crosses	十字
+	Coarse Grit	粗顆粒
+	Stipple	點畫
+	Scratches	刮痕
+	Sparse Flecks	稀疏斑點
+	Dense Flecks	密集斑點
+	Sine Bands	正弦帶
+	Ripple Lines	漣漪線
+	Interference Rings	干涉環
+	Offset Rings	錯位環
+	Warped Checks	扭曲方格
+	Pinched Stripes	收縮條紋
+	Chevron Pulse	人字脈衝
+	Radiating Lenses	放射透鏡
+	Soft Shadow	柔和陰影
+	Hard Shadow	硬陰影
+	Lifted Card	浮起卡片
+	Neon Tube	霓虹燈管
+	Inner Light	內光
+	Feathered	羽化
+	Haze	霧靄
+	Double Rule	雙線
+	Triple Rule	三線
+	Dashed Border	虛線邊框
+	Dotted Border	點線邊框
+	Offset Keyline	位移輪廓線
+	Inset Keyline	內縮輪廓線
+	Outside Stroke	外側筆畫
+	Pointer	指標
+	Highlighter	螢光筆
+	Sketchy Line	草圖線
+	Scribble Fill	塗鴉填色
+	Wobble	搖晃
+	Zig Zag Edge	鋸齒邊
+	Wavy Edge	波浪邊
+	Puffy	鼓起
+	Starburst	星爆
+	Glossy	光澤
+	Brushed Metal	拉絲金屬
+	Spotlight	聚光燈
+	Sunset Band	日落條帶
+	Sea Glass	海玻璃
+	Pearl	珍珠
+	Chrome Rim	鍍鉻邊
+	Glow Orb	發光球
+	Pill Badge	膠囊徽章
+	Round Badge	圓形徽章
+	Flag Wave	飄揚的旗幟
+	Bulge	凸起
+	Twisted	扭轉
+	Echo	回聲
+	Spiral Copies	螺旋副本
+	Multiply Tint	色彩增值色調
+	Darken Veil	變暗薄紗
+	Ghosted	半透明
+	Two Tone	雙色調
+	Overlay Glaze	覆蓋釉
+	Screen Light	濾色光
+	Soft Light Wash	柔光暈染
+	Cyan Neon	青色霓虹
+	Magenta Laser	洋紅雷射
+	Amber Tube	琥珀燈管
+	Electric Lime	電光萊姆
+	Pulse Violet	脈衝紫
+	Cobalt Phosphor	鈷藍螢光
+	Burst	爆發
+	Rounded Square	圓角正方形
+	Sun	太陽
+	Moon	月亮
+	Cloud	雲
+	Rain	雨
+	Thunder	雷
+	Snow	雪
+	Play	播放
+	Pause	暫停
+	Skip Next	跳到下一個
+	Shuffle	隨機播放
+	Bar	長條
+	Hexagon	六邊形
+	Spectrum	光譜
+	Triangle	三角
+	Vivid	鮮豔
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -7125,6 +7752,36 @@ anchor	Points:	點：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是顏色調整
 @msg	missing `effect`	未提供 `effect`
 @msg	`params` must be an object	`params` 必須是物件
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圓形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭頭 (空心)
+	Barbed	倒鉤
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭頭 (左)
+	Half Arrow (right)	半箭頭 (右)
+	Double Bar	雙長條
+	Dot on Bar	長條上的圓點
+	Chevron	人字形
+	Plus	加號
+	Hexagon (open)	六邊形 (空心)
+	Tag	標籤
+	Tag (open)	標籤 (空心)
+	Half Circle	半圓
+	Drop	水滴
+	Slash	斜線
+	Double Slash	雙斜線
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括號
+	Fork	叉形
+	Leaf	葉形
+	Kite	風箏形
+	Triangle to Bar	三角至長條
+	Oval	橢圓
+	Line Arrow	線條箭頭
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路徑精確工具
 	Anchor Eraser Brush	錨點橡皮擦筆刷
@@ -7415,6 +8072,7 @@ breakText	Glyphs	字符
 	Remove Strokes	移除筆畫
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
+	Replace Pattern Art	取代圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫
@@ -7447,10 +8105,18 @@ breakText	Glyphs	字符
 	Smooth Bridge…	平滑橋接…
 	Smooth Bridge	平滑橋接
 	Keep Originals	保留原始物件
-@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	select two or more circles to bridge	請選取兩個或更多要橋接的圓形
 @msg	one circle is inside the other	一個圓形位於另一個圓形內
 @msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
 @msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
+	Constant Gap	固定間隙
+	Reach:	範圍：
+@msg	the circles are too far apart for this gap: raise the gap	就此間隙而言，兩個圓形相距太遠：請增加間隙
+@msg	the circles are too far apart for this gap	就此間隙而言，兩個圓形相距太遠
+@msg	no two circles are within reach: raise the reach	範圍內沒有任何兩個圓形：請增加範圍
+@msg	select at most 2000 circles to bridge	最多選取 2000 個圓形進行橋接
+@msg	that makes too many bridges (at most 8000): lower the reach	這會產生過多橋接（最多 8000 個）：請減少範圍
+@msg	the bridged circles are too complex to unite	橋接的圓形過於複雜，無法合併
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切線…
 	Common Tangents	公切線
@@ -7474,6 +8140,8 @@ breakText	Glyphs	字符
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	相切圓…
 	Tangent Circle	相切圓
+	Tangent Circle Tool	相切圓工具
+	No tangent circle here	此處沒有相切圓
 	Circle:	圓：
 @msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
 @msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
@@ -7489,6 +8157,16 @@ breakText	Glyphs	字符
 @msg	`circle` is past the last circle found ({found})	`circle` 超出了找到的最後一個圓（{found}）
 @msg	object {value} is not a path or compound path	物件 {value} 不是路徑或複合路徑
 @msg	these shapes are too small to measure	這些形狀太小，無法測量
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	新增外接矩形
+	Add Bounding Circle	新增外接圓形
+	Add Bounding Rectangle…	新增外接矩形…
+	Add Bounding Circle…	新增外接圓形…
+	One per Object	每個物件一個
+@msg	nothing to enclose	沒有可包圍的內容
+@msg	`offset` must be 0 or more	`offset` 必須大於或等於 0
+@msg	the shape would have no size	形狀將沒有大小
+@msg	the shape would reach past the edge of the canvas	形狀會超出畫布邊緣
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	文件工具
 	Save a Timestamped Copy	儲存附時間戳記的拷貝
@@ -9442,6 +10120,7 @@ breakText	Glyphs	字符
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	工作區域無法容納於畫布：請減少工作區域、縮小間距或縮小尺寸
 @msg	the character's size can't be measured	無法測量字元的大小
 @msg	the compound shape is too complex to expand	複合形狀過於複雜，無法展開
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直線或其他不圍成區域的開放路徑不會為複合形狀增加任何區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	the container of the listed objects is gone	所列物件的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	複本 `{user_id}` 無法讀取為資料庫
 @msg	the copy would leave the canvas	複本會超出畫布
@@ -9708,7 +10387,6 @@ breakText	Glyphs	字符
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 檔案沒有透明度，而檔案中會有 {what}：請先將它平面化 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	無法開啟 {kind} 影像 (請參閱 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不是選項之一
-@msg	{k} has control characters{_1}	{k} 含有控制字元{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 過長 (最多 {MAX_TEXT} 個字元)
 @msg	{k} must be > 0	{k} 必須 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必須是數字 (pt) 或 "210 mm" 這類長度
@@ -9783,8 +10461,105 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Nature Icons	自然圖示
+	Flower	花朵
+	Tree	樹木
+	Mountain	山脈
+	Ornamental	裝飾紋樣
+	Scrollwork	卷飾
+	Filigree Arrow	花絲箭頭
+	Petal Sweep	花瓣曲線
+	Twin Curl	雙重卷飾
+	Vector Packs	向量筆刷包
+	Compass Rose	羅盤玫瑰
+	Botanical Sprig	植物枝條
+	Facet Diamond	切面鑽石
+	Tide Crest	浪尖
+	Leaf Vine	葉藤
+	Blossom Chain	花鏈
+	Pennant Garland	旗幟花環
+	Lantern String	燈籠串
+	Orbit Lines	軌道線
+	Petal Garland	花瓣花環
+	Lattice Braid	格紋編織
+	Facet Sweep	切面筆觸
+	Artistic Brushes	藝術筆刷
+	Paint	繪畫
+	Flat Sweep	平刷
+	Dry Drag	乾拖
+	Loaded Stroke	厚塗筆觸
+	Fan Sweep	扇形筆觸
+	Engraving	雕刻
+	Fine Hatching	細線排線
+	Dense Hatching	密集排線
+	Tapered Hatching	漸細排線
+	Broken Hatching	斷續排線
+	Image Brush	影像筆刷
+	Soft Bloom	柔和花朵
+	Halftone Field	半色調區域
+	Solar Grain	太陽顆粒
+	Color Flecks	彩色斑點
+	Fine Stipple	細密點描
+	Dense Stipple	濃密點描
+	Soft Stipple	柔和點描
+	Bold Stipple	粗重點描
+	Paper Cutouts	剪紙
+	Coral Layers	珊瑚色圖層
+	Mint Layers	薄荷色圖層
+	Midnight Layers	午夜色圖層
+	Sunflower Sheet	向日葵紙片
+	Rose Layers	玫瑰色圖層
+	Monochrome Stack	單色疊層
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	以卡片取代提示，顯示工具列工具及其按鍵的作用；需要開啟顯示工具提示。
+	Selects whole objects and groups to move, resize or rotate them.	選取整個物件和群組，以移動、縮放或旋轉它們。
+	Selects anchor points and path segments to reshape a path.	選取錨點和路徑區段，以改變路徑的形狀。
+	Draws paths point by point, with straight segments and smooth curves.	逐點繪製路徑，包括直線區段和平滑曲線。
+	Draws smooth curves through the points you click.	繪製通過所按各點的平滑曲線。
+	Adds text at a point, or in a frame you drag.	在某一點或拖曳出的框架中加入文字。
+	Draws rectangles and squares.	繪製矩形和正方形。
+	Draws rectangles with rounded corners.	繪製圓角矩形。
+	Draws ellipses and circles.	繪製橢圓形和圓形。
+	Draws polygons with sides of equal length.	繪製各邊等長的多邊形。
+	Draws stars.	繪製星形。
+	Turns objects around a reference point.	繞著參考點旋轉物件。
+	Flips objects across an axis through a reference point.	沿通過參考點的軸鏡射物件。
+	Resizes objects from a reference point.	從參考點縮放物件。
+	Slants objects from a reference point.	從參考點傾斜物件。
+	Moves the view of the document.	移動文件的檢視。
+	Magnifies or reduces the view.	放大或縮小檢視。
+	Copies the color and other attributes of one object to the selection.	將一個物件的顏色和其他屬性複製到選取的物件。
+	Sets the direction and length of a gradient.	設定漸層的方向和長度。
+	Creates, selects and resizes artboards.	建立、選取工作區域並調整其大小。
+	Changes the width of a stroke along its length.	沿筆畫的長度改變其寬度。
+	Bends art by dragging pins placed on it.	拖曳放在圖稿上的圖釘來彎曲圖稿。
+	Pushes the outlines of paths in the direction you drag.	沿拖曳方向推動路徑的輪廓。
+	Twists the outlines of paths into swirls.	將路徑的輪廓扭轉成漩渦。
+	Pulls the outlines of paths in toward the brush.	將路徑的輪廓向筆刷收縮。
+	Pushes the outlines of paths out from the brush.	將路徑的輪廓從筆刷向外膨脹。
+	Adds curved details along the outlines of paths.	沿路徑的輪廓加入弧形細節。
+	Adds spiky details along the outlines of paths.	沿路徑的輪廓加入尖刺細節。
+	Adds wrinkles along the outlines of paths.	沿路徑的輪廓加入皺褶。
+	Moves, copies and resizes objects on the perspective grid.	在透視格點上移動、複製和縮放物件。
+	Makes a series of steps between two or more objects.	在兩個或多個物件之間產生一系列步驟。
+	Places dimension lines that show measured lengths.	放置顯示測量長度的尺寸線。
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快速鍵
+	Hold Shortcut Delay	按住快速鍵延遲
+	How hold shortcuts work	按住快速鍵的運作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	按一下後按下要為此按住的按鍵 (Esc 取消)。按住該按鍵會執行此項；短按會執行該按鍵本身的快速鍵。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按按鍵會執行它的快速鍵。按住按鍵達延遲時間，則改為執行其「按住」欄中的工具或命令。按住快速鍵是字母、數字或標點符號按鍵，可單獨使用或搭配 Shift。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快速鍵是可輸入字元的按鍵，可單獨使用或搭配 Shift ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作為按住快速鍵：請使用字母、數字或標點符號按鍵
+	Dashed Arrow	虛線箭頭
 	Pressure Sensitive	壓感筆刷
 	Flex Ribbon	柔韌色帶
 	Pulse Stroke	脈動筆觸
 	Round Flow	圓頭流線
 	Chisel Flow	斜頭流線
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	編輯原稿所用應用程式：
+file-filter	Applications	應用程式
