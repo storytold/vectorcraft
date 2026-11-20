@@ -6,11 +6,14 @@
 //! pointer; a click inside selected art applies the gradient from that point.
 //!
 //! The annotator is a bar from a round start handle to a square end handle. Drag the start handle
-//! (or the bar) to move the gradient, the end handle to change its length and angle, and just past
-//! the end to rotate it. A vector drawn on the art, a click that applies one, and the dragged
-//! handles snap as drawn points do (the anchors and paths of the art, and with Snap to Glyph the
-//! guides of live type); Shift keeps the dragged end or handle at 45° steps from the Constrain Angle
-//! preference, snapping along that step. Colour stops sit under the bar: click the bar to add
+//! (or the bar) to move the gradient, the end handle to change its length, and just past the end
+//! to rotate it. The dragged end stays on the bar's line, never nearer the start than
+//! `MIN_LENGTH`; Alt-drag the end handle to change the length and angle together. A vector drawn
+//! on the art, a click that applies one, and the dragged handles snap as drawn points do (the
+//! anchors and paths of the art, and with Snap to Glyph the guides of live type; the end handle
+//! without Alt only onto points on the bar's line); Shift keeps the end of a drawn vector, the
+//! Alt-dragged end handle or the start handle at 45° steps from the Constrain Angle preference,
+//! snapping along that step. Colour stops sit under the bar: click the bar to add
 //! one, drag one to move it (Alt drags a copy), drag it off the bar to delete it, and drag a
 //! diamond above the bar to move a midpoint. Double-clicking a stop opens its popover. The
 //! selected stop (`gradient.selectStop`) is shared with the Gradient and Color panels: Delete or
@@ -54,6 +57,9 @@ const LIGHT: [u8; 3] = [0xf0, 0xf0, 0xf0];
 // Annotator layout and hit radii, in screen pixels.
 /// Start and end handles.
 const HANDLE: f64 = 5.0;
+/// The end handle dragged without Alt stays at least this far from the start (or at the vector's
+/// own length when that is shorter).
+const MIN_LENGTH: f64 = 2.0 * HANDLE;
 /// The rotate zone reaches this far past the end handle.
 const ROTATE: f64 = 14.0;
 /// Stop chips sit this far below the bar.
@@ -335,6 +341,19 @@ fn run_ticks(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
         .collect()
 }
 
+/// Where the end handle dragged to `p` lands when only the length changes: `p` projected onto the
+/// line of `geom`'s vector, on the side of its end and no nearer the start than `min` (or the
+/// vector's own length when that is shorter). None for a vector of no length.
+fn along_bar(geom: &GradientGeom, p: Point, min: f64) -> Option<Point> {
+    let v = geom.end - geom.start;
+    let len = v.hypot();
+    if len < 1e-12 {
+        return None;
+    }
+    let u = v / len;
+    Some(geom.start + u * (p - geom.start).dot(u).max(min.min(len)))
+}
+
 /// The vector a click applies to `id`: its current gradient's, else the default fit on its box.
 fn click_vector(cx: &ToolContext, id: NodeId) -> Option<Vec2> {
     let stroke = !cx.fill_active;
@@ -444,7 +463,24 @@ impl GradientTool {
                 let start = place(geom.start, geom.start + (p - g.at));
                 ("paint.setGradientGeom", Self::geom_params(cx, start, start + (geom.end - geom.start)))
             }
-            Grab::End(geom) => ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p))),
+            // Alt (or a vector of no length, which has no direction to keep) moves the end freely.
+            Grab::End(geom) if mods.alt || geom.length() < 1e-12 => {
+                ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p)))
+            }
+            Grab::End(geom) => {
+                // Only the length changes: the end slides along the bar's line. It snaps only to a
+                // target on that line; elsewhere it follows the pointer, with no guides.
+                let min = cx.tol(MIN_LENGTH);
+                let q = snap.drag(cx, p, Some(&Leave::segment(cx, geom.start, false)));
+                let end = match along_bar(geom, q, min) {
+                    Some(e) if e.distance(q) <= cx.tol(0.5) => e,
+                    _ => {
+                        snap.clear();
+                        along_bar(geom, p, min).unwrap_or(geom.end)
+                    }
+                };
+                ("paint.setGradientGeom", Self::geom_params(cx, geom.start, end))
+            }
             Grab::Rotate { geom, from } => {
                 let dir = (Affine::rotate(-from) * (p - geom.start).to_point()).to_vec2();
                 let dir = if mods.shift { constrain(dir) } else { dir };

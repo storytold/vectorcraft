@@ -11,20 +11,31 @@ pub(crate) fn checker_texture(
     setup: &vectorcraft_doc::DocSetup,
     display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
 ) -> (egui::TextureHandle, f32) {
-    let colors = setup.grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
     // A tile of its own with a display profile, so a preview drawn in sRGB beside the canvas
     // doesn't make the canvas's tile again each frame.
     let id = egui::Id::unique("transparency-grid-tile").with(display.is_some());
+    (checker_tile(ctx, setup.grid_colors, display, id), setup.grid_size.cell())
+}
+
+/// The transparency grid's 2 × 2-cell tile in the colors `grid_colors` (the first in the top-left
+/// and bottom-right cells), converted into the display profile `display` when there is one, and
+/// cached under `id` until the colors change.
+pub(crate) fn checker_tile(
+    ctx: &egui::Context,
+    grid_colors: [vectorcraft_color::Color; 2],
+    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+    id: egui::Id,
+) -> egui::TextureHandle {
+    let colors = grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
     let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);
-    let tex = cached.map(|(_, t)| t).unwrap_or_else(|| {
+    cached.map(|(_, t)| t).unwrap_or_else(|| {
         let [a, b] = colors;
         let img = egui::ColorImage::new([2, 2], vec![a, b, b, a]);
         let opts = egui::TextureOptions { wrap_mode: egui::TextureWrapMode::Repeat, ..egui::TextureOptions::NEAREST };
         let t = ctx.load_texture(TRANSPARENCY_GRID, img, opts);
         ctx.data_mut(|d| d.insert_temp(id, (colors, t.clone())));
         t
-    });
-    (tex, setup.grid_size.cell())
+    })
 }
 
 /// Name of the transparency grid's texture.
@@ -211,7 +222,14 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         if resp.clicked_by(egui::PointerButton::Primary) {
             ui.data_mut(|d| d.insert_temp(last_click, now));
         }
-        if resp.double_clicked_by(egui::PointerButton::Primary)
+        // Trim View hides the guides (#8363): a guide made now could not be seen, so none is.
+        let trim_view = app.ui.view.trim_view;
+        let refuse = |app: &mut VectorcraftApp| app.status(crate::menus::TRIM_VIEW_HIDES.to_string());
+        if trim_view && first_here && resp.double_clicked_by(egui::PointerButton::Primary) {
+            refuse(app);
+        }
+        if !trim_view
+            && resp.double_clicked_by(egui::PointerButton::Primary)
             && first_here
             && let Some(p) = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()))
         {
@@ -242,12 +260,22 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         } else {
             continue;
         };
-        let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()));
-        let on_canvas = p.is_some_and(|p| canvas.contains(p));
-        if on_canvas {
-            // The new guide shows even if guides were hidden.
-            app.ui.view.guides = true;
+        // A drag Trim View is on for at any point makes no guide, so none previews, even when
+        // Trim View is turned off again before the release: the whole gesture is cancelled and
+        // stays so until the button is released.
+        let cancel = egui::Id::unique(if vertical { "ruler-left-trim-cancel" } else { "ruler-top-trim-cancel" });
+        if resp.drag_started() {
+            ui.data_mut(|d| d.remove::<bool>(cancel));
         }
+        if trim_view && ui.data(|d| d.get_temp::<bool>(cancel).is_none()) {
+            refuse(app);
+            ui.data_mut(|d| d.insert_temp(cancel, true));
+        }
+        let cancelled = ui.data(|d| d.get_temp::<bool>(cancel).is_some());
+        if cancelled && kind == PointerKind::Up {
+            ui.data_mut(|d| d.remove::<bool>(cancel));
+        }
+        let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()));
         let ev = PointerEvent {
             kind,
             pos: p.map_or(Point::ZERO, |p| xf.to_doc(p)),
@@ -256,6 +284,21 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
             pressure: 1.0,
             pen: None,
         };
+        if cancelled {
+            // A guide already dragged when Trim View turned on ends as a release off the canvas
+            // does: no guide, no undo step.
+            if app.session.ruler_guide_dragging()
+                && let Err(e) = app.session.ruler_guide(vertical, &PointerEvent { kind: PointerKind::Up, ..ev }, false, app.view_info())
+            {
+                app.status(e.to_string());
+            }
+            continue;
+        }
+        let on_canvas = p.is_some_and(|p| canvas.contains(p));
+        if on_canvas {
+            // The new guide shows even if guides were hidden.
+            app.ui.view.guides = true;
+        }
         if let Err(e) = app.session.ruler_guide(vertical, &ev, on_canvas, app.view_info()) {
             app.status(e.to_string());
         }
@@ -277,11 +320,14 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
     let drag_id = ruler_origin_drag_id();
     let uid = app.session.active().map(|d| d.uid);
     if corner.drag_started_by(egui::PointerButton::Primary) {
-        ui.data_mut(|d| d.insert_temp(drag_id, (uid, false)));
+        ui.data_mut(|d| d.insert_temp(drag_id, OriginDrag { doc: uid, cancelled: false, trim_view: app.ui.view.trim_view }));
     }
     let mut preview = None;
-    if let Some((started_in, mut cancelled)) = ui.data(|d| d.get_temp::<(Option<u64>, bool)>(drag_id)) {
-        cancelled |= started_in != uid || ui.input(|i| !i.focused || i.key_pressed(egui::Key::Escape));
+    if let Some(OriginDrag { doc: started_in, mut cancelled, trim_view }) = ui.data(|d| d.get_temp::<OriginDrag>(drag_id)) {
+        // Trim View turned on or off during the drag: the snap targets gathered at its start
+        // hold the ruler guides, or leave them out, as they no longer show (#8363), so the origin
+        // could snap to a guide nobody sees. The drag is cancelled as for hidden rulers.
+        cancelled |= started_in != uid || trim_view != app.ui.view.trim_view || ui.input(|i| !i.focused || i.key_pressed(egui::Key::Escape));
         let pointer =
             corner.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos())).filter(|p| canvas.contains(*p)).map(|p| xf.to_doc(p));
         // The origin snaps as a drawn point does (Smart Guides, Snap to Point, pixels, the grid).
@@ -302,7 +348,7 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         } else if !ui.input(|i| i.pointer.primary_down()) {
             end_ruler_origin_drag(app, ui);
         } else {
-            ui.data_mut(|d| d.insert_temp(drag_id, (started_in, cancelled)));
+            ui.data_mut(|d| d.insert_temp(drag_id, OriginDrag { doc: started_in, cancelled, trim_view }));
             if !cancelled {
                 preview = at;
             }
@@ -322,8 +368,19 @@ pub(super) fn rulers_hidden(app: &mut VectorcraftApp, ui: &Ui) -> Option<Point> 
 
 /// Ends a drag from the rulers' corner, released or cancelled: its state and its snapping guides go.
 fn end_ruler_origin_drag(app: &mut VectorcraftApp, ui: &Ui) {
-    ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(ruler_origin_drag_id()));
+    ui.data_mut(|d| d.remove::<OriginDrag>(ruler_origin_drag_id()));
     app.session.end_ruler_origin_drag();
+}
+
+/// A drag of the rulers' origin out of their corner, kept between frames.
+#[derive(Clone, Copy)]
+struct OriginDrag {
+    /// The document it started in (`Document::uid`): another one active cancels it.
+    doc: Option<u64>,
+    /// Cancelled (Escape, focus lost, another document, Trim View toggled): it sets nothing.
+    cancelled: bool,
+    /// View › Trim View was on when it started.
+    trim_view: bool,
 }
 
 /// The key of the ruler origin drag's state in egui's temporary data.
@@ -334,7 +391,7 @@ fn ruler_origin_drag_id() -> egui::Id {
 /// Is a drag from the rulers' corner in progress? It stays true after Escape cancels the move, until
 /// the button is released.
 pub(crate) fn ruler_origin_dragging(ctx: &egui::Context) -> bool {
-    ctx.data(|d| d.get_temp::<(Option<u64>, bool)>(ruler_origin_drag_id()).is_some())
+    ctx.data(|d| d.get_temp::<OriginDrag>(ruler_origin_drag_id()).is_some())
 }
 
 /// What the rulers count, and from where: `unit`, from `origin` (document points), with each
@@ -432,7 +489,7 @@ pub(super) fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, s
         let sy = left.top() + d;
         clip_left.line_segment([pos2(left.right() - len, sy), pos2(left.right(), sy)], Stroke::new(1.0, t.ruler_tick));
         if let Some(text) = label {
-            // Vertical labels read top-to-bottom, one digit per line like Illustrator.
+            // Vertical labels read top-to-bottom, one digit per line.
             let top = sy + 2.0;
             if top < filled_to {
                 return;

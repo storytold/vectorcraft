@@ -240,6 +240,7 @@ fn wrap(r: Result<Value, String>) -> Outcome {
 pub fn all_commands(app: &VectorcraftApp) -> Value {
     let mut v: Vec<Value> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
     for (id, label, sc, params) in crate::menus::UI_COMMANDS {
+        let sc = crate::shortcut_editor::ui_command_default(id, sc, crate::keymap::platform());
         v.push(json!({"id": id, "label": label, "shortcut": sc, "params": params, "enabled": crate::menus::enabled(app, id), "ui": true}));
     }
     Value::Array(v)
@@ -267,6 +268,11 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
             "pinned": app.ui.task_bar_place.pinned,
             "rect": crate::canvas::task_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         },
+        // The Quick Pen toolbar: pinned (not saved either) and where it shows.
+        "quickPenToolbar": {
+            "pinned": app.ui.quick_pen_bar_place.pinned,
+            "rect": crate::canvas::quick_pen_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
+        },
         // The Free Transform tool's widget, where it shows.
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
@@ -274,11 +280,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
-        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index, view number (Window › New Window) and rect. Canvas
-        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
+        // last frame drew: each one's document index, view number (Window › New Window) and rect.
+        // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars
         // (`canvasRect`).
         "tiled": app.ui.tiled,
+        "tileLayout": app.ui.tile_layout.name(),
         "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
             "document": w.0,
             "view": w.1,
@@ -1144,9 +1151,9 @@ fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
-/// in recorded actions' steps outside the read root. The file selected in an open JavaScript Files
-/// dialog is named as `svgInteractivity.info` names the active document's linked files. The UI state
-/// itself is not changed.
+/// in recorded actions' steps and in the item an open Insert Menu Item dialog picked, outside the
+/// read root. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
+/// names the active document's linked files. The UI state itself is not changed.
 fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
@@ -1169,6 +1176,16 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
         && let Some(Value::Object(fields)) = dialog.get_mut("fields")
     {
         leave_out_unreadable_folders(fields);
+    }
+    // The menu item picked in an open Insert Menu Item dialog, such as a saved proof setup's file.
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::action_insert_menu_item::KIND)
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+    {
+        let command = fields.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let Some(Value::Object(params)) = fields.get_mut("params") {
+            leave_out_unreadable_step(&command, params);
+        }
     }
     if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
         && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::javascript_files::KIND)
@@ -1607,6 +1624,8 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // Create Object Mosaic converts New Size against the selected image's size as it is now.
+                crate::dialogs::object_mosaic::refresh(app);
                 // In order: a field that sets others (an export preset) goes before the fields after it.
                 // A field that fails leaves the dialog as it was before the request.
                 let before = app.ui.dialog.clone();
@@ -2105,7 +2124,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         r = app.run("window.panel", json!({"panel": pn}));
     }
     if let Some(st) = s("status") {
-        app.ui.status = st.to_string();
+        app.status(st);
     }
     for (k, flag) in [
         ("rulers", "view.rulers"),

@@ -5,7 +5,6 @@
 //! filled outlines where the look needs them.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use kurbo::PathEl;
 use vectorcraft_color::Paint;
@@ -14,8 +13,8 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
 use crate::aci::nearest_aci;
-use crate::writer::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, fixed};
 use crate::{CAP_HEIGHT, ColorDepth, DxfImage, DxfOptions, DxfOutput, MAX_NEST, Preserve, RasterFormat};
+use craft_dxf::drawing::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, STANDARD_STYLE, fixed};
 
 /// Curves are flattened to within this distance (points) where DXF needs straight segments
 /// (hatch boundaries, R12 polylines).
@@ -35,6 +34,7 @@ const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const TYPE_ITEMS: &str = "fills and strokes added to whole type objects are left out of text entities (outline the text to keep them)";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
@@ -543,7 +543,7 @@ impl<'a> Scene<'a> {
             o,
             to_dxf: Affine::new([k, 0.0, 0.0, -k, -r.x0 * k, r.y1 * k]),
             k,
-            e: Codes::new(o.version),
+            e: Codes::new(o.version.into()),
             next: fixed::FIRST_FREE,
             layers: vec![],
             layer_names: Names::with(&["0", "Defpoints"]),
@@ -551,7 +551,7 @@ impl<'a> Scene<'a> {
             flags: LayerFlags { off: false, locked: false, plot: true },
             linetypes: vec![],
             styles: vec![],
-            style_names: Names::with(&[crate::writer::STANDARD_STYLE]),
+            style_names: Names::with(&[STANDARD_STYLE]),
             images: vec![],
             files: vec![],
             by_key: HashMap::new(),
@@ -579,7 +579,7 @@ impl<'a> Scene<'a> {
         let one = (self.o.scale - 1.0).abs() < 1e-12;
         let insunits = if one { crate::insunits_code(self.o.unit).unwrap_or(0) } else { 0 };
         let drawing = Drawing {
-            version: self.o.version,
+            version: self.o.version.into(),
             layers: self.layers,
             linetypes: self.linetypes,
             styles: self.styles,
@@ -672,7 +672,18 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // DXF clips nothing, so a distorted image is written at the affine placement nearest
+                // its corners, with the warning once it is written.
+                Some(xf) => {
+                    if self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() }) {
+                        self.warn(DISTORTED_IMAGES);
+                    }
+                }
+                None => {
+                    self.image(&self.doc.shown_image(n, im));
+                }
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
@@ -1326,18 +1337,19 @@ impl<'a> Scene<'a> {
         name
     }
 
-    /// A placed image, linked to its file (written once per image).
-    fn image(&mut self, im: &ImageObject) {
+    /// A placed image, linked to its file (written once per image). False when no `IMAGE` entity is
+    /// written.
+    fn image(&mut self, im: &ImageObject) -> bool {
         if !self.o.version.handles() {
             self.warn(NO_IMAGES);
-            return;
+            return false;
         }
         if !self.o.include_images {
             self.note_setting(IMAGES_OFF);
-            return;
+            return false;
         }
-        let Some(i) = self.image_def(im) else { return };
-        let Some((dw, dh)) = self.images.get(i).map(|d| (f64::from(d.size.0), f64::from(d.size.1))) else { return };
+        let Some(i) = self.image_def(im) else { return false };
+        let Some((dw, dh)) = self.images.get(i).map(|d| (f64::from(d.size.0), f64::from(d.size.1))) else { return false };
         let (w, h) = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
         let map = self.to_dxf * im.xf;
         let lin = |v: kurbo::Vec2| (map * v.to_point()) - (map * Point::ZERO);
@@ -1350,7 +1362,7 @@ impl<'a> Scene<'a> {
         let at = map * Point::new(0.0, h);
         let handle = self.handle();
         let reactor = self.handle();
-        let Some(def) = self.images.get_mut(i) else { return };
+        let Some(def) = self.images.get_mut(i) else { return false };
         def.reactors.push((reactor, handle));
         let def = def.handle;
         let layer = self.layer.clone();
@@ -1376,6 +1388,7 @@ impl<'a> Scene<'a> {
         if self.o.version >= crate::DxfVersion::R2010 {
             self.e.int(290, 0);
         }
+        true
     }
 
     /// The image file for image `im`, encoded once in the chosen format (`None`: left out).
@@ -1403,35 +1416,37 @@ impl<'a> Scene<'a> {
 
     /// Image `im` as a file in the chosen format, and its size in pixels.
     fn encode_image(&self, im: &ImageObject) -> Result<(DxfImage, (u32, u32)), String> {
+        use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty()).ok_or_else(|| "an image has no pixels and was left out".to_string())?;
         // The pixels it converts to (RGBA, 4 bytes each) are read from its header before decoding.
-        let (w, h) = image::ImageReader::new(Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .ok_or_else(|| UNDECODED.to_string())?;
+        let (w, h) = vectorcraft_doc::header_size(&blob.bytes).ok_or_else(|| UNDECODED.to_string())?;
         if u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
             return Err("an image is too large for DXF and was left out".to_string());
         }
-        let img = image::load_from_memory(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
-        let size = (img.width(), img.height());
-        let mut bytes = vec![];
-        let written = match self.o.raster {
-            RasterFormat::Png => img.to_rgba8().write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png),
+        let decoded = craft_image_codecs::decode(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
+        let size = decoded.dimensions();
+        let mut rgba = decoded.to_rgba8();
+        let bytes = match self.o.raster {
+            RasterFormat::Png => {
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgba, SampleType::U8, rgba)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Png, &EncodeOptions::default())
+            }
             RasterFormat::Jpeg => {
                 // No alpha in JPEG: transparent pixels over white.
-                let mut rgba = img.to_rgba8();
-                for p in rgba.pixels_mut() {
+                let mut rgb = Vec::with_capacity(rgba.len() / 4 * 3);
+                for p in rgba.as_chunks_mut::<4>().0 {
                     let a = u32::from(p[3]);
-                    for c in 0..3 {
-                        p[c] = ((u32::from(p[c]) * a + 255 * (255 - a)) / 255) as u8;
+                    for c in &p[..3] {
+                        rgb.push(((u32::from(*c) * a + 255 * (255 - a)) / 255) as u8);
                     }
                 }
-                let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
-                rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90))
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgb, SampleType::U8, rgb)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Jpeg, &EncodeOptions { jpeg_quality: 90, ..EncodeOptions::default() })
             }
-        };
-        written.map_err(|e| format!("an image could not be written: {e}"))?;
+        }
+        .map_err(|e| format!("an image could not be written: {e}"))?;
         Ok((DxfImage { name: format!("{}.{}", blob.content_key(), self.o.raster.extension()), bytes }, size))
     }
 }

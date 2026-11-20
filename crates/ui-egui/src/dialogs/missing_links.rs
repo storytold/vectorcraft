@@ -293,12 +293,16 @@ mod tests {
     }
 
     fn png(rgb: [u8; 3]) -> Vec<u8> {
-        let mut out = vec![];
         let [r, g, b] = rgb;
-        image::RgbaImage::from_pixel(400, 300, image::Rgba([r, g, b, 255]))
-            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-            .unwrap();
-        out
+        let img = craft_image_codecs::Image::from_raw(
+            400,
+            300,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [r, g, b, 255].repeat(400 * 300),
+        )
+        .unwrap();
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     }
 
     /// A document with two placed linked files, saved to a fresh folder; the files are then

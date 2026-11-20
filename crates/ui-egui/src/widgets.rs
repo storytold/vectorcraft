@@ -27,33 +27,41 @@ pub use blend::{
     reference_point_named,
 };
 pub use buttons::{
-    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
-    primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
+    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_hint, menu_item_name, paint_icon_button,
+    primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{
+    button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
+};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh,
-    color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring,
-    region_texture, ring_square, segment_color, segmented_wheel, stepped_area,
+    FieldAxis, Live, MarkerResponse, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named,
+    channel_slider_stepped, channel_slider_valued, color_field, color_field_shaded, color_mesh, color_slider, color_slider_named,
+    color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture,
+    ring_markers, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
+#[cfg(test)]
+pub(crate) use color::{SHADE, shade_cells, shade_edges};
 pub use drag::{
-    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
+    ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::top_popup_shapes;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
-    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,
+    dropdown_with_named, list_scroll_style, menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{dim_label_width, label_field, take_previous_label, text_width};
+pub(crate) use labels::{dim_label_width, field_panel_label, label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
@@ -103,6 +111,13 @@ impl<T> std::fmt::Debug for HashOnly<T> {
 /// `parent.with(salt)` for a salt that needs only `Hash`.
 pub(crate) fn id_with(parent: egui::Id, salt: impl std::hash::Hash) -> egui::Id {
     parent.with(HashOnly(salt))
+}
+
+/// Gives `resp` the screen-reader role of a list item named `label`, with `selected` as its
+/// selected state. [`egui::WidgetInfo::selected`] would set the toggled state instead.
+pub(crate) fn list_item_info(resp: &Response, selected: bool, label: impl Fn() -> String) {
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, label()));
+    resp.ctx.accesskit_node_builder(resp.id, |node| node.set_selected(selected));
 }
 
 #[cfg(test)]
@@ -201,7 +216,7 @@ pub(crate) mod accessibility_tests {
         let tree = tree(|ui| {
             icon_button(ui, "link", "Constrain Proportions", true, 24.0);
             toggle_icon(ui, "eye", true, 18.0, "Show all plates");
-            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate)");
+            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
             orientation_button(ui, false, true, "Portrait");
             orientation_button(ui, true, false, "Landscape");
             layout_button(ui, &[(0, 0), (1, 0)], true, "Grid by Row");
@@ -211,12 +226,32 @@ pub(crate) mod accessibility_tests {
         let off = |label| assert_eq!(role_and_state(&tree, label), (Role::Button, Some(Toggled::False)), "{label}");
         on("Constrain Proportions");
         on("Show all plates");
-        off("Show/hide plate (Alt-click: only this plate)");
+        off("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
         on("Portrait");
         off("Landscape");
         on("Grid by Row");
         off("Recent");
         on("Saved");
+    }
+
+    #[test]
+    fn list_items_report_selection_and_section_headers_report_expansion() {
+        let tree = tree(|ui| {
+            for (name, on) in [("Artboard 1", true), ("Artboard 2", false)] {
+                let resp = ui.allocate_response(vec2(120.0, 20.0), Sense::click());
+                list_item_info(&resp, on, || name.to_string());
+            }
+            section_toggle(ui, "Open Section", true);
+            section_toggle(ui, "Closed Section", false);
+        });
+        let state = |label| {
+            let n = named(&tree, label);
+            (n.role(), n.toggled(), n.is_selected(), n.is_expanded())
+        };
+        assert_eq!(state("Artboard 1"), (Role::ListItem, None, Some(true), None));
+        assert_eq!(state("Artboard 2"), (Role::ListItem, None, Some(false), None));
+        assert_eq!(state("Open Section"), (Role::DisclosureTriangle, None, None, Some(true)));
+        assert_eq!(state("Closed Section"), (Role::DisclosureTriangle, None, None, Some(false)));
     }
 
     #[test]
@@ -578,7 +613,7 @@ mod decimal_point_tests {
         }
         assert_eq!(mm("1,000.5"), None, "a point and a comma");
         assert_eq!(mm("1,2,3"), None, "two commas");
-        for thousand in ["1,000", "12,500 mm", "-1,000", "999,999mm"] {
+        for thousand in ["1,000", "12,500 mm", "-1,000", "+1,000", "999,999mm", "1,000\"", "1,000'"] {
             assert_eq!(mm(thousand), None, "{thousand} reads as thousands: refused, not a thousand times too small");
         }
         for (text, want) in [("0,125", 0.125), ("1,25", 1.25), ("1,0000", 1.0), ("1,500+2", 3.5)] {
@@ -622,6 +657,15 @@ mod field_number_tests {
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
     }
 
+    /// A resolution field reads the unit it shows: "200 ppp" in a French interface.
+    #[test]
+    fn a_resolution_field_reads_its_translated_unit() {
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let read = [field_number("200 ppp", &crate::dialogs::ppi_suffix(), false), field_number("200", &crate::dialogs::ppi_suffix(), false)];
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(read, [Some(200.0), Some(200.0)]);
+    }
+
     /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the
     /// suffix, as it is in plain text, rather than read as a decimal comma (`(1,000)` as 1).
     #[test]
@@ -634,6 +678,17 @@ mod field_number_tests {
         assert_eq!(field_number("(1,5)", "", true), Some(1.5));
         assert_eq!(field_number("(0,125)", "", true), Some(0.125));
         assert_eq!(field_number("12,5%", "%", false), Some(12.5));
+    }
+
+    /// `x` multiplies in a unitless field as `*` does (#8435), next to a suffix, `%` and a decimal
+    /// comma too.
+    #[test]
+    fn x_multiplies_in_a_unitless_field() {
+        assert_eq!(field_number("45x2", "", false), Some(90.0));
+        assert_eq!(field_number("45x2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% x 2", "%", false), Some(100.0));
+        assert_eq!(field_number("1,5x2", "", false), Some(3.0));
+        assert_eq!(field_number("(10x2)", "", true), Some(20.0));
     }
 }
 

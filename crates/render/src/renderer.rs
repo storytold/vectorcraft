@@ -57,6 +57,7 @@ impl Renderer {
             live_root: None,
             fx_geom: PtrMap::default(),
             fx_stages: PtrMap::default(),
+            fx_placement: None,
             stamp: 0,
             alpha: 1.0,
             contexts: Vec::new(),
@@ -148,7 +149,16 @@ impl Renderer {
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
-        let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
+        // A proof that preserves the colors' numbers proofs each colour as it is painted; the hold
+        // keeps that proof registered until the frame is drawn.
+        let (screen, _proof) = match proof::preserving(opts) {
+            Some(p) => {
+                let (ink, hold) = ink::proofed_ink(p);
+                (ink, Some(hold))
+            }
+            None if opts.rich_black => (Ink::RichBlack, None),
+            None => (Ink::Display, None),
+        };
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
         let plates = proof::plate_lut(opts, doc);
@@ -168,10 +178,13 @@ impl Renderer {
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
         let mut pixels = if inks || self.blends_in_cmyk(doc, opts) {
-            // Blending in CMYK: one frame per ink plane, then their inks shown on screen.
-            let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, ..frame }, w, h);
+            // Blending in CMYK: one frame per ink plane, then their inks shown on screen (through a
+            // proof that preserves the numbers, when one is on: the planes hold the inks as they
+            // are, images included).
+            let planes = if proof::preserving(opts).is_some() { None } else { frame.plates };
+            let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, plates: planes, ..frame }, w, h);
             let stats = self.stats;
-            let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
+            let k = self.draw_frame(&Frame { ink: Ink::K, plates: planes, ..frame }, w, h);
             self.stats = stats;
             if inks {
                 ink::amounts(&cmy, &k)
@@ -267,9 +280,16 @@ impl Renderer {
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         self.raster = raster_settings(opts);
         if opts.artboards && !opts.outline {
-            // Paper: white on screen, no ink on the ink planes.
+            // Paper: white on screen, no ink on the ink planes; with a proof that preserves the
+            // colors' numbers, the device's paper.
             ctx.set_transform(f.view);
-            ctx.set_paint(peniko::Color::WHITE);
+            match screen_under_art(f, [255; 4]) {
+                [255, 255, 255, _] => ctx.set_paint(peniko::Color::WHITE),
+                paper => {
+                    let [r, g, b, a] = f.ink.fixed8(paper);
+                    ctx.set_paint(peniko::Color::from_rgba8(r, g, b, a));
+                }
+            }
             for ab in &f.doc.artboards {
                 ctx.fill_rect(&ab.rect);
             }
@@ -294,7 +314,7 @@ impl Renderer {
         }
         let mut pixels = pm.data_as_u8_slice().to_vec();
         if let Some(bg) = opts.background {
-            over_background(&mut pixels, f.ink.fixed8(bg));
+            over_background(&mut pixels, f.ink.fixed8(screen_under_art(f, bg)));
         }
         pixels
     }
@@ -462,6 +482,13 @@ impl Renderer {
 fn raster_settings(opts: &RenderOptions) -> vello_cpu::RasterizerSettings {
     let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
     vello_cpu::RasterizerSettings { render_mode, ..Default::default() }
+}
+
+/// Solid color `rgba` (straight alpha) under the art of frame `f`: on screen as
+/// [`proof::under_art`] gives it; the ink planes paint it as it is, and [`ink::compose`] shows it
+/// through the proof.
+fn screen_under_art(f: &Frame, rgba: [u8; 4]) -> [u8; 4] {
+    if matches!(f.ink.base(), Ink::Cmy | Ink::K) { rgba } else { proof::under_art(f.opts, rgba) }
 }
 
 /// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).

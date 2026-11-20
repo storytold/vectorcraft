@@ -71,6 +71,11 @@ pub struct StrokeLayer {
     /// Brush applied to the stroke (by brush name).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brush: Option<String>,
+    /// This stroke's own brush settings (the Brushes panel's Options of Selected Object): brush
+    /// definition fields, by their `brush.options` names, that replace the brush's values on this
+    /// stroke only. Empty: the stroke draws the brush as it is. `vectorcraft-brush` reads them.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub brush_options: serde_json::Map<String, serde_json::Value>,
     #[serde(default = "one", skip_serializing_if = "crate::skip::is_one")]
     pub opacity: f32,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
@@ -108,6 +113,11 @@ pub struct StrokeLayer {
     /// pressure, it stays with this path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation: Option<AngleProfile>,
+    /// Where the finger wheel of an airbrush pen was set along the stroke: 0 at one end of its
+    /// travel to 1 at the other. Brushes with Stylus Wheel variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wheel: Option<PressureProfile>,
 }
 
 /// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
@@ -170,6 +180,7 @@ impl StrokeLayer {
             arrow_scale: (100.0, 100.0),
             profile: None,
             brush: None,
+            brush_options: serde_json::Map::new(),
             opacity: 1.0,
             blend: BlendMode::Normal,
             visible: true,
@@ -181,14 +192,17 @@ impl StrokeLayer {
             tilt: None,
             bearing: None,
             rotation: None,
+            wheel: None,
         }
     }
+    /// The least weight an arrowhead is drawn at, in points ([`Self::arrow_weight`]).
+    pub const LEAST_ARROW_WEIGHT: f64 = 0.25;
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
-    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide (see
+    /// [`Self::LEAST_ARROW_WEIGHT`]. A head of weight `hw` fits a box about `4·hw` long and wide (see
     /// [`Arrowhead::reach`] and [`Arrowhead::half_width`]).
     pub fn arrow_weight(&self, end: bool) -> f64 {
         let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
-        (self.width * pct / 100.0).max(0.25)
+        (self.width * pct / 100.0).max(Self::LEAST_ARROW_WEIGHT)
     }
     /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
     /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.

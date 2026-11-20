@@ -16,7 +16,7 @@ pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.
-pub(super) const BLEND_BUDGET: usize = 50_000;
+pub(crate) const BLEND_BUDGET: usize = 50_000;
 
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
@@ -244,6 +244,7 @@ pub(super) struct PatternHead {
 pub(super) struct SymbolHead {
     /// `AI13PatternRegistrationType` in the dictionary after the art.
     pub(super) registration: Option<f64>,
+    pub(super) dynamic: bool,
     /// Art the reader left out (type, a placed file, non-native art, an image it can't read or
     /// place, a gradient it can't read): the symbol isn't kept, and its instances come in as the
     /// page draws them, within the box of the rest.

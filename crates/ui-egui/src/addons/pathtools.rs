@@ -1,20 +1,23 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths and Convert to Parametric Shape; the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle… and Add Bounding Circle…; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
 //! `tool.setOption`.
 
+pub mod bridge;
 pub mod corner;
 pub mod dashes;
 pub mod set_corners;
 pub mod shape;
 pub mod shared_edge;
+pub mod tangent_circle;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
+use vectorcraft_tools::addons::tangent_circle as tangent_circle_tool;
 use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
 use crate::VectorcraftApp;
@@ -30,6 +33,14 @@ pub const ID: &str = "anchorInspector";
 const COUNT: &str = "anchor-inspector-count";
 /// The tools' options dialog.
 pub const KIND: &str = "pathToolOptions";
+/// Common Tangents' command, whose menu item opens the command dialog with a Preview.
+pub const COMMON_TANGENTS: &str = "addon.pathtools.commonTangents";
+/// The kinds of tangent Common Tangents' `tangents` picks, and their labels.
+pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "external"), ("Internal", "internal")];
+/// Add Bounding Rectangle's and Add Bounding Circle's commands, whose menu items open the command
+/// dialog (Offset, One per Object) with a Preview.
+pub const BOUNDING_RECTANGLE: &str = "addon.pathtools.boundingRectangle";
+pub const BOUNDING_CIRCLE: &str = "addon.pathtools.boundingCircle";
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 const LABEL_W: f32 = 64.0;
@@ -60,6 +71,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
         tool("Slide Anchor Along Path", slide_anchor::ID),
         Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        tool("Tangent Circle Tool", tangent_circle_tool::ID),
         tool("Trim at Crossings Tool", trim::ID),
         Item::Sep,
         Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
@@ -69,7 +81,12 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
         Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
         Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
+        Item::Cmd("Smooth Bridge…", bridge::COMMAND, Value::Null),
         Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
+        Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
+        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
+        Item::Cmd("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
+        Item::Cmd("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
     ]
 }
 
@@ -190,7 +207,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Tools whose options the dialog edits.
 pub fn has_options(tool: &str) -> bool {
-    [anchor_eraser::ID, extend_path::ID].contains(&tool)
+    [anchor_eraser::ID, extend_path::ID, tangent_circle_tool::ID].contains(&tool)
 }
 
 /// Open the options of add-on tool `tool` with its current values.
@@ -220,6 +237,16 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         });
         return false;
     }
+    if d.str("__tool") == tangent_circle_tool::ID {
+        let (lo, hi) = tangent_circle_tool::RADIUS_RANGE;
+        let r = d.f64("radius", tangent_circle_tool::RADIUS);
+        widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
+            if let Some(x) = widgets::range_field(ui, "tangent-circle-radius", r, lo..=hi, " pt", 2, 96.0) {
+                d.fields.insert("radius".into(), json!(x));
+            }
+        });
+        return false;
+    }
     let rows = [
         ("size", "Size:", anchor_eraser::SIZE_RANGE, "px", anchor_eraser::SIZE),
         ("tolerance", "Tolerance:", anchor_eraser::TOLERANCE_RANGE, "", anchor_eraser::TOLERANCE),
@@ -239,12 +266,15 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: set the tool's options.
+/// OK: set the tool's options. When the tool refuses one of them, nothing is set and the dialog
+/// stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let tool = d.str("__tool");
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let r = app.run("tool.setOption", json!({ "tool": tool, "values": values }));
-    app.ui.dialog = None;
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
     r
 }
 

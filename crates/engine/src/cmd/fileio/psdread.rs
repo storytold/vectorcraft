@@ -174,23 +174,48 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
 /// blocks whose signature is `8BIM` are given.
 pub(super) fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
     let mut r = Reader::new(resources);
-    std::iter::from_fn(move || {
-        if r.rest().is_empty() {
-            return None;
+    std::iter::from_fn(move || if r.rest().is_empty() { None } else { block(&mut r).ok() })
+        .filter(move |(ours, ..)| *ours || !signed)
+        .map(|(_, id, name, data)| (id, name, data))
+}
+
+/// The data of the first `8BIM` image resource block `id` of `resources`. `None` when there is
+/// none before the blocks end or before a block that is cut short ahead of it. An error when
+/// that block itself is cut short.
+pub(super) fn resource(resources: &[u8], id: u16) -> Result<Option<&[u8]>, String> {
+    let mut r = Reader::new(resources);
+    while !r.rest().is_empty() {
+        match block(&mut r) {
+            Ok((true, i, _, data)) if i == id => return Ok(Some(data)),
+            Ok(_) => {}
+            Err(Some((true, i))) if i == id => return Err(TRUNCATED.into()),
+            Err(_) => return Ok(None),
         }
-        let ours = r.take(4).ok()? == b"8BIM";
-        let id = r.u16().ok()?;
+    }
+    Ok(None)
+}
+
+/// An image resource block: whether its signature is `8BIM`, its id, its name (the bytes of its
+/// Pascal string) and its data.
+type Block<'a> = (bool, u16, &'a [u8], &'a [u8]);
+
+/// The image resource block that `r` starts with. When it is cut short, the error gives whether
+/// its signature is `8BIM` and its id, when those were read.
+fn block<'a>(r: &mut Reader<'a>) -> Result<Block<'a>, Option<(bool, u16)>> {
+    let ours = r.take(4).map_err(|_| None)? == b"8BIM";
+    let id = r.u16().map_err(|_| None)?;
+    let mut rest = || -> Result<(&'a [u8], &'a [u8]), String> {
         // A Pascal string padded to an even size, length byte included.
-        let len = usize::from(r.u8().ok()?);
-        let name = r.take(len).ok()?;
-        r.take((len + 1) % 2).ok()?;
-        let size = usize::try_from(r.u32().ok()?).ok()?;
-        let data = r.take(size).ok()?;
-        r.take(size % 2).ok()?;
-        Some((ours, id, name, data))
-    })
-    .filter(move |(ours, ..)| *ours || !signed)
-    .map(|(_, id, name, data)| (id, name, data))
+        let len = usize::from(r.u8()?);
+        let name = r.take(len)?;
+        r.take((len + 1) % 2)?;
+        let size = usize::try_from(r.u32()?).map_err(|_| TRUNCATED.to_string())?;
+        let data = r.take(size)?;
+        r.take(size % 2)?;
+        Ok((name, data))
+    };
+    let (name, data) = rest().map_err(|_| Some((ours, id)))?;
+    Ok((ours, id, name, data))
 }
 
 /// The resource naming the document's clipping path.
@@ -473,6 +498,48 @@ pub(super) fn to_rgb(h: &Header<'_>, v: impl Fn(usize) -> f32, cmyk: &impl Fn([f
         Mode::Cmyk => cmyk([0, 1, 2, 3].map(|c| 1.0 - v(c))),
         Mode::Lab => lab_to_srgb(Lab { l: v(0) * 100.0, a: v(1) * 255.0 - 128.0, b: v(2) * 255.0 - 128.0 }),
     }
+}
+
+/// An opaque CMYK composite as its original 8- or 16-bit ink samples. Other modes,
+/// composites with transparency, and images beyond the native CMYK pixel or allocation limit return `None`.
+pub(super) fn decode_cmyk(bytes: &[u8], max_alloc: u64) -> Result<Option<craft_image_codecs::Image>, String> {
+    use craft_image_codecs::{ChannelLayout, Image, SampleType};
+    let mut r = Reader::new(bytes);
+    let h = header(&mut r)?;
+    if h.mode != Mode::Cmyk || (h.channels > 4 && merged_alpha(h.layers, h.psb)) {
+        return Ok(None);
+    }
+    let pixels = u64::from(h.width) * u64::from(h.height);
+    if pixels > vectorcraft_doc::cmyk::MAX_CMYK_PIXELS {
+        return Ok(None);
+    }
+    let sample_bytes = usize::from(h.depth / 8);
+    let samples = pixels * 4 * sample_bytes as u64;
+    let icc = resources(h.resources, false)
+        .find(|(id, _, _)| *id == 1039)
+        .map(|(_, _, data)| data)
+        .filter(|data| data.len() <= 16 << 20 && vectorcraft_doc::cmyk::icc_color_space(data) == Some(*b"CMYK"));
+    if samples.saturating_mul(2).saturating_add(icc.map_or(0, |p| p.len() as u64)) > max_alloc {
+        return Ok(None);
+    }
+    let count = pixels as usize;
+    let data = channel_data(r.rest(), &h, 4, row_bytes(h.width as usize, h.depth))?;
+    let mut out = Vec::with_capacity(samples as usize);
+    for i in 0..count {
+        for channel in 0..4 {
+            let at = (channel * count + i) * sample_bytes;
+            if h.depth == 8 {
+                out.push(255 - data.get(at).copied().ok_or(TRUNCATED)?);
+            } else {
+                let pair = data.get(at..at + 2).ok_or(TRUNCATED)?.try_into().map_err(|_| TRUNCATED)?;
+                out.extend((65535 - u16::from_be_bytes(pair)).to_ne_bytes());
+            }
+        }
+    }
+    let sample = if h.depth == 16 { SampleType::U16 } else { SampleType::U8 };
+    let mut image = Image::from_raw(h.width, h.height, ChannelLayout::Cmyk, sample, out).map_err(|e| e.to_string())?;
+    image.icc = icc.map(<[u8]>::to_vec);
+    Ok(Some(image))
 }
 
 /// A Photoshop document's merged image as straight RGBA. CMYK converts through `cmyk` (ink

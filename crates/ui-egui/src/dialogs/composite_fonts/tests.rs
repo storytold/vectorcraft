@@ -280,3 +280,193 @@ fn custom_sets_sharing_a_name_keep_the_dialog_open() {
     assert!(app.ui.dialog.is_some());
     assert!(names(&app).is_empty());
 }
+
+/// A composite font set in Inter, with its Roman part as `roman` changes it.
+fn inter_font(roman: impl FnOnce(&mut vectorcraft_doc::CompositePart)) -> CompositeFont {
+    let mut parts = vectorcraft_doc::CompositeParts::all(vectorcraft_doc::CompositePart::new("Inter", "Regular"));
+    roman(&mut parts.roman);
+    CompositeFont { name: "UI Composite Sample".into(), parts, custom: Vec::new() }
+}
+
+/// Show Sample opens hidden at 100% with the ICF box, em box and baseline shown; its button shows
+/// and hides the sample, which draws with every line shown and at every zoom; nothing changes in
+/// the document.
+#[test]
+fn show_sample_shows_and_hides_the_sample() {
+    let mut app = app();
+    open(&mut app).unwrap();
+    let d = dialog(&mut app);
+    assert!(!d.bool("sample"));
+    assert_eq!(d.fields.get("zoom"), Some(&json!(100)));
+    let shown: Vec<bool> = sample::Mark::ALL.iter().map(|m| d.bool(m.field())).collect();
+    assert_eq!(shown, [true, true, true, false, false, false, false]);
+    press(&mut app, Action::New);
+    press(&mut app, Action::Sample);
+    assert!(dialog(&mut app).bool("sample"));
+    frame(&mut app);
+    for m in sample::Mark::ALL {
+        dialog(&mut app).fields.insert(m.field().into(), json!(true));
+    }
+    for z in sample::ZOOMS {
+        dialog(&mut app).fields.insert("zoom".into(), json!(z));
+        frame(&mut app);
+    }
+    press(&mut app, Action::Sample);
+    assert!(!dialog(&mut app).bool("sample"));
+    super::super::cancel(&mut app);
+    assert!(names(&app).is_empty());
+}
+
+/// `ui.dialog.set` takes `sample`, `zoom` and the line fields; a zoom outside the Zoom menu or a
+/// line that is not true or false is refused and leaves the dialog as it was.
+#[test]
+fn sample_fields_are_set_and_checked() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    open(&mut app).unwrap();
+    let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+        let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+        let crate::control::Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+        r
+    };
+    for (field, value) in [("sample", json!(true)), ("zoom", json!(400)), ("lineCapHeight", json!(true)), ("lineBaseline", json!(false))] {
+        let r = set(&mut app, field, value.clone());
+        assert!(r.get("error").is_none(), "{field}: {r}");
+        assert_eq!(dialog(&mut app).fields.get(field), Some(&value), "{field}");
+    }
+    for (field, value) in [("zoom", json!(30)), ("zoom", json!("200")), ("sample", json!(1)), ("lineXHeight", json!("yes"))] {
+        let r = set(&mut app, field, value.clone());
+        assert!(r.get("error").is_some(), "{field} {value}: {r}");
+    }
+    let d = dialog(&mut app);
+    assert_eq!((d.fields.get("zoom"), d.bool("sample"), d.bool("lineXHeight")), (Some(&json!(400)), true, false));
+}
+
+/// The sample's lines: the em box and ICF box of the face the Kanji are set in (a face without
+/// ideographs centers its em box 0.38 em above the baseline), the cap height and x-height of the
+/// Roman part's face raised by its baseline and scaled by its vertical scale, the lowest descent
+/// and highest ascent, and the top of the tallest glyph; all of them grow with the size.
+#[test]
+fn sample_lines_follow_the_parts() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let (path, h) = sample::measure(&inter_font(|_| {}), 36.0);
+    assert!(!path.elements().is_empty());
+    let (bottom, top) = h.em_box.unwrap();
+    assert!(close(bottom, -0.12 * 36.0) && close(top, 0.88 * 36.0), "{h:?}");
+    let (ib, it) = h.icf_box.unwrap();
+    assert!(ib >= bottom && it <= top && ib < it, "{h:?}");
+    let (cap, x) = (h.cap_height.unwrap(), h.x_height.unwrap());
+    assert!(0.0 < x && x < cap && cap < top, "{h:?}");
+    let (low, high) = h.ascent_descent.unwrap();
+    assert!(low < 0.0 && high > cap, "{h:?}");
+    assert!(h.ascender.unwrap() > x, "{h:?}");
+    // The Roman part raised by 10% and squeezed to half height moves its lines; the Kanji's stay.
+    let (_, raised) = sample::measure(
+        &inter_font(|p| {
+            p.baseline = 10.0;
+            p.v_scale = 50.0;
+        }),
+        36.0,
+    );
+    assert!(close(raised.cap_height.unwrap(), 3.6 + cap * 0.5), "{raised:?}");
+    assert!(close(raised.x_height.unwrap(), 3.6 + x * 0.5), "{raised:?}");
+    assert_eq!(raised.em_box, h.em_box);
+    // At 200% every line is twice as far from the baseline.
+    let (_, double) = sample::measure(&inter_font(|_| {}), 72.0);
+    assert!(close(double.cap_height.unwrap(), cap * 2.0) && close(double.em_box.unwrap().1, top * 2.0), "{double:?}");
+}
+
+/// The ICF box is the Kanji face's ideographic character face inside its em box, and a Roman face
+/// without an OS/2 cap height still gets a Cap Height line, estimated from its ascent.
+#[test]
+fn sample_lines_read_the_icf_box_and_estimate_a_missing_cap_height() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, HEIGHTLESS_FAMILY, height_font};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(height_font(true).expect("the test font builds"));
+    db.add_font(height_font(false).expect("the test font builds"));
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let mut f = inter_font(|p| p.font = HEIGHTLESS_FAMILY.into());
+    f.parts.kanji.font = HEIGHT_FAMILY.into();
+    let (_, h) = sample::measure(&f, 36.0);
+    let (bottom, top) = h.icf_box.unwrap();
+    assert!(close(bottom, -0.07 * 36.0) && close(top, 0.83 * 36.0), "{h:?}");
+    let cap = h.cap_height.expect("an estimated cap height");
+    assert!(cap > h.x_height.unwrap() && cap < h.ascent_descent.unwrap().1, "{h:?}");
+}
+
+/// A character its part's font lacks is drawn in a fallback face, and the lines measure that face:
+/// in a font whose box runs to 0.9 em and which maps no `A`, `g`, `h`, `1` or `2`, the highest
+/// ascent is the fallback face's.
+#[test]
+fn sample_lines_measure_the_faces_that_draw_the_glyphs() {
+    use vectorcraft_text::test_fonts::{PATH_ALIGN_HHEA_FAMILY, path_align_font};
+    vectorcraft_text::FontDb::global().add_font(path_align_font(PATH_ALIGN_HHEA_FAMILY).expect("the test font builds"));
+    let mut f = inter_font(|_| {});
+    f.parts = vectorcraft_doc::CompositeParts::all(vectorcraft_doc::CompositePart::new(PATH_ALIGN_HHEA_FAMILY, "Regular"));
+    let (_, h) = sample::measure(&f, 36.0);
+    let (_, high) = h.ascent_descent.unwrap();
+    assert!(high > 0.9 * 36.0 + 0.5, "{h:?}");
+}
+
+/// The lines follow a vertical scale as the glyphs do: a custom set that holds the first Kanji at
+/// half height halves the em box about its baseline, and Kana scaled at center keep the middle of
+/// their em box, so their ascent moves up by the half they lose below it.
+#[test]
+fn sample_lines_follow_vertical_scale() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let mut f = inter_font(|_| {});
+    let mut half = vectorcraft_doc::CompositePart::new("Inter", "Regular");
+    half.v_scale = 50.0;
+    f.custom = vec![CustomCharSet { name: "Half".into(), characters: "永".into(), part: half }];
+    let (_, h) = sample::measure(&f, 36.0);
+    let (bottom, top) = h.em_box.unwrap();
+    assert!(close(bottom, (0.38 - 0.5) * 18.0) && close(top, (0.38 + 0.5) * 18.0), "{h:?}");
+    let kana = |at_center: bool| {
+        let mut f = inter_font(|_| {});
+        f.parts.kana.size = 300.0;
+        f.parts.kana.v_scale = 50.0;
+        f.parts.kana.scale_at_center = at_center;
+        sample::measure(&f, 36.0).1.ascent_descent.unwrap()
+    };
+    // The Kana, at three times the size, give the highest ascent either way.
+    let ((_, high), (_, raised)) = (kana(false), kana(true));
+    assert!(close(raised, high + 0.38 * 108.0 * 0.5), "{high} {raised}");
+}
+
+/// The sample adds the first character of each custom set it does not hold yet, and a font whose
+/// sets can't be used yet (two sharing a name while it is typed) still draws, without them.
+#[test]
+fn the_sample_takes_the_custom_sets() {
+    let mut f = inter_font(|_| {});
+    let set = |name: &str, characters: &str| CustomCharSet {
+        name: name.into(),
+        characters: characters.into(),
+        part: vectorcraft_doc::CompositePart::new("Inter", "Regular"),
+    };
+    f.custom = vec![set("Marks", "〒※"), set("Letters", "A")];
+    assert_eq!(sample::text(&f), format!("{}〒", sample::TEXT));
+    f.custom = vec![set("Marks", "〒"), set("marks", "〒")];
+    let (path, h) = sample::measure(&f, 36.0);
+    assert!(!path.elements().is_empty() && h.cap_height.is_some());
+}
+
+/// The sample draws a color font's glyphs in their own colors, not in the dialog's text color.
+#[test]
+fn the_sample_draws_color_glyphs_in_their_colors() {
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colr_family, colr_font};
+    vectorcraft_text::FontDb::global().add_font(colr_font(false).expect("the test font builds"));
+    let mut f = inter_font(|_| {});
+    let mut colr = vectorcraft_doc::CompositePart::new(colr_family(false), "Regular");
+    colr.size = 300.0;
+    f.custom = vec![CustomCharSet { name: "Color".into(), characters: COLOUR_CHAR.to_string(), part: colr }];
+    let img = sample::draw(&f, 36.0, 120.0, (900, 160), 1.0, egui::Color32::BLACK);
+    let red = (0..img.height).flat_map(|y| (0..img.width).map(move |x| (x, y))).any(|(x, y)| {
+        let p = img.pixel(x, y);
+        p[0] > 200 && p[1] < 60 && p[2] < 60 && p[3] > 200
+    });
+    assert!(red, "the glyph's red layer is drawn");
+    // Max Ascender reaches the top of the color glyph, three times the size of the rest.
+    let (_, plain) = sample::measure(&inter_font(|_| {}), 36.0);
+    let (_, tall) = sample::measure(&f, 36.0);
+    assert!(tall.ascender.unwrap() > plain.ascender.unwrap() * 1.5, "{plain:?} {tall:?}");
+}

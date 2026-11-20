@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); on type scaled unevenly, sheared or flattened, each glyph's stroke becomes a filled path over it, shaped as the canvas strokes it; the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Type Path Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner; symmetric: mirror the other handle about the anchor without changing its kind, except at an open end of the path; independent and symmetric cannot both be true; both default false); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
             has_doc,
             set_path_handle
         ),
@@ -619,16 +619,25 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
 /// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
 /// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
 /// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
-/// transform); `None` when the piece has no path.
-fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Option<Node> {
+/// transform), followed by a path (or compound path) filled with the run's stroke when the type's
+/// transform is not a similarity; empty when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Vec<Node> {
     let path = PathData::from_bezpath(outline);
     if path.is_empty() {
-        return None;
+        return vec![];
     }
     let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
     let mut node = shape_node(d, path, None);
-    vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
-    Some(node)
+    let stroke = vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    let mut out = vec![node];
+    if let Some(s) = stroke
+        && let Some(path) = s.path_data()
+    {
+        let mut filled = shape_node(d, path.clone(), None);
+        filled.appearance = s.appearance.clone();
+        out.push(filled);
+    }
+    out
 }
 
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
@@ -675,9 +684,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                         children.push(Arc::new(d.reid(&art)));
                         break 'glyph;
                     }
-                    if let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) {
-                        children.push(Arc::new(node));
-                    }
+                    children.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(Arc::new));
                 }
                 run_end.insert(g.run, children.len());
             }
@@ -686,10 +693,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // nothing there either).
             let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
             for g in &lay.ruby {
-                let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) else { continue };
                 // After the glyphs of its run and of the runs before it.
                 let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
-                ruby.push((at, Arc::new(node)));
+                ruby.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(|node| (at, Arc::new(node))));
             }
             ruby.sort_by_key(|(at, _)| *at);
             let mut ruby = ruby.into_iter().peekable();
@@ -711,9 +717,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 all.extend(bar.iter());
-                if let Some(node) = type_piece(d, t, lay.bounds, run, &bar) {
-                    children.push(Arc::new(node));
-                }
+                children.extend(type_piece(d, t, lay.bounds, run, &bar).into_iter().map(Arc::new));
             }
             // The object's own fills and strokes (not its characters') paint the whole outline:
             // those below the Characters row under the characters, the others over them, with
@@ -1034,7 +1038,17 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         // not in a scaled label's own units).
         let mut labels_changed = false;
         if range.is_none() {
-            labels_changed = super::graph::capture_label_styles(d, &ids, &|st| {
+            let gives_character = font.is_some()
+                || style.is_some()
+                || size.is_some()
+                || leading.is_some()
+                || tracking.is_some()
+                || fill.is_some()
+                || stroke.is_some()
+                || !stroke_weight.is_empty()
+                || features.is_some()
+                || feature_changes.as_ref().is_some_and(|c| !c.is_empty());
+            let change = |st: &mut vectorcraft_doc::CharStyle| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
@@ -1075,7 +1089,13 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(c) = &feature_changes {
                     st.features = super::textedit::change_features(&st.features, c);
                 }
-            });
+            };
+            // A command that gives character attributes keeps the style even when they equal the labels' own.
+            labels_changed = if gives_character {
+                super::graph::capture_label_styles_given(d, &ids, &change)
+            } else {
+                super::graph::capture_label_styles(d, &ids, &change)
+            };
         }
         Ok(((), labels_changed))
     })?;
@@ -1429,6 +1449,10 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
     let node = s.doc()?.doc.node(id);
     let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
@@ -1441,7 +1465,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let within = |t: &TextObject| {
             t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
         };
-        if !(t.set_path_handle((si, ai), out, pos, independent) && within(t)) {
+        if !(t.set_path_handle_with_symmetry((si, ai), out, pos, independent, symmetric) && within(t)) {
             t.kind = before;
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }

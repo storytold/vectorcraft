@@ -196,6 +196,128 @@ fn a_cancelled_export_writes_nothing() {
     assert_eq!(app.ui.status, io::EXPORT_CANCELLED);
 }
 
+/// Background Save's Cancel (`file.cancelSave`): a save canceled before it replaces its file writes
+/// nothing, and its document keeps its file, format and modified state, with no recent file noted
+/// and no error shown. A save already writing its file when Cancel came finishes and counts as
+/// saved. An export waiting with them goes on.
+#[test]
+fn a_canceled_save_writes_nothing_and_keeps_the_document_modified() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let first = app.session.active().unwrap().uid;
+    // The first save holds the worker at the gate, past its last check: it still writes.
+    app.run("file.save", json!({"path": "/docs/first.vectorcraft"})).unwrap();
+    writing.wait();
+    assert!(!crate::menus::enabled(&app, "file.cancelExport"), "a save is not an export");
+    io::export(&mut app, Some("svg"), Some("/out/c.svg".into()), &json!({})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let second = app.session.active().unwrap().uid;
+    let r = app.run("file.save", json!({"path": "/docs/second.svg"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert!(crate::menus::enabled(&app, "file.cancelSave") && crate::menus::enabled(&app, "file.saveInBackground"));
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 0, "nothing left to cancel");
+    assert!(!crate::menus::enabled(&app, "file.cancelSave"));
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/first.vectorcraft", "/out/c.svg"]);
+    fn doc(app: &VectorcraftApp, uid: u64) -> &vectorcraft_engine::DocState {
+        app.session.documents().iter().find(|d| d.uid == uid).unwrap()
+    }
+    let st = doc(&app, first);
+    assert_eq!(st.path.as_deref(), Some("/docs/first.vectorcraft"), "written before the Cancel took effect");
+    let st = doc(&app, second);
+    assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
+    assert_eq!(st.format, "vectorcraft");
+    assert!(io::recent_files(&app).iter().any(|p| p == "/docs/first.vectorcraft"));
+    assert!(!io::recent_files(&app).iter().any(|p| p == "/docs/second.svg"));
+    assert!(app.ui.dialog.is_none(), "no error is shown");
+    // The export's line came after the Cancel: the canceled save leaves it.
+    assert_eq!(app.ui.status, "Exported /out/c.svg");
+}
+
+/// A line set after Cancel Save (another command's) stays: neither the save that was already
+/// replacing its file nor the one Cancel stopped writes over it once it finishes.
+#[test]
+fn a_line_set_after_cancel_save_stays() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let first = app.session.active().unwrap().uid;
+    // The first save holds the worker at the gate, past its last check: it still writes.
+    app.run("file.save", json!({"path": "/docs/first.vectorcraft"})).unwrap();
+    writing.wait();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/second.vectorcraft"})).unwrap();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    app.status("Another command's line");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/first.vectorcraft"]);
+    let st = app.session.documents().iter().find(|d| d.uid == first).unwrap();
+    assert_eq!(st.path.as_deref(), Some("/docs/first.vectorcraft"), "the first save still finished");
+    assert_eq!(app.ui.status, "Another command's line");
+}
+
+/// A Cancel that comes once the encoder has filled a streamed save, while the host's writer is still
+/// flushing it, stops the save as any other Cancel does: the writer's last check refuses to put the
+/// file in place, and the save reports it canceled, not failed.
+#[test]
+fn a_cancel_after_a_streamed_save_is_filled_cancels_it() {
+    let (gate, filled) = (Gate::default(), Gate::default());
+    let (g, w) = (gate.clone(), filled.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))),
+        stream_shared: Some(Arc::new(move |_: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+            fill(&mut Vec::new()).map_err(|e| e.to_string())?;
+            w.open();
+            g.wait();
+            // The atomic writer's last check before the file is put in place.
+            vectorcraft_engine::cancel::check().map_err(|e| std::io::Error::other(e).to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let r = app.run("file.save", json!({"path": "/docs/streamed.vectorcraft"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    filled.wait();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none(), "no error is shown");
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    let st = app.session.active().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
+}
+
 #[test]
 fn quitting_waits_for_background_saves() {
     let gate = Gate::default();
