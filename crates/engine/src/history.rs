@@ -248,7 +248,7 @@ impl History {
 
     /// The document at row `row` of the History panel, `now` being the document now: the rows before
     /// it are the undo steps, oldest first, and the rows after it the redo steps, nearest first.
-    pub(crate) fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
+    pub fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
         let current = self.undo.len();
         match row.cmp(&current) {
             std::cmp::Ordering::Less => self.undo.get(row).map(|e| &e.doc),

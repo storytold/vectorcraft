@@ -53,7 +53,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     rows.extend(st.history.undo.iter().map(|h| (shown(h), false)));
     let current = rows.len() - 1;
     rows.extend(st.history.redo.iter().rev().map(|h| (shown(h), true)));
-    let mut steps: Option<i64> = None;
+    let mut target: Option<usize> = None;
     crate::widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         egui::ScrollArea::vertical().id_salt("hist").max_height(260.0).stick_to_bottom(true).show(ui, |ui| {
@@ -75,14 +75,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let col = if *future { t.text_disabled } else { t.text };
                 ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
                 if resp.clicked() && i != current {
-                    steps = Some(steps_to(current, i));
+                    target = Some(i);
                 }
                 resp.context_menu(|ui| {
-                    if menu_item(ui, tl!("New Document from State"), crate::menus::enabled(app, "edit.newDocumentFromState"), false) {
-                        crate::menus::invoke(app, "edit.newDocumentFromState", json!({ "index": i }));
+                    if menu_item(ui, tl!("New Document from State"), crate::menus::enabled(app, "edit.newDocumentFromState"), false)
+                        && let Some(row) = resolve_state(app, i, false)
+                    {
+                        crate::menus::invoke(app, "edit.newDocumentFromState", json!({ "index": row }));
                     }
                     if menu_item(ui, tl!("Step to This State"), i != current, false) {
-                        steps = Some(steps_to(current, i));
+                        target = Some(i);
                     }
                     ui.separator();
                     if menu_item(ui, tl!("Clear History"), crate::menus::enabled(app, "edit.clearHistory"), false) {
@@ -92,13 +94,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-    if let Some(s) = steps {
-        let (cmd, n) = if s < 0 { ("edit.undo", -s) } else { ("edit.redo", s) };
-        for _ in 0..n {
-            if app.run(cmd, json!({})).is_err() {
-                break;
-            }
-        }
+    if let Some(target) = target {
+        step_to_state(app, target);
     }
     widgets::divider(ui);
     // A click on a row moves to its state at once, so the selected state is the current one.
@@ -109,6 +106,51 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, NEW_DOCUMENT, json!({}));
         }
     });
+}
+
+/// Keep the clicked snapshot while pending edits settle: they can add or trim history rows.
+fn resolve_state(app: &mut VectorcraftApp, row: usize, keep_typing: bool) -> Option<usize> {
+    use std::sync::Arc;
+
+    let target = app.session.active().and_then(|st| st.history.state(&st.doc, row)).cloned()?;
+    let requests = app.session.finish_tool_edit();
+    let failed = requests.is_err();
+    crate::canvas::apply_requests(app, requests);
+    if failed {
+        return None;
+    }
+    if keep_typing && let Err(e) = app.keep_typing() {
+        app.status(e);
+        return None;
+    }
+    let st = app.session.active()?;
+    let current = st.history.undo.len();
+    let row = if Arc::ptr_eq(&st.doc, &target) {
+        Some(current)
+    } else {
+        st.history
+            .undo
+            .iter()
+            .position(|h| Arc::ptr_eq(&h.doc, &target))
+            .or_else(|| st.history.redo.iter().rev().position(|h| Arc::ptr_eq(&h.doc, &target)).map(|i| current + i + 1))
+    };
+    if row.is_none() {
+        app.status(tl!("That history state is no longer available."));
+    }
+    row
+}
+
+fn step_to_state(app: &mut VectorcraftApp, row: usize) {
+    let Some(row) = resolve_state(app, row, true) else { return };
+    let Some(st) = app.session.active() else { return };
+    let steps = steps_to(st.history.undo.len(), row);
+    let (cmd, n) = if steps < 0 { ("edit.undo", -steps) } else { ("edit.redo", steps) };
+    for _ in 0..n {
+        if let Err(e) = app.run(cmd, json!({})) {
+            app.status(e);
+            break;
+        }
+    }
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -448,5 +490,64 @@ mod tests {
         empty.session.execute("edit.clearHistory", &json!({})).unwrap();
         let h = row_menu_harness(empty, 0);
         assert!(h.get_by_label("   Clear History").accesskit_node().is_disabled());
+    }
+
+    #[test]
+    fn stepping_settles_typing_and_follows_the_snapshot_when_rows_shift() {
+        use egui_kittest::kittest::Queryable;
+        for (limit, row) in [(10, 0), (2, 1)] {
+            let mut app = app_with_two_rectangles();
+            app.session.active_mut().unwrap().history.limit = limit;
+            let st = app.session.active().unwrap();
+            let wanted = st.history.state(&st.doc, row).unwrap().clone();
+            app.session.begin_interaction("Typing").unwrap();
+            app.session.preview("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+            let mut h = row_menu_harness(app, row);
+            h.get_by_label("   Step to This State").click();
+            h.run_steps(2);
+            let st = h.state().session.active().unwrap();
+            assert_eq!(st.doc.layers, wanted.layers, "limit {limit}, row {row}");
+            assert!(st.interaction.is_none());
+            assert_eq!(st.history.undo.len(), 0);
+        }
+    }
+
+    #[test]
+    fn copying_a_state_resolves_pending_tool_edits_without_copying_a_neighbor() {
+        use egui_kittest::kittest::Queryable;
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+
+        for row in [0, 1] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+            // A Shape Builder merge over this many segments computes on another thread.
+            for k in 0..40 {
+                app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+            }
+            app.run("select.all", json!({})).unwrap();
+            app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+            let st = app.session.active_mut().unwrap();
+            st.history.limit = 2;
+            st.history.trim();
+            let wanted = st.history.state(&st.doc, row).unwrap().clone();
+            let view = app.view_info();
+            crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Move, 15.0, 10.0), view);
+            app.session.tool_poll(view, true).unwrap();
+            crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Down, 15.0, 10.0), view);
+            crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Up, 15.0, 10.0), view);
+            assert!(app.session.tool_waiting());
+            let mut h = row_menu_harness(app, row);
+            h.get_by_label("   New Document from State").click();
+            h.run_steps(2);
+            let app = h.state();
+            assert!(!app.session.tool_waiting());
+            if row == 0 {
+                assert_eq!(app.session.documents().len(), 1, "the pruned snapshot must not copy its neighbor");
+                assert_eq!(app.ui.status, "That history state is no longer available.");
+            } else {
+                assert_eq!(app.session.active_index(), Some(1));
+                assert_eq!(app.session.active().unwrap().doc.layers, wanted.layers, "the retained snapshot moved from row 1 to row 0");
+            }
+        }
     }
 }
