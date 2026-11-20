@@ -6282,6 +6282,8 @@ theme	Appearance	Udseende
 	Symbolism Tool	Symbolværktøj
 	Image Trace Presets	Forudindstillinger til billedsporing
 	Live Paint Bucket	Live Paint-spand
+	Fill Area	Udfyld område
+	Fill Area Tool	Værktøjet Udfyld område
 	Live Paint Bucket (Stroke)	Live Paint-spand (kontur)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Formbygger
@@ -7735,6 +7737,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Fill Area: no enclosed area under the pointer	Udfyld område: intet lukket område under markøren
 @msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
@@ -10861,6 +10864,10 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Nature Icons	Naturikoner
+	Flower	Blomst
+	Tree	Træ
+	Mountain	Bjerg
 	Ornamental	Ornamentik
 	Scrollwork	Slyngværk
 	Filigree Arrow	Filigranpil

@@ -2896,6 +2896,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	Saved {path}	Αποθηκεύτηκε το {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Επιλέξτε κείμενο ή κάντε κλικ μέσα σε κείμενο με το εργαλείο κειμένου για εισαγωγή γλύφων
 @msg	Shape Builder: no region under the pointer	Δημιουργία σχημάτων: δεν υπάρχει περιοχή κάτω από τον δείκτη
+@msg	Fill Area: no enclosed area under the pointer	Γέμισμα περιοχής: δεν υπάρχει κλειστή περιοχή κάτω από τον δείκτη
 @msg	Shape Builder: select all paths you want to merge	Δημιουργία σχημάτων: επιλέξτε όλες τις διαδρομές που θέλετε να συγχωνεύσετε
 @msg	Shape Builder: select paths or compound paths	Δημιουργία σχημάτων: επιλέξτε διαδρομές ή σύνθετες διαδρομές
 @msg	Show All Hidden Attributes: nothing is hidden	Εμφάνιση όλων των κρυφών χαρακτηριστικών: δεν υπάρχουν κρυφά χαρακτηριστικά
@@ -3306,6 +3307,8 @@ theme	Appearance	Εμφάνιση
 	List View	Προβολή λίστας
 	List Workspaces	Λίστα χώρων εργασίας
 	Live Paint Bucket	Κουβάς δυναμικής βαφής
+	Fill Area	Γέμισμα περιοχής
+	Fill Area Tool	Εργαλείο γεμίσματος περιοχής
 	Live Paint Bucket (Stroke)	Κουβάς δυναμικής βαφής (περίγραμμα)
 	Live Paint Info	Πληροφορίες δυναμικής βαφής
 	Live Paint Selection Tool	Επιλογή δυναμικής βαφής (Live Paint Selection Tool)
@@ -8948,6 +8951,10 @@ breakText	Glyphs	Γλύφοι
 @msg	A joint does not close by {gap} pt.	Μια ένωση δεν κλείνει κατά {gap} pt.
 @msg	Two panels pass through each other.	Δύο πάνελ διαπερνούν το ένα το άλλο.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Nature Icons	Εικονίδια φύσης
+	Flower	Λουλούδι
+	Tree	Δέντρο
+	Mountain	Βουνό
 	Ornamental	Διακοσμητικά μοτίβα
 	Scrollwork	Σπείρα
 	Filigree Arrow	Φιλιγκράν βέλος

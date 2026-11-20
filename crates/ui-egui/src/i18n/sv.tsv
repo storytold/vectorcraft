@@ -2097,6 +2097,8 @@ font-technology	Variable	Variabla
 	List Workspaces	Lista arbetslayouter
 	Live Paint	Direktmålning
 	Live Paint Bucket	Direktmålningshink
+	Fill Area	Fyll område
+	Fill Area Tool	Verktyget Fyll område
 	Live Paint Bucket (Stroke)	Direktmålningshink (kontur)
 	Live Paint Info	Direktmålningsinfo
 	Live Paint Selection Tool	Markeringsverktyg för direktmålning
@@ -5065,6 +5067,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Saved {path}	Sparade {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markera text eller klicka i text med textverktyget för att infoga glyfer
 @msg	Shape Builder: no region under the pointer	Formbyggare: inget område under pekaren
+@msg	Fill Area: no enclosed area under the pointer	Fyll område: inget slutet område under pekaren
 @msg	Shape Builder: select all paths you want to merge	Formbyggare: markera alla banor du vill sammanfoga
 @msg	Shape Builder: select paths or compound paths	Formbyggare: markera banor eller sammansatta banor
 @msg	Show All Hidden Attributes: nothing is hidden	Visa alla dolda attribut: ingenting är dolt
@@ -10892,6 +10895,10 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Nature Icons	Naturikoner
+	Flower	Blomma
+	Tree	Träd
+	Mountain	Berg
 	Ornamental	Ornament
 	Scrollwork	Snirkel
 	Filigree Arrow	Filigranpil

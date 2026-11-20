@@ -2469,6 +2469,8 @@ antiAlias	Sharp	날카롭게
 	List View	목록 보기
 	List Workspaces	작업 영역 목록
 	Live Paint Bucket	라이브 페인트 통
+	Fill Area	영역 채우기
+	Fill Area Tool	영역 채우기 도구
 	Live Paint Bucket (Stroke)	라이브 페인트 통 (선)
 	Live Paint Info	라이브 페인트 정보
 	Live Paint Selection Tool	라이브 페인트 선택 도구
@@ -4955,6 +4957,7 @@ theme	Appearance	외관
 @msg	Live Paint: select paths or compound paths	라이브 페인트: 패스 또는 컴파운드 패스를 선택하세요
 @msg	Live Paint: these paths are too degenerate to paint	라이브 페인트: 이 패스는 퇴화되어 칠할 수 없습니다
 @msg	Shape Builder: no region under the pointer	모양 빌더: 포인터 아래에 영역이 없습니다
+@msg	Fill Area: no enclosed area under the pointer	영역 채우기: 포인터 아래에 닫힌 영역이 없습니다
 @msg	Shape Builder: select all paths you want to merge	모양 빌더: 병합할 패스를 모두 선택하세요
 @msg	Shape Builder: select paths or compound paths	모양 빌더: 패스 또는 컴파운드 패스를 선택하세요
 @msg	image data `{_1}` is missing	이미지 데이터 `{_1}`이(가) 없습니다
@@ -10438,6 +10441,10 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Nature Icons	자연 아이콘
+	Flower	꽃
+	Tree	나무
+	Mountain	산
 	Ornamental	장식 문양
 	Scrollwork	소용돌이 장식
 	Filigree Arrow	세공 화살표

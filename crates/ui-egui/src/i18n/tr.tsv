@@ -1990,6 +1990,8 @@ font-technology	Variable	Değişken
 	List Workspaces	Çalışma Alanlarını Listeleme
 	Live Paint	Canlı Boyama
 	Live Paint Bucket	Canlı Boyama Kovası
+	Fill Area	Alanı Doldur
+	Fill Area Tool	Alan Doldurma Aracı
 	Live Paint Bucket (Stroke)	Canlı Boya Kovası (Strok)
 	Live Paint Info	Canlı Boyama Bilgisi
 	Live Paint Selection Tool	Canlı Boyama Seçim Aracı
@@ -4900,6 +4902,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Saved {path}	{path} kaydedildi
 @msg	Select text or click into text with the Type tool to insert glyphs	Glif eklemek için metni seçin veya Yazım aracıyla metne tıklayın
 @msg	Shape Builder: no region under the pointer	Şekil Oluşturucu: işaretçinin altında bölge yok
+@msg	Fill Area: no enclosed area under the pointer	Alanı Doldur: işaretçinin altında kapalı alan yok
 @msg	Shape Builder: select all paths you want to merge	Şekil Oluşturucu: birleştirmek istediğiniz tüm yolları seçin
 @msg	Shape Builder: select paths or compound paths	Şekil Oluşturucu: yolları veya bileşik yolları seçin
 @msg	Show All Hidden Attributes: nothing is hidden	Tüm Gizli Özellikleri Göster: hiçbir şey gizli değildir
@@ -10757,6 +10760,10 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Nature Icons	Doğa simgeleri
+	Flower	Çiçek
+	Tree	Ağaç
+	Mountain	Dağ
 	Ornamental	Süslemeli
 	Scrollwork	Kıvrım süsü
 	Filigree Arrow	Telkari ok

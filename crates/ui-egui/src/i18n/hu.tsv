@@ -2681,6 +2681,8 @@ file-filter	Templates	Sablonok
 	List Workspaces	Munkaterületek listázása
 	Live Paint	Élő festés
 	Live Paint Bucket	Élő festékesvödör
+	Fill Area	Terület kitöltése
+	Fill Area Tool	Területkitöltő eszköz
 	Live Paint Bucket (Stroke)	Élő festékesvödör (körvonal)
 	Live Paint Info	Élő festés adatai
 	Live Paint Selection Tool	Élőfestés-kijelölés
@@ -6466,6 +6468,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	shadings of more than 4096 patches or triangles were left out	kimaradtak a 4096-nál több foltból vagy háromszögből álló árnyalások
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	az ismeretlen típusú függvényt használó árnyalások a középső színükkel kitöltve jelennek meg
 @msg	Shape Builder: no region under the pointer	Alakzatépítő: a mutató alatt nincs terület
+@msg	Fill Area: no enclosed area under the pointer	Terület kitöltése: a mutató alatt nincs zárt terület
 @msg	Shape Builder: select all paths you want to merge	Alakzatépítő: jelöld ki az összes egyesítendő útvonalat
 @msg	Shape Builder: select paths or compound paths	Alakzatépítő: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	shortcut for `{k}` must be a string	`{k}` billentyűparancsa csak szöveg lehet
@@ -10788,6 +10791,10 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Nature Icons	Természetikonok
+	Flower	Virág
+	Tree	Fa
+	Mountain	Hegy
 	Ornamental	Díszítőmotívumok
 	Scrollwork	Kacskaringó
 	Filigree Arrow	Filigrán nyíl

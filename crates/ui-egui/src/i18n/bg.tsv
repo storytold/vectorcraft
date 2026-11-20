@@ -2075,6 +2075,8 @@ font-technology	Variable	Променливи
 	List Workspaces	Извеждане на работни пространства
 	Live Paint	Динамично оцветяване
 	Live Paint Bucket	Кофа за динамично оцветяване
+	Fill Area	Запълване на област
+	Fill Area Tool	Инструмент „Запълване на област“
 	Live Paint Bucket (Stroke)	Кофа за динамично оцветяване (Щрих)
 	Live Paint Info	Информация за динамично оцветяване
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
@@ -4785,6 +4787,7 @@ axis	Both	И двете
 @msg	Saved {path}	Записано: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Изберете текст или щракнете в текста с инструмента „Текст“, за да вмъкнете глифи
 @msg	Shape Builder: no region under the pointer	Инструмент за създаване на форми: няма област под показалеца
+@msg	Fill Area: no enclosed area under the pointer	Запълване на област: няма затворена област под показалеца
 @msg	Shape Builder: select paths or compound paths	Инструмент за създаване на форми: изберете пътища или съставни пътища
 @msg	Show All Hidden Attributes: nothing is hidden	Показване на всички скрити атрибути: нищо не е скрито
 @msg	Split Into Grid: select paths large enough for the grid	Разделяне на мрежа: изберете пътища, достатъчно големи за мрежата
@@ -7930,6 +7933,10 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Nature Icons	Природни икони
+	Flower	Цвете
+	Tree	Дърво
+	Mountain	Планина
 	Ornamental	Орнаментални
 	Scrollwork	Завитък
 	Filigree Arrow	Филигранна стрела

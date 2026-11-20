@@ -2203,6 +2203,8 @@ file-filter	Templates	Шаблони
 	List Workspaces	Перелічити робочі середовища
 	Live Paint	Швидка заливка
 	Live Paint Bucket	Швидка заливка (відро)
+	Fill Area	Заливка області
+	Fill Area Tool	Інструмент «Заливка області»
 	Live Paint Bucket (Stroke)	Швидка заливка (обведення)
 	Live Paint Info	Відомості про швидку заливку
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
@@ -5179,6 +5181,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Fill Area: no enclosed area under the pointer	Заливка області: під вказівником немає замкненої області
 @msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
@@ -10451,6 +10454,10 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Nature Icons	Значки природи
+	Flower	Квітка
+	Tree	Дерево
+	Mountain	Гора
 	Ornamental	Орнаментальні
 	Scrollwork	Завиток
 	Filigree Arrow	Філігранна стріла

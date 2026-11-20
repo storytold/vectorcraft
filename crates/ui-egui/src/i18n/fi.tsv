@@ -3739,6 +3739,8 @@ theme	Appearance	Ulkoasu
 	Symbolism Tool	Symbolityökalu
 	Image Trace Presets	Kuvan jäljityksen esiasetukset
 	Live Paint Bucket	Elävän maalauksen ämpäri
+	Fill Area	Täytä alue
+	Fill Area Tool	Alueen täyttötyökalu
 	Live Paint Bucket (Stroke)	Elävän maalauksen ämpäri (viiva)
 	Live Paint Info	Elävän maalauksen tiedot
 	Shape Builder	Muodonmuodostin
@@ -5409,6 +5411,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Fill Area: no enclosed area under the pointer	Täytä alue: osoittimen alla ei ole suljettua aluetta
 @msg	Shape Builder: select all paths you want to merge	Muodonmuodostin: valitse kaikki polut, jotka haluat yhdistää
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
@@ -9031,6 +9034,10 @@ breakText	Glyphs	Merkit
 @msg	A joint does not close by {gap} pt.	Liitos ei sulkeudu, rako {gap} pt.
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Nature Icons	Luontokuvakkeet
+	Flower	Kukka
+	Tree	Puu
+	Mountain	Vuori
 	Ornamental	Koristekuviot
 	Scrollwork	Kiemura
 	Filigree Arrow	Filigraanin nuoli

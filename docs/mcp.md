@@ -2388,7 +2388,7 @@ and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `o
 `swatch.addUsedColors`; `visible` in `appearance.setItem`; `copy` in `appearance.transfer`; `reverse` and `append` in
 `appearance.copyFrom`; `reverse` and `stroke` in `paint.editGradient`; `stroke` in `paint.setGradientGeom` and in
 `paint.freeform.addPoint`, `setPoint`, `deletePoint`, `addLine`, `splitLine` and `get`; `erase`,
-`openFilledAsClosed` and `splitStroke` in `shapeBuilder.merge`; `openFilledAsClosed` in `shapeBuilder.regions`; `closeGaps` in `livePaint.gapOptions`; and
+`openFilledAsClosed` and `splitStroke` in `shapeBuilder.merge`; `openFilledAsClosed` in `shapeBuilder.regions` and `shapeBuilder.copyRegion`; `closeGaps` in `livePaint.gapOptions`; and
 `enhanced` in `imageTrace.make` and `imageTrace.makeAndExpand`. A null is read as a key left out.
 
 These commands refuse a string or another value that is not a number with `` `radius` must be a number, not "2" ``,
@@ -2409,7 +2409,7 @@ and `fitMinPercent` in `text.areaOptions`; `x` and `y` in `symbol.place`; `radiu
 `symbol.spray`; `radius` and `intensity` in `symbol.adjust`; `to` in `swatch.move`; `weight` and `opacity` in
 `appearance.setItem`; `r`, `g`, `b`, `c`, `m`, `y`, `k`, `gray` and `tint` in `edit.colors.adjustBalance`; `steps`
 and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gradient` of a command that takes a paint; `t` in
-`paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions`; and
+`paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions` and `shapeBuilder.copyRegion`; and
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
@@ -5875,7 +5875,7 @@ left out.
 ## Symbol libraries
 
 Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons, Weather Icons, Media Controls), the `.vectorcraft` files in
+Inventory Icons, Skill Icons, Weather Icons, Nature Icons with Leaf, Flower, Tree, Mountain and Wave, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -13563,6 +13563,35 @@ a stroke when it has `rect`. With both `rect` and `points`, the command also tou
 
 ```json
 {"name":"run_command","arguments":{"command":"shapeBuilder.merge","params":{"rect":[50,50,200,200]}}}
+```
+
+The Fill Area tool (`fillArea`, in the Live Paint Bucket's group) adds a new closed path of the area under a click
+and leaves the paths around it as they are. Nothing needs to be selected: the visible, unlocked paths on every layer
+bound areas, filled or not, open paths included, and the overlap of two filled shapes is an area of its own. While the
+pointer hovers an area, the tool outlines it in red and the pointer shows the bucket with paint; elsewhere the pointer
+shows the empty bucket, and a click there does nothing. The new path appears on the press and is kept on the release;
+Escape or a canceled touch before the release takes it back. In a document of more than 128 path segments the tool looks
+for the hovered area on another thread, and the outline appears when that search is done. The tool sends `shapeBuilder.copyRegion` with `point`, the Shape Builder's gap
+length (`gap`, 0 with Gap Detection off) and its `openFilledAsClosed`: the two tools share `gapDetection`, `gapLength`
+and `openFilledAsClosed`, so `tool.setOption` on either one sets them for both, and `fillArea` has no other options.
+Double-clicking the Fill Area tool opens the Shape Builder Tool Options (`tool.options {tool: "fillArea"}`, dialog
+`shapeBuilderOptions`).
+The new path takes the current fill, stroke and stroke weight (`fill` and `stroke` override the paints), goes directly
+above the front-most object along the area (one whose outline touches the area's outline, or that covers it) and is
+selected. When a group, Live Paint group, Shaper group or clipping group holds that object, the new path goes above the
+outermost group in its layer, not inside it, and the group keeps its members. In isolation mode only the paths in
+the isolated layer or group bound areas, for the tool's hover and click and for the command (with `ids`, only the
+paths of the listed objects that are in it), and the new path goes inside the isolated layer or group, directly above
+the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
+or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or
+Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or
+inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
+step; a `gap` outside 0 to 72 is an error. It returns `{id, above}`. The command looks for the area among the paths
+near the point first. When the paths together have more than 65,536 segments and the paths near the point do not
+enclose it, the point counts as in no enclosed area.
+
+```json
+{"name":"run_command","arguments":{"command":"shapeBuilder.copyRegion","params":{"point":[50,70],"gap":3}}}
 ```
 
 ## Perspective grid

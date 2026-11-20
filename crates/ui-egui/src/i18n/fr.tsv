@@ -2157,6 +2157,8 @@ font-technology	Variable	Variables
 	List Workspaces	Lister les espaces de travail
 	Live Paint	Peinture dynamique
 	Live Paint Bucket	Pot de peinture dynamique
+	Fill Area	Remplir la zone
+	Fill Area Tool	Outil Remplir la zone
 	Live Paint Bucket (Stroke)	Pot de peinture dynamique (contour)
 	Live Paint Info	Informations sur la peinture dynamique
 	Live Paint Selection Tool	Outil Sélection de peinture dynamique
@@ -5126,6 +5128,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
 @msg	Select text or click into text with the Type tool to insert glyphs	Sélectionnez du texte ou cliquez dans un texte avec l’outil Texte pour insérer des glyphes
+@msg	Fill Area: no enclosed area under the pointer	Remplir la zone : aucune zone fermée sous le pointeur
 @msg	Shape Builder: no region under the pointer	Concepteur de forme : aucune zone sous le pointeur
 @msg	Shape Builder: select all paths you want to merge	Concepteur de forme : sélectionnez tous les tracés à fusionner
 @msg	Shape Builder: select paths or compound paths	Concepteur de forme : sélectionnez des tracés ou des tracés transparents
@@ -10762,6 +10765,10 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Nature Icons	Icônes de nature
+	Flower	Fleur
+	Tree	Arbre
+	Mountain	Montagne
 	Ornamental	Ornemental
 	Scrollwork	Volute
 	Filigree Arrow	Flèche filigrane

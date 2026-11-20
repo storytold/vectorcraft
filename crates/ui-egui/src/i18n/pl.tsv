@@ -3681,6 +3681,8 @@ theme	Appearance	Wygląd
 	Symbolism Tool	Narzędzie symboli
 	Image Trace Presets	Ustawienia obrysu obrazu
 	Live Paint Bucket	Wiadro aktywnego malowania
+	Fill Area	Wypełnij obszar
+	Fill Area Tool	Narzędzie Wypełnij obszar
 	Live Paint Bucket (Stroke)	Wiadro aktywnego malowania (obrys)
 	Live Paint Info	Informacje o aktywnym malowaniu
 	Shape Builder	Kreator kształtów
@@ -5300,6 +5302,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved {path}	Zapisano {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Zaznacz tekst lub kliknij w tekst narzędziem Tekst, aby wstawić glify
 @msg	Shape Builder: no region under the pointer	Kreator kształtów: brak obszaru pod wskaźnikiem
+@msg	Fill Area: no enclosed area under the pointer	Wypełnij obszar: brak zamkniętego obszaru pod wskaźnikiem
 @msg	Shape Builder: select all paths you want to merge	Kreator kształtów: zaznacz wszystkie ścieżki, które chcesz scalić
 @msg	Shape Builder: select paths or compound paths	Kreator kształtów: zaznacz ścieżki lub ścieżki złożone
 @msg	Show All Hidden Attributes: nothing is hidden	Pokaż wszystkie ukryte atrybuty: nic nie jest ukryte
@@ -10664,6 +10667,10 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Nature Icons	Ikony natury
+	Flower	Kwiat
+	Tree	Drzewo
+	Mountain	Góra
 	Ornamental	Ornamentalne
 	Scrollwork	Zawijas
 	Filigree Arrow	Filigranowa strzałka

@@ -2519,6 +2519,8 @@ digits	Hindi	Hindi
 	List Workspaces	Liệt kê không gian làm việc
 	Live Paint	Tô trực tiếp
 	Live Paint Bucket	Xô Tô trực tiếp
+	Fill Area	Tô vùng
+	Fill Area Tool	Công cụ Tô vùng
 	Live Paint Bucket (Stroke)	Xô Tô trực tiếp (Nét)
 	Live Paint Info	Thông tin Tô trực tiếp
 	Live Paint Selection Tool	Công cụ Chọn Tô trực tiếp
@@ -6169,6 +6171,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	shadings of more than 4096 patches or triangles were left out	các vùng tô có hơn 4096 mảnh hoặc tam giác đã bị bỏ qua
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	các vùng tô có hàm loại không xác định được tô bằng màu giữa
 @msg	Shape Builder: no region under the pointer	Xây dựng hình dạng: không có vùng nào dưới con trỏ
+@msg	Fill Area: no enclosed area under the pointer	Tô vùng: không có vùng kín nào dưới con trỏ
 @msg	Shape Builder: select all paths you want to merge	Xây dựng hình dạng: chọn tất cả đường dẫn bạn muốn hợp nhất
 @msg	Shape Builder: select paths or compound paths	Xây dựng hình dạng: chọn đường dẫn hoặc đường dẫn phức
 @msg	shortcut for `{k}` must be a string	phím tắt cho `{k}` phải là chuỗi
@@ -8648,6 +8651,10 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Nature Icons	Biểu tượng thiên nhiên
+	Flower	Hoa
+	Tree	Cây
+	Mountain	Núi
 	Ornamental	Hoa văn
 	Scrollwork	Nét cuộn
 	Filigree Arrow	Mũi tên hoa văn

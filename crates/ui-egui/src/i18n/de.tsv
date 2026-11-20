@@ -2169,6 +2169,8 @@ file-filter	Templates	Vorlagen
 	List Workspaces	Arbeitsbereiche auflisten
 	Live Paint	Interaktiv malen
 	Live Paint Bucket	Interaktiv-malen-Werkzeug
+	Fill Area	Fläche füllen
+	Fill Area Tool	Fläche-füllen-Werkzeug
 	Live Paint Bucket (Stroke)	Interaktiv-malen-Werkzeug (Kontur)
 	Live Paint Info	Informationen zu „Interaktiv malen“
 	Live Paint Selection Tool	Interaktiv-malen-Auswahlwerkzeug
@@ -5057,6 +5059,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Saved {path}	{path} gespeichert
 @msg	Select text or click into text with the Type tool to insert glyphs	Wählen Sie Text aus oder klicken Sie mit dem Text-Werkzeug in einen Text, um Glyphen einzufügen
 @msg	Shape Builder: no region under the pointer	Formerstellung: kein Bereich unter dem Zeiger
+@msg	Fill Area: no enclosed area under the pointer	Fläche füllen: kein geschlossener Bereich unter dem Zeiger
 @msg	Shape Builder: select all paths you want to merge	Formerstellung: Wählen Sie alle Pfade aus, die Sie zusammenfügen möchten
 @msg	Shape Builder: select paths or compound paths	Formerstellung: Wählen Sie Pfade oder zusammengesetzte Pfade aus
 @msg	Show All Hidden Attributes: nothing is hidden	Alle ausgeblendeten Attribute einblenden: Es ist nichts ausgeblendet
@@ -10441,6 +10444,10 @@ breakText	Glyphs	Glyphen
 @msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
 @msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
+	Nature Icons	Natursymbole
+	Flower	Blume
+	Tree	Baum
+	Mountain	Berg
 	Ornamental	Ornamental
 	Scrollwork	Schnörkel
 	Filigree Arrow	Filigranpfeil
