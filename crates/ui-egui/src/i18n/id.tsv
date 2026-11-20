@@ -344,8 +344,10 @@
 @msg	`{GRAPHICS}` face must be front, back or side	face `{GRAPHICS}` harus front, back, atau side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} `{GRAPHICS}` harus berupa angka dari {lo} sampai {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` harus berupa larik
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafis dipetakan ke jenis objek Plane, Extrude, dan Revolve
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafis dipetakan ke jenis objek Bidang, Ekstrusi, Revolusi, dan Gelembungkan
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolusi memetakan grafis ke sisinya: petakan ke bagian depan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gelembungkan memetakan grafis ke bagian depan dan belakangnya, bukan ke sisi
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objek {_1}: bagian belakang Gelembungkan hanya menerima grafis saat Kedua sisi dan Ujung diaktifkan
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafis terlalu rumit untuk permukaan ini: sederhanakan karya simbol atau kurangi Segmen
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` menerima paling banyak {MAX_GRAPHICS} grafis
 @msg	A plane has one face: map its graphics onto the front	Bidang memiliki satu sisi: petakan grafisnya ke bagian depan
@@ -4148,6 +4150,8 @@ theme	Appearance	Tampilan
 	Symbolism Tool	Alat simbolisme
 	Image Trace Presets	Preset telusur gambar
 	Live Paint Bucket	Ember Live Paint
+	Fill Area	Isi Area
+	Fill Area Tool	Alat Isi Area
 	Live Paint Bucket (Stroke)	Ember Live Paint (guratan)
 	Live Paint Info	Info Live Paint
 	Shape Builder	Pembangun bentuk
@@ -5597,6 +5601,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Berhasil menyimpan {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Pilih teks atau klik di dalam teks dengan alat Teks untuk menyisipkan glif
 @msg	Shape Builder: no region under the pointer	Pembangun Bentuk: tidak ada area di bawah penunjuk
+@msg	Fill Area: no enclosed area under the pointer	Isi Area: tidak ada area tertutup di bawah penunjuk
 @msg	Shape Builder: select paths or compound paths	Pembangun Bentuk: pilih jalur atau jalur majemuk
 @msg	Show All Hidden Attributes: nothing is hidden	Tampilkan semua atribut tersembunyi: tidak ada yang tersembunyi
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
@@ -8631,6 +8636,15 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Nature Icons	Ikon Alam
+	Flower	Bunga
+	Tree	Pohon
+	Mountain	Gunung
+	Ornamental	Ornamental
+	Scrollwork	Sulur Hias
+	Filigree Arrow	Panah Filigran
+	Petal Sweep	Sapuan Kelopak
+	Twin Curl	Sulur Ganda
 	Vector Packs	Paket Vektor
 	Compass Rose	Mawar Kompas
 	Botanical Sprig	Ranting Botani

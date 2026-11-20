@@ -461,8 +461,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`: face skal være front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér, Omdrej og Pust op
 @msg	Revolve maps graphics onto its side: map them onto the front	Omdrej kortlægger grafik på siden: kortlæg den på forsiden
+@msg	Inflate maps graphics onto its front and back, not onto a side	Pust op kortlægger grafik på forsiden og bagsiden, ikke på en side
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objektet {_1}: bagsiden af Pust op tager kun imod grafik, når Begge sider og Kappe er slået til
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikken er for kompleks til denne overflade: forenkl symbolernes grafik, eller reducér Segmenter
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tager højst {MAX_GRAPHICS} grafikelementer
 @msg	A plane has one face: map its graphics onto the front	Et plan har én flade: kortlæg dets grafik på forsiden
@@ -6280,6 +6282,8 @@ theme	Appearance	Udseende
 	Symbolism Tool	Symbolværktøj
 	Image Trace Presets	Forudindstillinger til billedsporing
 	Live Paint Bucket	Live Paint-spand
+	Fill Area	Udfyld område
+	Fill Area Tool	Værktøjet Udfyld område
 	Live Paint Bucket (Stroke)	Live Paint-spand (kontur)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Formbygger
@@ -7733,6 +7737,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Fill Area: no enclosed area under the pointer	Udfyld område: intet lukket område under markøren
 @msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
@@ -10859,6 +10864,15 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Nature Icons	Naturikoner
+	Flower	Blomst
+	Tree	Træ
+	Mountain	Bjerg
+	Ornamental	Ornamentik
+	Scrollwork	Slyngværk
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvirp
+	Twin Curl	Dobbelt slyng
 	Vector Packs	Vektorpakker
 	Compass Rose	Kompasrose
 	Botanical Sprig	Botanisk kvist
