@@ -5702,11 +5702,15 @@ fills and strokes above it paint over the members (characters), those below unde
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
 groups and layers. In a Live Paint group those are its faces and edges, not its hidden source paths.
-`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only; a selected group left with only its hidden source paths is returned without a change. A
+`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only. On a
+selected group left with only its hidden source paths, either command changes nothing. A
 fill or stroke command with an `item` and `target: "contents"` (such as `paint.setFill`, `stroke.set`,
 `paint.invert`, `paint.setGradientGeom` and `object.setOverprint`) changes the faces for a fill row and the edges for
 a stroke row. The row commands (`appearance.setItem`, `appearance.removeItem` and the others) find their rows on each
-face and edge as on any other object in the contents.
+face and edge as on any other object in the contents. `graphicStyle.apply` gives each face only the style's fills and
+each edge only its strokes, with or without `add`, and links neither to the style. `appearance.clear` leaves a face
+one empty fill and an edge one empty stroke, and `appearance.reduceToBasic` keeps only a face's fill and only an
+edge's stroke.
 `appearance.targetContents` selects a group's members (double-clicking the Contents row).
 SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
 filter on the whole group in SVG and become an image of the whole group in PDF.

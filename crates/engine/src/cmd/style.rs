@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows (with `add`: of the kinds of row the style shows) and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. In the contents of a Live Paint group, each face takes only the style's fills and each edge only its strokes, and neither is linked. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows (with `add`: of the kinds of row the style shows) and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -351,6 +351,9 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.
     let groups = super::appearance::stood_for(&own, &ids);
+    // In the contents of a Live Paint group, a face takes the style's fills and an edge its strokes.
+    let (faces, edges) = super::appearance::contents_parts(s, p)?;
+    let part = |id: &NodeId| (faces.contains(id) || edges.contains(id)).then(|| faces.contains(id));
     if ids.is_empty() {
         if p.get("ids").is_some() || p.get("id").is_some() {
             return Err(bad("graphicStyle.apply", "no such objects"));
@@ -361,13 +364,20 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "newArt": true }));
     }
     let before = s.doc()?.doc.clone();
-    s.edit("Apply Graphic Style", |d, _| {
+    // An apply that changes nothing (a fill-only style added to edges only) records no undo step.
+    super::overprint::edit_counted(s, "Apply Graphic Style", |d| {
         if add {
             let g = d.graphic_styles[i].clone();
             for id in &ids {
                 if let Some(n) = d.node_mut(*id) {
                     let ap = g.appearance_on(n).into_owned();
-                    n.appearance.items.extend(ap.items);
+                    let kind = part(id);
+                    let rows: Vec<_> = ap.items.into_iter().filter(|it| kind.is_none_or(|fill| it.is_fill() == fill)).collect();
+                    // A face or edge the style adds nothing to keeps its appearance and its link.
+                    if kind.is_some() && rows.is_empty() && ap.effects.is_empty() {
+                        continue;
+                    }
+                    n.appearance.items.extend(rows);
                     n.appearance.effects.extend(ap.effects);
                     n.extras_mut().graphic_style = None;
                 }
@@ -387,13 +397,18 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             let mut shared = None;
             for id in &ids {
                 apply_style(d, *id, &g, &mut shared, chars);
+                // A face or edge that keeps only the rows of its kind no longer has the style's look, so it is not linked.
+                if let (Some(fill), Some(n)) = (part(id), d.node_mut(*id)) {
+                    super::appearance::keep_rows_of_kind(n, fill);
+                    n.extras_mut().graphic_style = None;
+                }
             }
             super::appearance::clear_stood_for(d, &groups);
             super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
             // A label or graph line keeps its new rows for its kind.
             super::graph::capture_label_rows(d, &ids);
         }
-        Ok(())
+        Ok(usize::from(*d != *before))
     })?;
     ok()
 }
