@@ -298,6 +298,11 @@ fn review_597971_action_observation(outer: bool, partial: bool) -> (Value, Value
     stock.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let factory = palette(&stock);
     assert_ne!(custom, factory);
+    let native = vectorcraft_testkit::TempDir::new("swatch-defaults-action-original");
+    let native_path = native.join("original.vectorcraft");
+    app.session.execute("document.save", &json!({"path": native_path.to_string_lossy()})).unwrap();
+    assert!(native_path.is_file(), "the ordinary native save completed");
+    assert_eq!(palette(&app), custom, "saving the original document preserves its custom palette");
     app.run("swatch.defaults.save", json!({})).unwrap();
     assert!(app.take_prefs_changed());
     assert!(!app.take_prefs_changed());
