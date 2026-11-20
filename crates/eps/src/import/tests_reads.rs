@@ -360,6 +360,7 @@ fn one_pass_reads_timed() {
 
 #[test]
 fn currentfile_at_eof_without_trailing_newline_stops_cleanly() {
-    line_case(b"partial-eof", 32, b"partial-eof", false, b"");
+    line_case(b"partial-eof", 32, b"partial-eof", true, b"");
+    line_case(b"partial-eof", 7, b"partial", false, b"-eof");
     hex_case(b"deadbeef", 16, &[0xde, 0xad, 0xbe, 0xef], b"");
 }
