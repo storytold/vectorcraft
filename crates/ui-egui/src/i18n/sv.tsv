@@ -10997,3 +10997,6 @@ digits	Hindi	Hindi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigera original med:
 file-filter	Applications	Program
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Kopierat till urklipp

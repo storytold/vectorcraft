@@ -10860,3 +10860,6 @@ breakText	Glyphs	Glifák
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Eredeti szerkesztése ezzel:
 file-filter	Applications	Alkalmazások
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	A vágólapra másolva

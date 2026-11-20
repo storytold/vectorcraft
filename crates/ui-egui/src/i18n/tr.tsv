@@ -10829,3 +10829,6 @@ breakText	Glyphs	Glifler
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Orijinali şununla düzenle:
 file-filter	Applications	Uygulamalar
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Panoya kopyalandı

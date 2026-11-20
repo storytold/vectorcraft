@@ -10967,3 +10967,6 @@ breakText	Glyphs	Glyffer
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigér original med:
 file-filter	Applications	Programmer
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Kopieret til udklipsholder

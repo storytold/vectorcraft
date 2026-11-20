@@ -9138,3 +9138,6 @@ breakText	Glyphs	Merkit
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
 file-filter	Applications	Sovellukset
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Kopioitu leikepöydälle

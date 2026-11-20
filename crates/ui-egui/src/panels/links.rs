@@ -721,7 +721,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if o.info {
         let units = app.session.general_unit();
-        link_info(ui, cache.info.as_ref().map(|(_, i)| i), units);
+        link_info(ui, &mut app.session, cache.info.as_ref().map(|(_, i)| i), units);
     }
     let sel = selected_rows(&cache.list, &selected);
     let modified = ids(&sel, |r| status_is(r, "modified") || r["preview"] == true && !status_is(r, "missing"));
@@ -877,7 +877,7 @@ pub(crate) fn date_label(ms: u64) -> String {
 }
 
 /// The Link Info section: the details of `info` (`links.info`), or a hint.
-fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
+fn link_info(ui: &mut Ui, session: &mut vectorcraft_engine::Session, info: Option<&Value>, units: vectorcraft_doc::Unit) {
     widgets::divider(ui);
     let Some(i) = info else {
         widgets::dim_label(ui, tl!("Select an image to see its Link Info."));
@@ -892,16 +892,16 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
         }
     };
     let row = super::doc_info::row;
-    row(ui, tl!("Name"), i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into());
-    row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
-    row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
+    row(ui, session, tl!("Name"), i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into());
+    row(ui, session, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
+    row(ui, session, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
     if let Some(l) = i["location"].as_str() {
-        row(ui, tl!("Location"), l.into());
+        row(ui, session, tl!("Location"), l.into());
     }
     // A placed document has no resolution: its rows are left out.
     for (label, k) in [(tl!("PPI"), "ppi"), (tl!("Effective PPI"), "effectivePpi")] {
         if i.get(k).is_some() {
-            row(ui, label, pair(k));
+            row(ui, session, label, pair(k));
         }
     }
     // Pixels, or a placed document's artboard size.
@@ -910,22 +910,22 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
         (None, Some(w), Some(h)) => format!("{} × {}", units.format(w), units.format(h)),
         _ => String::new(),
     };
-    row(ui, tl!("Dimensions"), dims);
+    row(ui, session, tl!("Dimensions"), dims);
     let scale: Vec<f64> = i["scale"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
     if let [x, y] = scale[..] {
-        row(ui, tl!("Scale"), format!("H: {x:.1}%  V: {y:.1}%"));
+        row(ui, session, tl!("Scale"), format!("H: {x:.1}%  V: {y:.1}%"));
     }
-    row(ui, tl!("Rotation"), format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)));
+    row(ui, session, tl!("Rotation"), format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)));
     if let Some(b) = i["fileSize"].as_u64() {
-        row(ui, tl!("Size"), size_label(b));
+        row(ui, session, tl!("Size"), size_label(b));
     }
     for (k, label) in [("created", tl!("Created")), ("modified", tl!("Modified"))] {
         if let Some(ms) = i[k].as_u64() {
-            row(ui, label, date_label(ms));
+            row(ui, session, label, date_label(ms));
         }
     }
     if let Some(p) = i["page"].as_u64() {
-        row(ui, tl!("Page"), p.to_string());
+        row(ui, session, tl!("Page"), p.to_string());
     }
     let status = match i["status"].as_str().unwrap_or_default() {
         "ok" => tl!("Linked"),
@@ -933,7 +933,7 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
         "modified" => tl!("Modified"),
         _ => tl!("Embedded"),
     };
-    row(ui, tl!("Status"), status.into());
+    row(ui, session, tl!("Status"), status.into());
 }
 
 /// The panel's flyout menu: the link commands for the selected rows, Select Linked / Embedded /

@@ -10960,3 +10960,6 @@ shape	Open	Открытый
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактировать оригинал в:
 file-filter	Applications	Приложения
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Скопировано в буфер обмена

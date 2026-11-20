@@ -9082,3 +9082,6 @@ breakText	Glyphs	Glifs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Edita l’original amb:
 file-filter	Applications	Aplicacions
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Copiat al porta-retalls

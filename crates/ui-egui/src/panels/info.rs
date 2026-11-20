@@ -6,6 +6,7 @@
 use egui::{Sense, Ui, vec2};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{NodeKind, Unit};
+use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::Readout;
 
@@ -43,7 +44,7 @@ fn paint_name(p: &Paint) -> Option<String> {
 
 /// One paint's row: its tile and values, and with `options` its name ([`paint_name`]). A paint the
 /// selected objects do not share (`mixed`) leaves the row empty.
-fn paint_block(ui: &mut Ui, p: &Paint, mixed: bool, options: bool) {
+fn paint_block(ui: &mut Ui, session: &mut Session, p: &Paint, mixed: bool, options: bool) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
@@ -54,17 +55,18 @@ fn paint_block(ui: &mut Ui, p: &Paint, mixed: bool, options: bool) {
         match p {
             Paint::Solid { color, .. } => {
                 for (k, v) in color_values(color) {
-                    ui.label(egui::RichText::new(format!("{k}: {v}")).monospace().color(t.text));
+                    let value = format!("{k}: {v}");
+                    widgets::copyable_readout(ui, session, egui::RichText::new(&value).monospace().color(t.text), &value, false);
                 }
             }
             other => {
                 let name = paint_name(other).filter(|_| options).unwrap_or_else(|| other.label());
-                ui.label(egui::RichText::new(name).color(t.text_dim));
+                widgets::copyable_readout(ui, session, egui::RichText::new(&name).color(t.text_dim), &name, false);
             }
         }
     });
     if let (false, true, Paint::Solid { .. }, Some(name)) = (mixed, options, p, paint_name(p)) {
-        ui.label(egui::RichText::new(name).color(t.text_dim));
+        widgets::copyable_readout(ui, session, egui::RichText::new(&name).color(t.text_dim), &name, false);
     }
 }
 
@@ -166,39 +168,38 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         readout: readout.as_ref(),
         options,
     });
-    let mono = |ui: &mut Ui, s: String| {
-        ui.label(egui::RichText::new(s).monospace().color(t.text));
+    let mono = |ui: &mut Ui, session: &mut Session, s: String| {
+        widgets::copyable_readout(ui, session, egui::RichText::new(&s).monospace().color(t.text), &s, false);
     };
     ui.columns(2, |cols| {
         for s in rows.left {
-            mono(&mut cols[0], s);
+            mono(&mut cols[0], &mut app.session, s);
         }
         for s in rows.right {
-            mono(&mut cols[1], s);
+            mono(&mut cols[1], &mut app.session, s);
         }
     });
     if app.session.tool_id() == "zoom" {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        mono(ui, format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size)));
+        let value = format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
+        mono(ui, &mut app.session, value);
     }
     if let Some(Readout::Brush { name: Some(name) }) = readout {
-        mono(ui, name);
+        mono(ui, &mut app.session, name);
     }
     widgets::divider(ui);
     let (f, s) = current_paints(app);
     let (fill_mixed, stroke_mixed) = mixed_paints(app, ui.ctx());
-    paint_block(ui, &f, fill_mixed, options);
-    paint_block(ui, &s, stroke_mixed, options);
+    paint_block(ui, &mut app.session, &f, fill_mixed, options);
+    paint_block(ui, &mut app.session, &s, stroke_mixed, options);
     if let Some((font, size, tracking)) = shared_type(app) {
         widgets::divider(ui);
-        mono(ui, font);
-        mono(
-            ui,
-            crate::i18n::fmt(
-                tl!("Size: {size}  Tracking: {tracking}"),
-                &[("size", &app.session.type_unit().format(size)), ("tracking", &format!("{tracking:.0}"))],
-            ),
+        mono(ui, &mut app.session, font);
+        let value = crate::i18n::fmt(
+            tl!("Size: {size}  Tracking: {tracking}"),
+            &[("size", &app.session.type_unit().format(size)), ("tracking", &format!("{tracking:.0}"))],
         );
+        mono(ui, &mut app.session, value);
     }
 }
 

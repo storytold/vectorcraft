@@ -21,13 +21,13 @@ struct Cache {
 
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
 /// stays as it is.
-pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
+pub(crate) fn row(ui: &mut Ui, session: &mut vectorcraft_engine::Session, label: &str, value: String) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Long values (paths) are cut to the panel's width; hovering shows them whole.
-            ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
+            widgets::copyable_readout(ui, session, egui::RichText::new(&value).size(12.0).color(t.text), &value, true);
         });
     });
 }
@@ -80,10 +80,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for (k, r) in rows.iter().enumerate() {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
                 if value.is_empty() {
-                    widgets::dim_name(ui, super::label_or_name(label, !named.contains(&k)));
+                    if named.contains(&k) && !label.is_empty() {
+                        let t = Tokens::get(ui.ctx());
+                        widgets::copyable_readout(ui, &mut app.session, egui::RichText::new(label).color(t.text).size(12.5), label, false);
+                    } else {
+                        widgets::dim_name(ui, super::label_or_name(label, !named.contains(&k)));
+                    }
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
-                    row(ui, super::label_or_name(label, !named.contains(&k)), shown);
+                    row(ui, &mut app.session, super::label_or_name(label, !named.contains(&k)), shown);
                 }
             }
         }

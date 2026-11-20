@@ -10523,3 +10523,6 @@ breakText	Glyphs	Гліфи
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редагувати оригінал у:
 file-filter	Applications	Програми
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Скопійовано до буфера обміну

@@ -159,6 +159,83 @@ pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
     ui.label(egui::RichText::new(text).color(t.text).size(12.5))
 }
 
+/// A single click waits for egui's double-click interval: copying immediately would also
+/// copy the first click of a word-selection double-click. The record belongs to this label in
+/// this viewport, and expires if the label is not rendered in the next pass or its value changes.
+#[derive(Clone, Default)]
+struct PendingReadoutCopy {
+    value: String,
+    deadline: f64,
+    pass: u64,
+}
+
+/// A readonly panel value with native label selection and an accessible Copy click action.
+/// Only a completed primary single-click copies the entire value, including elided text.
+pub(crate) fn copyable_readout(
+    ui: &mut Ui,
+    session: &mut vectorcraft_engine::Session,
+    text: egui::RichText,
+    value: &str,
+    truncate: bool,
+) -> Response {
+    let mut label = egui::Label::new(text).sense(Sense::click());
+    if truncate {
+        label = label.truncate();
+    }
+    let response = ui.add(label);
+    let ctx = ui.ctx();
+    let id = response.id.with(("pending-readout-copy", ctx.viewport_id()));
+    let pass = ctx.cumulative_pass_nr();
+    let mut pending = ctx.data_mut(|d| d.remove_temp::<PendingReadoutCopy>(id));
+    let pressed = ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary));
+    let interrupted = ctx.input(|i| {
+        i.events.iter().any(|event| match event {
+            egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_) | egui::Event::Ime(_) => {
+                true
+            }
+            egui::Event::AccessKitActionRequest(request) => request.action == egui::accesskit::Action::SetTextSelection,
+            _ => false,
+        })
+    });
+    let cancelled = pressed || response.dragged() || response.double_clicked() || response.triple_clicked() || interrupted;
+    let eligible = ui.is_enabled() && ui.is_rect_visible(response.rect) && !value.is_empty();
+    let had_pending = pending.as_ref().is_some_and(|p| p.value == value && p.pass.saturating_add(1) >= pass);
+    pending = pending.filter(|p| eligible && p.value == value && p.pass.saturating_add(1) >= pass && !cancelled);
+    let accessible_click = eligible && ctx.input(|i| i.num_accesskit_action_requests(response.id, egui::accesskit::Action::Click) > 0);
+    if eligible {
+        ctx.accesskit_node_builder(response.id, |node| node.set_description(tl!("Copy")));
+    }
+    let now = ctx.input(|i| i.time);
+    if eligible
+        && !interrupted
+        && !ctx.input(|i| i.modifiers.shift)
+        && !response.double_clicked()
+        && !response.triple_clicked()
+        && !(had_pending && pressed)
+        && response.clicked_by(egui::PointerButton::Primary)
+    {
+        pending =
+            Some(PendingReadoutCopy { value: value.to_string(), deadline: now + ctx.options(|o| o.input_options.max_double_click_delay), pass });
+    }
+    let ready = pending.as_ref().is_some_and(|p| now >= p.deadline);
+    if accessible_click || ready {
+        copy_readout(ctx, session, value);
+    } else if let Some(mut pending) = pending {
+        pending.pass = pass;
+        if let Ok(delay) = std::time::Duration::try_from_secs_f64((pending.deadline - now).max(0.0)) {
+            ctx.request_repaint_after(delay);
+            ctx.data_mut(|d| d.insert_temp(id, pending));
+        }
+    }
+    response
+}
+
+fn copy_readout(ctx: &egui::Context, session: &mut vectorcraft_engine::Session, value: &str) {
+    use vectorcraft_engine::cmd::toast::{Level, Toast};
+    ctx.copy_text(value.to_string());
+    session.toast(Toast { seconds: 1.5, ..Toast::new(tl!("Copied to clipboard"), Level::Success) });
+}
+
 /// A form row: `label` in a column `label_width` wide, then what `add` draws.
 pub fn label_row(ui: &mut Ui, label: &str, label_width: f32, add: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
