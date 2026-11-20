@@ -957,7 +957,8 @@ link, and `graphicStyle.apply` with `add` unlinks the group. With `appearance.tr
 target group's paths keeps its look on a move, and a `source` that is the group's only path is an error.
 `graphicStyle.redefine` gives the style to the paths directly in a series group linked to it, whether or not the group
 has rows of its own, links them, and clears and unlinks the group; the source and the paths linked to the style whose
-look was edited keep their look. Read as a source, by `graphicStyle.new`, `graphicStyle.redefine` or
+look was edited keep their look, and a path in the group linked to another style keeps its look and its link. Read as a
+source, by `graphicStyle.new`, `graphicStyle.redefine` or
 `appearance.transfer`, a series group that has no fill, stroke, effect, opacity, blend mode, isolation, knockout or
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
