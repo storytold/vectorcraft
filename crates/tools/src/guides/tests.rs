@@ -2810,7 +2810,7 @@ fn review_7909_onset_collinear(d: &Document) {
     let (v, guides) = review_7909_onset_shape(d, true, &[Point::new(101.0, 101.0)]);
     let width = v["width"].as_f64().unwrap();
     let distance = width.hypot(width);
-    assert!(distance >= 2.0 && distance < 2.0 + 1e-6, "the nearest representable accepted onset, not a far collinear endpoint: {v}");
+    assert!((2.0..2.0 + 1e-6).contains(&distance), "the nearest representable accepted onset, not a far collinear endpoint: {v}");
     assert!(review_597185_stroke_label(&guides), "the real collinear painted edge wins: {guides:?}");
 }
 
