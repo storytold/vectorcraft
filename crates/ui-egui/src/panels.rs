@@ -96,8 +96,9 @@ pub(crate) fn field_width(ui: &Ui) -> f32 {
 }
 
 /// The Corner Radius field of a live rectangle's properties: [`corner_radius`], which a new value
-/// sets on those corners. The link behind it is the `singleCornerRadius` preference: off, a field
-/// for each of the four corners follows, each setting its own corner.
+/// sets on those corners. The link behind it is the `singleCornerRadius` preference: on, a Corner
+/// menu follows that sets the kind of all four corners; off, a row for each of the four corners
+/// follows, each with a radius field and a Corner menu that set its own corner.
 pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str) {
     let fw = field_width(ui);
     let single = app.session.prefs.single_corner_radius;
@@ -111,9 +112,64 @@ pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node,
             transform::set_pref(app, "singleCornerRadius", !single);
         }
     });
-    if !single {
+    if single {
+        corner_kind_row(app, ui, n, id, fw);
+    } else {
         corner_fields(app, ui, n, id, fw);
     }
+}
+
+/// The Corner menu of a live rectangle whose corners share one radius field: the kind of all four
+/// corners, also while some of them are Direct-Selected, blank when they differ. A pick sets it on
+/// every corner of each selected live rectangle ([`set_rectangle_kinds`]).
+fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, width: f32) {
+    let Some(lc) = LiveCorners::of(n) else { return };
+    let current = lc.style(&lc.all()).1;
+    ui.horizontal(|ui| {
+        dim_label(ui, tl!("Corner:"));
+        if let Some(kind) = corner_kind_menu(ui, (id, "kind"), tl!("Corner:"), current, width) {
+            set_rectangle_kinds(app, kind, None);
+        }
+    });
+}
+
+/// Set `kind` on corner `corner` (every corner for None) of each selected live rectangle
+/// ([`set_rectangle_corners`]).
+fn set_rectangle_kinds(app: &mut VectorcraftApp, kind: CornerKind, corner: Option<usize>) {
+    set_rectangle_corners(app, json!({"kind": kind}), corner);
+}
+
+/// Run `object.setLiveShape` with `p` (a `kind` or `radius`) on corner `corner` (every corner for
+/// None) of each selected live rectangle, leaving other selected objects as they are: one undo
+/// step, or none when nothing changes.
+fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<usize>) {
+    p["corners"] = corner.map_or(json!([0, 1, 2, 3]), |k| json!([k]));
+    // The edit the tool computes on another thread comes first: the rectangles are the ones
+    // selected after it.
+    match app.session.finish_tool_edit() {
+        Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+        Err(e) => {
+            app.status(e.to_string());
+            return;
+        }
+    }
+    if app.session.active().is_none() {
+        return;
+    }
+    // The live rectangles of the selection when it runs, so an action that records it acts on the
+    // rectangles selected when it plays.
+    p["rectanglesOnly"] = json!(true);
+    if let Err(e) = app.run("object.setLiveShape", p) {
+        app.status(e);
+    }
+}
+
+/// A menu of the corner kinds, `width` wide, showing `current` (blank for None) and named `name`
+/// for screen readers. Returns the kind picked.
+fn corner_kind_menu(ui: &mut Ui, id: impl std::hash::Hash, name: &str, current: Option<CornerKind>, width: f32) -> Option<CornerKind> {
+    let names: Vec<&str> = CornerKind::ALL.iter().map(|k| crate::dialogs::corners::kind_label(*k)).collect();
+    let shown = current.map_or("", crate::dialogs::corners::kind_label);
+    crate::widgets::dropdown_names_named(ui, id, Some(name), shown, &names, width).and_then(|i| CornerKind::ALL.get(i).copied())
 }
 
 /// The corners of a live rectangle in the order their fields show, with their labels.
@@ -121,17 +177,32 @@ fn rectangle_corners() -> [(usize, &'static str); 4] {
     [(0, tl!("Top Left:")), (1, tl!("Top Right:")), (2, tl!("Bottom Right:")), (3, tl!("Bottom Left:"))]
 }
 
-/// One Corner Radius field per corner of a live rectangle, each on its own row with its label,
-/// the fields in line.
+/// One Corner Radius field and one Corner menu per corner of a live rectangle, each pair on its own
+/// row with the corner's label, the fields and menus in line; in a panel too narrow for that, each
+/// menu goes on the row under its field. A value typed or a kind picked is set on that corner
+/// alone, of each selected live rectangle ([`set_rectangle_corners`]).
 fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, width: f32) {
     let Some(lc) = LiveCorners::of(n) else { return };
     let unit = app.session.general_unit();
-    egui::Grid::new((id, "corners")).num_columns(2).spacing(vec2(6.0, 4.0)).show(ui, |ui| {
+    let widest = |names: &mut dyn Iterator<Item = &str>| names.map(|t| crate::widgets::dim_label_width(ui, t)).fold(0.0, f32::max);
+    let labels = widest(&mut rectangle_corners().into_iter().map(|(_, label)| label));
+    // The longest kind name, with the room the menu's button gives around it and its arrow.
+    let menu_width = width.max(widest(&mut CornerKind::ALL.into_iter().map(crate::dialogs::corners::kind_label)) + 26.0);
+    // The two gaps between the grid's three columns are 6 points each.
+    let in_line = labels + width + menu_width + 12.0 <= ui.available_width();
+    egui::Grid::new((id, "corners")).num_columns(if in_line { 3 } else { 2 }).spacing(vec2(6.0, 4.0)).show(ui, |ui| {
         for (k, label) in rectangle_corners() {
             dim_label(ui, label);
             if let Some(v) = crate::widgets::num_field_named(ui, (id, "corner", k), Some(label), Some(lc.radius(k)), unit, width) {
                 // A negative radius typed in rounds nothing: the command takes 0 or more.
-                app.run("object.setLiveShape", json!({"radius": v.max(0.0), "corners": [k]})).ok();
+                set_rectangle_corners(app, json!({"radius": v.max(0.0)}), Some(k));
+            }
+            if !in_line {
+                ui.end_row();
+                ui.label("");
+            }
+            if let Some(kind) = corner_kind_menu(ui, (id, "kind", k), label, Some(lc.kind(k)), menu_width) {
+                set_rectangle_kinds(app, kind, Some(k));
             }
             ui.end_row();
         }
@@ -341,10 +412,10 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
 /// document revision, Appearance panel item and picked gradient mesh points (picking points
 /// changes no revision).
 pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
-    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>, &'static str);
+    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>, bool);
     let Some(st) = app.session.active() else { return (false, false) };
-    // The tool too: while the Live Paint Bucket is active the proxies show its colors.
-    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points(), app.session.tool_id());
+    // Whether the proxies show the Live Paint Bucket's colors too.
+    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points(), app.session.bucket_paints());
     match pstate::<Option<(Key, (bool, bool))>>(ctx, "proxy-mixed") {
         Some((k, mixed)) if k == key => mixed,
         _ => {
@@ -373,7 +444,7 @@ pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeM
     if character::text_editing(app).is_some() {
         return StrokeMixed { can_align: true, ..Default::default() };
     }
-    if app.session.tool_id() == "livePaintBucket" {
+    if app.session.bucket_paints() {
         return StrokeMixed { can_align: true, ..Default::default() };
     }
     let Some(st) = app.session.active() else { return StrokeMixed::default() };
@@ -818,6 +889,10 @@ mod tests_brush_libraries;
 mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
+#[cfg(test)]
+mod tests_color_wheel_document_colors;
+#[cfg(test)]
+mod tests_color_wheel_gamut;
 #[cfg(test)]
 mod tests_color_wheel_harmony;
 #[cfg(test)]

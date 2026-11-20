@@ -12,7 +12,7 @@
 use serde_json::{Map, Value, json};
 use vectorcraft_tools::settings::SYMBOLISM;
 
-use super::{DialogResult, DialogSpec, form, set_tool_options_and_close};
+use super::{DialogResult, DialogSpec, form, modal, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -55,6 +55,13 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    // The rows scroll when the window is shorter than they are, so the heading and the buttons
+    // stay in view.
+    modal::scrolled_rows(ui, "symbolism-options-rows", |ui| rows(app, ui, d));
+    false
+}
+
+fn rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let unit = app.session.general_unit();
     // The tool whose options show below (the eight tools share one toolbar icon, so they are listed
     // by name).
@@ -107,10 +114,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     ui.add_space(10.0);
     form::check(ui, d, "showBrush", tl!("Show Brush Size and Intensity"));
-    false
 }
 
-/// The selected symbol sets that can be edited (not locked or hidden).
+/// The selected symbol sets that can be edited (a locked or hidden one keeps its density).
 fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
     let Some(st) = app.session.active() else { return vec![] };
     let editable = st.doc.editable();
@@ -123,39 +129,42 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
 }
 
 /// OK: set the brush the Symbolism tools share, after giving a new Symbol Set Density to the
-/// selected symbol sets. Every option is checked first, so a value the tools refuse (a number out
-/// of its range included) leaves the symbol sets and the options as they are.
+/// selected symbol sets. A value outside its range is refused and changes nothing.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let mut values: Map<String, Value> =
-        NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
-    // The checkboxes and choices as the fields hold them, so a value the tools do not have is refused.
-    values.extend(SWITCHES.iter().chain(&SPRAY).chain(&["method"]).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
-    // An option `tool.setOption` refuses leaves the symbol sets as they are too.
+    // Each value goes to the check as it is stored, so one of the wrong kind is refused rather than
+    // read as 0 or false. A number stored as text is read as the field reads it, and other text is
+    // refused.
+    let stored = |k: &str| match d.fields.get(k) {
+        Some(Value::String(s)) => Some(vectorcraft_doc::Unit::Points.parse(s).map_or_else(|| json!(s), |n| json!(n))),
+        v => v.cloned(),
+    };
+    let mut values: Map<String, Value> = NUMBERS.iter().filter_map(|k| Some((k.to_string(), stored(k)?))).collect();
+    values.extend(SWITCHES.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
+    values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
+    // A tool or a value `tool.setOption` refuses changes no density either: the values go through
+    // both of its checks, the kinds and then each option's range, before the density changes.
     let tool = d.str("tool");
     if !SYMBOLISM.contains(&tool.as_str()) {
         return Err(format!("unknown tool `{tool}`"));
     }
-    // A number, or text that reads as one (a length with its unit for the diameter).
-    let readable = |v: &Value| match v {
-        Value::Number(_) => true,
-        Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).is_some(),
-        _ => false,
-    };
-    if let Some(k) = NUMBERS.iter().chain(&[DENSITY_WAS]).find(|k| d.fields.get(**k).is_some_and(|v| !readable(v))) {
-        return Err(format!("`{k}` must be a number"));
-    }
     vectorcraft_tools::symbolism::check_options(&tool, &values)?;
+    vectorcraft_tools::option_check::check_values(&vectorcraft_tools::symbolism::SymbolismTool::new(&tool), &values)?;
+    // The density the sets had when the dialog opened is read as a number too.
+    if stored(DENSITY_WAS).is_some_and(|v| !v.is_number()) {
+        return Err(format!("`{DENSITY_WAS}` must be a number"));
+    }
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
         app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
     }
-    set_tool_options_and_close(app, json!({ "tool": d.str("tool"), "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": tool, "values": values }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::kittest::Queryable;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
@@ -166,6 +175,39 @@ mod tests {
 
     fn painted(app: &mut VectorcraftApp) -> String {
         crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
+    }
+
+    /// In a short window the rows scroll, and the heading, OK and Cancel stay on the screen.
+    #[test]
+    fn the_buttons_stay_in_view_in_a_short_window() {
+        let mut app = app();
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        for (physical, zoom) in [(egui::vec2(1366.0, 768.0), 1.5), (egui::vec2(1280.0, 720.0), 1.5), (egui::vec2(800.0, 600.0), 1.0)] {
+            h.ctx.set_zoom_factor(zoom);
+            for _ in 0..12 {
+                h.set_size(physical / zoom);
+                h.run_steps(1);
+            }
+            let screen = h.ctx.content_rect();
+            let heading = h.get_by_role_and_label(egui::accesskit::Role::Label, "Symbolism Tools Options").rect();
+            assert!(screen.contains_rect(heading), "{physical:?} at {zoom}: the heading {heading:?} in {screen:?}");
+            for label in ["OK", "Cancel"] {
+                let rect = h.get_by_label(label).rect();
+                assert!(screen.contains_rect(rect), "{physical:?} at {zoom}: {label} {rect:?} in {screen:?}");
+            }
+        }
     }
 
     #[test]
@@ -280,6 +322,56 @@ mod tests {
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         super::super::confirm(&mut app).unwrap();
         assert_eq!((width(&app), undo(&app)), (was, steps));
+        // An option that `tool.setOption` refuses changes neither the density nor the set.
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+        fields.insert("density".into(), json!(9));
+        fields.insert("method".into(), json!("smooth"));
+        assert!(super::super::confirm(&mut app).is_err());
+        assert_eq!((width(&app), undo(&app)), (was, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
+        // So does a checkbox or a number stored as a value of the wrong kind, or a number outside its
+        // range.
+        for (k, v) in [
+            ("diameter", json!(1)),
+            ("intensity", json!(11)),
+            ("usePressure", json!("invalid")),
+            ("proportional", json!(1)),
+            ("intensity", json!("strong")),
+            ("diameter", json!(true)),
+            ("tool", json!("pen")),
+            ("tool", json!(null)),
+        ] {
+            app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+            let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+            fields.insert("density".into(), json!(9));
+            fields.insert(k.into(), v);
+            assert!(super::super::confirm(&mut app).is_err(), "{k}");
+            assert_eq!((width(&app), undo(&app)), (was, steps), "{k}");
+            let o = app.session.tool_options_of("symbolSizer");
+            assert_eq!((o["density"].as_f64(), o["usePressure"].as_bool()), (Some(5.0), Some(false)), "{k}");
+        }
+        // A selected set that is locked keeps its density, and OK still sets the options.
+        let lock = |app: &mut VectorcraftApp, on: bool| {
+            app.session
+                .edit("Lock", |d, _| {
+                    d.node_mut(vectorcraft_doc::NodeId(set)).unwrap().locked = on;
+                    Ok(())
+                })
+                .unwrap();
+        };
+        lock(&mut app, true);
+        let steps_locked = undo(&app);
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(8));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((width(&app), undo(&app)), (was, steps_locked));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(8.0));
+        lock(&mut app, false);
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(5));
+        super::super::confirm(&mut app).unwrap();
+        let steps = undo(&app);
         // A higher density packs the set closer, as one undo step.
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(9));

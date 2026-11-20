@@ -75,8 +75,9 @@ pub use bake::{
 };
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{
-    OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
-    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, pinned_container_appearance, shape_art,
+    OutlineHook, PATHFINDER_EFFECT_PRECISION, PATHFINDER_EFFECTS, PATHFINDER_OPTION_KEYS, PATHFINDER_OPTIONS_DOC, PathfinderEffectOptions,
+    compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_leaves,
+    member_shapes, paints, pathfinder_children, pinned_container_appearance, shape_art, takes_pathfinder_options,
 };
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
@@ -96,11 +97,11 @@ pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
 };
 pub use solids::{
-    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, MeshGraphics, RENDER, RENDER_MODES,
-    ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options, classic_shading,
-    extrude_options, graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d, mapped_graphics,
-    mesh_graphics_art, missing_symbol, names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe, solid_art,
-    solid_art_in, takes_graphics, three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as,
+    BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, MeshGraphics,
+    RENDER, RENDER_MODES, ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options,
+    classic_shading, extrude_options, graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d,
+    mapped_graphics, mesh_graphics_art, missing_symbol, names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe,
+    solid_art, solid_art_in, takes_graphics, three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as,
     three_d_wireframe_in, validate_solid, validate_solid_in, validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in,
     validate_three_d_params, view_options, with_graphic,
 };
@@ -115,8 +116,8 @@ pub use solids::{
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
-pub use vectorcraft_three_d::Mesh;
 pub use vectorcraft_three_d::PlanarFace;
+pub use vectorcraft_three_d::{BevelProfile, Mesh};
 pub use warp::{WARP_NET, WarpNet, WarpStyle, map_version, warp_point, warp_version};
 
 mod catalog;
