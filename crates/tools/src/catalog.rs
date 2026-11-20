@@ -34,6 +34,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("addAnchor", "Add Anchor Point Tool", Some("+"), "tool-pen-add"),
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
+        t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[
@@ -48,6 +49,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("lineSegment", "Line Segment Tool", Some("\\"), "tool-line"),
         t("arc", "Arc Tool", None, "tool-arc"),
+        t(crate::three_point_arc::ID, "Three-Point Arc Tool", None, "tool-three-point-arc"),
         t("spiral", "Spiral Tool", None, "tool-spiral"),
         t("rectangularGrid", "Rectangular Grid Tool", None, "tool-rect-grid"),
         t("polarGrid", "Polar Grid Tool", None, "tool-polar-grid"),
@@ -101,6 +103,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("shapeBuilder", "Shape Builder Tool", Some("Shift+M"), "tool-shape-builder"),
         t("livePaintBucket", "Live Paint Bucket", Some("K"), "tool-bucket"),
+        t("fillArea", "Fill Area Tool", None, "tool-fill-area"),
         t("livePaintSelection", "Live Paint Selection Tool", Some("Shift+L"), "tool-live-select"),
     ],
     &[
