@@ -2138,3 +2138,42 @@ fn ruby_is_written_with_its_type() {
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
 }
+
+#[test]
+fn tiff_preview_round_trips_when_postscript_is_unreadable() {
+    let d = doc_with(|d| vec![red_rect(d)]);
+    for kind in [Preview::TiffColor, Preview::TiffBlackWhite] {
+        let out = export(&d, &EpsOptions { preview: kind, ..opts(&d) }, Some(&preview()), None).unwrap();
+        let (ps, tiff) = sections(&out.bytes).unwrap();
+        let tiff = tiff.unwrap();
+        // Corrupt the PostScript body while keeping the binary header and TIFF preview intact.
+        let bad_ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\nunknown_op\n%%EOF\n";
+        let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
+        let imported = import_with(&wrapped, false).unwrap();
+        assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
+        assert!(imported.document.layers.iter().flat_map(|l| &l.nodes).any(|n| matches!(n.kind, NodeKind::Raster(_))));
+        assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    }
+}
+
+#[test]
+fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
+    // Ordinary benign fixture with native edit payload + TIFF preview round-trips cleanly.
+    let d = doc_with(|d| vec![red_rect(d)]);
+    let payload = b"vectorcraft-native-edit-payload".to_vec();
+    let out = export(&d, &EpsOptions { native: Some(payload.clone()), preview: Preview::TiffColor, ..opts(&d) }, Some(&preview()), None).unwrap();
+    assert!(super::has_native(&out.bytes));
+    assert_eq!(super::native(&out.bytes).as_deref(), Some(payload.as_slice()));
+    let benign = import_with(&out.bytes, false).unwrap();
+    assert!(!benign.preview);
+
+    // Truncated DOS EPS binary header is refused cleanly without panicking.
+    let mut bad_header = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    bad_header.extend_from_slice(&[0xFF; 26]);
+    assert!(sections(&bad_header).is_none());
+    assert!(import_with(&bad_header, false).is_err());
+
+    // Bounded malformed currentfile filter hitting EOF early fails cleanly.
+    let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n1 1 8 [1 0 0 1 0 0] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
+    assert!(import_with(truncated_inline, false).is_err());
+}

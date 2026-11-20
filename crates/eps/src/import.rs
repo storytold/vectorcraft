@@ -139,59 +139,37 @@ struct Dsc {
     own_legacy: bool,
 }
 
-/// The four numbers of a bounding box comment's value, when it has them and they make a box.
-fn box_of(v: &str) -> Option<[f64; 4]> {
-    let n: Vec<f64> = v.split_whitespace().map_while(|w| w.parse::<f64>().ok()).collect();
-    let [x0, y0, x1, y1] = n.as_slice() else { return None };
-    let b = [*x0, *y0, *x1, *y1];
-    (b.iter().all(|v| v.is_finite() && v.abs() <= MAX_SIDE) && x1 > x0 && y1 > y0).then_some(b)
+/// Whether a bounding box parsed by `craft_eps::Comments` fits within [`MAX_SIDE`].
+fn box_within_limit(b: [f64; 4]) -> bool {
+    b.iter().all(|v| v.is_finite() && v.abs() <= MAX_SIDE) && b[2] > b[0] && b[3] > b[1]
 }
 
 impl Dsc {
-    /// The comments of `ps`: from the header, or (`(atend)`) the last ones in the file.
+    /// The comments of `ps`: from the header, or (`(atend)`) the last ones in the file, bounded by
+    /// `craft_eps::MAX_EXTENDED_HEADER` / `craft_eps::MAX_TRAILER`.
     fn read(ps: &[u8]) -> Self {
-        let mut d = Dsc::default();
-        let (mut bbox, mut hires, mut atend) = (None, None, false);
-        let mut header = true;
-        for raw in ps.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
-            // Past the header only comments can matter.
-            if !header && !raw.starts_with(b"%%") {
-                continue;
-            }
+        let shared = craft_eps::Comments::read_with_header_limit(ps, craft_eps::MAX_EXTENDED_HEADER);
+        let head = &ps[..ps.len().min(craft_eps::MAX_EXTENDED_HEADER)];
+        let mut own_legacy = false;
+        for raw in head.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()) {
             let line = String::from_utf8_lossy(raw);
             let line = line.trim_end();
-            if header && (line.starts_with("%%EndComments") || !line.starts_with('%')) {
-                header = false;
-                if !atend {
-                    break;
-                }
+            if line.starts_with("%%EndComments") || !line.starts_with('%') {
+                break;
             }
-            let value = |key: &str| line.strip_prefix(key).map(str::trim);
-            let creator = value("%%Creator:").is_some_and(|v| v.contains("Illustrator")); // brand-ok: the creator its files name
-            if header && (line.starts_with("%AI") || line.starts_with("%%AI") || creator) {
-                d.illustrator = true;
-            }
-            if header && value("%%DocumentSuppliedResources:").is_some_and(|v| v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)) {
-                d.own_legacy = true;
-            }
-            if let Some(v) = value("%%HiResBoundingBox:") {
-                if header || atend {
-                    hires = box_of(v).or(hires);
-                }
-            } else if let Some(v) = value("%%BoundingBox:") {
-                if v.starts_with("(atend)") {
-                    atend = true;
-                } else if header || atend {
-                    bbox = box_of(v).or(bbox);
-                }
-            } else if let Some(v) = value("%%Pages:")
-                && header
+            if let Some(v) = line.strip_prefix("%%DocumentSuppliedResources:").map(str::trim)
+                && v.strip_prefix("procset ") == Some(crate::legacy_ai::PROCSET)
             {
-                d.pages = v.split_whitespace().next().and_then(|n| n.parse().ok());
+                own_legacy = true;
+                break;
             }
         }
-        d.bbox = hires.or(bbox);
-        d
+        Self {
+            bbox: shared.hires_bounding_box.filter(|b| box_within_limit(*b)).or_else(|| shared.bounding_box.filter(|b| box_within_limit(*b))),
+            pages: shared.pages,
+            illustrator: shared.illustrator,
+            own_legacy,
+        }
     }
 }
 
