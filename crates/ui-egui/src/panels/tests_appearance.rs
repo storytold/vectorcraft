@@ -2199,3 +2199,110 @@ fn right_clicking_root_object_row_exposes_clear_and_reduce_appearance() {
         vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0)
     );
 }
+
+/// Right-clicking directly on a row's label link (text rectangle) selects that row and opens the context menu.
+#[test]
+fn right_clicking_item_and_effect_labels_directly_selects_row_and_opens_menu() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "stylize.dropShadow"}));
+    let ctx = egui::Context::default();
+    assert_eq!(app.session.appearance_item(), None);
+
+    // Right-click directly on the "Stroke:" label rect.
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let stroke_label = text_rect(&texts, "Stroke:").center();
+    right_click(&ctx, &mut app, stroke_label, appearance::show);
+    assert_eq!(app.session.appearance_item(), Some(1), "right-clicking stroke label selected the stroke row");
+    let menu_texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Duplicate Stroke"), "menu contains Duplicate Stroke: {menu_texts:?}");
+
+    // Dismiss popup.
+    let _ = frame_events(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        appearance::show,
+    );
+
+    // Right-click directly on the "Drop Shadow" effect label rect.
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let effect_label = text_rect(&texts, "Drop Shadow").center();
+    right_click(&ctx, &mut app, effect_label, appearance::show);
+    let menu_texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Duplicate Effect"), "menu contains Duplicate Effect: {menu_texts:?}");
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Edit Effect…"), "menu contains Edit Effect…: {menu_texts:?}");
+}
+
+/// Reduce to Basic Appearance is enabled when any selected subject needs reduction.
+#[test]
+fn reduce_to_basic_enabled_when_any_selected_subject_needs_reduction() {
+    let mut app = app_with_rect();
+    let rect1 = first_selected(&app).unwrap().id.0;
+    // Create second rect and add an extra stroke to it so it is non-basic.
+    let rect2 = run(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut app, "appearance.addStroke", json!({}));
+
+    // Select only rect1 (which is basic).
+    run(&mut app, "select.set", json!({"ids": [rect1]}));
+    let ctx = drop_ctx();
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| appearance::show(&mut app, ui));
+    out.textures_delta.clear();
+    let is_disabled = out
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .and_then(|u| u.nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.contains("Reduce to Basic Appearance"))))
+        .is_some_and(|(_, n)| n.is_disabled());
+    assert!(is_disabled, "Reduce to Basic Appearance is disabled when all selected subjects are basic");
+    // Dismiss the menu with Escape.
+    let _ = frame_events(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        appearance::show,
+    );
+
+    // Select both rect1 (basic) and rect2 (non-basic). Both are rectangles so object_label is "Rectangle".
+    run(&mut app, "select.set", json!({"ids": [rect1, rect2]}));
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Reduce to Basic Appearance"), "Reduce to Basic Appearance is present: {texts:?}");
+    let reduce = text_rect(&texts, "   Reduce to Basic Appearance").center();
+    click(&ctx, &mut app, reduce, appearance::show);
+
+    // Both rectangles should now have basic appearance.
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(vectorcraft_doc::NodeId(rect1)).unwrap().appearance.is_basic(), "rect1 reduced to basic");
+    assert!(doc.node(vectorcraft_doc::NodeId(rect2)).unwrap().appearance.is_basic(), "rect2 reduced to basic");
+}
+
+/// Right-clicking an active multi-selection of appearance items shows plural "Duplicate Items" and "Delete Items".
+#[test]
+fn right_clicking_multi_selected_items_shows_plural_duplicate_and_delete() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    frame_in(&ctx, &mut app, appearance::show);
+
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    let fill = row_point(&ctx, &mut app, "Fill:", 0);
+
+    // Multi-select both stroke (item 1) and fill (item 0) using Command-click.
+    click_mod(&ctx, &mut app, stroke, egui::Modifiers::NONE);
+    click_mod(&ctx, &mut app, fill, egui::Modifiers::COMMAND);
+
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Items"), "shows Duplicate Items: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Items"), "shows Delete Items: {texts:?}");
+
+    // Clicking Duplicate Items duplicates both items in one undo step.
+    let dup = text_rect(&texts, "   Duplicate Items").center();
+    click(&ctx, &mut app, dup, appearance::show);
+    assert_eq!(stack_items(&app).len(), 4, "both items duplicated");
+
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(stack_items(&app).len(), 2, "undo restores 2 items");
+}

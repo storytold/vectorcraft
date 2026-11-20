@@ -462,6 +462,20 @@ fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
     if name.hovered() { resp } else { resp.on_hover_text(tl!("Double-click to edit")) }
 }
 
+/// Does any selected subject have a non-basic appearance that can be reduced?
+fn any_subject_needs_reduction(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    st.selection.subjects().iter().any(|id| {
+        let target_node = st
+            .doc
+            .parent_of(*id)
+            .and_then(|p| st.doc.node(p))
+            .filter(|p| matches!(p.kind, vectorcraft_doc::NodeKind::Compound { .. }))
+            .or_else(|| st.doc.node(*id));
+        target_node.is_some_and(|n| !n.appearance.is_basic())
+    })
+}
+
 /// The Appearance panel: the object row, the stack of the selected object (or of new art with nothing selected) and the bottom bar; Delete/Backspace after a row click remove the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -487,8 +501,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("appearance.clear", json!({})).ok();
                 ui.close();
             }
-            let is_basic = node.as_ref().is_some_and(|n| n.appearance.is_basic());
-            if menu_item(ui, tl!("Reduce to Basic Appearance"), has && !is_basic, false) {
+            let can_reduce = any_subject_needs_reduction(app);
+            if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
                 app.run("appearance.reduceToBasic", json!({})).ok();
                 ui.close();
             }
@@ -750,8 +764,17 @@ enum Slot {
 }
 
 /// Context menu and right-click selection for a stroke or fill row.
-fn item_row_context(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, resp: &egui::Response, i: usize, it: &AppearanceItem, items: &[usize]) {
-    if resp.secondary_clicked() {
+fn item_row_context(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    n: &Node,
+    resps: (&egui::Response, &egui::Response),
+    i: usize,
+    it: &AppearanceItem,
+    items: &[usize],
+) {
+    let (resp, name) = resps;
+    if resp.secondary_clicked() || name.secondary_clicked() {
         super::set_row_keys(ui.ctx(), ROW_KEYS, true);
         if !items.contains(&i) {
             select_row(app, ui.ctx(), Sel::Item(i));
@@ -759,19 +782,27 @@ fn item_row_context(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, resp: &egui
     }
     let is_stroke = matches!(it, AppearanceItem::Stroke(_));
     let visible = it.visible();
-    let (dup_label, del_label, vis_label) = if is_stroke {
-        (tl!("Duplicate Stroke"), tl!("Delete Stroke"), if visible { tl!("Hide Stroke") } else { tl!("Show Stroke") })
+    let vis_label = if is_stroke {
+        if visible { tl!("Hide Stroke") } else { tl!("Show Stroke") }
     } else {
-        (tl!("Duplicate Fill"), tl!("Delete Fill"), if visible { tl!("Hide Fill") } else { tl!("Show Fill") })
+        if visible { tl!("Hide Fill") } else { tl!("Show Fill") }
     };
-    resp.context_menu(|ui| {
+    let mut menu = |ui: &mut Ui| {
+        let sel = current_sel(app, ui.ctx(), Some(n));
+        let sel_items = selected_items(ui.ctx(), Some(n), sel);
+        let multi = sel_items.len() > 1;
+        let (dup_label, del_label) = if multi {
+            (tl!("Duplicate Items"), tl!("Delete Items"))
+        } else if is_stroke {
+            (tl!("Duplicate Stroke"), tl!("Delete Stroke"))
+        } else {
+            (tl!("Duplicate Fill"), tl!("Delete Fill"))
+        };
         if menu_item(ui, dup_label, true, false) {
-            let sel = current_sel(app, ui.ctx(), Some(n));
             duplicate_selected(app, ui, Some(n), sel);
             ui.close();
         }
         if menu_item(ui, del_label, true, false) {
-            let sel = current_sel(app, ui.ctx(), Some(n));
             delete_selected(app, ui, Some(n), sel);
             ui.close();
         }
@@ -779,7 +810,9 @@ fn item_row_context(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, resp: &egui
             app.run("appearance.setItem", aligned(app, json!({"index": i, "visible": !visible}))).ok();
             ui.close();
         }
-    });
+    };
+    resp.context_menu(&mut menu);
+    name.context_menu(&mut menu);
 }
 
 /// The rows of object `n` (fills/strokes with their Opacity and effect rows, the Contents row, the object's effects and Opacity) with the click rules, row drags and drop markers; `sel` is the active row.
@@ -837,7 +870,8 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         // The label edits the row (the Stroke or Color panel); the empty space only takes the click
         // rules.
         let label = if is_stroke { tl!("Stroke:") } else { tl!("Fill:") };
-        if name_link(ui, pos2(lx, r.center().y), ("ap-link", i), label).clicked() {
+        let name = name_link(ui, pos2(lx, r.center().y), ("ap-link", i), label);
+        if name.clicked() {
             select_row(app, ui.ctx(), Sel::Item(i));
             // The panel has the keyboard (Delete removes this row, not the art).
             super::set_row_keys(ui.ctx(), ROW_KEYS, true);
@@ -851,7 +885,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
             let m = ui.input(|inp| inp.modifiers);
             click_row(app, ui.ctx(), n, sel, Rows::Items, i, m);
         }
-        item_row_context(app, ui, n, &resp, i, it, &items);
+        item_row_context(app, ui, n, (&resp, &name), i, it, &items);
         track(&resp, Dragged::Item(i));
         if open {
             let r = opacity_row(app, ui, Some(i), it.opacity(), it.blend(), sel, false);
@@ -1284,13 +1318,13 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, item: Option<usiz
             set_pstate(ui.ctx(), &open_key, !open);
         }
     }
-    if resp.secondary_clicked() {
+    if resp.secondary_clicked() || name.secondary_clicked() {
         super::set_row_keys(ui.ctx(), ROW_KEYS, true);
         if !selected {
             select_row(app, ui.ctx(), this);
         }
     }
-    resp.context_menu(|ui| {
+    let mut menu = |ui: &mut Ui| {
         if menu_item(ui, tl!("Edit Effect…"), true, false) {
             select_row(app, ui.ctx(), this);
             super::set_row_keys(ui.ctx(), ROW_KEYS, true);
@@ -1301,13 +1335,16 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, item: Option<usiz
             }
             ui.close();
         }
-        if menu_item(ui, tl!("Duplicate Effect"), true, false) {
-            let sel = current_sel(app, ui.ctx(), Some(n));
+        let sel = current_sel(app, ui.ctx(), Some(n));
+        let sel_fx = selected_effects(ui.ctx(), Some(n), sel);
+        let multi = sel_fx.as_ref().is_some_and(|(list, ks)| *list == item && ks.len() > 1);
+        let dup_label = if multi { tl!("Duplicate Effects") } else { tl!("Duplicate Effect") };
+        let del_label = if multi { tl!("Delete Effects") } else { tl!("Delete Effect") };
+        if menu_item(ui, dup_label, true, false) {
             duplicate_selected(app, ui, Some(n), sel);
             ui.close();
         }
-        if menu_item(ui, tl!("Delete Effect"), true, false) {
-            let sel = current_sel(app, ui.ctx(), Some(n));
+        if menu_item(ui, del_label, true, false) {
             delete_selected(app, ui, Some(n), sel);
             ui.close();
         }
@@ -1316,7 +1353,9 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, item: Option<usiz
             app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "visible": !e.visible}))).ok();
             ui.close();
         }
-    });
+    };
+    resp.context_menu(&mut menu);
+    name.context_menu(&mut menu);
     icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     if open {
         effect_editor(app, ui, item, k, e);
@@ -1822,7 +1861,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();
     }
-    if menu_item(ui, tl!("Reduce to Basic Appearance"), has && !node.as_ref().is_some_and(|n| n.appearance.is_basic()), false) {
+    let can_reduce = any_subject_needs_reduction(app);
+    if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
         app.run("appearance.reduceToBasic", json!({})).ok();
     }
     ui.separator();
