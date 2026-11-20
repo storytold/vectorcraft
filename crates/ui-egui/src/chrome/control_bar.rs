@@ -136,33 +136,36 @@ fn snapping_width(ui: &Ui) -> f32 {
 /// The Control bar's snapping quick access; every change uses its existing command, and Pixel
 /// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.menu_button(tl!("Snapping"), |ui| {
-        for (label, cmd, on) in [
-            (tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
-            (tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
-            (tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
-            (tl!("Snap to Pixel"), "view.snapToPixel", app.ui.view.snap_to_pixel),
-            (tl!("Snap to Glyph"), "view.snapToGlyph", app.ui.view.snap_to_glyph),
-        ] {
-            if widgets::check(ui, label, on, true) {
-                crate::menus::invoke(app, cmd, json!({}));
-            }
+    ui.menu_button(tl!("Snapping"), |ui| snapping_menu_contents(app, ui));
+}
+
+/// The same snapping commands and preferences in the Control and status bars.
+pub(super) fn snapping_menu_contents(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (label, cmd, on) in [
+        (tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
+        (tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
+        (tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
+        (tl!("Snap to Pixel"), "view.snapToPixel", app.ui.view.snap_to_pixel),
+        (tl!("Snap to Glyph"), "view.snapToGlyph", app.ui.view.snap_to_glyph),
+    ] {
+        if widgets::check(ui, label, on, true) {
+            crate::menus::invoke(app, cmd, json!({}));
         }
-        if ui.button(tl!("Pixel Snapping Options…")).clicked() {
-            ui.close();
-            crate::menus::invoke(app, "view.snapToPixel.options", json!({}));
+    }
+    if ui.button(tl!("Pixel Snapping Options…")).clicked() {
+        ui.close();
+        crate::menus::invoke(app, "view.snapToPixel.options", json!({}));
+    }
+    ui.separator();
+    for (key, label, on) in [
+        ("alignmentGuides", tl!("Alignment Guides"), app.session.prefs.alignment_guides),
+        ("snapTangent", tl!("Snap to Tangent"), app.session.prefs.snap_tangent),
+        ("snapPerpendicular", tl!("Snap to Perpendicular"), app.session.prefs.snap_perpendicular),
+    ] {
+        if widgets::check(ui, label, on, true) {
+            crate::menus::invoke(app, "prefs.set", json!({"key": key, "value": !on}));
         }
-        ui.separator();
-        for (key, label, on) in [
-            ("alignmentGuides", tl!("Alignment Guides"), app.session.prefs.alignment_guides),
-            ("snapTangent", tl!("Snap to Tangent"), app.session.prefs.snap_tangent),
-            ("snapPerpendicular", tl!("Snap to Perpendicular"), app.session.prefs.snap_perpendicular),
-        ] {
-            if widgets::check(ui, label, on, true) {
-                crate::menus::invoke(app, "prefs.set", json!({"key": key, "value": !on}));
-            }
-        }
-    });
+    }
 }
 
 /// The Control bar's isolation button. In isolation mode it is Exit Isolation Mode, except while a

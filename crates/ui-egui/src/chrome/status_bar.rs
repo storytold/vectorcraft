@@ -104,10 +104,55 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 {
                     app.status(e);
                 }
-                status_readouts(app, ui, &t);
+                status_readouts_and_snapping(app, ui, &t);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
+}
+
+/// Reserve the right-side convenience controls before the optional readouts shrink.
+fn status_readouts_and_snapping(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+    let gap = ui.spacing().item_spacing.x;
+    let menu_width = status_snapping_menu_width(ui);
+    let full_width = 3.0 * 18.0 + 3.0 * gap + menu_width;
+    let available = ui.available_width();
+    let (width, direct) = if available >= MESSAGE_MIN + gap + full_width {
+        (full_width, true)
+    } else if available >= MESSAGE_MIN + gap + menu_width {
+        (menu_width, false)
+    } else {
+        (0.0, false)
+    };
+    let readouts_width = (available - width - if width > 0.0 { gap } else { 0.0 }).max(0.0);
+    let (area, _) = ui.allocate_exact_size(vec2(readouts_width, ui.available_height()), Sense::hover());
+    // Keep the readouts' child identity stable across all three collapse states.
+    let mut readouts = ui.new_child(egui::UiBuilder::new().max_rect(area).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    status_readouts(app, &mut readouts, t);
+    if width == 0.0 {
+        return;
+    }
+    if direct {
+        status_snapping_buttons(app, ui);
+    }
+    ui.menu_button(tl!("Snapping"), |ui| super::control_bar::snapping_menu_contents(app, ui));
+}
+
+/// Measure the same localized label and padding the native menu button draws.
+fn status_snapping_menu_width(ui: &Ui) -> f32 {
+    let label = egui::WidgetText::from(tl!("Snapping")).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+    label.size().x + 2.0 * ui.spacing().button_padding.x
+}
+
+fn status_snapping_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (icon, label, command, on) in [
+        ("sparkles", tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
+        ("dc-reference-point", tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
+        ("grid-3x3", tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
+    ] {
+        if widgets::icon_button(ui, icon, label, on, 18.0).clicked() {
+            crate::menus::invoke(app, command, json!({}));
+        }
+    }
 }
 
 /// The least width the status message keeps when the window is narrow.
