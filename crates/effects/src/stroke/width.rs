@@ -312,8 +312,18 @@ fn deviation(profile: &WidthProfile, t0: f64, t1: f64) -> f64 {
 fn sampled_enough(profile: &WidthProfile, at: &[f64], a: f64, b: f64, bend: f64) -> bool {
     let first = at.partition_point(|p| *p < a);
     let last = at.partition_point(|p| *p <= b);
-    let mut from = a;
+    // A segment with no flattened point of its own is a straight run, and one probe in its middle
+    // cannot see a bend that matches the chord there but leaves it nearer the ends. Let
+    // `adaptive_samples` measure it.
+    if first == last {
+        return false;
+    }
+    // A dash crossing a closed seam has a window past 1 (`[1.0, 1.5]`), where the widths wrap;
+    // probe the positions `densify` measured its samples at. `at` stays unwrapped for selection.
+    let shift = a - a.rem_euclid(1.0);
+    let mut from = a - shift;
     for &p in &at[first..last] {
+        let p = p - shift;
         if p <= from {
             continue;
         }
@@ -322,7 +332,7 @@ fn sampled_enough(profile: &WidthProfile, at: &[f64], a: f64, b: f64, bend: f64)
         }
         from = p;
     }
-    deviation(profile, from, b) <= bend
+    deviation(profile, from, b - shift) <= bend
 }
 
 /// Length of a flattened subpath (see [`flatten`]).
@@ -1157,6 +1167,35 @@ mod tests {
             assert!(dense.contains(Point::new(x, -3.0)), "{x}: {dense:?}");
             assert!(!dense.contains(Point::new(x, -3.4)), "{x}: no extra samples: {dense:?}");
         }
+    }
+
+    /// A profile segment with no flattened point of its own is a straight run: the sampler measures
+    /// it, rather than accepting it on a midpoint that happens to match the chord.
+    #[test]
+    fn a_bend_that_matches_the_chords_midpoint_still_gets_samples() {
+        // Flat at 1, then a smooth rise to 2: through the rising segment the curve matches its
+        // chord at the middle and sits below it at a quarter of the way, so one midpoint probe
+        // would leave the edge 0.47 pt out at the quarter.
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((100.0, 0.0));
+        let p = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.75, 2.0, 2.0), (1.0, 2.0, 2.0)] };
+        let o = width_outline(&b, 10.0, &p, &capped(LineCap::Butt), 0.01);
+        // At a quarter of the way through the rise the width is 1.15625, so that edge is 5.78 pt
+        // from the path; a chord from 1 to 2 would put it at 6.25.
+        assert!(!o.contains(Point::new(37.5, -6.0)), "{o:?}");
+        assert!(o.contains(Point::new(37.5, -5.5)), "{o:?}");
+    }
+
+    /// A window past the seam of a closed path probes the widths it actually wraps to: the
+    /// flattened points of a dash tail sit before the seam.
+    #[test]
+    fn a_window_past_the_seam_measures_the_wrapped_widths() {
+        let profile = WidthProfile::lens();
+        // A dash from 0.9 to 1.1 of the subpath, its flattened points ending at 1.1: `[1.0, 1.5]`
+        // is the wrapped half of the profile's first segment.
+        let at = [0.9, 0.95, 1.0, 1.05, 1.1];
+        assert!(!sampled_enough(&profile, &at, 1.0, 1.5, 0.002), "the wrapped width bends");
     }
 
     #[test]
