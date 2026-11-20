@@ -145,6 +145,7 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             maximized_for_mode: false,
+            unmaximize_sent: false,
             host_maximized: None,
             graphics_adapter: None,
             beacon: &crate::hang_beacon::BEACON,
@@ -292,6 +293,14 @@ impl VectorcraftApp {
         // frame 0 both count.
         self.input_frames.clear();
         self.shortcuts_frames.clear();
+    }
+
+    /// Whether a screen mode sizes the window for the time being: any mode but Normal Screen Mode,
+    /// and Normal Screen Mode until the host reads a window Full Screen Mode with Menu Bar
+    /// maximized as put back (`chrome::sync_fullscreen`). The desktop host keeps the window's
+    /// geometry for the next launch only when this is false (#7233).
+    pub fn screen_mode_sizes_window(&self) -> bool {
+        self.ui.screen_mode != 0 || self.maximized_for_mode
     }
 
     /// Background work, once per host iteration (full or logic-only): control requests, background

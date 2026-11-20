@@ -256,6 +256,9 @@ pub struct VectorcraftApp {
     /// Whether Full Screen Mode with Menu Bar maximized the window (`chrome::sync_fullscreen`), so
     /// Normal Screen Mode puts it back, and leaves a window the user maximized as it is.
     pub(crate) maximized_for_mode: bool,
+    /// Normal Screen Mode has asked the host to put back the window Full Screen Mode with Menu Bar
+    /// maximized, and the host doesn't read it as put back yet.
+    pub(crate) unmaximize_sent: bool,
     /// Whether the window is maximized, as the desktop host reads it from the window before each
     /// frame; `None` where it can't (egui's own reading then counts). egui reads it on macOS only
     /// at startup and when it maximizes the window itself (#3635).

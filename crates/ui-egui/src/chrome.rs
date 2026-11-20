@@ -398,7 +398,8 @@ pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Normal Screen Mode puts back a window it maximized. A window that was maximized or full screen
 /// already stays so; whether it is maximized comes from the host when it says
 /// ([`VectorcraftApp::host_maximized`]), as egui doesn't follow a zoom from the macOS title bar.
-/// Both wait for the window to be out of full screen.
+/// Both wait for the window to be out of full screen. The mode keeps the window
+/// ([`VectorcraftApp::screen_mode_sizes_window`]) until the host reads it as put back.
 pub fn sync_fullscreen(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mode = app.ui.screen_mode;
     let (is, maximized) = ctx.input(|i| (i.viewport().fullscreen.unwrap_or(false), i.viewport().maximized.unwrap_or(false)));
@@ -407,19 +408,31 @@ pub fn sync_fullscreen(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
         app.fullscreen_for_mode = true;
     } else if mode < 2 && app.fullscreen_for_mode {
-        if is {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
-        }
+        // Also before the window reads as full screen: the mode may end while it is still going
+        // full screen, and the host ignores the command when nothing is full screen.
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
         app.fullscreen_for_mode = false;
     }
-    if mode == 1 && !is && !maximized && !app.maximized_for_mode {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
-        app.maximized_for_mode = true;
+    if mode == 1 && !is {
+        if !app.maximized_for_mode && !maximized {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            app.maximized_for_mode = true;
+        } else if app.unmaximize_sent {
+            // Back in the mode before the window was put back.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            app.unmaximize_sent = false;
+        }
     } else if mode == 0 && !is && app.maximized_for_mode {
         // Also when the window doesn't read as maximized yet: a window manager may confirm the
         // maximize after the mode has already ended.
-        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
-        app.maximized_for_mode = false;
+        if !app.unmaximize_sent {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+            app.unmaximize_sent = true;
+        }
+        if !maximized {
+            app.maximized_for_mode = false;
+            app.unmaximize_sent = false;
+        }
     }
 }
 

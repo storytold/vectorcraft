@@ -220,8 +220,9 @@ impl App {
         }
         let host_maximized = self.winit_window.as_ref().map(|w| w.is_maximized());
         // The other screen modes size the window for the time being (Full Screen Mode with Menu
-        // Bar maximizes it, #7233): only Normal Screen Mode's window is kept for the next launch.
-        if self.app.ui.screen_mode == 0 {
+        // Bar maximizes it, #7233): only Normal Screen Mode's window, once put back, is kept for
+        // the next launch.
+        if !self.app.screen_mode_sizes_window() {
             window::track(ctx, &mut self.app.ui.window, host_maximized);
         }
         if self.app.ui.status == "quit" {
