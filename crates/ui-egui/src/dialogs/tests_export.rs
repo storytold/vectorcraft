@@ -259,11 +259,12 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
             _ => {}
         }
     }
-    let labels: Vec<&str> = export_as::formats().iter().map(|f| f.label).collect();
     // A built-in format six from the end of the built-in ones: out of view when the list opens at
     // its top, and far enough from the end that a plug-in format another test adds after the
-    // built-in ones does not move the rows shown around it.
+    // built-in ones does not move the rows shown around it. The window is short enough that the
+    // list centered on it stops short of its end.
     let built_in: Vec<_> = fileio::FORMATS.iter().filter(|f| f.write && !matches!(f.id, "vectorcraft" | "ai")).collect();
+    let labels: Vec<&str> = built_in.iter().map(|f| f.label).collect();
     let chosen = built_in.len().checked_sub(6).and_then(|i| built_in.get(i)).copied().expect("Export As lists formats");
     let (mut app, _) = app(1);
     app.run("file.exportAs", json!({"format": chosen.id})).unwrap();
@@ -272,31 +273,38 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
     theme::apply(&ctx, Default::default());
     // Every scroll area takes the bar at rest from the theme, whatever style the list sets itself.
     assert_eq!(ctx.global_style().spacing.scroll, crate::widgets::list_scroll_style());
-    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1024.0, 480.0)));
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1024.0, 280.0)));
     let mut time = 0.0;
+    let popup = std::cell::RefCell::new(vec![]);
+    // The texts and bars painted on the open list (without the dialog under it), and every text.
     let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         time += 0.25;
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| {
+            show(app, ui.ctx());
+            popup.replace(crate::widgets::top_popup_shapes(ui.ctx()));
+        });
         out.textures_delta.clear();
-        let (mut texts, mut bars) = (vec![], vec![]);
-        out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
-        (texts, bars)
+        let (mut texts, mut bars, mut all) = (vec![], vec![], vec![]);
+        popup.take().iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut all, &mut vec![]));
+        (texts, bars, all)
     };
     let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
     run(&mut app, vec![away.clone()]);
-    let (texts, _) = run(&mut app, vec![]);
+    let (_, _, texts) = run(&mut app, vec![]);
     let field = texts.iter().find(|(s, ..)| s == chosen.label).map(|(_, r, _)| r.center()).expect("the Format field shows the chosen format");
     let click_at = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     // Opens the list, moves the pointer away and returns the list's rect, the format names drawn in
     // it with their clip rects, and the bars drawn.
-    type Run<'r> = dyn FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> (Vec<(String, egui::Rect, egui::Rect)>, Vec<egui::Rect>) + 'r;
+    type Texts = Vec<(String, egui::Rect, egui::Rect)>;
+    type Run<'r> = dyn FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> (Texts, Vec<egui::Rect>, Texts) + 'r;
     let open = |run: &mut Run<'_>, app: &mut VectorcraftApp| {
         run(app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
         run(app, vec![click_at(field, false)]);
         run(app, vec![away.clone()]);
         let (mut texts, mut bars) = (vec![], vec![]);
         for _ in 0..4 {
-            (texts, bars) = run(app, vec![]);
+            (texts, bars, _) = run(app, vec![]);
         }
         let list = ctx
             .memory(|m| {
@@ -334,17 +342,96 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_with_the_chosen_format
     run(&mut app, vec![wheel]);
     let mut scrolled = vec![];
     for _ in 0..4 {
-        (scrolled, _) = run(&mut app, vec![]);
+        (scrolled, ..) = run(&mut app, vec![]);
     }
     let scrolled: Vec<_> = scrolled.into_iter().filter(|(s, r, _)| labels.contains(&s.as_str()) && list.contains_rect(*r)).collect();
-    run(&mut app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
-    run(&mut app, vec![click_at(field, false)]);
+    // Escape closes it: a list taller than the room beside its field covers the field.
+    let escape = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    run(&mut app, vec![escape(true)]);
+    run(&mut app, vec![escape(false)]);
     let (_, reopened, _) = open(&mut run, &mut app);
     if rows.len() < labels.len() {
         assert_ne!(tops(&scrolled), tops(&rows), "the wheel scrolled the list");
     }
     assert_eq!(tops(&reopened), tops(&rows), "the reopened list shows the rows it first opened with");
     assert!(whole(&reopened, chosen.label), "the chosen format shows whole: {:?}", tops(&reopened));
+}
+
+/// #5941: the Format list stopped at the room on one side of its field, so a window with room for
+/// every format still cut the list short. In windows of 1280×900 and 1000×856 the list shows every
+/// built-in format whole, the grayed-out DWG row after them included, inside the window, without a
+/// scroll bar. A plug-in format that another test adds or removes meanwhile is not counted.
+#[test]
+fn the_format_list_shows_every_format_when_the_window_has_room() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let labels: Vec<&str> =
+        fileio::FORMATS.iter().filter(|f| f.write && !matches!(f.id, "vectorcraft" | "ai")).map(|f| f.label).chain(["DWG (use DXF)"]).collect();
+    for (width, height) in [(1280.0, 900.0), (1000.0, 856.0)] {
+        let case = format!("{width}×{height}");
+        let (mut app, _) = app(1);
+        app.run("file.exportAs", json!({"format": "png"})).unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+        let mut time = 0.0;
+        let popup = std::cell::RefCell::new(vec![]);
+        // The texts and bars painted on the open list (without the dialog under it), and every text.
+        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 0.25;
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, time: Some(time), ..Default::default() }, |ui| {
+                show(app, ui.ctx());
+                popup.replace(crate::widgets::top_popup_shapes(ui.ctx()));
+            });
+            out.textures_delta.clear();
+            let (mut texts, mut bars, mut all) = (vec![], vec![], vec![]);
+            popup.take().iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+            out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut all, &mut vec![]));
+            (texts, bars, all)
+        };
+        let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
+        run(&mut app, vec![away.clone()]);
+        let (_, _, all) = run(&mut app, vec![]);
+        let field = all.iter().find(|(s, ..)| s == "PNG").map(|(_, r, _)| r.center()).expect("the Format field shows PNG");
+        let click = |pressed| egui::Event::PointerButton { pos: field, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(field), click(true)]);
+        run(&mut app, vec![click(false)]);
+        run(&mut app, vec![away.clone()]);
+        let list_rect = || {
+            ctx.memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+        };
+        // A plug-in format that another test installs or removes changes the list's height, and the
+        // list is placed for its new height on the pass after. Read it once it keeps its rect.
+        let (mut texts, mut bars, mut list) = (vec![], vec![], None);
+        for _ in 0..12 {
+            (texts, bars, _) = run(&mut app, vec![]);
+            let now = list_rect();
+            if now.is_some() && now == list {
+                break;
+            }
+            list = now;
+        }
+        let list = list.expect("the Format list is open");
+        assert!(screen.contains_rect(list), "{case}: the list {list:?} is inside the window");
+        let whole: Vec<&str> = labels
+            .iter()
+            .copied()
+            .filter(|name| {
+                texts.iter().any(|(s, r, clip)| s == name && list.contains_rect(*r) && r.top() >= clip.top() && r.bottom() <= clip.bottom())
+            })
+            .collect();
+        assert_eq!(whole, labels, "{case}: every format shows whole in {list:?}");
+        assert!(bars.is_empty(), "{case}: a list that shows every format draws no scroll bar: {bars:?}");
+    }
 }
 
 #[test]
