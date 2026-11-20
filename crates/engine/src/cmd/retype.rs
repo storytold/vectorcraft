@@ -648,9 +648,13 @@ fn verified(
             }
             if n > 1 {
                 // The tracking was measured with the mark's gap in it: the rest is measured again
-                // without it, from the same budgets as the rest after a split.
+                // without it, from the same budgets as the rest after a split. A rest that starts
+                // with a mark too is not measured here: its own pass leaves that mark out and
+                // measures the glyphs after it.
                 let measurable = n > 3 && remeasured >= (n - 1).saturating_mul(6) && track_budget >= (n - 1).saturating_mul(6);
-                let rest = if measurable {
+                let rest = if l.matches.get(1).is_some_and(|m| vectorcraft_text::retype::is_combining_mark(m.ch)) {
+                    l.part(1, n)
+                } else if measurable {
                     remeasured = remeasured.saturating_sub((n - 1).saturating_mul(6));
                     track_budget = track_budget.saturating_sub(n - 1);
                     l.respaced(1, n, 0.0).map(|r| r.tracked(system_layout, &mut track_budget))

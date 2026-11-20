@@ -195,6 +195,41 @@ fn a_combining_mark_starts_no_line() {
 }
 
 #[test]
+fn marks_first_after_a_split_leave_other_lines_their_tracking() {
+    // Twenty marks moved off their base, each one first on its line in turn, do not use up the
+    // measures of the other lines: the tracked line retyped with them keeps its tracking.
+    let mut s = session();
+    let marks = outlined(
+        &mut s,
+        json!({"x": 40, "y": 100, "text": format!("x{}a", "\u{312}".repeat(20)), "size": 40, "font": "Source Sans 3", "style": "Regular"}),
+    );
+    let mut moved: Vec<u64> = s.doc().unwrap().doc.children(Some(NodeId(marks))).unwrap().iter().map(|n| n.id.0).collect();
+    assert_eq!(moved.len(), 22);
+    moved = moved[1..21].to_vec();
+    let id = s
+        .execute("text.create", &json!({"x": 40, "y": 300, "text": "x\u{312}yzw", "size": 40, "font": "Source Sans 3", "style": "Regular"}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 5, "tracking": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let tracked = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(tracked))).unwrap()[1].id.0;
+    moved.push(mark);
+    s.execute("select.set", &json!({"ids": moved})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [marks, tracked]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts = r["texts"].as_array().unwrap();
+    let at = texts.iter().position(|t| t == "yzw").unwrap_or_else(|| panic!("yzw in {r}"));
+    assert_eq!(r["fonts"][at]["tracking"], json!(50.0), "{r}");
+    let mut left: Vec<u64> = r["unmatched"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    left.sort_unstable();
+    moved.sort_unstable();
+    assert_eq!(left, moved, "{r}");
+}
+
+#[test]
 fn mixed_selection_retypes_the_glyphs_and_keeps_the_rest() {
     let mut s = session();
     let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Mix", "size": 30}));
