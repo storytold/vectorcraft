@@ -41,7 +41,9 @@ struct Changes {
 ///   moved loses the mark, unless it is the clipping path of the clip it went into.
 /// - When the edit put new art in the clipping path's place (an object it made of the clipping
 ///   path, such as type's outlines), that art is the clipping path. When it made members of the
-///   clipping path's parts (a compound path released), the bottom one is, wherever it is.
+///   clipping path's parts (a compound path released), the bottom one is, wherever it is. When it
+///   wrapped the clipping path alone in a new member (Group, Make Compound Path), that member is,
+///   and the clip clips by its shape as before; the path inside it loses the mark.
 /// - A layer or group that starts clipping in the edit (Make Clipping Mask) keeps the clipping path
 ///   it was made with, and its other members lose the mark.
 /// - In a layer or group that doesn't clip, an object the edit put there loses the mark: a copy of
@@ -122,12 +124,18 @@ fn outcome(was: Option<&Node>, now: &Node, doc: &Document) -> Option<Outcome> {
     if let Some(i) = children.iter().position(|c| c.id == path) {
         return Some(Outcome::Keep(i));
     }
+    let old: std::collections::HashSet<NodeId> = was.children().into_iter().flatten().map(|o| o.id).collect();
+    let had = |id: NodeId| old.contains(&id);
+    // Wrapped alone in an object the edit made of it (Group, Make Compound Path): that object takes
+    // its place and clips by its shape.
+    let wraps_it = |c: &Arc<Node>| c.children().is_some_and(|w| matches!(w.as_slice(), [only] if only.id == path));
+    if let Some(i) = children.iter().position(|c| !had(c.id) && wraps_it(c)) {
+        return Some(Outcome::Keep(i));
+    }
     if doc.node(path).is_some() {
         return Some(Outcome::Release(Some(path)));
     }
     // Deleted, unless new art took its place.
-    let old: std::collections::HashSet<NodeId> = was.children().into_iter().flatten().map(|o| o.id).collect();
-    let had = |id: NodeId| old.contains(&id);
     // Its parts, members of their own now (a compound path released): the bottom one, wherever
     // the edit put it among the others, which other objects released with it may have moved.
     let mut parts = std::collections::HashSet::new();

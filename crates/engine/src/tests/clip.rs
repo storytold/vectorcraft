@@ -543,6 +543,64 @@ fn deleting_the_clipping_path_or_moving_it_out_releases_the_clip() {
     assert!(whole(&s));
 }
 
+/// The clipping path wrapped alone inside its clip, in a group or a compound path, gives the
+/// wrapper its place: the clip clips by the same shape, on the canvas, in the SVG and PDF output
+/// and in its file opened again, and undo gives the path back. Wrapped together with art, it
+/// releases the clip ([`deleting_the_clipping_path_or_moving_it_out_releases_the_clip`]).
+#[test]
+fn the_clipping_path_wrapped_alone_in_a_group_or_a_compound_path_still_clips() {
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().clone();
+    let clipped = |s: &Session| {
+        let r = render(s);
+        opaque(&r, 50, 50) && !opaque(&r, 3, 3)
+    };
+    for wrap in ["object.group", "object.compoundPath.make"] {
+        let mut s = session();
+        let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+        let circle = ellipse(&mut s, 10.0, 80.0);
+        select(&mut s, &[art, circle]);
+        let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+        assert!(clipped(&s));
+        select(&mut s, &[circle]);
+        let w = id_of(&s.execute(wrap, &json!({})).unwrap());
+        assert_eq!(s.doc().unwrap().doc.parent_of(circle), Some(w), "{wrap}");
+        assert_eq!(child_ids(&s, g), [art, w], "{wrap}: in the circle's place");
+        assert!(node(&s, g).clips(), "{wrap}: the clip stays");
+        assert_eq!(clips_by(&s, g), Some(w), "{wrap}");
+        assert!(node(&s, w).is_clipping_path() && !node(&s, circle).is_clipping_path(), "{wrap}");
+        assert!(clipped(&s), "{wrap}: clipped by the circle");
+        assert_eq!(hit(&s, 50.0, 50.0), Some(art), "{wrap}");
+        assert_eq!(hit(&s, 3.0, 3.0), None, "{wrap}: clipped away");
+        assert_outputs_agree(&mut s, &[(50, 50), (3, 3), (12, 12), (88, 50)]);
+
+        // Opened again: the wrapper, first in the file, is the clipping path on top.
+        let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+        let mut o = Session::new();
+        o.execute("document.open", &json!({"name": "clip.vectorcraft", "dataBase64": data})).unwrap();
+        assert_eq!(child_ids(&o, g), [art, w], "{wrap}: opened again");
+        assert_eq!(clips_by(&o, g), Some(w), "{wrap}: opened again");
+        assert!(clipped(&o), "{wrap}: opened again");
+
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(clips_by(&s, g), Some(circle), "{wrap}: undone");
+        assert!(node(&s, circle).is_clipping_path() && clipped(&s), "{wrap}: undone");
+    }
+
+    // A clipping layer's clipping path, grouped alone.
+    let mut s = session();
+    id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let circle = ellipse(&mut s, 10.0, 80.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("layer.clippingMask.toggle", &json!({})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    assert!(clipped(&s));
+    select(&mut s, &[circle]);
+    let w = id_of(&s.execute("object.group", &json!({})).unwrap());
+    assert!(node(&s, layer).clips(), "the layer still clips");
+    assert_eq!(clips_by(&s, layer), Some(w));
+    assert!(clipped(&s));
+}
+
 /// A copy of the clipping path alone is a plain object: pasted on its own, or into its clip group
 /// behind it, where the clip keeps its clipping path.
 #[test]
