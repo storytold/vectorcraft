@@ -232,6 +232,7 @@ impl<'a> Builder<'a> {
             away: behind,
             end: None,
             surface: None,
+            membrane: None,
             plane,
             cell: None,
             #[cfg(test)]

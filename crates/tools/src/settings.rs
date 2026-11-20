@@ -98,6 +98,8 @@ const ROWS: &[Row] = &[
             "highlightColor",
         ],
     ),
+    // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+    (&["fillArea"], Some("shapeBuilder"), &["openFilledAsClosed", "gapDetection", "gapLength"]),
     // Objects on Path Tool Options: the Pivot and Rotate of the objects attached next.
     (&["objectsOnPath"], None, &["pivot", "rotate"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),

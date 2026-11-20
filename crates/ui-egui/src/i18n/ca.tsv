@@ -2689,6 +2689,8 @@ digits	Malayalam	Malaiàlam
 	Live curve fitting	Ajustament de corbes en directe
 	Live Paint	Pintura interactiva
 	Live Paint Bucket	Galleda de pintura interactiva
+	Fill Area	Emplena l'àrea
+	Fill Area Tool	Eina Emplena l'àrea
 	Live Paint Bucket (Stroke)	Galleda de pintura interactiva (traç)
 	Live Paint Info	Informació de pintura interactiva
 	Live Paint Selection Tool	Eina de selecció de pintura interactiva
@@ -7230,6 +7232,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	shadings of more than 4096 patches or triangles were left out	els ombrejats de més de 4096 pedaços o triangles s’han omès
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	els ombrejats les funcions dels quals són d’un tipus desconegut s’omplen amb el seu color central
 @msg	Shape Builder: no region under the pointer	Constructor de formes: no hi ha cap regió sota el punter
+@msg	Fill Area: no enclosed area under the pointer	Emplena l'àrea: no hi ha cap àrea tancada sota el punter
 @msg	Shape Builder: select all paths you want to merge	Constructor de formes: selecciona tots els traçats que vulguis combinar
 @msg	Shape Builder: select paths or compound paths	Constructor de formes: selecciona traçats o traçats compostos
 @msg	shortcut for `{k}` must be a string	la drecera de `{k}` ha de ser una cadena
@@ -7319,8 +7322,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió, Revolució i Infla
 @msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	Inflate maps graphics onto its front and back, not onto a side	Infla aplica els gràfics a la cara davantera i a la posterior, no a un lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	l’objecte {_1}: la cara posterior d’Infla només admet gràfics amb Tots dos costats i Tapa activats
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
@@ -8975,6 +8980,15 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Nature Icons	Icones de natura
+	Flower	Flor
+	Tree	Arbre
+	Mountain	Muntanya
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Fletxa de filigrana
+	Petal Sweep	Traç de pètals
+	Twin Curl	Voluta doble
 	Vector Packs	Paquets vectorials
 	Compass Rose	Rosa dels vents
 	Botanical Sprig	Branqueta botànica

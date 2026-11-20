@@ -2180,6 +2180,8 @@
 	List Workspaces	વર્કસ્પેસની યાદી
 	Live Paint	લાઇવ પેઇન્ટ
 	Live Paint Bucket	લાઇવ પેઇન્ટ બકેટ
+	Fill Area	વિસ્તાર ભરો
+	Fill Area Tool	વિસ્તાર ભરો ટૂલ
 	Live Paint Bucket (Stroke)	લાઇવ પેઇન્ટ બકેટ (સ્ટ્રોક)
 	Live Paint Info	લાઇવ પેઇન્ટ માહિતી
 	Live Paint Selection Tool	લાઇવ પેઇન્ટ પસંદગી ટૂલ
@@ -5236,7 +5238,7 @@ antiAlias	Sharp	શાર્પ
 	Align On:	આના પર સંરેખિત કરો:
 	Delete Tab	ટૅબ કાઢી નાખો
 	Face	સપાટી
-	Graphics map onto the Plane, Extrude and Revolve object types.	ગ્રાફિક્સને Plane, Extrude અને Revolve પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	ગ્રાફિક્સને Plane, Extrude, Revolve અને Inflate પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
 	Justify with last line aligned center	છેલ્લી લાઇન મધ્યમાં રાખીને જસ્ટિફાઇ કરો
 	Justify with last line aligned right	છેલ્લી લાઇન જમણે રાખીને જસ્ટિફાઇ કરો
 	Leader:	લીડર:
@@ -5671,6 +5673,15 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Nature Icons	પ્રકૃતિ ચિહ્નો
+	Flower	ફૂલ
+	Tree	વૃક્ષ
+	Mountain	પર્વત
+	Ornamental	અલંકારિક
+	Scrollwork	વળાંકવાળી સજાવટ
+	Filigree Arrow	નાજુક કોતરણીવાળું તીર
+	Petal Sweep	પાંખડીઓનો વળાંક
+	Twin Curl	બેવડો વળાંક
 	Vector Packs	વેક્ટર પૅક
 	Compass Rose	દિશાસૂચક ગુલાબ
 	Botanical Sprig	વનસ્પતિ ડાળી
