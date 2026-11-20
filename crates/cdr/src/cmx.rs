@@ -110,7 +110,10 @@ fn chunks<'a>(b: &'a [u8], budget: &mut Budget, warn: &mut Vec<Warning>) -> Resu
             let Some(id) = Rd::at(b, pos).fourcc() else { break };
             if !is_id(&id) {
                 match resync(b, pos, end) {
-                    Some(next) => {
+                    Some((next, damaged)) => {
+                        if damaged {
+                            push(warn, Warning::Damaged);
+                        }
                         pos = next;
                         continue;
                     }
@@ -126,11 +129,12 @@ fn chunks<'a>(b: &'a [u8], budget: &mut Budget, warn: &mut Vec<Warning>) -> Resu
             let stop = start.saturating_add(size);
             if stop > end {
                 // Stray bytes that happen to start with four letters give a length past the list:
-                // look for the next chunk id after them. A chunk the reader uses is kept, cut at
-                // the end of the list.
+                // look for the next chunk id after them, and report the damage. A chunk the reader
+                // uses is kept, cut at the end of the list.
                 if !READ_IDS.contains(&id)
-                    && let Some(next) = resync(b, pos, end)
+                    && let Some((next, _)) = resync(b, pos, end)
                 {
+                    push(warn, Warning::Damaged);
                     pos = next;
                     continue;
                 }
@@ -164,11 +168,36 @@ fn is_id(t: &[u8]) -> bool {
 
 /// Where the next chunk after `pos` lies: the first chunk id at an even distance of 2 to [`RESYNC`]
 /// bytes that names a chunk the reader uses, or another chunk whose length keeps it inside the list
-/// that ends at `end` (R53).
-fn resync(b: &[u8], pos: usize, end: usize) -> Option<usize> {
-    let fits = |p: usize| u32_at(b, p + 4).and_then(|s| (p + 8).checked_add(s as usize)).is_some_and(|stop| stop <= end);
-    let chunk_at = |p: usize| Rd::at(b, p).fourcc().is_some_and(|id| is_id(&id) && (READ_IDS.contains(&id) || fits(p)));
-    (pos + 2..=pos.saturating_add(RESYNC).min(end.saturating_sub(8))).step_by(2).find(|&p| chunk_at(p))
+/// that ends at `end` (R53). A `LIST` is kept. When the chunk found is another one the reader
+/// passes over, or is not followed by another chunk id or by the end of the list, the reader
+/// resumes instead at a chunk the reader uses that starts 8 to [`RESYNC`] bytes after it, inside
+/// its body, when that chunk is not empty, ends inside the list and is followed in that way. When
+/// the chunk found is followed in that way, the inner chunk must end where it ends; when the chunk
+/// found is both, the inner chunk need not be followed in that way. When no such chunk
+/// is found, the chunk found is kept. The flag is set when the reader resumes at an inner chunk,
+/// or at a chunk it passes over that is not followed in that way: the bytes passed over were damage.
+fn resync(b: &[u8], pos: usize, end: usize) -> Option<(usize, bool)> {
+    let id_at = |p: usize| Rd::at(b, p).fourcc().filter(|id| is_id(id));
+    let size = |p: usize| u32_at(b, p + 4).map(|s| s as usize);
+    let fits = |p: usize| size(p).and_then(|s| (p + 8).checked_add(s)).is_some_and(|stop| stop <= end);
+    let known = |p: usize| id_at(p).is_some_and(|id| READ_IDS.contains(&id));
+    // Where the chunk at `p` ends with its pad byte, when its length keeps it inside the list.
+    let next = |p: usize| size(p).filter(|_| fits(p)).map(|s| p + 8 + s + (s & 1));
+    let settled = |p: usize| next(p).is_some_and(|n| n >= end || (n.saturating_add(8) <= end && id_at(n).is_some()));
+    let last = end.saturating_sub(8);
+    let p = (pos + 2..=pos.saturating_add(RESYNC).min(last)).step_by(2).find(|&p| known(p) || (id_at(p).is_some() && fits(p)))?;
+    let lone = !settled(p);
+    if known(p) && (!lone || id_at(p) == Some(LIST)) {
+        return Some((p, false));
+    }
+    let stop = next(p).unwrap_or(p);
+    let inside = (p + 8..=p.saturating_add(RESYNC).min(last)).step_by(2).find(|&k| {
+        k < stop && known(k) && size(k).is_some_and(|s| s > 0) && if lone { settled(k) || (!known(p) && fits(k)) } else { next(k) == Some(stop) }
+    });
+    match inside {
+        Some(k) => Some((k, true)),
+        None => Some((p, lone && !known(p))),
+    }
 }
 
 /// The end of the field list at `pos` of `b`: after its 0xff, or the end of `b` when a field runs
