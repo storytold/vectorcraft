@@ -373,6 +373,8 @@ impl Session {
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
         self.previewing = outer;
+        // A step inside a batch that changed only the defaults counts as well.
+        let ran_defaults_only = self.defaults_only_ran.is_some();
         if let Some(paint) = color_mode_paint {
             self.paint = paint;
         }
@@ -380,6 +382,7 @@ impl Session {
         let batch_paint = (r.is_ok() && cmd == "command.batch").then(|| self.paint.clone());
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
+            it.used_defaults_only |= ran_defaults_only;
             // A failed preview leaves the document at the snapshot, so nothing is left to commit
             // (not even an earlier successful preview, which the reset above already undid).
             it.preview = r.is_ok().then(|| (cmd.to_string(), params));
@@ -490,6 +493,7 @@ impl Session {
         // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
         // cancel puts back as well, as it does a color previewed with `defaultsOnly: true`.
         let bucket = self.bucket_paints();
+        let used_defaults_only = self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.used_defaults_only);
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
@@ -511,8 +515,11 @@ impl Session {
         // A canceled preview's Assign Profile is undone with it.
         self.sync_front_profiles();
         // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
-        // the document has it again, not as a preview left it.
-        self.inherit_new_art();
+        // the document has it again, not as a preview left it. An interaction that changed only the
+        // defaults (`defaultsOnly: true`) leaves the defaults it began with.
+        if !used_defaults_only {
+            self.inherit_new_art();
+        }
         Ok(())
     }
 

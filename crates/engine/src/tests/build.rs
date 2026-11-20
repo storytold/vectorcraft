@@ -3468,6 +3468,25 @@ fn live_paint_bucket_commands_replay_from_the_journal_with_another_tool() {
     s.preview("stroke.set", &json!({"weight": 7})).unwrap();
     s.cancel_interaction().unwrap();
     assert_eq!(s.paint.stroke_width, 2.0, "the canceled interaction's weight is not kept");
+    // With New Art Has Basic Appearance off and an object selected, canceling such an interaction
+    // keeps the defaults it began with, not the selection's appearance.
+    let mut s = session();
+    let (_, art, ..) = setup(&mut s, false);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "defaultsOnly": true})).unwrap();
+    let (red, selected) = (s.paint.fill.clone(), node(&s, art));
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#00ffff", "defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 2.0), "the defaults the interaction began with stay");
+    assert_eq!(node(&s, art), selected, "the selection keeps its paint");
+    // The same when the defaults-only step was inside a batch that a later preview replaced.
+    s.begin_interaction("Fill Color").unwrap();
+    let step = json!({"command": "paint.setFill", "params": {"color": "#00ffff", "defaultsOnly": true}});
+    s.preview("command.batch", &json!({"commands": [step]})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#ff0000").unwrap()), "a batch's defaults-only step is put back");
     // `defaultsOnly` is a bool, and names no objects or brush.
     let (g, ..) = setup(&mut s, true);
     for (cmd, params) in [
