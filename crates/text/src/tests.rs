@@ -553,6 +553,32 @@ fn fit_lines_grows_the_frame_until_the_source_s_lines_fit() {
     assert!(!fit_lines(db(), &mut v, 9));
 }
 
+/// #2769: in a frame of two columns, four lines alike gain their second line in each column at
+/// one height, so no height shows three. A source that sets three keeps its frame, rather than
+/// showing the fourth line it keeps overset; a source that sets four gets them.
+#[test]
+fn fit_lines_never_shows_more_lines_than_the_source() {
+    let text = "one
+two
+three
+four";
+    let tall = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left));
+    let frame = Rect::new(0.0, 0.0, 200.0, tall.lines[0].baseline + tall.lines[0].descent + 1.0);
+    let columns = |frame: Rect| {
+        let mut t = area(text, style(12.0), frame, Justify::Left);
+        (t.area.columns, t.area.gutter) = (2, 0.0);
+        t
+    };
+    let mut t = columns(frame);
+    assert_eq!(layout(db(), &t).lines.len(), 2);
+    let before = t.kind.clone();
+    assert!(!fit_lines(db(), &mut t, 3));
+    assert_eq!(t.kind, before);
+    assert!(fit_lines(db(), &mut t, 4));
+    let fitted = layout(db(), &t);
+    assert!(!fitted.overflow && fitted.lines.len() == 4);
+}
+
 #[test]
 fn indents_and_paragraph_spacing() {
     let frame = Rect::new(0.0, 0.0, 200.0, 400.0);

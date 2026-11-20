@@ -100,7 +100,8 @@ pub fn fit_source_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
 /// a descent past the frame's bottom, and a line that doesn't fit isn't drawn: it went missing
 /// without a sign. For importers: the frame is made taller, from its bottom, by the least that lays
 /// the source's lines out (or all of the text, when it has fewer), plus 0.05 pt for the rounding of
-/// the layout. Horizontal type only. Whether it was.
+/// the layout, and never so that it shows more lines than the source. Horizontal type only. Whether
+/// it was.
 pub fn fit_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
     if t.vertical || lines == 0 {
         return false;
@@ -151,13 +152,19 @@ pub fn fit_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
             lo = mid;
         }
     }
-    let taller = TextKind::Area { frame: at(hi + 0.05) };
-    let short = std::mem::replace(&mut t.kind, taller);
-    if !fits(t) {
-        t.kind = short;
-        return false;
+    // A frame of columns can gain a line in each at one height, so the least height that shows the
+    // source's lines can show more of them: lines the file keeps overset. Such a height isn't kept
+    // (with the rounding margin or without), and the frame stays as it was.
+    let short = t.kind.clone();
+    for height in [hi + 0.05, hi] {
+        t.kind = TextKind::Area { frame: at(height) };
+        let l = layout(db, t);
+        if (l.lines.len() >= lines || !l.overflow) && l.lines.len() <= lines {
+            return true;
+        }
     }
-    true
+    t.kind = short;
+    false
 }
 
 /// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
