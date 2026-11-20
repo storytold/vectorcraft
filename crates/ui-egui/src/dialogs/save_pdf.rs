@@ -5,7 +5,8 @@
 //! plus `preset`, `range`, `path?` and UI-only `__` keys, so agents fill the dialog with
 //! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`]; the Summary is
 //! `document.pdfSettings`, and its Save Summary… writes it to a text file (`ui.pdfSummary.save`).
-//! Save Preset… names the settings as a preset (`pdf.preset.save`).
+//! Save Preset… names the settings as a preset (`pdf.preset.save`). The Preset menu reads Custom
+//! while the options differ from the chosen preset's settings; `preset` keeps the chosen name.
 //! Opened from Export As with Use Artboards off (`__artBounds`), the dialog has no Artboards
 //! section, and OK writes one page of the visible art's bounds through [`io::export`]; opened
 //! from Export Selection (`__selection` too), the page is the selection's crop. While Alt (Option
@@ -531,9 +532,9 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         let names: Vec<&str> = presets.iter().map(String::as_str).collect();
         // The built-in presets come first (translated); the saved ones are names.
         let builtins = names.len().saturating_sub(app.session.prefs.pdf_presets.len());
-        let chosen = super::mixed_dropdown(ui, "pdf-preset", &d.str("preset"), &names, 300.0, |k| k < builtins)
-            .and_then(|i| names.get(i))
-            .map(|p| p.to_string());
+        let shown = if differs_from_preset(app, d) { tl!("Custom").to_string() } else { d.str("preset") };
+        let chosen =
+            super::mixed_dropdown(ui, "pdf-preset", &shown, &names, 300.0, |k| k < builtins).and_then(|i| names.get(i)).map(|p| p.to_string());
         if let Some(name) = chosen {
             apply_preset(app, d, &name);
         }
@@ -564,6 +565,29 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             note(ui, tl!("The PDF preset keeps the flattener preset but not the Custom… settings."));
         }
     }
+}
+
+/// Do the options of Save PDF `d` differ from its chosen preset's settings? The settings the
+/// dialog writes are compared with the preset's by value, so an option set back to the preset's
+/// value no longer counts. Passwords, which presets never keep, count, and so do Custom… flattener
+/// options that differ from the flattener preset's. The artboards, the path and the UI-only fields
+/// do not. While either side can't be resolved (a saved preset deleted, a value refused), the
+/// options don't count as different: Save PDF and Reset say what is wrong.
+fn differs_from_preset(app: &VectorcraftApp, d: &Dialog) -> bool {
+    let saved = &app.session.prefs.pdf_presets;
+    let p = params(d);
+    let settings = match (pdf::preset_settings("ui.savePdfDialog", &p, saved), pdf::resolve("ui.savePdfDialog", &p, saved)) {
+        (Ok(base), Ok(current)) => base != current,
+        _ => false,
+    };
+    settings
+        || d.fields.contains_key("flattener") && {
+            let flattener_saved = &app.session.prefs.flattener_presets;
+            match (flattener(d, flattener_saved), FlattenOptions::for_export(Some(&flattener_name(d)), None, flattener_saved)) {
+                (Ok(current), Ok(base)) => current != base,
+                _ => false,
+            }
+        }
 }
 
 /// Replace the settings with preset `name`'s (the artboard choice and path stay).

@@ -1559,6 +1559,122 @@ fn save_preset_says_it_leaves_the_custom_flattener_options_out() {
     assert!(!r.texts(&mut app).iter().any(|t| t == note), "without them");
 }
 
+/// Whether Save PDF's Preset menu reads Custom, after checking that it shows the chosen preset
+/// otherwise and that the dialog still holds that preset's name.
+fn reads_custom(r: &Reader, app: &mut VectorcraftApp) -> bool {
+    let preset = app.ui.dialog.as_ref().expect("dialog open").str("preset");
+    let texts = r.texts(app);
+    let custom = texts.iter().any(|t| t == "Custom");
+    assert_ne!(custom, texts.contains(&preset), "{preset}: {texts:?}");
+    assert_eq!(params(app.ui.dialog.as_ref().unwrap())["preset"], json!(preset), "the chosen preset stays");
+    custom
+}
+
+/// `ui.dialog.set` on the open dialog.
+fn dialog_set(app: &mut VectorcraftApp, field: &str, value: Value) {
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
+    assert!(r.get("error").is_none(), "{field}: {r}");
+}
+
+/// The Preset menu reads Custom while an option, Standard and Compatibility included, differs from
+/// the chosen preset's, and its name again once every option is back to the preset's value.
+#[test]
+fn the_preset_menu_reads_custom_while_an_option_differs_from_the_preset() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    app.run("ui.savePdfDialog", json!({})).unwrap();
+    assert!(!reads_custom(&r, &mut app), "as the preset opens");
+    let compatibility = get(app.ui.dialog.as_ref().unwrap(), "compatibility").clone();
+    dialog_set(&mut app, "compatibility", json!("1.4"));
+    assert!(reads_custom(&r, &mut app), "Compatibility");
+    dialog_set(&mut app, "compatibility", compatibility);
+    assert!(!reads_custom(&r, &mut app), "Compatibility back");
+    set_field(&mut app, "compression.color.ppi", json!(72));
+    assert!(reads_custom(&r, &mut app), "a nested option");
+    set_field(&mut app, "compression.color.ppi", json!(300));
+    assert!(!reads_custom(&r, &mut app), "a nested option back");
+    // Standard as the menu chooses it, which also sets Compatibility.
+    set_field(&mut app, "standard", json!("pdfX1a"));
+    standard_chosen(app.ui.dialog.as_mut().unwrap(), Standard::PdfX1a);
+    assert!(reads_custom(&r, &mut app), "Standard");
+    app.ui.dialog = None;
+    app.run("ui.savePdfDialog", json!({"marks": {"trim": true}})).unwrap();
+    assert!(reads_custom(&r, &mut app), "an option given when opening");
+}
+
+/// Choosing a preset, the chosen one or another, and Reset show the preset's name again.
+#[test]
+fn choosing_a_preset_and_reset_show_the_presets_name() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5"})).unwrap();
+    let r = Reader::new();
+    app.run("ui.savePdfDialog", json!({"preset": "Mine"})).unwrap();
+    assert!(!reads_custom(&r, &mut app), "a saved preset");
+    set_field(&mut app, "marks.trim", json!(true));
+    assert!(reads_custom(&r, &mut app));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(!reads_custom(&r, &mut app), "Reset");
+    for preset in ["Mine", pdf::DEFAULT_PRESET] {
+        set_field(&mut app, "marks.trim", json!(true));
+        let mut d = app.ui.dialog.take().unwrap();
+        apply_preset(&mut app, &mut d, preset);
+        app.ui.dialog = Some(d);
+        assert!(!reads_custom(&r, &mut app), "{preset}");
+    }
+}
+
+/// The artboards, the path, the section, the bleed link and a password checkbox without a password
+/// are not PDF options; a password and Custom… flattener options that differ from the flattener
+/// preset's are.
+#[test]
+fn only_the_pdf_options_make_the_preset_menu_read_custom() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/a.pdf"})).unwrap();
+    set_field(&mut app, "path", json!("/tmp/b.pdf"));
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("2"));
+    set_field(&mut app, "__section", json!("Security"));
+    set_field(&mut app, BLEED_LINKED, json!(false));
+    set_field(&mut app, "__requireOpenPassword", json!(true));
+    assert!(!reads_custom(&r, &mut app), "dialog controls");
+    set_field(&mut app, OPEN_PASSWORD, json!("secret"));
+    assert!(reads_custom(&r, &mut app), "a password");
+    set_field(&mut app, OPEN_PASSWORD, json!(""));
+    assert!(!reads_custom(&r, &mut app), "the password cleared");
+
+    let preset = FlattenOptions::for_export(Some(pdf::DEFAULT_FLATTENER), None, &[]).unwrap();
+    app.ui.dialog = None;
+    app.run("ui.savePdfDialog", json!({"flattener": serde_json::to_value(&preset).unwrap()})).unwrap();
+    assert!(!reads_custom(&r, &mut app), "flattener options equal to the preset's");
+    let mut other = preset.clone();
+    other.balance = if preset.balance == 10.0 { 20.0 } else { 10.0 };
+    set_field(&mut app, "flattener", serde_json::to_value(&other).unwrap());
+    assert!(reads_custom(&r, &mut app), "flattener options that differ");
+    app.ui.dialog.as_mut().unwrap().fields.remove("flattener");
+    assert!(!reads_custom(&r, &mut app), "without them");
+}
+
+/// Save Preset… picks the preset it saved, so the menu shows its name; a saved preset replaced
+/// while the dialog is open is compared as it is now, and a deleted one leaves its name showing.
+#[test]
+fn the_preset_menu_compares_with_the_saved_preset_as_it_is_now() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    app.run("ui.savePdfDialog", json!({})).unwrap();
+    set_field(&mut app, "compatibility", json!("1.5"));
+    assert!(reads_custom(&r, &mut app));
+    set_field(&mut app, SAVE_AS, json!("Mine"));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("preset"), "Mine");
+    assert!(!reads_custom(&r, &mut app), "the saved preset");
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.6"})).unwrap();
+    assert!(reads_custom(&r, &mut app), "the preset replaced");
+    app.run("pdf.preset.delete", json!({"name": "Mine"})).unwrap();
+    assert!(!reads_custom(&r, &mut app), "the preset deleted");
+}
+
 #[test]
 fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
     let (mut app, _, _) = app();
