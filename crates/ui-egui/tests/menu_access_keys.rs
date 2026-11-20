@@ -764,6 +764,16 @@ fn menu_access_stationary_pointer_repeat_and_rerun_do_not_retarget_or_double_inv
     assert_eq!(s.app.ui.view.rulers, !before, "one Text/Key pair invokes exactly once across passes");
 
     s.end_access();
+    // Wait for any background font scan and ensure > 20 families even on minimal runners.
+    let db = vectorcraft_text::FontDb::global();
+    let _ = db.families();
+    for i in 0..24 {
+        if db.menu_family_list_now().len() > 20 {
+            break;
+        }
+        // `renamed` needs a family name as long as "Source Sans 3" (13 bytes).
+        db.add_font(vectorcraft_testkit::fonts::renamed(&format!("Menu Test F{i:02}")));
+    }
     let text = s.app.run("text.create", json!({"x": 250, "y": 200, "text": "Menu", "font": "Inter", "size": 12})).unwrap()["id"].clone();
     s.app.run("select.set", json!({"ids": [text]})).unwrap();
     let size = vec2(640.0, 420.0);
