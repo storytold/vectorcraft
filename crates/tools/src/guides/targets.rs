@@ -1198,7 +1198,7 @@ impl Targets {
     /// now `r` (#8568). Where paths cross, or on a curved segment, the point lands as
     /// `snap_onto_path` lands it. On a straight segment, the selection then slides along that
     /// segment, so the point stays on it, until its bounds line up with the other art or are spaced
-    /// evenly with it ([`Self::snap_rects_along`]), else until they line up with a ruler guide of
+    /// evenly with it ([`Self::snap_rects_along_legacy_contact`]), else until they line up with a ruler guide of
     /// `rulers` ([`Self::snap_moved_along_to_rulers`]). A slide goes at most twice `tol` and not
     /// past the segment's ends. Returns where the point goes and the guides.
     pub(crate) fn snap_held_onto_path(&self, p: Point, r: Rect, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
@@ -1433,20 +1433,26 @@ impl Targets {
     /// it is spaced evenly along an axis the line runs along. Returns the shift (along `dir`),
     /// the guides and whether a stroke contour holds the contact.
     pub(crate) fn snap_rects_along_contact(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        let (d, ov, paint_hit, _) = self.snap_rects_along_contacts(rects, dir, tol);
+        (d, ov, paint_hit)
+    }
+
+    /// Returns `(delta, overlays, paint_hit, legacy_hit)`: paint and legacy geometry
+    /// contacts are distinct from displayed guides. A paint hit defers the legacy query.
+    pub(crate) fn snap_rects_along_contacts(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool, bool) {
         if let Some((d, q)) = self.stroke_contours.rect_delta(rects, tol, Some(dir)) {
-            return (d, self.label(q, "stroke edge").into_iter().collect(), true);
+            return (d, self.label(q, "stroke edge").into_iter().collect(), true, false);
         }
-        let (d, ov) = self.snap_rects_along(rects, dir, tol);
-        (d, ov, false)
+        let (d, ov, legacy_hit) = self.snap_rects_along_legacy_contact(rects, dir, tol);
+        (d, ov, false, legacy_hit)
     }
 
-    /// Legacy alignment and spacing for rectangles moving along `dir`.
-    pub(crate) fn snap_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
-        let (s, ov, _) = self.slide_rects_along(rects, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
-        (s, ov)
+    /// Legacy alignment/spacing contact, independent of displacement or drawn guides.
+    pub(crate) fn snap_rects_along_legacy_contact(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        self.slide_rects_along(rects, dir, tol, (f64::NEG_INFINITY, f64::INFINITY))
     }
 
-    /// [`Self::snap_rects_along`] for a slide of `within` (the least and the most way along
+    /// [`Self::snap_rects_along_legacy_contact`] for a slide of `within` (the least and the most way along
     /// `dir`), also saying whether anything lined up or was spaced evenly.
     fn slide_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
@@ -1873,8 +1879,18 @@ impl Targets {
             .map(|(&(base, dir, near), stroke)| {
                 let l2 = dir.hypot2();
                 let anchor = if l2 > 1e-18 {
-                    let point =
-                        if painted { self.nearest_point_with(near, tol, |q| valid((q - base).dot(dir) / l2)) } else { self.nearest_point(near, tol) };
+                    let nearest = self.nearest_point(near, tol);
+                    // Preserve the original nearest anchor's projected-scale admission. Only
+                    // the extra paint-enabled search requires this probe to reach the anchor.
+                    let point = if painted && nearest.is_none_or(|(q, _)| !valid((q - base).dot(dir) / l2)) {
+                        self.nearest_point_with(near, tol, |q| {
+                            let scale = (q - base).dot(dir) / l2;
+                            let projected = base + dir * scale;
+                            valid(scale) && projected.distance(q) <= 1e-9 * (1.0 + q.x.abs().max(q.y.abs()))
+                        })
+                    } else {
+                        nearest
+                    };
                     point.map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0))
                 } else {
                     None

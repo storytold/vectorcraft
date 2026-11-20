@@ -2419,3 +2419,326 @@ fn stroke_review_compound_outline_fill_origin() {
         }
     }
 }
+
+fn review_599225_effect(id: &str) -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect { id: id.into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true }
+}
+
+fn review_599225_group(mix: Option<&str>, outline: bool) -> (Document, NodeId, NodeId) {
+    use vectorcraft_doc::{
+        Appearance,
+        color::{Color, Paint},
+    };
+    let mut d = Document::new(800.0, 600.0);
+    let (owner, first, second) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let children = [(first, Rect::new(100.0, 100.0, 175.0, 200.0)), (second, Rect::new(150.0, 100.0, 200.0, 200.0))]
+        .into_iter()
+        .map(|(id, r)| {
+            Arc::new(Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)))
+        })
+        .collect();
+    let mut group = Node::group(owner, children);
+    if let Some(mix) = mix {
+        group.appearance.effects.push(review_599225_effect(mix));
+    }
+    if outline {
+        group.appearance.effects.push(review_599225_effect("pathfinder.outline"));
+    }
+    d.insert(Some(d.layers[0].id), 0, group).unwrap();
+    (d, owner, first)
+}
+
+fn review_599225_gather(d: &Document, on: bool, excluded: &[NodeId], roots: Option<&[NodeId]>) -> Option<Point> {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: on, snapping_tolerance: 4.0, ..cx(d, &selection, &paint) };
+    let original = d.clone();
+    let result = stroke::gather(&c, excluded, None, roots).nearest(Point::new(202.0, 140.0), 4.0);
+    assert_eq!(d, &original, "gathering does not edit the actual source artwork");
+    result
+}
+
+fn review_599225_mix_controls(mix: &str) {
+    let (d, owner, _) = review_599225_group(Some(mix), false);
+    let art = vectorcraft_effects::pathfinder_children(Some(&d), d.node(owner).unwrap(), None).unwrap();
+    assert!(!art.is_empty(), "CONTROL: Mix produces actual filled faces");
+    assert!(art.iter().all(|n| n.appearance.stroke().is_none() && !n.appearance.fill_paint().is_none()));
+    assert!(art.iter().all(|n| n.extras().query_origin.0.is_none()), "ordinary rendering carries no query metadata");
+    assert!(review_599225_gather(&d, true, &[], None).is_none(), "CONTROL: Mix alone paints no stroke");
+    let (ordinary, _, _) = review_599225_group(None, true);
+    assert!(review_599225_gather(&ordinary, true, &[], None).is_some(), "CONTROL: a plain group's actual Outline already snaps");
+}
+
+fn review_599225_outline_contact(d: &Document, owner: NodeId) -> Point {
+    let art = vectorcraft_effects::pathfinder_children(Some(d), d.node(owner).unwrap(), None).unwrap();
+    let probe = Point::new(202.0, 140.0);
+    let contact = art
+        .iter()
+        .filter_map(|n| {
+            assert!(n.extras().query_origin.0.is_none(), "ordinary painted output has no transient provenance");
+            let stroke = n.appearance.stroke().expect("the actual later Outline paints a stroke");
+            assert!(stroke.visible && !stroke.paint.is_none() && stroke.width == 1.0);
+            let band = vectorcraft_effects::stroke::outline_region(n.path_data().unwrap(), vectorcraft_geom::FillRule::NonZero, stroke).to_bezpath();
+            band.segments().map(|s| s.eval(s.nearest(probe, 1e-6).t)).min_by(|a, b| a.distance_squared(probe).total_cmp(&b.distance_squared(probe)))
+        })
+        .min_by(|a, b| a.distance_squared(probe).total_cmp(&b.distance_squared(probe)))
+        .unwrap();
+    assert!(contact.distance(Point::new(200.5, 140.0)) < 1e-6, "CONTROL: independently evaluated real one-point painted band: {contact:?}");
+    contact
+}
+
+#[test]
+fn review_599225_mix_then_outline_keeps_actual_painted_targets() {
+    for mix in ["pathfinder.softMix", "pathfinder.hardMix"] {
+        review_599225_mix_controls(mix);
+    }
+    for mix in ["pathfinder.softMix", "pathfinder.hardMix"] {
+        let (d, owner, child) = review_599225_group(Some(mix), true);
+        let contact = review_599225_outline_contact(&d, owner);
+        assert!(review_599225_gather(&d, false, &[], None).is_none(), "CONTROL: OFF emits no painted targets");
+        assert!(review_599225_gather(&d, true, &[owner], None).is_none(), "CONTROL: selected container is excluded");
+        assert!(review_599225_gather(&d, true, &[child], None).is_none(), "CONTROL: rewritten Mix geometry depends on every member");
+        let roots = [owner];
+        let actual = review_599225_gather(&d, true, &[], Some(&roots));
+        assert!(
+            actual.is_some_and(|p| p.distance(contact) < 1e-6),
+            "REGRESSION: {mix} followed by Outline paints a real eligible stroke: {actual:?}"
+        );
+    }
+}
+
+fn review_599225_budget_document(count: usize, enabled: bool) -> (Document, NodeId, NodeId, NodeId) {
+    use vectorcraft_doc::{
+        Appearance,
+        color::{Color, Paint},
+    };
+    let mut d = Document::new(800.0, 600.0);
+    let owner = d.alloc_id();
+    let mut children = Vec::new();
+    for _ in 0..count {
+        let id = d.alloc_id();
+        children.push(Arc::new(Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        )));
+    }
+    let first = children[0].id;
+    let remote = d.alloc_id();
+    children.push(Arc::new(Node::path(
+        remote,
+        vectorcraft_geom::shapes::rectangle(Rect::new(380.0, 100.0, 400.0, 200.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0),
+    )));
+    let mut group = Node::group(owner, children);
+    let mut effect = review_599225_effect("pathfinder.divide");
+    effect.visible = enabled;
+    group.appearance.effects.push(effect);
+    d.insert(Some(d.layers[0].id), 0, group).unwrap();
+    (d, owner, first, remote)
+}
+
+fn review_599225_budget_contact_at(d: &Document, selected: &[NodeId], probe: Point) -> Option<Point> {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(d, &selection, &paint) };
+    let original = d.clone();
+    let q = stroke::gather(&c, selected, None, None).nearest(probe, 4.0);
+    assert_eq!(d, &original);
+    q
+}
+
+fn review_599225_budget_contact(d: &Document, selected: &[NodeId]) -> Option<Point> {
+    review_599225_budget_contact_at(d, selected, Point::new(412.0, 140.0))
+}
+
+fn review_599225_budget_later_geometry_control(d: &Document, owner: NodeId, first: NodeId) {
+    let mut moved = d.clone();
+    moved.node_mut(owner).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 30}),
+        visible: true,
+    });
+    let probe = Point::new(442.0, 140.0);
+    assert!(
+        review_599225_budget_contact_at(&moved, &[], probe).is_some_and(|p| p.distance(Point::new(440.0, 140.0)) < 1e-6),
+        "CONTROL: the later real Transform still paints its translated contour"
+    );
+    assert!(
+        review_599225_budget_contact_at(&moved, &[first], probe).is_none(),
+        "CONTROL: a later real geometry effect still depends on the container's selected member"
+    );
+}
+
+#[test]
+fn review_599225_pathfinder_budget_keeps_untouched_sibling_targets() {
+    let (plain, _, first, remote) = review_599225_budget_document(182, false);
+    let expected = Point::new(410.0, 140.0);
+    assert!(
+        review_599225_budget_contact(&plain, &[first]).is_some_and(|p| p.distance(expected) < 1e-6),
+        "CONTROL: an untouched sibling is eligible without Pathfinder"
+    );
+    assert!(review_599225_budget_contact(&plain, &[remote]).is_none(), "CONTROL: the selected actual paint owner stays excluded");
+    let (d, owner, first, remote) = review_599225_budget_document(182, true);
+    // 182 identical rectangles have 16,471 overlapping pairs, above the 16,384 cap.
+    let group = d.node(owner).unwrap();
+    let art = vectorcraft_effects::pathfinder_children(Some(&d), group, None).unwrap();
+    let children = group.children().unwrap();
+    assert_eq!(art.len(), children.len());
+    assert!(
+        art.iter().zip(children).all(|(a, b)| a.id == b.id && a.path_data() == b.path_data() && Arc::ptr_eq(a, b)),
+        "CONTROL: the public operation returned the original child art"
+    );
+    assert!(
+        review_599225_budget_contact(&d, &[]).is_some_and(|p| p.distance(expected) < 1e-6),
+        "CONTROL: unselected fallback paints the original remote stroke"
+    );
+    assert!(review_599225_budget_contact(&d, &[remote]).is_none(), "CONTROL: selecting the remote paint owner excludes its own stroke");
+    assert!(review_599225_budget_contact(&d, &[owner]).is_none(), "CONTROL: selecting the whole group excludes its children");
+    let (within, within_owner, within_child, _) = review_599225_budget_document(1, true);
+    assert!(!vectorcraft_effects::pathfinder_children(Some(&within), within.node(within_owner).unwrap(), None).unwrap().is_empty());
+    assert!(
+        review_599225_budget_contact(&within, &[]).is_some_and(|p| p.distance(expected) < 1e-6),
+        "CONTROL: the genuine within-budget result really paints this stroke before excluding a dependency"
+    );
+    assert!(
+        review_599225_budget_contact(&within, &[within_child]).is_none(),
+        "CONTROL: a real evaluated Pathfinder result remains dependent on the selected member"
+    );
+    review_599225_budget_later_geometry_control(&d, owner, first);
+    let actual = review_599225_budget_contact(&d, &[first]);
+    assert!(
+        actual.is_some_and(|p| p.distance(expected) < 1e-6),
+        "REGRESSION: budget fallback must not make an untouched sibling depend on a different selected member: {actual:?}"
+    );
+}
+
+fn review_599225_body_move(grab_x: f64, ruler: Option<f64>, alignment: bool, paint_on: bool, show: bool, edge: Option<f64>) -> (Point, Vec<Overlay>) {
+    let (d, selection) = review_597702_move_document(edge.map(|x| (x + 10.0, 20.0)), ruler, alignment.then_some(Point::new(200.0, 500.0)));
+    let paint = paint();
+    let c = ToolContext {
+        smart_guides: true,
+        guides: true,
+        snap_to_point: true,
+        snap_to_grid: false,
+        snap_to_pixel: false,
+        snap_to_glyph: false,
+        snap_to_last_location: false,
+        spacing_guides: false,
+        snap_to_stroke_edges: paint_on,
+        snapping_tolerance: 4.0,
+        alignment_guides: show,
+        anchor_path_labels: show,
+        ..cx(&d, &selection, &paint)
+    };
+    let start = Point::new(grab_x, 150.0);
+    let raw = start + Vec2::new(130.0, 0.0);
+    let targets = Targets::for_move(&c, &selection.objects);
+    assert!(!targets.has_point_near(raw, 4.0), "CONTROL: neither the remote alignment nor actual stroke endpoints supplies a near legacy anchor");
+    assert!(targets.stroke_contours.nearest(raw, 4.0).is_none(), "CONTROL: only moving bounds, not the grabbed point, can reach paint");
+    let original = d.clone();
+    let mut snap = crate::select::MoveSnap::new(&c);
+    let (delta, guides) = snap.snap_along(&c, start, raw - start, false);
+    assert_eq!(d, original, "real constrained body snapping leaves the document and selection geometry intact");
+    (start + delta, guides)
+}
+
+#[test]
+fn review_599225_zero_grab_ruler_contact_beats_bounds_paint() {
+    let painted = review_599225_body_move(57.0, None, false, true, true, Some(202.0));
+    assert!(
+        painted.0.distance(Point::new(189.0, 150.0)) < 1e-9 && review_597185_stroke_label(&painted.1),
+        "CONTROL: the real right-bound paint contact moves by two: {painted:?}"
+    );
+    let ruler = review_599225_body_move(57.0, Some(186.0), false, true, true, Some(202.0));
+    assert_eq!(ruler.0, Point::new(186.0, 150.0), "CONTROL: a nonzero closer held-grab ruler contact keeps priority");
+    assert!(!review_597185_stroke_label(&ruler.1));
+    for show in [true, false] {
+        for on in [false, true] {
+            let actual = review_599225_body_move(57.0, Some(187.0), false, on, show, Some(202.0));
+            assert_eq!(
+                actual.0,
+                Point::new(187.0, 150.0),
+                "REGRESSION: the actual zero-travel grab contact is not replaced by a farther bounds contact: on={on}, show={show}"
+            );
+            assert!(!review_597185_stroke_label(&actual.1));
+            if !show {
+                assert!(actual.1.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn review_599225_hidden_legacy_geometry_does_not_enable_bounds_ruler() {
+    for show in [true, false] {
+        let ordinary = review_599225_body_move(60.0, Some(201.0), false, true, show, None);
+        assert_eq!(ordinary.0, Point::new(191.0, 150.0), "CONTROL: absent legacy geometry and paint keep the ordinary bounds ruler");
+        let painted = review_599225_body_move(60.0, None, true, true, show, Some(203.0));
+        assert!(painted.0.distance(Point::new(193.0, 150.0)) < 1e-9, "CONTROL: genuine paint wins without a competing ruler: {painted:?}");
+        if show {
+            assert!(review_597185_stroke_label(&painted.1));
+        } else {
+            assert!(painted.1.is_empty());
+        }
+    }
+    for show in [true, false] {
+        for on in [false, true] {
+            let actual = review_599225_body_move(60.0, Some(201.0), true, on, show, Some(203.0));
+            let expected = Point::new(if on { 193.0 } else { 190.0 }, 150.0);
+            assert!(
+                actual.0.distance(expected) < 1e-9,
+                "REGRESSION: the same zero-travel legacy bounds geometry gates ruler fallback regardless of its display: on={on}, show={show}, {actual:?}"
+            );
+            if !show {
+                assert!(actual.1.is_empty());
+            } else {
+                assert_eq!(review_597185_stroke_label(&actual.1), on);
+            }
+        }
+    }
+}
+
+fn review_599225_scale_document(edge: Option<f64>, anchors: &[Point]) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    if let Some(edge) = edge {
+        review_597185_vertical(&mut d, edge + 0.25);
+    }
+    for at in anchors {
+        review_597185_anchor(&mut d, *at);
+    }
+    d
+}
+
+#[test]
+fn review_599225_extra_scale_anchor_must_lie_on_its_handle_trajectory() {
+    let raw = Point::new(0.5, 10.0);
+    let rejected = Point::new(-0.25, 10.0);
+    let off_path = Point::new(2.0, 12.0);
+    // The original nearest anchor still keeps its intentional projected legacy snap.
+    let valid_nearest = review_599225_scale_document(Some(3.0), &[off_path]);
+    let projected = review_597185_scale(&valid_nearest, true, Handle::Right, raw);
+    assert_eq!(projected.0, Point::new(2.0, 10.0));
+    assert!(!review_597185_stroke_label(&projected.1), "CONTROL: valid original nearest-anchor projection is unchanged");
+    let anchors = [rejected, off_path];
+    for edge in [None, Some(3.0), Some(1003.0)] {
+        let d = review_599225_scale_document(edge, &anchors);
+        let off = review_597185_scale(&d, false, Handle::Right, raw);
+        if edge != Some(3.0) {
+            let on = review_597185_scale(&d, true, Handle::Right, raw);
+            assert_eq!(on.0, off.0, "CONTROL: no eligible paint retains the ordinary fallback");
+            assert_eq!(labels(&on.1), labels(&off.1));
+        }
+    }
+    let reachable = review_599225_scale_document(Some(3.0), &[rejected, Point::new(2.0, 10.0)]);
+    let anchor = review_597185_scale(&reachable, true, Handle::Right, raw);
+    assert_eq!(anchor.0, Point::new(2.0, 10.0), "CONTROL: the additional anchor actually reachable by this handle keeps priority");
+    assert!(!review_597185_stroke_label(&anchor.1));
+    let d = review_599225_scale_document(Some(3.0), &anchors);
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    assert_eq!(Targets::for_scale(&c).nearest_point(raw, 4.0).map(|p| p.0), Some(rejected), "CONTROL: the sign-invalid anchor is really nearest");
+    let actual = review_597185_scale(&d, true, Handle::Right, raw);
+    assert!(
+        actual.0.distance(Point::new(3.0, 10.0)) < 1e-7 && review_597185_stroke_label(&actual.1),
+        "REGRESSION: an off-trajectory extra anchor cannot steal the feasible painted contact: {actual:?}"
+    );
+}
