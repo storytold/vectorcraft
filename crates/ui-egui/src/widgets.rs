@@ -27,28 +27,32 @@ pub use blend::{
     reference_point_named,
 };
 pub use buttons::{
-    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
-    primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
+    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_hint, menu_item_name, paint_icon_button,
+    primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{
-    button_width, flat_button_fit_width, icon_button_info, paint_icon_button_named, primary_button_width, secondary_button_width,
+    button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
 };
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub use color::{
-    FieldAxis, Live, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named, channel_slider_stepped,
-    channel_slider_valued, color_field, color_mesh, color_slider, color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel,
-    hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area,
-    wheel_of,
+    FieldAxis, Live, MarkerResponse, RingResponse, SliderValue, WheelAxes, WheelResponse, channel_slider, channel_slider_named,
+    channel_slider_stepped, channel_slider_valued, color_field, color_field_shaded, color_mesh, color_slider, color_slider_named,
+    color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture,
+    ring_markers, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
+#[cfg(test)]
+pub(crate) use color::{SHADE, shade_cells, shade_edges};
 pub use drag::{
     PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
     ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::top_popup_shapes;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, menu_min_width, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_icon_names, dropdown_icon_names_sized, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with,
@@ -674,6 +678,17 @@ mod field_number_tests {
         assert_eq!(field_number("(1,5)", "", true), Some(1.5));
         assert_eq!(field_number("(0,125)", "", true), Some(0.125));
         assert_eq!(field_number("12,5%", "%", false), Some(12.5));
+    }
+
+    /// `x` multiplies in a unitless field as `*` does (#8435), next to a suffix, `%` and a decimal
+    /// comma too.
+    #[test]
+    fn x_multiplies_in_a_unitless_field() {
+        assert_eq!(field_number("45x2", "", false), Some(90.0));
+        assert_eq!(field_number("45x2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% x 2", "%", false), Some(100.0));
+        assert_eq!(field_number("1,5x2", "", false), Some(3.0));
+        assert_eq!(field_number("(10x2)", "", true), Some(20.0));
     }
 }
 

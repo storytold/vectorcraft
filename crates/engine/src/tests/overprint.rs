@@ -281,6 +281,10 @@ fn overprint_black_covers_type_gradients_spots_and_groups() {
 /// pixel (0 full ink, 255 none).
 fn plate(doc: &Document, plate: &str) -> Vec<u8> {
     let mut r = Renderer::new();
+    plate_with_renderer(&mut r, doc, plate)
+}
+
+fn plate_with_renderer(r: &mut Renderer, doc: &Document, plate: &str) -> Vec<u8> {
     r.threads = 0;
     let seps = vectorcraft_render::proof::ProofSetup { separations: Some(vec![plate.into()]), ..Default::default() };
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), proof: Some(seps), ..Default::default() };
@@ -304,8 +308,18 @@ fn classic_3d_black_overprint_shades_on_the_black_plate() {
     let (over_doc, flat_doc) = (&over.doc().unwrap().doc, &flat.doc().unwrap().doc);
     let inked = |p: &[u8]| p.iter().filter(|v| **v < 250).count();
     assert!(inked(&plate(over_doc, "Cyan")) > 1000, "the solid is drawn");
+    for name in ["Cyan", "Magenta", "Yellow"] {
+        let shaded = plate(over_doc, name);
+        let unshaded = plate(flat_doc, name);
+        let changed = shaded.iter().zip(&unshaded).filter(|(s, u)| s.abs_diff(**u) > 1).count();
+        assert_eq!(changed, 0, "Black Overprint changes the {name} plate");
+    }
     assert!(inked(&plate(over_doc, "Black")) > 100, "the shading is on the black plate");
     assert_eq!(inked(&plate(flat_doc, "Black")), 0, "No Shading adds no black");
+    let mut renderer = Renderer::new();
+    let first_cyan = plate_with_renderer(&mut renderer, over_doc, "Cyan");
+    assert!(inked(&plate_with_renderer(&mut renderer, over_doc, "Black")) > 100);
+    assert_eq!(plate_with_renderer(&mut renderer, over_doc, "Cyan"), first_cyan, "switching plates preserves the Cyan preview");
     // On screen a shaded face is the cyan darkened, not gray: the black multiplies the cyan.
     let image = |d: &Document| {
         let mut r = Renderer::new();

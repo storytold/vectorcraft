@@ -1575,11 +1575,11 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     // The whole path selected.
     app.run("select.set", json!({"ids": [star]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Corner:"), "no corner selected");
-    // A live rectangle's corner: its own Corner Radius row, once.
+    // A live rectangle's corner: its own Corner Radius row and Corner menu, once each.
     let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
     app.run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(!shows(&texts, "Corner:"), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
 }
 
@@ -1805,6 +1805,64 @@ fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
     app.run("select.set", json!({"ids": [t, r]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
     assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
+}
+
+/// Contextual Quick Actions for type selection (G12): with text selected, Quick Actions shows
+/// Create Outlines, Retype and Find and Replace…; clicking Create Outlines converts the text
+/// to vector paths with one undo step. A non-text selection (plain path) displays Offset Path
+/// and Simplify without displaying Create Outlines.
+#[test]
+fn type_quick_actions_show_text_commands_and_create_outlines() {
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hello"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Create Outlines"), "text shows Create Outlines: {texts:?}");
+    assert!(shows(&texts, "Retype"), "text shows Retype: {texts:?}");
+    assert!(shows(&texts, "Find and Replace…"), "text shows Find and Replace…: {texts:?}");
+    assert!(shows(&texts, "Arrange: Bring to Front") && shows(&texts, "Lock"), "standard object actions: {texts:?}");
+    assert!(!shows(&texts, "Offset Path") && !shows(&texts, "Simplify"), "no offset path/simplify for type alone");
+
+    let undo0 = app.session.doc().unwrap().history.undo.len();
+    press(&mut app, &ctx, text_at(&texts, "Create Outlines").center());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0 + 1, "one undo step");
+    let sel = app.session.doc().unwrap().selection.objects.clone();
+    assert!(!sel.is_empty(), "outlines are selected");
+    for id in &sel {
+        let node = app.session.doc().unwrap().doc.node(*id).unwrap();
+        assert!(!matches!(node.kind, NodeKind::Text(_)), "converted from live text: {:?}", node.kind);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0);
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(t.as_u64().unwrap())).unwrap();
+    assert!(matches!(node.kind, NodeKind::Text(_)), "undo restores live text");
+
+    // Non-text selection (plain path): continues to show Offset Path and Simplify without Create Outlines.
+    let r = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "path shows Offset Path and Simplify");
+    assert!(!shows(&texts, "Create Outlines"), "path does not show Create Outlines");
+
+    // Find and Replace… quick action opens the Find and Replace dialog.
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Find and Replace…").center());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("findReplace"), "opens findReplace dialog");
+
+    // Retype quick action reveals the Retype panel and leaves it open if already visible.
+    app.ui.dialog = None;
+    let retype_panel = crate::panels::retype::ID;
+    assert!(!crate::panel_docking::visible(&app.ui, retype_panel), "Retype is initially hidden");
+
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel is revealed when initially hidden");
+
+    // Clicking Retype again leaves the panel open rather than toggling it closed.
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel remains visible when already open");
 }
 
 /// A dynamic symbol instance with appearance changes of its own has Reset in Quick Actions, which

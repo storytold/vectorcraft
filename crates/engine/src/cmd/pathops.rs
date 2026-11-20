@@ -685,14 +685,21 @@ fn pf_label(op: PathfinderOp) -> &'static str {
     }
 }
 
-/// The Pathfinder Options an operation uses: those `p` gives, else the preferences'. They join the
-/// command's journal entry, so replaying it gives the same result whatever the preferences are then.
-fn pf_options(s: &mut Session, p: &Value, id: &str) -> Result<PathfinderOptions> {
+/// The Pathfinder Options in the preferences, as the panel's operations and a new Pathfinder effect
+/// take them.
+pub(crate) fn current_pf_options(s: &Session) -> PathfinderOptions {
     let mut stored = s.prefs.pathfinder;
     if !PATHFINDER_PRECISION_RANGE.contains(&stored.precision) {
         // A preferences file edited by hand: the default, rather than refitting everything away.
         stored.precision = po::DEFAULT_PRECISION;
     }
+    stored
+}
+
+/// The Pathfinder Options an operation uses: those `p` gives, else the preferences'. They join the
+/// command's journal entry, so replaying it gives the same result whatever the preferences are then.
+fn pf_options(s: &mut Session, p: &Value, id: &str) -> Result<PathfinderOptions> {
+    let stored = current_pf_options(s);
     let keys = ["precision", "removeRedundantPoints", "removeUnpainted"];
     let given: serde_json::Map<String, Value> =
         p.as_object().into_iter().flatten().filter(|(k, _)| keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
