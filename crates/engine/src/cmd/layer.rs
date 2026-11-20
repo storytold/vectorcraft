@@ -192,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Target",
             [],
             None,
-            "{id, add?: bool (Shift-click: the item joins the selection, or leaves it when all selected; nothing is targeted)} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
+            "{id, add?: bool} or {range: [id…], add?: bool} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. `add` (Ctrl/Cmd-click): the item joins the selection, or leaves it when all selected; nothing is targeted. `range` (Shift-click, the rows from the last circle clicked to this one): the art of every listed row that is visible, unlocked and inside the isolated group is selected, or added to the selection with `add` (Shift+Ctrl/Cmd-click); nothing is targeted. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]} (with `range`: {range, selected})",
             has_doc,
             target
         ),
@@ -433,6 +433,9 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
+    if let Some(ids) = ids_param(p, "range", C)? {
+        return target_range(s, p, ids);
+    }
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -456,6 +459,31 @@ fn target(s: &mut Session, p: &Value) -> Result<Value> {
         st.active_layer = Some(id);
     }
     Ok(json!({ "id": id.0, "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// `layer.target` with `range`, a Shift-click range of target circles: the art of every listed row
+/// that is visible, unlocked and inside the isolated group is selected, or added to the selection
+/// with `add`. Nothing is targeted, and the highlighted rows stay. The current layer follows the
+/// selection, as with any selection change ([`Session::select`]).
+fn target_range(s: &mut Session, p: &Value, mut ids: Vec<NodeId>) -> Result<Value> {
+    const C: &str = "layer.target";
+    ids.truncate(MAX_ROWS);
+    let add = switch_or(p, "add", false, C)?;
+    let rows = {
+        let st = s.doc()?;
+        // Measures the locked artboards once for every row, not once per row.
+        let editable = st.doc.editable();
+        ids.retain(|id| st.doc.node(*id).is_some() && editable(*id) && in_isolation(&st.doc, st.isolation, *id));
+        st.layer_rows.clone()
+    };
+    if ids.is_empty() {
+        return Err(bad(C, "no row in the range is visible, unlocked and inside the isolated group"));
+    }
+    s.select(|d, sel| sel.target_range(d, &ids, add))?;
+    let st = s.doc_mut()?;
+    // Targeting doesn't change which rows are highlighted.
+    st.layer_rows = rows;
+    Ok(json!({ "range": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 /// The Layers panel's clipping mask button: the top object of a layer (or group) clips the rest,

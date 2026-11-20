@@ -31,9 +31,12 @@
 //!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
-//! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
-//!   row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
-//!   on the trash reduces it to basic appearance (`appearance.reduceToBasic`) without deleting it.
+//! - A target circle targets its layer, group or object (`layer.target`). Its modifier keys
+//!   follow the names' rules: Ctrl/Cmd adds the item to the selection or takes it out, Shift
+//!   selects the art of every row from the last circle clicked to this one, and Shift+Ctrl/Cmd
+//!   adds that art (#8639). Dragging a circle onto another row's circle moves the appearance there
+//!   (Alt copies it, `appearance.transfer`) and dropping it on the trash reduces it to basic
+//!   appearance (`appearance.reduceToBasic`) without deleting it.
 //! - Search All and the Filter button at its right (`ui.layersFilter`, lit while a filter is on)
 //!   narrow the rows, and every row that holds others shows open while they do. A row stays when
 //!   its name holds the text typed, it is one of the object kinds ticked under By Object and it is
@@ -74,7 +77,7 @@ pub use model::{Filter, ObjectKind, RowState};
 #[cfg(test)]
 use model::{Row, list_rows, painted_name};
 use model::{isolated_root, push_rows, rows_of_doc};
-use rows::{drag_ghost, key, rename_id, resolve_click, row};
+use rows::{drag_ghost, key, rename_id, resolve_click, resolve_target_click, row};
 #[cfg(test)]
 use thumbs::THUMBS;
 pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, retain_open_thumbs, show_thumbs_of, thumb_options};
@@ -184,6 +187,8 @@ struct Out {
     actions: Vec<(String, Value)>,
     /// A row clicked with these modifiers (resolved once every row is listed).
     click: Option<(NodeId, egui::Modifiers)>,
+    /// A target circle clicked with these modifiers (resolved once every row is listed).
+    target_click: Option<(NodeId, egui::Modifiers)>,
     /// The column drag after this frame (`Some(None)`: it ended).
     column: Option<Option<ColumnDrag>>,
     /// Rows to open or close, and whether to open them.
@@ -220,6 +225,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.data_mut(|d| {
             if before.is_some() {
                 d.remove::<(u64, String)>(rename_id());
+                // So is the target circles' Shift-click anchor: it could name another row here.
+                d.remove::<NodeId>(key("target-anchor"));
             }
             d.insert_temp(shown_doc, st.uid);
         });
@@ -368,6 +375,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let list_rect = scrolled.inner.inner_rect;
     resolve_click(ui, &view, &list, &mut out);
+    resolve_target_click(ui, &view, &list, &mut out);
     if let Some(st) = app.session.active_mut() {
         for (id, open) in out.toggle.drain(..) {
             st.layers_open.set(id, open);

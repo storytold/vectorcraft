@@ -2654,17 +2654,106 @@ fn show_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
 }
 
+/// An action set's right-click context menu.
+fn action_set_context_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, si: usize) {
+    const SELECTED: &str = "actions-selected";
+    let has_set = si < app.ui.action_sets.len();
+    if widgets::menu_item(ui, tl!("New Action…"), crate::dialogs::action_new::can_open(app), false) {
+        app.ui.action_set = Some(si);
+        if let Err(e) = crate::dialogs::action_new::open(app) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if widgets::menu_item(ui, tl!("New Set…"), true, false) {
+        crate::dialogs::action_set_options::open_new(app);
+        ui.close();
+    }
+    if widgets::menu_item(ui, tl!("Duplicate Set"), has_set, false) {
+        if let Err(e) = app.run(DUPLICATE, json!({ "set": si })) {
+            app.status(e);
+        }
+        set_pstate::<Option<(usize, usize)>>(ui.ctx(), SELECTED, None);
+        ui.close();
+    }
+    if widgets::menu_item(ui, tl!("Delete Set"), has_set, false) {
+        app.ui.action_set = Some(si);
+        app.ui.action_sets_selected = vec![si];
+        set_pstate::<Option<(usize, usize)>>(ui.ctx(), SELECTED, None);
+        delete_selection(app, ui.ctx());
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, tl!("Set Options…"), has_set, false) {
+        crate::dialogs::action_set_options::open(app, si);
+        ui.close();
+    }
+}
+
+/// An action's right-click context menu.
+fn action_context_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, si: usize, ai: usize) {
+    const SELECTED: &str = "actions-selected";
+    let has_action = app.ui.action_sets.get(si).and_then(|s| s.actions.get(ai)).is_some();
+    let can_play = has_action && app.ui.action_playing.is_none();
+    if widgets::menu_item(ui, tl!("Play"), can_play, false) {
+        if let Err(e) = play(app, si, ai) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    let can_record = has_action && app.ui.recording.is_none();
+    if widgets::menu_item(ui, tl!("Record"), can_record, false) {
+        if let Err(e) = app.run(START_RECORDING, json!({ "set": si, "action": ai })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, tl!("Duplicate"), has_action, false) {
+        if let Err(e) = app.run(DUPLICATE, json!({ "set": si, "action": ai })) {
+            app.status(e);
+        }
+        set_pstate(ui.ctx(), SELECTED, Some((si, ai + 1)));
+        ui.close();
+    }
+    if widgets::menu_item(ui, tl!("Delete"), has_action, false) {
+        if let Some(s) = app.ui.action_sets.get_mut(si)
+            && ai < s.actions.len()
+        {
+            s.actions.remove(ai);
+            set_pstate::<Option<(usize, usize)>>(ui.ctx(), SELECTED, None);
+            set_pstate::<Option<(u64, usize)>>(ui.ctx(), SELECTED_STEP, None);
+        }
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, tl!("Action Options…"), has_action, false) {
+        crate::dialogs::action_set_options::open_action(app, si, ai);
+        ui.close();
+    }
+    if widgets::menu_item(ui, tl!("Batch…"), has_action, false) {
+        if let Err(e) = crate::dialogs::action_batch::open(app, si, ai) {
+            app.status(e);
+        }
+        ui.close();
+    }
+}
+
 /// Draw action sets, steps and playback controls, keeping the list above a pinned footer, or in
 /// Button Mode the actions as buttons ([`show_buttons`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if app.ui.action_button_mode {
         return show_buttons(app, ui);
     }
+    if app.ui_ctx.is_none() {
+        app.ui_ctx = Some(ui.ctx().clone());
+    }
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a
     // value per type, so reading the bare pair never found it and no action stayed selected (#1629).
     const SELECTED: &str = "actions-selected";
-    let mut selected: Option<(usize, usize)> = pstate(ui.ctx(), SELECTED);
+    let initial_selected: Option<(usize, usize)> = pstate(ui.ctx(), SELECTED);
+    let mut selected: Option<(usize, usize)> = initial_selected;
     // A set made with New Set, or whose name was clicked, is current with none of its actions
     // selected.
     if selected.is_some_and(|(s, _)| app.ui.action_set != Some(s)) {
@@ -2673,6 +2762,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // The selected step as (the action's id, the step), of the selected action only.
     let mut step_selected =
         selected_step(app, ui.ctx(), selected).zip(selected).and_then(|(step, (s, a))| Some((app.ui.action_sets[s].actions.get(a)?.id, step)));
+    let initial_step_selected = step_selected;
     let mut current = app.ui.action_set;
     let mut sets_selected = selected_sets(app);
     let shift = ui.input(|i| i.modifiers.shift);
@@ -2693,10 +2783,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // half, where on its lower half), as `before` of [`MOVE_STEP`].
     let mut slots: Vec<(egui::Rect, usize, usize, usize, usize)> = Vec::new();
     let mut drop = None;
+    let action_sets = app.ui.action_sets.clone();
     let list_height = widgets::panel_list_height(ui, 260.0, 0.0).min(260.0);
     egui::ScrollArea::vertical().max_height(list_height).min_scrolled_height(list_height.min(64.0)).show(ui, |ui| {
-        for (si, set) in app.ui.action_sets.iter().enumerate() {
+        for (si, set) in action_sets.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, &set.name));
             if sets_selected.contains(&si) && selected.is_none() {
                 ui.painter().rect_filled(r, 0.0, t.row_selected);
             } else if resp.hovered() {
@@ -2716,22 +2808,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 egui::FontId::proportional(12.5),
                 t.text,
             );
-            if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p)) {
+            if (resp.clicked() || resp.secondary_clicked()) && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p)) {
                 // Shift-click selects the sets from the current one to the one clicked; the current
                 // set stays as it was.
                 match current {
-                    Some(c) if shift && sets_selected.contains(&c) => sets_selected = (c.min(si)..=c.max(si)).collect(),
+                    Some(c) if shift && resp.clicked() && sets_selected.contains(&c) => sets_selected = (c.min(si)..=c.max(si)).collect(),
                     _ => {
                         current = Some(si);
                         sets_selected = vec![si];
+                        app.ui.action_set = Some(si);
                     }
                 }
                 selected = None;
                 step_selected = None;
             }
+            resp.context_menu(|ui| action_set_context_menu(app, ui, si));
             for (ai, a) in set.actions.iter().enumerate() {
                 let sel = selected == Some((si, ai));
                 let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.0), egui::Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, &a.name));
                 if sel {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -2769,12 +2864,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                     egui::FontId::proportional(11.0),
                     t.text_dim,
                 );
-                if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
+                if (resp.clicked() || resp.secondary_clicked())
+                    && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p))
+                {
                     selected = Some((si, ai));
                     step_selected = None;
                     current = Some(si);
                     sets_selected = vec![si];
+                    app.ui.action_set = Some(si);
                 }
+                resp.context_menu(|ui| action_context_menu(app, ui, si, ai));
                 if resp.double_clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
                     play_req = Some((si, ai));
                 }
@@ -2867,6 +2966,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         if let Err(error) = app.run(INCLUDE_STEPS, params) {
             app.status(error);
         }
+    }
+    let ctx_selected: Option<(usize, usize)> = pstate(ui.ctx(), SELECTED);
+    if ctx_selected != initial_selected {
+        selected = ctx_selected;
+    }
+    let ctx_step: Option<(u64, usize)> = pstate(ui.ctx(), SELECTED_STEP);
+    if ctx_step != initial_step_selected {
+        step_selected = ctx_step;
     }
     set_pstate(ui.ctx(), "actions-expanded", expanded);
     set_pstate(ui.ctx(), SELECTED, selected);
@@ -3595,6 +3702,128 @@ mod tests {
 
     fn set_names(app: &VectorcraftApp) -> Vec<String> {
         app.ui.action_sets.iter().map(|s| s.name.clone()).collect()
+    }
+
+    #[test]
+    fn right_clicking_an_action_set_selects_it_and_presents_set_context_options() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = app_with_sets();
+        app.ui.action_set = Some(0);
+
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(300.0, 500.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        let node = h.get_all_by_label("Mine").find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).expect("Mine action set node");
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert_eq!(h.state().ui.action_set, Some(1));
+        assert_eq!(pstate::<Option<(usize, usize)>>(&h.ctx, "actions-selected"), None);
+
+        let new_action = h.get_by_label("   New Action…");
+        let new_set = h.get_by_label("   New Set…");
+        let dup_set = h.get_by_label("   Duplicate Set");
+        let del_set = h.get_by_label("   Delete Set");
+        let opt_set = h.get_by_label("   Set Options…");
+
+        assert!(!new_action.accesskit_node().is_disabled());
+        assert!(!new_set.accesskit_node().is_disabled());
+        assert!(!dup_set.accesskit_node().is_disabled());
+        assert!(!del_set.accesskit_node().is_disabled());
+        assert!(!opt_set.accesskit_node().is_disabled());
+    }
+
+    #[test]
+    fn right_clicking_an_action_selects_it_and_presents_action_options() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = app_with_sets();
+        app.ui.action_set = Some(0);
+
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(300.0, 500.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        let node = h.get_all_by_label("Nudge").find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).expect("Nudge action node");
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert_eq!(h.state().ui.action_set, Some(1));
+        assert_eq!(pstate::<Option<(usize, usize)>>(&h.ctx, "actions-selected"), Some((1, 0)));
+
+        let play = h.get_by_label("   Play");
+        let record = h.get_by_label("   Record");
+        let duplicate = h.get_by_label("   Duplicate");
+        let delete = h.get_by_label("   Delete");
+        let options = h.get_by_label("   Action Options…");
+        let batch = h.get_by_label("   Batch…");
+
+        assert!(!play.accesskit_node().is_disabled());
+        assert!(!record.accesskit_node().is_disabled());
+        assert!(!duplicate.accesskit_node().is_disabled());
+        assert!(!delete.accesskit_node().is_disabled());
+        assert!(!options.accesskit_node().is_disabled());
+        assert!(!batch.accesskit_node().is_disabled());
+    }
+
+    #[test]
+    fn clicking_duplicate_on_an_action_duplicates_that_action_in_the_set() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = app_with_sets();
+        app.ui.action_set = Some(0);
+
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(300.0, 500.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        let node = h.get_all_by_label("Nudge").find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).expect("Nudge action node");
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let duplicate = h.get_by_label("   Duplicate");
+        duplicate.click();
+        h.run_steps(2);
+
+        let set = &h.state().ui.action_sets[1];
+        let action_names: Vec<&str> = set.actions.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(action_names, ["Nudge", "Nudge copy", "Nudge Again"]);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&h.ctx, "actions-selected"), Some((1, 1)));
     }
 
     /// The bottom bar's Delete Selection button (stop, record, play, new set, new action, delete).
