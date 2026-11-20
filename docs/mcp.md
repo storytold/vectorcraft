@@ -8929,7 +8929,8 @@ be one of …", and a `visible` that is not true or false fails with "`visible` 
 every group as it is. The groups and their contents are VectorCraft's own.
 `window.taskBar.actions {action, visible?}` (desktop app) turns one of the Contextual Task Bar's actions or chips on
 (`visible: true`), off (`false`) or toggles it (omitted or null), and returns `{action, visible}`. The actions are `imageTrace`,
-`cropImage`, `removeBackground`, `conceptToVector` (Concept to Vector), `removeAnchorPoints`, `join` (Connect and Join), `cutPath`, `convertToCorner`,
+`cropImage`, `removeBackground`, `conceptToVector` (Concept to Vector), `removeAnchorPoints`,
+`join` (Connect and Join), `cutPath`, `convertToCorner`,
 `convertToSmooth`, `group`, `makeClippingMask`, `unite`, `expand`, `editClippingPath`, `releaseClippingMask`,
 `ungroup`, `isolate`, `editPath`, `releaseCompoundPath`, `createOutlines`, `convertToPointType`, `convertToAreaType`,
 `typeOnPathOptions`, `centerOnTop`, `centerOnBottom`, `dynamicText`, `offsetPath`, `simplify`, `smooth`, `duplicate`,

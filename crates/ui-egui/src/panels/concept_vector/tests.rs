@@ -285,6 +285,19 @@ fn a_preview_that_leaves_part_out_says_so() {
     let full: Vec<Point> = (0..PREVIEW_POINTS - 1).map(|i| Point::new((i % 100) as f64, (i / 1000) as f64)).collect();
     two.paths.insert(0, one_path(&full, Some([0; 3]), None).paths.remove(0));
     assert!(preview(&two, "s".into(), (100, 100)).cut, "a path past the limit");
+    // An open last path whose final segment is the one point past the limit.
+    let open: Vec<Point> = (0..=PREVIEW_POINTS).map(|i| Point::new((i % 100) as f64, (i / 1000) as f64)).collect();
+    let last = Variation {
+        style: "s".into(),
+        paths: vec![VectorPath {
+            path: PathData::single(SubPath::polyline(&open, false)),
+            fill: None,
+            stroke: Some(([0; 3], 1.0)),
+            square_caps: false,
+        }],
+        warnings: vec![],
+    };
+    assert!(preview(&last, "s".into(), (100, 100)).cut, "an open path's last segment past the limit");
 
     let mut app = app();
     let v = app.run("conceptVector.generate", json!({"provider": offline::ID, "styles": ["outline"]})).unwrap();

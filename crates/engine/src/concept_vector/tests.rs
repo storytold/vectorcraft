@@ -641,6 +641,9 @@ fn a_recorded_insert_does_not_play_again() {
     assert!(e.contains("a recorded insert or cancel does not play again"), "{e}");
     assert!(s.doc().unwrap().doc == before && undo_len(&s) == depth);
     assert!(!s.replaying());
+    let batch = json!({"commands": [{"command": "conceptVector.insert", "params": insert}]});
+    assert!(s.replay("command.batch", &batch).is_err(), "nor as a step of a recorded batch");
+    assert!(s.doc().unwrap().doc == before && undo_len(&s) == depth);
     s.execute("conceptVector.insert", &insert).unwrap();
     assert_eq!(undo_len(&s), depth + 1);
 }
@@ -678,6 +681,42 @@ fn a_script_keeps_what_the_app_did_to_the_jobs_meanwhile() {
     s.merge_concept_jobs(app, from);
     assert!(s.concept_variations(job).is_none(), "the app's cancel stands");
     assert!(s.concept_variations(made).is_some(), "the app's job is kept");
+}
+
+/// The same in a run in the app: while the script waits at a dialog, the app cancels a job and
+/// makes another, and both stand when the script ends, with the job the script made; when the
+/// script fails after the wait, the app's cancel and job stand and the script's job is dropped.
+#[test]
+fn a_script_run_in_the_app_keeps_what_the_app_did_while_it_waited() {
+    for fails in [false, true] {
+        let (mut s, img) = doc_with(&art());
+        let p = json!({"provider": ID, "styles": ["outline"], "id": img.0});
+        let job = generate(&mut s, p.clone()).unwrap()["job"].as_u64().unwrap();
+        let end = if fails { "throw new Error('stop');" } else { "1" };
+        let source = format!("vc.run('conceptVector.generate', {{provider: '{ID}', styles: ['outline'], id: {}}}); alert('x'); {end}", img.0);
+        s.script_frames = true;
+        assert_eq!(s.execute("script.run", &json!({"source": source})).unwrap()["running"], true);
+        let mut ended = None;
+        for _ in 0..10_000 {
+            if s.script_dialog().is_some() {
+                break;
+            }
+            if let Some(r) = s.script_pump() {
+                ended = Some(r);
+                break;
+            }
+        }
+        assert!(ended.is_none() && s.script_dialog().is_some(), "the run waits at its dialog");
+        s.execute("conceptVector.cancel", &json!({"job": job})).unwrap();
+        let made = generate(&mut s, p).unwrap()["job"].as_u64().unwrap();
+        assert!(s.script_answer(crate::script::DialogAnswer::Ok));
+        let r = (0..10_000).find_map(|_| s.script_pump()).expect("the run ends");
+        assert_eq!(r.is_err(), fails);
+        assert!(s.concept_variations(job).is_none(), "the app's cancel stands");
+        assert!(s.concept_variations(made).is_some(), "the app's job is kept");
+        let scripts = (job + 1..made).chain(made + 1..made + 3).filter(|j| s.concept_variations(*j).is_some()).count();
+        assert_eq!(scripts, usize::from(!fails), "the script's job is kept only when it ends without an error");
+    }
 }
 
 /// A script that fails leaves the jobs as they were: those it made are dropped, and a job it
@@ -1031,6 +1070,56 @@ fn insert_puts_the_results_outside_a_live_paint_group() {
     let d = &s.doc().unwrap().doc;
     assert_eq!(d.parent_of(NodeId(r["ids"][0].as_u64().unwrap())), Some(layer), "beside the group, not in it");
     assert!(*d.node(group).unwrap() == before, "the group is unchanged");
+}
+
+/// For an image in a graph, Shaper, dimension or flare group or a compound shape, the results go
+/// beside the group, whose members stay as they are.
+#[test]
+fn insert_puts_the_results_outside_the_other_generated_groups() {
+    use vectorcraft_doc::dimension::{Dimension, DimensionMode, DimensionOptions};
+    type Mark = fn(&mut Node);
+    let kinds: [(&str, Mark); 5] = [
+        ("graph", |g| g.extras_mut().graph = Some(Box::default())),
+        ("Shaper", |g| g.extras_mut().shaper = Some(Box::default())),
+        ("dimension", |g| {
+            let p = Point::new(0.0, 0.0);
+            g.extras_mut().dimension = Some(Box::new(Dimension {
+                mode: DimensionMode::Linear,
+                a: p,
+                b: Point::new(10.0, 0.0),
+                vertex: p,
+                offset: 0.0,
+                length: 10.0,
+                options: DimensionOptions::default(),
+                source: None,
+                orientation: Default::default(),
+                moved: None,
+            }));
+        }),
+        ("flare", |g| g.extras_mut().flare = Some(Box::new(vectorcraft_doc::flare::FlareSpec::new(json!({}))))),
+        ("compound shape", |g| g.extras_mut().compound_shape = true),
+    ];
+    for (kind, mark) in kinds {
+        let (mut s, img) = doc_with(&art());
+        let other = s.execute("shape.rectangle", &json!({"x": 120, "y": 120, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [img.0, other]})).unwrap();
+        s.execute("object.group", &json!({})).unwrap();
+        let group = s.doc().unwrap().doc.parent_of(img).unwrap();
+        s.edit("mark", |d, _| {
+            if let Some(g) = d.node_mut(group) {
+                mark(g);
+            }
+            Ok(())
+        })
+        .unwrap();
+        let d = &s.doc().unwrap().doc;
+        let (layer, before) = (d.parent_of(group).unwrap(), d.node(group).unwrap().clone());
+        let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+        let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.parent_of(NodeId(r["ids"][0].as_u64().unwrap())), Some(layer), "{kind}: beside the group, not in it");
+        assert!(*d.node(group).unwrap() == before, "{kind}: the group is unchanged");
+    }
 }
 
 /// An effect that moves or reshapes the image, on a group around it or on the image itself, shows

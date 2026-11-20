@@ -919,8 +919,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   by id (`crates/engine/src/concept_vector.rs`), and a request to any provider makes up to 8 variations; the
   only provider is built in and makes five offline Image Trace styles.
 - **Missing:** Text to Vector Graphic, Generative Recolor, Generative Shape Fill (#766), Generative Expand,
-  Concept to Vector's prompt-led generation and raster output, Prompt to Edit, Rewrite Text. The reference features run on
-  cloud models; ours would be a pluggable provider.
+  Concept to Vector's prompt-led generation and raster output, Prompt to Edit, Rewrite Text. In the reference
+  app these run on cloud models; ours would be a pluggable provider.
 - **Needs:** an owner decision on models and providers.
 - **Estimate:** 30–60 h after that decision.
 

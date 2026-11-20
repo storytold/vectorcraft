@@ -525,10 +525,11 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
         let mut rings: Vec<Vec<Pos2>> = vec![];
         let mut ring: Vec<Pos2> = vec![];
         let taken = std::cell::Cell::new(0usize);
-        let els = elements(&p.path).inspect(|_| taken.set(taken.get() + 1));
+        // Counted after `within_budget`, so the element it stops at is not counted as drawn.
+        let els = within_budget(elements(&p.path), &left).inspect(|_| taken.set(taken.get() + 1));
         // `flatten` takes an element only after the points of the one before, and makes a bounded
         // number of each curve, so the elements past the points left are neither made nor flattened.
-        vectorcraft_geom::flatten(within_budget(els, &left), (w.max(h) / 400.0).max(0.25), |el| {
+        vectorcraft_geom::flatten(els, (w.max(h) / 400.0).max(0.25), |el| {
             let q = match el {
                 vectorcraft_geom::PathEl::MoveTo(q) => {
                     if ring.len() > 1 {
