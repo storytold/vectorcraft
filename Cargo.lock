@@ -1051,6 +1051,11 @@ dependencies = [
 [[package]]
 name = "craft-eps"
 version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec#cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec"
+
+[[package]]
+name = "craft-eps"
+version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
 
 [[package]]
@@ -1248,10 +1253,15 @@ dependencies = [
 [[package]]
 name = "craft-ps"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec#cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec"
 dependencies = [
+ "craft-eps 0.1.0 (git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec)",
  "flate2",
  "kurbo 0.13.1",
+ "miniz_oxide 0.8.9",
+ "pdf-writer",
+ "skrifa 0.47.0",
+ "weezl 0.1.12",
 ]
 
 [[package]]
@@ -6673,6 +6683,7 @@ dependencies = [
  "craft-image-codecs",
  "crc32fast",
  "proptest",
+ "vectorcraft-affinity",
 ]
 
 [[package]]
@@ -6866,7 +6877,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.24.1"
 dependencies = [
- "craft-eps",
+ "craft-eps 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0)",
  "craft-image-codecs",
  "craft-pdf",
  "craft-ps",
@@ -7034,6 +7045,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom 0.24.1",
+ "vectorcraft-pdf",
  "vectorcraft-testkit",
  "vectorcraft-text",
 ]
