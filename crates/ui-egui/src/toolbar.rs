@@ -58,7 +58,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         &[
             &["width", "warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"],
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
-            &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
+            &["shapeBuilder", "livePaintBucket", "fillArea", "livePaintSelection", "blend"],
             &["dimension"],
         ],
     ),
@@ -469,7 +469,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::perspective_options::open(app);
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
-        "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+        "shapeBuilder" | "fillArea" => Ok(crate::dialogs::shape_builder_options::open(app)),
         // The Objects on Path tool: the Pivot and Rotate of the objects it attaches next.
         "objectsOnPath" => Ok(crate::dialogs::objects_on_path_options::open(app)),
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
