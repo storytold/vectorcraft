@@ -262,6 +262,12 @@ fn spend(work: &mut usize, steps: usize) -> Result<(), String> {
 /// The triangles covering one face: `contours` (outlines one way round, holes the other) on the
 /// plane across `normal` (its Newell normal).
 pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
+    triangulate_keeping(contours, normal, work, false)
+}
+
+/// [`triangulate`], keeping the corners that lie straight between their neighbors as triangle
+/// corners when `keep_straight` is set.
+fn triangulate_keeping(contours: &[Vec<V3>], normal: V3, work: &mut usize, keep_straight: bool) -> Result<Vec<[V3; 3]>, String> {
     // Cut the face on the coordinate plane it is least slanted to, turned so outlines run
     // counterclockwise.
     let (ax, ay, az) = (normal.0.abs(), normal.1.abs(), normal.2.abs());
@@ -332,9 +338,28 @@ pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) ->
             let (hole, rest) = holes[k..].split_first().ok_or_else(too_complex)?;
             ring = bridge(ring, hole, rest, work)?;
         }
-        clip(&ring, &mut out, work)?;
+        clip(&ring, &mut out, work, keep_straight)?;
     }
     Ok(out)
+}
+
+/// The triangles covering `rings`, a flat face in the art's plane (outlines with a positive signed
+/// area, holes negative), cut as a mesh's faces are: each hole bridged to the outline around it,
+/// then ear clipped. Every corner of the rings that lies straight between its neighbors (a corner
+/// a neighboring cell shares) stays a triangle corner. Each triangle runs the way its outline does,
+/// and a triangle with no area that way round is left out. The steps add to `work`, and the cut
+/// stops as soon as `work` passes `budget`. `None` when a hole crosses an outline or another hole,
+/// or when `work` passes `budget`.
+pub(crate) fn flat_triangles(rings: &[Vec<Point>], work: &mut usize, budget: usize) -> Option<Vec<[Point; 3]>> {
+    let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|q| V3(q.x, q.y, 0.0)).collect()).collect();
+    // Counted up from MAX_WORK less the budget, the cut's own checks stop it at the budget.
+    let start = MAX_WORK - budget.min(MAX_WORK);
+    let mut spent = start.saturating_add(*work);
+    let triangles = triangulate_keeping(&contours, V3(0.0, 0.0, 1.0), &mut spent, true);
+    *work = spent.saturating_sub(start);
+    let triangles = triangles.ok()?;
+    let triangles = triangles.into_iter().map(|t| t.map(|v| Point::new(v.0, v.1)));
+    Some(triangles.filter(|[a, b, c]| (*b - *a).cross(*c - *a) > 0.0).collect())
 }
 
 /// Do segments `a`–`b` and `c`–`d` cross (touching at a shared end does not count)?
@@ -401,9 +426,10 @@ fn bridge(ring: Vec<Corner>, hole: &[Corner], others: &[Vec<Corner>], work: &mut
 }
 
 /// Cut `ring` (counterclockwise, possibly joined to its holes by bridges) into triangles by ear
-/// clipping. A corner in line with its neighbors goes without a triangle. If no ear is left (a
-/// ring that crosses itself), the rest is cut as a fan.
-fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize) -> Result<(), String> {
+/// clipping. A corner in line with its neighbors goes without a triangle, unless `keep_straight`
+/// is set and it lies straight between them: it then stays a corner of the triangles beside it. If
+/// no ear is left (a ring that crosses itself), the rest is cut as a fan.
+fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize, keep_straight: bool) -> Result<(), String> {
     let n = ring.len();
     if n < 3 {
         return Ok(());
@@ -419,14 +445,21 @@ fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize) -> Result<(),
         let turn = cross(pa, pb, pc);
         let scale = (pb.x - pa.x).hypot(pb.y - pa.y) * (pc.x - pb.x).hypot(pc.y - pb.y);
         let mut ear = false;
-        let drop = turn.abs() <= 1e-12 * scale.max(1e-300);
-        if !drop && turn > 0.0 {
+        let flat = turn.abs() <= 1e-12 * scale.max(1e-300);
+        let straight = keep_straight && flat && (pb.x - pa.x) * (pc.x - pb.x) + (pb.y - pa.y) * (pc.y - pb.y) > 0.0;
+        let drop = flat && !straight;
+        if !flat && turn > 0.0 {
             spend(work, left)?;
             ear = true;
             let mut k = next[c];
             while k != a {
                 let p = &ring[k];
                 if !same(p, pa) && !same(p, pb) && !same(p, pc) && cross(pa, pb, p) > 0.0 && cross(pb, pc, p) > 0.0 && cross(pc, pa, p) > 0.0 {
+                    ear = false;
+                    break;
+                }
+                // A kept corner on the ear's new edge would be left off every triangle.
+                if keep_straight && touches((p.x, p.y), (pc.x, pc.y), (pa.x, pa.y)) {
                     ear = false;
                     break;
                 }

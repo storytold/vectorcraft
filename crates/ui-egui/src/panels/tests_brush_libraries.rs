@@ -200,6 +200,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("paint"),
             json!("pattern-borders"),
             json!("decorative"),
+            json!("ornamental"),
             json!("scatter-shapes"),
             json!("stipple"),
             json!("game-trails"),
@@ -257,6 +258,17 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     click(&mut app, &ctx, "Compass Rose", Modifiers::NONE, 4.0);
     assert!(has(&app, "Compass Rose") && !has(&app, "Facet Diamond"));
     assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Ornamental"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("ornamental"), Some(4)));
+    let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Scrollwork", Modifiers::NONE, 5.0);
+    assert!(has(&app, "Scrollwork") && !has(&app, "Twin Curl"));
+    assert_eq!(undo_len(&app), undo + 1);
+    assert_eq!(
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
+        Some("Scrollwork")
+    );
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
     app.run("brush.delete", json!({ "names": all })).unwrap();

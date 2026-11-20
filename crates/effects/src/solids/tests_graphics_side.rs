@@ -185,6 +185,7 @@ fn a_piece_cut_from_a_face_draws_its_own_part() {
             away: false,
             end: None,
             surface: Some(vectorcraft_three_d::SurfaceCell { page: square, uv, outward: true }),
+            membrane: None,
             plane: Some(vectorcraft_three_d::DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
             cell: None,
         }

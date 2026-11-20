@@ -2519,6 +2519,8 @@ digits	Hindi	Hindi
 	List Workspaces	Liệt kê không gian làm việc
 	Live Paint	Tô trực tiếp
 	Live Paint Bucket	Xô Tô trực tiếp
+	Fill Area	Tô vùng
+	Fill Area Tool	Công cụ Tô vùng
 	Live Paint Bucket (Stroke)	Xô Tô trực tiếp (Nét)
 	Live Paint Info	Thông tin Tô trực tiếp
 	Live Paint Selection Tool	Công cụ Chọn Tô trực tiếp
@@ -6169,6 +6171,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	shadings of more than 4096 patches or triangles were left out	các vùng tô có hơn 4096 mảnh hoặc tam giác đã bị bỏ qua
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	các vùng tô có hàm loại không xác định được tô bằng màu giữa
 @msg	Shape Builder: no region under the pointer	Xây dựng hình dạng: không có vùng nào dưới con trỏ
+@msg	Fill Area: no enclosed area under the pointer	Tô vùng: không có vùng kín nào dưới con trỏ
 @msg	Shape Builder: select all paths you want to merge	Xây dựng hình dạng: chọn tất cả đường dẫn bạn muốn hợp nhất
 @msg	Shape Builder: select paths or compound paths	Xây dựng hình dạng: chọn đường dẫn hoặc đường dẫn phức
 @msg	shortcut for `{k}` must be a string	phím tắt cho `{k}` phải là chuỗi
@@ -6253,8 +6256,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face của `{GRAPHICS}` phải là front, back hoặc side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài, Xoay tròn và Phình
 @msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	Inflate maps graphics onto its front and back, not onto a side	Phình đặt đồ họa lên mặt trước và mặt sau, không đặt lên mặt bên
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	đối tượng {_1}: mặt sau của Phình chỉ nhận đồ họa khi bật Cả hai mặt và Nắp
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
@@ -8646,6 +8651,15 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Nature Icons	Biểu tượng thiên nhiên
+	Flower	Hoa
+	Tree	Cây
+	Mountain	Núi
+	Ornamental	Hoa văn
+	Scrollwork	Nét cuộn
+	Filigree Arrow	Mũi tên hoa văn
+	Petal Sweep	Nét cánh hoa
+	Twin Curl	Nét cuộn đôi
 	Vector Packs	Bộ cọ véc-tơ
 	Compass Rose	Hoa la bàn
 	Botanical Sprig	Cành cây
