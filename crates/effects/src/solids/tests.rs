@@ -587,6 +587,30 @@ fn drawn_face_bounds(f: &Node) -> Rect {
     }
 }
 
+/// Under a colored light, an Inflate in a solid color with a graphic on its front lies over an
+/// underlay of its faces, the faces that carry parts of the graphic included.
+#[test]
+fn a_colored_inflate_with_a_graphic_lies_over_an_underlay_of_its_faces() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let mark = Node::path(
+        NodeId(0),
+        vectorcraft_geom::shapes::rectangle(Rect::new(500.0, 500.0, 510.0, 510.0)),
+        Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0),
+    );
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(mark) });
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let mut n = Node::path(NodeId(7), square, Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let p = json!({"rotationX": -20, "rotationY": -30, "rotationZ": 0, "lights": [{"color": "#ff8080"}], "graphics": [{"symbol": "Mark", "scale": 300.0}]});
+    n.appearance.effects.push(fx(INFLATE, p));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    let order = art.children().unwrap()[0].children().unwrap();
+    let faces: Vec<Arc<Node>> = order.iter().flat_map(unsealed).collect();
+    assert!(faces.len() > order.len(), "the faces lie over an underlay");
+    let carrying = faces.iter().filter(|f| matches!(f.kind, NodeKind::Group { clip: false, .. })).count();
+    assert!(carrying > 0, "faces carry parts of the graphic");
+    assert!(order.iter().all(|run| !Arc::ptr_eq(&unsealed(run)[0], run)), "every face is in a sealed run");
+}
+
 /// Under a light that is not white, a solid-color fill and a solid-color stroke, plain, dashed or
 /// with a width profile, draw their faces in one order, the faces of both solids in the order of
 /// their depths where they overlap, in Inflate and in Extrude & Bevel, with and without perspective
@@ -775,6 +799,7 @@ fn a_stroke_face_through_a_fill_wall_is_cut_where_their_depths_meet() {
         away: false,
         end: None,
         surface: None,
+        membrane: None,
         plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
         cell: None,
     };
@@ -1206,6 +1231,33 @@ fn a_groups_solids_together_past_the_limit_draw_the_source() {
     assert_eq!(three_d_wireframe_in(None, &past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
 }
 
+/// An Inflate group whose second member's fill is past the limits draws its source art, and its
+/// frame places no graphic handle on the first member's puff.
+#[test]
+fn an_inflate_frame_places_no_handle_when_a_fill_is_past_the_limits() {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    b.line_to((40_000.0, 0.0));
+    b.line_to((40_000.0, 40_000.0));
+    b.line_to((0.0, 40_000.0));
+    b.close_path();
+    let square = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let view = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0});
+    let group = |members: Vec<Node>| {
+        let mut g = Node::group(NodeId(9999), members.into_iter().map(Arc::new).collect());
+        g.appearance.effects.push(fx(INFLATE, view.clone()));
+        g
+    };
+    let center = MappedGraphic::from_value(&json!({"symbol": "Mark"})).unwrap();
+    // The square alone builds, and the graphic's handle sits on its puff.
+    let alone = group(vec![square.clone()]);
+    assert!(graphic_frame(None, &alone, None).unwrap().handle(&center).is_some());
+    // 70,000 corners: more points than a fill's solid takes.
+    let past = group(vec![square, polygon_node(2, 70_000)]);
+    assert!(solid_art(&past).is_none(), "the source art draws");
+    assert!(graphic_frame(None, &past, None).unwrap().handle(&center).is_none());
+}
+
 /// A fill and strokes whose solids each fit, but not all of them together, draw the source art,
 /// and the strokes after the one past the limit are not left out to make room.
 #[test]
@@ -1592,6 +1644,58 @@ fn parameters_are_validated_and_lengths_scale_with_the_object() {
     let b = o.bevel.unwrap();
     assert_eq!((b.shape, b.space, b.repeat), (BevelShape::Step, 0.3, 32));
     assert!(extrude_options(&json!({})).bevel.is_none());
+}
+
+/// `bevel` custom draws the points of `bevelProfile` in both Extrude & Bevels, with the other bevel
+/// settings; bad points, a custom bevel without points and a name that is not a string are refused.
+#[test]
+fn custom_bevels_draw_their_points_and_bad_points_are_refused() {
+    let n = square_node();
+    let notch = json!([[0, 0], [0.2, 0.6], [0.7, 0.4], [1, 1]]);
+    let custom = json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch, "bevelWidth": 10, "bevelRepeat": 2, "bevelBothSides": true});
+    let b = extrude_options(&custom).bevel.unwrap();
+    assert!(matches!(b.shape, BevelShape::Custom(_)));
+    assert_eq!((b.width, b.repeat, b.both_sides), (10.0, 2, true));
+    let points: Vec<(f64, f64)> = match b.shape {
+        BevelShape::Custom(p) => p.points().collect(),
+        _ => vec![],
+    };
+    assert_eq!(points.len(), 4);
+    assert!((points[2].0 - 0.7).abs() < 1e-4 && (points[2].1 - 0.4).abs() < 1e-4, "{points:?}");
+    assert!(matches!(classic_extrude_options(&custom).bevel.map(|b| b.shape), Some(BevelShape::Custom(_))));
+    for id in [EXTRUDE, CLASSIC_EXTRUDE] {
+        let classic_params = json!({"bevel": "classic", "bevelHeight": 10});
+        let custom_params = json!({"bevel": "custom", "bevelProfile": notch, "bevelHeight": 10, "bevelName": "Notch"});
+        assert!(validate_solid(&n, id, &custom_params).is_ok(), "{id}");
+        let art = |p: &Value| {
+            let mut n = square_node();
+            n.appearance.effects.push(fx(id, p.clone()));
+            solid_art(&n).unwrap()
+        };
+        assert_ne!(art(&classic_params), art(&custom_params), "{id}");
+        for (bad, err) in [
+            (json!({"bevel": "custom"}), "bevel custom needs bevelProfile"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0.1, 0], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0], [2, 0.5], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0], ["a", 0.5], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": "0,0 1,1"}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": notch, "bevelName": 3}), "bevelName must be a string"),
+        ] {
+            let e = validate_solid(&n, id, &bad).unwrap_err();
+            assert!(e.contains(err), "{id} {bad}: {e}");
+        }
+    }
+    // A loaded file whose points do not make a profile draws no bevel.
+    assert!(extrude_options(&json!({"bevel": "custom", "bevelProfile": [[0, 0]]})).bevel.is_none());
+    // Changing the type keeps the custom bevel where the new effect takes a bevel, and drops it
+    // where it does not.
+    let classic = three_d_params_as(EXTRUDE, &custom, CLASSIC_EXTRUDE);
+    assert_eq!((&classic["bevel"], &classic[BEVEL_NAME], &classic[BEVEL_PROFILE]), (&json!("custom"), &json!("Notch"), &notch));
+    assert!(validate_solid(&n, CLASSIC_EXTRUDE, &classic).is_ok());
+    assert_eq!(three_d_params_as(CLASSIC_EXTRUDE, &classic, EXTRUDE)[BEVEL_PROFILE], notch);
+    let inflate = three_d_params_as(EXTRUDE, &custom, INFLATE);
+    assert!(inflate.get(BEVEL_PROFILE).is_none() && inflate.get(BEVEL_NAME).is_none());
 }
 
 #[test]

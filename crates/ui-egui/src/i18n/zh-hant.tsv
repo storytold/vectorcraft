@@ -471,6 +471,11 @@ font-technology	Variable	可變
 	Cusp	尖點
 	Straight segment	直線段
 	Circle too large	圓形過大
+	Show Radii	顯示半徑
+	Show Diameter	顯示直徑
+	Anchors at Standard Positions	錨點位於標準位置
+	Third Point by Dragging	拖曳放置第三點
+	Gray	灰
 	Classic Defaults	經典預設值
 	Clean Up…	清除…
 	Clear	清除
@@ -574,9 +579,14 @@ font-technology	Variable	可變
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色輪檢視
 	Box View	方塊檢視
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Document Colors	顯示文件顏色
+	Document Colors	文件顏色
+	Selection Colors	所選物件的顏色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	顯示色彩調和
 	Harmony Rule	色彩調和規則
 	Harmony color	調和色彩
@@ -1911,6 +1921,10 @@ file-filter	Templates	範本
 	Rename Preset	重新命名預設集
 	Save Image Trace Preset	儲存影像描圖預設集
 	Delete Image Trace Preset	刪除影像描圖預設集
+	Tracing Presets…	描圖預設集…
+	Import Image Trace Presets	匯入影像描圖預設集
+	Export Image Trace Presets	匯出影像描圖預設集
+	Replace the saved presets that have these names?	要取代具有這些名稱的已儲存預設集嗎？
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -2069,6 +2083,7 @@ file-filter	Templates	範本
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
+@msg	Fill Area: no enclosed area under the pointer	填滿區域：指標下方沒有封閉區域
 @msg	Shape Builder: select all paths you want to merge	形狀建立：請選取要合併的所有路徑
 @msg	Shape Builder: select paths or compound paths	形狀建立：請選取路徑或複合路徑
 @msg	image data `{_1}` is missing	找不到影像資料 `{_1}`
@@ -3463,6 +3478,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	List Workspaces	列出工作區
 	Live Paint	即時上色
 	Live Paint Bucket	即時上色油漆桶
+	Fill Area	填滿區域
+	Fill Area Tool	填滿區域工具
 	Live Paint Bucket (Stroke)	即時上色油漆桶 (筆畫)
 	Live Paint Info	即時上色資訊
 	Live Paint Selection Tool	即時上色選取工具
@@ -4133,6 +4150,13 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Pen Tool	筆型工具
 	Quick Pen Tool	快速筆型工具
 	Quick Pen	快速筆型
+	Quick Pen Toolbar	快速筆型工具列
+	Continuous Arc	連續弧線
+	Sharp Corner Arc	尖角弧線
+	Flip Arc	翻轉弧線
+	Hide Toolbar	隱藏工具列
+	Pin Toolbar Position	釘選工具列位置
+	Reset Toolbar Position	重設工具列位置
 	Pencil	鉛筆
 	Pencil Tool	鉛筆工具
 	per slice	每個切片
@@ -4583,6 +4607,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit Arrowheads	編輯箭頭
 	Edit Arrowheads…	編輯箭頭…
 	Reload Arrowheads	重新載入箭頭
+	Bevels	斜角清單
+	Edit Bevels	編輯斜角
+	Edit Bevels…	編輯斜角…
+	{name} (document)	{name} (文件)
+	Reload Bevels	重新載入斜角
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
@@ -4721,6 +4750,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處加上斷字連字號，沒有連字號則從不斷字，與語言和大小寫無關。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及透過「確定」設定新資料夾時載入，安全模式除外；要求權限的增效模組只在您授予權限後載入。網頁版不載入任何增效模組。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	「大」為濾鏡或指令增效模組的每次執行提供至少 2.5 億個指令，時間限制不變；「正常」保留增效模組自己的預算。即時效果、轉存器和匯入器保留各自的預算。
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	「正常」保留每個增效模組自身的限制；選擇「大」時，增效模組的濾鏡或命令除處理其輸入所需的指令外，至少可執行 2.5 億條指令。時間限制不變。
@@ -4735,8 +4768,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具列中將每個工具組的名稱顯示在其工具上方；關閉此選項時，各組依序排列，中間沒有任何內容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	從現在起，開啟或新增的文件會以分頁開啟；關閉此選項時，每份文件會在浮動視窗中開啟。已開啟的文件保持原位。
 	Makes the document tabs taller and their names larger.	讓文件頁籤更高，頁籤上的名稱更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	從下次啟動起，在 VectorCraft 原本會自行繪製標題列的地方，改由系統繪製視窗的標題列；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 變數優先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	從下次啟動起，即使桌面會繪製視窗的標題列，VectorCraft 也會自行繪製，除非開啟了系統標題列或 VECTORCRAFT_TITLEBAR 變數選擇了標題列。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或縮小介面；在相同縮放比例下，畫布上的圖稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 繪製的工具指標會隨介面縮放一起變大變小；關閉此選項時，指標保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	介面的語言；「自動」使用系統的語言。選擇一種語言後，對話方塊會立即切換為該語言。
@@ -4762,6 +4795,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	「開啟最近使用的檔案」和首頁畫面最多列出這麼多最近的檔案；設為 0 時不列出，但 VectorCraft 仍會記住最多 30 個。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	開啟文件時，顯示已儲存預視的連結 EPS 影像會保留該預視，而不重新讀取 EPS 檔案；已變更的檔案仍依「更新連結」處理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素預視中，影像以平滑方式繪製；關閉此選項時，像素邊緣清晰銳利。像素預視以外，影像一律平滑顯示。
+	PDF Text	PDF 文字
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	開啟或嵌入的 PDF 中的文字會以可編輯文字匯入，或以外框匯入，在沒有其字體的電腦上看起來也相同。
+	Linked pages show the file's own text.	連結的頁面顯示檔案本身的文字。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	連結的檔案變更時，「自動」會重新讀取，「修改時詢問」會先詢問您，「手動」則保持不變並在狀態列顯示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，「從範本新增…」和「另存範本…」開啟時所在的資料夾；留空則使用文件資料夾中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	「編輯原稿」以系統中該類型的預設應用程式開啟連結的檔案；關閉此選項時，若已安裝 PhotoCraft，連結的點陣影像會在 PhotoCraft 中開啟。
@@ -5021,6 +5057,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
 	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
+	Clear Recent Commands	清除最近使用的指令
 	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
@@ -6556,7 +6593,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
-@msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必須是 none、{_1} 其中之一，或帶有 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，也就是斜角的點
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必須是字串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必須是 2 到 {most} 個 [x, y] 點，每個比例介於 0 和 1 之間，從 [0, 0]（端面的邊緣）到 [1, 1]（側壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}無法從符號「{symbol}」的實例產生實體：該符號的圖稿無法使用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪裁路徑過於複雜，無法用來剪裁圖稿
@@ -6582,9 +6622,11 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必須是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
-	Graphics map onto the Plane, Extrude and Revolve object types.	圖形會對應到「平面」、「突出」與「迴轉」物件類型。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型。
 @msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨脹會將圖形對應到正面和背面，不會對應到側面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	物件 {_1}：只有開啟「雙面」和「封口」後，膨脹的背面才能對應圖形
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
@@ -10419,6 +10461,24 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Nature Icons	自然圖示
+	Flower	花朵
+	Tree	樹木
+	Mountain	山脈
+	Ornamental	裝飾紋樣
+	Scrollwork	卷飾
+	Filigree Arrow	花絲箭頭
+	Petal Sweep	花瓣曲線
+	Twin Curl	雙重卷飾
+	Vector Packs	向量筆刷包
+	Compass Rose	羅盤玫瑰
+	Botanical Sprig	植物枝條
+	Facet Diamond	切面鑽石
+	Tide Crest	浪尖
+	Leaf Vine	葉藤
+	Blossom Chain	花鏈
+	Pennant Garland	旗幟花環
+	Lantern String	燈籠串
 	Orbit Lines	軌道線
 	Petal Garland	花瓣花環
 	Lattice Braid	格紋編織

@@ -999,6 +999,12 @@ fn a_mixed_selection_has_no_colour_to_edit() {
     frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false));
     let _ = ctx.run_ui(Default::default(), |ui| assert_eq!(target(&app, ui).color(), None));
+    // The Eyedropper armed for a stop of the Live Paint Bucket's gradient shows the bucket's color.
+    app.select_tool("eyedropper");
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false));
+    app.session.set_tool_option("stop", &json!("livePaintBucket"));
+    assert_eq!(crate::panels::mixed_paints(&app, &ctx), (false, false), "arming the pick recomputes it");
+    app.session.set_tool_option("stop", &serde_json::Value::Null);
     app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (false, false), "a new revision recomputes it");
 }
