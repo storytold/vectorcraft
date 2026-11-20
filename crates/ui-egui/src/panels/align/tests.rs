@@ -679,6 +679,20 @@ fn object_align_lists_the_align_to_choices() {
     assert_eq!(app.ui.align_to, AlignTo::Selection);
 }
 
+/// With anchor points of one path selected (Direct Selection), Align to Selection returns
+/// `"selection"`: the points align to each other, so the lone path does not make it Artboard.
+#[test]
+fn align_to_selection_with_anchor_points_returns_selection() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+}
+
 /// With the Artboard tool chosen, Align to Key Object is off and fails, and Align to Artboard and
 /// Align to Selection store the choice while the selected objects keep their key.
 #[test]
