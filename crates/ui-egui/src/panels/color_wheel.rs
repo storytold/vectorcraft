@@ -318,7 +318,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.separator();
     if menu_item(ui, tl!("Show Out-of-Gamut Colors"), true, set.gamut) {
-        command(app, &json!({ "gamut": !set.gamut })).ok();
+        run(app, json!({ "gamut": !set.gamut }));
     }
     let on = set.sliders == Sliders::Hsl;
     if menu_item(ui, tl!("HSL Sliders"), true, on) {
