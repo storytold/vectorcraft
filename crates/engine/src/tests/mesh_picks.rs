@@ -88,6 +88,26 @@ fn a_tool_that_picks_no_mesh_points_drops_the_picks() {
     assert_eq!(colors(&s, m), before, "no point is picked");
 }
 
+/// A plain Lasso click away from the art deselects it and unpicks the points the Mesh tool picked,
+/// so the Mesh tool chosen next has none picked.
+#[test]
+fn a_lasso_click_that_deselects_unpicks_the_mesh_points() {
+    let (mut s, m) = mesh_session();
+    let v = ViewInfo::default();
+    let before = colors(&s, m);
+    s.select_tool("mesh", v).unwrap();
+    press(&mut s, m, 0, Mods::default());
+    s.select_tool("lasso", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 500.0, 500.0), v).unwrap();
+    }
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the click deselects the mesh");
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    s.select_tool("mesh", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    assert_eq!(colors(&s, m), before, "no point is picked");
+}
+
 /// Direct Selection lent to the Mesh tool for a Cmd-click starts from the Mesh tool's picks, so a
 /// Shift-click adds to them, and gives back what it left picked.
 #[test]
