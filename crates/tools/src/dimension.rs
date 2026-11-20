@@ -77,6 +77,10 @@ pub struct DimensionTool {
     /// The path that holds the first Linear point, when it was picked on a corner of that path's
     /// preview bounds.
     first_corner: Option<NodeId>,
+    /// The link the first Linear point took at its click when it was not on an anchor: held
+    /// against the path whose preview-bounds corner it was picked on, or on the segment under it.
+    /// When the art moves before the second click, the first point moves with it.
+    first_link: Option<FreePoint>,
     /// Whether the press under way began on an anchor a Linear click picks.
     press_on_anchor: bool,
     /// The second point clicked for the Linear dimension being placed, and where the pointer was
@@ -564,28 +568,34 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
 /// point, so that it moves with that path. None when neither point has a path to link to.
 /// `held_a` and `held_b` name the path holding a point picked on a corner of that path's
 /// preview bounds: such a point is held against that path, however far its strokes or effects
-/// put the corner from the path and whatever other segment lies there.
+/// put the corner from the path and whatever other segment lies there. `link_a` is the link the
+/// first point took at its own click ([`own_link`]): while it still resolves, the point keeps it,
+/// whatever other art lies there now.
 fn points_source(
     cx: &ToolContext,
     (a, ra, held_a): (Point, &Option<PointRef>, Option<NodeId>),
     (b, rb, held_b): (Point, &Option<PointRef>, Option<NodeId>),
+    link_a: Option<FreePoint>,
 ) -> Option<DimensionSource> {
     // A path deleted since the pick holds nothing.
     let holder = |held: Option<NodeId>| held.filter(|node| cx.doc.node(*node).is_some());
     let (corner_a, corner_b) = (holder(held_a), holder(held_b));
+    let link_a = link_a.filter(|link| ra.is_none() && link.position(cx.doc).is_some());
     let edge = |p: Point, corner: Option<NodeId>| if corner.is_some() { None } else { pick(cx, p) };
-    let (edge_a, edge_b) = (edge(a, corner_a), edge(b, corner_b));
+    let (edge_a, edge_b) = (if link_a.is_some() { None } else { edge(a, corner_a) }, edge(b, corner_b));
     let node = |r: &Option<PointRef>, corner: Option<NodeId>, e: &Option<SegmentRef>| {
         r.as_ref().map(|r| r.node).or(corner).or_else(|| e.as_ref().map(|e| e.node))
     };
-    let (path_a, path_b) = (node(ra, corner_a, &edge_a), node(rb, corner_b, &edge_b));
+    let path_a = link_a.as_ref().map(FreePoint::node).or_else(|| node(ra, corner_a, &edge_a));
+    let path_b = node(rb, corner_b, &edge_b);
     let free = |p: Point, r: &Option<PointRef>, edge: &Option<SegmentRef>, own: Option<NodeId>, other: Option<NodeId>| {
         if r.is_some() {
             return None;
         }
         edge.as_ref().and_then(|e| FreePoint::on_segment(cx.doc, e, p)).or_else(|| own.or(other).and_then(|node| FreePoint::on(cx.doc, node, p)))
     };
-    let (free_a, free_b) = (free(a, ra, &edge_a, path_a, path_b), free(b, rb, &edge_b, path_b, path_a));
+    let free_a = link_a.or_else(|| free(a, ra, &edge_a, path_a, path_b));
+    let free_b = free(b, rb, &edge_b, path_b, path_a);
     (ra.is_some() || rb.is_some() || free_a.is_some() || free_b.is_some()).then(|| DimensionSource::Points {
         a: ra.clone(),
         b: rb.clone(),
@@ -593,6 +603,17 @@ fn points_source(
         free_a,
         free_b,
     })
+}
+
+/// The link a point picked at `p` off any anchor takes from its own pick, as [`points_source`]
+/// links it: held against `corner`'s path when it was picked on a corner of that path's preview
+/// bounds, else on the segment under it, or held against that segment's path. None when nothing
+/// under it holds it.
+fn own_link(cx: &ToolContext, p: Point, corner: Option<NodeId>) -> Option<FreePoint> {
+    match corner.filter(|node| cx.doc.node(*node).is_some()) {
+        Some(node) => FreePoint::on(cx.doc, node, p),
+        None => pick(cx, p).and_then(|e| FreePoint::on_segment(cx.doc, &e, p).or_else(|| FreePoint::on(cx.doc, e.node, p))),
+    }
 }
 
 impl DimensionTool {
@@ -610,6 +631,7 @@ impl DimensionTool {
     /// A point the guides leave where the pointer is (right on a guide line) stays there, and with
     /// Snap to Pixel or Snap to Grid on a point stays where they place it.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
+        self.follow_first(cx);
         let leave = self.points.last().map(|(first, anchor)| match anchor {
             Some(_) => crate::guides::Leave::segment(cx, *first, false),
             None => crate::guides::Leave::contact(*first),
@@ -651,6 +673,26 @@ impl DimensionTool {
             }
             None => (p, None),
         }
+    }
+    /// Moves the first Linear point to where its link puts it in the document as it is now: on
+    /// its anchor, or where [`Self::first_link`] holds it. A point whose link no longer resolves,
+    /// or that has none, stays where it was picked.
+    fn follow_first(&mut self, cx: &ToolContext) {
+        if let Some(now) = self.first_now(cx)
+            && let [(at, _)] = self.points.as_mut_slice()
+        {
+            *at = now;
+        }
+    }
+    /// Where the first Linear point is in the document as it is now ([`Self::follow_first`]),
+    /// while it is the only point picked.
+    fn first_now(&self, cx: &ToolContext) -> Option<Point> {
+        let [(at, reference)] = self.points.as_slice() else { return None };
+        let now = match reference {
+            Some(r) => r.position(cx.doc),
+            None => self.first_link.as_ref().and_then(|link| link.position(cx.doc)),
+        };
+        Some(now.unwrap_or(*at))
     }
     fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
         let edge = pick(cx, p)?;
@@ -800,6 +842,7 @@ impl DimensionTool {
         self.on_end = false;
         self.corner = None;
         self.first_corner = None;
+        self.first_link = None;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
@@ -824,12 +867,13 @@ impl DimensionTool {
                     reference = reference.filter(|r| r.position(cx.doc) == Some(at));
                     corner = corner.filter(|_| at.distance(snapped) <= 1e-9);
                 }
-                self.points.push((at, reference));
-                if self.points.len() == 1 {
+                if self.points.is_empty() {
                     self.first_corner = corner;
+                    self.first_link = reference.is_none().then(|| own_link(cx, at, corner)).flatten();
                 }
+                self.points.push((at, reference));
                 if let [(a, ra), (b, rb)] = self.points.as_slice() {
-                    let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner));
+                    let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner), self.first_link.take());
                     self.first_corner = None;
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
@@ -1041,8 +1085,10 @@ impl Tool for DimensionTool {
                 None => {}
             }
         }
+        // The first point where the art puts it now, also when the art moved without a pointer move.
+        let first = self.first_now(cx);
         for (p, _) in &self.points {
-            out.push(Overlay::Anchor { p: *p, color, filled: true, size: 6.0 });
+            out.push(Overlay::Anchor { p: first.unwrap_or(*p), color, filled: true, size: 6.0 });
         }
         for edge in &self.lines {
             segment(edge, &mut out);
@@ -1057,10 +1103,10 @@ impl Tool for DimensionTool {
             let on_anchor = reference.is_some() || self.on_end;
             out.push(Overlay::Anchor { p: *q, color, filled: !on_anchor, size: if on_anchor { 10.0 } else { 6.0 } });
         }
-        if let Some((p, _)) = self.points.last() {
+        if let Some(p) = first.or_else(|| self.points.last().map(|(p, _)| *p)) {
             let target = snapped.map_or(self.at, |(q, _)| q);
-            let b = if self.shift { constrained(cx, *p, target) } else { target };
-            out.push(Overlay::Line { a: *p, b, color, dashed: true });
+            let b = if self.shift { constrained(cx, p, target) } else { target };
+            out.push(Overlay::Line { a: p, b, color, dashed: true });
         }
         // The Smart Guides of the point the next click picks (after the rubber band).
         if linear_pick {
@@ -1814,7 +1860,7 @@ mod tests {
         let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
         let (corner, b) = (Point::new(99.5, 99.5), Point::new(250.0, 99.5));
         for (held, node) in [(Some(id), id), (None, line)] {
-            let source = points_source(&c, (corner, &None, held), (b, &None, None));
+            let source = points_source(&c, (corner, &None, held), (b, &None, None), None);
             let Some(DimensionSource::Points { free_a: Some(free), .. }) = &source else { panic!("{source:?}") };
             let linked = match free {
                 FreePoint::Anchors { node, .. } => *node,
@@ -1822,6 +1868,79 @@ mod tests {
             };
             assert_eq!(linked, node, "{held:?}: {free:?}");
         }
+    }
+
+    /// A first point keeps its link when the art moves before the second click: a point picked on
+    /// a corner of the preview bounds, on a segment or on an anchor is measured, shown and
+    /// constrained by Shift from where the art puts it now.
+    #[test]
+    fn a_first_point_follows_art_moved_before_the_second_click() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let near = |a: Point, b: Point| a.distance(b) < 1e-9;
+        let moved = |by: (f64, f64)| {
+            let mut m = d.clone();
+            m.node_mut(id).expect("the rectangle").transform(vectorcraft_geom::Affine::translate(by), false);
+            m
+        };
+        let click = |t: &mut DimensionTool, c: &ToolContext, (x, y): (f64, f64), shift: bool| {
+            for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+                let mut ev = PointerEvent::new(kind, x, y);
+                ev.mods.shift = shift;
+                t.pointer(c, &ev);
+            }
+        };
+        let base = |doc| ToolContext { preview_bounds: true, smart_guides: false, snap_to_point: false, ..cx(doc, &s, &p) };
+        // A corner of the preview bounds, then the rectangle moved 20 points right.
+        let right = moved((20.0, 0.0));
+        let mut t = DimensionTool::default();
+        click(&mut t, &base(&d), (101.0, 101.0), false);
+        let c = ToolContext { revision: (0, 1), ..base(&right) };
+        let shown = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Anchor { p, filled: true, .. } if near(p, Point::new(119.5, 99.5))));
+        assert!(shown, "the first point shows at the moved corner before the pointer moves");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 219.0, 101.0));
+        let band = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Line { a, dashed: true, .. } if near(a, Point::new(119.5, 99.5))));
+        assert!(band, "the rubber band starts at the moved corner");
+        click(&mut t, &c, (219.0, 101.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(119.5, 99.5)) && near(pending.b, Point::new(220.5, 99.5)), "{:?} {:?}", pending.a, pending.b);
+        assert!((pending.length - 101.0).abs() < 1e-9, "{}", pending.length);
+        let Some(DimensionSource::Points { free_a: Some(free), .. }) = &pending.source else { panic!("{:?}", pending.source) };
+        assert!(free.position(&right).is_some_and(|q| near(q, Point::new(119.5, 99.5))), "{free:?}");
+        // A point on the top segment, then the rectangle moved 20 points down.
+        let down = moved((0.0, 20.0));
+        let mut t = DimensionTool::default();
+        let unbounded = |doc| ToolContext { preview_bounds: false, ..base(doc) };
+        click(&mut t, &unbounded(&d), (150.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 1), ..unbounded(&down) }, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(150.0, 120.0)), "{:?}", pending.a);
+        let Some(DimensionSource::Points { free_a: Some(FreePoint::OnSegment { edge, .. }), .. }) = &pending.source else {
+            panic!("{:?}", pending.source)
+        };
+        assert_eq!(edge.node, id);
+        // The same, with a line drawn on top along the moved segment before the second click: the
+        // point keeps the segment it was picked on, where a pick there now finds the line.
+        let mut covered = down.clone();
+        let (l, line) = (covered.layers[0].id, covered.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 120.0), Point::new(300.0, 120.0)], false));
+        covered.insert(Some(l), 0, Node::path(line, path, Default::default())).expect("the line");
+        let c = unbounded(&covered);
+        let at = Point::new(150.0, 120.0);
+        assert_eq!(pick(&c, at).map(|e| e.node), Some(line));
+        let link = own_link(&unbounded(&d), Point::new(150.0, 100.0), None);
+        assert!(matches!(&link, Some(FreePoint::OnSegment { edge, .. }) if edge.node == id), "{link:?}");
+        let source = points_source(&c, (at, &None, None), (Point::new(300.0, 300.0), &None, None), link);
+        let Some(DimensionSource::Points { free_a: Some(FreePoint::OnSegment { edge, .. }), .. }) = &source else { panic!("{source:?}") };
+        assert_eq!(edge.node, id, "the line on top does not take the point");
+        // An anchor, then the rectangle moved 20 points down: Shift constrains from the anchor's
+        // new place.
+        let mut t = DimensionTool::default();
+        click(&mut t, &unbounded(&d), (100.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 1), ..unbounded(&down) }, (300.0, 124.0), true);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(100.0, 120.0)) && (pending.b.y - 120.0).abs() < 1e-9, "{:?} {:?}", pending.a, pending.b);
     }
 
     /// Hovering right on the end of a dimension's line shows the anchor ring there.
