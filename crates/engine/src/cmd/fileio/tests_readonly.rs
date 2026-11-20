@@ -9,7 +9,7 @@ use crate::{EngineError, READ_ONLY_LOCATION, Session};
 
 #[test]
 fn readonly_error_is_typed_and_other_writers_keep_their_error() {
-    let dir = vectorcraft_testkit::temp_dir("save-refusal");
+    let dir = vectorcraft_testkit::TempDir::new("save-refusal");
     let path = dir.join("Poster.vectorcraft").to_string_lossy().into_owned();
     for kind in [ErrorKind::PermissionDenied, ErrorKind::ReadOnlyFilesystem, ErrorKind::StorageFull, ErrorKind::NotFound, ErrorKind::Other] {
         let typed = write_save_file_with(&path, &mut |_| Err(io::Error::new(kind, "injected"))).unwrap_err();
@@ -26,7 +26,6 @@ fn readonly_error_is_typed_and_other_writers_keep_their_error() {
         }
         assert!(!std::path::Path::new(&path).exists());
     }
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

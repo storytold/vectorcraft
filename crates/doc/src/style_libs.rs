@@ -157,11 +157,13 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "hand-drawn", name: "Hand-Drawn", make: hand_drawn },
     BuiltinStyleLibrary { id: "textures", name: "Textures", make: textures },
     BuiltinStyleLibrary { id: "painted-sketched", name: "Painted and Sketched", make: painted_sketched },
+    BuiltinStyleLibrary { id: "paper-cutouts", name: "Paper Cutouts", make: paper_cutouts },
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
     BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
     BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
+    BuiltinStyleLibrary { id: "neon-glow", name: "Neon & Glow", make: neon_glow },
 ];
 
 /// Built-in library `id`, made once.
@@ -380,6 +382,25 @@ fn painted_sketched() -> Vec<GraphicStyle> {
             vec![F(fill("#d8d4c6"))],
             vec![fx("sketch.graphicPen", json!({"strokeLength": 6.0, "lightDarkBalance": 55.0, "strokeDirection": "rightDiagonal"}))],
         ),
+    ]
+}
+
+/// Paper Cutouts: original layered paper colors with visible cut edges and crisp cast shadows.
+fn paper_cutouts() -> Vec<GraphicStyle> {
+    let cutout = |name: &str, face: &str, edge: &str, rim: &str, shadow: &str, x: f64, y: f64| {
+        style(
+            name,
+            vec![F(fill(face)), S(stroke(edge, 7.0)), S(stroke(rim, 2.0))],
+            vec![fx("stylize.dropShadow", json!({"mode": "normal", "opacity": 100.0, "x": x, "y": y, "blur": 0.0, "color": shadow}))],
+        )
+    };
+    vec![
+        cutout("Coral Layers", "#ff6b6b", "#f9c74f", "#fff4e6", "#6d597a", 5.0, 5.0),
+        cutout("Mint Layers", "#80cbc4", "#2a9d8f", "#e9f5db", "#355070", 4.0, 6.0),
+        cutout("Midnight Layers", "#3d5a80", "#ee6c4d", "#e0fbfc", "#1b263b", 6.0, 4.0),
+        cutout("Sunflower Sheet", "#ffbe0b", "#fb5607", "#fff3b0", "#6a4c93", 3.0, 6.0),
+        cutout("Rose Layers", "#f28482", "#84a59d", "#f7ede2", "#4a4e69", 6.0, 3.0),
+        cutout("Monochrome Stack", "#f5f5f5", "#444444", "#ffffff", "#222222", 5.0, 5.0),
     ]
 }
 
@@ -619,6 +640,44 @@ fn status_effects() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Neon & Glow: original multi-layer procedural styles with neon tubes, laser beams, and glowing halos.
+fn neon_glow() -> Vec<GraphicStyle> {
+    vec![
+        style(
+            "Cyan Neon",
+            vec![S(StrokeLayer { opacity: 0.7, ..round("#00e5ff", 6.0) }), S(round("#ffffff", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "screen", "opacity": 85.0, "x": 0.0, "y": 0.0, "blur": 8.0, "color": "#00e5ff"}))],
+        ),
+        GraphicStyle {
+            blend: BlendMode::Screen,
+            ..style(
+                "Magenta Laser",
+                vec![S(StrokeLayer { blend: BlendMode::Screen, ..round("#ff007f", 5.0) }), S(round("#ffffff", 1.5))],
+                vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 90.0, "blur": 8.0, "color": "#ff007f"}))],
+            )
+        },
+        style(
+            "Amber Tube",
+            vec![S(StrokeLayer { opacity: 0.8, ..round("#ff8c00", 6.0) }), S(round("#ffea00", 1.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 85.0, "blur": 8.0, "color": "#ff8c00"}))],
+        ),
+        style(
+            "Electric Lime",
+            vec![S(StrokeLayer { opacity: 0.75, ..round("#39ff14", 6.0) }), S(round("#ffffff", 1.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 90.0, "blur": 8.0, "color": "#39ff14"}))],
+        ),
+        style(
+            "Pulse Violet",
+            vec![S(StrokeLayer { opacity: 0.75, ..round("#7b2cbf", 5.0) }), S(round("#e0aaff", 1.5))],
+            vec![
+                fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 75.0, "blur": 6.0, "color": "#c77dff", "source": "edge"})),
+                fx("stylize.outerGlow", json!({"mode": "screen", "opacity": 85.0, "blur": 8.0, "color": "#7b2cbf"})),
+            ],
+        ),
+        style("Cobalt Phosphor", vec![S(round("#0047ab", 6.0)), S(round("#ffffff", 1.5))], vec![fx("blur.gaussian", json!({"radius": 2.0}))]),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -661,6 +720,26 @@ mod tests {
         }
         let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
         assert_eq!(ids.iter().position(|&i| i == "textures"), ids.iter().position(|&i| i == "hand-drawn").map(|i| i + 1), "after Hand-Drawn");
+    }
+
+    #[test]
+    fn paper_cutouts_have_layered_edges_and_crisp_shadows() {
+        let lib = builtin_style_library("paper-cutouts").unwrap();
+        assert_eq!(lib.name, "Paper Cutouts");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Coral Layers", "Mint Layers", "Midnight Layers", "Sunflower Sheet", "Rose Layers", "Monochrome Stack"]);
+        for g in &lib.styles {
+            assert_eq!(g.appearance.items.len(), 3, "{} has a face and two cut edges", g.name);
+            assert!(matches!(g.appearance.items[0], AppearanceItem::Fill(_)));
+            assert!(matches!(g.appearance.items[1], AppearanceItem::Stroke(_)));
+            assert!(matches!(g.appearance.items[2], AppearanceItem::Stroke(_)));
+            assert_eq!(g.appearance.effects.len(), 1);
+            let shadow = &g.appearance.effects[0];
+            assert_eq!(shadow.id, "stylize.dropShadow");
+            assert_eq!(shadow.params["blur"], 0.0);
+            assert_eq!(shadow.params["opacity"], 100.0);
+        }
+        assert_eq!(read(&write(&lib), "Fallback").unwrap(), *lib);
     }
 
     /// The built-in styles' Warps draw with the map a new Warp takes.
@@ -749,5 +828,37 @@ mod tests {
         let g = GraphicStyle::new("G", Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 1.0)).standalone();
         let Paint::Gradient(gp) = g.appearance.fill_paint() else { panic!("a gradient") };
         assert!(gp.swatch.is_none() && gp.gradient.stops.iter().all(|s| s.swatch.is_none() && s.tint == 1.0));
+    }
+
+    #[test]
+    fn neon_and_glow_styles_are_defined_with_multi_strokes_and_effects() {
+        let lib = builtin_style_library("neon-glow").expect("neon-glow library exists");
+        assert_eq!(lib.name, "Neon & Glow");
+        assert_eq!(lib.len(), 6);
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Cyan Neon", "Magenta Laser", "Amber Tube", "Electric Lime", "Pulse Violet", "Cobalt Phosphor"]);
+        for g in &lib.styles {
+            let strokes = g.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(_))).count();
+            assert!(strokes >= 2, "{} has {} strokes, expected >= 2", g.name, strokes);
+            assert!(!g.appearance.effects.is_empty(), "{} has effects", g.name);
+        }
+        let cyan = lib.style("Cyan Neon").unwrap();
+        assert_eq!(cyan.appearance.effects[0].id, "stylize.dropShadow");
+        let magenta = lib.style("Magenta Laser").unwrap();
+        assert_eq!(magenta.blend, BlendMode::Screen);
+        let pulse = lib.style("Pulse Violet").unwrap();
+        let pulse_fx: Vec<&str> = pulse.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(pulse_fx, ["stylize.innerGlow", "stylize.outerGlow"]);
+        let cobalt = lib.style("Cobalt Phosphor").unwrap();
+        assert_eq!(cobalt.appearance.effects[0].id, "blur.gaussian");
+    }
+
+    #[test]
+    fn neon_glow_round_trips_through_vcstyles() {
+        let lib = builtin_style_library("neon-glow").unwrap();
+        let text = write(&lib);
+        assert!(sniff(&text));
+        let read_back = read(&text, "Fallback").unwrap();
+        assert_eq!(*lib, read_back);
     }
 }

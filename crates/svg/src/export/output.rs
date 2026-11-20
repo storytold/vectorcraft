@@ -164,14 +164,22 @@ impl Writer<'_> {
     }
 
     /// Reserve ids for every named object up front so generated def ids never collide with them.
+    /// Symbols' art takes no ids, also where the drawing holds it placed by an instance (every
+    /// instance of the symbol writes it).
     pub(super) fn assign_name_ids(&mut self) {
         if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
+        let mut art = HashSet::new();
+        for s in &self.doc.symbols {
+            s.art.walk(&mut |n| {
+                art.insert(n.id);
+            });
+        }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
             // Ruler guides are not written, so their names reserve no id.
-            if n.is_ruler_guide() {
+            if n.is_ruler_guide() || art.contains(&n.id) {
                 return;
             }
             if let Some(name) = &n.name {
@@ -500,8 +508,8 @@ impl Writer<'_> {
     /// `<circle>` when its radii are written the same, else `<ellipse>`.
     fn ellipse_shape(&self, sp: &SubPath, m: Affine) -> Option<(&'static str, String)> {
         let tol = 10f64.powi(-i32::from(self.opts.decimals));
-        let (anchors, closed) = (sp.anchors.as_slice(), sp.closed);
-        let [a0, a1, a2, a3] = anchors else { return None };
+        let (anchors, closed) = (sp.anchors.contiguous(), sp.closed);
+        let [a0, a1, a2, a3] = &*anchors else { return None };
         let [p0, p1, p2, p3] = [a0.p, a1.p, a2.p, a3.p].map(|p| m * p);
         let c = p0.midpoint(p2);
         let near = |a: f64, b: f64| (a - b).abs() <= tol;

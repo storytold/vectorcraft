@@ -295,12 +295,14 @@ fn display(path: &Path) -> Arc<str> {
 
 impl Files {
     /// The files of a run of the script at `path` (`None` for a script given as text), with the
-    /// `JSINCLUDE` folders `jsinclude`.
-    pub(crate) fn new(path: Option<&str>, jsinclude: Vec<PathBuf>) -> Self {
-        let real = path.and_then(|p| std::fs::canonicalize(p).ok());
+    /// `JSINCLUDE` folders `jsinclude`. `checked` is the script's real path when the read of its text
+    /// found it, which the run's folder then comes from; without it, `path` is looked up.
+    pub(crate) fn new(path: Option<&str>, checked: Option<PathBuf>, jsinclude: Vec<PathBuf>) -> Self {
+        let scope_of_checked = checked.as_deref().and_then(Path::parent).map(|d| ScriptScope::of_real_folder(d.to_path_buf()));
+        let real = checked.or_else(|| path.and_then(|p| std::fs::canonicalize(p).ok()));
         let dir = real.as_deref().and_then(folder_of);
         Self {
-            scope: dir.as_deref().map(ScriptScope::of_folder).unwrap_or_default(),
+            scope: scope_of_checked.or_else(|| dir.as_deref().map(ScriptScope::of_folder)).unwrap_or_default(),
             jsinclude,
             include_path: Vec::new(),
             files: 0,
@@ -321,7 +323,8 @@ impl Files {
         std::env::var("JSINCLUDE").map(|v| v.split(';').map(str::trim).filter(|p| !p.is_empty()).map(PathBuf::from).collect()).unwrap_or_default()
     }
 
-    /// The file being run now, as `$.fileName` gives it (empty for a script given as text).
+    /// The file being run now: the script, or the file `$.evalFile` is running (empty for a script
+    /// given as text). `$.fileName` gives it to code that `eval` or `Function` compiled.
     pub(crate) fn file_name(&self) -> String {
         self.frames.last().map(|f| f.shown.to_string()).unwrap_or_default()
     }

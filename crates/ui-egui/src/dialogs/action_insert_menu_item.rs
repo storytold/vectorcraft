@@ -66,23 +66,27 @@ fn build(lang: crate::i18n::Lang, english_names: bool) -> Vec<Row> {
         .map(|item| {
             let parts = || item.path.iter().chain(std::iter::once(&item.label)).copied();
             let english = parts().collect::<Vec<_>>().join(" › ");
-            let shown = parts().map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ");
+            // A saved proof setup keeps its file's name.
+            let own_name = item.command == crate::dialogs::proof_setup::LOAD;
+            let path = item.path.iter().map(|s| crate::i18n::tr(lang, s));
+            let label = if own_name { item.label } else { crate::i18n::tr(lang, item.label) };
+            let shown = path.chain(std::iter::once(label)).collect::<Vec<_>>().join(" › ");
             let haystack = format!("{}\n{}\n{}", english.to_lowercase(), shown.to_lowercase(), item.command.to_lowercase());
             Row { command: item.command, params: item.params, shown, haystack }
         })
         .collect()
 }
 
-/// The rows, built again only when the language, the installed plug-ins, the font name setting or
-/// the loaded fonts change, not on every frame.
+/// The rows, built again only when the language, the installed plug-ins, the font name setting,
+/// the loaded fonts or the saved proof setups change, not on every frame.
 fn rows(app: &VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Row>> {
-    type Key = (&'static str, u64, bool, u64, bool);
+    type Key = (&'static str, u64, bool, u64, bool, u64);
     let lang = crate::i18n::current();
     let english_names = app.session.prefs.font_names_in_english;
     let db = vectorcraft_text::FontDb::global();
     // Read before building, as the Font menu does: fonts that load meanwhile build the rows again.
     let (cataloged, generation) = (db.installed_fonts_ready(), db.generation());
-    let key: Key = (lang.code(), menus::plugin_revision(), english_names, generation, cataloged);
+    let key: Key = (lang.code(), menus::plugin_revision(), english_names, generation, cataloged, crate::dialogs::proof_setup::saved_revision());
     let id = egui::Id::unique("action-insert-menu-item-rows");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, Arc<Vec<Row>>)>(id))
         && k == key
@@ -207,40 +211,83 @@ mod tests {
         assert_eq!((d.str("note"), d.str("command")), ("none".to_string(), "object.ungroup".to_string()), "a failed Find keeps the pick");
     }
 
-    /// The list holds the menu items that run an engine command without asking for values first,
-    /// outside the application, File, Window and Help menus, and leaves out Undo, Redo, the Pastes,
-    /// Object › Align, Image Trace's Make and Make and Expand, Pattern's Make and Edit Pattern and the
-    /// saved-selection, saved-view and recent-font items.
+    /// The list holds the menu items that run an engine command, and the View menu items that the
+    /// app runs itself, without asking for values first, outside the application, File, Window and
+    /// Help menus, and leaves out Undo, Redo, the Pastes, Image Trace's Make and Make and Expand,
+    /// Pattern's Make and Edit Pattern and the saved-selection, saved-view and recent-font items.
     #[test]
     fn the_list_holds_only_menu_items_that_can_be_steps() {
         let items = menus::insertable_items(true);
         assert!(items.len() > 100, "only {} items", items.len());
         for item in &items {
-            assert!(vectorcraft_engine::find_command(item.command).is_some(), "{item:?}");
+            let in_app = menus::plays_in_app(item.command);
+            assert!(vectorcraft_engine::find_command(item.command).is_some() != in_app, "{item:?}");
+            assert!(!in_app || item.path[0] == "View", "{item:?}");
             assert!(!item.label.ends_with('…'), "{item:?}");
             assert!(!["VectorCraft", "File", "Window", "Help"].contains(&item.path[0]), "{item:?}");
             assert!(item.params.is_object(), "{item:?}");
         }
         let has = |command: &str| items.iter().any(|i| i.command == command);
-        for command in ["object.group", "object.ungroup", "object.arrange.bringToFront"] {
+        for command in [
+            "object.group",
+            "object.ungroup",
+            "object.arrange.bringToFront",
+            "object.align",
+            "view.outline",
+            "view.zoomIn",
+            "view.fitArtboard",
+            "view.rotate",
+            "view.rulers",
+            "view.snapToGrid",
+            "view.guides.lock",
+        ] {
             assert!(has(command), "{command}");
         }
+        let aligns = items.iter().filter(|i| i.command == "object.align").count();
+        assert_eq!(aligns, 7, "each Object › Align item, by its params");
         for command in [
             "edit.undo",
             "edit.redo",
             "edit.paste",
             "edit.pasteInFront",
             "object.move",
-            "object.align",
             "imageTrace.make",
             "imageTrace.makeAndExpand",
             "object.pattern.make",
             "object.pattern.edit",
             "file.save",
-            "view.zoomIn",
+            "window.panel",
+            "view.goto1",
+            "view.saved.new",
             "select.recall1",
         ] {
             assert!(!has(command), "{command}");
+        }
+    }
+
+    /// Every View menu item that the app runs itself is listed, apart from the saved-view slots, the
+    /// Perspective Grid presets (`ui.` commands, whose items follow the presets in the preferences)
+    /// and the items that ask for values first.
+    #[test]
+    fn every_view_item_the_app_runs_is_listed() {
+        let items = menus::insertable_items(true);
+        let view = menus::menu_tree_named(true).into_iter().find(|(title, _)| *title == "View").map(|(_, items)| items).unwrap();
+        fn walk(items: &[menus::Item], out: &mut Vec<(&'static str, &'static str)>) {
+            for it in items {
+                match it {
+                    menus::Item::Cmd(label, id, _) => out.push((label, id)),
+                    menus::Item::Sub(_, children) => walk(children, out),
+                    _ => {}
+                }
+            }
+        }
+        let mut all = vec![];
+        walk(&view, &mut all);
+        for (label, id) in all {
+            let ui = vectorcraft_engine::find_command(id).is_none() && menus::UI_COMMANDS.iter().any(|c| c.0 == id);
+            if ui && !label.ends_with('…') && !id.starts_with("view.goto") && !id.starts_with("ui.") {
+                assert!(items.iter().any(|i| i.command == id), "{label} ({id})");
+            }
         }
     }
 
@@ -257,5 +304,34 @@ mod tests {
         }
         let shared = rows.iter().any(|r| rows.iter().any(|o| o.command == r.command && o.params != r.params));
         assert!(shared, "items that share a command are listed apart, by their params");
+    }
+
+    /// A proof setup saved while the dialog is open is listed at once, by its file's name in every
+    /// UI language.
+    #[test]
+    fn a_proof_setup_saved_meanwhile_is_listed_by_its_name() {
+        use crate::dialogs::proof_setup;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let dir = vectorcraft_testkit::TempDir::new("insert-menu-item-proof-setups");
+        app.session.attach_proof_setups(dir.join("Proof Setups"));
+        proof_setup::refresh_saved(&app, None);
+        proof_setup::wait();
+        let de = Lang::from_code("de").unwrap();
+        crate::i18n::set_current(de);
+        let listed =
+            |app: &VectorcraftApp| rows(app, &ctx).iter().filter(|r| r.command == proof_setup::LOAD).map(|r| r.shown.clone()).collect::<Vec<_>>();
+        // The installed fonts' scan, which builds the rows again when it ends, is over first.
+        vectorcraft_text::FontDb::global().menu_family_list();
+        let before = listed(&app);
+        app.run("view.proofSetup.save", json!({"name": "Group", "target": "workingCmyk"})).unwrap();
+        proof_setup::refresh_saved(&app, None);
+        proof_setup::wait();
+        let after = listed(&app);
+        crate::i18n::set_current(Lang::EN);
+        assert!(before.is_empty(), "{before:?}");
+        let view = crate::i18n::tr(de, "View");
+        let menu = crate::i18n::tr(de, "Proof Setup");
+        assert_eq!(after, [format!("{view} › {menu} › Group")]);
     }
 }

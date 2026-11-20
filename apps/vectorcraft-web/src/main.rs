@@ -21,11 +21,13 @@
 
 #[cfg(target_arch = "wasm32")]
 mod api;
+#[cfg(any(target_arch = "wasm32", test))]
+mod demand;
 #[cfg(target_arch = "wasm32")]
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]
 mod keys;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;

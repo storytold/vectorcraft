@@ -760,7 +760,23 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
     let (ps, tiff) = vectorcraft_eps::sections(&bytes).unwrap();
     let tiff = tiff.unwrap();
     assert!(tiff.len() < 4 * 1024 * 1024 + 64 * 1024, "compatibility preview grew to {} bytes", tiff.len());
-    let preview = image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).unwrap();
+    let preview = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, tiff)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((preview.width(), preview.height()), (1024, 1024));
     assert!(std::str::from_utf8(ps).unwrap().contains("%%BoundingBox: 0 0 4000 4000"));
     let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
@@ -786,6 +802,32 @@ fn units_and_ruler_guides_survive_save_and_reopen() {
         let doc = &s.doc().unwrap().doc;
         let guides: Vec<_> = doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!((doc.units, guides), (vectorcraft_doc::Unit::Millimeters, vec![(true, 50.0), (false, 30.0)]), "{ext}");
+    }
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// A ruler guide hidden or locked on its own (the Layers panel's eye and lock on its row,
+/// `layer.setProps` on its node) stays so through Save, Close and Open, and the other guide stays
+/// visible and unlocked.
+#[test]
+fn a_guide_hidden_or_locked_on_its_own_survives_save_and_reopen() {
+    let d = dir("guide-flags");
+    for ext in ["vectorcraft", "pdf", "ai", "eps"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        for pos in [10, 20, 30] {
+            s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+        }
+        rect(&mut s);
+        let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
+        s.execute("layer.setProps", &json!({"ids": [ids[1]], "visible": false})).unwrap();
+        s.execute("layer.setProps", &json!({"ids": [ids[2]], "locked": true})).unwrap();
+        let p = path(&d, &format!("a.{ext}"));
+        s.execute("document.save", &json!({"path": p})).unwrap();
+        s.execute("file.close", &json!({})).unwrap();
+        s.execute("document.open", &json!({"path": p})).unwrap();
+        let flags: Vec<_> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.pos, g.hidden, g.locked)).collect();
+        assert_eq!(flags, [(10.0, false, false), (20.0, true, false), (30.0, false, true)], "{ext}");
     }
     let _ = std::fs::remove_dir_all(d);
 }

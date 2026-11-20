@@ -2,8 +2,9 @@
 //!
 //! The editing copy of a file keeps the characters of its text objects, with their fonts, sizes,
 //! colours and where they sit, in one text document of its own: between `%AI11_BeginTextDocument`
-//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys. A text object
-//! in a layer is only a stub naming its story in it (`/StoryIndex`).
+//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys (names in files
+//! saved for version 11, and for keys newer than the version a file is saved for: see [`names`]).
+//! A text object in a layer is only a stub naming its story in it (`/StoryIndex`).
 //!
 //! The format isn't documented. Most of what is read here was worked out from the files of the
 //! project's users, used locally and never committed, by comparing it with the type their pages
@@ -25,11 +26,14 @@ use std::collections::{BTreeMap, HashMap};
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
-    CharStyle, HyphenationOptions, JustificationOptions, Justify, LineCap, LineJoin, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
-    PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
+    Burasagari, CharStyle, HyphenationOptions, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LineCap, LineJoin, Node, NodeId, NodeKind,
+    ParaDirection, ParaStyle, PathAlign, PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
+
+mod names;
 
 /// Longest story read (bytes).
 pub(crate) const MAX_STORY: usize = 1 << 20;
@@ -61,6 +65,14 @@ impl Val {
         }
     }
 
+    /// Removes the entry `key` of a dictionary and returns it, without copying it.
+    fn take(&mut self, key: &str) -> Option<Val> {
+        match self {
+            Val::Dict(d) => d.remove(key),
+            _ => None,
+        }
+    }
+
     fn num(&self) -> Option<f64> {
         match self {
             Val::Num(n) if n.is_finite() => Some(*n),
@@ -79,6 +91,14 @@ impl Val {
         match self {
             Val::List(l) => l,
             _ => &[],
+        }
+    }
+
+    /// [`Self::list`] as an owned vector, without copying the items: empty when this isn't a list.
+    fn into_list(self) -> Vec<Val> {
+        match self {
+            Val::List(l) => l,
+            _ => Vec::new(),
         }
     }
 
@@ -341,8 +361,9 @@ impl AreaFrame {
                 2 => F::CapHeight,
                 3 => F::Leading,
                 4 => F::XHeight,
-                // Em Box Height (5) and Legacy (6) have no first baseline of their own here: the
-                // first baseline stays as it was.
+                5 => F::EmBoxHeight,
+                // Legacy (6) has no first baseline of its own here: the first baseline stays as it
+                // was.
                 _ => return None,
             };
             Some((kind, length(b.get("1")).unwrap_or(0.0)))
@@ -405,6 +426,42 @@ struct Para {
     tabs: Vec<TabStop>,
     /// The paragraph has more than [`MAX_TABS`] stops: those past them were left out.
     tabs_truncated: bool,
+    /// Key 27: the Kinsoku set, `/nil` for None, else the index of one of the document's sets
+    /// ([`Texts::kinsoku_sets`]). `None`: the default.
+    kinsoku: Option<Kinsoku>,
+    /// Key 27 names a set of the document that isn't Hard or Soft: the paragraph takes the set it
+    /// would have without it.
+    kinsoku_custom: bool,
+    /// Key 25: Kinsoku Shori Type, 0 Push In First, 1 Push Out First, 2 Push Out Only. `None`: the
+    /// default.
+    kinsoku_type: Option<KinsokuShoriType>,
+    /// Key 24: Burasagari, 0 None, 1 Regular, 2 Force. `None`: the default.
+    burasagari: Option<Burasagari>,
+    /// Key 23: Bunri-Kinshi.
+    bunri_kinshi: bool,
+}
+
+/// The name of the document's predefined Hard Kinsoku set (key 0 of its entry in the document's
+/// Kinsoku sets).
+const KINSOKU_HARD: &str = "PhotoshopKinsokuHard";
+/// The name of the document's predefined Soft Kinsoku set.
+const KINSOKU_SOFT: &str = "PhotoshopKinsokuSoft";
+/// The warning when a paragraph's Kinsoku set is one VectorCraft doesn't have.
+pub(crate) const KINSOKU_SETS_LEFT_OUT: &str = "custom Kinsoku sets were left out: their paragraphs take the set their paragraph style has";
+
+/// The Kinsoku sets of text document `doc` (the list at key 0 of key 4 of its resources), in
+/// order, each by its name (key 0 of the set): Hard or Soft, `None` for any other set. Those past
+/// [`MAX_SHEETS`] are left out.
+fn kinsoku_sets(doc: &Val) -> Vec<Option<Kinsoku>> {
+    let list = doc.get("0").and_then(|d| d.get("4")).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
+    list.iter()
+        .take(MAX_SHEETS)
+        .map(|s| match s.get("0").and_then(|r| r.get("0")).and_then(Val::str) {
+            Some(KINSOKU_HARD) => Some(Kinsoku::Hard),
+            Some(KINSOKU_SOFT) => Some(Kinsoku::Soft),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Most tab stops read for one paragraph.
@@ -489,6 +546,17 @@ struct Style {
     /// Key 35 at 1 (Standard): Standard Vertical Roman Alignment, half-width characters upright in
     /// a column. Any other value, or no key in the run, its character style or the defaults, is off.
     standard_vertical_roman: bool,
+    /// Keys 49 and 50, Insert Aki Left and Right ([`CharStyle::aki_left`]), in 1/1000 em.
+    aki_left: f64,
+    aki_right: f64,
+}
+
+/// Insert Aki Left or Right as key `v` of a character style gives it, in 1/1000 em (the unit the
+/// scripting reference gives `aki left` and `aki right`), 0 to [`MAX_AKI`]. A negative value, one
+/// that is not a finite number, or no key is 0: no space added. A key the run itself carries wins
+/// over its styles' even when it is not a number, so a bad value never shows a style's.
+fn aki(v: Option<&Val>) -> f64 {
+    v.and_then(Val::num).filter(|v| v.is_finite() && *v > 0.0).map_or(0.0, |v| v.min(MAX_AKI))
 }
 
 /// The longest font version string read from a font record: name ID 5 strings are short (`Version
@@ -525,6 +593,12 @@ impl DocFont {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Texts::read`] has read a text document on this thread.
+    pub(super) static TEXTS_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The text document of an editing copy.
 pub(super) struct Texts {
     stories: Vec<Val>,
@@ -542,6 +616,9 @@ pub(super) struct Texts {
     /// The patterns that paint characters, by the name of the art style that gives each
     /// ([`Self::with_patterns`]).
     patterns: HashMap<String, Paint>,
+    /// The document's Kinsoku sets (key 4 of its resources), in order, each by its name (key 0):
+    /// Hard or Soft, `None` for any other set.
+    kinsoku_sets: Vec<Option<Kinsoku>>,
 }
 
 impl Texts {
@@ -561,6 +638,8 @@ impl Texts {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
             h.get(from..)?.windows(n.len()).position(|w| w == n).map(|p| p + from)
         }
+        #[cfg(test)]
+        TEXTS_READS.set(TEXTS_READS.get() + 1);
         let start = find(data, b"%AI11_BeginTextDocument", 0)?;
         let from = find(data, b"/ASCII85Decode", start)? + b"/ASCII85Decode".len();
         let end = find(data, b"~>", from)? + 2;
@@ -580,7 +659,7 @@ impl Texts {
         if bytes.len() > MAX_BYTES {
             return None;
         }
-        let doc = read(&bytes)?;
+        let doc = names::numbered(read(&bytes)?);
         let fonts = doc
             .get("0")?
             .get("1")?
@@ -598,19 +677,30 @@ impl Texts {
             })
             .collect();
         let main = doc.get("1")?;
+        main.get("1")?;
+        main.get("2")?;
+        doc.get("0")?.get("8")?.get("0")?;
         let sheets = |key: &str| -> Vec<Val> {
             let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
             list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
         };
+        let char_sheets = sheets("5");
+        let para_sheets = sheets("6");
+        let kinsoku_sets = kinsoku_sets(&doc);
+        // Every path is there (looked up above), so the stories, defaults and frames move out of the
+        // document without a copy.
+        let mut doc = doc;
+        let mut main = doc.take("1")?;
         Some(Texts {
-            stories: main.get("1")?.list().to_vec(),
+            stories: main.take("1")?.into_list(),
             fonts,
-            defaults: main.get("2")?.clone(),
-            para_defaults: main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
-            char_sheets: sheets("5"),
-            para_sheets: sheets("6"),
-            frames: doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
+            defaults: main.take("2")?,
+            para_defaults: main.take("3").unwrap_or(Val::Dict(BTreeMap::new())),
+            char_sheets,
+            para_sheets,
+            frames: doc.take("0")?.take("8")?.take("0")?.into_list(),
             patterns: HashMap::new(),
+            kinsoku_sets,
         })
     }
 
@@ -749,7 +839,37 @@ impl Texts {
         chain.extend(self.para_sheets.first().and_then(|s| s.get("5")));
         let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.para_defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num).filter(|v| v.abs() < 1e5).unwrap_or(0.0);
+        // The East Asian settings: the first value along the chain that can be read, so one that
+        // can't be read takes the paragraph style's.
+        let levels = || chain.iter().copied().chain(std::iter::once(&self.para_defaults));
+        let choice = |k: &str| {
+            levels().find_map(|s| match s.get(k) {
+                Some(Val::Num(v)) if *v == 0.0 || *v == 1.0 || *v == 2.0 => Some(*v as u8),
+                _ => None,
+            })
+        };
+        let set = |v: &Val| match v {
+            Val::Name(n) if n == "nil" => Some(Some(Kinsoku::None)),
+            Val::Num(i) if *i >= 0.0 && i.fract() == 0.0 => self.kinsoku_sets.get(*i as usize).copied(),
+            _ => None,
+        };
         Para {
+            kinsoku: levels().find_map(|s| s.get("27").and_then(set).flatten()),
+            kinsoku_custom: levels().find_map(|s| s.get("27").and_then(set)).is_some_and(|k| k.is_none()),
+            kinsoku_type: choice("25").map(|v| match v {
+                0 => KinsokuShoriType::PushInFirst,
+                1 => KinsokuShoriType::PushOutFirst,
+                _ => KinsokuShoriType::PushOutOnly,
+            }),
+            burasagari: choice("24").map(|v| match v {
+                0 => Burasagari::None,
+                1 => Burasagari::Standard,
+                _ => Burasagari::Forced,
+            }),
+            bunri_kinshi: levels().find_map(|s| match s.get("23") {
+                Some(Val::Bool(b)) => Some(*b),
+                _ => None,
+            }) == Some(true),
             justify: pick("0").and_then(Val::num).map_or(0, |v| v.clamp(0.0, 6.0) as u8),
             rtl: pick("33").and_then(Val::num) == Some(1.0),
             first_indent: num("1"),
@@ -852,6 +972,8 @@ impl Texts {
             caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
             tate_chu_yoko: num("35") == Some(3.0),
             standard_vertical_roman: num("35") == Some(1.0),
+            aki_left: aki(pick("49")),
+            aki_right: aki(pick("50")),
         }
     }
 }
@@ -1067,6 +1189,12 @@ impl Story {
         self.text.len()
     }
 
+    /// Is frame `frame` of the story point type with nothing but spaces and line ends (its last
+    /// `\r` left out), which [`Self::node`] doesn't make: it draws nothing.
+    pub(super) fn blank_point(&self, frame: usize) -> bool {
+        frame == 0 && matches!(self.frames.first(), Some(FrameKind::Point(_))) && self.is_blank()
+    }
+
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
     fn matrix(&self) -> [f64; 6] {
         match self.frames.first() {
@@ -1138,6 +1266,24 @@ impl Story {
     /// document), or `None` for type that is mirrored, has no size, or a frame past the first of
     /// threaded type (the first frame holds the whole story).
     pub(super) fn node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.made_node(id, frame, template, to_doc, false)
+    }
+
+    /// For a blank story (nothing but spaces and line ends) in an area frame or on a path, an empty
+    /// text object with that frame or path, as [`Self::node`] would make it, as VectorCraft's Type
+    /// tool keeps such an empty frame (#85, #154). Its text is the story's, spaces kept. `None` for
+    /// any other story or frame.
+    pub(super) fn blank_frame_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.is_blank().then(|| self.made_node(id, frame, template, to_doc, true)).flatten()
+    }
+
+    /// Is the story's text nothing but spaces and line ends (`\r`, and `\x03`, a line break)?
+    pub(super) fn is_blank(&self) -> bool {
+        self.text.chars().all(|c| c.is_whitespace() || c == '\x03')
+    }
+
+    /// [`Self::node`]; with `blank_frame`, a blank story in an area frame or on a path is made too.
+    fn made_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine, blank_frame: bool) -> Option<Node> {
         let kind = self.frames.get(frame)?;
         let threaded = frame > 0;
         let (scale, xf, kind) = match kind {
@@ -1179,7 +1325,9 @@ impl Story {
                 })
                 .collect()
         };
-        if text.trim().is_empty() && !threaded {
+        // A blank story isn't made here: the page may still have type for its object. What is left
+        // of one, an area frame or a path, is made by [`Self::blank_frame_node`].
+        if text.trim().is_empty() && !threaded && !(blank_frame && !matches!(kind, TextKind::Point)) {
             return None;
         }
         // The text document measures in the art's units too: the document's scale carries its
@@ -1262,6 +1410,11 @@ impl Story {
     /// object counts them again)?
     pub(super) fn tabs_left_out(&self) -> bool {
         self.tabs_left_out.get()
+    }
+
+    /// Does a paragraph have a Kinsoku set VectorCraft doesn't have ([`Para::kinsoku_custom`])?
+    pub(super) fn kinsoku_sets_left_out(&self) -> bool {
+        self.paras.iter().any(|(_, p)| p.kinsoku_custom)
     }
 
     /// Area type (`node`, the story's first frame as [`Self::node`] makes it with `template` and
@@ -1425,6 +1578,10 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
             auto_leading: p.auto_leading.map_or(JustificationOptions::default().auto_leading, |a| (a * 1e6).round() / 1e4),
             ..JustificationOptions::default()
         },
+        kinsoku: p.kinsoku.unwrap_or_default(),
+        kinsoku_type: p.kinsoku_type.unwrap_or_default(),
+        burasagari: p.burasagari.unwrap_or_default(),
+        bunri_kinshi: p.bunri_kinshi,
         ..ParaStyle::default()
     }
 }
@@ -1470,6 +1627,9 @@ fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
         small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
         tate_chu_yoko: s.tate_chu_yoko,
         standard_vertical_roman: s.standard_vertical_roman,
+        // In ems of the type's own size, so the art's scale does not apply.
+        aki_left: s.aki_left,
+        aki_right: s.aki_right,
         ..CharStyle::default()
     }
 }
@@ -1496,6 +1656,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let justify = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justify;
         // Right to left from the document's defaults, or the paragraph's own.
@@ -1520,6 +1681,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let auto = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justification.auto_leading;
         assert_eq!(auto(b""), JustificationOptions::default().auto_leading);
@@ -1543,6 +1705,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let options = |own: &[u8], scale: f64| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale).hyphenation;
         let want = HyphenationOptions { words_longer_than: 6, after_first: 2, before_last: 2, hyphen_limit: 0, zone: 36.0, capitalized: true };
@@ -1561,10 +1724,91 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
         assert_eq!(own(b""), d);
         assert_eq!(own(b"/10 0 /11 99 /12 2.5 /13 -1 /14 -3 /15 1"), d);
+    }
+
+    /// The document's Kinsoku sets are known by their names, in order: the predefined Hard and
+    /// Soft sets, in either string form, and any other set as one VectorCraft doesn't have.
+    #[test]
+    fn the_documents_kinsoku_sets_are_known_by_name() {
+        let utf16: Vec<u8> = b"(\xfe\xff".iter().copied().chain(KINSOKU_SOFT.bytes().flat_map(|c| [0, c])).chain(*b")").collect();
+        let doc = read(
+            &[
+                b"/0 << /4 << /0 [ << /0 << /0 (PhotoshopKinsokuHard) /5 << /4 1 >> >> >> << /0 << /0 ".as_slice(),
+                &utf16,
+                b" >> >> << /0 << /0 (My Set) >> >> << /0 << >> >> ] >> >>",
+            ]
+            .concat(),
+        )
+        .unwrap();
+        assert_eq!(kinsoku_sets(&doc), [Some(Kinsoku::Hard), Some(Kinsoku::Soft), None, None]);
+        assert_eq!(kinsoku_sets(&read(b"/0 << >>").unwrap()), []);
+    }
+
+    /// Keys 23 to 27 are the paragraph's East Asian settings: Bunri-Kinshi (23), Burasagari (24:
+    /// 0 None, 1 Regular, 2 Force), Kinsoku Shori Type (25: 0 Push In First, 1 Push Out First, 2
+    /// Push Out Only) and the Kinsoku set (27: `/nil` for None, else the index of one of the
+    /// document's sets). A value that can't be read, and a set VectorCraft doesn't have, take the
+    /// paragraph style's, or else the document's.
+    #[test]
+    fn a_paragraph_keeps_its_east_asian_settings() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/27 0 /25 2 /24 0 /23 false").unwrap(),
+            char_sheets: vec![],
+            // [Normal Paragraph Style] has the Soft set; the second style has Force burasagari.
+            para_sheets: vec![read(b"/5 << /27 1 >>").unwrap(), read(b"/5 << /24 2 /23 true >>").unwrap()],
+            frames: vec![],
+            patterns: HashMap::new(),
+            kinsoku_sets: vec![Some(Kinsoku::Hard), Some(Kinsoku::Soft), None],
+        };
+        let para = |run: &[u8]| texts.para(Some(&read(run).unwrap()));
+        let settings = |run: &[u8]| {
+            let p = para_style(&para(run), 1.0);
+            (p.kinsoku, p.kinsoku_type, p.burasagari, p.bunri_kinshi)
+        };
+        let normal = (Kinsoku::Soft, KinsokuShoriType::PushOutOnly, Burasagari::None, false);
+        assert_eq!(settings(b"/5 << >>"), normal);
+        assert_eq!(settings(b"/5 << /27 /nil /25 0 /24 1 /23 true >>"), (Kinsoku::None, KinsokuShoriType::PushInFirst, Burasagari::Standard, true));
+        assert_eq!(settings(b"/5 << /27 0 /25 1 /24 2 >>"), (Kinsoku::Hard, KinsokuShoriType::PushOutFirst, Burasagari::Forced, false));
+        // The paragraph style it is based on (key 6), then [Normal Paragraph Style].
+        assert_eq!(settings(b"/5 << >> /6 1"), (Kinsoku::Soft, KinsokuShoriType::PushOutOnly, Burasagari::Forced, true));
+        assert_eq!(settings(b"/5 << /23 false >> /6 1"), (Kinsoku::Soft, KinsokuShoriType::PushOutOnly, Burasagari::Forced, false));
+        // A set VectorCraft doesn't have takes the paragraph style's, and the paragraph says so.
+        assert_eq!(settings(b"/5 << /27 2 >>"), normal);
+        assert!(para(b"/5 << /27 2 >>").kinsoku_custom);
+        assert!(!para(b"/5 << /27 0 >>").kinsoku_custom && !para(b"/5 << >>").kinsoku_custom);
+        // The story warns of it (the importer's warning).
+        assert!(story("あ\r", &[0.0], &para(b"/5 << /27 2 >>")).kinsoku_sets_left_out());
+        assert!(!story("あ\r", &[0.0], &para(b"/5 << /27 1 >>")).kinsoku_sets_left_out());
+        for unreadable in [
+            b"/5 << /27 3 >>".as_slice(),
+            b"/5 << /27 -1 >>",
+            b"/5 << /27 0.5 >>",
+            b"/5 << /27 (PhotoshopKinsokuHard) >>",
+            b"/5 << /27 /Hard >>",
+            b"/5 << /25 3 >>",
+            b"/5 << /25 1.5 >>",
+            b"/5 << /25 -1 >>",
+            b"/5 << /24 /nil >>",
+            b"/5 << /24 true >>",
+            b"/5 << /23 1 >>",
+            b"/5 << /23 /nil >>",
+        ] {
+            assert_eq!(settings(unreadable), normal, "{}", String::from_utf8_lossy(unreadable));
+            assert!(!para(unreadable).kinsoku_custom, "{}", String::from_utf8_lossy(unreadable));
+        }
+        // Without any of the keys, VectorCraft's defaults.
+        let bare = Texts { para_defaults: Val::Dict(BTreeMap::new()), para_sheets: vec![], kinsoku_sets: vec![], ..texts };
+        let p = para_style(&bare.para(Some(&read(b"/5 << >>").unwrap())), 1.0);
+        let d = ParaStyle::default();
+        assert_eq!((p.kinsoku, p.kinsoku_type, p.burasagari, p.bunri_kinshi), (d.kinsoku, d.kinsoku_type, d.burasagari, d.bunri_kinshi));
     }
 
     /// Key 30 holds the paragraph's tab stops: their positions (key 0), sorted, and alignments (key
@@ -1581,6 +1825,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let tabs = |own: &[u8], scale: f64| {
             para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale)
@@ -1648,6 +1893,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         }
         .para(None);
         let mut s = story(" 80 mm ", &[0.0], &para);
@@ -1696,6 +1942,7 @@ mod tests {
             para_sheets: vec![],
             frames: cases.iter().map(|c| frame(c)).collect(),
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let vertical: Vec<bool> = (0..cases.len() + 1).map(|i| texts.frame_vertical(i)).collect();
         assert_eq!(vertical, [true, false, false, false, false, false, false, false, false, false, false]);
@@ -1714,6 +1961,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let tcy = |run: &[u8]| texts.style(Some(&read(run).unwrap())).tate_chu_yoko;
         assert!(tcy(b"/6 << /35 3 >>"), "the run's own");
@@ -1738,6 +1986,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let roman = |defaults: &[u8], run: &[u8]| texts(defaults).style(Some(&read(run).unwrap())).standard_vertical_roman;
         assert!(roman(b"/35 1", b"/6 << >>"), "the document's defaults");
@@ -1752,6 +2001,48 @@ mod tests {
             assert!(!roman(b"/0 0", other), "{}", String::from_utf8_lossy(other));
         }
         assert!(texts(b"/35 3").style(None).tate_chu_yoko && !texts(b"/35 3").style(None).standard_vertical_roman);
+    }
+
+    /// Keys 49 and 50 of a character style are Insert Aki Left and Right in 1/1000 em, each from the
+    /// run, its character style and the styles that is based on, `[Normal Character Style]`, then the
+    /// document's defaults. A run's own 0 wins over a style's value, a value past 1000 is 1000, and a
+    /// negative value, one that is not a number or no key at all is 0.
+    #[test]
+    fn a_run_keeps_its_insert_aki() {
+        let texts = |defaults: &[u8], normal: &[u8]| Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(defaults).unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![
+                read(&[&b"/0 ([Normal Character Style]) /6 << "[..], normal, b" >>"].concat()).unwrap(),
+                read(b"/0 (Base) /6 << /49 125.0 >>").unwrap(),
+                read(b"/0 (Spaced) /5 1 /6 << /50 500.0 >>").unwrap(),
+            ],
+            para_sheets: vec![],
+            frames: vec![],
+            patterns: HashMap::new(),
+            kinsoku_sets: vec![],
+        };
+        let aki = |defaults: &[u8], normal: &[u8], run: &[u8]| {
+            let s = texts(defaults, normal).style(Some(&read(run).unwrap()));
+            (s.aki_left, s.aki_right)
+        };
+        assert_eq!(aki(b"/0 0", b"", b"/6 << /49 250.0 /50 750.0 >>"), (250.0, 750.0), "the run's own");
+        assert_eq!(aki(b"/0 0", b"", b"/5 2 /6 << >>"), (125.0, 500.0), "its style's, and the style that is based on");
+        assert_eq!(aki(b"/0 0", b"", b"/5 2 /6 << /49 0.0 /50 0 >>"), (0.0, 0.0), "the run's own zero wins");
+        assert_eq!(aki(b"/49 10.0 /50 20.0", b"/49 30.0", b"/6 << >>"), (30.0, 20.0), "Normal, then the document's");
+        assert_eq!(aki(b"/49 10.0 /50 20.0", b"", b"/6 << >>"), (10.0, 20.0), "the document's");
+        assert_eq!(aki(b"/0 0", b"", b"/6 << >>"), (0.0, 0.0), "no key");
+        assert_eq!(aki(b"/0 0", b"", b"/6 << /49 1000.5 /50 1e300 >>"), (MAX_AKI, MAX_AKI), "clamped");
+        for bad in [&b"-1.0"[..], b"-250", b"(125)", b"true", b"[ 125 ]", b"1e400", b"-1e400"] {
+            let run = [&b"/5 2 /6 << /49 "[..], bad, b" /50 ", bad, b" >>"].concat();
+            assert_eq!(aki(b"/0 0", b"", &run), (0.0, 0.0), "{}", String::from_utf8_lossy(bad));
+        }
+        // In ems of the type's size: the art's scale leaves it as it is.
+        let s = texts(b"/0 0", b"").style(Some(&read(b"/6 << /49 250.0 /50 125.0 >>").unwrap()));
+        let c = char_style(&s, 10.0, Affine::IDENTITY);
+        assert_eq!((c.aki_left, c.aki_right), (250.0, 125.0));
     }
 
     /// Keys 61, 62 and 64 of a character style are its stroke's cap (0 butt, 1 round, 2
@@ -1769,6 +2060,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let stroke = |run: &[u8]| {
             let s = char_style(&texts.style(Some(&read(run).unwrap())), 1.0, Affine::IDENTITY);
@@ -1811,6 +2103,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         }
         .with_patterns(patterns)
     }
@@ -1894,6 +2187,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![read(b"/0 << /0 [ 0 0 ] /2 << /0 0 >> >>").unwrap()],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let text = |kerns: &[u8]| -> TextObject {
             let node = texts(kerns).story(0).unwrap().node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
@@ -1961,6 +2255,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let direction = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).direction;
         assert_eq!(direction(b"/0 2"), Some(ParaDirection::RightToLeft), "from the document's defaults");
@@ -2009,6 +2304,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         texts.frame(0)
     }
@@ -2224,6 +2520,8 @@ mod tests {
                     caps: 0,
                     tate_chu_yoko: false,
                     standard_vertical_roman: false,
+                    aki_left: 0.0,
+                    aki_right: 0.0,
                 },
             )],
             kerns: vec![],
@@ -2667,6 +2965,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         texts.frame(0).unwrap()
     }
@@ -2698,12 +2997,12 @@ mod tests {
     #[test]
     fn area_frame_first_baseline_kinds_and_minimum_are_read() {
         use vectorcraft_doc::FirstBaseline as F;
-        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight)] {
+        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight), (5, F::EmBoxHeight)] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 2.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (kind, 60.0), "code {code}");
         }
         // A kind without its own first baseline here, or none known, leaves Ascent.
-        for code in ["1", "5", "6", "7", "-1", "2.5", "(x)"] {
+        for code in ["1", "6", "7", "-1", "2.5", "(x)"] {
             let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 1.0);
             assert_eq!((a.first_baseline, a.first_baseline_min), (F::Ascent, 0.0), "code {code}");
         }
@@ -2734,9 +3033,10 @@ mod tests {
         };
         let placed = |options: &str| placed_in(&[options]);
         assert_eq!(placed("/10 << /0 2 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::CapHeight));
+        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::EmBoxHeight));
         // Without one (Ascent), or with one that isn't read, the line goes where the file has it.
         assert_eq!(placed(""), (true, vectorcraft_doc::FirstBaseline::Fixed));
-        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        assert_eq!(placed("/10 << /0 6 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
         // Another frame of the thread keeping one doesn't count for the first.
         assert_eq!(placed_in(&["", "/10 << /0 2 /1 0 >>"]), (true, vectorcraft_doc::FirstBaseline::Fixed));
     }
@@ -2837,5 +3137,101 @@ mod tests {
         s.lines = vec![(0.0, 210.0 - own - 3.0)];
         let (placed, at, _) = first(&s, true);
         assert!(placed && at.is_some_and(|x| (x - (own + 3.0)).abs() < 1e-6), "{at:?} for {}", own + 3.0);
+    }
+
+    /// [`Val::take`] and [`Val::into_list`] hand over the value they find without copying it.
+    #[test]
+    fn taking_a_value_keeps_its_storage() {
+        let mut v = read(b"/1 [ (a story) << /0 (its frame) >> ] /2 (defaults)").unwrap();
+        let (Some(Val::List(l)), Some(Val::Str(s))) = (v.get("1"), v.get("2")) else { panic!("a list and a string") };
+        let (list, string) = (l.as_ptr(), s.as_ptr());
+        let taken = v.take("1").unwrap().into_list();
+        assert_eq!(taken.as_ptr(), list);
+        assert_eq!(taken.len(), 2);
+        let Some(Val::Str(s)) = v.take("2") else { panic!("a string") };
+        assert_eq!(s.as_ptr(), string);
+        assert_eq!(v, Val::Dict(BTreeMap::new()));
+        assert_eq!(v.take("1"), None);
+        assert_eq!(Val::Num(1.0).take("1"), None);
+        assert_eq!(Val::Str("x".into()).into_list(), Vec::new());
+    }
+
+    /// [`Texts::read`] gives the same stories, defaults, frames, styles, Kinsoku sets and fonts as
+    /// copying each of them out of the parsed document does, and reads nothing where that finds
+    /// nothing.
+    #[test]
+    fn the_text_document_reads_the_same_as_copying_its_parts() {
+        type Parts = (Vec<Val>, Val, Val, Vec<Val>, Vec<Val>, Vec<Val>, Vec<Option<Kinsoku>>, Vec<(String, Option<String>)>);
+        let copied = |document: &str| -> Option<Parts> {
+            let doc = names::numbered(read(document.as_bytes())?);
+            let fonts = doc.get("0")?.get("1")?.get("0")?.list();
+            let fonts = fonts
+                .iter()
+                .map(|f| {
+                    let record = f.get("0").and_then(|f| f.get("0"));
+                    let text = |k: &str| record.and_then(|r| r.get(k)).and_then(Val::str);
+                    (text("0").unwrap_or_default().to_string(), text("5").and_then(record_version).map(str::to_string))
+                })
+                .collect();
+            let main = doc.get("1")?;
+            let sheets = |key: &str| -> Vec<Val> {
+                let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
+                list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
+            };
+            Some((
+                main.get("1")?.list().to_vec(),
+                main.get("2")?.clone(),
+                main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
+                doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
+                sheets("5"),
+                sheets("6"),
+                kinsoku_sets(&doc),
+                fonts,
+            ))
+        };
+        let read_parts = |document: &str| -> Option<Parts> {
+            // Padded so that the data's end, `~>`, stays on one line.
+            let mut document = document.to_string();
+            while crate::import::tests_native::native_with_text("", &document).contains("\n%>\n") {
+                document.push('\n');
+            }
+            let t = Texts::read(crate::import::tests_native::native_with_text("", &document).as_bytes())?;
+            let fonts = t.fonts.iter().map(|f| (f.name.clone(), f.version.clone())).collect();
+            Some((t.stories, t.defaults, t.para_defaults, t.frames, t.char_sheets, t.para_sheets, t.kinsoku_sets, fonts))
+        };
+        let plain = crate::import::tests_native::text_document(&[
+            ("First story", 0, (10.0, 20.0), (1.0, 2.0), 0.0),
+            ("Second, longer story", 2, (30.0, 40.0), (3.0, 4.0), 5.0),
+            ("Third", 1, (50.0, 60.0), (5.0, 6.0), 0.0),
+        ]);
+        let full = plain
+            .replacen(
+                "/8 << /0 [",
+                "/4 << /0 [ << /0 << /0 (PhotoshopKinsokuHard) >> >> << /0 << /0 (Own) >> >> ] >> \
+                 /5 << /0 [ << /0 << /0 (Normal) /6 << /1 9.0 >> >> >> << /1 0 >> ] >> \
+                 /6 << /0 [ << /0 << /0 (Body) /5 << /0 2 >> >> >> ] >> /8 << /0 [",
+                1,
+            )
+            .replacen("/2 << /1 12.0 >>", "/2 << /1 12.0 /0 1 >> /3 << /0 2 /33 1 >>", 1);
+        let cases = [
+            ("every part", full.clone(), true),
+            ("no paragraph defaults", plain.clone(), true),
+            ("stories that aren't a list", full.replacen("\n/1 << /1 [", "\n/1 << /1 5 /7 [", 1), true),
+            ("frames that aren't a list", full.replacen("/8 << /0 [", "/8 << /0 5 /7 [", 1), true),
+            ("no defaults", full.replacen("/2 << /1 12.0 /0 1 >>", "", 1), false),
+            ("no frames", full.replacen("/8 << /0 [", "/9 << /0 [", 1), false),
+            ("no stories", full.replacen("\n/1 << /1 [", "\n/1 << /7 [", 1), false),
+            ("no fonts", full.replacen("/0 << /1 << /0 [", "/0 << /1 << /7 [", 1), false),
+        ];
+        for (case, document, reads) in cases {
+            assert!(case == "every part" || document != full, "{case} changes the document");
+            let want = copied(&document);
+            assert_eq!(want.is_some(), reads, "{case}");
+            assert_eq!(read_parts(&document), want, "{case}");
+        }
+        let Some((stories, defaults, para_defaults, frames, char_sheets, para_sheets, kinsoku, fonts)) = read_parts(&full) else { panic!("read") };
+        assert_eq!((stories.len(), frames.len(), char_sheets.len(), para_sheets.len(), fonts.len()), (3, 3, 2, 1, 1));
+        assert_eq!(kinsoku, [Some(Kinsoku::Hard), None]);
+        assert!(defaults.get("0").is_some() && para_defaults.get("33").is_some());
     }
 }

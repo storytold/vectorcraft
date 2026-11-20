@@ -28,16 +28,12 @@ const ADAM7: [(u32, u32, u32, u32); 7] = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 
 
 /// Pixels per metre for a resolution in pixels per inch (the unit `pHYs` stores).
 pub fn pixels_per_metre(ppi: f64) -> u32 {
-    (ppi / 0.0254).round().clamp(1.0, u32::MAX as f64) as u32
+    vectorcraft_doc::ppi::pixels_per_metre(ppi)
 }
 
 /// A whole `pHYs` chunk (length, type, data, CRC) declaring `x` × `y` pixels per inch.
 pub fn phys_chunk(x: f64, y: f64) -> Vec<u8> {
-    let [x, y] = [x, y].map(|v| pixels_per_metre(v).to_be_bytes());
-    let mut out = Vec::with_capacity(21);
-    // x, y, unit 1 = metre.
-    chunk(&mut out, b"pHYs", &[x.as_slice(), y.as_slice(), &[1]].concat());
-    out
+    vectorcraft_doc::ppi::phys_chunk(x, y)
 }
 
 /// Encode straight-alpha RGBA8 pixels (`width`×`height`, row-major) as a PNG file.

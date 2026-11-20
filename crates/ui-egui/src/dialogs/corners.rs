@@ -105,7 +105,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("radius".into(), json!(n));
             }
         } else {
-            form::length(ui, d, "radius", unit, 120.0);
+            form::length_within(ui, d, "radius", unit, 120.0, Some(0.0..=f64::INFINITY));
         }
         ui.end_row();
     });

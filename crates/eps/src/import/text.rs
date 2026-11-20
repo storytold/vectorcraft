@@ -251,6 +251,15 @@ impl Interp<'_> {
                     self.g.font = root;
                     return r;
                 }
+                // In a composite font the file carries, once for each character it maps.
+                if let Some(glyphs) = self.composite_glyphs(&s)? {
+                    let root = self.g.font.clone();
+                    let before = self.cshow.take();
+                    let r = self.composite_cshow(&glyphs, &proc, root.clone());
+                    self.cshow = before;
+                    self.g.font = root;
+                    return r;
+                }
                 for b in s {
                     let v = self.width_of(&[b])?;
                     self.push(Obj::Int(i64::from(b)))?;
@@ -509,9 +518,11 @@ impl Interp<'_> {
     /// Font name `name` as a CIDFont's name and the name of a predefined CMap other than a Unicode
     /// CMap ([`super::predefined_cmap::composite_font`]), unless an installed face has the whole
     /// name. A name that ends in the row-and-cell CMap `H` or `V` splits only when the part before
-    /// it names a CIDFont the file defines, or has a hyphen and names an installed face that covers
-    /// Japanese; otherwise it stays a font of the whole name (`Futura-H`, `Foo-Bold-H`), its
-    /// strings read byte by byte.
+    /// it names a CIDFont the file defines, one of the Japanese CIDFonts a printer carries
+    /// (`Ryumin-Light`, `GothicBBB-Medium`: Adobe Technical Note #5014, appendix A.2,
+    /// <https://adobe-type-tools.github.io/font-tech-notes/pdfs/5014.CIDFont_Spec.pdf>), or has a
+    /// hyphen and names an installed face that covers Japanese; otherwise it stays a font of the
+    /// whole name (`Futura-H`, `Foo-Bold-H`), its strings read byte by byte.
     fn predefined_split<'a>(&mut self, name: &'a str) -> Option<(&'a str, &'a str)> {
         let (cid_font, cmap) = super::predefined_cmap::composite_font(name)?;
         let db = vectorcraft_text::FontDb::global();
@@ -525,7 +536,8 @@ impl Interp<'_> {
             let defined = self.instances(&Obj::name("CIDFont")).is_ok_and(|d| d.borrow().contains_key(&key)) || cid_font_in(&self.fonts);
             // 日 is in the row-and-cell CMaps' character set (JIS X 0208).
             let installed = || db.find_postscript(cid_font).is_some_and(|face| face.covers('日'));
-            if !(defined || (cid_font.contains('-') && installed())) {
+            let printer = matches!(cid_font, "Ryumin-Light" | "GothicBBB-Medium");
+            if !(defined || printer || (cid_font.contains('-') && installed())) {
                 return None;
             }
         }
@@ -989,6 +1001,7 @@ impl Spacing {
 /// A character of a composite font: the descendant font that draws it, its code there (its last
 /// byte for a CID), its CID and the notdef mapping's (`FMapType` 9), the composite font's matrix
 /// (over the descendant's own) and whether it is set vertically (`WMode` 1).
+#[derive(Clone)]
 struct Mapped {
     font: DictRef,
     /// The byte that picked the descendant (the font number).
@@ -999,6 +1012,15 @@ struct Mapped {
     cid: Option<(u32, Option<u32>)>,
     outer: Affine,
     vertical: bool,
+    /// The value of the character's code in the shown string (what `kshow` gives its procedure).
+    value: u32,
+}
+
+impl Mapped {
+    /// The last byte of the character's code in the shown string (what `cshow` gives its procedure).
+    fn last(&self) -> u8 {
+        (self.value & 0xff) as u8
+    }
 }
 
 /// Type in a CIDFont only named, over a predefined CMap ([`Interp::named_cid_type`]): its codes
@@ -1011,13 +1033,15 @@ struct NamedCid {
     ems: bool,
 }
 
-/// A `cshow` procedure running over type in a CIDFont only named ([`Interp::named_cshow`]): the
-/// CIDFont it sees as current, the composite font `rootfont` gives while that CIDFont is current,
-/// and the type of the code it was given.
+/// A `cshow` procedure running over a composite font's type ([`Interp::named_cshow`],
+/// [`Interp::composite_cshow`]): the descendant it sees as current, the composite font `rootfont`
+/// gives while that descendant is current, and the code it was given: over a CIDFont only named,
+/// its type; over a composite font the file carries, the character it maps to.
 pub(super) struct CShowFont {
     selected: DictRef,
     root: DictRef,
-    code: NamedCid,
+    code: Option<NamedCid>,
+    mapped: Option<Mapped>,
 }
 
 /// What drawing a glyph does with it.
@@ -1064,6 +1088,22 @@ impl Interp<'_> {
     /// codes mapped to a descendant and a CID, §5.11.5); `None` for other fonts and mappings,
     /// which are set as type in the font of the composite font's name.
     fn composite_glyphs(&mut self, s: &[u8]) -> Res<Option<Vec<Mapped>>> {
+        // Inside a `cshow` procedure over a composite font the file carries, with the descendant
+        // it selected current, the one byte the procedure was given stands for the character its
+        // code maps to: a CMap's CID, base-font code or glyph name. In a CIDFont any other string
+        // is a `rangecheck` error (PLRM 3rd ed., `cshow`: the glyph of the selected CID); in a
+        // base font it is shown as it is.
+        if let Some(c) = self.cshow.as_ref()
+            && let Some(mapped) = c.mapped.as_ref()
+            && self.g.font.as_ref().is_some_and(|f| f.same(&c.selected))
+        {
+            if s == [mapped.last()] {
+                return Ok(Some(vec![mapped.clone()]));
+            }
+            if mapped.cid.is_some() {
+                return ps_err("rangecheck", "a string shown in cshow");
+            }
+        }
         let Some(font) = self.g.font.clone() else { return Ok(None) };
         let map = {
             let f = font.borrow();
@@ -1097,7 +1137,8 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), pick, code, name: None, cid: None, outer, vertical: false });
+                let value = u32::from(pick) * 256 + u32::from(code);
+                out.push(Mapped { font: d.clone(), pick, code, name: None, cid: None, outer, vertical: false, value });
             }
         }
         Ok(Some(out))
@@ -1124,21 +1165,28 @@ impl Interp<'_> {
             .filter_map(|c| match (fonts.get(c.font), c.base) {
                 // A base font's code, or its glyph name (at the code its encoding gives it, if any).
                 (Some(Obj::Dict(d)), Some(Base::Code(code))) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code, name: None, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code, name: None, cid: None, outer, vertical, value: c.value })
                 }
                 (Some(Obj::Dict(d)), Some(Base::Name(name))) => {
                     let code = encoded(&d.borrow(), &name);
                     let name = code.is_none().then_some(name);
-                    Some(Mapped { font: d.clone(), pick: 0, code: code.unwrap_or(0), name, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code: code.unwrap_or(0), name, cid: None, outer, vertical, value: c.value })
                 }
                 // A code without a mapping in a base font (not a CIDFont): its code 0, the
                 // `.notdef` glyph CID 0 stands for in a CIDFont.
                 (Some(Obj::Dict(d)), None) if !d.borrow().contains_key(&Key::name("CIDFontType")) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code: 0, name: None, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code: 0, name: None, cid: None, outer, vertical, value: c.value })
                 }
-                (Some(Obj::Dict(d)), None) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code: (c.cid & 0xff) as u8, name: None, cid: Some((c.cid, c.notdef)), outer, vertical })
-                }
+                (Some(Obj::Dict(d)), None) => Some(Mapped {
+                    font: d.clone(),
+                    pick: 0,
+                    code: (c.cid & 0xff) as u8,
+                    name: None,
+                    cid: Some((c.cid, c.notdef)),
+                    outer,
+                    vertical,
+                    value: c.value,
+                }),
                 _ => None,
             })
             .collect())
@@ -1207,17 +1255,18 @@ impl Interp<'_> {
     /// that code when `code` and with none otherwise, while the CIDFont it selected is current.
     fn cshow_code(&self, code: bool) -> Option<NamedCid> {
         let c = self.cshow.as_ref()?;
+        let given = c.code.as_ref()?;
         if !self.g.font.as_ref().is_some_and(|f| f.same(&c.selected)) {
             return None;
         }
         let mut codes = Decoded::default();
         if code {
-            let mut chars = c.code.codes.text.chars();
-            for &(value, n) in &c.code.codes.codes {
+            let mut chars = given.codes.text.chars();
+            for &(value, n) in &given.codes.codes {
                 codes.push(value, chars.by_ref().take(n));
             }
         }
-        Some(NamedCid { codes, font: c.code.font.clone(), vertical: c.code.vertical, ems: c.code.ems })
+        Some(NamedCid { codes, font: given.font.clone(), vertical: given.vertical, ems: given.ems })
     }
 
     /// The CMap's name, the composite font, the CIDFont's name and the writing mode of
@@ -1305,8 +1354,43 @@ impl Interp<'_> {
             self.push(Obj::Int(i64::from(code & 0xff)))?;
             self.push_num(v.x)?;
             self.push_num(v.y)?;
-            self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: one });
+            self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: Some(one), mapped: None });
             self.g.font = Some(selected.clone());
+            let go = self.body(proc);
+            self.g.font = root.clone();
+            if !go? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// `cshow`'s procedure `proc` run for each character `glyphs` of composite font `root` maps,
+    /// with the last byte of its code and its width (PLRM 3rd ed., `cshow`). While it runs the
+    /// descendant that draws the character, at the size the composite font sets it, is the current
+    /// font and `rootfont` gives `root`. The current font is restored when the procedure completes.
+    fn composite_cshow(&mut self, glyphs: &[Mapped], proc: &Obj, root: Option<DictRef>) -> Res {
+        let Some(composite) = root.clone() else { return Ok(()) };
+        for g in glyphs {
+            let v = self.composite_glyph(g, Point::ZERO, Draw::No)?;
+            self.push(Obj::Int(i64::from(g.last())))?;
+            self.push_num(v.x)?;
+            self.push_num(v.y)?;
+            // Scaling the descendant copies its dictionary for every character: charged by its
+            // size, so a huge font dictionary in a loop runs out of the budget.
+            let entries = g.font.borrow().len();
+            self.spend(entries as u64)?;
+            // Without a matrix, a Type 42 font or a Type 2 CIDFont is in ems, as `composite_glyph`
+            // and `cid_glyph_at` draw it.
+            let selected = {
+                let f = g.font.borrow();
+                let default = if units(&f) == 1.0 { 1.0 } else { 0.001 };
+                let mut d = f.clone();
+                d.insert(Key::name("FontMatrix"), matrix_obj(g.outer * font_matrix(&f, default)));
+                DictRef::new(d)
+            };
+            self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: None, mapped: Some(g.clone()) });
+            self.g.font = Some(selected);
             let go = self.body(proc);
             self.g.font = root.clone();
             if !go? {
@@ -1346,6 +1430,12 @@ impl Interp<'_> {
     fn show_composite(&mut self, glyphs: &[Mapped], spacing: &Spacing) -> Res {
         let start = self.out.drawn.len();
         let mut text = String::new();
+        let kern: Vec<u32> = match spacing {
+            Spacing::Kern(_) => glyphs.iter().map(|g| g.value).collect(),
+            _ => Vec::new(),
+        };
+        // Where in the objects drawn each run of `kshow`'s procedure put its art.
+        let mut kerned = Vec::new();
         for (i, g) in glyphs.iter().enumerate() {
             let at = self.user_point()?;
             let w = self.composite_glyph(g, at, Draw::Fill)?;
@@ -1353,6 +1443,12 @@ impl Interp<'_> {
             // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
             let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
+            // `kshow`'s procedure runs between each two characters with the values of their codes.
+            let before = self.out.drawn.len();
+            self.kern(spacing, &kern, i, at + d)?;
+            if self.out.drawn.len() > before {
+                kerned.push(before..self.out.drawn.len());
+            }
             // A CID stands for no character (its code is only the CID's low byte).
             let c = if g.cid.is_some() { '\u{2022}' } else { g.name.as_deref().map_or_else(|| code_char(&g.font.borrow(), g.code), glyph_char) };
             if c != '\u{2022}' {
@@ -1364,7 +1460,13 @@ impl Interp<'_> {
         {
             text = name.to_string();
         }
+        // What `kshow`'s procedure draws goes after the type, outside its group.
+        let mut art = Vec::new();
+        for run in kerned.into_iter().rev() {
+            art.splice(0..0, self.out.drawn.drain(run));
+        }
         self.group_glyphs(start, &text);
+        self.out.drawn.extend(art);
         Ok(())
     }
 

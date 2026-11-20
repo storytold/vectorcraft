@@ -1,7 +1,7 @@
 //! Synthetic XML 1.0/SVG round trips: https://www.w3.org/TR/xml/#AVNormalize
 //! https://www.w3.org/TR/xml/#NT-NameChar https://www.w3.org/TR/xml/#charsets
+use craft_svg::tree::usvg::roxmltree;
 use std::collections::HashSet;
-use usvg::roxmltree;
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_svg::{Encoding, ExportOptions, ObjectIds, Output, Styling, export, export_full, import};
 

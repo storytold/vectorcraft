@@ -5,7 +5,8 @@
 //!
 //! Fields: `conflicts` (as `clipboard.conflicts` lists them: `[{name, document, clipboard, spot}]`),
 //! `index` (the one asked about), `choice` (`merge` or `add`), `applyToAll`, `choices` (the
-//! answers so far, by swatch name), `__command` and `__params` (the paste to run).
+//! answers so far, by swatch name), `__command` and `__params` (the paste to run), and `__doc`
+//! (the uid of the document it asks about).
 
 use egui::vec2;
 use serde_json::{Map, Value, json};
@@ -35,11 +36,10 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     if params.get("swatchConflict").is_some() {
         return None;
     }
-    let found = app.session.execute("clipboard.conflicts", &json!({})).ok()?;
-    let conflicts = found["swatches"].as_array().filter(|a| !a.is_empty())?.clone();
+    let conflicts = found(app, params).filter(|a| !a.is_empty())?;
     let fields = json!({
         "conflicts": conflicts, "index": 0, "choice": "merge", "applyToAll": false, "choices": {},
-        "__command": command, "__params": params,
+        "__command": command, "__params": params, DOC: app.session.active().map(|doc| doc.uid),
     });
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
         crate::placing::cancel_swatch_paste(app);
@@ -47,6 +47,9 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Some(Ok(json!({ "dialog": KIND })))
 }
+
+/// The field that holds the uid of the document the question is about.
+const DOC: &str = "__doc";
 
 fn conflicts(d: &Dialog) -> &[Value] {
     d.fields.get("conflicts").and_then(Value::as_array).map_or(&[], Vec::as_slice)
@@ -102,8 +105,14 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// Record the answer; ask about the next conflict, or paste once every one is answered.
+/// Record the answer; ask about the next conflict, or paste once every one is answered. When
+/// another document has become the active one since an immediate paste asked, it closes as Cancel
+/// does and pastes nothing (a deferred paste goes back to its own document).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
+    if d.fields.get("__deferredPaste").is_none() && d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|doc| doc.uid) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let choice = d.str("choice");
     if !matches!(choice.as_str(), "merge" | "add") {
         return Err(format!("choice must be \"merge\" or \"add\", not `{choice}`"));
@@ -127,6 +136,23 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     }
     let mut params = d.fields.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
     params["swatchConflict"] = Value::Object(choices);
+    // When the conflicts the paste raises have changed meanwhile (another profile converts the
+    // pasted swatches), it asks again about them instead.
+    let asked = list.to_vec();
     app.ui.dialog = None;
-    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, d.fields.get("__deferredPaste").and_then(Value::as_u64))
+    let changed = |app: &mut VectorcraftApp, _: &str, params: &Value| found(app, params).is_some_and(|now| now != asked);
+    let recheck = crate::placing::Recheck { key: "swatchConflict", changed: &changed };
+    let deferred = d.fields.get("__deferredPaste").and_then(Value::as_u64);
+    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, deferred, Some(&recheck))
+}
+
+/// The swatch conflicts pasting with `params` raises (`clipboard.conflicts`), with the swatches as
+/// the paste brings them: converted from another profile when it converts.
+fn found(app: &mut VectorcraftApp, params: &Value) -> Option<Vec<Value>> {
+    let mut q = json!({});
+    if let Some(m) = params.get("profileMismatch") {
+        q["profileMismatch"] = m.clone();
+    }
+    let found = app.session.execute("clipboard.conflicts", &q).ok()?;
+    found["swatches"].as_array().cloned()
 }

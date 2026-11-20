@@ -127,6 +127,32 @@ fn options_keep_the_brackets() {
     }
 }
 
+/// `start` below 0 starts type on an open path before the path's start, one undo step; on a closed
+/// path it is the path's start, and a start that is not a number is an error.
+#[test]
+fn options_start_type_before_an_open_path() {
+    let mut s = session();
+    let id = on_line(&mut s);
+    let n = undo_len(&s);
+    let r = s.execute("type.pathOptions", &json!({"start": -0.25})).unwrap();
+    assert_eq!(brackets(&s, id), (-0.25, None));
+    assert!(near(r["start"].as_f64().unwrap(), -0.25), "{r}");
+    assert_eq!(undo_len(&s), n + 1);
+    // The same start again records nothing.
+    s.execute("type.pathOptions", &json!({"start": -0.25})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    // 100 pt before a 400 pt line: the 12 pt word is drawn nowhere.
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, id));
+    assert!(!laid.glyphs.is_empty() && laid.glyphs.iter().all(|g| g.outline.elements().is_empty()));
+    assert!(s.execute("type.pathOptions", &json!({"start": "-0.5"})).is_err());
+    // A flip keeps the stretch from the path's start: the type then starts at the start bracket.
+    s.execute("type.pathOptions", &json!({"flip": true})).unwrap();
+    assert_eq!(brackets(&s, id), (0.0, None));
+    let ring = path_type(&mut s, "M100 100 L300 100 L300 300 L100 300 Z", [200.0, 90.0], "Ring");
+    s.execute("type.pathOptions", &json!({"ids": [ring.0], "start": -0.25})).unwrap();
+    assert_eq!(brackets(&s, ring).0, 0.0);
+}
+
 /// Type on a Path Options given the values the type has (OK in the dialog with nothing changed, the
 /// effect it has from the Type on a Path menu, the end bracket at the end of the path, or the
 /// query's own reply) records no undo step: the step to redo stays and the document stays

@@ -19,8 +19,15 @@ pub const ON_ACTIVE_ARTBOARD: [&str; 8] = [
 /// The commands that resize the artboards the app passes (Object › Artboards): the app passes the
 /// selected artboards to Fit to Artwork Bounds as its `indices`, and the active artboard to Fit to
 /// Selected Art as its `index`. A `command.batch` given `artboard` passes it on, as `index`, to
-/// each of their steps that names none.
+/// each of their steps that names none; a Fit to Artwork Bounds step that names neither `index` nor
+/// `indices`, while the Artboard tool is chosen with several artboards selected, gets those as its
+/// `indices` instead.
 pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitToSelection"];
+
+/// The commands that the Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment
+/// tools and their dialogs, and the Shaper tool for a shape it recognizes, run to draw a shape
+/// ([`crate::Session::take_shape_drawn`]).
+pub const DRAWS_SHAPE: [&str; 5] = ["shape.rectangle", "shape.ellipse", "shape.polygon", "shape.star", "shape.line"];
 
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
@@ -98,6 +105,7 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "symbol.selectInstances",
     "view.guides.lock",
     "view.proofSetup",
+    "view.proofSetup.load",
     "view.proofColors",
     "view.overprintPreview",
     "view.separationsPreview",
@@ -161,6 +169,11 @@ pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
     "object.shear",
     "object.ungroup",
 ];
+
+/// Commands whose `ids` (or `id`) may name ruler guide nodes as well as objects: the Layers panel's
+/// eye and lock on a guide's row, and a drag down either column that passes guide rows. Every other
+/// command given a ruler guide's id refuses it (the guide commands take guides by index).
+pub(crate) const TAKES_GUIDE_IDS: &[&str] = &["layer.setProps"];
 
 /// The non-empty `ids` given to a command whose params description names `ids` as a key (the
 /// key callers outside the app may pass it, [`cmd::params::takes_key`]), or its `id` as `ids` of

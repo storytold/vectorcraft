@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi, transparency: {gridSize: small|medium|large, gridColors: [#rrggbb, #rrggbb], gridColorsName (a preset's name or Custom), simulatePaper, flattenerPreset} (File › Document Setup's transparency settings, which the document category lists), selectedArtboards: [{index, name, width, height, x, y}] (while the Artboard tool is the current tool, the artboards it has selected, in the document's units, x and y those of the top-left corner from the ruler origin of its active artboard, which the document category lists after the artboards; else empty)}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontUses: [{font, type: truetype|opentype|unknown, uses}] (each font of fonts, in order: truetype or opentype by the outlines (glyf, or CFF or CFF2) of the face its type is drawn in, unknown for a font not installed in the family and style it names; uses: the text objects set in it, each once however many of its runs use the font, the type in a mask or in a symbol's or pattern's art once however many objects show it; the fonts category's rows give them as `TrueType; 2 uses`), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -52,7 +52,7 @@ pub const CATEGORIES: [(&str, &str); 13] = [
 ];
 
 /// The object counts of `document.info` and their labels.
-const OBJECT_LABELS: [(&str, &str); 19] = [
+pub const OBJECT_LABELS: [(&str, &str); 19] = [
     ("paths", "Paths"),
     ("compoundPaths", "Compound Paths"),
     ("groups", "Groups"),
@@ -85,14 +85,101 @@ pub struct Section {
 /// What a font's `fsType` lets a copy of it do, read as exports read it ([`Embedding`]): the
 /// most permissive usage bit wins, and bitmap-only fonts may not be embedded.
 pub fn embedding_label(fs_type: u16) -> &'static str {
+    match embedding_id(fs_type) {
+        "forbidden" => "embedding not allowed",
+        "editing" => "embedding for editing",
+        "previewPrint" => "embedding for preview and print",
+        _ => "embedding allowed",
+    }
+}
+
+/// [`embedding_label`] as the `embedding` value of a `fontDetails` entry: `forbidden`, `editing`,
+/// `previewPrint` or `allowed`.
+pub fn embedding_id(fs_type: u16) -> &'static str {
     if Embedding::from_fs_type(fs_type) == Embedding::Forbidden {
-        "embedding not allowed"
+        "forbidden"
     } else if fs_type & 0x0008 != 0 {
-        "embedding for editing"
+        "editing"
     } else if fs_type & 0x0004 != 0 {
-        "embedding for preview and print"
+        "previewPrint"
     } else {
-        "embedding allowed"
+        "allowed"
+    }
+}
+
+/// A font as Font Details lists it: its `fontDetails` entry and its row. The row gives the file
+/// the font is drawn from (`built in` for a face with no file) and whether its license lets it be
+/// embedded; for a style the family lacks, the face shown in its place; for a font that is not
+/// installed, the face shown instead, or `missing`. The entry holds the same facts as values
+/// (`match`: `exact`, `style`, `missingWithFallback` or `missing`), so the panel can show them in
+/// the interface language.
+fn font_detail(used: &super::fonts::UsedFont) -> (Value, (String, String)) {
+    let db = vectorcraft_text::FontDb::global();
+    let (family, style, version) = used;
+    let label = super::fonts::font_label(used);
+    // Found by any of its names (in the version the type names); a style the family lacks shows in
+    // another.
+    let resolved = db.resolve(family, style).map(|(f, m)| (db.face_version(family, style, version.as_deref()).unwrap_or(f), m));
+    let (entry, detail) = match resolved {
+        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => {
+            let file = f.path().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
+            let found = format!("{}; {}", file.as_deref().unwrap_or("built in"), embedding_label(f.fs_type()));
+            let substituted = m == vectorcraft_text::FontMatch::Style;
+            let entry = json!({
+                "font": label,
+                "match": if substituted { "style" } else { "exact" },
+                "family": f.family,
+                "style": f.style,
+                "file": file,
+                "embedding": embedding_id(f.fs_type()),
+            });
+            (entry, if substituted { format!("substituted: shown in {} {} ({found})", f.family, f.style) } else { found })
+        }
+        Some((f, _)) => (
+            json!({ "font": label, "match": "missingWithFallback", "family": f.family, "style": f.style, "file": null, "embedding": null }),
+            format!("missing: shown in {} {}", f.family, f.style),
+        ),
+        None => (json!({ "font": label, "match": "missing", "family": null, "style": null, "file": null, "embedding": null }), "missing".into()),
+    };
+    (entry, (label, detail))
+}
+
+/// The type of a font as Fonts lists it: `truetype` or `opentype` by the outlines of the face the
+/// type is drawn in (in the version the type names), `unknown` for a font that is not installed in
+/// the family and style it names, or whose face holds neither kind of outline.
+fn font_type(used: &super::fonts::UsedFont) -> &'static str {
+    let db = vectorcraft_text::FontDb::global();
+    let (family, style, version) = used;
+    match db.resolve(family, style) {
+        Some((f, vectorcraft_text::FontMatch::Exact)) => match db.face_version(family, style, version.as_deref()).unwrap_or(f).outline_format() {
+            Some(vectorcraft_text::OutlineFormat::TrueType) => "truetype",
+            Some(vectorcraft_text::OutlineFormat::Cff) => "opentype",
+            None => "unknown",
+        },
+        _ => "unknown",
+    }
+}
+
+/// A font as Fonts lists it: its `fontUses` entry and its row, which gives the font's type and its
+/// number of uses (`uses`: the text objects set in it).
+fn font_use(used: &super::fonts::UsedFont, uses: usize) -> (Value, (String, String)) {
+    let label = super::fonts::font_label(used);
+    let kind = font_type(used);
+    let name = match kind {
+        "truetype" => "TrueType",
+        "opentype" => "OpenType",
+        _ => "unknown type",
+    };
+    let count = if uses == 1 { "1 use".to_string() } else { format!("{uses} uses") };
+    (json!({ "font": label, "type": kind, "uses": uses }), (label, format!("{name}; {count}")))
+}
+
+/// Counts text object `t` once for each font its runs are drawn in, a composite font's parts in
+/// place of its name ([`super::fonts::run_fonts`]).
+fn count_fonts(fonts: &mut BTreeMap<super::fonts::UsedFont, usize>, t: &vectorcraft_doc::TextObject) {
+    let own: BTreeSet<super::fonts::UsedFont> = t.runs.iter().flat_map(super::fonts::run_fonts).collect();
+    for font in own {
+        *fonts.entry(font).or_default() += 1;
     }
 }
 
@@ -130,15 +217,60 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
     (entry, (name, format!("{}, {detail}", kind.label())))
 }
 
+/// The artboards the Artboard tool has selected while it is the current tool, in artboard order,
+/// with the index of its active artboard; none with another tool or when it has none of the
+/// document's artboards selected. Indices the document does not have are left out.
+fn artboard_tool_selection(s: &Session) -> Option<(Vec<usize>, usize)> {
+    if s.tool_id() != "artboard" {
+        return None;
+    }
+    let n = s.active().map_or(0, |d| d.doc.artboards.len());
+    let t = s.tool_options_of("artboard");
+    let index = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
+    let mut picked: Vec<usize> = t["selected"].as_array().into_iter().flatten().filter_map(index).collect();
+    picked.sort_unstable();
+    picked.dedup();
+    let first = *picked.first()?;
+    let active = index(&t["active"]).filter(|a| picked.contains(a)).unwrap_or(first);
+    Some((picked, active))
+}
+
+/// The artboards `picked` as Document Info › Document lists them while the Artboard tool is the
+/// current tool: their `selectedArtboards` entries (in the document's units), and for each its
+/// rows: its name, width, height and the X and Y of its top-left corner from the ruler origin of
+/// artboard `active`.
+fn selected_artboard_rows(d: &Document, picked: &[usize], active: usize) -> (Vec<Value>, Vec<(String, String)>) {
+    let (u, per) = (d.units, d.units.points());
+    let origin = d.ruler_origin_for(active);
+    let mut entries = vec![];
+    let mut rows = vec![];
+    for &i in picked {
+        let Some(a) = d.artboards.get(i) else { continue };
+        let (w, h, x, y) = (a.rect.width(), a.rect.height(), a.rect.x0 - origin.x, a.rect.y0 - origin.y);
+        entries.push(json!({ "index": i, "name": a.name, "width": w / per, "height": h / per, "x": x / per, "y": y / per }));
+        rows.extend([
+            ("Artboard".to_string(), a.name.clone()),
+            ("Width".into(), u.format(w)),
+            ("Height".into(), u.format(h)),
+            ("X".into(), u.format(x)),
+            ("Y".into(), u.format(y)),
+        ]);
+    }
+    (entries, rows)
+}
+
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts, its image objects, the rows of the brushes its art uses, the
-/// rows of its Repeat objects and the rows of its objects filled or stroked with a spot color, with a
-/// pattern and with a gradient.
+/// `document.info` reports), the rows of the artboards the Artboard tool has selected, the rows of
+/// its fonts and their Font Details rows, its image objects, the rows of the brushes its art uses,
+/// the rows of its Repeat objects and the rows of its objects filled or stroked with a spot color,
+/// with a pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
-    fonts: &BTreeSet<super::fonts::UsedFont>,
+    selected_artboards: &[(String, String)],
+    fonts: &[(String, String)],
+    font_details: &[(String, String)],
     images: &[ImageRow],
     brushes: &[(String, String)],
     repeats: &[(String, String)],
@@ -166,7 +298,19 @@ fn sections(
                     rows.extend(
                         d.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", u.format(a.rect.width()), u.format(a.rect.height())))),
                     );
+                    rows.extend(selected_artboards.iter().cloned());
                     rows.push(("Raster Effects".into(), format!("{} ppi", d.raster_effects_ppi)));
+                    let setup = &d.setup;
+                    let colors = match setup.grid_colors_name() {
+                        "Custom" => setup.grid_colors.map(|c| c.to_hex()).join(", "),
+                        name => name.to_string(),
+                    };
+                    rows.extend([
+                        ("Grid Size".to_string(), setup.grid_size.label().to_string()),
+                        ("Grid Colors".into(), colors),
+                        ("Simulate Colored Paper".into(), if setup.simulate_paper { "On" } else { "Off" }.into()),
+                        ("Flattener Preset".into(), setup.flattener().to_string()),
+                    ]);
                     let counts = [
                         ("Swatches", "swatches"),
                         ("Character Styles", "characterStyles"),
@@ -191,35 +335,8 @@ fn sections(
                 "patterns" => pattern_objects.to_vec(),
                 "gradients" => gradient_objects.to_vec(),
                 "symbols" => names("symbols"),
-                "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
-                "fontDetails" => {
-                    let db = vectorcraft_text::FontDb::global();
-                    fonts
-                        .iter()
-                        .map(|used| {
-                            let (family, style, version) = used;
-                            // Found by any of its names (in the version the type names); a style the
-                            // family lacks shows in another.
-                            let resolved =
-                                db.resolve(family, style).map(|(f, m)| (db.face_version(family, style, version.as_deref()).unwrap_or(f), m));
-                            let detail = match resolved {
-                                Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => {
-                                    let file =
-                                        f.path().and_then(|p| p.file_name()).map_or_else(|| "built in".into(), |n| n.to_string_lossy().into_owned());
-                                    let found = format!("{file}; {}", embedding_label(f.fs_type()));
-                                    if m == vectorcraft_text::FontMatch::Style {
-                                        format!("substituted: shown in {} {} ({found})", f.family, f.style)
-                                    } else {
-                                        found
-                                    }
-                                }
-                                Some((f, _)) => format!("missing: shown in {} {}", f.family, f.style),
-                                None => "missing".into(),
-                            };
-                            (super::fonts::font_label(used), detail)
-                        })
-                        .collect()
-                }
+                "fonts" => fonts.to_vec(),
+                "fontDetails" => font_details.to_vec(),
                 "linkedImages" => {
                     images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
                 }
@@ -277,6 +394,39 @@ fn gradient_label(p: &Paint) -> Option<String> {
     }
 }
 
+/// Where [`gradient_label`]'s name for gradient paint `p` comes from: `swatch:<name>` for a
+/// gradient linked to a swatch, else `kind:<kind>` (`linear`, `radial`, `conic`, `diamond` or
+/// `freeform`). The two prefixes keep a swatch's name apart from a kind's name it reads like.
+fn gradient_source(p: &Paint) -> Option<String> {
+    match p {
+        Paint::Gradient(g) => Some(match g.swatch.as_deref().filter(|s| !s.is_empty()) {
+            Some(swatch) => format!("swatch:{swatch}"),
+            None => format!("kind:{}", g.gradient.kind.label().to_ascii_lowercase()),
+        }),
+        _ => None,
+    }
+}
+
+/// For each of `names` (an object's [`gradient_label`]s), the kind it names when only a kind
+/// gives that name: a name one of `sources` (the object's [`gradient_source`]s) gives as a kind's
+/// and none gives as a swatch's, else null. A swatch named like a kind keeps its name even where
+/// a gradient of that kind is listed under the same name.
+fn gradient_kinds(names: &[String], sources: &[String]) -> Vec<Value> {
+    names
+        .iter()
+        .map(|name| {
+            if sources.iter().any(|s| s.strip_prefix("swatch:") == Some(name.as_str())) {
+                return Value::Null;
+            }
+            sources
+                .iter()
+                .filter_map(|s| s.strip_prefix("kind:"))
+                .find(|k| vectorcraft_color::GradientKind::parse(k).is_some_and(|kind| *name == format!("{} gradient", kind.label())))
+                .map_or(Value::Null, |k| json!(k))
+        })
+        .collect()
+}
+
 /// The names of `d`'s spot color swatches: the swatches whose prints go to a plate of their own
 /// ([`vectorcraft_doc::inks::inks`]). A name held by several swatches is the first one's, as
 /// [`Document::swatch`] finds it, and the Registration swatch prints on every plate, so it is not
@@ -290,9 +440,10 @@ fn spot_swatches(d: &Document) -> HashSet<&str> {
 }
 
 /// The spot colors paint `p` prints (`spots`: [`spot_swatches`]): the spot swatch a solid color is
-/// linked to, or those a gradient's stops are linked to, each once, in the order of the stops. A
-/// link at a tint of 0 prints no ink, a gradient whose stops are all at an opacity of 0 draws
-/// nothing, and a color that only looks like a spot color is not linked to one.
+/// linked to, or those a gradient's drawn stops ([`vectorcraft_color::Gradient::drawn_stops`]) are
+/// linked to, each once, in the order of the stops. A link at a tint of 0 prints no ink, a stop that colors only parts of a
+/// gradient at an opacity of 0 prints none, and a color that only looks like a spot color is not
+/// linked to one.
 fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     let mut add = |swatch: &Option<String>, tint: f32| {
@@ -306,7 +457,10 @@ fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     };
     match p {
         Paint::Solid { swatch, tint, .. } => add(swatch, *tint),
-        Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity > 0.0) => g.gradient.stops.iter().for_each(|s| add(&s.swatch, s.tint)),
+        Paint::Gradient(g) => {
+            let drawn = g.gradient.drawn_stops();
+            g.gradient.stops.iter().zip(drawn).filter(|&(_, d)| d).for_each(|(s, _)| add(&s.swatch, s.tint));
+        }
         _ => {}
     }
     out
@@ -425,6 +579,66 @@ fn applied_brushes(d: &Document, n: &Node, members: &HashSet<*const Node>) -> Ve
     if follows { used } else { vec![] }
 }
 
+/// Whether `n` draws, as far as its own state goes: a hidden object, and an object at an opacity
+/// of 0, paint no color, and neither do their members.
+fn draws(n: &Node) -> bool {
+    n.visible && n.opacity > 0.0
+}
+
+/// The object of `d` at index path `path`, with whether the groups and layers around it draw
+/// ([`draws`]).
+fn node_and_drawn<'a>(d: &'a Document, path: &[usize]) -> Option<(&'a Node, bool)> {
+    let (first, rest) = path.split_first()?;
+    let mut at: &Node = d.layers.get(*first)?;
+    let mut drawn = true;
+    for &i in rest {
+        drawn &= draws(at);
+        at = &**at.children()?.get(i)?;
+    }
+    Some((at, drawn))
+}
+
+/// The spot colors, the patterns and the gradients (`spots`: [`spot_swatches`]) that object `n`
+/// paints, each once: those of its own fills and strokes ([`own_paints`], `members` included), of
+/// its drawn characters and, for a grayscale or 1-bit image, of the color it is colorized with.
+/// The fourth list gives where each gradient comes from: a swatch or a kind ([`gradient_source`]).
+fn object_paints(d: &Document, spots: &HashSet<&str>, members: &HashSet<*const Node>, n: &Node) -> [Vec<String>; 4] {
+    let (spot, pattern, gradient) = (|p: &Paint| spot_labels(spots, p), one_label(pattern_label), one_label(gradient_label));
+    let gradient_from = one_label(gradient_source);
+    let labels: [&PaintNames<'_>; 4] = [&spot, &pattern, &gradient, &gradient_from];
+    let painted_runs = painted_runs(d, spots, n);
+    let mut used = labels.map(|label| own_paints(d, n, members, painted_runs.as_ref(), label));
+    // The characters' own paints: an inline graphic draws no outline and does not take its run's
+    // paint (a list marker set in its run does), and a stroke with no width paints nothing.
+    if let Some((t, painted)) = &painted_runs {
+        for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
+            let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
+            for paint in std::iter::once(&run.style.fill).chain(stroke) {
+                for (used, label) in used.iter_mut().zip(labels) {
+                    for name in label(paint) {
+                        if !used.contains(&name) {
+                            used.push(name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // A grayscale or 1-bit image colorized with a spot color prints it, while its pixels take the
+    // color, as the renderer draws it.
+    if let NodeKind::Image(im) = &n.kind
+        && let Some(colorize) = n.extras().colorize.as_deref()
+        && d.image_blob(im).is_some_and(|b| b.takes_colorize())
+    {
+        for name in spot(colorize) {
+            if !used[0].contains(&name) {
+                used[0].insert(0, name);
+            }
+        }
+    }
+    used
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -437,16 +651,23 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         Some("text") => true,
         Some(f) => return Err(bad(C, format!("format `{f}`: text or json"))),
     };
+    let artboard_tool = artboard_tool_selection(s);
     let st = s.doc()?;
     let d = &st.doc;
     let selection_only = bool_or(p, "selectionOnly", false);
-    let roots: Vec<&Node> =
-        if selection_only { st.selection.objects.iter().filter_map(|id| d.node(*id)).collect() } else { d.layers.iter().map(|l| &**l).collect() };
+    // Each root with whether the groups and layers around it draw: a selected object inside a hidden group or layer, or one
+    // at an opacity of 0, paints nothing.
+    let roots: Vec<(&Node, bool)> = if selection_only {
+        st.selection.objects.iter().filter_map(|id| node_and_drawn(d, &d.index_path(*id)?)).collect()
+    } else {
+        d.layers.iter().map(|l| (&**l, true)).collect()
+    };
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
     let mut path_length = 0.0;
-    let mut fonts = BTreeSet::new();
+    // Each font with the number of text objects set in it.
+    let mut fonts: BTreeMap<super::fonts::UsedFont, usize> = BTreeMap::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
     // Whether the request being served may read each linked file (a relative path read from the
@@ -467,7 +688,6 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut spot_objects: Vec<Value> = vec![];
     let mut spot_rows: Vec<(String, String)> = vec![];
     let mut spot = BTreeSet::new();
-    let (spot_label, pattern, gradient) = (|p: &Paint| spot_labels(&spot_swatches, p), one_label(pattern_label), one_label(gradient_label));
     let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
     // `library` holds the Brushes panel's brushes, and `brushes` the brushes the visited objects' strokes draw with, each once,
     // in walk order.
@@ -494,10 +714,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
         }
     });
-    for r in roots {
-        r.walk(&mut |n| {
+    // Depth first, in paint order, as `Node::walk` visits: each object with whether it and the groups and layers around it
+    // draw. An object that does not draw is still counted, and its members are visited.
+    let mut stack: Vec<(&Node, bool)> = vec![];
+    for (r, drawn) in roots {
+        stack.push((r, drawn));
+        while let Some((n, around)) = stack.pop() {
             if !seen.insert(std::ptr::from_ref(n)) {
-                return;
+                continue;
+            }
+            let drawn = around && draws(n);
+            if let Some(ch) = n.children() {
+                stack.extend(ch.iter().rev().map(|c| (&**c, drawn)));
             }
             let k = match &n.kind {
                 // The Guides row counts paths made into guides; ruler guides are not objects.
@@ -514,9 +742,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 NodeKind::Compound { .. } => Some("compoundPaths"),
                 NodeKind::Text(t) => {
-                    for run in &t.runs {
-                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
-                    }
+                    count_fonts(&mut fonts, t);
                     Some("textObjects")
                 }
                 NodeKind::Image(im) => {
@@ -545,42 +771,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
-            // The spot colors, the patterns and the gradients this object's fills and strokes paint, each once.
-            let painted_runs = painted_runs(d, &spot_swatches, n);
-            let mut used_spots = own_paints(d, n, &members, painted_runs.as_ref(), &spot_label);
-            let mut used_patterns = own_paints(d, n, &members, painted_runs.as_ref(), &pattern);
-            let mut used_gradients = own_paints(d, n, &members, painted_runs.as_ref(), &gradient);
-            // The characters' own paints: an inline graphic draws no outline and does not take its
-            // run's paint (a list marker set in its run does), and a stroke with no width paints
-            // nothing.
-            if let Some((t, painted)) = &painted_runs {
-                for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
-                    let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
-                    for paint in std::iter::once(&run.style.fill).chain(stroke) {
-                        let labels: [(&mut Vec<String>, &PaintNames<'_>); 3] =
-                            [(&mut used_spots, &spot_label), (&mut used_patterns, &pattern), (&mut used_gradients, &gradient)];
-                        for (used, label) in labels {
-                            for name in label(paint) {
-                                if !used.contains(&name) {
-                                    used.push(name);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // A grayscale or 1-bit image colorized with a spot color prints it, while its pixels take
-            // the color, as the renderer draws it.
-            if let NodeKind::Image(im) = &n.kind
-                && let Some(colorize) = n.extras().colorize.as_deref()
-                && d.image_blob(im).is_some_and(|b| b.takes_colorize())
-            {
-                for name in spot_label(colorize) {
-                    if !used_spots.contains(&name) {
-                        used_spots.insert(0, name);
-                    }
-                }
-            }
+            // The spot colors, the patterns and the gradients this object paints, each once, and where each gradient comes from;
+            // none when it does not draw.
+            let [used_spots, used_patterns, used_gradients, used_sources] =
+                if drawn { object_paints(d, &spot_swatches, &members, n) } else { Default::default() };
             // Objects counts the objects that Spot Color Objects, Pattern Objects and Gradient Objects list.
             if !used_spots.is_empty() {
                 let name = n.display_name();
@@ -600,7 +794,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 let name = n.display_name();
                 gradients.extend(used_gradients.iter().cloned());
                 gradient_rows.push((name.clone(), used_gradients.join(", ")));
-                gradient_objects.push(json!({ "id": n.id.0, "name": name, "gradients": used_gradients }));
+                let kinds = gradient_kinds(&used_gradients, &used_sources);
+                gradient_objects.push(json!({ "id": n.id.0, "name": name, "gradients": used_gradients, "kinds": kinds }));
                 *counts.entry("gradients").or_default() += 1;
             }
             if n.extras().mask.is_some() {
@@ -615,9 +810,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             {
                 styles.push(&g.name);
             }
-            for b in applied_brushes(d, n, &members) {
-                if !brushes.contains(&b) {
-                    brushes.push(b);
+            if drawn {
+                for b in applied_brushes(d, n, &members) {
+                    if !brushes.contains(&b) {
+                        brushes.push(b);
+                    }
                 }
             }
             if let NodeKind::Repeat(spec) = &n.kind {
@@ -625,18 +822,33 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 repeats.push(entry);
                 repeat_rows.push(row);
             }
-        });
+        }
     }
     // The document's fonts include those of the type in opacity masks and in the art of its
-    // symbols and patterns, as Find Font lists them.
+    // symbols and patterns, as Find Font lists them. Each of those text objects counts once, however
+    // many objects show it.
     if !selection_only {
-        fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
+        for (_, t, _) in super::fonts::art_texts_of(d) {
+            count_fonts(&mut fonts, t);
+        }
     }
-    let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
-    // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the last of two
+    let font_names: Vec<String> = fonts.keys().map(super::fonts::font_label).collect();
+    let (font_uses, font_use_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(|(f, n)| font_use(f, *n)).unzip();
+    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.keys().map(font_detail).unzip();
+    // The image objects in walk order, as Linked Images and Embedded Images list them: `file` is a
+    // linked image's row value (its path, or its file name alone when the request may not read it),
+    // and null for an embedded one.
+    let image_objects: Vec<Value> = image_rows
+        .iter()
+        .map(|(name, w, h, file)| json!({ "name": name, "width": w, "height": h, "linked": file.is_some(), "file": file }))
+        .collect();
+    // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
-    let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
+    let mut kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = HashMap::new();
+    for b in &library {
+        kinds.entry(b.name.as_str()).or_insert(&b.kind);
+    }
     let brush_entries: Vec<Value> =
         brushes.iter().map(|name| json!({ "name": name, "type": kinds.get(name.as_str()).map(|k| k.type_id()) })).collect();
     let brush_rows: Vec<(String, String)> = brushes
@@ -650,7 +862,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "objects": counts,
         "pathLength": path_length,
         "fonts": font_names,
+        "fontUses": font_uses,
+        "fontDetails": font_entries,
         "images": images,
+        "imageObjects": image_objects,
         "symbols": symbols,
         "spotColors": spot,
         "spotColorNames": spot,
@@ -672,7 +887,22 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let (selected_entries, selected_rows) = artboard_tool.map(|(picked, active)| selected_artboard_rows(d, &picked, active)).unwrap_or_default();
+    out["document"]["selectedArtboards"] = json!(selected_entries);
+    let sections = sections(
+        d,
+        &out,
+        &selected_rows,
+        &font_use_rows,
+        &font_rows,
+        &image_rows,
+        &brush_rows,
+        &repeat_rows,
+        &spot_rows,
+        &pattern_rows,
+        &gradient_rows,
+        category,
+    );
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -686,8 +916,16 @@ fn document_summary(d: &Document) -> Value {
         "title": d.title,
         "colorMode": match d.color_mode { ColorMode::Rgb => "RGB", ColorMode::Cmyk => "CMYK" },
         "units": d.units.label(),
+        "unitId": d.units.key(),
         "artboards": d.artboards.iter().map(|a| json!({ "name": a.name, "width": a.rect.width() / u, "height": a.rect.height() / u })).collect::<Vec<_>>(),
         "rasterEffectsPpi": d.raster_effects_ppi,
+        "transparency": {
+            "gridSize": d.setup.grid_size.id(),
+            "gridColors": d.setup.grid_colors.map(|c| c.to_hex()),
+            "gridColorsName": d.setup.grid_colors_name(),
+            "simulatePaper": d.setup.simulate_paper,
+            "flattenerPreset": d.setup.flattener(),
+        },
     })
 }
 
@@ -741,14 +979,12 @@ mod tests {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
-        s.execute(
-            "paint.setFill",
-            &json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
-        )
-        .unwrap();
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"gradient": gradient})).unwrap();
         let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        // New type starts black (#7975); filled with the gradient, its characters make it a gradient object too.
+        s.execute("paint.setFill", &json!({"gradient": gradient, "ids": [t]})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
-        // The type's characters take the current gradient fill, so it is a gradient object too.
         assert_eq!(
             (i["objects"]["paths"].as_u64(), i["objects"]["textObjects"].as_u64(), i["objects"]["gradients"].as_u64()),
             (Some(1), Some(1), Some(2))
@@ -759,6 +995,101 @@ mod tests {
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
+    }
+
+    /// The Document category's rows from `info`, as (label, value) pairs.
+    fn document_rows(i: &Value) -> Vec<(String, String)> {
+        let doc = i["sections"].as_array().unwrap().iter().find(|s| s["id"] == "document").unwrap();
+        doc["rows"].as_array().unwrap().iter().map(|r| (r[0].as_str().unwrap().to_string(), r[1].as_str().unwrap().to_string())).collect()
+    }
+
+    /// Document lists File › Document Setup's transparency settings: the grid's size and colors
+    /// (a preset's name, else both colors), Simulate Colored Paper and the flattener preset.
+    #[test]
+    fn info_lists_the_transparency_settings() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let t = &i["document"]["transparency"];
+        assert_eq!(
+            (t["gridSize"].clone(), t["gridColorsName"].clone(), t["simulatePaper"].clone(), t["flattenerPreset"].clone()),
+            (json!("medium"), json!("Light"), json!(false), json!("Medium Resolution"))
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Raster Effects").unwrap();
+        let expected =
+            [("Grid Size", "Medium"), ("Grid Colors", "Light"), ("Simulate Colored Paper", "Off"), ("Flattener Preset", "Medium Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        s.execute(
+            "document.setup",
+            &json!({"gridSize": "large", "gridColors": ["#ff0000", "#00ff00"], "simulatePaper": true, "flattenerPreset": "High Resolution"}),
+        )
+        .unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["transparency"]["gridColors"], json!(["#ff0000", "#00ff00"]));
+        assert_eq!(i["document"]["transparency"]["gridColorsName"], "Custom");
+        let rows = document_rows(&i);
+        let expected =
+            [("Grid Size", "Large"), ("Grid Colors", "#ff0000, #00ff00"), ("Simulate Colored Paper", "On"), ("Flattener Preset", "High Resolution")];
+        assert_eq!(rows[at + 1..at + 5], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        let report = s.execute("document.info", &json!({"category": "document", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("Grid Colors: #ff0000, #00ff00\nSimulate Colored Paper: On\nFlattener Preset: High Resolution\n"), "{report}");
+    }
+
+    /// While the Artboard tool is the current tool, Document lists each artboard it has selected
+    /// after the artboards: its name, width, height and the X and Y of its top-left corner from the
+    /// ruler origin of the tool's active artboard. With another tool it lists none.
+    #[test]
+    fn info_lists_the_artboards_the_artboard_tool_selected() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        s.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        s.execute("artboard.new", &json!({"x": 400, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute("artboard.setProps", &json!({"index": 2, "name": "Back"})).unwrap();
+        let before = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(before["document"]["selectedArtboards"], json!([]));
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", &json!([2, 1, 7]));
+        let i = s.execute("document.info", &json!({})).unwrap();
+        // Artboard 2 is active: positions are measured from its top-left corner.
+        assert_eq!(
+            i["document"]["selectedArtboards"],
+            json!([
+                {"index": 1, "name": "Artboard 2", "width": 60.0, "height": 80.0, "x": -250.0, "y": 30.0},
+                {"index": 2, "name": "Back", "width": 100.0, "height": 50.0, "x": 0.0, "y": 0.0},
+            ])
+        );
+        let rows = document_rows(&i);
+        let at = rows.iter().position(|(l, _)| l == "Artboards").unwrap() + 4;
+        let expected = [
+            ("Artboard", "Artboard 2"),
+            ("Width", "60 pt"),
+            ("Height", "80 pt"),
+            ("X", "-250 pt"),
+            ("Y", "30 pt"),
+            ("Artboard", "Back"),
+            ("Width", "100 pt"),
+            ("Height", "50 pt"),
+            ("X", "0 pt"),
+            ("Y", "0 pt"),
+            ("Raster Effects", "72 ppi"),
+        ];
+        assert_eq!(rows[at..at + 11], expected.map(|(l, v)| (l.to_string(), v.to_string())), "{rows:?}");
+        // The rows follow the document's units and its ruler origin.
+        s.execute("document.setup", &json!({"units": "Millimeters"})).unwrap();
+        s.execute("document.setRulerOrigin", &json!({"x": 390, "y": 0, "artboard": 2})).unwrap();
+        s.set_tool_option("selected", &json!([2]));
+        let i = s.execute("document.info", &json!({"category": "document"})).unwrap();
+        let entry = &i["document"]["selectedArtboards"];
+        assert_eq!((entry.as_array().unwrap().len(), entry[0]["index"].clone()), (1, json!(2)));
+        assert!((entry[0]["x"].as_f64().unwrap() - 10.0 * 25.4 / 72.0).abs() < 1e-9, "{entry}");
+        let rows = document_rows(&i);
+        assert!(rows.contains(&("X".into(), "3.5278 mm".into())) && rows.contains(&("Y".into(), "3.5278 mm".into())), "{rows:?}");
+        // Another tool: no artboard rows.
+        s.select_tool("selection", crate::tooling::ViewInfo::default()).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!(i["document"]["selectedArtboards"], json!([]));
+        assert!(!document_rows(&i).iter().any(|(l, _)| l == "X"), "{:?}", document_rows(&i));
     }
 
     /// Document Info's fonts include the type in an opacity mask, in a symbol's art and in a
@@ -793,6 +1124,92 @@ mod tests {
         );
         s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
         assert_eq!(fonts(&mut s, json!({"selectionOnly": true})), json!(["Source Sans 3 Regular"]));
+    }
+
+    /// Fonts gives each font's type and its number of uses: the text objects set in it, each once
+    /// however many of its runs use the font. The type in a symbol's art counts once however many
+    /// instances show it, and the type in an opacity mask once. With Selection Only it counts the
+    /// selected type alone. A font that is not installed has an unknown type. The rows, the report
+    /// and `fontUses` give the same facts, in the order of `fonts`.
+    #[test]
+    fn info_fonts_give_each_font_s_type_and_uses() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+        let text =
+            |s: &mut Session, font: &str, y: f64| id(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Hello", "font": font})).unwrap());
+        // Two runs in Source Sans 3 Regular in one text object, a second object in it, and one in Inter.
+        let twice = text(&mut s, "Source Sans 3", 20.0);
+        s.execute("text.setRangeStyle", &json!({"id": twice.0, "start": 0, "end": 2, "size": 30})).unwrap();
+        assert!(matches!(&s.doc().unwrap().doc.node(twice).unwrap().kind, NodeKind::Text(t) if t.runs.len() == 2));
+        let other = text(&mut s, "Source Sans 3", 50.0);
+        text(&mut s, "Inter", 80.0);
+        text(&mut s, "Qx Absent Family", 110.0);
+        // A symbol whose art holds type in Inter, shown by two instances, and a mask holding type in Inter.
+        let in_symbol = text(&mut s, "Inter", 140.0);
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+        s.execute("symbol.place", &json!({"name": "Mark", "x": 100, "y": 100})).unwrap();
+        let masked = id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+        let in_mask = text(&mut s, "Inter", 170.0);
+        s.edit("Mask", |d, _| {
+            let art = d.remove(in_mask)?;
+            d.node_mut(masked).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "Qx Absent Family Regular", "Source Sans 3 Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 3},
+                {"font": "Qx Absent Family Regular", "type": "unknown", "uses": 1},
+                {"font": "Source Sans 3 Regular", "type": "truetype", "uses": 2},
+            ])
+        );
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([
+                ["Inter Regular", "TrueType; 3 uses"],
+                ["Qx Absent Family Regular", "unknown type; 1 use"],
+                ["Source Sans 3 Regular", "TrueType; 2 uses"],
+            ])
+        );
+        let report = s.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("\nFONTS\nInter Regular: TrueType; 3 uses\nQx Absent Family Regular: unknown type; 1 use\n"), "{report}");
+        // Selection Only: the selected type's fonts and uses.
+        s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!(i["fontUses"], json!([{"font": "Source Sans 3 Regular", "type": "truetype", "uses": 1}]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Source Sans 3 Regular", "TrueType; 1 use"]]));
+        s.execute("select.none", &json!({})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!((i["fontUses"].clone(), i["sections"][0]["rows"].clone()), (json!([]), json!([])));
+    }
+
+    /// Type set in a composite font counts as a use of the fonts of the parts its characters fall
+    /// in, as Find Font lists them, not of the composite font's name.
+    #[test]
+    fn info_fonts_count_the_parts_of_a_composite_font() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let font = json!({"name": "DI Uses Composite", "parts": {
+            "kanji": {"font": "Source Sans 3"},
+            "roman": {"font": "JetBrains Mono"},
+            "numerals": {"font": "Inter"},
+        }});
+        s.execute("type.compositeFonts.set", &json!({"fonts": [font]})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab1", "font": "DI Uses Composite"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "12", "font": "DI Uses Composite"})).unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "JetBrains Mono Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 2},
+                {"font": "JetBrains Mono Regular", "type": "truetype", "uses": 1},
+            ])
+        );
     }
 
     /// Document Info › Objects gives the paths' total length in the document's units (#1958): an
@@ -910,7 +1327,7 @@ mod tests {
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
         d.node_mut(NodeId(missing)).unwrap().appearance.stroke_mut().unwrap().paint = Paint::None;
         assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([]));
-        // Two panel brushes with one name: the type is the one the renderer draws with, the last one's.
+        // Two panel brushes with one name: the type is the one the renderer draws with, the first one's.
         let twin = square(&mut s, 140.0);
         s.execute("brush.apply", &json!({"ids": [twin], "name": "Charcoal"})).unwrap();
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
@@ -920,7 +1337,7 @@ mod tests {
         lib.extend(kinds.into_iter().map(|kind| vectorcraft_brush::Brush { name: "Twin".into(), kind }));
         vectorcraft_brush::store(d, &lib);
         d.node_mut(NodeId(twin)).unwrap().appearance.stroke_mut().unwrap().brush = Some("Twin".into());
-        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([{"name": "Twin", "type": "scatter"}]));
+        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([{"name": "Twin", "type": "art"}]));
         // Type: a brushed stroke on drawn characters is listed, one on spaces alone is not.
         let blank = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "  "})).unwrap()["id"].as_u64().unwrap();
         let word = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
@@ -1212,11 +1629,11 @@ mod tests {
         assert_eq!(
             i["gradientObjects"],
             json!([
-                {"id": a, "name": "Both", "gradients": ["Ramp", "Linear gradient"]},
-                {"id": b, "name": "<Rectangle>", "gradients": ["Radial gradient"]},
-                {"id": f, "name": "<Rectangle>", "gradients": ["Freeform gradient"]},
-                {"id": t, "name": "Type", "gradients": ["Ramp"]},
-                {"id": bar, "name": "Bar", "gradients": ["Ramp"]},
+                {"id": a, "name": "Both", "gradients": ["Ramp", "Linear gradient"], "kinds": [null, "linear"]},
+                {"id": b, "name": "<Rectangle>", "gradients": ["Radial gradient"], "kinds": ["radial"]},
+                {"id": f, "name": "<Rectangle>", "gradients": ["Freeform gradient"], "kinds": ["freeform"]},
+                {"id": t, "name": "Type", "gradients": ["Ramp"], "kinds": [null]},
+                {"id": bar, "name": "Bar", "gradients": ["Ramp"], "kinds": [null]},
             ])
         );
         assert_eq!(i["gradientNames"], json!(["Freeform gradient", "Linear gradient", "Radial gradient", "Ramp"]));
@@ -1384,9 +1801,41 @@ mod tests {
         s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
         let mut bytes = Vec::new();
-        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
         let image = s
             .edit("Place", |d, sel| {
                 d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
@@ -1453,6 +1902,203 @@ mod tests {
             }
         }
         assert_eq!(spots(&mut s), (vec![], None, None));
+    }
+
+    /// Spot Color Objects leaves out a spot color linked only from gradient stops at an opacity of 0
+    /// whose stretches all lead to other stops at an opacity of 0 or have no width, while another
+    /// part of the gradient draws: an inner stop, an end stop and a stop at the offset of an opaque
+    /// stop. A clear stop next to an opaque stop tints the stretch between them, so it stays listed.
+    /// Type whose characters draw such a gradient follows the same rule, with and without Selection
+    /// Only, and the report writes the same rows.
+    #[test]
+    fn spot_color_objects_skip_spot_stops_only_in_clear_stretches() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let ink = |c: f64| json!({"model": "cmyk", "c": c, "m": 0.5, "y": 0.0, "k": 0.0});
+        for (k, name) in ["Ink", "Near", "Far", "Edge", "Seam"].into_iter().enumerate() {
+            s.execute("swatch.new", &json!({"name": name, "color": ink(0.2 * k as f64), "spot": true})).unwrap();
+        }
+        let stop = |offset: f64, swatch: Option<&str>, opacity: f64| match swatch {
+            Some(sw) => json!({"offset": offset, "color": "#000", "swatch": sw, "opacity": opacity}),
+            None => json!({"offset": offset, "color": "#fff", "opacity": opacity}),
+        };
+        let fill = |s: &mut Session, id: &Value, stops: Value| {
+            s.execute("paint.setFill", &json!({"ids": [id], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+        };
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        // Near borders the opaque Ink stop; Far sits between clear stops; Edge ends the ramp after a
+        // clear stop.
+        let ramp = square(&mut s, 0.0);
+        fill(
+            &mut s,
+            &ramp,
+            json!([stop(0.0, Some("Ink"), 1.0), stop(0.4, Some("Near"), 0.0), stop(0.6, Some("Far"), 0.0), stop(1.0, Some("Edge"), 0.0)]),
+        );
+        s.execute("layer.setProps", &json!({"id": ramp, "name": "Ramp"})).unwrap();
+        // Seam meets the opaque half only at one offset, where nothing between them has width.
+        let seam = square(&mut s, 20.0);
+        fill(&mut s, &seam, json!([stop(0.0, None, 0.0), stop(0.5, Some("Seam"), 0.0), stop(0.5, None, 1.0), stop(1.0, None, 1.0)]));
+        let t = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+        fill(&mut s, &t, json!([stop(0.0, Some("Ink"), 1.0), stop(0.5, None, 0.0), stop(1.0, Some("Far"), 0.0)]));
+        s.execute("layer.setProps", &json!({"id": t, "name": "Type"})).unwrap();
+        let check = |s: &mut Session, params: Value| {
+            let i = s.execute("document.info", &params).unwrap();
+            let listed: Vec<(String, Value)> =
+                i["spotObjects"].as_array().unwrap().iter().map(|o| (o["name"].as_str().unwrap().to_string(), o["spotColors"].clone())).collect();
+            assert_eq!(listed, vec![("Ramp".to_string(), json!(["Ink", "Near"])), ("Type".to_string(), json!(["Ink"]))], "{params}");
+            assert_eq!((i["spotColorNames"].clone(), i["objects"]["spots"].as_u64()), (json!(["Ink", "Near"]), Some(2)), "{params}");
+            let rows = i["sections"].as_array().unwrap().iter().find(|c| c["id"] == "spotColors").unwrap()["rows"].clone();
+            assert_eq!(rows, json!([["Ramp", "Ink, Near"], ["Type", "Ink"]]), "{params}");
+        };
+        check(&mut s, json!({}));
+        s.execute("select.set", &json!({"ids": [ramp, seam, t]})).unwrap();
+        check(&mut s, json!({"selectionOnly": true}));
+        let text = s.execute("document.info", &json!({"category": "spotColors", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nSPOT COLOR OBJECTS\nRamp: Ink, Near\nType: Ink\n"), "{text}");
+        assert!(!["Far", "Edge", "Seam"].iter().any(|n| text.contains(n)), "{text}");
+    }
+
+    /// Brushes, Spot Color Objects, Pattern Objects and Gradient Objects leave out a hidden object,
+    /// an object at an opacity of 0 and the objects inside a hidden layer or a group at an opacity of
+    /// 0, with Selection Only too: their fills, strokes, characters and colorized pixels paint no
+    /// color. Objects still counts them.
+    #[test]
+    fn info_skips_paints_on_hidden_and_clear_objects_and_their_members() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        // A patterned square that stays drawn, an object at an opacity of 0 and a hidden one.
+        let (shown, clear, hidden) = (square(&mut s, 20.0), square(&mut s, 40.0), square(&mut s, 60.0));
+        s.execute("paint.setFill", &json!({"ids": [shown, clear], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [hidden], "swatch": "Ink"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [shown, clear, hidden], "none": true})).unwrap();
+        // A brushed square in a group.
+        let (brushed, other) = (square(&mut s, 80.0), square(&mut s, 100.0));
+        s.execute("brush.apply", &json!({"ids": [brushed], "name": "Charcoal"})).unwrap();
+        s.execute("select.set", &json!({"ids": [brushed, other]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        // Type whose characters are filled with the spot color.
+        let word = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [word], "swatch": "Ink"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [word], "none": true})).unwrap();
+        // A grayscale image colorized with the spot color.
+        let mut bytes = Vec::new();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
+        let image = s
+            .edit("Place", |d, sel| {
+                d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
+                let id = d.alloc_id();
+                let im = vectorcraft_doc::ImageObject {
+                    key: "gray".into(),
+                    width: 2,
+                    height: 1,
+                    xf: Default::default(),
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+                sel.set([id]);
+                Ok(id)
+            })
+            .unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+        // A square with a gradient on a layer of its own.
+        let layer = s.execute("layer.new", &json!({"name": "Back"})).unwrap()["id"].as_u64().unwrap();
+        let ramp = square(&mut s, 120.0);
+        s.execute(
+            "paint.setFill",
+            &json!({"ids": [ramp], "gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
+        )
+        .unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [ramp], "none": true})).unwrap();
+        let listed = |s: &mut Session, p: Value| {
+            let i = s.execute("document.info", &p).unwrap();
+            let ids = |k: &str| -> Vec<u64> {
+                let mut ids: Vec<u64> = i[k].as_array().unwrap().iter().map(|o| o["id"].as_u64().unwrap()).collect();
+                ids.sort_unstable();
+                ids
+            };
+            (i["brushNames"].clone(), ids("spotObjects"), ids("patternObjects"), ids("gradientObjects"), i["objects"].clone())
+        };
+        // Everything drawn: each object is listed.
+        let (brushes, spots, patterns, gradients, before) = listed(&mut s, json!({}));
+        assert_eq!(brushes, json!(["Charcoal"]));
+        // New squares take the new spot color as their fill, the group's members included.
+        assert_eq!((spots, patterns, gradients), (vec![hidden, brushed, other, word, image.0], vec![shown, clear], vec![ramp]));
+        s.edit("hide", |d, _| {
+            d.node_mut(NodeId(clear)).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(hidden)).unwrap().visible = false;
+            d.node_mut(NodeId(group)).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(word)).unwrap().opacity = 0.0;
+            d.node_mut(image).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(layer)).unwrap().visible = false;
+            Ok(())
+        })
+        .unwrap();
+        let (brushes, spots, patterns, gradients, after) = listed(&mut s, json!({}));
+        assert_eq!((brushes, spots, patterns, gradients), (json!([]), vec![], vec![shown], vec![]));
+        // Objects counts the listed objects, and every object as before.
+        assert_eq!((after["spots"].clone(), after["patterns"].clone(), after["gradients"].clone()), (Value::Null, json!(1), Value::Null));
+        for k in ["paths", "groups", "textObjects", "images"] {
+            assert_eq!(after[k], before[k], "{k}: {after}");
+        }
+        let rows = s.execute("document.info", &json!({"category": "brushes"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([]));
+        // Selection Only: an object selected inside a group at an opacity of 0 or a hidden layer paints nothing either.
+        s.execute("select.set", &json!({"ids": [brushed, ramp]})).unwrap();
+        let (brushes, _, _, gradients, after) = listed(&mut s, json!({"selectionOnly": true}));
+        assert_eq!((brushes, gradients, after["paths"].clone()), (json!([]), vec![], json!(2)));
+        // Drawn again, the group's brush and the layer's gradient are listed.
+        s.edit("show", |d, _| {
+            d.node_mut(NodeId(group)).unwrap().opacity = 1.0;
+            d.node_mut(NodeId(layer)).unwrap().visible = true;
+            Ok(())
+        })
+        .unwrap();
+        let (brushes, _, _, gradients, _) = listed(&mut s, json!({"selectionOnly": true}));
+        assert_eq!((brushes, gradients), (json!(["Charcoal"]), vec![ramp]));
     }
 
     /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
@@ -1525,6 +2171,112 @@ mod tests {
         assert_eq!(embedding_label(0x0003), "embedding not allowed");
         assert_eq!(embedding_label(0x0006), "embedding for preview and print");
         assert_eq!(embedding_label(0x000c), "embedding for editing");
+        // `fontDetails` names each permission by id.
+        assert_eq!(
+            [0, 0x0002, 0x0104, 0x0008, 0x0200, 0x000c].map(embedding_id),
+            ["allowed", "forbidden", "previewPrint", "editing", "forbidden", "editing"]
+        );
+    }
+
+    /// `fontDetails` gives each Font Details row's facts as values, in the rows' order: how the
+    /// font was found, the face shown, its file (null for a built-in face) and its embedding
+    /// permission. The rows and the report stay in English.
+    #[test]
+    fn info_exposes_structured_font_details_without_changing_english_rows() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Heavy", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Gone", "font": "Qx Absent Family"})).unwrap();
+        let i = s.execute("document.info", &json!({"category": "fontDetails"})).unwrap();
+        let (entries, rows) = (i["fontDetails"].as_array().unwrap(), i["sections"][0]["rows"].as_array().unwrap());
+        assert_eq!(entries.iter().map(|e| e["font"].clone()).collect::<Vec<_>>(), rows.iter().map(|r| r[0].clone()).collect::<Vec<_>>());
+        let at = |prefix: &str| entries.iter().position(|e| e["font"].as_str().unwrap().starts_with(prefix)).unwrap();
+        let regular = at("Source Sans 3 Regular");
+        assert_eq!(
+            entries[regular],
+            json!({"font": "Source Sans 3 Regular", "match": "exact", "family": "Source Sans 3", "style": "Regular", "file": null, "embedding": "allowed"})
+        );
+        assert_eq!(rows[regular][1], "built in; embedding allowed");
+        let (wide, e) = (at("Source Sans 3 Black Wide"), &entries[at("Source Sans 3 Black Wide")]);
+        assert_eq!((e["match"].as_str(), e["family"].as_str()), (Some("style"), Some("Source Sans 3")), "{e}");
+        let file = e["file"].as_str().unwrap_or("built in");
+        let fs_type = [("allowed", 0), ("forbidden", 0x0002), ("previewPrint", 0x0004), ("editing", 0x0008)]
+            .into_iter()
+            .find_map(|(id, bits)| (e["embedding"] == id).then_some(bits))
+            .unwrap();
+        let found = format!("{file}; {}", embedding_label(fs_type));
+        assert_eq!(rows[wide][1], format!("substituted: shown in Source Sans 3 {} ({found})", e["style"].as_str().unwrap()));
+        let (gone, e) = (at("Qx Absent Family"), &entries[at("Qx Absent Family")]);
+        assert!(e["file"].is_null() && e["embedding"].is_null(), "{e}");
+        match e["match"].as_str() {
+            Some("missingWithFallback") => {
+                assert_eq!(rows[gone][1], format!("missing: shown in {} {}", e["family"].as_str().unwrap(), e["style"].as_str().unwrap()))
+            }
+            Some("missing") => assert_eq!((rows[gone][1].as_str(), e["family"].is_null()), (Some("missing"), true)),
+            m => panic!("{m:?}"),
+        }
+        let text = s.execute("document.info", &json!({"category": "fontDetails", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Source Sans 3 Regular: built in; embedding allowed\n"), "{text}");
+    }
+
+    /// `document.unitId` names the document's units as Preferences › Units does, beside the English
+    /// `units`, and `imageObjects` lists the image objects in the order Embedded Images and Linked
+    /// Images list them, with the file a linked one shows (null for an embedded one).
+    #[test]
+    fn info_exposes_ordered_images_and_unit_id() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.edit("Units", |d, _| {
+            d.units = vectorcraft_doc::Unit::Millimeters;
+            Ok(())
+        })
+        .unwrap();
+        for x in [0.0, 50.0] {
+            let r = s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 20, "height": 10})).unwrap()["id"].clone();
+            s.execute("select.set", &json!({"ids": [r]})).unwrap();
+            s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+        }
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!((i["document"]["units"].as_str(), i["document"]["unitId"].as_str()), (Some("Millimeters"), Some("millimeters")));
+        let section = |id: &str| i["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap()["rows"].as_array().unwrap().clone();
+        assert!(section("document").iter().any(|r| *r == json!(["Units", "Millimeters"])));
+        let embedded = section("embeddedImages");
+        let objects = i["imageObjects"].as_array().unwrap();
+        assert_eq!(objects.len(), 2, "{objects:?}");
+        for (o, r) in objects.iter().zip(&embedded) {
+            assert_eq!((o["linked"].clone(), o["file"].clone(), o["name"].clone()), (json!(false), Value::Null, r[0].clone()), "{o}");
+            assert_eq!(r[1], format!("{} × {} px", o["width"], o["height"]));
+        }
+        assert!(section("linkedImages").is_empty());
+    }
+
+    /// A `gradientObjects` entry's `kinds` gives the kind of each gradient listed by its kind
+    /// rather than by a swatch, and null for a swatch's name, even one that reads like a kind and
+    /// one an object's gradient of that kind shares; a type object's characters count as its own.
+    #[test]
+    fn gradient_kinds_tell_kinds_from_swatch_names() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let ramp = |kind: &str| json!({"kind": kind, "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("swatch.new", &json!({"name": "Radial gradient", "gradient": ramp("linear")})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [r], "swatch": "Radial gradient"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [r], "gradient": ramp("conic")})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [t], "gradient": ramp("diamond")})).unwrap();
+        // The swatch's name and a radial gradient's kind name are listed once, as the name.
+        let both = s.execute("shape.rectangle", &json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [both], "swatch": "Radial gradient"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [both], "gradient": ramp("radial")})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let entry = |id: &Value| i["gradientObjects"].as_array().unwrap().iter().find(|e| e["id"] == *id).unwrap().clone();
+        assert_eq!(
+            (entry(&r)["gradients"].clone(), entry(&r)["kinds"].clone()),
+            (json!(["Radial gradient", "Conic gradient"]), json!([null, "conic"]))
+        );
+        assert_eq!((entry(&t)["gradients"].clone(), entry(&t)["kinds"].clone()), (json!(["Diamond gradient"]), json!(["diamond"])));
+        assert_eq!((entry(&both)["gradients"].clone(), entry(&both)["kinds"].clone()), (json!(["Radial gradient"]), json!([null])));
     }
 
     #[test]

@@ -1,16 +1,17 @@
 //! Select menu.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
+use vectorcraft_doc::{AnchorRef, Document, LockedArtboards, Node, NodeId, NodeKind, Selection};
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::object::can_align;
+use super::panelcmds::artboard_at;
 use super::wand::{fill_of, stroke_of};
 use super::{
-    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index_opt, ok, str_param,
     switch_or, text_param,
 };
 use crate::DocState;
@@ -31,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All on Active Artboard",
             ["Select"],
             Some("Cmd+Alt+A"),
-            "{artboard?: index (0-based; the app passes the active one; default: the first)}",
+            "{artboard?: index (0-based whole number; the app passes the active one; default, or null: the first)}",
             has_doc,
             all_on_artboard
         ),
@@ -81,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection; any other id or guide is an error that leaves the key as it was → {key, guide?} (the resulting key object, or null; guide: the key guide, left out without one)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put), anchor?: [subpath, anchor] with `id` the path (an anchor point selected with Direct Selection beside at least one other point becomes the key anchor: Align and Distribute move the other points relative to it and it stays put; a click without modifiers on an already-selected anchor point makes it the key anchor)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection, or a key anchor that is deselected, deleted or left as the only selected point; any other id, guide or anchor is an error that leaves the key as it was → {key, guide?, keyAnchor?} (the resulting key object, or null; guide: the key guide, left out without one; keyAnchor: {id, anchor}, left out without one)",
             has_doc,
             key
         ),
@@ -221,11 +222,71 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Attribute",
             ["Select", "Same"],
             None,
-            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
+            "{item?: appearance item index (0-based whole number; default, or null: the Appearance panel's active item)} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
             has_selection,
             same_attribute
         ),
+        cmd!(
+            "select.similar",
+            "Select Similar Objects",
+            [],
+            None,
+            "{by?: \"all\"|\"fillColor\"|\"fillAndStroke\"|\"strokeColor\"|\"strokeWeight\"|\"opacity\"|\"blendingMode\"|\"appearance\"|\"graphicStyle\"|\"shapeType\"|\"symbolInstance\"} the Control bar's Select Similar Objects button and its menu: selects the objects like the first selected object by `by`, running the select.same command of that name; `all` selects the objects with its fill and stroke colours, stroke weight, opacity and blending mode (tints, compound paths and Live Paint faces as select.same.fillColor). A `by` given is kept for the session once the selection is made; without it, the kept one (`all` until one is given). Any other `by` is an error that keeps the selection and the kept attribute → {count, by}",
+            has_selection,
+            similar
+        ),
     ]
+}
+
+/// The attributes Select Similar Objects (`select.similar`) selects by, in its menu's order, each
+/// with the Select › Same command it runs; `all` compares the fill and stroke colours, the stroke
+/// weight, the opacity and the blending mode at once, with no command of its own.
+pub const SIMILAR: [(&str, Option<&str>); 11] = [
+    ("all", None),
+    ("fillColor", Some("select.same.fillColor")),
+    ("fillAndStroke", Some("select.same.fillAndStroke")),
+    ("strokeColor", Some("select.same.strokeColor")),
+    ("strokeWeight", Some("select.same.strokeWeight")),
+    ("opacity", Some("select.same.opacity")),
+    ("blendingMode", Some("select.same.blendingMode")),
+    ("appearance", Some("select.same.appearance")),
+    ("graphicStyle", Some("select.same.graphicStyle")),
+    ("shapeType", Some("select.same.shapeType")),
+    ("symbolInstance", Some("select.same.symbolInstance")),
+];
+
+fn similar(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.similar";
+    let by = match text_param(p, "by", C)? {
+        Some(name) => *SIMILAR.iter().find(|(n, _)| *n == name).ok_or_else(|| {
+            let names: Vec<&str> = SIMILAR.iter().map(|(n, _)| *n).collect();
+            bad(C, format!("unknown `by` \"{name}\": expected one of {}", names.join(", ")))
+        })?,
+        None => *SIMILAR.iter().find(|(n, _)| *n == s.select_similar).unwrap_or(&SIMILAR[0]),
+    };
+    let mut r = match by.1 {
+        Some(same_cmd) => s.execute(same_cmd, &json!({}))?,
+        None => {
+            let tint = s.prefs.select_same_tint_percent;
+            let r = same_fill(s, C, |a, b| {
+                same_paint(&fill_of(a), &fill_of(b), tint)
+                    && same_paint(&stroke_of(a).0, &stroke_of(b).0, tint)
+                    && (stroke_weight(a) - stroke_weight(b)).abs() < 1e-9
+                    && (a.opacity - b.opacity).abs() < 1e-6
+                    && a.blend == b.blend
+            })?;
+            // Select › Reselect repeats `all`, whichever attribute is kept by then.
+            if let Some(last) = s.doc_mut()?.last_selection_cmd.as_mut() {
+                last.1 = json!({ "by": by.0 });
+            }
+            r
+        }
+    };
+    s.select_similar = by.0;
+    // A recorded action or the journal repeats the attribute used, not the one kept by then.
+    s.note_journal("by", json!(by.0));
+    r["by"] = json!(by.0);
+    Ok(r)
 }
 
 /// Selectable objects: children of visible, unlocked layers (or of the isolation container).
@@ -247,24 +308,30 @@ pub(crate) fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
 /// them, leaving out every hidden or locked object with what it holds. `f` returns whether to
 /// visit the objects inside the one it is given.
 pub(crate) fn walk_selectable(d: &Document, iso: Option<NodeId>, mut f: impl FnMut(&Node) -> bool) {
-    fn inside(n: &Node, f: &mut impl FnMut(&Node) -> bool) {
-        if n.visible && !n.locked && f(n) {
+    walk_selectable_in(d, iso, |n, _| f(n));
+}
+
+/// [`walk_selectable`], handing `f` each object with the node that holds it in the tree: its
+/// layer, sublayer, group or other container, or `None` for a top-level layer.
+fn walk_selectable_in(d: &Document, iso: Option<NodeId>, mut f: impl FnMut(&Node, Option<&Node>) -> bool) {
+    fn inside(n: &Node, parent: Option<&Node>, f: &mut impl FnMut(&Node, Option<&Node>) -> bool) {
+        if n.visible && !n.locked && f(n, parent) {
             for c in n.children().into_iter().flatten() {
-                inside(c, f);
+                inside(c, Some(n), f);
             }
         }
     }
-    fn find(n: &Node, tops: &BTreeSet<NodeId>, f: &mut impl FnMut(&Node) -> bool) {
+    fn find(n: &Node, parent: Option<&Node>, tops: &BTreeSet<NodeId>, f: &mut impl FnMut(&Node, Option<&Node>) -> bool) {
         if tops.contains(&n.id) {
-            return inside(n, f);
+            return inside(n, parent, f);
         }
         for c in n.children().into_iter().flatten() {
-            find(c, tops, f);
+            find(c, Some(n), tops, f);
         }
     }
     let tops: BTreeSet<NodeId> = selectable(d, iso).into_iter().collect();
     for l in &d.layers {
-        find(l, &tops, &mut f);
+        find(l, None, &tops, &mut f);
     }
 }
 
@@ -306,6 +373,59 @@ fn is_selectable_within(d: &Document, iso: Option<NodeId>, locks: Option<&Locked
             top.is_some_and(|t| locks.is_none_or(|l| l.is_empty() || !l.holds(t)))
         }
     }
+}
+
+/// The object Next Object Above (`dir` > 0) or Next Object Below selects from `cur`: the nearest
+/// sibling of `cur` in that direction that [`walk_selectable`] visits. Hidden and locked objects
+/// and sublayers are passed over. Only the siblings are read, not the rest of the document.
+fn step_target(d: &Document, iso: Option<NodeId>, cur: NodeId, dir: i64) -> Option<NodeId> {
+    let path = d.index_path(cur)?;
+    let (&idx, up) = path.split_last()?;
+    // The objects that hold `cur` and its siblings, from the top-level layer down.
+    let mut holders = Vec::with_capacity(up.len());
+    let mut siblings = &d.layers;
+    for &i in up {
+        let n = siblings.get(i)?;
+        holders.push(n.as_ref());
+        siblings = n.children()?;
+    }
+    let iso = iso.and_then(|i| d.node(i));
+    let locks = d.locked_artboards();
+    let visits = |n: &Node| walk_visits(&holders, n, iso, &locks);
+    let next = if dir > 0 { siblings.iter().skip(idx + 1).find(|n| visits(n)) } else { siblings.iter().take(idx).rev().find(|n| visits(n)) };
+    next.map(|n| n.id)
+}
+
+/// Whether [`walk_selectable`] visits `n`, read from the objects that hold it: `holders` are its
+/// layer and the sublayers, groups and other containers inside it that hold `n`, outermost first
+/// (its [`Document::ancestry`] without `n`). `iso` is the isolated object. Unlike
+/// [`is_selectable`], it passes over sublayers and the ruler guides of a layer, which the walk
+/// looks through or leaves out.
+fn walk_visits(holders: &[&Node], n: &Node, iso: Option<&Node>, locks: &LockedArtboards) -> bool {
+    let len = holders.len() + 1;
+    let at = |i: usize| holders.get(i).copied().unwrap_or(n);
+    let open = |i: usize| at(i).visible && !at(i).locked;
+    let start = match iso {
+        Some(c) => {
+            let Some(p) = (0..len).find(|&i| at(i).id == c.id) else { return false };
+            if !(0..=p).all(|i| open(i) && !at(i).is_template()) {
+                return false;
+            }
+            // A single object isolated is all there is to select.
+            if !c.is_container() {
+                return p + 1 == len;
+            }
+            p + 1
+        }
+        None => 0,
+    };
+    // The object Select All takes: the first one that is not a layer, inside visible, unlocked
+    // layers and sublayers that are not template layers.
+    let Some(top) = (start..len).find(|&i| !at(i).is_layer()) else { return false };
+    (start..top).all(|i| open(i) && !at(i).is_template())
+        && !at(top).is_ruler_guide()
+        && (top..len).all(open)
+        && (iso.is_some() || locks.is_empty() || !locks.holds(at(top)))
 }
 
 /// The first selected object, in selection order, that [`is_selectable`] accepts.
@@ -360,7 +480,7 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
+    let i = artboard_at(&st.doc, p, "artboard", "select.allOnArtboard")?.unwrap_or(0);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
     let symbols = st.doc.symbol_boxes();
     let ids: Vec<NodeId> =
@@ -399,7 +519,8 @@ fn reselect(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation).into_iter().filter(|id| !st.selection.contains(*id)).collect();
+    let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation).into_iter().filter(|id| !selected.contains(id)).collect();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     ok()
 }
@@ -407,17 +528,7 @@ fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
 fn step(s: &mut Session, dir: i64) -> Result<Value> {
     let st = s.doc()?;
     let Some(cur) = st.selection.objects.first().copied() else { return ok() };
-    let Some((par, idx, _)) = st.doc.position(cur) else { return ok() };
-    let Some(siblings) = st.doc.children(par) else { return ok() };
-    // The nearest sibling in that direction that `walk_selectable` visits: hidden and locked
-    // objects and sublayers are passed over.
-    let can = selectable_ids(&st.doc, st.isolation);
-    let next = if dir > 0 {
-        siblings.iter().skip(idx + 1).find(|n| can.contains(&n.id))
-    } else {
-        siblings.iter().take(idx).rev().find(|n| can.contains(&n.id))
-    };
-    let Some(id) = next.map(|n| n.id) else { return ok() };
+    let Some(id) = step_target(&st.doc, st.isolation, cur, dir) else { return ok() };
     s.select(|_, sel| sel.set([id]))?;
     ok()
 }
@@ -430,11 +541,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = checked_ids_param(s, p, "ids", "select.add")?;
-    s.select(|_, sel| {
-        for i in ids {
-            sel.add(i);
-        }
-    })?;
+    s.select(|_, sel| sel.add_all(ids))?;
     selection_result(s)
 }
 
@@ -445,11 +552,7 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
         let value = p.get("id").ok_or_else(|| bad("select.toggle", "missing id or ids"))?;
         vec![checked_id(s, value, "select.toggle")?]
     };
-    s.select(|_, sel| {
-        for id in ids {
-            sel.toggle(id);
-        }
-    })?;
+    s.select(|_, sel| sel.toggle_all(ids))?;
     selection_result(s)
 }
 
@@ -610,6 +713,9 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => None,
     };
+    if let Some(v) = p.get("anchor").filter(|v| !v.is_null()) {
+        return key_anchor(s, id, guide, v);
+    }
     if let Some(g) = guide {
         let sel = &s.doc()?.selection;
         if id.is_some() {
@@ -624,6 +730,7 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
         }
         s.select(|_, sel| {
             sel.key = None;
+            sel.key_anchor = None;
             sel.key_guide = Some(gid);
         })?;
         return key_result(s);
@@ -640,16 +747,66 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
     s.select(|_, sel| {
         sel.key = id;
         sel.key_guide = None;
+        sel.key_anchor = None;
     })?;
     key_result(s)
 }
 
-/// `{key}`, with `guide` when a guide is the key.
+/// `select.key {id, anchor: [subpath, anchor]}`: anchor point `anchor` of path `id`, selected with
+/// Direct Selection beside at least one other point, becomes the key anchor
+/// ([`vectorcraft_doc::Selection::key_anchor`]).
+fn key_anchor(s: &mut Session, id: Option<NodeId>, guide: Option<usize>, v: &Value) -> Result<Value> {
+    const C: &str = "select.key";
+    let r = match checked_refs(Some(&Value::Array(vec![v.clone()])), C)?.as_slice() {
+        [r] => *r,
+        _ => return Err(bad(C, "`anchor` must be a [subpath, anchor] pair")),
+    };
+    if guide.is_some() {
+        return Err(bad(C, "give `anchor` or `guide`, not both"));
+    }
+    let id = id.ok_or_else(|| bad(C, "`anchor` needs `id`, the path the point is on"))?;
+    let st = s.doc()?;
+    let sel = &st.selection;
+    let on_path = st.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.get(r.0).is_some_and(|sp| r.1 < sp.anchors.len()));
+    let is_selected_anchor = on_path
+        && !sel.segments.contains_key(&id)
+        && (sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) || (!sel.anchors.contains_key(&id) && sel.contains(id)));
+    if !is_selected_anchor {
+        return Err(bad(C, format!("anchor [{}, {}] of object {id} is not a selected anchor point", r.0, r.1)));
+    }
+    // Check the new key on a copy first, so a request that fails leaves the key as it was.
+    let mut trial = sel.clone();
+    if !trial.anchors.contains_key(&id)
+        && let Some(p) = st.doc.node(id).and_then(|n| n.path_data())
+    {
+        trial.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+    }
+    trial.key_anchor = Some((id, r));
+    trial.prune(&st.doc);
+    if trial.key_anchor.is_none() {
+        return Err(bad(C, "select another anchor point to align to the key anchor"));
+    }
+    s.select(|d, sel| {
+        if !sel.anchors.contains_key(&id)
+            && let Some(p) = d.node(id).and_then(|n| n.path_data())
+        {
+            sel.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+        }
+        sel.key_anchor = Some((id, r));
+    })?;
+    key_result(s)
+}
+
+/// `{key}`, with `guide` when a guide is the key and `keyAnchor` (`{id, anchor}`) when an anchor
+/// point is.
 fn key_result(s: &Session) -> Result<Value> {
     let st = s.doc()?;
     let mut out = json!({ "key": st.selection.key });
     if let Some(g) = st.selection.key_guide.and_then(|id| super::docmenu::guide_indexes(&st.doc, &[id]).first().copied()) {
         out["guide"] = json!(g);
+    }
+    if let Some((id, (si, ai))) = st.selection.key_anchor {
+        out["keyAnchor"] = json!({ "id": id.0, "anchor": [si, ai] });
     }
     Ok(out)
 }
@@ -815,50 +972,143 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
         None if bool_or(p, "add", false) => "add",
         None => "set",
     };
-    s.select(|d, sel| {
-        if mode == "set" {
-            sel.clear();
-        }
-        for (id, refs) in items {
-            // A segment pick's endpoints aren't selected anchors: start from none of them.
-            let segment_pick = sel.segments.remove(&id).is_some();
-            let all: BTreeSet<(usize, usize)> =
-                d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
-            // Anything but a path is selected, toggled or deselected as a whole.
-            if all.is_empty() {
-                match mode {
-                    "toggle" => sel.toggle(id),
-                    "subtract" => sel.remove(id),
-                    _ => sel.add(id),
-                }
-                continue;
-            }
-            // From the anchors selected now (all of them for a path selected as a whole).
-            let now = match sel.partial(id) {
-                _ if segment_pick => BTreeSet::new(),
-                Some(a) => a.clone(),
-                None if sel.contains(id) => all.clone(),
-                None => BTreeSet::new(),
-            };
-            let refs: BTreeSet<(usize, usize)> = refs.intersection(&all).copied().collect();
-            let next: BTreeSet<(usize, usize)> = match mode {
-                "toggle" => now.symmetric_difference(&refs).copied().collect(),
-                "subtract" => now.difference(&refs).copied().collect(),
-                _ => now.union(&refs).copied().collect(),
-            };
-            if next.is_empty() {
-                sel.remove(id);
-                continue;
-            }
-            sel.add(id);
-            if next.len() < all.len() {
-                sel.anchors.insert(id, next);
-            } else {
-                sel.anchors.remove(&id);
-            }
-        }
-    })?;
+    s.select(|d, sel| select_anchor_items(d, sel, items, mode))?;
     ok()
+}
+
+/// `select.anchorsMany`'s change to `sel`: each item in order, with the selected objects kept in a
+/// [`Members`] map while the items run, so that an item's membership check and change don't go
+/// through `sel.objects`.
+fn select_anchor_items(d: &Document, sel: &mut Selection, items: Vec<(NodeId, BTreeSet<AnchorRef>)>, mode: &str) {
+    if mode == "set" {
+        sel.clear();
+    }
+    if items.is_empty() {
+        return;
+    }
+    let mut members = Members::of(sel);
+    for (id, refs) in items {
+        // A segment pick's endpoints aren't selected anchors: start from none of them.
+        let segment_pick = sel.segments.remove(&id).is_some();
+        let all: BTreeSet<AnchorRef> =
+            d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
+        // Anything but a path is selected, toggled or deselected as a whole.
+        if all.is_empty() {
+            match mode {
+                "toggle" => members.toggle(sel, id),
+                "subtract" => members.remove(sel, id),
+                _ => members.add(sel, id),
+            }
+            continue;
+        }
+        // From the anchors selected now (all of them for a path selected as a whole).
+        let now = match sel.partial(id) {
+            _ if segment_pick => BTreeSet::new(),
+            Some(a) => a.clone(),
+            None if members.contains(id) => all.clone(),
+            None => BTreeSet::new(),
+        };
+        let refs: BTreeSet<AnchorRef> = refs.intersection(&all).copied().collect();
+        let next: BTreeSet<AnchorRef> = match mode {
+            "toggle" => now.symmetric_difference(&refs).copied().collect(),
+            "subtract" => now.difference(&refs).copied().collect(),
+            _ => now.union(&refs).copied().collect(),
+        };
+        if next.is_empty() {
+            members.remove(sel, id);
+            continue;
+        }
+        members.add(sel, id);
+        if next.len() < all.len() {
+            sel.anchors.insert(id, next);
+        } else {
+            sel.anchors.remove(&id);
+        }
+    }
+    members.finish(sel);
+}
+
+/// The selected objects of a [`Selection`] while [`select_anchor_items`] changes them. Each
+/// selected id maps to the activation that selected it: 0 for the objects selected before, and
+/// a new number for each later [`Members::add`] of an unselected id, which `added` lists in order.
+/// [`Members::finish`] writes them back to `objects`.
+struct Members {
+    live: std::collections::HashMap<NodeId, usize>,
+    added: Vec<(NodeId, usize)>,
+    removed: bool,
+}
+
+impl Members {
+    fn of(sel: &Selection) -> Self {
+        count_objects_walk();
+        Self { live: sel.objects.iter().map(|id| (*id, 0)).collect(), added: Vec::new(), removed: false }
+    }
+
+    fn contains(&self, id: NodeId) -> bool {
+        self.live.contains_key(&id)
+    }
+
+    /// [`Selection::add`]: clears what any selection change clears, and selects `id` at the end
+    /// unless it is selected.
+    fn add(&mut self, sel: &mut Selection, id: NodeId) {
+        sel.target = None;
+        sel.slices.clear();
+        sel.symbol_part = None;
+        sel.on_path_member = None;
+        if let std::collections::hash_map::Entry::Vacant(e) = self.live.entry(id) {
+            let activation = self.added.len() + 1;
+            e.insert(activation);
+            self.added.push((id, activation));
+        }
+    }
+
+    /// [`Selection::remove`]: clears what any selection change clears, and deselects `id` with
+    /// its anchors, segments, and the key or key anchor it is.
+    fn remove(&mut self, sel: &mut Selection, id: NodeId) {
+        sel.target = None;
+        sel.slices.clear();
+        sel.symbol_part = None;
+        sel.on_path_member = None;
+        if self.live.remove(&id).is_some() {
+            self.removed = true;
+        }
+        sel.anchors.remove(&id);
+        sel.segments.remove(&id);
+        if sel.key == Some(id) {
+            sel.key = None;
+        }
+        if sel.key_anchor.is_some_and(|(k, _)| k == id) {
+            sel.key_anchor = None;
+        }
+    }
+
+    /// [`Selection::toggle`].
+    fn toggle(&mut self, sel: &mut Selection, id: NodeId) {
+        if self.contains(id) { self.remove(sel, id) } else { self.add(sel, id) }
+    }
+
+    /// Writes the selected objects to `sel.objects`: the slots of the objects selected before and
+    /// still selected by that activation, in their order, then the ids selected since and still
+    /// selected by the activation that added them, in the order they were added.
+    fn finish(self, sel: &mut Selection) {
+        if self.removed {
+            count_objects_walk();
+            sel.objects.retain(|id| self.live.get(id) == Some(&0));
+        }
+        sel.objects.extend(self.added.into_iter().filter(|(id, n)| self.live.get(id) == Some(n)).map(|(id, _)| id));
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`select_anchor_items`] made over the selected objects on this thread.
+    pub(crate) static OBJECTS_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the selected objects.
+fn count_objects_walk() {
+    #[cfg(test)]
+    OBJECTS_WALKS.set(OBJECTS_WALKS.get() + 1);
 }
 
 /// Select › Same › Fill/Stroke Color: is `a` the same colour as `b`? Tints of one global or spot
@@ -890,7 +1140,9 @@ fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "give `fill`, `stroke` or both"));
     }
     let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
-    select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+    select_where(s, C, p, |_, n, parent| {
+        paint_reported(n, parent) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref())
+    })
 }
 
 /// The longest note, in bytes, that Select by Note searches for.
@@ -1011,11 +1263,11 @@ fn fold_case(c: char) -> impl Iterator<Item = char> {
     c.to_lowercase().map(|l| if l == 'ς' { 'σ' } else { l })
 }
 
-/// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though
-/// it holds its members, and its members report none.
-fn paint_reported(d: &Document, n: &Node) -> bool {
+/// Does `document.inspect` report a fill and stroke for `n`, held by `parent`? A compound path's
+/// are its own, though it holds its members, and its members report none.
+fn paint_reported(n: &Node, parent: Option<&Node>) -> bool {
     let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
-    compound(n) || (!n.is_container() && !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
+    compound(n) || (!n.is_container() && !parent.is_some_and(compound))
 }
 
 /// The object Select > Same compares the others with, and whether isolation mode is inside a
@@ -1052,30 +1304,30 @@ fn same_fill(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> R
 fn same_in(s: &mut Session, cmd: &str, live_paint: bool, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let (refn, members) = same_reference(st, cmd)?;
-    let group = live_paint_group(&st.doc, refn.id);
+    let group = live_paint_group(st.doc.parent_of(refn.id).and_then(|p| st.doc.node(p)));
     let refn = refn.clone();
-    select_where(s, cmd, &json!({}), |d, n| {
-        (!live_paint || live_paint_group(d, n.id) == group) && (if members { !n.is_container() } else { paint_reported(d, n) }) && eq(n, &refn)
-    })
+    select_where(s, cmd, &json!({}), |_, n, parent| same_candidate(n, parent, live_paint, group, members) && eq(n, &refn))
 }
 
-/// The Live Paint group `id` is a face or edge of.
-fn live_paint_group(d: &Document, id: NodeId) -> Option<NodeId> {
-    d.parent_of(id).filter(|p| d.node(*p).is_some_and(is_live_paint))
+/// Whether Select > Same compares `n`, held by `parent`, with its reference: with `live_paint`, only
+/// when `n` is a face or edge of the Live Paint group `group` (or of none, for `None`); in
+/// isolation mode inside a compound path (`members`), any object that is not a container;
+/// otherwise one that [`paint_reported`] accepts.
+fn same_candidate(n: &Node, parent: Option<&Node>, live_paint: bool, group: Option<NodeId>, members: bool) -> bool {
+    (!live_paint || live_paint_group(parent) == group) && (if members { !n.is_container() } else { paint_reported(n, parent) })
+}
+
+/// The Live Paint group an object held by `parent` is a face or edge of.
+fn live_paint_group(parent: Option<&Node>) -> Option<NodeId> {
+    parent.filter(|p| is_live_paint(p)).map(|p| p.id)
 }
 
 /// Select the objects [`walk_selectable`] visits that `f` accepts (not looking inside accepted
-/// ones); Select > Reselect repeats `cmd` with `p`.
-pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
+/// ones); `f` is given each object with the node that holds it. Select > Reselect repeats `cmd`
+/// with `p`.
+pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node, Option<&Node>) -> bool) -> Result<Value> {
     let st = s.doc()?;
-    let mut ids = vec![];
-    walk_selectable(&st.doc, st.isolation, |n| {
-        if f(&st.doc, n) {
-            ids.push(n.id);
-            return false;
-        }
-        true
-    });
+    let ids = matching(&st.doc, st.isolation, |n, parent| f(&st.doc, n, parent));
     let from = st.selection.objects.clone();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     let st = s.doc_mut()?;
@@ -1084,12 +1336,26 @@ pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Do
     Ok(json!({ "count": st.selection.objects.len() }))
 }
 
+/// The objects [`walk_selectable`] visits that `f` accepts, in paint order, not looking inside
+/// accepted ones. `f` is given each object with the node that holds it.
+fn matching(d: &Document, iso: Option<NodeId>, f: impl Fn(&Node, Option<&Node>) -> bool) -> Vec<NodeId> {
+    let mut ids = vec![];
+    walk_selectable_in(d, iso, |n, parent| {
+        if f(n, parent) {
+            ids.push(n.id);
+            return false;
+        }
+        true
+    });
+    ids
+}
+
 fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
     let cmd = "select.same.graphicStyle";
     let st = s.doc()?;
     let (refn, _) = same_reference(st, cmd)?;
     let id = super::style::linked_style(&st.doc, refn).map(|g| g.id).ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
-    select_where(s, cmd, &json!({}), |d, n| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
+    select_where(s, cmd, &json!({}), |d, n, _| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
 }
 
 /// An appearance attribute Select > Same > Appearance Attribute matches.
@@ -1102,10 +1368,10 @@ enum Attribute {
 
 fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "select.same.appearanceAttribute";
+    let item = index_opt(p, "item", cmd)?.or(s.appearance_item());
     let st = s.doc()?;
     let (refn, _) = same_reference(st, cmd)?;
     let ap = &refn.appearance;
-    let item = p.get("item").and_then(Value::as_u64).map(index).or(s.appearance_item());
     let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
         (Some(it), _) => Attribute::Item(it.clone()),
         (None, Some(e)) => Attribute::Effect(e.clone()),
@@ -1113,7 +1379,7 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
             Attribute::Item(ap.items.iter().rev().find(|i| i.is_fill()).cloned().ok_or_else(|| bad(cmd, "the object has no fill, stroke or effect"))?)
         }
     };
-    select_where(s, cmd, p, |_, n| match &attr {
+    select_where(s, cmd, p, |_, n, _| match &attr {
         Attribute::Item(it) => n.appearance.items.contains(it),
         Attribute::Effect(e) => n.appearance.effects.iter().any(|x| x.id == e.id && x.params == e.params),
     })
@@ -1172,3 +1438,12 @@ fn not_pixel_aligned(s: &mut Session, _: &Value) -> Result<Value> {
     s.select(|_, sel| sel.set(ids))?;
     Ok(json!({ "count": s.doc()?.selection.objects.len() }))
 }
+
+#[cfg(test)]
+mod same_tests;
+
+#[cfg(test)]
+mod step_tests;
+
+#[cfg(test)]
+mod tests;

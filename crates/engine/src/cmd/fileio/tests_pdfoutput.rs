@@ -38,3 +38,19 @@ fn export_pdf_converts_colours_writes_the_output_intent_and_real_text() {
     let bad = s.execute("document.exportPdf", &json!({"output": {"conversion": "destination", "destination": "Missing"}}));
     assert!(matches!(bad, Err(crate::EngineError::BadParams { .. })), "{bad:?}");
 }
+
+/// Over a saved preset whose Profiles setting is `none`, `"default"` leaves the setting unset,
+/// while `null` keeps the preset's value; an unknown value is a bad parameter.
+#[test]
+fn profiles_default_unsets_a_presets_profiles_setting() {
+    use vectorcraft_pdf::{PdfPreset, PdfSettings, ProfileInclusion};
+    let mut settings = PdfSettings::default();
+    settings.output.profiles = Some(ProfileInclusion::None);
+    let saved = [PdfPreset { name: "No profiles".into(), description: String::new(), settings }];
+    let resolve = |output: Value| pdf::resolve("document.exportPdf", &json!({"preset": "No profiles", "output": output}), &saved);
+    assert_eq!(resolve(json!({"profiles": "default"})).unwrap().output.profiles, None);
+    assert_eq!(resolve(json!({"profiles": null})).unwrap().output.profiles, Some(ProfileInclusion::None));
+    assert_eq!(resolve(json!({"profiles": "all"})).unwrap().output.profiles, Some(ProfileInclusion::All));
+    let bad = resolve(json!({"profiles": "sometimes"}));
+    assert!(matches!(bad, Err(crate::EngineError::BadParams { .. })), "{bad:?}");
+}

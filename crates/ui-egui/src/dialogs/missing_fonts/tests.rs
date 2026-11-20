@@ -1,21 +1,20 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::Rules;
 
 use super::*;
+use crate::tests_folder::Folder;
 
 fn frame(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
 }
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
+/// A fresh temporary folder (canonical, as a search reports it), removed when dropped.
+fn folder(tag: &str) -> Folder {
     let dir = vectorcraft_testkit::temp_dir(&format!("missing-fonts-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+    Folder::adopt(vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap()))
 }
 
 /// An app that reads files and whose searches may go anywhere in `root`, on two threads.
@@ -29,9 +28,41 @@ fn app_for(root: &Path) -> VectorcraftApp {
 
 fn png() -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -191,7 +222,7 @@ fn closing_the_dialog_stops_its_search() {
     app.session.search_threads = Some(1);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
-    app.run("ui.missingFontsDialog", json!({"folder": root})).unwrap();
+    app.run("ui.missingFontsDialog", json!({"folder": root.as_path()})).unwrap();
     let id = app.ui.dialog_search.expect("the dialog's search");
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none() && app.ui.dialog_search.is_none());
@@ -275,7 +306,8 @@ fn the_question_comes_back_after_a_dialog_that_took_its_place() {
 /// opens without the question.
 #[test]
 fn generic_families_are_not_asked_about() {
-    let mut app = app_for(&folder("generic"));
+    let root = folder("generic");
+    let mut app = app_for(&root);
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="10" y="40" font-family="sans-serif">A</text></svg>"#;
     crate::io::open_bytes(&mut app, "generic.svg", svg.as_bytes(), None).unwrap();
     let listed = app.session.execute("text.fonts", &json!({})).unwrap();

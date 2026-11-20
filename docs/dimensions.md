@@ -15,8 +15,41 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   path's length. A press on an anchor picks it when the pointer moves less than 8 pixels
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
-  anchors and centres, and the second onto the construction guides through the first; the guides
-  show while hovering, before each click.
+  anchors and centres. With Snap to Perpendicular or Snap to Tangent on, the second point also
+  snaps onto a segment where the line from the first meets it square or grazes a curve. When the
+  first point was picked on an anchor, the second also snaps onto the construction guides through
+  it; any other first point has no construction guides through it. The guides
+  show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
+  anchor within 8 pixels takes it first (with Use Preview Bounds on, except where a corner of a
+  path's preview bounds takes it, as below); with Smart Guides or Snap to Point on, the end of a line
+  of a visible, unlocked dimension already drawn (its dimension line, or the far end of an
+  extension line) within 8 pixels takes it next, without a link to that dimension; a point on a
+  guide stays on the guide where the pointer
+  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or, on a
+  construction guide or a Snap to Glyph guide that runs at an angle, onto the place where that
+  guide crosses another object's alignment line within twice that tolerance; a point that no
+  anchor, guide, grid or pixel snapping places lands on the closest point of a segment, or of a
+  line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
+  on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
+  line shows the "path" label. These rules apply to the Linear points.
+  With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
+  preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes measuring a stroked segment by snapping onto its preview bounds. VectorCraft snaps to
+  the four corners of those bounds only, not to their edges, by its own rules: a click within 8
+  pixels of a corner lands on it instead of on the anchor at the same corner of the object's
+  geometric bounds, and any other anchor, of that object or of other art, that is nearer the
+  pointer than the corner takes the point instead. A corner that is also an anchor, as on a path
+  without a stroke, takes the anchor, and so does another path's anchor right on the corner. The
+  corners of a group's own strokes or effects, of type, of paths made into guides and of the
+  members of a compound path on their own are not snapped to. The point is linked to the path (in a compound path, to the member
+  whose own bounds reach nearest to the corner), is held against its anchors and shows the
+  "anchor" label. It does not start construction guides for the second point. For an object that
+  is not rotated, a horizontal or vertical dimension between two such corners measures, when it
+  is drawn, the outside of the stroke, the width or height that W and H show in the Transform and
+  Properties panels. The point then moves with the path's anchors, so a later change to the
+  stroke weight, or a scale with Scale Strokes off, does not move it with the outside of the
+  stroke.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
@@ -37,6 +70,14 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   point as before. An unlinked dimension that
   turns has its line where the turn puts it, or, when that would put it between the points, as
   far past the outermost point as before.
+  With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
+  tolerance of the level of a parallel line of a linear dimension already drawn has its line on
+  that level. The other dimension, and every layer and group it is in, must be visible and
+  unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
+  frontmost back, so in a larger document a dimension past them is not a level. This is
+  VectorCraft's own rule. With
+  Alignment Guides on, a guide runs along the level across both lines while the dimension is
+  placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
@@ -50,6 +91,12 @@ alignment). **Position** is **Away from the Line** (the label on the far side of
 from the object) or **Between Line and Object**; **Alignment** is **Left**, **Center** or
 **Right** along the line. **Save** keeps them for new dimensions; existing ones don't change.
 
+**Arrow Style** lists **Filled**, **Open**, **Tick** and **None**, then every other built-in
+arrowhead of the Stroke panel, each with a drawn preview before its name. Custom arrowheads are not
+listed. A version that has the arrowhead in the Stroke panel but not in Arrow Style keeps the saved
+arrows of such a dimension until it draws the dimension again, and then draws **Filled** arrows. A
+version without the arrowhead does not open the file.
+
 Scale means **drawing : real size**, independent of zoom. At **1:10** a 1 in line on the page is
 labelled 10 in; at **10:1**, 0.1 in. It scales lengths, not angles or the size of text and arrows.
 
@@ -61,7 +108,8 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. Deleting the art, changing its number of anchors or whether it is
+same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
 attaching them to a different edge. Undo links them again. A linked dimension moved on its own

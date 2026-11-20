@@ -177,11 +177,13 @@ pub(crate) enum NativeKind {
 /// 15.3.4.5): calling it calls `target` with `this` and `args` before the arguments it is given.
 /// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
 /// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
-/// is called when that code ends.
+/// is called when that code ends. `Pausable` is a built-in that may ask the host for a value the
+/// run to wait for ([`crate::interp::Pause`]).
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
     Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
+    Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
     Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
@@ -213,7 +215,9 @@ pub(crate) enum Class {
         length_writable: bool,
     },
     Function(Func),
-    Error,
+    /// An error object. One the interpreter threw itself holds a hash of the description it had
+    /// then ([`crate::interp::Interp::describe`]); one a script made holds `None`.
+    Error(Option<u64>),
     Arguments(Box<ArgMap>),
     /// A `Boolean` object made by ToObject, with its primitive value.
     Boolean(bool),
@@ -311,7 +315,7 @@ impl Class {
             Class::Ordinary | Class::ForIn(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
-            Class::Error => "Error",
+            Class::Error(_) => "Error",
             Class::Arguments(_) => "Arguments",
             Class::Boolean(_) => "Boolean",
             Class::Number(_) => "Number",

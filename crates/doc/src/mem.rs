@@ -105,8 +105,26 @@ impl Document {
         n += shared(&self.para_styles, &newer.para_styles, styles);
         n += shared(&self.composite_fonts, &newer.composite_fonts, |c| {
             let part = |p: &crate::CompositePart| p.font.capacity() + p.style.capacity();
+            let custom = |f: &crate::CompositeFont| {
+                vec_bytes(&f.custom) + f.custom.iter().map(|s| s.name.capacity() + s.characters.capacity() + part(&s.part)).sum::<usize>()
+            };
             vec_bytes(c)
-                + c.iter().map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>()).sum::<usize>()
+                + c.iter()
+                    .map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>() + custom(f))
+                    .sum::<usize>()
+        });
+        n += shared(&self.kinsoku_sets, &newer.kinsoku_sets, |k| {
+            vec_bytes(k)
+                + k.iter()
+                    .map(|s: &crate::KinsokuSet| {
+                        s.name.capacity()
+                            + vec_bytes(&s.cannot_start)
+                            + vec_bytes(&s.cannot_end)
+                            + vec_bytes(&s.hanging)
+                            + vec_bytes(&s.inseparable)
+                            + s.inseparable.iter().map(String::capacity).sum::<usize>()
+                    })
+                    .sum::<usize>()
         });
         n += shared(&self.saved_selections, &newer.saved_selections, |s| {
             vec_bytes(s) + s.iter().map(|s: &SavedSelection| s.name.capacity() + vec_bytes(&s.objects)).sum::<usize>()
@@ -266,6 +284,7 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
             .as_deref()
             .map_or(0, |m| ALLOC + size_of::<crate::color_mask::ColorMask>() + m.key.capacity() + m.from.capacity() + m.colors.capacity() * 3);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
+        b += e.flare.as_ref().map_or(0, |f| ALLOC + size_of::<crate::flare::FlareSpec>() + json_bytes(&f.params));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         if e.intertwine_tiers.capacity() > 0 {
             b += ALLOC + e.intertwine_tiers.capacity() * size_of::<PathData>() + e.intertwine_tiers.iter().map(path_bytes).sum::<usize>();
@@ -276,7 +295,13 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
         });
     }
     b += match &n.kind {
-        NodeKind::Path { path, live, .. } => path_bytes(path) + boxed(live),
+        NodeKind::Path { path, live, .. } => {
+            let was = other.and_then(|o| match &o.kind {
+                NodeKind::Path { path, .. } => Some(path),
+                _ => None,
+            });
+            path_bytes_besides(path, was) + boxed(live)
+        }
         NodeKind::Layer { children, .. }
         | NodeKind::Group { children, .. }
         | NodeKind::Compound { children, .. }
@@ -293,8 +318,30 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
 }
 
 fn path_bytes(p: &PathData) -> usize {
-    let anchors: usize =
-        p.subpaths.iter().map(|s| if s.anchors.capacity() == 0 { 0 } else { ALLOC + s.anchors.capacity() * size_of::<Anchor>() }).sum();
+    path_bytes_besides(p, None)
+}
+
+/// [`path_bytes`] without the anchor chunks that `other` (another version of the path) holds too:
+/// a version made by changing one anchor shares every chunk but the one it changed.
+fn path_bytes_besides(p: &PathData, other: Option<&PathData>) -> usize {
+    let mut shared: Vec<usize> =
+        other.map(|o| o.subpaths.iter().flat_map(|s| s.anchors.chunk_allocations()).map(|(id, _)| id).collect()).unwrap_or_default();
+    shared.sort_unstable();
+    let chunk = ALLOC + ARC + size_of::<Vec<Anchor>>() + ALLOC;
+    let anchors: usize = p
+        .subpaths
+        .iter()
+        .map(|s| {
+            let table = s.anchors.table_bytes();
+            let own: usize = s
+                .anchors
+                .chunk_allocations()
+                .filter(|(id, _)| shared.binary_search(id).is_err())
+                .map(|(_, capacity)| chunk + capacity * size_of::<Anchor>())
+                .sum();
+            if table == 0 { own } else { ALLOC + table + own }
+        })
+        .sum();
     anchors + if p.subpaths.capacity() == 0 { 0 } else { ALLOC + p.subpaths.capacity() * size_of::<SubPath>() }
 }
 
@@ -320,7 +367,8 @@ pub fn appearance_heap_bytes(a: &Appearance) -> usize {
                     AppearanceItem::Stroke(s) => {
                         s.dash.as_ref().map_or(0, |d| vec_bytes(&d.pattern))
                             + s.profile.as_ref().map_or(0, |p| vec_bytes(&p.points))
-                            + s.pressure.as_ref().map_or(0, |p| vec_bytes(&p.points))
+                            + [&s.pressure, &s.tilt, &s.wheel].into_iter().flatten().map(|p| vec_bytes(&p.points)).sum::<usize>()
+                            + [&s.bearing, &s.rotation].into_iter().flatten().map(|p| vec_bytes(&p.points)).sum::<usize>()
                             + s.brush.as_ref().map_or(0, String::capacity)
                     }
                     _ => 0,
@@ -389,6 +437,27 @@ mod tests {
             d.insert(Some(layer), usize::MAX, Node::path(id, r, Appearance::default_art())).unwrap();
         }
         d
+    }
+
+    #[test]
+    fn every_pen_recording_of_a_stroke_counts() {
+        use crate::{AngleProfile, PressureProfile};
+        let plain = Appearance::default_art();
+        let base = appearance_heap_bytes(&plain);
+        let ramp = || PressureProfile { points: (0..100).map(|i| (f64::from(i) / 99.0, 0.5)).collect() };
+        let turn = || AngleProfile { points: (0..100).map(|i| (f64::from(i) / 99.0, 10.0)).collect() };
+        for i in 0..5 {
+            let mut a = plain.clone();
+            let s = a.stroke_mut().unwrap();
+            match i {
+                0 => s.pressure = Some(ramp()),
+                1 => s.tilt = Some(ramp()),
+                2 => s.bearing = Some(turn()),
+                3 => s.rotation = Some(turn()),
+                _ => s.wheel = Some(ramp()),
+            }
+            assert!(appearance_heap_bytes(&a) >= base + 100 * size_of::<(f64, f64)>(), "recording {i}");
+        }
     }
 
     #[test]
