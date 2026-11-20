@@ -367,6 +367,61 @@ pub fn circle_through_points(points: &[Point]) -> Option<(Point, f64)> {
     circle.filter(|(c, r)| c.is_finite() && r.is_finite() && *r > 0.0)
 }
 
+/// The circle at `center` with `radius` as a closed path whose anchors are `points` (points on the
+/// circle, as [`circle_through_points`] gives it) plus as many more as split each arc between two
+/// of them into equal parts of at most a quarter turn. The path starts at the first point and runs
+/// as [`ellipse`] does (left, top, right on the page); each curve's handles are 4/3·tan(θ/4) of
+/// the radius along the tangents at its ends (θ, its turn). Two points with `center` at their
+/// midpoint give four anchors. A point given twice is one anchor; with no points it starts at the
+/// left, as [`ellipse`] does.
+pub fn circle_with_anchors_at(center: Point, radius: f64, points: &[Point]) -> PathData {
+    let quarter = PI / 2.0;
+    let angle = |p: Point| (p.y - center.y).atan2(p.x - center.x);
+    let start = points.first().map_or(PI, |p| angle(*p));
+    // (turn from the first point, the point itself).
+    let mut placed: Vec<(f64, Point)> = points.iter().map(|p| ((angle(*p) - start).rem_euclid(TAU), *p)).collect();
+    placed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    placed.dedup_by(|a, b| a.1 == b.1);
+    // Two points with the center at their midpoint are the ends of a diameter: the second is half a
+    // turn from the first, also where rounding moves the angle from the center off it.
+    if let [(_, a), (turn, b)] = placed.as_mut_slice()
+        && a.midpoint(*b) == center
+    {
+        *turn = PI;
+    }
+    if placed.is_empty() {
+        placed.push((0.0, Point::new(center.x - radius, center.y)));
+    }
+    let on_circle = |t: f64| Point::new(center.x + radius * (start + t).cos(), center.y + radius * (start + t).sin());
+    // Every anchor: (turn, position), the given points where they are and the others on the circle.
+    let mut turns: Vec<(f64, Point)> = Vec::new();
+    for (i, &(t, p)) in placed.iter().enumerate() {
+        turns.push((t, p));
+        let next = placed.get(i + 1).map_or(TAU, |n| n.0);
+        let gap = next - t;
+        // At most 4 parts for the whole turn: a gap is never more than a full turn.
+        let parts = (gap / quarter - 1e-9).ceil().clamp(1.0, 4.0);
+        for k in 1..parts as u32 {
+            let tk = t + gap * f64::from(k) / parts;
+            turns.push((tk, on_circle(tk)));
+        }
+    }
+    let n = turns.len();
+    let anchors = (0..n)
+        .filter_map(|i| {
+            let &(t, p) = turns.get(i)?;
+            let prev = if i == 0 { turns.last()?.0 - TAU } else { turns.get(i - 1)?.0 };
+            let next = turns.get(i + 1).map_or(TAU, |n| n.0);
+            // The unit tangent along the run (y down: increasing angle).
+            let a = start + t;
+            let tangent = Vec2::new(-a.sin(), a.cos());
+            let handle = |turn: f64| radius * 4.0 / 3.0 * (turn / 4.0).tan();
+            Some(Anchor { p, h_in: p - tangent * handle(t - prev), h_out: p + tangent * handle(next - t), kind: AnchorKind::Smooth })
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
 /// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
 pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> PathData {
     let n = sides.max(3);
@@ -1144,6 +1199,53 @@ mod tests {
         for points in [&[a][..], &[a, b, c, a], &[a, a], &[a, Point::new(f64::INFINITY, 0.0)], &[], &[a, b, a.midpoint(b)]] {
             assert_eq!(circle_through_points(points), None, "{points:?}");
         }
+    }
+
+    /// The anchors are the given points exactly, plus enough more that no curve turns more than a
+    /// quarter; every anchor and every curve's middle lies on the circle, and the path starts at
+    /// the first point.
+    #[test]
+    fn a_circle_with_its_anchors_at_given_points() {
+        use kurbo::ParamCurve;
+        let (a, b, c) = (Point::new(8.0, 0.0), Point::new(0.0, 6.0), Point::ORIGIN);
+        let center = Point::new(4.0, 3.0);
+        for (points, count) in [(&[a, b][..], 4), (&[a, b, c][..], 5), (&[b, a, c, b][..], 5), (&[][..], 4)] {
+            let path = circle_with_anchors_at(center, 5.0, points);
+            let sub = &path.subpaths[0];
+            assert!(sub.closed, "{points:?}");
+            assert_eq!(sub.anchors.len(), count, "{points:?}: {sub:?}");
+            for p in points {
+                assert!(sub.anchors.iter().any(|q| q.p == *p), "{p:?} is an anchor: {sub:?}");
+            }
+            if let Some(first) = points.first() {
+                assert_eq!(sub.anchors[0].p, *first);
+            }
+            for q in &sub.anchors {
+                assert!((q.p.distance(center) - 5.0).abs() < 1e-9, "{q:?}");
+            }
+            for seg in path.to_bezpath().segments() {
+                let turn = {
+                    let (p0, p1) = (seg.start() - center, seg.end() - center);
+                    p0.cross(p1).atan2(p0.dot(p1))
+                };
+                assert!(turn > 0.0 && turn <= PI / 2.0 + 1e-9, "{turn} for {seg:?}");
+                assert!((seg.eval(0.5).distance(center) - 5.0).abs() < 5.0 * 1e-3, "{seg:?}");
+            }
+        }
+    }
+
+    /// The two ends of a diameter give four anchors, also where the midpoint rounds off it: at
+    /// x = 10⁶, steps of 2⁻³³ put the second point more than half a turn from the first, seen from
+    /// the rounded center.
+    #[test]
+    fn a_diameter_gives_four_anchors_where_its_midpoint_rounds() {
+        let u = 2f64.powi(-33);
+        let (a, b) = (Point::new(1_000_000.0, 0.0), Point::new(1_000_000.0 + 9.0 * u, 8.0 * u));
+        let (center, radius) = circle_through_points(&[a, b]).expect("a circle");
+        let path = circle_with_anchors_at(center, radius, &[a, b]);
+        let sub = &path.subpaths[0];
+        assert_eq!(sub.anchors.len(), 4, "{sub:?}");
+        assert_eq!((sub.anchors[0].p, sub.anchors[2].p), (a, b));
     }
 
     /// Nearly on one line: a point 10⁻⁴ off a chord 2000 long still gives the circle (its sagitta

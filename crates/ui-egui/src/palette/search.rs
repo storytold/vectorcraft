@@ -682,9 +682,9 @@ fn phrase(e: &Entry, query: &str, initials: bool) -> u8 {
 /// What results are ordered by, compared field by field: whether a word matched only through a
 /// description, whether a word matched only through a typo, how the whole query matches, the worst
 /// grade a word gets, the sum of the grades, how the whole query matches when read with the words
-/// of the same meaning it matched through, the result's place among the recent picks, the kind of
-/// result and the label's length.
-type RankKey = (bool, bool, u8, u8, u32, u8, usize, u8, usize);
+/// of the same meaning it matched through, how often the result was picked (higher first), the
+/// result's place among the recent picks, the kind of result and the label's length.
+type RankKey = (bool, bool, u8, u8, u32, u8, std::cmp::Reverse<u8>, usize, u8, usize);
 
 /// The results of `entries` that the lowercased `query` matches, best first, as places in
 /// `entries`. A result matches when every word of the query is text in one of its names or ids
@@ -705,12 +705,14 @@ type RankKey = (bool, bool, u8, u8, u32, u8, usize, u8, usize);
 /// worst grade a word gets, the sum of the grades, how the whole query matches when read with each
 /// word matched through a word of the same meaning replaced by that word ("colour" as "color"; of
 /// several such words the result holds, the ones that match the whole query best),
-/// then by the result's place in `recent`, the places in `entries` of the recent picks, most
-/// recent first (a result not in it comes after every result in it), then the kind of result
-/// ([`kind`]), the label's length and the catalog order. So a recent pick ranks above the results
-/// that match the query as well as it does and below every result that matches it better. An
-/// empty query lists every result in catalog order.
-pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]) -> Vec<u32> {
+/// then by the grade in `uses` of how often the result was picked, highest first (`uses` holds one
+/// grade per entry of `entries`, in their order; a missing grade is 0), then by the result's place
+/// in `recent`, the places in `entries` of the recent picks, most recent first (a result not in it
+/// comes after every result in it), then the kind of result ([`kind`]), the label's length and the
+/// catalog order. So a result picked often, or recently, ranks above the results that match the
+/// query as well as it does and below every result that matches it better. An empty query lists
+/// every result in catalog order.
+pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32], uses: &[u8]) -> Vec<u32> {
     let query = normalize(query);
     if query.is_empty() {
         return (0..entries.len()).filter_map(|i| u32::try_from(i).ok()).collect();
@@ -858,7 +860,8 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         let meant_tier = if synonym { best_reading(&query, &starts, &tokens, &meant, |read| phrase(e, read, false)) } else { tier };
         let length = split_name(&e.shown).0.chars().count();
         let picked = recent.iter().position(|&r| r == place).unwrap_or(recent.len());
-        ranked.push(((described, typo, tier, worst, sum, meant_tier, picked, e.kind, length), place));
+        let used = std::cmp::Reverse(uses.get(i).copied().unwrap_or(0));
+        ranked.push(((described, typo, tier, worst, sum, meant_tier, used, picked, e.kind, length), place));
     }
     ranked.sort_by_key(|&(key, place)| (key, place));
     ranked.into_iter().map(|(_, place)| place).collect()
@@ -966,8 +969,15 @@ mod tests {
     /// The ids of the results `query` lists, best first, with the results of ids `picked` as the
     /// recent picks, most recent first.
     fn recently(c: &Catalog, query: &str, picked: &[&str]) -> Vec<String> {
+        used(c, query, picked, &[])
+    }
+
+    /// The ids of the results `query` lists, best first, with the results of ids `picked` as the
+    /// recent picks, most recent first, and the results of ids `counted` given those use grades.
+    fn used(c: &Catalog, query: &str, picked: &[&str], counted: &[(&str, u8)]) -> Vec<String> {
         let recent: Vec<u32> = picked.iter().filter_map(|id| c.list.iter().position(|e| e.id == *id)).filter_map(|i| u32::try_from(i).ok()).collect();
-        rank(&c.list, &c.index, query, &recent).iter().filter_map(|&i| c.list.get(i as usize)).map(|e| e.id.clone()).collect()
+        let uses: Vec<u8> = c.list.iter().map(|e| counted.iter().find(|(id, _)| e.id == *id).map_or(0, |&(_, g)| g)).collect();
+        rank(&c.list, &c.index, query, &recent, &uses).iter().filter_map(|&i| c.list.get(i as usize)).map(|e| e.id.clone()).collect()
     }
 
     /// A result named `name` (`›`-separated, its last part the label) with id `id`.
@@ -1095,13 +1105,11 @@ mod tests {
         assert_eq!(ranked(&c, "same zz"), ranked(&c, "same zz"));
     }
 
-    /// For each pair of adjacent grades and whole-query tiers, a recent pick ranks above a result
-    /// that matches the query as well as it does and comes earlier in the catalog, and below the
-    /// result that matches better; of two such recent picks, the more recent ranks first.
-    #[test]
-    fn a_recent_pick_ranks_first_within_its_grades() {
+    /// For each pair of adjacent grades and whole-query tiers: a query, a result that matches it
+    /// better, one that matches it as the next grade or tier, and the description of the latter.
+    fn adjacent_grades() -> [(&'static str, Entry, Entry, &'static str); 14] {
         let description = "{} keeps the art central on the page";
-        for (query, better, worse, said) in [
+        [
             ("cut zz", entry("Zz Cut", "a.one"), entry("Zz Cutter", "b.two"), ""),
             ("scale zz", entry("Zz Scale", "a.one"), entry("Zz Scaling", "b.two"), ""),
             ("scale zz", entry("Zz Scaling", "a.one"), entry("Zz Scalers", "scale.two"), ""),
@@ -1120,7 +1128,15 @@ mod tests {
             ("remove", entry("Zz Remove", "a.one"), entry("Zz Delete", "b.two"), ""),
             // Matches through a word of the same meaning: the whole label, then a word of it.
             ("colour", entry("Color", "a.one"), entry("Zz Color", "b.two"), ""),
-        ] {
+        ]
+    }
+
+    /// For each pair of adjacent grades and whole-query tiers, a recent pick ranks above a result
+    /// that matches the query as well as it does and comes earlier in the catalog, and below the
+    /// result that matches better; of two such recent picks, the more recent ranks first.
+    #[test]
+    fn a_recent_pick_ranks_first_within_its_grades() {
+        for (query, better, worse, said) in adjacent_grades() {
             let (b, w) = (better.id.clone(), worse.id.clone());
             // A second result that matches as the worse one does and comes before it.
             let twin = entry(&worse.shown, &format!("{w}x"));
@@ -1137,6 +1153,31 @@ mod tests {
         assert_eq!(recently(&c, "", &["b.two"]), ["a.one", "b.two"]);
     }
 
+    /// For each pair of adjacent grades and whole-query tiers, a result picked often ranks above a
+    /// result that matches the query as well as it does and comes earlier in the catalog, and below
+    /// the result that matches better, which was never picked. Of two such results, the
+    /// one with the higher use grade ranks first, and a recent pick ranks first only among results
+    /// of the same use grade.
+    #[test]
+    fn a_command_picked_often_ranks_first_within_its_grades() {
+        for (query, better, worse, said) in adjacent_grades() {
+            let (b, w) = (better.id.clone(), worse.id.clone());
+            // A second result that matches as the worse one does and comes before it.
+            let twin = entry(&worse.shown, &format!("{w}x"));
+            let t = twin.id.clone();
+            let c = described(vec![twin, worse, better], &[said, said, ""]);
+            let (b, w, t) = (b.as_str(), w.as_str(), t.as_str());
+            assert_eq!(used(&c, query, &[], &[(w, 1)]), [b, w, t], "{query}: one pick ranks above none");
+            assert_eq!(used(&c, query, &[], &[(w, 9), (t, 3)]), [b, w, t], "{query}: the higher grade first");
+            assert_eq!(used(&c, query, &[], &[(w, 1), (t, 3)]), [b, t, w], "{query}: the higher grade first");
+            assert_eq!(used(&c, query, &[w], &[(t, 1)]), [b, t, w], "{query}: a recent pick within its use grade");
+            assert_eq!(used(&c, query, &[w], &[(w, 1), (t, 1)]), [b, w, t], "{query}: a recent pick within its use grade");
+        }
+        // An empty query lists every result in catalog order.
+        let c = synthetic(vec![entry("Zz One", "a.one"), entry("Zz Two", "b.two")]);
+        assert_eq!(used(&c, "", &[], &[("b.two", 9)]), ["a.one", "b.two"]);
+    }
+
     /// A query that is a menu's title ranks a result whose label holds it as a word above the items
     /// of that menu, which match only by their menu path. A query that names the menu with `›`
     /// still starts the item's name.
@@ -1147,7 +1188,7 @@ mod tests {
         assert_eq!(ranked(&c, "object › pa"), ["a.one"]);
         let en = catalog(Lang::EN, false);
         for q in ["object", "effect", "select", "view", "type", "edit"] {
-            let first = rank(&en.list, &en.index, q, &[]).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
+            let first = rank(&en.list, &en.index, q, &[], &[]).first().and_then(|&i| en.list.get(i as usize)).map(|e| e.shown.to_lowercase());
             let label = first.as_deref().map(|n| split_name(n).0.to_string()).unwrap_or_default();
             assert!(words(&label).any(|w| w.starts_with(q)), "{q}: {first:?}");
         }
@@ -1362,7 +1403,7 @@ mod tests {
         ] {
             assert!(substring_rule(&c, typo).is_empty(), "{typo} matched nothing before");
             let top = |q: &str| ranked(&c, q).into_iter().take(4).collect::<Vec<_>>();
-            let spelled_right: Vec<String> = rank(&c.list, &plain, word, &[]).iter().take(4).map(id).collect();
+            let spelled_right: Vec<String> = rank(&c.list, &plain, word, &[], &[]).iter().take(4).map(id).collect();
             assert_eq!(top(typo), spelled_right, "{typo}");
             assert!(place(&c, typo, tool).is_some_and(|p| p < 4), "{typo}: {:?}", ranked(&c, typo));
         }
@@ -1609,7 +1650,16 @@ mod tests {
         assert_eq!(first("outline text"), "type.createOutlines");
         assert!(within("flip", "object.reflect", 3), "{:?}", ranked(&c, "flip"));
         assert!(within("combine", "object.pathfinder.unite", 3), "{:?}", ranked(&c, "combine"));
-        assert!(ranked(&c, "vectorize").iter().take(3).any(|id| id.starts_with("imageTrace.")), "{:?}", ranked(&c, "vectorize"));
+        // "vectorize" lists an image trace command in the first five, and only results whose label
+        // holds a word that is "trace" or stems to it rank above it.
+        let vectorize = ranked(&c, "vectorize");
+        let trace_word = |w: &str| {
+            let w = w.to_lowercase();
+            w == "trace" || stems(&w).iter().any(|s| s == "trace")
+        };
+        let traced = |id: &String| c.list.iter().any(|e| &e.id == id && words(split_name(&e.shown).0).any(trace_word));
+        let traces = vectorize.iter().position(|id| id.starts_with("imageTrace."));
+        assert!(traces.is_some_and(|p| p < 5 && vectorize.get(..p).is_some_and(|above| above.iter().all(traced))), "{vectorize:?}");
         assert_eq!(first("colour"), "panel:color", "{:?}", ranked(&c, "colour"));
         // A word that only starts other labels is in a group, and its labels follow the direct match.
         assert_eq!(first("unite"), "object.pathfinder.unite");
@@ -1923,7 +1973,7 @@ mod tests {
             let started = std::time::Instant::now();
             let runs = 100;
             for _ in 0..runs {
-                std::hint::black_box(rank(&c.list, &c.index, q, &[]));
+                std::hint::black_box(rank(&c.list, &c.index, q, &[], &[]));
             }
             println!("{:>12}: {:?} per query", q.get(..12).unwrap_or(q), started.elapsed() / runs);
         }
