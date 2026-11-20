@@ -7703,7 +7703,7 @@ on them. `on`, when given and not `null`, must be `true` or `false` and sets the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
 In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
-Direct Selection, while a corner is selected) opens the Corners pop-up for the picked corners of every selected path:
+Direct Selection, while a corner is selected or one live rectangle or polygon is selected) opens the Corners pop-up for the picked corners of every selected path:
 the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
 hold no corner is left out. The pop-up has the corner kind, the radius (blank while the picked corners differ) and the
 rounding, Relative or Absolute (`relativeRadii`, which applies to each path as a whole; neither is chosen while the

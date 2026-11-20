@@ -211,7 +211,7 @@ fn can_merge_live_paint(app: &VectorcraftApp) -> bool {
 /// and the Corners link opens the corner settings
 /// (<https://web.archive.org/web/20200308215011/https://helpx.adobe.com/illustrator/using/reshape-with-live-corners.html>). One live
 /// rectangle or live polygon selected alone has its own kind and radius rows, which already set
-/// the selected corners: it shows the Corners link alone.
+/// the selected corners: it shows the Corners link alone, also while it is selected whole.
 fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() != "directSelection" {
         return;
@@ -223,7 +223,7 @@ fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let corner_selected = st.selection.objects.iter().any(|id| {
         st.doc.node(*id).and_then(LiveCorners::of).is_some_and(|lc| st.selection.partial(*id).is_some_and(|a| !lc.corners_of(a).is_empty()))
     });
-    if !corner_selected {
+    if !own_rows && !corner_selected {
         return;
     }
     let Some(picked) = super::picked_corners(app) else { return };

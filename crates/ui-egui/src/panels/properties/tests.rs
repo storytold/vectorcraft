@@ -1588,6 +1588,38 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     assert!(LiveCorners::of(&n).unwrap().radii_relative());
 }
 
+/// With Direct Selection, a live rectangle or live polygon selected whole keeps its own rows and
+/// shows the Corners link, whose pop-up sets every corner of the shape. A path with Live Corners
+/// selected whole shows no corner rows.
+#[test]
+fn a_whole_live_shape_with_direct_selection_shows_the_corners_link() {
+    let mut app = new_app();
+    let ctx = egui::Context::default();
+    app.select_tool("directSelection");
+    let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
+    let polygon = app.run("shape.polygon", json!({"cx": 200, "cy": 150, "radius": 50, "sides": 5})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [polygon]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corners").count(), 1, "polygon: {texts:?}");
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corners").count(), 1, "rectangle: {texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
+    // The pop-up's rounding: Relative on the rectangle.
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    let depth = undo_depth(&app);
+    press(&mut app, &ctx, text_at(&texts, "Relative").center());
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(LiveCorners::of(&n).unwrap().radii_relative());
+    // A plain path selected whole: no corner selected.
+    let path = square_path(&mut app, 200.0);
+    app.select_tool("directSelection");
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(!shows(&texts, "Corner:") && !shows(&texts, "Corners"), "{texts:?}");
+}
+
 /// A square path, not a live shape, its top-left corner at (`x`, 50) → its id.
 fn square_path(app: &mut VectorcraftApp, x: f64) -> u64 {
     let id = rect(app, x, 50.0, 100.0, 100.0);
