@@ -137,6 +137,34 @@ fn the_slider_sets_the_fill_opacity_and_takes_the_arrow_keys() {
     assert_eq!((fill_opacity(h.state()) * 100.0).round(), before + 1.0);
 }
 
+/// Hiding the row during a drag on its slider keeps the opacity the drag previewed as one undo step
+/// and leaves no interaction open.
+#[test]
+fn hiding_the_row_during_a_drag_keeps_its_opacity_as_one_undo_step() {
+    let mut h = harness(app());
+    let undo = undo_labels(h.state()).len();
+    let r = slider_rect(&h);
+    let at = |f: f32| Pos2::new(r.left() + 4.0 + f * (r.width() - 8.0), r.top() + 7.0);
+    let press = |h: &mut Harness<'static, VectorcraftApp>, pos: Pos2, pressed: bool| {
+        h.event(Event::PointerMoved(pos));
+        h.event(Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE });
+        h.run_steps(1);
+    };
+    press(&mut h, at(0.5), true);
+    for _ in 0..2 {
+        h.event(Event::PointerMoved(at(0.25)));
+        h.run_steps(1);
+    }
+    assert!(h.state().session.in_interaction(), "the drag previews");
+    let previewed = fill_opacity(h.state());
+    assert!((previewed - 0.25).abs() < 0.05, "{previewed}");
+    h.state_mut().run("ui.colorWheel", json!({"opacity": false})).unwrap();
+    h.run_steps(2);
+    assert!(!h.state().session.in_interaction(), "the interaction ended");
+    assert!((fill_opacity(h.state()) - previewed).abs() < 1e-6);
+    assert_eq!(undo_labels(h.state()).len(), undo + 1);
+}
+
 /// Screen readers get a slider named Opacity with its percentage and its range, and can step it and
 /// set it.
 #[test]
@@ -404,6 +432,16 @@ fn the_row_is_gray_with_nothing_selected_and_on_type() {
     let mut app = self::app();
     app.run("paint.setFill", json!({"gradient": {}})).unwrap();
     app.run("select.none", json!({})).unwrap();
+    let mut h = harness(app);
+    assert!(h.get_by_role_and_label(Role::Slider, "Opacity").accesskit_node().is_disabled());
+    let defaults = h.state().session.paint.fill.clone();
+    action(&mut h, Action::SetValue, Some(ActionData::NumericValue(25.0)));
+    assert_eq!(h.state().session.paint.fill, defaults);
+
+    // The Live Paint Bucket painting a gradient with an object selected: the stop is the bucket's.
+    let mut app = self::app();
+    app.session.select_tool("livePaintBucket", Default::default()).unwrap();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
     let mut h = harness(app);
     assert!(h.get_by_role_and_label(Role::Slider, "Opacity").accesskit_node().is_disabled());
     let defaults = h.state().session.paint.fill.clone();

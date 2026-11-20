@@ -352,6 +352,47 @@ fn a_paint_opacity_on_a_series_mark_survives_regeneration() {
     assert!(opacities.iter().all(|o| *o == (0.4, 0.6)), "{opacities:?}");
 }
 
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` with the opacity a mark already shows replace the opacity
+/// another mark of the series left on the graph, as an explicit 100% does.
+#[test]
+fn a_paint_opacity_a_series_mark_already_shows_replaces_the_kept_opacity() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [marks[0].0], "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    // The second mark is opaque already: its row comes out as it was.
+    s.execute("paint.setFill", &json!({"ids": [marks[1].0], "color": "#ff0000", "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, Some(0.6)));
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, None));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let opacities: Vec<(f32, f32)> =
+        series(&n, 0).children().unwrap().iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (1.0, 1.0)), "{opacities:?}");
+}
+
+/// The same for a graph's axis lines: a stroke opacity set on an opaque line replaces the one its kind keeps from another
+/// line.
+#[test]
+fn a_stroke_opacity_an_axis_line_already_shows_replaces_the_kept_opacity() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "opacity": 40})).unwrap();
+    let kept = |s: &Session| spec(s, id).label_styles.axis_rows.and_then(|r| r.paint.stroke_opacity);
+    assert_eq!(kept(&s), Some(0.4));
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "opacity": 100})).unwrap();
+    assert_eq!(kept(&s), None);
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.stroke().map_or(1.0, |st| st.opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == 1.0), "{opacities:?}");
+}
+
 /// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
 /// graph keeps none, so the series stays opaque when it is drawn again.
 #[test]

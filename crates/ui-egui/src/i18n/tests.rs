@@ -573,8 +573,8 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
-/// The Color Wheel panel's Show Opacity and the errors of `paint.setFill {opacity}` and
-/// `ui.colorWheel {opacity}`.
+/// The Color Wheel panel's Show Opacity and the errors of `paint.setFill {opacity}`,
+/// `paint.setStroke {opacity}` and `ui.colorWheel {opacity}`.
 #[test]
 fn color_wheel_opacity_strings_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
