@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), center?: [x, y] (the circle's center; `points` then holds the one point its edge passes through, [[x, y]])} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, a point on `center`, three on one line, a circle reaching past the canvas, or one too small for its edges to differ at its coordinates are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), center?: [x, y] (the circle's center; `points` then holds the one point its edge passes through, [[x, y]]), anchors?: \"standard\"|\"points\" (default standard: four anchors at 0°, 90°, 180° and 270°; points: an anchor at each point and more between them so that no curve turns more than a quarter)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, a point on `center`, three on one line, a circle reaching past the canvas, or one too small for its edges to differ at its coordinates are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
@@ -443,12 +443,14 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// A live ellipse whose edge passes through two or three points: `points`, or the two or three
-/// selected anchor points ([`selected_anchor_points`]). Two points are the ends of a diameter. One
-/// undo step, named as an Ellipse tool drag is.
+/// selected anchor points ([`selected_anchor_points`]). Two points are the ends of a diameter. With
+/// `anchors: "points"` the circle is a plain path with an anchor at each point
+/// ([`shapes::circle_with_anchors_at`]); otherwise it is a live ellipse. One undo step, named as an
+/// Ellipse tool drag is.
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
     const SAME: &str = "no circle passes through these points: two are the same or all three lie on one line";
-    let (center, radius) = match p.get("center") {
+    let (center, radius, points) = match p.get("center") {
         // From a center: the circle at `center` whose edge passes through the one point. A null
         // `center` is refused, as a null `points` with a center is.
         Some(c) => {
@@ -464,24 +466,35 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
             if !r.is_finite() {
                 return Err(bad(C, "result would exceed the canvas (coordinates out of range)"));
             }
-            (c, r)
+            (c, r, vec![q])
         }
         None => {
             let points = match p.get("points").filter(|v| !v.is_null()) {
                 Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
                 None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
             };
-            shapes::circle_through_points(&points).ok_or_else(|| bad(C, SAME))?
+            let (c, r) = shapes::circle_through_points(&points).ok_or_else(|| bad(C, SAME))?;
+            (c, r, points)
         }
+    };
+    let key = "anchors";
+    let at_points = match p.get(key).map(Value::as_str) {
+        None | Some(Some("standard")) => false,
+        Some(Some("points")) => true,
+        Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, points"))),
     };
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
     // A radius below the step between doubles at the center leaves opposite edges on one number.
     if !(r.width() > 0.0 && r.height() > 0.0) {
         return Err(bad(C, "the circle is too small to draw at these coordinates"));
     }
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
     // Not pixel-aligned: the circle stays through the points.
-    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    let mut out = if at_points {
+        add_art_unaligned(s, "Ellipse", path_kind(shapes::circle_with_anchors_at(center, radius, &points), None))?
+    } else {
+        let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+        add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?
+    };
     out["cx"] = json!(center.x);
     out["cy"] = json!(center.y);
     out["radius"] = json!(radius);

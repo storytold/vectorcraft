@@ -1127,6 +1127,12 @@ fn the_status_bar_info_field_shows_the_chosen_readout() {
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(counts(&app), format!("Undos: {before}  Redos: 1"));
     assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == counts(&app)), "the redo step counts");
+    // The labels take the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let (french, _) = super::status_bar::info_text(&app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(french, format!("{}\u{a0}: {before}  {}\u{a0}: 1", crate::i18n::tr(fr, "Undos"), crate::i18n::tr(fr, "Redos")));
 
     app.run("view.statusBarShow", json!({"show": "colorProfile"})).unwrap();
     let working = vectorcraft_color::cms::working_settings();

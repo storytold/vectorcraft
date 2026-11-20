@@ -78,8 +78,8 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     // The Ellipse dialog's Anchors.
     (&["ellipse"], None, &["anchors"]),
-    // The Circle tool's From Center.
-    (&[crate::circle::ID], None, &["fromCenter"]),
+    // Circle Tool Options (`circle::CircleTool`) and the Control bar's From Center.
+    (&[crate::circle::ID], None, &["center", "radii", "diameter", "color", "standardAnchors", "dragThird", "fromCenter"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (
@@ -98,6 +98,8 @@ const ROWS: &[Row] = &[
             "highlightColor",
         ],
     ),
+    // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+    (&["fillArea"], Some("shapeBuilder"), &["openFilledAsClosed", "gapDetection", "gapLength"]),
     // Objects on Path Tool Options: the Pivot and Rotate of the objects attached next.
     (&["objectsOnPath"], None, &["pivot", "rotate"]),
     (&["artboard"], None, &["moveArt", "scaleArt"]),

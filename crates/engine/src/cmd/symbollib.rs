@@ -170,6 +170,7 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
     BuiltinSymbolLibrary { id: "skill-icons", name: "Skill Icons", make: skill_icons },
     BuiltinSymbolLibrary { id: "weather-icons", name: "Weather Icons", make: weather_icons },
+    BuiltinSymbolLibrary { id: "nature-icons", name: "Nature Icons", make: nature_icons },
     BuiltinSymbolLibrary { id: "media-controls", name: "Media Controls", make: media_controls },
 ];
 
@@ -501,6 +502,91 @@ fn weather_icons() -> SymbolLibrary {
     }
     doc.title = "Weather Icons".into();
     SymbolLibrary { name: "Weather Icons".into(), doc }
+}
+
+/// Nature Icons: five original silhouettes for diagrams and reusable artwork.
+fn nature_icons() -> SymbolLibrary {
+    let poly = |coords: &[(f64, f64)]| {
+        let points: Vec<Point> = coords.iter().map(|&(x, y)| Point::new(x, y)).collect();
+        SubPath::polyline(&points, true)
+    };
+    let leaf = PathData::new(vec![
+        poly(&[(0.0, -20.0), (12.0, -13.0), (17.0, -2.0), (12.0, 10.0), (0.0, 19.0), (-12.0, 10.0), (-17.0, -2.0), (-12.0, -13.0)]),
+        poly(&[(-1.0, -13.0), (1.0, -13.0), (1.0, 20.0), (-1.0, 20.0)]),
+    ]);
+    let mut flower_parts = shapes::ellipse(Rect::new(-6.0, -6.0, 6.0, 6.0)).subpaths;
+    for i in 0..6 {
+        let angle = i as f64 * std::f64::consts::PI / 3.0;
+        let (sin, cos) = angle.sin_cos();
+        let x = 12.0 * cos;
+        let y = 12.0 * sin;
+        flower_parts.extend(shapes::ellipse(Rect::new(x - 5.5, y - 5.5, x + 5.5, y + 5.5)).subpaths);
+    }
+    let flower = PathData::new(flower_parts);
+    let tree = PathData::new(vec![
+        poly(&[(-3.0, 6.0), (3.0, 6.0), (3.0, 20.0), (-3.0, 20.0)]),
+        poly(&[
+            (0.0, -21.0),
+            (12.0, -8.0),
+            (8.0, -8.0),
+            (17.0, 4.0),
+            (11.0, 4.0),
+            (18.0, 12.0),
+            (-18.0, 12.0),
+            (-11.0, 4.0),
+            (-17.0, 4.0),
+            (-8.0, -8.0),
+            (-12.0, -8.0),
+        ]),
+    ]);
+    let mountain = PathData::new(vec![
+        poly(&[(-21.0, 17.0), (-6.0, -17.0), (2.0, 0.0), (8.0, -11.0), (21.0, 17.0)]),
+        poly(&[(-12.0, -4.0), (-6.0, -17.0), (0.0, -4.0), (-5.0, -7.0), (-8.0, -3.0)]),
+    ]);
+    let wave = PathData::new(
+        (0..3)
+            .map(|row| {
+                let y = row as f64 * 9.0 - 10.0;
+                poly(&[
+                    (-20.0, y),
+                    (-14.0, y - 4.0),
+                    (-8.0, y - 4.0),
+                    (-2.0, y),
+                    (4.0, y + 4.0),
+                    (10.0, y + 4.0),
+                    (16.0, y),
+                    (20.0, y),
+                    (20.0, y + 3.0),
+                    (16.0, y + 3.0),
+                    (10.0, y + 7.0),
+                    (4.0, y + 7.0),
+                    (-2.0, y + 3.0),
+                    (-8.0, y - 1.0),
+                    (-14.0, y - 1.0),
+                    (-20.0, y + 3.0),
+                ])
+            })
+            .collect(),
+    );
+    let icons = [
+        ("Leaf", leaf, "#4f9d59"),
+        ("Flower", flower, "#d977a7"),
+        ("Tree", tree, "#287c53"),
+        ("Mountain", mountain, "#768899"),
+        ("Wave", wave, "#388fb8"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Nature Icons".into();
+    SymbolLibrary { name: "Nature Icons".into(), doc }
 }
 
 /// Media Controls: play, pause, stop, skip next, shuffle and repeat for audio/video UI art (original, no 9-slice).

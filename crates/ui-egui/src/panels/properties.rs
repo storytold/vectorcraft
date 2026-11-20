@@ -767,7 +767,9 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "ruler", tl!("Show Rulers (⌘R)"), v.rulers, 26.0).clicked() {
             app.run("view.rulers", json!({})).ok();
         }
-        if widgets::icon_button(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, 26.0).clicked() {
+        // Trim View holds the grid and the guides off while it is on (#8363).
+        let shows = crate::menus::enabled(app, "view.grid");
+        if widgets::icon_button_enabled(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, shows, 26.0).clicked() {
             app.run("view.grid", json!({})).ok();
         }
         let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
@@ -779,7 +781,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Guides"));
     ui.horizontal(|ui| {
         let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "layout-grid", tl!("Show Guides"), v.guides, 26.0).clicked() {
+        let shows = crate::menus::enabled(app, "view.guides");
+        if widgets::icon_button_enabled(ui, "layout-grid", tl!("Show Guides"), v.guides, shows, 26.0).clicked() {
             app.run("view.guides", json!({})).ok();
         }
         if widgets::icon_button(ui, "sparkles", tl!("Smart Guides (⌘U)"), v.smart_guides, 26.0).clicked() {

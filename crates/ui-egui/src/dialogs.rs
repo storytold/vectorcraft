@@ -25,6 +25,7 @@ pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
+pub mod circle_options;
 pub mod color_balance;
 pub mod color_group_options;
 pub mod color_guide_options;
@@ -155,6 +156,7 @@ mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
 pub mod trace_presets;
+pub mod tracing_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
@@ -381,6 +383,9 @@ registry! {
     FlattenTransparency: [flatten::KIND] => flatten::SPEC,
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
     ImageTracePreset: [trace_presets::KIND] => trace_presets::SPEC,
+    TracingPresets: [tracing_presets::KIND] => tracing_presets::SPEC,
+    TracingPreset: [tracing_presets::PRESET_KIND] => tracing_presets::PRESET_SPEC,
+    TracingPresetsReplace: [tracing_presets::REPLACE_KIND] => tracing_presets::REPLACE_SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     SaveSymbolLibrary: [save_symbol_library::KIND] => save_symbol_library::SPEC,
     SaveBrushLibrary: [save_brush_library::KIND] => save_brush_library::SPEC,
@@ -472,6 +477,7 @@ registry! {
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
+    CircleOptions: [circle_options::KIND] => circle_options::SPEC,
     ThreePointArcOptions: [three_point_arc_options::KIND] => three_point_arc_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,

@@ -510,6 +510,11 @@ font-technology	Variable	Variabili
 	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
 	From Center	Dal centro
+	Show Radii	Mostra raggi
+	Show Diameter	Mostra diametro
+	Anchors at Standard Positions	Punti di ancoraggio in posizioni standard
+	Third Point by Dragging	Terzo punto trascinando
+	Gray	Grigio
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -617,6 +622,10 @@ font-technology	Variable	Variabili
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
+	Show Document Colors	Mostra colori del documento
+	Document Colors	Colori del documento
+	Selection Colors	Colori della selezione
+@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Show Harmony	Mostra armonia
 	Harmony Rule	Regola di armonia
 	Harmony color	Colore dell’armonia
@@ -1948,6 +1957,10 @@ file-filter	Templates	Modelli
 	Rename Preset	Rinomina preset
 	Save Image Trace Preset	Salva preset ricalco immagine
 	Delete Image Trace Preset	Elimina preset ricalco immagine
+	Tracing Presets…	Preset di ricalco…
+	Import Image Trace Presets	Importa preset ricalco immagine
+	Export Image Trace Presets	Esporta preset ricalco immagine
+	Replace the saved presets that have these names?	Sostituire i preset salvati con questi nomi?
 	Image Trace Presets	Preset ricalco immagine
 	Image:	Immagine:
 	Images:	Immagini:
@@ -2197,6 +2210,8 @@ file-filter	Templates	Modelli
 	List Workspaces	Elenca aree di lavoro
 	Live Paint	Pittura dinamica
 	Live Paint Bucket	Secchiello pittura dinamica
+	Fill Area	Riempi area
+	Fill Area Tool	Strumento Riempi area
 	Live Paint Bucket (Stroke)	Secchiello pittura dinamica (traccia)
 	Live Paint Info	Informazioni pittura dinamica
 	Live Paint Selection Tool	Strumento Selezione pittura dinamica
@@ -2849,6 +2864,13 @@ file-filter	Templates	Modelli
 	Pen Tool	Strumento Penna
 	Quick Pen Tool	Strumento Penna rapida
 	Quick Pen	Penna rapida
+	Quick Pen Toolbar	Barra degli strumenti Penna rapida
+	Continuous Arc	Arco continuo
+	Sharp Corner Arc	Arco ad angolo vivo
+	Flip Arc	Capovolgi arco
+	Hide Toolbar	Nascondi barra degli strumenti
+	Pin Toolbar Position	Fissa posizione barra degli strumenti
+	Reset Toolbar Position	Ripristina posizione barra degli strumenti
 	Pencil	Matita
 	Pencil Tool	Strumento Matita
 	per slice	per sezione
@@ -5176,6 +5198,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Saved {path}	Salvato {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Seleziona del testo o fai clic nel testo con lo strumento Testo per inserire glifi
 @msg	Shape Builder: no region under the pointer	Generatore forme: nessuna regione sotto il puntatore
+@msg	Fill Area: no enclosed area under the pointer	Riempi area: nessuna area chiusa sotto il puntatore
 @msg	Shape Builder: select all paths you want to merge	Generatore forme: seleziona tutti i tracciati da unire
 @msg	Shape Builder: select paths or compound paths	Generatore forme: seleziona tracciati o tracciati composti
 @msg	Show All Hidden Attributes: nothing is hidden	Mostra tutti gli attributi nascosti: non c'è nulla di nascosto
@@ -6506,8 +6529,10 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` face must be front, back or side	face di `{GRAPHICS}` deve essere front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione, Rivoluzione e Gonfia
 @msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gonfia applica le grafiche sulla faccia anteriore e sul retro, non su un lato
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	oggetto {_1}: il retro di Gonfia accetta grafiche solo con Entrambi i lati e Chiusura attivi
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore
@@ -10458,6 +10483,20 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Nature Icons	Icone della natura
+	Flower	Fiore
+	Tree	Albero
+	Mountain	Montagna
+	Ornamental	Ornamentale
+	Scrollwork	Voluta
+	Filigree Arrow	Freccia filigranata
+	Petal Sweep	Tratto a petali
+	Twin Curl	Doppia voluta
+	Vector Packs	Pacchetti vettoriali
+	Compass Rose	Rosa dei venti
+	Botanical Sprig	Rametto botanico
+	Facet Diamond	Diamante sfaccettato
+	Tide Crest	Cresta dell'onda
 	Leaf Vine	Tralcio di foglie
 	Blossom Chain	Catena di fiori
 	Pennant Garland	Ghirlanda di bandierine
