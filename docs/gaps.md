@@ -10,6 +10,8 @@
 
 ## Feature submission evidence
 
+Variables panel row context menus (2026-11-20, G12): Right-click highlights the clicked variable without changing the canvas selection and offers Select Bound Object, Variable Options…, Unbind Variable, the four Make Dynamic actions, and Delete Variable. Shift+F10 opens the same menu for the focused row; Escape dismisses it. Row actions target that variable; dynamic actions use the canvas selection. Lock and selection checks disable unavailable actions. Headless pointer/accessibility tests cover opening the menu, highlighting, bound-object selection, deletion in one undo step and restoration, and disabled actions. Scores and estimates unchanged.
+
 Actions panel item context menus (2026-11-20): Right-clicking an Action Set row selects it and presents a context menu with New Action…, New Set…, Duplicate Set, Delete Set, and Set Options…. Right-clicking an Action row selects it and presents a context menu with Play, Record, Duplicate, Delete, Action Options…, and Batch…. Duplicate on an action duplicates that action and selects the duplicate; Delete removes it. Headless tests in `crates/ui-egui/src/panels/actions.rs`: `right_clicking_an_action_set_selects_it_and_presents_set_context_options`, `right_clicking_an_action_selects_it_and_presents_action_options`, and `clicking_duplicate_on_an_action_duplicates_that_action_in_the_set`. Scores and estimates unchanged.
 
 **Scissors cut-point preview (#8655):** A native point marker shows the anchor or position on a curve that the current Scissors click targets, including the existing snapping rules. Hovering changes no artwork; an ineligible or stale hover has no marker. Existing cut and Alt Add Anchor behavior are retained. Focused tool and Session regressions live in `crates/tools/src/draw2/anchor/tests.rs` and `crates/engine/tests/scissors_snap.rs`. Scores and estimates are unchanged.
@@ -58,6 +60,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-20 | minor | G12: Variables panel row context menus implemented with row highlighting, bound-object selection, options, unbinding, selection-based dynamic actions and single-step deletion; headless regression coverage. Scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Asset Export tiles have item context menus for Export, Remove, Rename, Select Artwork on Canvas and collecting selected artwork; right-click selects an unselected tile and preserves an existing multi-selection. Headless regressions: panels::tests_asset_export. Scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Properties panel Quick Actions include contextual text actions (Create Outlines, Retype, Find and Replace…); headless tests in crates/ui-egui/src/panels/properties/tests.rs; scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Actions panel item context menus for action sets (New Action…, New Set…, Duplicate Set, Delete Set, Set Options…) and actions (Play, Record, Duplicate, Delete, Action Options…, Batch…) with selection handling; clicking Duplicate on an action duplicates that action; headless tests in `crates/ui-egui/src/panels/actions.rs`; scores and estimates unchanged. |
@@ -521,6 +524,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
 
 ## G12 Preferences and panels that don't act yet
+
+Variables panel row context menus (2026-11-20, G12): Right-click highlights the clicked variable without changing the canvas selection and offers Select Bound Object, Variable Options…, Unbind Variable, the four Make Dynamic actions, and Delete Variable. Shift+F10 opens the same menu for the focused row; Escape dismisses it. Row actions target that variable; dynamic actions use the canvas selection. Lock and selection checks disable unavailable actions. Headless pointer/accessibility tests cover opening the menu, highlighting, bound-object selection, deletion in one undo step and restoration, and disabled actions. Scores and estimates unchanged.
 
 - **Implemented (2026-11-20):** Asset Export tiles have item context menus: Export and Remove act on the asset selection (plural labels for multiple assets), Rename opens the clicked tile's inline field, Select Artwork on Canvas selects that tile's source nodes, and Add Selected Artwork as One Asset / Multiple Assets are enabled with canvas selection. A right-click selects an unselected tile, clearing the previous asset selection, and preserves a multi-selection when the tile is already selected. Export reuses the raster/3D export path; Remove is one undo step and keeps the artwork. Headless regression coverage: `crates/ui-egui/src/panels/tests_asset_export.rs`. Other G12 panel gaps remain; scores and estimates unchanged.
 

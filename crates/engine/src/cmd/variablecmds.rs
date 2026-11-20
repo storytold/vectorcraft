@@ -23,7 +23,10 @@ use vectorcraft_doc::{DataSet, DataValue, Document, NodeId, NodeKind, Selection,
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
 use super::textedit::set_story_text;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, links, str_param};
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, checked_ids_param, cmd, has_doc, has_selection, links,
+    str_param,
+};
 
 mod csv;
 mod library;
@@ -435,7 +438,8 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
-    let ids = checked_ids_or_selection(s, p, C)?;
+    // Explicit bindings can include both a group and its children; retain every supplied ID.
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { checked_ids_or_selection(s, p, C)? };
     let name = defined_variable(s, p, C)?;
     let n = edit_variables(s, "Unbind Variable", |vars| {
         let mut n = 0;
