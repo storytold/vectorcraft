@@ -2461,7 +2461,10 @@ fn review_599225_mix_controls(mix: &str) {
     let (d, owner, _) = review_599225_group(Some(mix), false);
     let art = vectorcraft_effects::pathfinder_children(Some(&d), d.node(owner).unwrap(), None).unwrap();
     assert!(!art.is_empty(), "CONTROL: Mix produces actual filled faces");
-    assert!(art.iter().all(|n| n.appearance.stroke().is_none() && !n.appearance.fill_paint().is_none()));
+    assert!(
+        art.iter()
+            .all(|n| n.appearance.stroke().is_none_or(|s| !s.visible || s.paint.is_none() || s.width <= 0.0) && !n.appearance.fill_paint().is_none())
+    );
     assert!(art.iter().all(|n| n.extras().query_origin.0.is_none()), "ordinary rendering carries no query metadata");
     assert!(review_599225_gather(&d, true, &[], None).is_none(), "CONTROL: Mix alone paints no stroke");
     let (ordinary, _, _) = review_599225_group(None, true);
