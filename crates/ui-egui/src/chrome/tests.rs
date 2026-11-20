@@ -5087,10 +5087,12 @@ fn review_8687_direct_commands(app: &mut crate::VectorcraftApp, ctx: &egui::Cont
         assert_eq!(app.run_count, before + 1, "direct {name} uses the existing command entry");
         assert_eq!(crate::menus::checked(app, command, &json!({})), Some(true));
         let button = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::Button);
-        assert_eq!(button.is_selected(), Some(true));
+        assert_eq!(button.is_selected(), None);
+        assert_eq!(button.toggled(), Some(egui::accesskit::Toggled::True));
         crate::menus::invoke(app, command, json!({}));
         let button = review_8687_node(&review_8687_frame(app, ctx, width).1, name, egui::accesskit::Role::Button);
         assert_eq!(button.is_selected(), None, "an existing reverse command refreshes the live button");
+        assert_eq!(button.toggled(), None);
         assert_eq!(crate::menus::checked(app, command, &json!({})), Some(false));
     }
 }
