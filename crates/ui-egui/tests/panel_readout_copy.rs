@@ -325,9 +325,10 @@ fn panel_readout_info_names_and_truncated_link_metadata_copy_full_displayed_text
     copy_long_link_value(&mut a);
 }
 
-fn assert_no_delayed_copy(a: &mut App) {
-    assert!(copies(&a.deadline()).is_empty());
-    assert!(copies(&a.frame(vec![])).is_empty());
+fn assert_no_delayed_copy(a: &mut App, kind: &str) {
+    let copied = copies(&a.deadline());
+    assert!(copied.is_empty(), "{kind}: unexpected delayed copy {copied:?}");
+    assert!(copies(&a.frame(vec![])).is_empty(), "{kind}: no later duplicate copy");
 }
 
 fn cancelled_gesture(kind: &str) {
@@ -338,7 +339,10 @@ fn cancelled_gesture(kind: &str) {
     match kind {
         "outside" => {
             a.frame(vec![Event::PointerMoved(at), button(at, true)]);
-            let up = a.frame(vec![button(at + vec2(-80.0, 0.0), false)]);
+            let outside = at + vec2(-80.0, 0.0);
+            // A real release outside includes the pointer motion that egui uses to distinguish
+            // dragging from a click; a button's release position alone does not record movement.
+            let up = a.frame(vec![Event::PointerMoved(outside), button(outside, false)]);
             assert!(copies(&up).is_empty(), "release outside does not accept the value");
         }
         "double" => {
@@ -350,7 +354,7 @@ fn cancelled_gesture(kind: &str) {
         "hidden" => {
             assert!(copies(&a.tap(at)).is_empty());
             a.close_panel("docInfo");
-            assert_no_delayed_copy(&mut a);
+            assert_no_delayed_copy(&mut a, kind);
             a.panel("docInfo");
         }
         "changed" => {
@@ -361,7 +365,7 @@ fn cancelled_gesture(kind: &str) {
         }
         _ => panic!("unknown fixture"),
     }
-    assert_no_delayed_copy(&mut a);
+    assert_no_delayed_copy(&mut a, kind);
     if kind != "changed" {
         assert_eq!(a.snapshot(), before, "cancelled gestures do not edit the document or selection");
     }
