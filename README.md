@@ -257,7 +257,7 @@ All 57 approximated Photoshop-style raster filters are available. The Effect Gal
 **What's missing:**
 - reliable exchange of .ai files (layer structure in real files; the editing copy a save writes keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), leaves out other objects' effects other than geometry effects, and writes live objects as their art);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
-- 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
+- the rest of 3D and Materials (base and Adobe Substance materials, shadows from lights after the first, ray-traced rendering, Turntable; see [docs/three-d.md](docs/three-d.md));
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.
