@@ -798,10 +798,11 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
         None => (None, None),
     };
     let applied = profile.is_some();
-    let (mut d, links_from, warnings) = match profile {
+    let (mut d, links_from, mut warnings) = match profile {
         Some(p) => (settings.document_from_profile(p.doc), Some(p.file), p.warnings),
         None => (settings.document(), None, vec![]),
     };
+    let swatch_defaults_error = apply_swatch_defaults(s, &mut d);
     d.grid = s.prefs.grid();
     d.title = match str_param(p, "name").or(str_param(p, "title")).map(str::trim).filter(|t| !t.is_empty()) {
         // New Document offers the next untitled name: taking it uses it up.
@@ -828,6 +829,10 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     if applied {
         out["profile"] = json!(settings.profile);
     }
+    if let Some(error) = swatch_defaults_error {
+        warnings.push(error.clone());
+        out["swatchDefaultsError"] = json!(error);
+    }
     if !warnings.is_empty() {
         out["warnings"] = json!(warnings);
     }
@@ -835,6 +840,16 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
         out["profileError"] = json!({ "profile": settings.profile, "reason": e });
     }
     Ok(out)
+}
+
+/// A damaged saved palette does not prevent creation from the chosen profile or factory settings.
+/// `apply` is transactional; retain the saved record until the user explicitly resets it.
+fn apply_swatch_defaults(s: &Session, d: &mut Document) -> Option<String> {
+    let defaults = s.prefs.default_swatches.as_ref()?;
+    let error = super::swatchdefaults::apply(d, defaults).err()?;
+    Some(format!(
+        "Saved default swatches could not be loaded: {error}. This new document keeps its profile or factory palette. Use Swatches > Restore Factory Default Swatches to recover."
+    ))
 }
 
 /// Put `settings` first in Recent (one entry per size and units).

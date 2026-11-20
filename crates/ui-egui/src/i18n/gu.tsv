@@ -5773,3 +5773,7 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Pulse Stroke	ધબકતો ઘસારો
 	Round Flow	ગોળ પ્રવાહ
 	Chisel Flow	ત્રાંસો પ્રવાહ
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	વર્તમાન સ્વેચને ડિફૉલ્ટ તરીકે વાપરો
+	Restore Factory Default Swatches	ફેક્ટરીના ડિફૉલ્ટ સ્વેચ પુનઃસ્થાપિત કરો

@@ -192,14 +192,18 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     r
 }
 
-/// Say in the status bar when `file.new`'s result `r` reports a profile it could not read, or
-/// color profiles its file carries that can't be used.
+/// Report both profile errors and warnings, including recovery from unusable saved swatches.
 fn report_profile(app: &mut VectorcraftApp, r: &Value) {
+    let mut messages = Vec::new();
     if let Some(e) = r.get("profileError") {
         let (name, reason) = (e["profile"].as_str().unwrap_or_default(), e["reason"].as_str().unwrap_or_default());
-        app.status(format!("The {name} profile could not be read, so the new document has the default settings: {reason}"));
-    } else if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
-        app.status(w.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("; "));
+        messages.push(format!("The {name} profile could not be read, so the new document has the default settings: {reason}"));
+    }
+    if let Some(w) = r["warnings"].as_array() {
+        messages.extend(w.iter().filter_map(Value::as_str).map(str::to_owned));
+    }
+    if !messages.is_empty() {
+        app.status(messages.join("; "));
     }
 }
 
@@ -1741,6 +1745,40 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         super::report_profile(&mut app, &json!({"index": 0, "warnings": ["the color profile X can't be used"]}));
         assert_eq!(app.ui.status, "the color profile X can't be used");
+    }
+
+    #[test]
+    fn review_598379_unreadable_defaults_warn_with_and_without_dialog() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let dialog = app.ui.dialog.clone().unwrap();
+        let control = super::confirm(&mut app, &dialog).unwrap();
+        assert!(control.get("swatchDefaultsError").is_none(), "CONTROL: ordinary dialog creation succeeds without a warning");
+        let mut prefs = app.session.prefs.to_json();
+        prefs["defaultSwatches"] = json!({"kind": "custom", "data": "not base64 %"});
+        app.session.apply_prefs(serde_json::from_value(prefs.clone()).unwrap());
+        app.run("file.newDialog", json!({})).unwrap();
+        let dialog = app.ui.dialog.clone().unwrap();
+        let result = super::confirm(&mut app, &dialog).unwrap();
+        assert!(app.ui.dialog.is_none(), "fallback creation closes New Document normally");
+        let warning = result["swatchDefaultsError"].as_str().unwrap();
+        assert!(warning.contains("Swatches > Restore Factory Default Swatches"));
+        assert!(app.ui.status.contains(warning), "dialog creation reports recovery");
+        let mut combined = result.clone();
+        combined["profileError"] = json!({"profile": "Print", "reason": "unreadable profile control"});
+        combined["warnings"].as_array_mut().unwrap().push(json!("color profile warning control"));
+        super::report_profile(&mut app, &combined);
+        assert!(app.ui.status.contains("unreadable profile control"));
+        assert!(app.ui.status.contains(warning), "a profile error cannot hide the Factory Reset recovery");
+        assert!(app.ui.status.contains("color profile warning control"));
+        app.run("file.newDialog", json!({})).unwrap();
+        let shown = app.ui.dialog.clone().unwrap();
+        app.ui.status.clear();
+        let result = super::create_without_dialog(&mut app).unwrap();
+        assert!(app.ui.status.contains(result["swatchDefaultsError"].as_str().unwrap()), "without-dialog creation also reports recovery");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, shown.kind, "without-dialog keeps the existing dialog");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields, shown.fields);
+        assert_eq!(app.session.prefs.to_json()["defaultSwatches"], prefs["defaultSwatches"]);
     }
 
     /// Manage Profiles lists a row per profile; Reset is off until a profile has been edited, Escape

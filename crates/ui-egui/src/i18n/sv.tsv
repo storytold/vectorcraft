@@ -10997,3 +10997,7 @@ digits	Hindi	Hindi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigera original med:
 file-filter	Applications	Program
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Använd aktuella färgrutor som standard
+	Restore Factory Default Swatches	Återställ fabriksinställda standardfärgrutor

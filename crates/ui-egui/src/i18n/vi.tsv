@@ -8755,3 +8755,7 @@ breakText	Glyphs	Glyph
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Chỉnh sửa bản gốc bằng:
 file-filter	Applications	Ứng dụng
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Dùng các mẫu màu hiện tại làm mặc định
+	Restore Factory Default Swatches	Khôi phục các mẫu màu mặc định ban đầu

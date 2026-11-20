@@ -8094,3 +8094,7 @@ shape	Open	Otvoren
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Uredi original pomoću:
 file-filter	Applications	Aplikacije
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Koristi trenutne uzorke boja kao zadane
+	Restore Factory Default Swatches	Vrati tvornički zadane uzorke boja

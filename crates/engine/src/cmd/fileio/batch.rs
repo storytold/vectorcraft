@@ -21,6 +21,16 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         super::super::edit::settle_interaction(s)?;
     }
     let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
+    // Save/reset and command-running steps can choose defaults. Other batches need no capsule copy.
+    let default_swatches = cmds
+        .iter()
+        .any(|step| {
+            matches!(
+                step.get("command").and_then(Value::as_str),
+                Some("swatch.defaults.save" | "swatch.defaults.reset" | "script.run" | "action.batch")
+            )
+        })
+        .then(|| s.prefs.default_swatches.clone());
     // The documents as they are now, whole: what a failed step brings back. Their art, history,
     // file, format and saved state share their data with the open ones until a step changes them.
     let start = s.docs.clone();
@@ -43,6 +53,9 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
             s.active = active;
             s.sync_front_profiles();
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
+            if let Some(default_swatches) = default_swatches {
+                s.prefs.default_swatches = default_swatches;
+            }
             s.pending_paint = None;
             return Err(e);
         }

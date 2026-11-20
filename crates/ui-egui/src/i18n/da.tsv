@@ -10967,3 +10967,7 @@ breakText	Glyphs	Glyffer
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigér original med:
 file-filter	Applications	Programmer
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Brug de aktuelle farveprøver som standard
+	Restore Factory Default Swatches	Gendan fabrikkens standardfarveprøver

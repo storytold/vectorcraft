@@ -10943,3 +10943,7 @@ swatch	Yellow Green	Verde-amarelado
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Editar original com:
 file-filter	Applications	Aplicativos
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Usar amostras atuais como padrão
+	Restore Factory Default Swatches	Restaurar amostras padrão de fábrica

@@ -10523,3 +10523,7 @@ breakText	Glyphs	Гліфи
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редагувати оригінал у:
 file-filter	Applications	Програми
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Використовувати поточні зразки за замовчуванням
+	Restore Factory Default Swatches	Відновити заводські зразки за замовчуванням

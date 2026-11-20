@@ -10860,3 +10860,7 @@ breakText	Glyphs	Glifák
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Eredeti szerkesztése ezzel:
 file-filter	Applications	Alkalmazások
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Aktuális színminták használata alapértelmezettként
+	Restore Factory Default Swatches	Gyári alapértelmezett színminták visszaállítása

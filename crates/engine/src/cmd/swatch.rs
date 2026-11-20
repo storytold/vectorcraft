@@ -17,6 +17,24 @@ use crate::EngineError;
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
+            query "swatch.defaults.save",
+            "Use Current Swatches as Default",
+            [],
+            None,
+            "{} save the complete current palette, groups and their resources as the persistent default for regular new documents; encoded data larger than 1 MiB (1048576 bytes) is refused without changing the previous default; existing documents and templates are unchanged",
+            has_doc,
+            save_defaults
+        ),
+        cmd!(
+            query "swatch.defaults.reset",
+            "Restore Factory Default Swatches",
+            [],
+            None,
+            "{} use the factory palette for future regular new documents, including customized categories; existing documents and templates are unchanged",
+            super::always,
+            reset_defaults
+        ),
+        cmd!(
             "swatch.new",
             "New Swatch",
             ["Window", "Swatches"],
@@ -1468,4 +1486,36 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, false, rename, C))?;
     e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
+}
+
+/// Bound the base64-encoded native palette stored in preferences, not the source artwork.
+const MAX_DEFAULT_SWATCHES_ENCODED_BYTES: usize = 1024 * 1024;
+
+fn save_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    if s.previewing {
+        return Err(bad("swatch.defaults.save", "cannot be previewed"));
+    }
+    let data = super::swatchdefaults::capture(s)?;
+    if data.len() > MAX_DEFAULT_SWATCHES_ENCODED_BYTES {
+        return Err(bad(
+            "swatch.defaults.save",
+            format!(
+                "the saved palette exceeds the 1 MiB ({MAX_DEFAULT_SWATCHES_ENCODED_BYTES} encoded bytes) limit; the previous default palette was kept"
+            ),
+        ));
+    }
+    let d = &s.doc()?.doc;
+    let swatches = d.swatches_iter().count();
+    let groups = d.swatch_groups.len();
+    s.prefs.default_swatches = Some(crate::SavedSwatchDefaults::Custom { data });
+    Ok(json!({ "swatches": swatches, "groups": groups }))
+}
+
+fn reset_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    if s.previewing {
+        return Err(bad("swatch.defaults.reset", "cannot be previewed"));
+    }
+    let changed = !matches!(s.prefs.default_swatches, Some(crate::SavedSwatchDefaults::Factory));
+    s.prefs.default_swatches = Some(crate::SavedSwatchDefaults::Factory);
+    Ok(json!({ "reset": true, "changed": changed }))
 }

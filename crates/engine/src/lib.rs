@@ -439,7 +439,7 @@ use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
+pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs, SavedSwatchDefaults};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]

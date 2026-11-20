@@ -5,13 +5,16 @@
 //! defines differently keeps its colour, unlinked. Text styles are left as they are: the art carries
 //! its own formatting.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind, PatternDef, Symbol};
 
+use super::super::clipboard::SymbolOptions;
+use super::super::compositefonts::{CompositeImport, node_families, plan_import};
+use super::super::{Result, bad};
 use super::unique_name;
 
 /// Visit `n` and every descendant (children and opacity-mask art) mutably.
@@ -52,9 +55,47 @@ fn paint_refs(p: &mut Paint, f: &mut impl FnMut(Ref)) {
     });
 }
 
+/// The symbols mapped by supported 3D effects, including effects on individual paints.
+fn effect_symbol_refs(appearance: &mut vectorcraft_doc::Appearance, f: &mut impl FnMut(Ref)) {
+    let items = appearance.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+    for effect in appearance.effects.iter_mut().chain(items) {
+        let graphics = vectorcraft_render::effects::takes_graphics(&effect.id);
+        let key = if graphics {
+            vectorcraft_render::effects::GRAPHICS
+        } else if vectorcraft_render::effects::takes_map_art(&effect.id) {
+            vectorcraft_render::effects::MAP_ART
+        } else {
+            continue;
+        };
+        let mut surfaces = BTreeSet::new();
+        for (index, graphic) in effect.params.get_mut(key).and_then(serde_json::Value::as_array_mut).into_iter().flatten().enumerate() {
+            // Match the renderer: graphics cap the raw list; Map Art keeps the first valid map
+            // per surface, then caps that accepted list. Ignored file records remain untouched.
+            if graphics && index >= vectorcraft_render::effects::MAX_GRAPHICS {
+                break;
+            }
+            let accepted = if graphics {
+                vectorcraft_render::effects::MappedGraphic::from_value(graphic).is_ok()
+            } else {
+                vectorcraft_render::effects::SurfaceMap::from_value(graphic).is_ok_and(|map| surfaces.insert(map.surface))
+            };
+            if !accepted {
+                continue;
+            }
+            if surfaces.len() > vectorcraft_render::effects::MAX_MAPS {
+                break;
+            }
+            if let Some(serde_json::Value::String(symbol)) = graphic.get_mut("symbol") {
+                f(Ref::Symbol(symbol));
+            }
+        }
+    }
+}
+
 /// Every resource reference in `n` and its descendants.
 fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
     each_mut(n, &mut |n| {
+        effect_symbol_refs(&mut n.appearance, f);
         for it in &mut n.appearance.items {
             match it {
                 AppearanceItem::Fill(fl) => paint_refs(&mut fl.paint, f),
@@ -66,11 +107,24 @@ fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
                 }
             }
         }
+        if let Some(extras) = n.extras_if_any() {
+            for entry in &mut extras.symbol_overrides {
+                if let Some(fill) = &mut entry.fill {
+                    paint_refs(fill, f);
+                }
+                if let Some(stroke) = &mut entry.stroke {
+                    paint_refs(stroke, f);
+                }
+            }
+        }
         match &mut n.kind {
             NodeKind::Text(t) => {
                 for r in &mut t.runs {
                     paint_refs(&mut r.style.fill, f);
                     paint_refs(&mut r.style.stroke, f);
+                    if let Some(inline) = &mut r.inline {
+                        f(Ref::Symbol(&mut inline.symbol));
+                    }
                 }
             }
             NodeKind::Image(im) => f(Ref::Image(&mut im.key)),
@@ -217,14 +271,41 @@ fn brush_art(b: &mut Brush) -> Vec<&mut Node> {
     }
 }
 
+/// Apply a checked font plan only to the incoming art and definitions it actually uses.
+fn remap_composite_families(src: &Document, nodes: &mut [Node], used: &Used, brushes: &mut [Brush], plan: &CompositeImport) -> Document {
+    let mut staged = src.clone();
+    for n in nodes.iter_mut() {
+        each_mut(n, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+    }
+    for symbol in staged.symbols.iter_mut().filter(|symbol| used.symbols.contains(&symbol.name)) {
+        each_mut(Arc::make_mut(&mut symbol.art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+    }
+    for pattern in staged.patterns.iter_mut().filter(|pattern| used.patterns.contains(&pattern.name)) {
+        for art in &mut pattern.art {
+            each_mut(Arc::make_mut(art), &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+    }
+    for brush in brushes.iter_mut().filter(|brush| used.brushes.contains(&brush.name)) {
+        for art in brush_art(brush) {
+            each_mut(art, &mut |n| node_families(n, &mut |family| plan.rename(family)));
+        }
+    }
+    staged
+}
+
 /// Bring the resources `nodes` (art from `src`) use into `dst`, renaming on conflict, and point
 /// `nodes` at the names they got.
-pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
+pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node], cmd: &str) -> Result<()> {
     let mut used = Used::default();
+    let mut families = BTreeSet::new();
+    let mut note_family = |name: &mut String| {
+        families.insert(name.to_lowercase());
+    };
     for n in nodes.iter_mut() {
         refs(n, &mut |r| used.note(r));
+        each_mut(n, &mut |n| node_families(n, &mut note_family));
     }
-    let src_brushes = vectorcraft_brush::library(src);
+    let mut src_brushes = vectorcraft_brush::library(src);
     // Symbol, pattern and brush art and tint swatches can use more resources (the lists grow while
     // they are walked).
     let (mut si, mut pi, mut wi, mut bi) = (0, 0, 0, 0);
@@ -251,8 +332,26 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         }
         for mut a in art {
             refs(&mut a, &mut |r| used.note(r));
+            each_mut(&mut a, &mut |n| node_families(n, &mut note_family));
         }
     }
+
+    let fonts = src.composite_fonts.iter().filter(|font| families.contains(&font.name.to_lowercase())).cloned().collect::<Vec<_>>();
+    // Plan first: no destination resource or incoming family changes survive a planning error.
+    let plan = if fonts.is_empty() {
+        None
+    } else {
+        Some(plan_import(fonts, families, dst, "the placed art and document", "placed art").map_err(|error| bad(cmd, error.to_string()))?)
+    };
+    // Resource equality must see the incoming aliases. Never remap destination art, unused
+    // source definitions or the source document itself.
+    let staged;
+    let src = if let Some(plan) = &plan {
+        staged = remap_composite_families(src, nodes, &used, &mut src_brushes, plan);
+        &staged
+    } else {
+        src
+    };
 
     let images = names(&used.images, |k| src.images.get(k), |k| dst.images.get(k), |a, b| a == b, |c| dst.images.contains_key(c));
     // Symbol and pattern art copied in takes ids of `dst`, so their art is compared by what it
@@ -327,6 +426,9 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         unshare(&mut brushes, &bru, &used.brushes, |c| dst_brushes.iter().any(|b| b.name == c));
     }
 
+    if let Some(plan) = plan {
+        dst.composite_fonts = plan.combined.into();
+    }
     let mut rename = |r: Ref| {
         let (map, k) = match r {
             Ref::Image(k) => (&images, k),
@@ -359,6 +461,7 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             // The art takes ids of `dst`: those of `src` may name objects of `dst` already.
             def.art = Arc::new(dst.reid(&def.art));
             dst.symbols.push(def);
+            SymbolOptions::of(src, old).give(dst, new);
         }
     }
     for (old, new) in copies(&patterns) {
@@ -390,4 +493,5 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             dst.swatches.push(w);
         }
     }
+    Ok(())
 }

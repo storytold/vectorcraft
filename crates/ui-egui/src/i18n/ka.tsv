@@ -11190,3 +11190,7 @@ font-script	Japanese	იაპონური
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	ორიგინალის რედაქტირება პროგრამით:
 file-filter	Applications	აპლიკაციები
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	მიმდინარე ფერის ნიმუშების ნაგულისხმევად გამოყენება
+	Restore Factory Default Swatches	ქარხნული ნაგულისხმევი ფერის ნიმუშების აღდგენა

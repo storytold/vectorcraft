@@ -9055,3 +9055,7 @@ breakText	Glyphs	Γλύφοι
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Επεξεργασία πρωτοτύπου με:
 file-filter	Applications	Εφαρμογές
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Χρήση των τρεχόντων δειγμάτων χρωμάτων ως προεπιλογή
+	Restore Factory Default Swatches	Επαναφορά εργοστασιακών προεπιλεγμένων δειγμάτων χρωμάτων

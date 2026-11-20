@@ -201,6 +201,9 @@ impl Session {
         // after an undone or redone Assign Profile, a failed or panicked command's documents put
         // back, and a batch step, before the next step converts through them.
         self.sync_front_profiles();
+        if self.depth != 0 {
+            cmd::compositefonts::sync(self);
+        }
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
             // A failed or panicked command's documents are put back: type is drawn in their

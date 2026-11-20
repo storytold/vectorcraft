@@ -7558,3 +7558,12 @@ fn every_catalog_names_the_digits_menus_numeral_systems() {
     }
     assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
 }
+
+#[test]
+fn default_swatch_actions_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Use Current Swatches as Default", "Restore Factory Default Swatches"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}

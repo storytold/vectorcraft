@@ -122,6 +122,9 @@ fn attrs_refs(attrs: &Map<String, Value>, f: Visit) {
 fn node_refs(n: &Node, f: Visit) {
     n.walk(&mut |m| {
         appearance_refs(&m.appearance, f);
+        for paint in vectorcraft_doc::swatches::override_paints(m) {
+            paint_refs(paint, f);
+        }
         if let Some(id) = m.extras().graphic_style {
             f(Ref::Style(id));
         }
@@ -154,6 +157,9 @@ fn node_refs(n: &Node, f: Visit) {
                     paint_refs(&r.style.stroke, f);
                     if let Some(s) = &r.style.style_name {
                         f(Ref::Name(Res::CharStyle, s));
+                    }
+                    if let Some(inline) = &r.inline {
+                        f(Ref::Name(Res::Symbol, &inline.symbol));
                     }
                 }
                 for s in t.para_styles().filter_map(|pa| pa.style_name.as_ref()) {
@@ -747,6 +753,11 @@ impl Relink {
     /// Relink a node tree (the mirror of [`node_refs`]).
     fn node(&self, n: &mut Node) {
         self.appearance(&mut n.appearance);
+        if let Some(extras) = n.extras_if_any() {
+            for paint in extras.symbol_overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+                self.paint(paint);
+            }
+        }
         if !self.keep_styles {
             n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
         }
@@ -789,6 +800,9 @@ impl Relink {
                     self.paint(&mut r.style.stroke);
                     if let Some(s) = &mut r.style.style_name {
                         self.name(Res::CharStyle, s);
+                    }
+                    if let Some(inline) = &mut r.inline {
+                        self.name(Res::Symbol, &mut inline.symbol);
                     }
                 }
                 // Lines break anew when a paragraph's set takes other characters or Hard.
@@ -879,7 +893,7 @@ pub struct SymbolOptions {
 
 impl SymbolOptions {
     /// The options `d` keeps for symbol `name`.
-    fn of(d: &Document, name: &str) -> Self {
+    pub(in crate::cmd) fn of(d: &Document, name: &str) -> Self {
         Self {
             size: stored_natural_size(d, name),
             registration: d.symbol_registration(name),
@@ -890,7 +904,7 @@ impl SymbolOptions {
     }
 
     /// Make them the options of `d`'s symbol `name`.
-    fn give(&self, d: &mut Document, name: &str) {
+    pub(in crate::cmd) fn give(&self, d: &mut Document, name: &str) {
         set_natural_size(d, name, self.size);
         d.set_symbol_registration(name, self.registration);
         d.set_symbol_export_type(name, self.export_type);

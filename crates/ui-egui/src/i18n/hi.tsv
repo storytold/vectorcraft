@@ -10477,3 +10477,7 @@ theme	Appearance	अपीयरेंस
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	मूल फ़ाइल इसमें एडिट करें:
 file-filter	Applications	ऐप्स
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	वर्तमान स्वॉचेस को डिफ़ॉल्ट के रूप में उपयोग करें
+	Restore Factory Default Swatches	फ़ैक्टरी डिफ़ॉल्ट स्वॉचेस पुनर्स्थापित करें

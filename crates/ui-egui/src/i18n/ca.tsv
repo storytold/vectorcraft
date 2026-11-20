@@ -9082,3 +9082,7 @@ breakText	Glyphs	Glifs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Edita l’original amb:
 file-filter	Applications	Aplicacions
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Utilitza les mostres actuals com a predeterminades
+	Restore Factory Default Swatches	Restaura les mostres predeterminades de fàbrica

@@ -662,6 +662,21 @@ pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
             Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color), tex: None }))
         })
         .collect();
+    show_queue_notes(app, r);
+}
+
+/// Report files omitted from the loaded cursor once, when either reading route completes.
+fn show_queue_notes(app: &mut VectorcraftApp, r: &Value) {
+    let notes: Vec<String> =
+        r["skipped"].as_array().into_iter().flatten().filter_map(|f| Some(format!("{}: {}", f["name"].as_str()?, f["error"].as_str()?))).collect();
+    let Some(first) = notes.first() else { return };
+    let status = crate::i18n::msg_n(
+        notes.len() as u64,
+        "Skipped {n} file while loading the place cursor: {first}",
+        "Skipped {n} files while loading the place cursor: {first}",
+        &[("first", first.as_str())],
+    );
+    io::show_with_notes(app, status, notes);
 }
 
 /// The loaded place cursor at `pos`: the current file's thumbnail with the number of files loaded.

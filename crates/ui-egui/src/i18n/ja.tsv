@@ -10610,3 +10610,7 @@ breakText	Glyphs	字形
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	元のファイルを編集するアプリ:
 file-filter	Applications	アプリケーション
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	現在のスウォッチを初期設定にする
+	Restore Factory Default Swatches	スウォッチを出荷時の初期設定に戻す

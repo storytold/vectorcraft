@@ -10960,3 +10960,7 @@ shape	Open	Открытый
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактировать оригинал в:
 file-filter	Applications	Приложения
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Использовать текущие образцы по умолчанию
+	Restore Factory Default Swatches	Восстановить заводские образцы по умолчанию

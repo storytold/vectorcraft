@@ -9138,3 +9138,7 @@ breakText	Glyphs	Merkit
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
 file-filter	Applications	Sovellukset
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Käytä nykyisiä värimalleja oletuksena
+	Restore Factory Default Swatches	Palauta tehdasasetusten oletusvärimallit

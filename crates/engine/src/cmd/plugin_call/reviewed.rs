@@ -747,6 +747,7 @@ pub(super) const DENIED: &[&str] = &[
     "object.pathfinder.options",
     "stroke.arrowheads.edit",
     "stroke.arrowheads.list",
+    "swatch.defaults.reset",
     "text.similarFonts",
     "threeD.bevels.edit",
     "threeD.bevels.list",

@@ -36,8 +36,10 @@ const WRAPPED: &[(&str, &str)] = &[
 /// Engine commands that [`crate::shortcut_editor::needs_a_value`] marks and that a pick, which
 /// gives no params, still runs: Stop Script stops the running script, Clear Script Console empties
 /// the Script Console, Clear Plug-in Cache deletes every plug-in's cache, Reset Preferences resets
-/// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
-/// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
+/// every preference, Use Current Swatches as Default saves the current palette as application
+/// defaults, Restore Factory Default Swatches selects factory defaults for future documents,
+/// Forget Import Matches forgets every saved match, Begin Undo Group and End Undo Group begin
+/// and end a group, the six Save … Preset commands save a new preset (Save
 /// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
 /// selection's gradient matches, Pixel Snapping Options…
 /// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
@@ -50,6 +52,8 @@ const PICK_RUNS: &[&str] = &[
     "script.console.clear",
     "plugin.clearCache",
     "prefs.reset",
+    "swatch.defaults.save",
+    "swatch.defaults.reset",
     "importMatches.reset",
     "edit.undoGroup.begin",
     "edit.undoGroup.end",

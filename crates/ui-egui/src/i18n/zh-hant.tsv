@@ -10563,3 +10563,7 @@ breakText	Glyphs	字符
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	編輯原稿所用應用程式：
 file-filter	Applications	應用程式
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	將目前色票設為預設
+	Restore Factory Default Swatches	還原原廠預設色票

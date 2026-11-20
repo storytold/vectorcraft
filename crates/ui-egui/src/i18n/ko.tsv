@@ -10510,3 +10510,7 @@ breakText	Glyphs	글리프
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	원본 편집 앱:
 file-filter	Applications	응용 프로그램
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	현재 견본을 기본값으로 사용
+	Restore Factory Default Swatches	출고 시 기본 견본 복원

@@ -9087,6 +9087,10 @@ file-filter	Applications	Aplikasi
 @msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor irisan memiliki referensi dengan jenis yang tidak dikenal ({_1})
 @msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor irisan memiliki nilai dengan tipe yang tidak dikenal ({_1})
 @msg	the layers can't be read ({e}): the file was placed as its merged image	lapisan tidak dapat dibaca ({e}): berkas ditempatkan sebagai gambar gabungannya
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Gunakan sampel warna saat ini sebagai default
+	Restore Factory Default Swatches	Pulihkan sampel warna default pabrik
 @msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objek {_1} adalah gambar yang diubah dengan Distorsi perspektif atau Distorsi bebas, dan perintah ini tidak dapat digunakan padanya
 @msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya tidak akan membentuk bangun cembung
 @msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya akan melewati cakrawala distorsi

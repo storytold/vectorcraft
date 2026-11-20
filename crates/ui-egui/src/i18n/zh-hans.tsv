@@ -10747,3 +10747,7 @@ breakText	Glyphs	字形
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	编辑原稿所用应用：
 file-filter	Applications	应用程序
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	将当前色板设为默认
+	Restore Factory Default Swatches	恢复出厂默认色板

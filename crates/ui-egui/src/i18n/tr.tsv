@@ -10829,3 +10829,7 @@ breakText	Glyphs	Glifler
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Orijinali şununla düzenle:
 file-filter	Applications	Uygulamalar
+
+# Persistent default swatch palette.
+	Use Current Swatches as Default	Geçerli Renk Örneklerini Varsayılan Olarak Kullan
+	Restore Factory Default Swatches	Fabrika Varsayılanı Renk Örneklerini Geri Yükle

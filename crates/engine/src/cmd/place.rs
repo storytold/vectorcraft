@@ -550,7 +550,7 @@ fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
 }
 
 /// The art as one object of `d` (its resources added), at its natural size and position.
-fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
+fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>, cmd: &str) -> Result<Node> {
     let mut node = match l.art {
         Art::Image(img, clip) => {
             let (sx, sy) = pt_per_px(img.ppi);
@@ -585,7 +585,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
         Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural, &d.setup)))),
         Art::Document(s, link, bounding) => document::node(d, &s, link, bounding),
         Art::Vector { src, mut nodes, clip } => {
-            adopt::adopt(d, &src, &mut nodes);
+            adopt::adopt(d, &src, &mut nodes, cmd)?;
             let mut children: Vec<Arc<Node>> = nodes.iter().map(|n| Arc::new(d.reid(n))).collect();
             if let Some(r) = clip {
                 children.insert(0, Arc::new(clip_path(d.alloc_id(), r)));
@@ -594,7 +594,7 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
         }
     };
     node.name = Some(l.name);
-    node
+    Ok(node)
 }
 
 /// `node` moved and scaled by `m` as a whole: strokes, effects and pattern tiles go along.
@@ -730,28 +730,127 @@ impl Session {
     /// reply. The document Place started in must be the active one, and the object Replace swaps
     /// must still be in it as it was when Place started; when the selection changed meanwhile,
     /// `select.set` selects that object again first, so a replay of the journal replaces the same
-    /// object.
+    /// object. A failed completion puts back the selection and context from before that internal
+    /// reselection, after ordinary pending edits and typing have settled.
     pub fn place_read(&mut self, read: PlaceRead) -> Result<Value> {
         if self.doc()?.uid != read.job.doc {
             return Err(bad(PLACE, NOT_ACTIVE));
         }
         let params = read.job.params.clone();
+        let mut reselect = None;
+        let mut rollback = None;
+        let mut settled = Vec::new();
         if let Some(old) = read.job.old {
+            // The retained target must be checked against committed art even while it is still
+            // selected: deferred typing can otherwise change it later inside the Place edit.
+            let (kept, warnings) = self.collect_settled_warnings(|s| {
+                if s.depth == 0 {
+                    s.finish_tool_edit_later()?;
+                }
+                if !s.previewing {
+                    for warning in s.keep_typing()? {
+                        s.note_settled_warning(&warning);
+                    }
+                }
+                Ok::<(), EngineError>(())
+            });
+            for warning in &warnings {
+                self.note_settled_warning(warning);
+            }
+            kept?;
             let st = self.doc()?;
-            // Deleted, changed, or another object with its id: an undo that removes the object frees
-            // its id for the next object made.
+            if st.uid != read.job.doc {
+                return Err(bad(PLACE, NOT_ACTIVE));
+            }
+            // Deleted, changed, or another object with its id: an undo that removes the object
+            // frees its id for the next object made. Settling must precede this comparison.
             if st.doc.node(old) != read.job.replaced.as_ref() {
                 return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
             }
+            settled = warnings;
             if st.selection.objects != [old] || st.selection.symbol_part.is_some() {
-                self.execute("select.set", &json!({ "ids": [old.0] }))?;
+                rollback = Some((
+                    self.active,
+                    st.clone(),
+                    self.paint.clone(),
+                    self.fill_active,
+                    self.pending_paint.clone(),
+                    self.active_appearance_item.clone(),
+                    self.batch_paint_docs.clone(),
+                    self.journal.len(),
+                    self.journal.held(),
+                ));
+                // Keep the old retained prefix while the internal selection journals: an
+                // error must not lose entries that a bounded journal would otherwise trim.
+                self.journal.hold(Some(self.journal.first_kept()));
+                reselect = Some(old);
             }
         }
-        self.place_hand_off = Some(read);
-        let r = self.execute(PLACE, &params);
+        // A provisional selection must not end the current Type edit. Keep both commands
+        // top-level for their existing journal, but let the tool observe only the final state.
+        let outer_tool_actions = self.in_tool_actions;
+        if reselect.is_some() {
+            self.in_tool_actions = true;
+        }
+        let r = (|| {
+            if let Some(old) = reselect {
+                self.execute("select.set", &json!({ "ids": [old.0] }))?;
+            }
+            self.place_hand_off = Some(read);
+            self.execute(PLACE, &params)
+        })();
         self.place_hand_off = None;
-        r
+        if let Some((active, before, paint, fill_active, pending, appearance, paint_docs, journal, held)) = rollback {
+            if r.is_err() {
+                if let Some(st) = self.docs.iter_mut().find(|st| st.uid == before.uid) {
+                    let revision = st.revision.max(before.revision);
+                    *st = before;
+                    st.revision = revision + 1;
+                }
+                self.active = active;
+                self.paint = paint;
+                self.fill_active = fill_active;
+                self.pending_paint = pending;
+                self.active_appearance_item = appearance;
+                self.batch_paint_docs = paint_docs;
+                self.journal.truncate(journal);
+                for group in self.docs.iter_mut().filter_map(|st| st.undo_group.as_mut()) {
+                    group.journal.retain(|&(n, _)| n < journal);
+                    group.steps.retain(|&(n, _)| n < journal);
+                }
+                self.clear_deferred_overlay_cache();
+                self.decoded_images.empty();
+                self.sync_front_profiles();
+                super::compositefonts::sync(self);
+            }
+            self.journal.hold(held);
+        }
+        if reselect.is_some() {
+            self.in_tool_actions = outer_tool_actions;
+            self.after_command(r.is_ok().then_some(PLACE));
+        }
+        r.map(|reply| place_read_warnings(reply, &settled))
     }
+}
+
+/// Keep the ordinary preview-warning fields when typing settled before the completion baseline.
+fn place_read_warnings(mut reply: Value, settled: &[String]) -> Value {
+    if !settled.is_empty()
+        && let Some(out) = reply.as_object_mut()
+    {
+        let mut warnings = settled.to_vec();
+        if let Some(previous) = out.get("previewWarning").and_then(Value::as_str)
+            && !warnings.iter().any(|warning| warning == previous)
+        {
+            warnings.push(previous.to_string());
+        }
+        let warning = Value::String(warnings.join("; "));
+        if out.get("warning").is_none_or(Value::is_null) {
+            out.insert("warning".into(), warning.clone());
+        }
+        out.insert("previewWarning".into(), warning);
+    }
+    reply
 }
 
 fn place(s: &mut Session, p: &Value) -> Result<Value> {
@@ -864,7 +963,7 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         n => warnings.push(format!("{n} slices would lie outside the canvas and were left out")),
     }
     let (id, size, slice_ids) = s.edit("Place", |d, sel| {
-        let node = transformed(build(d, loaded, link), m);
+        let node = transformed(build(d, loaded, link, PLACE)?, m);
         let size = node.geometric_bounds_with(&d.symbol_boxes()).unwrap_or_default();
         let (into, index) = match old {
             Some(old) => {
@@ -1011,17 +1110,18 @@ fn read_queue(doc: u64, p: Value, queued: Vec<Value>) -> Result<QueueRead> {
                 Art::Dcs(a) => a.img.blob = super::links::readable(a.img.blob.clone(), false, true)?,
                 _ => {}
             }
-            Ok(l)
+            let (w, h) = (l.natural.width(), l.natural.height());
+            let name = l.name.clone();
+            let mut file = json!({ "name": name, "format": l.format.id, "width": w, "height": h });
+            if let Some(px) = thumbnail {
+                file["thumbnailBase64"] = json!(thumbnail_png(l, px)?);
+            }
+            Ok((name, w, h, file))
         });
         match checked {
-            Ok(l) => {
-                let (w, h) = (l.natural.width(), l.natural.height());
-                let mut f = json!({ "name": l.name, "format": l.format.id, "width": w, "height": h });
-                entries.push(json!({ "params": q, "name": l.name, "width": w, "height": h }));
-                if let Some(px) = thumbnail {
-                    f["thumbnailBase64"] = json!(thumbnail_png(l, px)?);
-                }
-                files.push(f);
+            Ok((name, w, h, file)) => {
+                entries.push(json!({ "params": q, "name": name, "width": w, "height": h }));
+                files.push(file);
             }
             Err(e) => {
                 let name = str_param(&q, "path").or(str_param(&q, "name")).map(fileio::file_name).unwrap_or_default();
@@ -1090,7 +1190,15 @@ fn queue(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let QueueRead { entries, files, skipped, .. } = read;
     if entries.is_empty() {
-        let why = skipped.first().and_then(|e| e["error"].as_str()).unwrap_or("nothing to place");
+        let why = if skipped.is_empty() {
+            "nothing to place".to_string()
+        } else {
+            skipped
+                .iter()
+                .map(|file| format!("{}: {}", file["name"].as_str().unwrap_or_default(), file["error"].as_str().unwrap_or_default()))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
         return Err(bad(QUEUE, why));
     }
     // Reloading the cursor keeps the tool to return to.
@@ -1117,7 +1225,7 @@ fn thumbnail_png(l: Loaded, px: f64) -> Result<String> {
     let natural = l.natural;
     let mut d = Document::new(natural.width().max(1.0), natural.height().max(1.0));
     let layer = d.layers.first().map(|l| l.id);
-    let node = build(&mut d, l, None);
+    let node = build(&mut d, l, None, "file.place.info")?;
     d.insert(layer, 0, node)?;
     let k = px.clamp(1.0, MAX_THUMBNAIL) / natural.width().max(natural.height()).max(1e-9);
     let png = vectorcraft_render::Renderer::new().render_region(&d, natural, k, false).to_png().map_err(EngineError::Other)?;

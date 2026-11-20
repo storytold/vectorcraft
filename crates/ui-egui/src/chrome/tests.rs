@@ -5020,3 +5020,171 @@ fn the_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
     let (_, [x0, _, x1, _]) = state(&app);
     assert!(x1 - x0 > before.1[2] - before.1[0], "a drag on W: scrubs the width: {:?} to {:?}", before.1, [x0, x1]);
 }
+
+fn review_4635935484_notes_frame(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    time: f64,
+    events: Vec<egui::Event>,
+) -> (Vec<StatusText>, Vec<egui::accesskit::Node>) {
+    bar_frame(app, ctx, 700.0, Some(time), events, super::status_bar)
+}
+
+fn review_4635935484_visible_note<'a>(texts: &'a [StatusText], note: &str) -> Option<&'a StatusText> {
+    texts.iter().find(|t| t.text == format!("• {note}") && t.bounds.intersect(t.clip).is_positive())
+}
+
+/// The compact hover remains a summary; the status button reaches every note in a small window.
+#[test]
+fn review_4635935484_all_status_notes_are_reachable_by_click_and_wheel() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let notes: Vec<String> =
+        (1..=100).map(|i| format!("queue file {i:03}.png: reason {i:03} — {}", "the image could not be read ".repeat(2))).collect();
+    let message = format!("Skipped 100 files: {}", notes[0]);
+    crate::io::show_with_notes(&mut app, message.clone(), notes.clone());
+    let original = (app.ui.status.clone(), app.ui.status_notes.clone(), app.ui.status_sets);
+    let (texts, _) = review_4635935484_notes_frame(&mut app, &ctx, 1.0, vec![]);
+    let field = status_text(&texts, "Skipped");
+    let at = field.bounds.intersect(field.clip).center();
+    review_4635935484_notes_frame(&mut app, &ctx, 1.1, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    review_4635935484_notes_frame(&mut app, &ctx, 1.2, vec![press_at(at, false)]);
+    let (texts, _) = review_4635935484_notes_frame(&mut app, &ctx, 1.3, vec![]);
+    let first = review_4635935484_visible_note(&texts, &notes[0]).expect("click opens the real complete-list popup");
+    assert!(review_4635935484_visible_note(&texts, &notes[99]).is_none(), "the last note starts below the bounded viewport");
+    let over = first.bounds.intersect(first.clip).center();
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -1000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for i in 0..12 {
+        review_4635935484_notes_frame(&mut app, &ctx, 2.0 + f64::from(i), vec![egui::Event::PointerMoved(over), wheel.clone()]);
+    }
+    let (texts, nodes) = review_4635935484_notes_frame(&mut app, &ctx, 15.0, vec![]);
+    let last = review_4635935484_visible_note(&texts, &notes[99]).expect("wheel scrolling reaches the 100th filename and reason");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(700.0, 300.0));
+    assert!(screen.contains_rect(last.bounds.intersect(last.clip)), "the last note is visibly clipped inside the small window: {last:?}");
+    let expected = format!("{message}\n{}", notes.iter().map(|n| format!("• {n}")).collect::<Vec<_>>().join("\n"));
+    assert!(
+        nodes.iter().any(|n| n.role() == egui::accesskit::Role::Button && n.value() == Some(expected.as_str())),
+        "the status button has every note in its accessible value"
+    );
+    assert_eq!(
+        (app.ui.status.clone(), app.ui.status_notes.clone(), app.ui.status_sets),
+        original,
+        "viewing and scrolling do not repeat or alter the report"
+    );
+    review_4635935484_notes_frame(
+        &mut app,
+        &ctx,
+        16.0,
+        vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+    );
+    let (texts, _) = review_4635935484_notes_frame(&mut app, &ctx, 16.1, vec![]);
+    assert!(review_4635935484_visible_note(&texts, &notes[99]).is_none(), "Escape closes the full viewer");
+}
+
+fn review_all_skipped_message_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) -> egui::FullOutput {
+    let mut output = ctx.run_ui(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(700.0, 300.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        },
+        |ui| super::status_bar(app, ui),
+    );
+    output.textures_delta.clear();
+    output
+}
+
+/// Actual glyph rectangles in the full message, rather than its potentially very tall label box.
+fn review_all_skipped_message_glyphs(out: &egui::FullOutput, message: &str) -> Vec<(char, egui::Rect, egui::Rect)> {
+    out.shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if !text.galley.elided && text.galley.job.text == message => Some((text, shape.clip_rect)),
+            _ => None,
+        })
+        .flat_map(|(text, clip)| {
+            text.galley.rows.iter().flat_map(move |row| {
+                row.glyphs.iter().map(move |glyph| {
+                    let bounds = glyph.logical_rect().translate(text.pos.to_vec2() + row.pos.to_vec2());
+                    (glyph.chr, bounds, clip)
+                })
+            })
+        })
+        .collect()
+}
+
+fn review_all_skipped_tail_glyphs(glyphs: &[(char, egui::Rect, egui::Rect)], tail: &str) -> Vec<(egui::Rect, egui::Rect)> {
+    let chars: String = glyphs.iter().filter(|(c, _, _)| !c.is_whitespace()).map(|(c, _, _)| c).collect();
+    let tail: String = tail.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(chars.ends_with(&tail), "the actual full-message galley contains the complete last filename and producer reason");
+    glyphs.iter().filter(|(c, _, _)| !c.is_whitespace()).skip(chars.chars().count() - tail.chars().count()).map(|(_, b, c)| (*b, *c)).collect()
+}
+
+/// An actual all-skipped queue keeps its Err but exposes its whole error through the message field.
+#[test]
+fn review_all_skipped_queue_error_scrolls_its_last_filename_and_reason_into_view() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let files: Vec<serde_json::Value> = (1..=100)
+        .map(|i| json!({"name": format!("all-skipped-{i:03}.png"), "dataBase64": vectorcraft_format::base64_encode(b"not a PNG")}))
+        .collect();
+    let before = app.session.doc().unwrap().doc.clone();
+    let history = app.session.doc().unwrap().history.undo.len();
+    let error = app.run("file.place.queue", json!({"files": files})).unwrap_err();
+    assert_eq!(app.ui.status, error);
+    assert!(app.ui.status_notes.is_none(), "the real all-skipped Err is a plain status message");
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), history);
+    let last = error.rfind("all-skipped-100.png").expect("the actual producer error retains the last filename");
+    let tail = &error[last..];
+    assert!(tail.len() > "all-skipped-100.png".len(), "the last filename carries its real rejection reason");
+    let original = (app.ui.status.clone(), app.ui.status_sets);
+    let (texts, _) = bar_frame(&mut app, &ctx, 700.0, Some(1.0), vec![], super::status_bar);
+    let prefix: String = error.chars().take(24).collect();
+    let field = status_text(&texts, &prefix);
+    assert!(field.elided, "the bounded field needs its full-message affordance");
+    let at = field.bounds.intersect(field.clip).center();
+    review_all_skipped_message_frame(&mut app, &ctx, 1.1, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    review_all_skipped_message_frame(&mut app, &ctx, 1.2, vec![press_at(at, false)]);
+    let opened = review_all_skipped_message_frame(&mut app, &ctx, 1.3, vec![]);
+    let glyphs = review_all_skipped_message_glyphs(&opened, &error);
+    let over = glyphs
+        .iter()
+        .find(|(c, bounds, clip)| !c.is_whitespace() && bounds.intersect(*clip).is_positive())
+        .expect("click opens the complete real error");
+    let over = over.1.intersect(over.2).center();
+    let tail_glyphs = review_all_skipped_tail_glyphs(&glyphs, tail);
+    assert!(tail_glyphs.iter().all(|(bounds, clip)| !bounds.intersect(*clip).is_positive()), "the last filename/reason starts below the viewport");
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -2000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    for i in 0..16 {
+        review_all_skipped_message_frame(&mut app, &ctx, 2.0 + f64::from(i), vec![egui::Event::PointerMoved(over), wheel.clone()]);
+    }
+    let output = review_all_skipped_message_frame(&mut app, &ctx, 19.0, vec![]);
+    let glyphs = review_all_skipped_message_glyphs(&output, &error);
+    let tail_glyphs = review_all_skipped_tail_glyphs(&glyphs, tail);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(700.0, 300.0));
+    assert!(
+        tail_glyphs.iter().all(|(bounds, clip)| bounds.intersect(clip.intersect(screen)).is_positive()),
+        "every glyph of the last actual filename/reason is painted inside the small-window clip"
+    );
+    let nodes = output.platform_output.accesskit_update.expect("AccessKit is enabled").nodes;
+    assert!(
+        nodes.iter().any(|(_, n)| n.role() == egui::accesskit::Role::Button && n.value() == Some(error.as_str())),
+        "the message button retains the complete accessible value"
+    );
+    assert_eq!((app.ui.status.clone(), app.ui.status_sets), original, "reading/scrolling the error does not re-report it");
+}

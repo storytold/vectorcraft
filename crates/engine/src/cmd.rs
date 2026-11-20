@@ -97,6 +97,7 @@ mod style;
 pub mod stylelib;
 mod svgfilter;
 mod swatch;
+mod swatchdefaults;
 pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
