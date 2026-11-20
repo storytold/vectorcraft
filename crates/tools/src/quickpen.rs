@@ -717,7 +717,9 @@ impl QuickPenTool {
         if !changed.is_some_and(|sp| on_canvas(&sp)) {
             return vec![];
         }
-        if drag.begun && (length - drag.length).abs() <= 1e-12 * length.max(1.0) {
+        // A length the end already has changes nothing: no preview, and no undo step before the
+        // first change.
+        if (length - drag.length).abs() <= 1e-12 * length.max(1.0) {
             return vec![];
         }
         let mut out = vec![];
