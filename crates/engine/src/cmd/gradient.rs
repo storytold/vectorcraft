@@ -804,7 +804,7 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
             let skipped = super::paint::live_paint_parts_skipped(&s.doc()?.doc, &roots, !stroke);
             leaf_targets(s, &roots)?.into_iter().filter(|id| !skipped.contains(id)).collect()
         }
-        _ => item.targets(s, p)?,
+        _ => item.targets_for(s, p, !stroke)?,
     };
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));

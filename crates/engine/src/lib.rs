@@ -153,6 +153,9 @@ pub struct Session {
     pub(crate) pending_paint: Option<Paint>,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
+    /// The graph designs of the documents loaded as swatch libraries (Window → Swatch Libraries →
+    /// Other Library…), for the Graph Column and Graph Marker dialogs; not saved.
+    pub graph_design_libraries: cmd::swatchlib::DesignLibraries,
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
     /// was selected on: read it with [`Session::selected_freeform_point`].
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
@@ -164,6 +167,8 @@ pub struct Session {
     pub brush_libraries: cmd::brushlib::Libraries,
     /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
     pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The custom bevels of the bevels file (`threeD.bevels.*`); none without one.
+    pub bevels: cmd::bevels::Bevels,
     /// The id each loaded library outside a request's read roots has been shown under, by its own id
     /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
     shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,

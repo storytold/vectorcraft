@@ -136,6 +136,101 @@ fn a_polygon_shows_its_polygon_properties() {
     assert!(live(&app).polygon_sides_equal());
 }
 
+/// A live rectangle's Rectangle Properties show one Corner menu for all four corners while Corner
+/// Radius is linked, blank when the corners' kinds differ, and one per corner when it is unlinked,
+/// in the Transform panel and the Properties panel's Transform section.
+#[test]
+fn a_rectangle_shows_linked_and_unlinked_corner_types() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80, "radius": 10})).unwrap();
+    let count = |shown: &[String], t: &str| shown.iter().filter(|s| *s == t).count();
+    let draws = [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section];
+    set_pref(&mut app, "singleCornerRadius", true);
+    for draw in draws {
+        let shown = texts(&mut app, draw);
+        assert_eq!((count(&shown, "Corner:"), count(&shown, "Round")), (1, 1), "{shown:?}");
+    }
+    // Kinds that differ leave the linked menu blank.
+    app.run("object.setLiveShape", json!({"kind": "chamfer", "corners": [2]})).unwrap();
+    for draw in draws {
+        let shown = texts(&mut app, draw);
+        assert_eq!((count(&shown, "Corner:"), count(&shown, "Round"), count(&shown, "Chamfer")), (1, 0, 0), "{shown:?}");
+    }
+    set_pref(&mut app, "singleCornerRadius", false);
+    for draw in draws {
+        let shown = texts(&mut app, draw);
+        for t in ["Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"] {
+            assert_eq!(count(&shown, t), 1, "{t} in {shown:?}");
+        }
+        assert_eq!((count(&shown, "Round"), count(&shown, "Chamfer")), (3, 1), "{shown:?}");
+    }
+}
+
+/// A corner kind set with no live rectangle selected leaves the selected polygon, the document and
+/// its undo history as they are.
+#[test]
+fn a_rectangle_corner_kind_without_a_selected_rectangle_changes_nothing() {
+    use vectorcraft_geom::shapes::CornerKind::Chamfer;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 40, "sides": 6})).unwrap();
+    let st = app.session.active().unwrap();
+    let (before, steps) = (st.doc.clone(), st.history.undo.len());
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, None);
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, Some(2));
+    let st = app.session.active().unwrap();
+    assert!(st.doc == before, "the document changed");
+    assert_eq!(st.history.undo.len(), steps);
+}
+
+/// A corner kind picked while a Shape Builder merge is computed on another thread applies the
+/// merge first, and sets the kind on the live rectangles selected after it.
+#[test]
+fn a_rectangle_corner_kind_applies_a_merge_on_another_thread_first() {
+    use vectorcraft_geom::shapes::CornerKind::Chamfer;
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    let view = app.view_info();
+    let at = |kind| PointerEvent {
+        kind,
+        pos: vectorcraft_geom::Point::new(15.0, 10.0),
+        mods: Mods::default(),
+        pressure: 1.0,
+        backquote: false,
+        pen: None,
+    };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Move), view);
+    app.session.tool_poll(view, true).unwrap();
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Down), view);
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Up), view);
+    assert!(app.session.tool_editing());
+    crate::panels::set_rectangle_kinds(&mut app, Chamfer, None);
+    assert!(!app.session.tool_editing());
+    let st = app.session.active().unwrap();
+    let labels: Vec<_> = st.history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Live Shape", "Shape Builder"]);
+    let kinds: Vec<_> = st
+        .selection
+        .objects
+        .iter()
+        .filter_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Path { live: Some(l), .. } => match &**l {
+                LiveShape::Rectangle { kinds, .. } => Some(*kinds),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert!(!kinds.is_empty() && kinds.iter().all(|k| *k == [Chamfer; 4]), "{kinds:?}");
+}
+
 /// #3451: a live ellipse shows pie start/end angles and Invert Pie in the Transform panel and
 /// the Properties panel's Transform section; typed angles update the shape.
 #[test]

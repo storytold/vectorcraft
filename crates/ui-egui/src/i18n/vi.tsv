@@ -587,6 +587,11 @@ font-technology	Variable	Biến thiên
 	Cusp	Điểm lùi
 	Straight segment	Đoạn thẳng
 	Circle too large	Hình tròn quá lớn
+	Show Radii	Hiện bán kính
+	Show Diameter	Hiện đường kính
+	Anchors at Standard Positions	Điểm neo ở vị trí chuẩn
+	Third Point by Dragging	Điểm thứ ba bằng cách kéo
+	Gray	Xám
 	Classic	Cổ điển
 	Classic Defaults	Mặc định cổ điển
 	Clean Up…	Dọn dẹp…
@@ -729,6 +734,10 @@ font-technology	Variable	Biến thiên
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Document Colors	Hiện màu của tài liệu
+	Document Colors	Màu của tài liệu
+	Selection Colors	Màu của vùng chọn
+@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Show Harmony	Hiện hài hòa màu
 	Harmony Rule	Quy tắc hài hòa màu
 	Harmony color	Màu hài hòa
@@ -2510,6 +2519,8 @@ digits	Hindi	Hindi
 	List Workspaces	Liệt kê không gian làm việc
 	Live Paint	Tô trực tiếp
 	Live Paint Bucket	Xô Tô trực tiếp
+	Fill Area	Tô vùng
+	Fill Area Tool	Công cụ Tô vùng
 	Live Paint Bucket (Stroke)	Xô Tô trực tiếp (Nét)
 	Live Paint Info	Thông tin Tô trực tiếp
 	Live Paint Selection Tool	Công cụ Chọn Tô trực tiếp
@@ -3157,6 +3168,13 @@ digits	Hindi	Hindi
 	Pen Tool	Công cụ Bút
 	Quick Pen Tool	Công cụ Bút nhanh
 	Quick Pen	Bút nhanh
+	Quick Pen Toolbar	Thanh công cụ Bút nhanh
+	Continuous Arc	Cung liên tục
+	Sharp Corner Arc	Cung góc nhọn
+	Flip Arc	Lật cung
+	Hide Toolbar	Ẩn thanh công cụ
+	Pin Toolbar Position	Ghim vị trí thanh công cụ
+	Reset Toolbar Position	Đặt lại vị trí thanh công cụ
 	Pencil	Bút chì
 	Pencil Tool	Công cụ Bút chì
 	per slice	mỗi lát cắt
@@ -3598,6 +3616,11 @@ mark-style	Japanese	Kiểu Nhật
 	Edit Arrowheads	Chỉnh sửa đầu mũi tên
 	Edit Arrowheads…	Chỉnh sửa đầu mũi tên…
 	Reload Arrowheads	Tải lại đầu mũi tên
+	Bevels	Các kiểu vát
+	Edit Bevels	Chỉnh sửa kiểu vát
+	Edit Bevels…	Chỉnh sửa kiểu vát…
+	{name} (document)	{name} (tài liệu)
+	Reload Bevels	Tải lại kiểu vát
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
 	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
@@ -4088,6 +4111,7 @@ mark-style	Japanese	Kiểu Nhật
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
 	Type to search commands, tools, panels and effects	Nhập để tìm kiếm lệnh, công cụ, bảng và hiệu ứng
+	Clear Recent Commands	Xóa lệnh gần đây
 	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
@@ -4809,6 +4833,10 @@ mark-style	Japanese	Kiểu Nhật
 	Rename Preset	Đổi tên thiết lập sẵn
 	Save Image Trace Preset	Lưu thiết lập sẵn vector hóa ảnh
 	Delete Image Trace Preset	Xóa thiết lập sẵn vector hóa ảnh
+	Tracing Presets…	Thiết lập sẵn vector hóa…
+	Import Image Trace Presets	Nhập thiết lập sẵn vector hóa ảnh
+	Export Image Trace Presets	Xuất thiết lập sẵn vector hóa ảnh
+	Replace the saved presets that have these names?	Thay thế các thiết lập sẵn đã lưu có những tên này?
 	Tracing Result	Kết quả vector hóa
 	Tracing Result with Outlines	Kết quả vector hóa với đường bao
 	Tracking	Giãn chữ
@@ -6143,6 +6171,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	shadings of more than 4096 patches or triangles were left out	các vùng tô có hơn 4096 mảnh hoặc tam giác đã bị bỏ qua
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	các vùng tô có hàm loại không xác định được tô bằng màu giữa
 @msg	Shape Builder: no region under the pointer	Xây dựng hình dạng: không có vùng nào dưới con trỏ
+@msg	Fill Area: no enclosed area under the pointer	Tô vùng: không có vùng kín nào dưới con trỏ
 @msg	Shape Builder: select all paths you want to merge	Xây dựng hình dạng: chọn tất cả đường dẫn bạn muốn hợp nhất
 @msg	Shape Builder: select paths or compound paths	Xây dựng hình dạng: chọn đường dẫn hoặc đường dẫn phức
 @msg	shortcut for `{k}` must be a string	phím tắt cho `{k}` phải là chuỗi
@@ -6198,7 +6227,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
-@msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel phải là none, một trong {_1}, hoặc custom kèm {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom cần {BEVEL_PROFILE}, các điểm của kiểu vát
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} phải là một chuỗi
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} phải có từ 2 đến {most} điểm [x, y], mỗi tỷ lệ từ 0 đến 1, từ [0, 0] (cạnh của mặt đầu) đến [1, 1] (thành bên)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} không thể tạo khối từ phiên bản của ký hiệu “{symbol}”: không có hình vẽ của ký hiệu
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: đường dẫn cắt quá phức tạp để cắt hình vẽ
@@ -6224,8 +6256,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face của `{GRAPHICS}` phải là front, back hoặc side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài, Xoay tròn và Phình
 @msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	Inflate maps graphics onto its front and back, not onto a side	Phình đặt đồ họa lên mặt trước và mặt sau, không đặt lên mặt bên
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	đối tượng {_1}: mặt sau của Phình chỉ nhận đồ họa khi bật Cả hai mặt và Nắp
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
@@ -8617,6 +8651,16 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Ornamental	Hoa văn
+	Scrollwork	Nét cuộn
+	Filigree Arrow	Mũi tên hoa văn
+	Petal Sweep	Nét cánh hoa
+	Twin Curl	Nét cuộn đôi
+	Vector Packs	Bộ cọ véc-tơ
+	Compass Rose	Hoa la bàn
+	Botanical Sprig	Cành cây
+	Facet Diamond	Kim cương nhiều mặt
+	Tide Crest	Đỉnh sóng
 	Leaf Vine	Dây leo lá
 	Blossom Chain	Chuỗi hoa
 	Pennant Garland	Dây cờ tam giác

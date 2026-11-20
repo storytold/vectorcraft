@@ -784,6 +784,10 @@
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
+	Show Document Colors	Pokaż kolory dokumentu
+	Document Colors	Kolory dokumentu
+	Selection Colors	Kolory zaznaczenia
+@plural	Used {n} time|Used {n} times	Użyty {n} raz|Użyty {n} razy|Użyty {n} razy
 	Show Harmony	Pokaż harmonię
 	Harmony Rule	Reguła harmonii
 	Harmony color	Kolor harmonii
@@ -2044,6 +2048,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Zmień nazwę ustawienia
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
+	Tracing Presets…	Ustawienia obrysu…
+	Import Image Trace Presets	Importuj ustawienia obrysu obrazu
+	Export Image Trace Presets	Eksportuj ustawienia obrysu obrazu
+	Replace the saved presets that have these names?	Zastąpić zapisane ustawienia o tych nazwach?
 	Method:	Metoda:
 	Pad	Przedłuż
 	Repeats	Liczba powtórzeń
@@ -3673,6 +3681,8 @@ theme	Appearance	Wygląd
 	Symbolism Tool	Narzędzie symboli
 	Image Trace Presets	Ustawienia obrysu obrazu
 	Live Paint Bucket	Wiadro aktywnego malowania
+	Fill Area	Wypełnij obszar
+	Fill Area Tool	Narzędzie Wypełnij obszar
 	Live Paint Bucket (Stroke)	Wiadro aktywnego malowania (obrys)
 	Live Paint Info	Informacje o aktywnym malowaniu
 	Shape Builder	Kreator kształtów
@@ -4183,6 +4193,13 @@ theme	Appearance	Wygląd
 	Pen Tool	Narzędzie Pióro
 	Quick Pen Tool	Narzędzie Szybkie pióro
 	Quick Pen	Szybkie pióro
+	Quick Pen Toolbar	Pasek narzędzi szybkiego pióra
+	Continuous Arc	Łuk ciągły
+	Sharp Corner Arc	Łuk z ostrym narożnikiem
+	Flip Arc	Odwróć łuk
+	Hide Toolbar	Ukryj pasek narzędzi
+	Pin Toolbar Position	Przypnij położenie paska narzędzi
+	Reset Toolbar Position	Resetuj położenie paska narzędzi
 	Picas	Pica
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Zachowaj wygląd i nadruki
@@ -4298,6 +4315,11 @@ theme	Appearance	Wygląd
 	Edit Arrowheads	Edytuj groty strzałek
 	Edit Arrowheads…	Edytuj groty strzałek…
 	Reload Arrowheads	Wczytaj ponownie groty strzałek
+	Bevels	Fazy
+	Edit Bevels	Edytuj fazy
+	Edit Bevels…	Edytuj fazy…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Wczytaj ponownie fazy
 	Stroke Options	Opcje obrysu
 	Width Profiles	Profile szerokości
 	Apply Graphic Style	Zastosuj styl graficzny
@@ -4602,6 +4624,7 @@ font-technology	Variable	Zmienne
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
 	Type to search commands, tools, panels and effects	Pisz, aby szukać poleceń, narzędzi, paneli i efektów
+	Clear Recent Commands	Wyczyść listę ostatnich poleceń
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…
@@ -4807,6 +4830,11 @@ font-technology	Variable	Zmienne
 	Cusp	Ostrze
 	Straight segment	Prosty segment
 	Circle too large	Okrąg jest za duży
+	Show Radii	Pokaż promienie
+	Show Diameter	Pokaż średnicę
+	Anchors at Standard Positions	Punkty kontrolne w standardowych położeniach
+	Third Point by Dragging	Trzeci punkt przez przeciągnięcie
+	Gray	Szary
 	Clip to Art	Przytnij do kompozycji
 	Colorize	Koloruj
 	Gamma	Gamma
@@ -5274,6 +5302,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved {path}	Zapisano {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Zaznacz tekst lub kliknij w tekst narzędziem Tekst, aby wstawić glify
 @msg	Shape Builder: no region under the pointer	Kreator kształtów: brak obszaru pod wskaźnikiem
+@msg	Fill Area: no enclosed area under the pointer	Wypełnij obszar: brak zamkniętego obszaru pod wskaźnikiem
 @msg	Shape Builder: select all paths you want to merge	Kreator kształtów: zaznacz wszystkie ścieżki, które chcesz scalić
 @msg	Shape Builder: select paths or compound paths	Kreator kształtów: zaznacz ścieżki lub ścieżki złożone
 @msg	Show All Hidden Attributes: nothing is hidden	Pokaż wszystkie ukryte atrybuty: nic nie jest ukryte
@@ -6678,7 +6707,10 @@ mark-style	Japanese	Japońskie
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
-@msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel musi mieć wartość none, jedną z: {_1}, albo custom z {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom wymaga {BEVEL_PROFILE}, punktów fazy
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} musi być ciągiem znaków
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} musi zawierać od 2 do {most} punktów [x, y], każdy udział od 0 do 1, od [0, 0] (krawędź ściany czołowej) do [1, 1] (ściana boczna)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tej kompozycji: jej wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nie może utworzyć bryły z wystąpienia symbolu „{symbol}”: kompozycja symbolu jest niedostępna
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ścieżka przycinająca jest zbyt złożona, aby przyciąć nią kompozycję
@@ -6704,8 +6736,10 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front, back or side	face w `{GRAPHICS}` musi mieć wartość front, back lub side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie, Obrót i Nadmuchanie
 @msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nadmuchanie nakłada grafiki na przednią i tylną stronę, a nie na powierzchnię boczną
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	obiekt {_1}: tył Nadmuchania przyjmuje grafiki tylko przy włączonych opcjach Obie strony i Zakończenie
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość kompozycje symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
@@ -10633,6 +10667,16 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Ornamental	Ornamentalne
+	Scrollwork	Zawijas
+	Filigree Arrow	Filigranowa strzałka
+	Petal Sweep	Smuga płatków
+	Twin Curl	Podwójny zawijas
+	Vector Packs	Pakiety wektorowe
+	Compass Rose	Róża wiatrów
+	Botanical Sprig	Gałązka botaniczna
+	Facet Diamond	Fasetowany diament
+	Tide Crest	Grzbiet fali
 	Leaf Vine	Liściasta winorośl
 	Blossom Chain	Łańcuch kwiatów
 	Pennant Garland	Girlanda proporczyków
