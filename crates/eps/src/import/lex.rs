@@ -9,7 +9,15 @@ use craft_ps::read::lex::{LexError, Number, Token};
 
 use super::obj::{Obj, PsError, Res};
 
-pub(crate) use craft_ps::read::lex::{IMMEDIATE, find, hex_decode};
+pub(crate) use craft_ps::read::lex::{IMMEDIATE, hex_decode};
+
+/// Where `needle` first starts in `hay` (uses `memmem` so large inputs stay linear-time).
+pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    memchr::memmem::find(hay, needle)
+}
 
 pub(crate) struct Lexer<'a> {
     inner: craft_ps::read::lex::Lexer<'a>,
