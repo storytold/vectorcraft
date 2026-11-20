@@ -57,7 +57,7 @@ pub fn links(app: &mut VectorcraftApp, ui: &mut Ui) {
     links_in(app, ui, false);
 }
 
-/// [`links`] for a centred column (the Home screen's, as PhotoCraft's, #4684): the Discord button
+/// [`links`] for a centred column (the Home screen's, #4684): the Discord button
 /// and the links, each in the middle.
 pub fn links_centered(app: &mut VectorcraftApp, ui: &mut Ui) {
     links_in(app, ui, true);

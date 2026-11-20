@@ -132,9 +132,11 @@ impl CornerWidgets {
         Self::of(doc, selection, zoom, any_path)?.within_angle(max_angle)
     }
 
-    /// The widgets the active tool can drag (Direct Selection: `any_path`).
+    /// The widgets the active tool can drag (Direct Selection: `any_path`). The live shapes' widgets
+    /// of the other tools also need Show Shape Widgets.
     pub fn for_tool(cx: &ToolContext, any_path: bool) -> Option<Self> {
-        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, cx.corner_widgets, cx.corner_widget_max_angle)
+        let on = cx.corner_widgets && (any_path || cx.shape_widgets);
+        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, on, cx.corner_widget_max_angle)
     }
 
     /// The centres of the widgets that show.
@@ -257,7 +259,7 @@ pub struct CornerDrag {
 }
 
 /// Direct Selection: the drawn anchors of a widget's corner, which a click on the widget selects
-/// (Shift: toggles), as a click on the corner's anchor does.
+/// (Shift: toggles, unless every corner is selected), as a click on the corner's anchor does.
 #[derive(Clone, Debug)]
 struct CornerClick {
     id: NodeId,
@@ -282,7 +284,13 @@ impl CornerDrag {
                 let path = widgets.paths.get(widget.0)?;
                 let corner = path.widgets.get(widget.1)?.corner.index;
                 let lc = cx.doc.node(path.id).and_then(LiveCorners::of)?;
-                Some(CornerClick { id: path.id, anchors: lc.anchors_of(&[corner].into()).into_iter().collect(), shift: ev.mods.shift })
+                // While every corner is selected (the path selected whole), a Shift-click picks
+                // this corner alone, as the first click of "click one widget, then Shift-click the
+                // others" does: toggling it would deselect it and leave the rest (#5188). Selected
+                // anchors that are no corner show every widget too, but select no corner: there a
+                // Shift-click adds the corner.
+                let every = cx.selection.partial(path.id).is_none_or(|anchors| lc.all().is_subset(&lc.corners_of(anchors)));
+                Some(CornerClick { id: path.id, anchors: lc.anchors_of(&[corner].into()).into_iter().collect(), shift: ev.mods.shift && !every })
             })
             .flatten();
         let outlines = widgets
