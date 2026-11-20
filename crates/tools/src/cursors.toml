@@ -524,6 +524,7 @@ id = "LivePaintBucket"
 group = "Colour and gradient"
 shown_when = [
     "The Live Paint Bucket where a click paints nothing: away from Live Paint groups and the selected paths' regions, or over a part the Paint Fills and Paint Strokes options (and Shift) leave unpainted.",
+    "The Fill Area tool outside every area that visible, unlocked paths enclose, where a click adds nothing.",
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The drop the paint pours onto."
@@ -534,6 +535,7 @@ id = "LivePaintBucketFace"
 group = "Colour and gradient"
 shown_when = [
     "The Live Paint Bucket over a face of a Live Paint group, or a region of the selected paths, that a click fills.",
+    "The Fill Area tool over an enclosed area, where a click adds a path of that area.",
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The drop the paint pours onto."
