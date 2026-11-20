@@ -4150,6 +4150,8 @@ theme	Appearance	Tampilan
 	Symbolism Tool	Alat simbolisme
 	Image Trace Presets	Preset telusur gambar
 	Live Paint Bucket	Ember Live Paint
+	Fill Area	Isi Area
+	Fill Area Tool	Alat Isi Area
 	Live Paint Bucket (Stroke)	Ember Live Paint (guratan)
 	Live Paint Info	Info Live Paint
 	Shape Builder	Pembangun bentuk
@@ -5599,6 +5601,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Berhasil menyimpan {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Pilih teks atau klik di dalam teks dengan alat Teks untuk menyisipkan glif
 @msg	Shape Builder: no region under the pointer	Pembangun Bentuk: tidak ada area di bawah penunjuk
+@msg	Fill Area: no enclosed area under the pointer	Isi Area: tidak ada area tertutup di bawah penunjuk
 @msg	Shape Builder: select paths or compound paths	Pembangun Bentuk: pilih jalur atau jalur majemuk
 @msg	Show All Hidden Attributes: nothing is hidden	Tampilkan semua atribut tersembunyi: tidak ada yang tersembunyi
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
@@ -8633,6 +8636,10 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Nature Icons	Ikon Alam
+	Flower	Bunga
+	Tree	Pohon
+	Mountain	Gunung
 	Ornamental	Ornamental
 	Scrollwork	Sulur Hias
 	Filigree Arrow	Panah Filigran

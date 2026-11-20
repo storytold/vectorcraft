@@ -1829,6 +1829,8 @@ antiAlias	Sharp	Nítido
 	List Workspaces	Listar Espaços de Trabalho
 	Live Paint	Pintura ao Vivo
 	Live Paint Bucket	Balde de Pintura ao Vivo
+	Fill Area	Preencher área
+	Fill Area Tool	Ferramenta Preencher Área
 	Live Paint Bucket (Stroke)	Balde de Pintura ao Vivo (Traçado)
 	Live Paint Info	Informações da Pintura ao Vivo
 	Live Paint Selection Tool	Ferramenta Seleção de Pintura ao Vivo
@@ -4450,6 +4452,7 @@ axis	Both	Ambos
 @msg	Saved {path}	{path} salvo
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecione texto ou clique em um texto com a ferramenta Texto para inserir glifos
 @msg	Shape Builder: no region under the pointer	Criador de formas: nenhuma região sob o ponteiro
+@msg	Fill Area: no enclosed area under the pointer	Preencher área: nenhuma área fechada sob o ponteiro
 @msg	Shape Builder: select all paths you want to merge	Criador de formas: selecione todos os traçados que deseja mesclar
 @msg	Shape Builder: select paths or compound paths	Criador de formas: selecione traçados ou traçados compostos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos os atributos ocultos: nada está oculto
@@ -10871,6 +10874,10 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Nature Icons	Ícones da natureza
+	Flower	Flor
+	Tree	Árvore
+	Mountain	Montanha
 	Ornamental	Ornamental
 	Scrollwork	Voluta
 	Filigree Arrow	Seta filigranada

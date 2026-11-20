@@ -2689,6 +2689,8 @@ digits	Malayalam	Malaiàlam
 	Live curve fitting	Ajustament de corbes en directe
 	Live Paint	Pintura interactiva
 	Live Paint Bucket	Galleda de pintura interactiva
+	Fill Area	Emplena l'àrea
+	Fill Area Tool	Eina Emplena l'àrea
 	Live Paint Bucket (Stroke)	Galleda de pintura interactiva (traç)
 	Live Paint Info	Informació de pintura interactiva
 	Live Paint Selection Tool	Eina de selecció de pintura interactiva
@@ -7228,6 +7230,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	shadings of more than 4096 patches or triangles were left out	els ombrejats de més de 4096 pedaços o triangles s’han omès
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	els ombrejats les funcions dels quals són d’un tipus desconegut s’omplen amb el seu color central
 @msg	Shape Builder: no region under the pointer	Constructor de formes: no hi ha cap regió sota el punter
+@msg	Fill Area: no enclosed area under the pointer	Emplena l'àrea: no hi ha cap àrea tancada sota el punter
 @msg	Shape Builder: select all paths you want to merge	Constructor de formes: selecciona tots els traçats que vulguis combinar
 @msg	Shape Builder: select paths or compound paths	Constructor de formes: selecciona traçats o traçats compostos
 @msg	shortcut for `{k}` must be a string	la drecera de `{k}` ha de ser una cadena
@@ -8975,6 +8978,10 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Nature Icons	Icones de natura
+	Flower	Flor
+	Tree	Arbre
+	Mountain	Muntanya
 	Ornamental	Ornamental
 	Scrollwork	Voluta
 	Filigree Arrow	Fletxa de filigrana

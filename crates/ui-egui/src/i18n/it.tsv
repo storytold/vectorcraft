@@ -2209,6 +2209,8 @@ file-filter	Templates	Modelli
 	List Workspaces	Elenca aree di lavoro
 	Live Paint	Pittura dinamica
 	Live Paint Bucket	Secchiello pittura dinamica
+	Fill Area	Riempi area
+	Fill Area Tool	Strumento Riempi area
 	Live Paint Bucket (Stroke)	Secchiello pittura dinamica (traccia)
 	Live Paint Info	Informazioni pittura dinamica
 	Live Paint Selection Tool	Strumento Selezione pittura dinamica
@@ -5195,6 +5197,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Saved {path}	Salvato {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Seleziona del testo o fai clic nel testo con lo strumento Testo per inserire glifi
 @msg	Shape Builder: no region under the pointer	Generatore forme: nessuna regione sotto il puntatore
+@msg	Fill Area: no enclosed area under the pointer	Riempi area: nessuna area chiusa sotto il puntatore
 @msg	Shape Builder: select all paths you want to merge	Generatore forme: seleziona tutti i tracciati da unire
 @msg	Shape Builder: select paths or compound paths	Generatore forme: seleziona tracciati o tracciati composti
 @msg	Show All Hidden Attributes: nothing is hidden	Mostra tutti gli attributi nascosti: non c'è nulla di nascosto
@@ -10475,6 +10478,10 @@ breakText	Glyphs	Glifi
 @msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
 @msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}
+	Nature Icons	Icone della natura
+	Flower	Fiore
+	Tree	Albero
+	Mountain	Montagna
 	Ornamental	Ornamentale
 	Scrollwork	Voluta
 	Filigree Arrow	Freccia filigranata

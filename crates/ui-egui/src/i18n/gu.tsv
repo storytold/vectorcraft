@@ -2180,6 +2180,8 @@
 	List Workspaces	વર્કસ્પેસની યાદી
 	Live Paint	લાઇવ પેઇન્ટ
 	Live Paint Bucket	લાઇવ પેઇન્ટ બકેટ
+	Fill Area	વિસ્તાર ભરો
+	Fill Area Tool	વિસ્તાર ભરો ટૂલ
 	Live Paint Bucket (Stroke)	લાઇવ પેઇન્ટ બકેટ (સ્ટ્રોક)
 	Live Paint Info	લાઇવ પેઇન્ટ માહિતી
 	Live Paint Selection Tool	લાઇવ પેઇન્ટ પસંદગી ટૂલ
@@ -5669,6 +5671,10 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Nature Icons	પ્રકૃતિ ચિહ્નો
+	Flower	ફૂલ
+	Tree	વૃક્ષ
+	Mountain	પર્વત
 	Ornamental	અલંકારિક
 	Scrollwork	વળાંકવાળી સજાવટ
 	Filigree Arrow	નાજુક કોતરણીવાળું તીર

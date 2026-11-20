@@ -5560,6 +5560,8 @@ theme	Appearance	იერსახე
 	Symbolism Tool	სიმბოლოების ხელსაწყო
 	Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტები
 	Live Paint Bucket	ცოცხალი შეღებვის სათლი
+	Fill Area	არის შევსება
+	Fill Area Tool	არის შევსების ხელსაწყო
 	Live Paint Bucket (Stroke)	ცოცხალი შეღებვის სათლი (კონტური)
 	Live Paint Info	ცოცხალი შეღებვის ინფორმაცია
 	Shape Builder	ფიგურების კონსტრუქტორი
@@ -6965,6 +6967,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Fill Area: no enclosed area under the pointer	არის შევსება: მაჩვენებლის ქვეშ დახურული არე არ არის
 @msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
@@ -11085,6 +11088,10 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Nature Icons	ბუნების ხატულები
+	Flower	ყვავილი
+	Tree	ხე
+	Mountain	მთა
 	Ornamental	ორნამენტული
 	Scrollwork	ხვეული
 	Filigree Arrow	ფილიგრანული ისარი

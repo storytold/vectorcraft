@@ -4148,6 +4148,8 @@ theme	Appearance	Vormgeving
 	Symbolism Tool	Symbolisatiegereedschap
 	Image Trace Presets	Voorinstellingen voor afbeeldingtracering
 	Live Paint Bucket	Live Paint-emmer
+	Fill Area	Gebied vullen
+	Fill Area Tool	Gereedschap Gebied vullen
 	Live Paint Bucket (Stroke)	Live Paint-emmer (streek)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Vormopbouw
@@ -5602,6 +5604,7 @@ imageTrace	Outline	Contour
 @msg	Saved {path}	{path} opgeslagen
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecteer tekst of klik met het tekstgereedschap in tekst om glyphs in te voegen
 @msg	Shape Builder: no region under the pointer	Vormbouwer: geen gebied onder de aanwijzer
+@msg	Fill Area: no enclosed area under the pointer	Gebied vullen: geen gesloten gebied onder de aanwijzer
 @msg	Shape Builder: select all paths you want to merge	Vormbouwer: selecteer alle paden die je wilt samenvoegen
 @msg	Shape Builder: select paths or compound paths	Vormbouwer: selecteer paden of samengestelde paden
 @msg	Show All Hidden Attributes: nothing is hidden	Alle verborgen kenmerken tonen: er is niets verborgen
@@ -10838,6 +10841,10 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Nature Icons	Natuurpictogrammen
+	Flower	Bloem
+	Tree	Boom
+	Mountain	Berg
 	Ornamental	Ornamentaal
 	Scrollwork	Krulwerk
 	Filigree Arrow	Filigraanpijl

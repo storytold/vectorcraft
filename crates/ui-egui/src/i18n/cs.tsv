@@ -3802,6 +3802,8 @@ theme	Appearance	Motiv
 	Symbolism Tool	Nástroj symbolů
 	Image Trace Presets	Přednastavení vektorizace obrazu
 	Live Paint Bucket	Kbelík živé malby
+	Fill Area	Vyplnit oblast
+	Fill Area Tool	Nástroj Vyplnit oblast
 	Live Paint Bucket (Stroke)	Kbelík živé malby (tah)
 	Live Paint Info	Informace o živé malbě
 	Shape Builder	Tvorba tvarů
@@ -5481,6 +5483,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Saved {path}	Uloženo: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Glyfy vložíte, když vyberete text nebo do něj kliknete nástrojem Text
 @msg	Shape Builder: no region under the pointer	Tvorba tvarů: pod ukazatelem není žádná oblast
+@msg	Fill Area: no enclosed area under the pointer	Vyplnit oblast: pod ukazatelem není žádná uzavřená oblast
 @msg	Shape Builder: select all paths you want to merge	Tvorba tvarů: vyberte všechny cesty, které chcete sloučit
 @msg	Shape Builder: select paths or compound paths	Tvorba tvarů: vyberte cesty nebo složené cesty
 @msg	Show All Hidden Attributes: nothing is hidden	Zobrazit všechny skryté atributy: nic není skryto
@@ -10799,6 +10802,10 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Nature Icons	Ikony přírody
+	Flower	Květina
+	Tree	Strom
+	Mountain	Hora
 	Ornamental	Ornamentální
 	Scrollwork	Rozvilina
 	Filigree Arrow	Filigránový šíp

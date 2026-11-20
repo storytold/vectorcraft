@@ -2167,6 +2167,8 @@ font-technology	Variable	Variables
 	List Workspaces	Enumerar espacios de trabajo
 	Live Paint	Pintura interactiva
 	Live Paint Bucket	Bote de pintura interactiva
+	Fill Area	Rellenar área
+	Fill Area Tool	Herramienta Rellenar área
 	Live Paint Bucket (Stroke)	Bote de pintura interactiva (trazo)
 	Live Paint Info	Información de pintura interactiva
 	Live Paint Selection Tool	Herramienta Selección de pintura interactiva
@@ -5168,6 +5170,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Saved {path}	Se guardó {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecciona texto o haz clic dentro del texto con la herramienta Texto para insertar glifos
 @msg	Shape Builder: no region under the pointer	Generador de formas: no hay ninguna región bajo el puntero
+@msg	Fill Area: no enclosed area under the pointer	Rellenar área: no hay ninguna área cerrada bajo el puntero
 @msg	Shape Builder: select all paths you want to merge	Generador de formas: selecciona todos los trazados que quieras combinar
 @msg	Shape Builder: select paths or compound paths	Generador de formas: selecciona trazados o trazados compuestos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos los atributos ocultos: no hay nada oculto
@@ -10692,6 +10695,10 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Nature Icons	Iconos de naturaleza
+	Flower	Flor
+	Tree	Árbol
+	Mountain	Montaña
 	Ornamental	Ornamental
 	Scrollwork	Voluta
 	Filigree Arrow	Flecha de filigrana

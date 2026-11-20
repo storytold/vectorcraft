@@ -2083,6 +2083,7 @@ file-filter	Templates	範本
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
 @msg	Shape Builder: no region under the pointer	形狀建立：指標下方沒有區域
+@msg	Fill Area: no enclosed area under the pointer	填滿區域：指標下方沒有封閉區域
 @msg	Shape Builder: select all paths you want to merge	形狀建立：請選取要合併的所有路徑
 @msg	Shape Builder: select paths or compound paths	形狀建立：請選取路徑或複合路徑
 @msg	image data `{_1}` is missing	找不到影像資料 `{_1}`
@@ -3477,6 +3478,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	List Workspaces	列出工作區
 	Live Paint	即時上色
 	Live Paint Bucket	即時上色油漆桶
+	Fill Area	填滿區域
+	Fill Area Tool	填滿區域工具
 	Live Paint Bucket (Stroke)	即時上色油漆桶 (筆畫)
 	Live Paint Info	即時上色資訊
 	Live Paint Selection Tool	即時上色選取工具
@@ -10458,6 +10461,10 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Nature Icons	自然圖示
+	Flower	花朵
+	Tree	樹木
+	Mountain	山脈
 	Ornamental	裝飾紋樣
 	Scrollwork	卷飾
 	Filigree Arrow	花絲箭頭

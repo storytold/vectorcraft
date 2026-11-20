@@ -2079,6 +2079,8 @@ file-filter	Templates	模板
 	List Workspaces	列出工作区
 	Live Paint	实时上色
 	Live Paint Bucket	实时上色工具
+	Fill Area	填充区域
+	Fill Area Tool	填充区域工具
 	Live Paint Bucket (Stroke)	实时上色工具 (描边)
 	Live Paint Info	实时上色信息
 	Live Paint Selection Tool	实时上色选择工具
@@ -4736,6 +4738,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Fill Area: no enclosed area under the pointer	填充区域：指针下方没有封闭区域
 @msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
@@ -10642,6 +10645,10 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Nature Icons	自然图标
+	Flower	花朵
+	Tree	树木
+	Mountain	山脉
 	Ornamental	装饰纹样
 	Scrollwork	卷饰
 	Filigree Arrow	花丝箭头
