@@ -438,7 +438,10 @@ fn swedish_svg_filter_spelling_and_3d_labels_are_complete() {
         ("Apply SVG Filter", "Använd SVG-filter"),
         ("Check Spelling", "Kontrollera stavning"),
         ("SVG Filter", "SVG-filter"),
-        ("Graphics map onto the Plane, Extrude and Revolve object types.", "Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel."),
+        (
+            "Graphics map onto the Plane, Extrude, Revolve and Inflate object types.",
+            "Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp.",
+        ),
     ] {
         assert_eq!(sv.catalog().plain(en), Some(want), "{en}");
     }
@@ -590,6 +593,16 @@ fn color_wheel_opacity_strings_are_in_complete_catalogs() {
         for code in COMPLETE_MESSAGES {
             let lang = Lang::from_code(code).expect("registered");
             assert_ne!(message(lang, m), m, "{code}");
+        }
+    }
+}
+
+/// The Nature Icons library and its symbols display in each complete UI language.
+#[test]
+fn nature_symbol_library_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for name in ["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"] {
+            assert!(lang.catalog().plain(name).is_some(), "{} is missing {name}", lang.code);
         }
     }
 }
@@ -884,7 +897,7 @@ fn built_in_library_symbol_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 38, "{names:?}");
+    assert_eq!(names.len(), 43, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
@@ -4183,6 +4196,28 @@ fn three_d_refusals_translate_with_their_values() {
         assert!(label != "Extrude & Bevel" && symbol.contains(&label), "{code}: the effect's name is translated: {symbol}");
     }
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
+}
+
+/// Map Graphic's refusal of Inflate's back while Both sides or Cap is off shows in every
+/// complete-message language, with the object's number as given.
+#[test]
+fn inflate_back_refusal_translates_in_every_complete_catalog() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mark = s.execute("path.create", &json!({"d": "M300 300L310 300L310 320L300 320Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M100 100L200 100L200 200L100 200Z"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.inflate", "item": null, "params": {}})).unwrap();
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id]})).unwrap_err().to_string();
+    let english = "Inflate's back takes graphics with Both sides and Cap on";
+    assert!(e.ends_with(&format!("object {id}: {english}")), "{e}");
+    assert_eq!(message(Lang::EN, &e), e);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(english) && shown.contains(&id.to_string()) && shown.contains("`threeD.mapGraphic`"), "{code}: {e} -> {shown}");
+    }
 }
 
 /// The Blob Brush's range refusals (`path.blob` `angle`, `roundness` and `fidelity`) show in every

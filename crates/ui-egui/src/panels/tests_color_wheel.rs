@@ -1089,7 +1089,7 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     let got = app.run("ui.colorWheel", json!({"sliders": "oklch"})).unwrap();
     let want = json!({
         "view": "box", "channel": "red", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false,
-        "opacity": false, "hexField": false, "sliders": "oklch"
+        "opacity": false, "hexField": false, "sliders": "oklch", "documentColors": false
     });
     assert_eq!(got, want);
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();

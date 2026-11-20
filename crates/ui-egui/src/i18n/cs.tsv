@@ -847,6 +847,10 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Document Colors	Zobrazit barvy dokumentu
+	Document Colors	Barvy dokumentu
+	Selection Colors	Barvy výběru
+@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	Show Harmony	Zobrazit harmonii
 	Harmony Rule	Pravidlo harmonie
 	Harmony color	Barva harmonie
@@ -2138,6 +2142,10 @@ digits	Malayalam	Malajálamské
 	Rename Preset	Přejmenovat přednastavení
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
+	Tracing Presets…	Přednastavení vektorizace…
+	Import Image Trace Presets	Importovat přednastavení vektorizace obrazu
+	Export Image Trace Presets	Exportovat přednastavení vektorizace obrazu
+	Replace the saved presets that have these names?	Nahradit uložená přednastavení s těmito názvy?
 	Method:	Metoda:
 	Pad	Prodloužit
 	Repeats	Počet opakování
@@ -3806,6 +3814,8 @@ theme	Appearance	Motiv
 	Symbolism Tool	Nástroj symbolů
 	Image Trace Presets	Přednastavení vektorizace obrazu
 	Live Paint Bucket	Kbelík živé malby
+	Fill Area	Vyplnit oblast
+	Fill Area Tool	Nástroj Vyplnit oblast
 	Live Paint Bucket (Stroke)	Kbelík živé malby (tah)
 	Live Paint Info	Informace o živé malbě
 	Shape Builder	Tvorba tvarů
@@ -4330,6 +4340,13 @@ theme	Appearance	Motiv
 	Pen Tool	Nástroj Pero
 	Quick Pen Tool	Nástroj Rychlé pero
 	Quick Pen	Rychlé pero
+	Quick Pen Toolbar	Panel nástrojů rychlého pera
+	Continuous Arc	Plynulý oblouk
+	Sharp Corner Arc	Oblouk s ostrým rohem
+	Flip Arc	Překlopit oblouk
+	Hide Toolbar	Skrýt panel nástrojů
+	Pin Toolbar Position	Připnout polohu panelu nástrojů
+	Reset Toolbar Position	Obnovit polohu panelu nástrojů
 	Picas	Pica
 	Portuguese	Portugalština
 	Preserve Appearance and Overprints	Zachovat vzhled a přetisky
@@ -4981,6 +4998,10 @@ font-technology	Variable	Variabilní
 	Cusp	Hrot
 	Straight segment	Přímý segment
 	Circle too large	Kruh je příliš velký
+	Show Radii	Zobrazit poloměry
+	Show Diameter	Zobrazit průměr
+	Anchors at Standard Positions	Kotevní body ve standardních polohách
+	Third Point by Dragging	Třetí bod tažením
 	Clip to Art	Oříznout podle kresby
 	Colorize	Obarvit
 	Gamma	Gama
@@ -5474,6 +5495,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Saved {path}	Uloženo: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Glyfy vložíte, když vyberete text nebo do něj kliknete nástrojem Text
 @msg	Shape Builder: no region under the pointer	Tvorba tvarů: pod ukazatelem není žádná oblast
+@msg	Fill Area: no enclosed area under the pointer	Vyplnit oblast: pod ukazatelem není žádná uzavřená oblast
 @msg	Shape Builder: select all paths you want to merge	Tvorba tvarů: vyberte všechny cesty, které chcete sloučit
 @msg	Shape Builder: select paths or compound paths	Tvorba tvarů: vyberte cesty nebo složené cesty
 @msg	Show All Hidden Attributes: nothing is hidden	Zobrazit všechny skryté atributy: nic není skryto
@@ -6903,8 +6925,10 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafika se mapuje na typy objektu Rovina, Vysunutí, Rotační těleso a Nafouknutí
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nafouknutí mapuje grafiku na přední a zadní stranu, ne na bok
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekt {_1}: zadní strana Nafouknutí přijímá grafiku jen se zapnutými volbami Obě strany a Uzávěr
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
@@ -10799,6 +10823,15 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Nature Icons	Ikony přírody
+	Flower	Květina
+	Tree	Strom
+	Mountain	Hora
+	Ornamental	Ornamentální
+	Scrollwork	Rozvilina
+	Filigree Arrow	Filigránový šíp
+	Petal Sweep	Tah okvětních lístků
+	Twin Curl	Dvojitá rozvilina
 	Vector Packs	Vektorové balíčky
 	Compass Rose	Směrová růžice
 	Botanical Sprig	Botanická větvička

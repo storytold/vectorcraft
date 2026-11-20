@@ -228,7 +228,7 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     let settings = |view: &str, vision: bool| {
         json!({
             "view": view, "channel": "hue", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": vision,
-            "opacity": false, "hexField": false, "sliders": "none"
+            "opacity": false, "hexField": false, "sliders": "none", "documentColors": false
         })
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", false));
@@ -241,7 +241,7 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     assert_eq!(app.run("ui.colorWheel", json!(5)).unwrap_err(), "the params must be an object, not 5");
     assert_eq!(
         app.run("ui.colorWheel", json!({"visoin": false})).unwrap_err(),
-        "unknown parameter `visoin`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField"
+        "unknown parameter `visoin`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors"
     );
     assert!(app.ui.color_wheel.vision);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": null})).unwrap()["vision"], true);

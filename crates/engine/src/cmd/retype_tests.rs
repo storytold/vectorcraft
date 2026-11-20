@@ -1107,6 +1107,31 @@ fn tracking_near_a_whole_number_is_kept_as_measured_when_rounding_moves_glyphs()
 }
 
 #[test]
+fn a_tracking_translucent_glyphs_cannot_take_keeps_the_tracking_that_fits() {
+    // The first three glyphs are tracked 50 and the last 150 further on. A tracking tighter than
+    // zero is not tried for glyphs that cannot be one object, and the tracked prefix is kept.
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "MMMM", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "tracking": 50})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": 3, "tracking": 150})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let kids = children_of(&s, g);
+    s.edit("test", |d, _| {
+        for k in &kids {
+            d.node_mut(NodeId(*k)).unwrap().opacity = 0.5;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat(), "MMMM", "{r}");
+    assert!(texts.iter().any(|t| t.len() > 1), "the tracked glyphs stay one object: {r}");
+}
+
+#[test]
 fn overlapping_translucent_glyphs_are_not_tracked_into_one_object() {
     let mut s = session();
     let id = s.execute("text.create", &json!({"x": 40, "y": 100, "text": "MMMM", "size": 30})).unwrap()["id"].as_u64().unwrap();

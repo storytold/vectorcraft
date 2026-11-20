@@ -103,6 +103,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("shapeBuilder", "Shape Builder Tool", Some("Shift+M"), "tool-shape-builder"),
         t("livePaintBucket", "Live Paint Bucket", Some("K"), "tool-bucket"),
+        t("fillArea", "Fill Area Tool", None, "tool-fill-area"),
         t("livePaintSelection", "Live Paint Selection Tool", Some("Shift+L"), "tool-live-select"),
     ],
     &[

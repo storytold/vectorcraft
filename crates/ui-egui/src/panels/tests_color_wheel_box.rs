@@ -167,7 +167,10 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let harmony = json!({"sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false, "opacity": false, "hexField": false});
+    let harmony = json!({
+        "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false, "opacity": false,
+        "hexField": false, "documentColors": false
+    });
     let with = |v: serde_json::Value| {
         let mut v = v;
         v.as_object_mut().unwrap().extend(harmony.as_object().unwrap().clone());
@@ -217,9 +220,15 @@ fn ui_color_wheel_rejects_other_params() {
     let e = app.run("ui.colorWheel", json!([1])).unwrap_err();
     assert_eq!(e, "the params must be an object, not [1]");
     let e = app.run("ui.colorWheel", json!({"veiw": "wheel"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField");
+    assert_eq!(
+        e,
+        "unknown parameter `veiw`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors"
+    );
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "chanel": "blue"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField");
+    assert_eq!(
+        e,
+        "unknown parameter `chanel`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors"
+    );
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Red, ..Default::default() }, "an error changes nothing");
 }
 
