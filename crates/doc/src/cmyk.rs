@@ -2099,7 +2099,7 @@ mod tests {
     #[test]
     fn cmyk_tiff_read_and_write_use_shared_codec_behavior() {
         let written = ImageBlob::cmyk_tiff(&inks()).unwrap();
-        let mut decoder = tiff::decoder::Decoder::new(Cursor::new(&written.bytes)).unwrap();
+        let mut decoder = tiff::decoder::Decoder::new(Cursor::new(written.bytes.as_slice())).unwrap();
         assert_eq!(decoder.find_tag_unsigned::<u16>(tiff::tags::Tag::Predictor).ok().flatten(), Some(2));
 
         let multiband = extras_tiff::<Cmyk8x8>(&[0, 0, 0, 0], &[255, 0, 0, 0, 9, 10, 11, 12]);
