@@ -10,6 +10,8 @@
 
 ## Feature submission evidence
 
+History panel row context menus (2026-11-20, G12): Right-clicking any state offers New Document from State, Step to This State, and Clear History. Creating a document uses the clicked snapshot without stepping the source document; Step to This State uses undo/redo and is disabled on the current row; Clear History removes undo and redo steps without changing artwork and is disabled when history is empty. Headless tests in `crates/ui-egui/src/panels/history.rs` cover opening an earlier row menu, snapshot creation, backward/forward jumps, and clearing history. Scores and estimates unchanged.
+
 Actions panel item context menus (2026-11-20): Right-clicking an Action Set row selects it and presents a context menu with New Action…, New Set…, Duplicate Set, Delete Set, and Set Options…. Right-clicking an Action row selects it and presents a context menu with Play, Record, Duplicate, Delete, Action Options…, and Batch…. Duplicate on an action duplicates that action and selects the duplicate; Delete removes it. Headless tests in `crates/ui-egui/src/panels/actions.rs`: `right_clicking_an_action_set_selects_it_and_presents_set_context_options`, `right_clicking_an_action_selects_it_and_presents_action_options`, and `clicking_duplicate_on_an_action_duplicates_that_action_in_the_set`. Scores and estimates unchanged.
 
 **Scissors cut-point preview (#8655):** A native point marker shows the anchor or position on a curve that the current Scissors click targets, including the existing snapping rules. Hovering changes no artwork; an ineligible or stale hover has no marker. Existing cut and Alt Add Anchor behavior are retained. Focused tool and Session regressions live in `crates/tools/src/draw2/anchor/tests.rs` and `crates/engine/tests/scissors_snap.rs`. Scores and estimates are unchanged.
@@ -58,6 +60,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-20 | minor | G12: History panel row context menus: New Document from State uses the clicked snapshot; Step to This State runs undo/redo; Clear History clears both stacks. Current-state stepping and empty-history clearing are disabled. Headless tests in `crates/ui-egui/src/panels/history.rs`; scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Properties panel Quick Actions include contextual text actions (Create Outlines, Retype, Find and Replace…); headless tests in crates/ui-egui/src/panels/properties/tests.rs; scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Actions panel item context menus for action sets (New Action…, New Set…, Duplicate Set, Delete Set, Set Options…) and actions (Play, Record, Duplicate, Delete, Action Options…, Batch…) with selection handling; clicking Duplicate on an action duplicates that action; headless tests in `crates/ui-egui/src/panels/actions.rs`; scores and estimates unchanged. |
 | 2026-11-19 | minor | G12: Graphic Styles panel item context menus (Options…, Duplicate, Delete, Redefine, Break Link); regression tests in crates/ui-egui/src/panels/graphic_styles.rs; scores and estimates unchanged. |
@@ -520,6 +523,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).
 
 ## G12 Preferences and panels that don't act yet
+
+- **Implemented (2026-11-20):** History panel row context menus (2026-11-20, G12): Right-clicking any state offers New Document from State, Step to This State, and Clear History. Creating a document uses the clicked snapshot without stepping the source document; Step to This State uses undo/redo and is disabled on the current row; Clear History removes undo and redo steps without changing artwork and is disabled when history is empty. Headless tests in `crates/ui-egui/src/panels/history.rs` cover opening an earlier row menu, snapshot creation, backward/forward jumps, and clearing history. Scores and estimates unchanged.
 
 - **Implemented and tested (2026-11-20):** Appearance panel row context menus: right-clicking stroke and fill rows offers Duplicate Stroke / Duplicate Fill, Delete Stroke / Delete Fill, and Hide Stroke/Show Stroke / Hide Fill/Show Fill; effect rows offer Edit Effect…, Duplicate Effect, Delete Effect, and Hide Effect / Show Effect; the root object row offers Clear Appearance and Reduce to Basic Appearance. Right-clicking an unselected row targets that row before presenting the menu. Item actions run in one undo step. Headless regression coverage: `crates/ui-egui/src/panels/tests_appearance.rs`. Scores and estimates unchanged.
 
