@@ -11322,7 +11322,9 @@ mean square distance of its sampled outline points from their center), is at mos
 tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
 and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
 and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
-a near match. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
+a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
+the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
+with the change of size and turn) or with its center further away than its origin may be. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
 at a leftover distance of 0.05. A compound path that holds several
 glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
 inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the

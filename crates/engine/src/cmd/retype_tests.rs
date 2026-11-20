@@ -1063,6 +1063,75 @@ fn a_near_glyph_moved_by_more_than_the_tolerance_ends_the_line() {
     assert!(run(0.06) > 1, "past it: the line splits where the m was moved");
 }
 
+/// The bounding box of shape `id` (a path, or a compound path's paths), in document space.
+fn shape_box(s: &Session, id: u64) -> kurbo::Rect {
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(NodeId(id)).unwrap();
+    let paths: Vec<&vectorcraft_doc::Node> = match n.children() {
+        Some(c) => c.iter().map(|c| &**c).collect(),
+        None => vec![n],
+    };
+    paths
+        .iter()
+        .filter_map(|p| match &p.kind {
+            NodeKind::Path { path, .. } => Some(kurbo::Shape::bounding_box(&path.to_bezpath())),
+            _ => None,
+        })
+        .reduce(|a, b| a.union(b))
+        .unwrap()
+}
+
+/// The bounding box of each glyph with ink that type `t` draws, in document space.
+fn drawn_boxes(t: &TextObject) -> Vec<kurbo::Rect> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| kurbo::Shape::bounding_box(&(t.xf * g.outline.clone()))).collect()
+}
+
+#[test]
+fn a_near_glyph_whose_size_and_turn_differ_past_the_tolerance_ends_the_line() {
+    // The m of simplified outlines made 4% larger, and turned 0.04 radians as well, about where it
+    // starts on the baseline, retyped with a tolerance of 0.05. Each change alone is within the
+    // size and turn a near-matched line allows, but drawn at the line's size and turn the m would
+    // lie further than 0.05 of its spread from its outline: it becomes type of its own. Larger
+    // alone, it is still within the tolerance and stays on the line.
+    for (scale, turn, lines) in [(1.04, 0.0, 1), (1.04, 0.04, 2)] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
+        simplify_every_path(&mut s, 0.05);
+        let kids = children_of(&s, g);
+        let m = *kids.last().unwrap();
+        let x0 = shape_box(&s, m).x0;
+        s.edit("test", |d, _| {
+            let at = kurbo::Vec2::new(x0, 100.0);
+            let xf = kurbo::Affine::translate(at) * kurbo::Affine::rotate(turn) * kurbo::Affine::scale(scale) * kurbo::Affine::translate(-at);
+            let data = d.node_mut(NodeId(m)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&(xf * data.to_bezpath()));
+            Ok(())
+        })
+        .unwrap();
+        let before: Vec<kurbo::Rect> = kids.iter().map(|k| shape_box(&s, *k)).collect();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({"tolerance": 0.05})).unwrap();
+        let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+        assert_eq!(texts.concat(), "Tim", "{r}");
+        assert_eq!(texts.len(), lines, "scale {scale}, turn {turn}: {r}");
+        if lines == 1 {
+            continue;
+        }
+        let drawn: Vec<kurbo::Rect> = r["ids"].as_array().unwrap().iter().flat_map(|id| drawn_boxes(&text_of(&s, id.as_u64().unwrap()))).collect();
+        assert_eq!(drawn.len(), before.len(), "{r}");
+        for b in &before {
+            // The glyph drawn nearest where the outline was.
+            let d = drawn.iter().min_by(|p, q| p.center().distance(b.center()).total_cmp(&q.center().distance(b.center()))).unwrap();
+            let size = b.width().hypot(b.height());
+            assert!(
+                (d.width() - b.width()).abs() < size * 0.01 && (d.height() - b.height()).abs() < size * 0.01,
+                "scale {scale}, turn {turn}: the outline's box {b:?}, the type's {d:?}: {r}"
+            );
+        }
+    }
+}
+
 #[test]
 fn an_exact_glyph_moved_splits_the_line_whatever_the_tolerance() {
     let mut s = session();

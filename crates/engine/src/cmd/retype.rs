@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a counter narrower than three times the outline tolerance across in some direction, an outline too large to check, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
+        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it), and before a near-matched glyph the line's size and turn would draw further from its shape than the tolerance; a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a counter narrower than three times the outline tolerance across in some direction, an outline too large to check, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
         has_selected_path,
         retype
     )]
@@ -637,9 +637,49 @@ fn first_mismatch(t: &TextObject, matches: &[GlyphMatch], size: f64, slack: f64)
         if g.font_id != m.face.id() || g.gid != m.gid || at.distance(m.origin) > tol {
             return Some(k);
         }
+        // The type sets the glyph at its line's size and turn, which may differ from the glyph's
+        // own: the glyph drawn so must still lie within the tolerance of the shape (its center
+        // within the same distance as its origin).
+        if !(m.exact && first_exact) {
+            let (shape, moved) = set_apart(t, g, m);
+            // An exact match's own leftover is within the exact matcher's reach, not the tolerance.
+            let own = if m.exact { 0.0 } else { m.pose_residual };
+            if own.hypot(shape) > slack + 1e-9 || moved > tol {
+                return Some(k);
+            }
+        }
     }
     // Ink the outlines did not have: the last glyph is where it went wrong.
     drawn.next().map(|_| matches.len().saturating_sub(1))
+}
+
+/// How glyph `g`, as type `t` draws it, differs from glyph `m` in the size, turn and place `m`
+/// was matched in. The first value bounds, whatever points the outline is sampled at, the root
+/// mean square distance between the two outlines' points about their center, relative to the
+/// root mean square distance of `m`'s points from that center (the measure of near matches'
+/// leftover distance): the largest stretch of the change from `m`'s size and turn to the drawn
+/// one, which for a change of size and turn alone is that distance exactly. The second is how far
+/// apart the two draw the center of the glyph's bounding box. Both are infinite when they cannot
+/// be measured.
+fn set_apart(t: &TextObject, g: &vectorcraft_text::PositionedGlyph, m: &GlyphMatch) -> (f64, f64) {
+    let (sin, cos) = m.angle.sin_cos();
+    let matched = kurbo::Affine::new([m.scale * cos, m.scale * sin, -m.scale * sin, m.scale * cos, m.origin.x, m.origin.y]);
+    let (gd, md) = (g.xf.determinant(), matched.determinant());
+    if !gd.is_finite() || gd.abs() < 1e-12 || !md.is_finite() || md.abs() < 1e-12 {
+        return (f64::INFINITY, f64::INFINITY);
+    }
+    let drawn = t.xf * g.xf;
+    // The change from the matched glyph to the drawn one, less the identity, without the move.
+    let [a, b, c, d, _, _] = (drawn * matched.inverse()).as_coeffs();
+    let (a, d) = (a - 1.0, d - 1.0);
+    // The largest singular value of [[a, c], [b, d]].
+    let (p, q) = ((a * a + b * b + c * c + d * d) / 2.0, a * d - b * c);
+    let shape = (p + (p * p - q * q).max(0.0).sqrt()).sqrt();
+    // The center of the glyph's box, in font units.
+    let center = g.xf.inverse() * kurbo::Shape::bounding_box(&g.outline).center();
+    let moved = (drawn * center).distance(matched * center);
+    let finite = |v: f64| if v.is_finite() { v } else { f64::INFINITY };
+    (finite(shape), finite(moved))
 }
 
 /// `lines` checked against their own layout: a line splits where its type stops drawing the
