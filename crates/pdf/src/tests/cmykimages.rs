@@ -1173,6 +1173,43 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
 }
 
+/// A distorted CMYK image whose mask is a gray image distorted to the same corners keeps the
+/// mask on its pixel grid: every piece of its mesh draws the image with the mask as its `/SMask`,
+/// with a color mask on the image too.
+#[test]
+fn a_distorted_cmyk_image_and_its_grid_mask_with_the_same_corners_write_it_as_its_smask() {
+    for color_masked in [false, true] {
+        let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+        let q = [(16.0, 0.0), (24.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y));
+        let id = d.layers[0].children().unwrap()[0].id;
+        let mut mask = d.node(id).unwrap().extras().mask.clone().unwrap();
+        Arc::make_mut(&mut mask.art).set_image_corners(q).unwrap();
+        if color_masked {
+            d.images.insert("shown".into(), ImageBlob::new("image/png", png(image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 90, 200, 255])))));
+        }
+        let n = d.node_mut(id).unwrap();
+        n.extras_mut().mask = Some(mask);
+        if color_masked {
+            n.extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+                key: "shown".into(),
+                from: "img".into(),
+                background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+                colors: vec![[255, 255, 255]],
+                contiguous: false,
+                measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+                tolerance: 0.0,
+                softness: 0.0,
+            }));
+        }
+        n.set_image_corners(q).unwrap();
+        let (bytes, smasks) = export_smasks(&d);
+        // The shown pixels of a color mask have alpha, so its pieces take their triangles as
+        // luminosity masks; the mask's alpha still goes to the image's own `/SMask`.
+        assert!(color_masked || !String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
+        assert!(!smasks.is_empty() && smasks.iter().all(|m| m.as_deref() == Some(&[255, 128, 0, 64][..])), "{color_masked}: {smasks:?}");
+    }
+}
+
 /// A grey mask image with a color mask masks the CMYK image with the pixels it shows: its hidden
 /// pixels are clear in the image's `/SMask`.
 #[test]

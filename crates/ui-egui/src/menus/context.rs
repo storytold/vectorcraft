@@ -270,8 +270,9 @@ fn isolatable(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, n: &vectorc
         && doc.symbol_edit.as_ref().is_none_or(|e| doc.ancestry(target).is_some_and(|a| a.contains(&e.layer)))
 }
 
-/// `items` without the commands that can't run now (Undo and Redo stay, greyed out), submenus
-/// left empty, and separators that no longer separate anything.
+/// `items` without the commands that can't run now (Undo and Redo stay, greyed out, and so do Show
+/// Grid and Hide Guides while Trim View holds them off: #8363), submenus left empty, and separators
+/// that no longer separate anything.
 fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
     let mut out: Vec<Item> = Vec::with_capacity(items.len());
     for it in items {
@@ -280,7 +281,7 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
             it => it,
         };
         let keep = match &it {
-            Item::Cmd(_, id, _) => matches!(*id, "edit.undo" | "edit.redo") || enabled(app, id),
+            Item::Cmd(_, id, _) => matches!(*id, "edit.undo" | "edit.redo" | "view.guides" | "view.grid") || enabled(app, id),
             Item::Sub(_, children) => !children.is_empty(),
             Item::Sep => out.last().is_some_and(|l| !matches!(l, Item::Sep)),
             _ => true,

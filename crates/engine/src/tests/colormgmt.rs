@@ -318,6 +318,45 @@ fn convert_query_and_intents() {
     assert!(s.execute("color.convert", &json!({"color": "#808080", "intent": "vivid"})).is_err());
 }
 
+/// `to: "oklch"` answers the OKLCH of the color's display sRGB, which converts back to the color;
+/// a CMYK color's display color, not its naive separation, sets them.
+#[test]
+fn convert_to_oklch_answers_lightness_chroma_and_hue() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let r = s.execute("color.convert", &json!({"color": "#ff0000", "to": "oklch"})).unwrap();
+    assert_eq!(r["model"], "oklch");
+    let v: Vec<f64> = r["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!((v[0] - 62.80).abs() < 0.005 && (v[1] - 0.2577).abs() < 5e-5 && (v[2] - 29.23).abs() < 0.005, "{r}");
+    let (rgb, lowered) = vectorcraft_color::oklab::from_oklch(v[0] / 100.0, v[1], v[2]);
+    assert!(!lowered);
+    assert_eq!(Color::rgb(rgb[0], rgb[1], rgb[2]).to_hex(), "#ff0000");
+    assert_eq!(r["hex"], "#ff0000");
+    let gray = s.execute("color.convert", &json!({"color": "#808080", "to": "oklch"})).unwrap();
+    assert_eq!(gray["values"][2], 0.0, "{gray}");
+    let ink = json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0});
+    let cyan = s.execute("color.convert", &json!({"color": ink, "to": "oklch"})).unwrap();
+    let shown = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+    let naive = vectorcraft_color::oklab::to_oklch([0.0, 1.0, 1.0]);
+    let c: Vec<f64> = cyan["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let got = [c[0] / 100.0, c[1], c[2]];
+    assert!((0..3).all(|i| (got[i] - shown[i]).abs() < 1e-9) && shown[1] > 0.05, "{cyan} {shown:?}");
+    assert!((got[0] - naive[0]).abs() > 0.02, "{cyan} {naive:?}");
+    // A Lab color outside sRGB answers the OKLCH of its color clipped to sRGB.
+    let vivid = s.execute("color.convert", &json!({"color": {"l": 50.0, "a": 100.0, "b": 0.0}, "to": "oklch"})).unwrap();
+    let w: Vec<f64> = vivid["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let shown = cms::active().display_rgb(&Color::lab(50.0, 100.0, 0.0)).map(|v| v.clamp(0.0, 1.0));
+    let clipped = vectorcraft_color::oklab::to_oklch(shown);
+    assert!((w[0] / 100.0 - clipped[0]).abs() < 1e-9 && (w[1] - clipped[1]).abs() < 1e-9, "{vivid} {clipped:?}");
+    assert!((w[2] - clipped[2]).abs() < 1e-9 && (0.0..360.0).contains(&w[2]), "{vivid} {clipped:?}");
+    assert!(vectorcraft_color::oklab::in_srgb(vectorcraft_color::oklab::oklch_to_srgb(w[0] / 100.0, w[1], w[2])), "{vivid}");
+    // RGB numbers past 0..1 answer the OKLCH of the clipped color `hex` reports: white.
+    let past = s.execute("color.convert", &json!({"color": [2.0, 2.0, 2.0], "to": "oklch"})).unwrap();
+    assert_eq!(past["hex"], "#ffffff");
+    let l = past["values"][0].as_f64().unwrap();
+    assert!((l - 100.0).abs() < 0.01 && past["values"][1].as_f64().unwrap() < 1e-3, "{past}");
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());

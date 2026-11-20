@@ -92,7 +92,7 @@ the two can still win that race.
 | `engine.execute` | `{command, params}` | run any engine or UI command (see `engine.commands`). A key of `params` that the command's params description doesn't name is an error naming it and the nearest key the command takes, before anything runs (`unknown parameter `widht`; did you mean `width`?`); see [Parameter keys](mcp.md#parameter-keys) |
 | `engine.commands` | | every command with label, shortcut, params doc, enablement |
 | `document.inspect` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | layer tree, selection, the key object (`key`, null without one; a key ruler guide as `keyGuide`), history, paint defaults; `depth` / `childLimit` slice the layer tree as `document.node {summary: true}` does; `ids`, `kind`, `limit` and `offset` list just some nodes as `nodes` (with `total`) instead of the whole tree, see [mcp.md](mcp.md). Each node reports `opacity` below 1 and `blend` when it isn't Normal; objects and compound paths report `fill`, `stroke` and `strokeWidth`, a compound path's members `compoundMember: true` instead |
-| `ui.inspect` | | tool, UI state, `screenMode` (0 normal, 1 full screen with menu bar, 2 full screen, 3 Presentation Mode), `taskBar` (`pinned`, and `rect` `[x, y, w, h]` while the Contextual Task Bar shows), `freeTransformWidget` (`[x, y, w, h]` while the Free Transform widget shows), view, canvas rect, window size, perf, background saves and exports still running, `nativeMenuBar` (true when the menus are in the macOS menu bar rather than the window; `ui.menu.list` lists the in-window menus either way), `fileDialog` (`"open"`, `"place"`, `"save"` or `"folder"` while a native file dialog is open, `null` otherwise; see below), `opening` (the paths of the documents still being read). Under `--automation-read-root` the reply leaves out the paths outside the read roots (see `docs/mcp.md`) |
+| `ui.inspect` | | tool, UI state, `screenMode` (0 normal, 1 full screen with menu bar, 2 full screen, 3 Presentation Mode), `taskBar` (`pinned`, and `rect` `[x, y, w, h]` while the Contextual Task Bar shows), `quickPenToolbar` (the same for the Quick Pen toolbar), `freeTransformWidget` (`[x, y, w, h]` while the Free Transform widget shows), view, canvas rect, window size, perf, background saves and exports still running, `nativeMenuBar` (true when the menus are in the macOS menu bar rather than the window; `ui.menu.list` lists the in-window menus either way), `fileDialog` (`"open"`, `"place"`, `"save"` or `"folder"` while a native file dialog is open, `null` otherwise; see below), `opening` (the paths of the documents still being read). Under `--automation-read-root` the reply leaves out the paths outside the read roots (see `docs/mcp.md`) |
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
 | `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected. With the Artboard tool it lists the artboard entries (see `docs/mcp.md`), after selecting the artboard there unless it is already selected. While a menu opened over locked objects is open, it has an `Unlock` submenu with one item for each locked object under the pointer, topmost first and at most 20, labeled with the object's name, which runs `layer.setProps {ids: [id], locked: false}`. A locked group gets one item, and the locked objects inside it get none. Hidden objects, objects on hidden, locked or template layers, and in isolation mode objects outside the isolated group get no item |
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
@@ -272,10 +272,13 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, harmony?, harmonyRule?, vision?}`
-shows the wheel or the box (a color field with a channel strip at its right), picks the box's channel, shows the
-other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns
-the settings, and `ui.inspect` reports them as `ui.color_wheel`.
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?,
+harmonyRule?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
+channel, shows OKLCH Sliders, HSL Sliders or neither, grays out the colors the CMYK space cannot print, shows the
+other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns the
+settings, and `ui.inspect` reports them as `ui.color_wheel`.
+The key `sliders` takes (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
+profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
@@ -332,6 +335,16 @@ The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
+
+`color.used {selection?, limit?}` lists the colors of the selection, or with nothing selected the colors of the art
+`select.all` takes, most used first, as `recolor.colors {}` counts them. Each entry adds `color`, the color in its own
+model as the paint commands take it, and `tint`, the percent of its global `swatch` it is, to three decimals. The
+swatch and tint come from the color's first linked use in paint order; a plain use goes before a gradient stop that
+mixes a spot ink with process inks, and a color only such stops link has no `swatch` here. `selection: false` reads
+the art `select.all` takes while something is selected, and the answer's `selection` says whether the colors are
+the selection's. `limit` keeps only the most used entries, and the answer's `uses` counts the uses of every color.
+The selection does not change. The Color Wheel panel's Show Document Colors row (`ui.colorWheel {documentColors:
+true}`) shows these colors.
 
 Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
 panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
@@ -493,6 +506,12 @@ selection changes (the handle still moves it) and, turned off, lets it follow th
 Bar Position (`window.taskBar.reset`), which unpins it and puts it back under the selection; and Show Properties
 Panel. As in Illustrator, neither the position nor the pin is saved: each launch starts with the bar under the
 selection.
+
+The Quick Pen toolbar shows while the Quick Pen tool is active and Window › Quick Pen Toolbar
+(`window.quickPenToolbar`) is on. Its handle drags it as the Contextual Task Bar's does. Its buttons set the tool's
+action and flip the last sharp-corner arc (`tool.quickPen.flipArc`), and its More Options (…) menu has Hide Toolbar
+(`window.quickPenToolbar`), Pin Toolbar Position (`window.quickPenToolbar.pin {pinned?}`) and Reset Toolbar Position
+(`window.quickPenToolbar.reset`). `docs/mcp.md` (Drawing with the Quick Pen tool) says where it sits.
 
 The Compound Shapes add-on's setting, `window.pathfinder.compoundShapes` (omitted params toggle; checked while on; kept with the
 preferences; off by default), swaps what a click and an Alt-click do on the Pathfinder panel's Shape Mode buttons: on, a click makes a
@@ -925,7 +944,8 @@ when the export refuses the options or the artboard choice, `pens` stays null an
 remembers the options for the next HP-GL Options (not `exportSelection`) and writes the `.plt` file(s), asking for a
 path when there is none (one per artboard with Use Artboards). A canceled save dialog writes nothing and keeps the
 options remembered before; a save dialog shown in line (not as a sheet or off the UI thread) also keeps HP-GL
-Options open.
+Options open. When another document has become the active one since the dialog opened, `ui.dialog.confirm` closes
+it and writes nothing.
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

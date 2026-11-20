@@ -17,7 +17,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 use vectorcraft_doc::pattern::pattern_paint;
 
-use super::fileio::{create_dir, extension, read_file, write_file, write_new_file};
+use super::fileio::{create_dir, extension, read_file, read_file_head, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
 use super::patternlib;
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl, .ase (swatch exchange) or .acb (color book, read only) library, or the swatches of any document VectorCraft opens (see document.formats), such as a .ai or .eps swatch library, for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library). A document's colors, tints, gradients and pattern swatches come in, in its order and color groups; swatch.library.add brings a pattern swatch's pattern with it. A document with no swatches is an error, and so is a .ai, .eps or PostScript file whose swatches are only the default ones (it has no palette of its own) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl, .ase (swatch exchange) or .acb (color book, read only) library, or the swatches of any document VectorCraft opens (see document.formats), such as a .ai or .eps swatch library, for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library). A document's colors, tints, gradients and pattern swatches come in, in its order and color groups; swatch.library.add brings a pattern swatch's pattern with it. A document's graph designs are offered by Object › Graph › Column… and Marker… (graph.column, graph.marker and graph.design take the library's id) until the app quits. A document with no swatches is an error, and so is a .ai, .eps or PostScript file whose swatches are only the default ones (it has no palette of its own), unless it has graph designs, which then load with no swatches. A file larger than 256 MB is refused before it is read → {library: id, name, count, graphDesigns: the document's graph designs (0 for a library file)}",
             always,
             load
         ),
@@ -90,6 +90,45 @@ pub fn specs() -> Vec<CommandSpec> {
             copy_to_user
         ),
     ]
+}
+
+/// The graph designs of the documents Other Library… loaded (`swatch.library.load`), which the
+/// Graph Column and Graph Marker dialogs offer besides the document's own; not saved.
+#[derive(Clone, Debug, Default)]
+pub struct DesignLibraries {
+    libs: Vec<DesignLibrary>,
+}
+
+/// A document loaded as a swatch library that holds graph designs ([`DesignLibraries`]).
+#[derive(Clone, Debug)]
+pub struct DesignLibrary {
+    /// The id `swatch.library.load` gave the swatch library. A User Defined copy of it
+    /// (`swatch.library.copyToUser`) holds the swatches alone, so the designs stay under this id.
+    pub id: String,
+    pub name: String,
+    /// The designs and the resources their art uses.
+    pub doc: Arc<vectorcraft_doc::Document>,
+}
+
+impl DesignLibraries {
+    /// The libraries, in the order they were loaded.
+    pub fn iter(&self) -> impl Iterator<Item = &DesignLibrary> {
+        self.libs.iter()
+    }
+
+    /// The library loaded as swatch library `id`.
+    pub fn get(&self, id: &str) -> Option<&DesignLibrary> {
+        self.libs.iter().find(|l| l.id == id)
+    }
+
+    /// Keep `doc`'s graph designs as library `id` named `name`, in place of the ones loaded as `id`
+    /// before; with no designs, `id` no longer has any.
+    fn set(&mut self, id: &str, name: &str, doc: Option<vectorcraft_doc::Document>) {
+        self.libs.retain(|l| l.id != id);
+        if let Some(doc) = doc {
+            self.libs.push(DesignLibrary { id: id.to_string(), name: name.to_string(), doc: Arc::new(doc) });
+        }
+    }
 }
 
 /// The libraries beyond the built-in ones: User Defined (the library files in the user library
@@ -354,12 +393,32 @@ impl<L: LibraryFile> Libraries<L> {
     /// or a file with the same extension and bytes as one there, is that User Defined library;
     /// others are listed as loaded until the app quits.
     pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
+        self.load_within(p, cmd, None, parse)
+    }
+
+    /// [`Self::load`], with a file at `path` read up to `max` bytes and refused when it is longer.
+    pub(crate) fn load_within(
+        &mut self,
+        p: &Value,
+        cmd: &str,
+        max: Option<usize>,
+        parse: impl FnOnce(&[u8], &str) -> Result<L>,
+    ) -> Result<(LibraryInfo, Arc<L>)> {
         let path = text_param(p, "path", cmd)?;
         let data = text_param(p, "data", cmd)?;
         let data_base64 = text_param(p, "dataBase64", cmd)?;
         let name = text_param(p, "name", cmd)?;
         let bytes = match (path, data, data_base64) {
-            (Some(path), ..) => read_file(path)?,
+            (Some(path), ..) => match max {
+                Some(max) => {
+                    let bytes = read_file_head(path, max.saturating_add(1))?;
+                    if bytes.len() > max {
+                        return Err(bad(cmd, too_big_message(max)));
+                    }
+                    bytes
+                }
+                None => read_file(path)?,
+            },
             (None, Some(text), _) => text.as_bytes().to_vec(),
             (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
             _ => return Err(bad(cmd, "give `path`, `data` or `dataBase64`")),
@@ -777,12 +836,40 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// The error for a library file larger than `max` bytes.
+fn too_big_message(max: usize) -> String {
+    format!("the file is larger than {} MB", max >> 20)
+}
+
+/// Whether the library `p` gives (`path`, `data` or `dataBase64`) is larger than `max` bytes,
+/// checked before the file is read, copied or decoded.
+pub(crate) fn library_too_big(p: &Value, cmd: &str, max: usize) -> Result<bool> {
+    Ok(match text_param(p, "path", cmd)? {
+        Some(path) => super::fileio::file_stamp(path).is_some_and(|(len, _)| len > max as u64),
+        None => match text_param(p, "data", cmd)? {
+            Some(text) => text.len() > max,
+            // Base64 holds 3 bytes in every 4 characters (padding and white space hold none).
+            None => {
+                text_param(p, "dataBase64", cmd)?.is_some_and(|b| b.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).count() * 3 / 4 > max)
+            }
+        },
+    })
+}
+
 fn load(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.load";
+    let max = super::place::document::MAX_FILE;
+    if library_too_big(p, C, max)? {
+        return Err(bad(C, too_big_message(max)));
+    }
+    let mut designs = None;
     // The document a library with pattern swatches was read from, which holds their patterns.
     let mut patterns = None;
-    let (info, lib) = s.swatch_libraries.load(p, C, |bytes, file| {
-        // A library file, or a document whose swatches become the library.
+    // The file is read no further than the limit, so a file that grew since it was checked is
+    // refused too.
+    let (info, lib) = s.swatch_libraries.load_within(p, C, Some(max), |bytes, file| {
+        // A library file, or a document whose swatches become the library and whose graph
+        // designs the Graph Column and Graph Marker dialogs offer.
         if palette_io::sniff_bytes(bytes) {
             return palette_io::read_bytes(bytes, stem(file)).map_err(|e| bad(C, e));
         }
@@ -792,10 +879,17 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // A `.ai`, EPS or PostScript file without a palette of its own opens with the default swatches.
         let defaults = matches!(loaded.format.id, "ai" | "ait" | "eps" | "ps") && has_only_default_swatches(&loaded.doc);
-        let lib = document_library(&loaded.doc, &[], stem(file).to_string(), true, C)?;
+        let mut lib = document_library(&loaded.doc, &[], stem(file).to_string(), true, C)?;
+        let doc_designs = super::clipboard::resources::graph_design_library(&loaded.doc);
         if defaults || lib.is_empty() {
-            return Err(bad(C, format!("`{file}` has no swatches of its own")));
+            // A document with graph designs loads for them, with no swatches.
+            if doc_designs.is_none() {
+                return Err(bad(C, format!("`{file}` has no swatches of its own")));
+            }
+            lib.swatches.clear();
+            lib.groups.clear();
         }
+        designs = doc_designs;
         if lib.iter().any(|w| matches!(w.paint, Paint::Pattern { .. })) {
             patterns = Some(Arc::new(loaded.doc));
         }
@@ -804,7 +898,9 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
     if info.category == "loaded" {
         s.swatch_libraries.set_pattern_doc(&info.id, patterns);
     }
-    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
+    let count = designs.as_ref().map_or(0, |d| d.graph_designs.len());
+    s.graph_design_libraries.set(&info.id, &info.name, designs);
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len(), "graphDesigns": count}))
 }
 
 /// `d`'s swatches and color groups are exactly the default ones of a color mode, as a new

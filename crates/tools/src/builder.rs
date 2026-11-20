@@ -1,7 +1,7 @@
-//! Shape Builder (Shift+M), Live Paint Bucket (K) and Live Paint Selection (Shift+L).
+//! Shape Builder (Shift+M), Live Paint Bucket (K), Fill Area and Live Paint Selection (Shift+L).
 //!
-//! The tools only emit commands (`shapeBuilder.merge`, `livePaint.fill`, `livePaint.strokeEdge`,
-//! `select.*`); the planar arrangement comes from `vectorcraft_pathops::shape_builder` (Shape
+//! The tools only emit commands (`shapeBuilder.merge`, `shapeBuilder.copyRegion`, `livePaint.fill`,
+//! `livePaint.strokeEdge`, `select.*`); the planar arrangement comes from `vectorcraft_pathops::shape_builder` (Shape
 //! Builder) and `vectorcraft_pathops::live_paint` (Live Paint).
 //!
 //! **Live Paint groups** are ordinary groups (no special node kind): the group's name starts with
@@ -28,11 +28,13 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 pub use po::SHAPE_BUILDER_MAX_GAP;
 
 mod cache;
+mod fill_area;
 mod live_paint;
 mod lookup;
 mod map;
 
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
+pub use fill_area::{AreaFinder, EnclosedArea, FillAreaTool, every_layer, fill_area_roots};
 #[cfg(test)]
 use live_paint::LpHover;
 pub use live_paint::{
@@ -868,11 +870,16 @@ impl Tool for ShapeBuilderTool {
 /// is not true or false, a `pickColorFrom` other than `artwork` or `swatches`, a `selection` other
 /// than `freeform` or `straightLine`, a `highlightColor` that is not an RGB color without an alpha
 /// part and a `gapLength` that is not a finite number are errors. A finite gap length out of 0 to
-/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. The Live Paint tools are checked
-/// by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the tools'
-/// `set_option` instead, which skips a value it cannot read.
+/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. `fillArea` takes only
+/// `gapDetection`, `gapLength` and `openFilledAsClosed`, checked the same way. The Live Paint tools
+/// are checked by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the
+/// tools' `set_option` instead, which skips a value it cannot read.
 pub fn check_builder_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
-    if tool != "shapeBuilder" {
+    if tool == "fillArea" {
+        if let Some(key) = values.keys().find(|k| !matches!(k.as_str(), "gapDetection" | "gapLength" | "openFilledAsClosed")) {
+            return Err(format!("unknown Fill Area option `{key}`"));
+        }
+    } else if tool != "shapeBuilder" {
         return check_live_paint_options(tool, values);
     }
     let one_of = |key: &str, v: &Value, names: &[&str]| {
@@ -902,6 +909,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "shapeBuilder" => Box::new(ShapeBuilderTool::default()),
         "livePaintBucket" => Box::new(LivePaintBucketTool::default()),
         "livePaintSelection" => Box::new(LivePaintSelectionTool::default()),
+        "fillArea" => Box::new(FillAreaTool::new()),
         _ => return None,
     })
 }

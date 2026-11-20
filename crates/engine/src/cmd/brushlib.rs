@@ -175,7 +175,10 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
     BuiltinBrushLibrary { id: "pressure-sensitive", name: "Pressure Sensitive", make: pressure_sensitive },
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
+    BuiltinBrushLibrary { id: "paint", name: "Paint", make: paint },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
+    BuiltinBrushLibrary { id: "decorative", name: "Decorative", make: decorative },
+    BuiltinBrushLibrary { id: "ornamental", name: "Ornamental", make: ornamental },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "stipple", name: "Stipple", make: stipple },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
@@ -185,6 +188,8 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "engraving", name: "Engraving", make: engraving },
     BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
     BuiltinBrushLibrary { id: "image-brush", name: "Image Brush", make: image_brush },
+    BuiltinBrushLibrary { id: "artistic", name: "Artistic Brushes", make: artistic },
+    BuiltinBrushLibrary { id: "vector-packs", name: "Vector Packs", make: vector_packs },
 ];
 
 /// Built-in library `id`, made once.
@@ -236,6 +241,42 @@ fn ring(c: Point, outer: f64, inner: f64) -> Node {
 
 fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
+}
+
+/// Artistic: four original vector compositions that stretch along a path and take its color.
+fn artistic() -> BrushLibrary {
+    let orbit = group(vec![
+        black(band(100.0, 1.4, 64, |x| 3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+        black(band(100.0, 1.4, 64, |x| -3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+    ]);
+    let mut petals = vec![black(band(100.0, 0.8, 4, |_| 0.0))];
+    for i in 0..6 {
+        let x = 9.0 + 16.0 * i as f64;
+        let side = if i % 2 == 0 { 1.0 } else { -1.0 };
+        petals.push(black(polygon(&[(x - 6.0, 0.0), (x - 2.0, 5.0 * side), (x + 5.0, 7.0 * side), (x + 2.0, 2.0 * side)])));
+    }
+    let mut lattice = vec![black(band(100.0, 0.9, 4, |_| 0.0))];
+    for i in 0..5 {
+        let x = 20.0 * i as f64;
+        lattice.push(black(polygon(&[(x, -4.0), (x + 1.0, -4.0), (x + 20.0, 4.0), (x + 19.0, 4.0)])));
+        lattice.push(black(polygon(&[(x, 4.0), (x + 1.0, 4.0), (x + 20.0, -4.0), (x + 19.0, -4.0)])));
+    }
+    let mut facets = Vec::new();
+    for i in 0..8 {
+        let x = 12.5 * i as f64;
+        let high = if i % 2 == 0 { 6.0 } else { 3.5 };
+        facets.push(black(polygon(&[(x, -high), (x + 11.0, -high / 2.0), (x + 12.5, 0.0), (x + 11.0, high / 2.0), (x, high)])));
+    }
+    built(
+        "Artistic Brushes",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Orbit Lines", orbit, Colorization::Tints),
+            art("Petal Garland", group(petals), Colorization::Tints),
+            art("Lattice Braid", group(lattice), Colorization::Tints),
+            art("Facet Sweep", group(facets), Colorization::Tints),
+        ],
+    )
 }
 
 /// Original fine-line art for an engraving-style brush library.
@@ -594,6 +635,45 @@ fn spacer(r: Rect) -> Node {
     Node::path(NodeId(0), shapes::rectangle(r), Appearance::default())
 }
 
+/// Paint: original filled vector art with broad, broken, loaded, and fanned marks. Each is one
+/// stroke stretched along the path, with an intentionally different edge and paint distribution.
+fn paint() -> BrushLibrary {
+    let flat_sweep = group(vec![
+        black(band(100.0, 5.0, 64, |x| 0.8 * (x / 100.0 * std::f64::consts::TAU).sin())),
+        black(polygon(&[(0.0, -2.5), (7.0, -3.8), (18.0, -2.5)])),
+        black(polygon(&[(78.0, 2.5), (94.0, 4.0), (100.0, 2.5)])),
+    ]);
+    let mut dry_drag = vec![];
+    for (y, shift) in [(-5.0, 0.0), (-3.2, 4.0), (-1.3, 1.0), (0.8, 6.0), (2.8, 3.0), (4.8, 8.0)] {
+        dry_drag.push(black(shapes::rectangle(Rect::new(2.0 + shift, y, 35.0 + shift, y + 0.8))));
+        dry_drag.push(black(shapes::rectangle(Rect::new(40.0 + shift, y, 75.0 - shift / 2.0, y + 0.8))));
+        dry_drag.push(black(shapes::rectangle(Rect::new(80.0 - shift / 2.0, y, 98.0, y + 0.8))));
+    }
+    let mut loaded_stroke = vec![black(band(100.0, 6.0, 64, |x| 1.2 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin()))];
+    for (x, r) in [(12.0, 4.2), (39.0, 3.6), (64.0, 4.8), (88.0, 3.9)] {
+        loaded_stroke.push(black(shapes::ellipse(Rect::new(x - r, -r - 1.5, x + r, r + 1.5))));
+    }
+    let mut fan_sweep = vec![];
+    for i in -2..=2 {
+        let offset = i as f64;
+        fan_sweep.push(black(band(100.0, 1.2, 48, |x| offset * (1.4 + x * 0.045) + 0.3 * (x / 100.0 * std::f64::consts::TAU).sin())));
+    }
+    let paint_art = |name: &str, art: Node| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush { art, width: 150.0, colorization: Colorization::Tints, ..Default::default() }),
+    };
+    built(
+        "Paint",
+        Document::new(100.0, 100.0),
+        vec![
+            paint_art("Flat Sweep", flat_sweep),
+            paint_art("Dry Drag", group(dry_drag)),
+            paint_art("Loaded Stroke", group(loaded_stroke)),
+            paint_art("Fan Sweep", group(fan_sweep)),
+        ],
+    )
+}
+
 /// Pattern Borders: pattern brushes of tiles drawn here; Beads has corner tiles.
 fn pattern_borders() -> BrushLibrary {
     let zigzag = black(polygon(&[(0.0, 1.4), (5.0, -2.6), (10.0, 1.4), (10.0, 2.6), (5.0, -1.4), (0.0, 2.6)]));
@@ -611,6 +691,94 @@ fn pattern_borders() -> BrushLibrary {
         border("Scallops", scallops, None, PatternFit::Stretch),
     ];
     built("Pattern Borders", Document::new(100.0, 100.0), brushes)
+}
+
+/// Decorative: repeating plant, flower and hanging ornaments drawn as original vector tiles.
+/// Every tile joins the next at x = 0 and 48 so open and closed paths stay continuous.
+fn decorative() -> BrushLibrary {
+    let stem = || black(shapes::rectangle(Rect::new(0.0, -0.65, 48.0, 0.65)));
+    let vine = group(vec![
+        stem(),
+        black(polygon(&[(8.0, -0.2), (12.0, -5.0), (24.0, -8.0), (20.0, -1.0)])),
+        black(polygon(&[(28.0, 0.2), (32.0, 5.0), (44.0, 8.0), (40.0, 1.0)])),
+    ]);
+    let mut blossoms = vec![stem()];
+    for x in [12.0, 36.0] {
+        for (dx, dy) in [(0.0, -4.0), (4.0, 0.0), (0.0, 4.0), (-4.0, 0.0)] {
+            blossoms.push(black(shapes::ellipse(Rect::new(x + dx - 2.5, dy - 2.5, x + dx + 2.5, dy + 2.5))));
+        }
+        blossoms.push(black(shapes::ellipse(Rect::new(x - 1.3, -1.3, x + 1.3, 1.3))));
+    }
+    let flowers = group(blossoms);
+    let pennants = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.2, 48.0, -4.2))),
+        black(polygon(&[(4.0, -4.2), (20.0, -4.2), (12.0, 10.0)])),
+        black(polygon(&[(28.0, -4.2), (44.0, -4.2), (36.0, 10.0)])),
+    ]);
+    let lanterns = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.0, 48.0, -4.0))),
+        black(shapes::rectangle(Rect::new(11.4, -4.0, 12.6, -1.0))),
+        black(shapes::ellipse(Rect::new(7.0, -1.0, 17.0, 9.0))),
+        black(shapes::rectangle(Rect::new(35.4, -4.0, 36.6, -1.0))),
+        black(shapes::ellipse(Rect::new(31.0, -1.0, 41.0, 9.0))),
+    ]);
+    built(
+        "Decorative",
+        Document::new(100.0, 100.0),
+        vec![
+            border("Leaf Vine", vine, None, PatternFit::Stretch),
+            border("Blossom Chain", flowers, None, PatternFit::Stretch),
+            border("Pennant Garland", pennants, None, PatternFit::Stretch),
+            border("Lantern String", lanterns, None, PatternFit::Stretch),
+        ],
+    )
+}
+
+/// Ornamental: one-pass flourishes and arrow accents that stretch with the path rather than
+/// repeating a pattern tile. Every shape is original filled vector art.
+fn ornamental() -> BrushLibrary {
+    let scrollwork = group(vec![
+        black(band(100.0, 1.2, 64, |x| 2.6 * (x / 100.0 * std::f64::consts::TAU).sin())),
+        ring(Point::new(7.0, 0.0), 4.0, 2.0),
+        ring(Point::new(93.0, 0.0), 4.0, 2.0),
+        black(polygon(&[(28.0, 1.0), (34.0, -5.0), (40.0, -3.0), (33.0, 2.0)])),
+        black(polygon(&[(60.0, 3.0), (66.0, 5.0), (72.0, -1.0), (67.0, -2.0)])),
+    ]);
+    let arrow = group(vec![
+        // The shaft runs into the head's notch at x = 85 so the two overlap.
+        black(shapes::rectangle(Rect::new(4.0, -0.7, 86.0, 0.7))),
+        black(polygon(&[(80.0, -6.5), (100.0, 0.0), (80.0, 6.5), (85.0, 0.0)])),
+        ring(Point::new(7.0, 0.0), 4.0, 1.7),
+        black(polygon(&[(25.0, -0.4), (31.0, -4.4), (37.0, -2.0), (31.0, 0.8)])),
+        black(polygon(&[(43.0, 0.4), (49.0, 4.4), (55.0, 2.0), (49.0, -0.8)])),
+    ]);
+    let mut petals = vec![black(band(100.0, 1.0, 48, |x| 1.8 * (x / 100.0 * std::f64::consts::PI).sin()))];
+    for x in [19.0, 43.0, 67.0, 87.0] {
+        let y = 1.8 * (x / 100.0 * std::f64::consts::PI).sin();
+        petals.push(black(shapes::ellipse(Rect::new(x - 4.5, y - 7.5, x + 4.5, y - 0.3))));
+        petals.push(black(shapes::ellipse(Rect::new(x - 3.5, y + 0.3, x + 3.5, y + 5.5))));
+    }
+    let petal_sweep = group(petals);
+    let twin_curl = group(vec![
+        black(band(100.0, 0.9, 64, |x| -3.8 + 1.6 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        black(band(100.0, 0.9, 64, |x| 3.8 - 1.6 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        ring(Point::new(8.0, -3.8), 3.0, 1.5),
+        ring(Point::new(92.0, 3.8), 3.0, 1.5),
+    ]);
+    let ornament = |name: &str, art: Node| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush { art, width: 300.0, colorization: Colorization::Tints, ..Default::default() }),
+    };
+    built(
+        "Ornamental",
+        Document::new(100.0, 100.0),
+        vec![
+            ornament("Scrollwork", scrollwork),
+            ornament("Filigree Arrow", arrow),
+            ornament("Petal Sweep", petal_sweep),
+            ornament("Twin Curl", twin_curl),
+        ],
+    )
 }
 
 fn scatter(name: &str, art: Node, s: Scatter) -> Brush {
@@ -745,6 +913,38 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Vector Packs: four original, editable vector marks that follow the stroke color.
+fn vector_packs() -> BrushLibrary {
+    let compass = group(vec![black(shapes::star(Point::ZERO, 10.0, 3.0, 8, 0.0)), black(shapes::ellipse(Rect::new(-1.5, -1.5, 1.5, 1.5)))]);
+    let sprig = group(vec![
+        black(polygon(&[(-0.7, 10.0), (0.7, 10.0), (0.7, -10.0), (-0.7, -10.0)])),
+        black(polygon(&[(0.0, 5.0), (5.0, 2.0), (7.0, -1.0), (3.0, 0.0)])),
+        black(polygon(&[(0.0, 0.0), (-5.0, -3.0), (-7.0, -6.0), (-3.0, -5.0)])),
+        black(polygon(&[(0.0, -5.0), (5.0, -8.0), (7.0, -10.0), (3.0, -9.0)])),
+    ]);
+    let diamond = group(vec![
+        black(polygon(&[(-9.0, 0.0), (-1.0, -9.0), (-1.0, -1.0)])),
+        black(polygon(&[(1.0, -9.0), (9.0, 0.0), (1.0, -1.0)])),
+        black(polygon(&[(9.0, 0.0), (1.0, 9.0), (1.0, 1.0)])),
+        black(polygon(&[(-1.0, 9.0), (-9.0, 0.0), (-1.0, 1.0)])),
+    ]);
+    let tide = group(vec![
+        black(band(20.0, 1.2, 32, |x| -3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+        black(band(20.0, 1.2, 32, |x| 3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+    ]);
+    let settings = Scatter { size: (90.0, 110.0), spacing: (130.0, 160.0), colorization: Colorization::Tints, ..Default::default() };
+    built(
+        "Vector Packs",
+        Document::new(100.0, 100.0),
+        vec![
+            scatter("Compass Rose", compass, settings.clone()),
+            scatter("Botanical Sprig", sprig, settings.clone()),
+            scatter("Facet Diamond", diamond, settings.clone()),
+            scatter("Tide Crest", tide, settings),
+        ],
+    )
 }
 
 /// Stipple: original dot-based scatter brushes for fine and broad shading along a path.
@@ -1036,10 +1236,14 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
         return Some(found);
     }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
-        return Some((builtin_info(b), builtin_library(key)?));
+        return Some((builtin_info(b), builtin_library(b.id)?));
     }
-    let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
-    library(s, &id)
+    if let Some(id) = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key)).map(|l| l.id) {
+        return library(s, &id);
+    }
+    // Keep the short built-in alias, but let a user or loaded library own its display name.
+    let b = key.eq_ignore_ascii_case("Artistic").then(|| BUILTIN.iter().find(|b| b.id == "artistic")).flatten()?;
+    Some((builtin_info(b), builtin_library(b.id)?))
 }
 
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<BrushLibrary>)> {

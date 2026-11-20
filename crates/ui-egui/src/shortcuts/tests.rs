@@ -489,8 +489,8 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// add-on, Set Corners…, Divide into Dashes, Tangent Circle…, Find Nearest Swatch, the swatch legend, the type
 /// tools, the select add-on and Select by Link Status…), three "…" items whose menu entry gives
 /// params, Smart Punctuation…, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
-/// dialogs and Apply SVG Filter….
-const MENU_DIALOG_COMMANDS: [&str; 40] = [
+/// dialogs (Transparency Flattener, Print, PDF, Tracing and Perspective Grid Presets…) and Apply SVG Filter….
+const MENU_DIALOG_COMMANDS: [&str; 41] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
@@ -529,6 +529,7 @@ const MENU_DIALOG_COMMANDS: [&str; 40] = [
     "ui.flattenerPresetsDialog",
     "ui.printPresetsDialog",
     "ui.pdfPresetsDialog",
+    "ui.tracingPresetsDialog",
     "ui.perspectivePresetsDialog",
     "ui.svgFilterDialog",
 ];
@@ -1638,6 +1639,45 @@ fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open(
     assert_eq!(sel.anchors.get(&id).map(|a| a.len()), Some(1), "only the corner inside the loop");
 }
 
+/// Color Picker… (`ui.colorPicker`) has no default key. Keyboard Shortcuts lists it, and a key
+/// assigned there opens the picker for the proxy in front: with no document open, with nothing
+/// selected and with an object selected, and for the stroke while the Stroke proxy is in front,
+/// with or without a document open.
+#[test]
+fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!(crate::shortcut_editor::default_command_shortcut("ui.colorPicker"), None);
+    let listed = app.run("shortcuts.list", json!({"query": "ui.colorPicker"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
+    assert_eq!(rows, [json!("Color Picker…")], "Keyboard Shortcuts lists it");
+    app.run("shortcuts.set", json!({"id": "ui.colorPicker", "shortcut": "Cmd+Alt+Shift+F12"})).unwrap();
+    crate::shortcut_editor::sync(&app.ui);
+    let key = || press(Key::F12, Modifiers::COMMAND | Modifiers::ALT | Modifiers::SHIFT);
+    let opened = |app: &mut VectorcraftApp| {
+        let stroke = app.ui.dialog.as_ref().filter(|d| d.kind == "colorPicker").map(|d| d.bool("stroke"));
+        app.ui.dialog = None;
+        stroke
+    };
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "no document: the fill");
+    app.run("paint.toggleActive", json!({"fill": false})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(true), "no document, the Stroke proxy in front: the stroke");
+    app.run("paint.toggleActive", json!({"fill": true})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "nothing selected: the fill");
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(false), "an object selected: the fill");
+    app.run("paint.toggleActive", json!({})).unwrap();
+    frame(&mut app, key());
+    assert_eq!(opened(&mut app), Some(true), "the Stroke proxy in front: the stroke");
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
 /// Binds Show Grid to `chord`, or with `None` leaves every command its default shortcut.
 fn bind_grid(app: &mut VectorcraftApp, chord: Option<&str>) {
     app.ui.shortcut_overrides.clear();
@@ -2080,13 +2120,16 @@ fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
     // The empty search lists the recent picks, so the last pick is the highlighted result.
     app.ui.recent_commands = vec!["paint.swap".into()];
     app.ui.palette_open = true;
+    let before = undo_len(&app);
     for repeat in 0..4 {
         held.press(&mut app);
         assert!(app.ui.palette_open, "repeat {repeat}: it stays open");
+        assert_eq!(undo_len(&app), before, "repeat {repeat}: nothing ran");
     }
     held.release(&mut app);
     held.press(&mut app);
     assert!(!app.ui.palette_open, "a new press runs the highlighted result");
+    assert_eq!(undo_len(&app), before + 1, "Swap Fill and Stroke ran on the rectangle: {}", app.ui.status);
 }
 
 /// Enter on a command search result whose menu item opens a dialog (Create Gradient Mesh…) opens
@@ -2235,6 +2278,39 @@ fn brackets_size_the_blob_brush_and_the_eraser() {
     app.select_tool("rectangle");
     frame(&mut app, vec![text("[")]);
     assert_eq!(app.session.paint.stroke_width, 3.0);
+}
+
+/// A typed `[` or `]` reaches the Quick Pen tool while a press drags a sharp-corner arc: the arc
+/// being dragged takes the new size.
+#[test]
+fn brackets_size_the_quick_pen_arc_being_dragged() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    app.select_tool(vectorcraft_tools::quickpen::ID);
+    app.session.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    let v = vectorcraft_engine::ViewInfo { smart_guides: false, ..Default::default() };
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, 100.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 300.0), v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), v).unwrap();
+    assert!(app.session.tool_busy());
+    let points = |app: &VectorcraftApp| {
+        let mut v = vec![];
+        app.session.doc().unwrap().doc.walk(|n| {
+            if let Some(pd) = n.path_data() {
+                v.extend(pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)));
+            }
+        });
+        v
+    };
+    let before = points(&app);
+    assert_eq!(before.len(), 3, "the arc being dragged is drawn");
+    frame(&mut app, vec![egui::Event::Text("[".into())]);
+    assert_eq!(app.session.tool_options()["turn"], 165.0);
+    let after = points(&app);
+    assert_eq!(after.len(), 3);
+    assert_ne!(after[1], before[1], "the arc being dragged is drawn again with the new size");
 }
 
 fn remembered_paint_app() -> VectorcraftApp {

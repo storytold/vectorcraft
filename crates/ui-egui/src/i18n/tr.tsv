@@ -223,6 +223,10 @@ font-technology	Variable	Değişken
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
+	Three-Point Arc Tool	Üç Noktalı Yay Aracı
+	Three-Point Arc	Üç Noktalı Yay
+	Arc too large	Yay çok büyük
+	Third Point Sets Direction	Üçüncü Nokta Yönü Belirler
 	Arc Upper…	Ark Üst…
 	Arch…	Kemer…
 	Arc…	Yay…
@@ -485,6 +489,10 @@ font-technology	Variable	Değişken
 	Cusp	Sivri nokta
 	Straight segment	Düz segment
 	Circle too large	Daire çok büyük
+	Show Radii	Yarıçapları Göster
+	Show Diameter	Çapı Göster
+	Anchors at Standard Positions	Standart Konumlarda Bağlantı Noktaları
+	Third Point by Dragging	Sürükleyerek Üçüncü Nokta
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle
@@ -587,9 +595,14 @@ font-technology	Variable	Değişken
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tekerlek Görünümü
 	Box View	Kutu Görünümü
+	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Document Colors	Belge Renklerini Göster
+	Document Colors	Belge Renkleri
+	Selection Colors	Seçim Renkleri
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
 	Show Harmony	Uyumu Göster
 	Harmony Rule	Uyum Kuralı
 	Harmony color	Uyum rengi
@@ -632,6 +645,8 @@ font-technology	Variable	Değişken
 	Contextual Task Bar	Bağlamsal Görev Çubuğu
 	Pin Bar Position	Pim Çubuğu Konumu
 	Reset Bar Position	Çubuk Konumunu Sıfırla
+	Bar Actions	Çubuk Eylemleri
+	Reset Bar Actions	Çubuk Eylemlerini Sıfırla
 	Contrast	Kontrast
 	Control	Kontrol
 	Convert	Dönüştür
@@ -1726,6 +1741,10 @@ font-technology	Variable	Değişken
 	Rename Preset	Ön Ayarı Yeniden Adlandır
 	Save Image Trace Preset	Görüntü İzleme Ön Ayarını Kaydet
 	Delete Image Trace Preset	Görüntü İzleme Ön Ayarını Sil
+	Tracing Presets…	İzleme Ön Ayarları…
+	Import Image Trace Presets	Görüntü İzleme Ön Ayarlarını İçe Aktar
+	Export Image Trace Presets	Görüntü İzleme Ön Ayarlarını Dışa Aktar
+	Replace the saved presets that have these names?	Bu adlara sahip kayıtlı ön ayarlar değiştirilsin mi?
 	Image Trace Presets	Görüntü İzleme Ön Ayarları
 	Image:	Resim:
 	Images:	Görseller:
@@ -1855,6 +1874,11 @@ font-technology	Variable	Değişken
 	Knife	Bıçak
 	Knockout Group	Nakavt Grubu
 	Lab	Laboratuvar
+	OKLCH Sliders	OKLCH Kaydırıcıları
+	HSL Sliders	HSL Kaydırıcıları
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	sRGB'nin bu açıklık ve renk tonunda alabileceği en yüksek kroma
+	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 	Lab Spot Colors:	Laboratuvar Spot Renkleri:
 	Lab Values	Laboratuvar Değerleri
 	Landscape	Manzara
@@ -1966,6 +1990,8 @@ font-technology	Variable	Değişken
 	List Workspaces	Çalışma Alanlarını Listeleme
 	Live Paint	Canlı Boyama
 	Live Paint Bucket	Canlı Boyama Kovası
+	Fill Area	Alanı Doldur
+	Fill Area Tool	Alan Doldurma Aracı
 	Live Paint Bucket (Stroke)	Canlı Boya Kovası (Strok)
 	Live Paint Info	Canlı Boyama Bilgisi
 	Live Paint Selection Tool	Canlı Boyama Seçim Aracı
@@ -2563,6 +2589,13 @@ shape	Open	Açık
 	Pen Tool	Kalem Aracı
 	Quick Pen Tool	Hızlı Kalem Aracı
 	Quick Pen	Hızlı Kalem
+	Quick Pen Toolbar	Hızlı Kalem Araç Çubuğu
+	Continuous Arc	Sürekli Yay
+	Sharp Corner Arc	Keskin Köşeli Yay
+	Flip Arc	Yayı Çevir
+	Hide Toolbar	Araç Çubuğunu Gizle
+	Pin Toolbar Position	Araç Çubuğu Konumunu Sabitle
+	Reset Toolbar Position	Araç Çubuğu Konumunu Sıfırla
 	Pencil	Kalem
 	Pencil Tool	Kurşun Kalem Aracı
 	per slice	dilim başına
@@ -3001,6 +3034,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Ok Uçlarını Düzenle
 	Edit Arrowheads…	Ok Uçlarını Düzenle…
 	Reload Arrowheads	Ok Uçlarını Yeniden Yükle
+	Bevels	Eğimler
+	Edit Bevels	Eğimleri Düzenle
+	Edit Bevels…	Eğimleri Düzenle…
+	{name} (document)	{name} (belge)
+	Reload Bevels	Eğimleri Yeniden Yükle
 	Reset Rotate View	Döndürme Görünümünü Sıfırla
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
@@ -3138,9 +3176,14 @@ digits	Malayalam	Malayalam
 	Edit type set in fonts that aren't available?	Mevcut olmayan yazı tiplerindeki metin düzenlensin mi?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Tuvalde her dilimin numarasını sol üst köşesindeki bir kutuda gösterir; kapalıyken dilimlerin dış çizgileri görünmeye devam eder.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kullanıcı ve nesne dilimlerinin dış çizgilerinin ve numara kutularının rengi; otomatik dilimler bu rengin daha soluk bir tonunu kullanır.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden tirelenir, tire yoksa hiç tirelenmez; dili ve büyük/küçük harf durumu fark etmez.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Masaüstü sürümünde bu klasördeki .wasm eklentileri başlangıçta ve Tamam yeni bir klasör ayarladığında yüklenir, Güvenli Mod hariç; izin isteyen bir eklenti ancak siz izinleri verdikten sonra yüklenir. Web sürümü hiçbirini yüklemez.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Büyük, bir filtre veya komut eklentisinin her çalışmasına aynı süre sınırıyla en az 250 milyon talimat verir; Normal eklentinin kendi bütçesini korur. Canlı efektler, dışa aktarıcılar ve içe aktarıcılar kendi bütçelerini korur.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu ve [Normal Karakter Stili] bir dil belirlemediği sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden bölünür, tire yoksa hiç bölünmez; dili ve büyük/küçük harf durumu fark etmez.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Masaüstü sürümünde bu klasördeki .wasm eklentileri başlangıçta ve burada yeni bir klasörle Tamam'a tıkladığınızda yüklenir, Güvenli Mod hariç; web sürümü bunları yüklemez.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal, her eklentinin kendi sınırlarını korur; Büyük ile bir eklenti filtresi veya komutu, girdisi için olanlara ek olarak en az 250 milyon talimat çalıştırabilir. Süre sınırı aynı kalır.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Bir eklentinin nesne filtresinin her çalıştırmasının kullanabileceği talimat sayısı; Büyük, aynı 60 saniyelik sınırla Normal'den fazlasına izin verir. Ağır filtreler kendi bütçelerini korur.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	İlk geçici disk seçimi: Startup, None veya bir klasör yolu; VectorCraft bunu saklar ancak henüz geçici disk kullanmaz.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	İkinci geçici disk seçimi: Startup, None veya bir klasör yolu; VectorCraft bunu saklar ancak henüz geçici disk kullanmaz.
@@ -3152,13 +3195,15 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Araç çubuğunda her araç grubunun adını araçlarının üstünde gösterir; kapalıyken gruplar arada hiçbir şey olmadan birbirini izler.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Bundan sonra açtığınız veya oluşturduğunuz belgeler sekme olarak açılır; kapalıyken her biri kayan bir pencerede açılır. Zaten açık olan belgeler yerinde kalır.
 	Makes the document tabs taller and their names larger.	Belge sekmelerini daha yüksek, adlarını daha büyük yapar.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Bir sonraki başlatmadan itibaren sistem, VectorCraft'ın aksi halde kendi başlık çubuğunu çizeceği yerde pencerenin başlık çubuğunu çizer.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Bir sonraki başlatmadan itibaren VectorCraft, masaüstünün çizeceği yerlerde bile pencerenin başlık çubuğunu çizer; Sistem Başlık Çubuğu açıksa çizmez.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Bir sonraki başlatmadan itibaren sistem, VectorCraft'ın aksi halde kendi başlık çubuğunu çizeceği yerde pencerenin başlık çubuğunu çizer; Linux ve BSD'lerde VECTORCRAFT_TITLEBAR değişkeni önceliklidir.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Bir sonraki başlatmadan itibaren VectorCraft, masaüstünün çizeceği yerlerde bile pencerenin başlık çubuğunu çizer; Sistem Başlık Çubuğu açıksa veya VECTORCRAFT_TITLEBAR değişkeni onu seçiyorsa çizmez.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Arayüzü büyütür veya küçültür; kanvastaki çizim aynı yakınlaştırmada boyutunu korur.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft'ın çizdiği araç işaretçileri Kullanıcı Arayüzü Ölçeklendirme ile büyüyüp küçülür; kapalıyken boyutlarını korur.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Arayüzün dili; Otomatik, sistemin dilini kullanır. İletişim kutusu, bir dil seçer seçmez o dile geçer.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animasyonlu Yakınlaştırma yalnızca bu açıkken çalışır; kapalıyken Animasyonlu Yakınlaştırma soluk görünür ve yakınlaştırma animasyonlu olmaz.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Tekerlekle yakınlaştırma yumuşakça kayar, Yakınlaştırma Aracı ise yana sürüklerken veya basılı tutarken yakınlaştırır; kapalıyken Yakınlaştırma Aracı sürüklediğiniz alana yakınlaştırır.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Bir sonraki başlatmadan itibaren masaüstü sürümü tuvali bu tür grafik işlemci üzerinden gösterir; çizim her durumda CPU'da yapılır. Otomatik, Windows ve macOS'ta tümleşik işlemciyi tercih eder. Web sürümü bunu kullanmaz.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Bir sonraki başlatmadan itibaren pencere, grafik sürücüsünün izin verdiği yerde ekranın yenilenmesini beklemeden her kareyi gösterir; saniyede en fazla 240 kare.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Bir sonraki başlatmadan itibaren masaüstü sürümü bu tür grafik işlemciyle çizer; Otomatik, ekranı süren işlemciyi tercih eder. Web sürümü bunu kullanmaz.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Bir sonraki başlatmadan itibaren pencere, ekranın yenilenmesini beklemeden kareleri gösterir, saniyede en fazla 240; kapalıyken hızı ekran belirler. Başlatırken ayarlanan bir sunum modu önceliklidir.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Her belgenin sakladığı en fazla geri alma adımı sayısı; daha düşük bir sayı, Tamam'a tıkladığınızda en eski adımları kaldırır. Adımlar çok fazla bellek kullanırsa daha erken de gidebilir.
@@ -3177,6 +3222,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Son Dosyaları Aç ve Ana Sayfa ekranı en fazla bu kadar son dosyayı listeler; 0 hiçbirini listelemez ve VectorCraft yine de 30'a kadarını hatırlar.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bir belge açılırken, kayıtlı önizlemesini gösteren bağlı bir EPS görüntüsü EPS dosyasını yeniden okumak yerine bu önizlemeyi korur; değişen dosyalar yine Bağlantıları Güncelle ayarını izler.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Piksel Önizlemesi'nde görüntüler yumuşatılarak çizilir; kapalıyken pikselleri keskin kenarlı görünür. Piksel Önizlemesi dışında görüntüler her zaman yumuşatılır.
+	PDF Text	PDF metni
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Açtığınız veya gömdüğünüz bir PDF'nin metni düzenlenebilir metin olarak ya da yazı tipleri olmayan bir bilgisayarda aynı görünen ana hatlar olarak gelir.
+	Linked pages show the file's own text.	Bağlı sayfalar dosyanın kendi metnini gösterir.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Bağlı bir dosya değiştiğinde Otomatik olarak onu yeniden okur, Değiştirildiğinde Sor önce size sorar, Manuel olarak ise onu olduğu gibi bırakıp durum çubuğunda bir not gösterir.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Masaüstü sürümünde Şablondan yeni… ve Şablon Olarak Kaydet… komutlarının başladığı klasör; belgeler klasörünüzdeki VectorCraft Templates için boş bırakın.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Orijinali Düzenle, bağlı bir dosyayı sistemin o tür için varsayılan uygulamasında açar; kapalıyken bağlı bir raster görüntü, kuruluysa PhotoCraft'ta açılır.
@@ -3191,7 +3239,6 @@ digits	Malayalam	Malayalam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Tüm Siyahların Çıkışını Zengin Siyah Olarak Çıkarın seçeneği, RGB ve gri tonlamalı raster dışa aktarımlarda ve Bitmap olarak yazdır ile saf CMYK siyahını RGB siyahı olarak çizer; vektör dışa aktarımları, CMYK JPEG, TIFF ve PSD dosyalarını veya diğer yazdırmaları değiştirmez.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Dokunmatik ekranda dokunmatik çalışma alanına geçer; seçenek kapatıldığında veya dokunmatik ekran algılanmadığında önceki çalışma alanına döner.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Tuvale iki parmakla dokunmak geri alır veya dokunmatik çalışma alanında seçim ve çizim araçları arasında geçiş yapar, üç parmakla dokunmak yineler; Sunum Modu'nda ikisi de çalışmaz.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Belge Kurulumu'nun dili İngilizce: ABD olduğu ve [Normal Karakter Stili] bir dil belirlemediği sürece yeni metin bu dili alır; bir belgede zaten bulunan metin kendi dilini korur.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Tireleme açık paragraflarda listedeki bir sözcük yalnızca içine yazılan tirelerden bölünür, tire yoksa hiç bölünmez; büyük/küçük harf durumu fark etmez, Korece sözcükler tire almaz ve Hint dillerindeki sözcükler bir karakter grubunun içinden bölünmez.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
@@ -3457,6 +3504,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Type to search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri aramak için yazın
+	Clear Recent Commands	Son Komutları Temizle
 	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
@@ -4854,6 +4902,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Saved {path}	{path} kaydedildi
 @msg	Select text or click into text with the Type tool to insert glyphs	Glif eklemek için metni seçin veya Yazım aracıyla metne tıklayın
 @msg	Shape Builder: no region under the pointer	Şekil Oluşturucu: işaretçinin altında bölge yok
+@msg	Fill Area: no enclosed area under the pointer	Alanı Doldur: işaretçinin altında kapalı alan yok
 @msg	Shape Builder: select all paths you want to merge	Şekil Oluşturucu: birleştirmek istediğiniz tüm yolları seçin
 @msg	Shape Builder: select paths or compound paths	Şekil Oluşturucu: yolları veya bileşik yolları seçin
 @msg	Show All Hidden Attributes: nothing is hidden	Tüm Gizli Özellikleri Göster: hiçbir şey gizli değildir
@@ -4907,6 +4956,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk veya websafe olmalıdır
 @msg	`view` must be wheel or box	`view` wheel veya box olmalıdır
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch veya hsl olmalıdır
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç
@@ -5085,6 +5136,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	a guide has no curvature circle	bir kılavuzun eğrilik çemberi yoktur
 @msg	the circle that matches the path there would reach past the canvas	yolla orada eşleşen çember tuvalin dışına taşardı
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	`at` must be "start" or "end"	`at` "start" veya "end" olmalıdır
+@msg	give exactly one of `through` and `toward`	`through` ve `toward` değerlerinden tam olarak birini verin
+@msg	no arc fits these points: two are the same or all three lie on one line	bu noktalara uyan bir yay yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	give `at` only with `toward`	`at` değerini yalnızca `toward` ile birlikte verin
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
@@ -5310,6 +5365,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	{_1} nesnesi Perspektif Deformasyonu veya Serbest Deformasyon ile değiştirilmiş bir görüntüdür ve bu komut onunla çalışmaz
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri dışbükey bir şekil oluşturmaz
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri deformasyonun ufkunu geçer
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	{_1} görüntüsü bu şekilde deforme edilemez: köşeleri perspektif eşleme için birbirine çok yakın olur
 @msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
 @msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
 @msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır
@@ -6126,7 +6185,10 @@ lighting	Light	Işık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Eksen Etrafında Döndür, Şişir veya Döndür)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
-@msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel; none, {_1} değerlerinden biri veya {BEVEL_PROFILE} ile custom olmalıdır
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom için {BEVEL_PROFILE}, yani eğimin noktaları gerekir
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} bir dize olmalıdır
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}, 2 ile {most} arasında [x, y] noktası olmalıdır; her oran 0 ile 1 arasında, [0, 0] (uç yüzeyin kenarı) ile [1, 1] (yan duvar) arasında
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}, “{symbol}” sembolünün örneğinden katı oluşturamaz: sembolün resmi kullanılamıyor
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık
@@ -6152,8 +6214,10 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` face değeri front, back veya side olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafikler Düzlem, Ekstrüzyon, Eksen Etrafında Döndür ve Şişir nesne türlerine eşlenir
 @msg	Revolve maps graphics onto its side: map them onto the front	Eksen Etrafında Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	Inflate maps graphics onto its front and back, not onto a side	Şişir grafikleri ön ve arka yüze eşler, yan yüze eşlemez
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	nesne {_1}: Şişir efektinin arka yüzü yalnızca Her iki taraf ve Kapak açıkken grafik alır
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
@@ -10696,6 +10760,34 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Nature Icons	Doğa simgeleri
+	Flower	Çiçek
+	Tree	Ağaç
+	Mountain	Dağ
+	Ornamental	Süslemeli
+	Scrollwork	Kıvrım süsü
+	Filigree Arrow	Telkari ok
+	Petal Sweep	Yaprakçık kıvrımı
+	Twin Curl	Çift kıvrım
+	Vector Packs	Vektör Paketleri
+	Compass Rose	Pusula Gülü
+	Botanical Sprig	Botanik Dal
+	Facet Diamond	Fasetli Elmas
+	Tide Crest	Dalga Tepesi
+	Leaf Vine	Yapraklı sarmaşık
+	Blossom Chain	Çiçek zinciri
+	Pennant Garland	Bayrak süsü
+	Lantern String	Fener dizisi
+	Orbit Lines	Yörünge Çizgileri
+	Petal Garland	Taç Yaprağı Çelengi
+	Lattice Braid	Kafes Örgü
+	Facet Sweep	Fasetli Darbe
+	Artistic Brushes	Sanatsal Fırçalar
+	Paint	Boya
+	Flat Sweep	Düz fırça izi
+	Dry Drag	Kuru sürükleme
+	Loaded Stroke	Yoğun fırça izi
+	Fan Sweep	Yelpaze izi
 	Engraving	Gravür
 	Fine Hatching	İnce tarama
 	Dense Hatching	Yoğun tarama
