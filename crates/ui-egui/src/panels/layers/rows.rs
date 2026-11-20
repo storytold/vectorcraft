@@ -926,8 +926,28 @@ fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
     }
 }
 
-/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, filled when `n`
-/// has an appearance or transparency of its own. Its response is clicked to target `n`; dragging
+/// The radius of the inner ring of a targeted item's target circle (the double ring); the outer
+/// ring's radius is 5.
+pub(super) const TARGET_RING: f32 = 2.8;
+/// The width of the inner ring.
+pub(super) const TARGET_STROKE: f32 = 1.0;
+/// The radius of the dot filling the circle of an item that has an appearance of its own and is
+/// not targeted.
+pub(super) const TARGET_DOT: f32 = 3.2;
+/// The radius of that dot inside a targeted item's inner ring: clear of the ring, so a targeted
+/// item with an appearance of its own shows both (#8711).
+pub(super) const TARGET_DOT_IN_RING: f32 = 1.5;
+
+/// The marks inside a target circle's outer ring: the inner ring's radius when the item is
+/// `targeted`, and the appearance dot's radius when it is `styled` (has an appearance of its own).
+/// Each of the four combinations looks different, as the Layers panel's target icons do.
+pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
+    let dot = if targeted { TARGET_DOT_IN_RING } else { TARGET_DOT };
+    (targeted.then_some(TARGET_RING), styled.then_some(dot))
+}
+
+/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a dot when
+/// `n` has an appearance or transparency of its own ([`target_marks`]). Its response is clicked to target `n`; dragging
 /// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
 /// copies it) or the trash.
 fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
@@ -946,11 +966,12 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     }
     let ring = if held { t.accent } else { t.icon };
     ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
-    if targeted {
-        ui.painter().circle_stroke(c, 2.8, Stroke::new(1.0, t.icon));
+    let (inner, dot) = target_marks(targeted, has_styled_target(n));
+    if let Some(r) = inner {
+        ui.painter().circle_stroke(c, r, Stroke::new(TARGET_STROKE, t.icon));
     }
-    if has_styled_target(n) {
-        ui.painter().circle_filled(c, 3.2, t.icon);
+    if let Some(r) = dot {
+        ui.painter().circle_filled(c, r, t.icon);
     }
     if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);

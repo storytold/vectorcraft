@@ -2167,6 +2167,8 @@ font-technology	Variable	Variables
 	List Workspaces	Enumerar espacios de trabajo
 	Live Paint	Pintura interactiva
 	Live Paint Bucket	Bote de pintura interactiva
+	Fill Area	Rellenar área
+	Fill Area Tool	Herramienta Rellenar área
 	Live Paint Bucket (Stroke)	Bote de pintura interactiva (trazo)
 	Live Paint Info	Información de pintura interactiva
 	Live Paint Selection Tool	Herramienta Selección de pintura interactiva
@@ -5169,6 +5171,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Saved {path}	Se guardó {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecciona texto o haz clic dentro del texto con la herramienta Texto para insertar glifos
 @msg	Shape Builder: no region under the pointer	Generador de formas: no hay ninguna región bajo el puntero
+@msg	Fill Area: no enclosed area under the pointer	Rellenar área: no hay ninguna área cerrada bajo el puntero
 @msg	Shape Builder: select all paths you want to merge	Generador de formas: selecciona todos los trazados que quieras combinar
 @msg	Shape Builder: select paths or compound paths	Generador de formas: selecciona trazados o trazados compuestos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos los atributos ocultos: no hay nada oculto
@@ -6881,9 +6884,11 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` debe ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` debe ser un número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` debe ser una matriz
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución
-	Graphics map onto the Plane, Extrude and Revolve object types.	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución.
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión, Revolución e Inflar
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	Los gráficos se asignan a los tipos de objeto Plano, Extrusión, Revolución e Inflar.
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolución asigna los gráficos a su lateral: asígnelos a la cara frontal
+@msg	Inflate maps graphics onto its front and back, not onto a side	Inflar asigna los gráficos a la cara frontal y a la posterior, no a un lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	el objeto {_1}: la cara posterior de Inflar admite gráficos solo con Ambos lados y Tapa activados
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Los gráficos son demasiado complejos para esta superficie: simplifique la ilustración de los símbolos o reduzca Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admite como máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Un plano tiene una sola cara: asigne sus gráficos a la cara frontal
@@ -10696,6 +10701,15 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Nature Icons	Iconos de naturaleza
+	Flower	Flor
+	Tree	Árbol
+	Mountain	Montaña
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Flecha de filigrana
+	Petal Sweep	Trazo de pétalos
+	Twin Curl	Voluta doble
 	Vector Packs	Paquetes vectoriales
 	Compass Rose	Rosa de los vientos
 	Botanical Sprig	Ramita botánica

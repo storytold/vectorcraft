@@ -2403,7 +2403,7 @@ and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `o
 `swatch.addUsedColors`; `visible` in `appearance.setItem`; `copy` in `appearance.transfer`; `reverse` and `append` in
 `appearance.copyFrom`; `reverse` and `stroke` in `paint.editGradient`; `stroke` in `paint.setGradientGeom` and in
 `paint.freeform.addPoint`, `setPoint`, `deletePoint`, `addLine`, `splitLine` and `get`; `erase`,
-`openFilledAsClosed` and `splitStroke` in `shapeBuilder.merge`; `openFilledAsClosed` in `shapeBuilder.regions`; `closeGaps` in `livePaint.gapOptions`; and
+`openFilledAsClosed` and `splitStroke` in `shapeBuilder.merge`; `openFilledAsClosed` in `shapeBuilder.regions` and `shapeBuilder.copyRegion`; `closeGaps` in `livePaint.gapOptions`; and
 `enhanced` in `imageTrace.make` and `imageTrace.makeAndExpand`. A null is read as a key left out.
 
 These commands refuse a string or another value that is not a number with `` `radius` must be a number, not "2" ``,
@@ -2424,7 +2424,7 @@ and `fitMinPercent` in `text.areaOptions`; `x` and `y` in `symbol.place`; `radiu
 `symbol.spray`; `radius` and `intensity` in `symbol.adjust`; `to` in `swatch.move`; `weight` and `opacity` in
 `appearance.setItem`; `r`, `g`, `b`, `c`, `m`, `y`, `k`, `gray` and `tint` in `edit.colors.adjustBalance`; `steps`
 and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gradient` of a command that takes a paint; `t` in
-`paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions`; and
+`paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions` and `shapeBuilder.copyRegion`; and
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
@@ -5182,7 +5182,8 @@ joins the edges, so with such an effect its paths can differ from the drawn ones
 draw the edges, and `effect.expandAppearance` keeps them as paths. Past 1,000,000 edges the source path is drawn, as
 it is for a solid past its limits. A `render` that is not an object, a key other than `mode`, another mode, and
 `render` on Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic) are refused before the document
-changes. See [three-d.md](three-d.md#3d-and-materials-panel).
+changes. In wireframe mode the graphics' art is not checked against the graphics limits, so art too complex for the
+shaded surface does not refuse the wireframe. See [three-d.md](three-d.md#3d-and-materials-panel).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"render":{"mode":"wireframe"}}}}}
@@ -5215,19 +5216,22 @@ offset in points of the graphic's center from the center of the object's bounds 
 percentage of the symbol's size (1..10000; omitted, 100 or less so the graphic fits inside the object) and
 `rotation` is in degrees counterclockwise (-360..360). Without `index` each object's first 3D effect takes it, and `item` is refused.
 Every object's 3D effect must be Extrude & Bevel (front only at a depth of 0; `front` and `back` need Cap on, and
-`side`, its walls and bevels, does not), Rotate (the Plane type, front only) or Revolve (front only: its swept
-side), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
+`side`, its walls and bevels, does not), Rotate (the Plane type, front only), Revolve (front only: its swept
+side) or Inflate (`front` or `back`, and `back` only with Both sides and Cap on), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
 On Revolve and on Extrude & Bevel's side, `x` and `y` are measured on the side unrolled flat from its middle (on
 Extrude & Bevel, `x` along the outline, clockwise from its top, and `y` from the front toward the back), and a
 graphic that does not fit starts scaled to fit the part of Extrude & Bevel's side unrolled about `x` = 0 that does
 not reach its cut, or the half of Revolve's side seen from the front ([three-d.md](three-d.md#graphics)).
+On Inflate, `x` and `y` are measured in the art's plane, and the graphic is carried straight out onto the puffed
+face, Twist and Taper turning and shrinking the back's with it.
 
-The graphics are the `graphics` parameter of `threeD.extrude`, `threeD.rotate` and `threeD.revolve`, which `effect.setParams` also
+The graphics are the `graphics` parameter of `threeD.extrude`, `threeD.rotate`, `threeD.revolve` and `threeD.inflate`, which `effect.setParams` also
 edits: an array of up to 64 `{symbol, face, x, y, scale, rotation}` objects, drawn on the face turned,
 foreshortened and shaded with it and clipped to it ([Map artworks on 3D object](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/map-artwork-on-3d-objects.html)).
 Revolve takes graphics on its swept side and shades them with the object's light ([the archived reference, page 185](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185));
-how a graphic wraps around the side is VectorCraft's own rule. Extrude & Bevel takes graphics on its side, its
-walls and bevels unrolled as one surface; how they are unrolled is VectorCraft's own rule.
+how a graphic wraps around the side, and how one follows Inflate's puff, are VectorCraft's own rules. Extrude &
+Bevel takes graphics on its side, its walls and bevels unrolled as one surface; how they are unrolled is
+VectorCraft's own rule.
 A graphic naming a symbol the document does not have is refused, unless the effect already holds a graphic of it.
 The drawing rules are VectorCraft's own; see [three-d.md](three-d.md#graphics).
 
@@ -5886,7 +5890,7 @@ left out.
 ## Symbol libraries
 
 Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons, Weather Icons, Media Controls), the `.vectorcraft` files in
+Inventory Icons, Skill Icons, Weather Icons, Nature Icons with Leaf, Flower, Tree, Mountain and Wave, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -13574,6 +13578,35 @@ a stroke when it has `rect`. With both `rect` and `points`, the command also tou
 
 ```json
 {"name":"run_command","arguments":{"command":"shapeBuilder.merge","params":{"rect":[50,50,200,200]}}}
+```
+
+The Fill Area tool (`fillArea`, in the Live Paint Bucket's group) adds a new closed path of the area under a click
+and leaves the paths around it as they are. Nothing needs to be selected: the visible, unlocked paths on every layer
+bound areas, filled or not, open paths included, and the overlap of two filled shapes is an area of its own. While the
+pointer hovers an area, the tool outlines it in red and the pointer shows the bucket with paint; elsewhere the pointer
+shows the empty bucket, and a click there does nothing. The new path appears on the press and is kept on the release;
+Escape or a canceled touch before the release takes it back. In a document of more than 128 path segments the tool looks
+for the hovered area on another thread, and the outline appears when that search is done. The tool sends `shapeBuilder.copyRegion` with `point`, the Shape Builder's gap
+length (`gap`, 0 with Gap Detection off) and its `openFilledAsClosed`: the two tools share `gapDetection`, `gapLength`
+and `openFilledAsClosed`, so `tool.setOption` on either one sets them for both, and `fillArea` has no other options.
+Double-clicking the Fill Area tool opens the Shape Builder Tool Options (`tool.options {tool: "fillArea"}`, dialog
+`shapeBuilderOptions`).
+The new path takes the current fill, stroke and stroke weight (`fill` and `stroke` override the paints), goes directly
+above the front-most object along the area (one whose outline touches the area's outline, or that covers it) and is
+selected. When a group, Live Paint group, Shaper group or clipping group holds that object, the new path goes above the
+outermost group in its layer, not inside it, and the group keeps its members. In isolation mode only the paths in
+the isolated layer or group bound areas, for the tool's hover and click and for the command (with `ids`, only the
+paths of the listed objects that are in it), and the new path goes inside the isolated layer or group, directly above
+the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
+or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or
+Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or
+inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
+step; a `gap` outside 0 to 72 is an error. It returns `{id, above}`. The command looks for the area among the paths
+near the point first. When the paths together have more than 65,536 segments and the paths near the point do not
+enclose it, the point counts as in no enclosed area.
+
+```json
+{"name":"run_command","arguments":{"command":"shapeBuilder.copyRegion","params":{"point":[50,70],"gap":3}}}
 ```
 
 ## Perspective grid

@@ -1829,6 +1829,8 @@ antiAlias	Sharp	Nítido
 	List Workspaces	Listar Espaços de Trabalho
 	Live Paint	Pintura ao Vivo
 	Live Paint Bucket	Balde de Pintura ao Vivo
+	Fill Area	Preencher área
+	Fill Area Tool	Ferramenta Preencher Área
 	Live Paint Bucket (Stroke)	Balde de Pintura ao Vivo (Traçado)
 	Live Paint Info	Informações da Pintura ao Vivo
 	Live Paint Selection Tool	Ferramenta Seleção de Pintura ao Vivo
@@ -4451,6 +4453,7 @@ axis	Both	Ambos
 @msg	Saved {path}	{path} salvo
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecione texto ou clique em um texto com a ferramenta Texto para inserir glifos
 @msg	Shape Builder: no region under the pointer	Criador de formas: nenhuma região sob o ponteiro
+@msg	Fill Area: no enclosed area under the pointer	Preencher área: nenhuma área fechada sob o ponteiro
 @msg	Shape Builder: select all paths you want to merge	Criador de formas: selecione todos os traçados que deseja mesclar
 @msg	Shape Builder: select paths or compound paths	Criador de formas: selecione traçados ou traçados compostos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos os atributos ocultos: nada está oculto
@@ -6856,8 +6859,10 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` deve ser front, back ou side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão, Revolver e Inflar
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolver mapeia os gráficos na sua lateral: mapeie-os na face frontal
+@msg	Inflate maps graphics onto its front and back, not onto a side	Inflar mapeia os gráficos na face frontal e no verso, não em uma lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objeto {_1}: o verso de Inflar recebe gráficos apenas com Ambos os Lados e Tampa ativados
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Os gráficos são complexos demais para esta superfície: simplifique a arte dos símbolos ou reduza Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` aceita no máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Um plano tem uma única face: mapeie seus gráficos na face frontal
@@ -10876,6 +10881,15 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Nature Icons	Ícones da natureza
+	Flower	Flor
+	Tree	Árvore
+	Mountain	Montanha
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Seta filigranada
+	Petal Sweep	Traço de pétalas
+	Twin Curl	Voluta dupla
 	Vector Packs	Pacotes vetoriais
 	Compass Rose	Rosa dos ventos
 	Botanical Sprig	Ramo botânico
