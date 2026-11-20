@@ -1153,6 +1153,25 @@ fn insert_refuses_an_image_that_effects_move_or_reshape() {
     assert!(s.doc().unwrap().doc == before);
 }
 
+/// A distorted image is drawn at its corners rather than by its transform, so insert is refused
+/// and changes nothing, even when the image was distorted after the results were made.
+#[test]
+fn insert_refuses_a_distorted_image() {
+    let (mut s, img) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    s.edit("distort", |d, _| {
+        let n = d.node_mut(img).ok_or(crate::EngineError::NoNode(img))?;
+        let [a, b, c, e] = n.image_corners().ok_or(crate::EngineError::NoNode(img))?;
+        n.set_image_corners([a + vectorcraft_geom::Vec2::new(30.0, 0.0), b, c, e]).map_err(|q| crate::EngineError::Other(format!("{q:?}")))
+    })
+    .unwrap();
+    assert!(s.doc().unwrap().doc.node(img).unwrap().is_distorted_image());
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
+    assert!(e.contains("distorted"), "{e}");
+    assert!(s.doc().unwrap().doc == before);
+}
+
 #[test]
 fn insert_puts_the_results_outside_a_clip_group_around_the_image() {
     let (mut s, img) = doc_with(&art());

@@ -8571,6 +8571,7 @@ breakText	Glyphs	Гліфи
 @msg	the image is on a layer with an opacity mask, which would hide the results	Зображення на шарі з маскою непрозорості, яка приховала б результати
 @msg	the image is on a layer with effects of its own, which would apply to the results	Зображення на шарі з власними ефектами, які застосувалися б і до результатів
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Зображення або група навколо нього має ефекти, які зсувають або деформують його, тому результати опинилися б не поруч із ним
+@msg	the image is distorted, so the results would not go beside it	Зображення спотворене, тому результати опинилися б не поруч із ним
 @msg	`output` must be "vector"	`output` має бути "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` не приймає запиту і створює лише векторну графіку
 @msg	`{pid}` takes no prompt	`{pid}` не приймає запиту

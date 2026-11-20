@@ -8433,6 +8433,7 @@ breakText	Glyphs	Glyphen
 @msg	the image is on a layer with an opacity mask, which would hide the results	Das Bild liegt auf einer Ebene mit Deckkraftmaske, die die Ergebnisse verbergen würde
 @msg	the image is on a layer with effects of its own, which would apply to the results	Das Bild liegt auf einer Ebene mit eigenen Effekten, die auch auf die Ergebnisse angewendet würden
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	Das Bild oder eine Gruppe um es herum hat Effekte, die es verschieben oder verformen, sodass die Ergebnisse nicht neben ihm lägen
+@msg	the image is distorted, so the results would not go beside it	Das Bild ist verzerrt, sodass die Ergebnisse nicht neben ihm lägen
 @msg	`output` must be "vector"	`output` muss "vector" sein
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nimmt keinen Prompt an und erstellt nur Vektorgrafik
 @msg	`{pid}` takes no prompt	`{pid}` nimmt keinen Prompt an

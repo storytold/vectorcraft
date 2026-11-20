@@ -8675,6 +8675,7 @@ breakText	Glyphs	字形
 @msg	the image is on a layer with an opacity mask, which would hide the results	图像位于带不透明度蒙版的图层上，不透明度蒙版会遮住结果
 @msg	the image is on a layer with effects of its own, which would apply to the results	图像位于带有自身效果的图层上，这些效果也会应用到结果上
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	图像或包含它的编组带有移动或变形图像的效果，因此结果不会放在图像旁边
+@msg	the image is distorted, so the results would not go beside it	图像已扭曲，因此结果不会放在图像旁边
 @msg	`output` must be "vector"	`output` 必须是 "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` 不接受提示词，且只生成矢量图稿
 @msg	`{pid}` takes no prompt	`{pid}` 不接受提示词

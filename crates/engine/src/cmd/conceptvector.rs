@@ -146,12 +146,19 @@ impl Session {
 
 /// The image `n` shows: its own, or the source image of an Image Trace object that wasn't expanded.
 fn shown_image(n: &Node) -> Option<&ImageObject> {
-    match &n.kind {
+    match &shown_image_node(n)?.kind {
         NodeKind::Image(i) => Some(i),
-        NodeKind::Group { clip: false, .. } if n.name.as_deref() == Some(TRACE_NAME) => match &n.children()?.first()?.kind {
-            NodeKind::Image(i) => Some(i),
-            _ => None,
-        },
+        _ => None,
+    }
+}
+
+/// The image object [`shown_image`] reads: `n` itself, or the first member of its Image Trace object.
+fn shown_image_node(n: &Node) -> Option<&Node> {
+    match &n.kind {
+        NodeKind::Image(_) => Some(n),
+        NodeKind::Group { clip: false, .. } if n.name.as_deref() == Some(TRACE_NAME) => {
+            n.children()?.first().map(|i| &**i).filter(|i| matches!(i.kind, NodeKind::Image(_)))
+        }
         _ => None,
     }
 }
@@ -559,6 +566,10 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     if ancestry.iter().any(moves) {
         return Err(bad(C, "the image or a group around it has effects that move or reshape it, so the results would not go beside it"));
     }
+    // A distorted image ([`Node::image_quad`]) is drawn at its corners, not by its transform.
+    if st.doc.node(source).and_then(shown_image_node).is_some_and(Node::is_distorted_image) {
+        return Err(bad(C, "the image is distorted, so the results would not go beside it"));
+    }
     let mut anchor = source;
     for &id in ancestry.iter().rev().skip(1) {
         let n = st.doc.node(id).ok_or_else(stale)?;
@@ -804,7 +815,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object, the outermost group whose members it makes or places (a graph, an Objects on Path, Shaper, dimension, flare or Live Paint group, a compound shape) and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask, or effects, fills or strokes of its own, or it or a group around it has effects that move or reshape it, and when it plays from recorded steps (an action, a replayed journal or a step of a replayed batch), since jobs are not saved →{ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object, the outermost group whose members it makes or places (a graph, an Objects on Path, Shaper, dimension, flare or Live Paint group, a compound shape) and the outermost group with effects or fills and strokes of its own around it; the image and other art stay as they are; one undo step; a variation with no paths is left out, and when every chosen one has none nothing changes (no undo step, ids []); an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask, an opacity mask, or effects, fills or strokes of its own, or it or a group around it has effects that move or reshape it, or its image is distorted (Perspective Distort or Free Distort), and when it plays from recorded steps (an action, a replayed journal or a step of a replayed batch), since jobs are not saved →{ids: the groups, selected}",
             has_doc,
             insert
         ),

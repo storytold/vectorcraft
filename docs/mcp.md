@@ -4736,7 +4736,8 @@ already walks Image Trace. Short agent entry points:
   is not the active one, when the object, its pixels or its placement changed, when the object is now locked or hidden,
   or when it is on a layer with a clipping mask, an opacity mask, or effects, fills or strokes of its own, or when the
   object or a group around it has effects that move or reshape it (Transform, a warp), which show the image away from
-  its placement. Jobs are not saved, so an insert or a cancel played from recorded steps (an action, a journal played
+  its placement, or when its image is distorted (Perspective Distort or Free Distort) and drawn at its corners instead
+  of by its transform. Jobs are not saved, so an insert or a cancel played from recorded steps (an action, a journal played
   again, or a step of a batch played again) is an error too. Example, where insert takes the `job`
   that generate returned (job numbers count up through the session, so 1 only for its first job):
 

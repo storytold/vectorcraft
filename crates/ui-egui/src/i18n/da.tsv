@@ -10844,6 +10844,7 @@ breakText	Glyphs	Glyffer
 @msg	the image is on a layer with an opacity mask, which would hide the results	billedet ligger på et lag med en opacitetsmaske, som ville skjule resultaterne
 @msg	the image is on a layer with effects of its own, which would apply to the results	billedet ligger på et lag med sine egne effekter, som også ville blive anvendt på resultaterne
 @msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	billedet eller en gruppe omkring det har effekter, der flytter eller omformer det, så resultaterne ikke ville komme til at ligge ved siden af det
+@msg	the image is distorted, so the results would not go beside it	billedet er forvrænget, så resultaterne ikke ville komme til at ligge ved siden af det
 @msg	`output` must be "vector"	`output` skal være "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tager ingen prompt og laver kun vektorgrafik
 @msg	`{pid}` takes no prompt	`{pid}` tager ingen prompt
