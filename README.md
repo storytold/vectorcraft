@@ -270,8 +270,8 @@ alongside the raster-effects package; then type, recent additions and 3D. The ra
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 
-Agent and contributor rules (clean-room, the asset policy, no panics in shipped code, quality gates) are in
-[`AGENTS.md`](AGENTS.md); [`docs/development.md`](docs/development.md#robustness-vectorcraft-never-crashes)
+Agent and contributor rules are the shared rules in
+[`AGENTS.md`](AGENTS.md), which also lists the checks for the crates you change; [`docs/development.md`](docs/development.md#robustness-vectorcraft-never-crashes)
 explains how VectorCraft avoids crashing, and [`docs/releasing.md`](docs/releasing.md) how releases are built,
 signed and published. Every bundled asset is listed with its licence in [`ASSETS.md`](ASSETS.md).
 
