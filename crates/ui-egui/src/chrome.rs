@@ -157,8 +157,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 })
                 .inner;
             if clicked && enabled {
-                app.ui.palette_open = !app.ui.palette_open;
-                app.ui.palette_query.clear();
+                crate::palette::toggle(app);
             }
             if learn {
                 let shown = crate::panels::learn::visible(&app.ui);

@@ -35,6 +35,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         };
         return dialogs::script_check::command(app, &p).map(|_| Value::Null);
     }
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens {
+        return dialogs::tracing_presets::open_file(app, bytes).map(|_| Value::Null);
+    }
     if let Some(OpensAs::Presets { import, what }) = opens {
         import_presets(app, import, what, serde_json::json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}))?;
         return Ok(Value::Null);
@@ -108,6 +111,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+        (vectorcraft_engine::cmd::TRACE_PRESET_EXTS, "imageTrace.presets.import", "tracing presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
         (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];
@@ -133,8 +137,10 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 /// Open a document through the engine loader with the `document.open` options in `p` →
 /// `document.open`'s result, or `{dialog}` when Edit › Color Settings asks about its profile first
 /// ([`dialogs::profile_mismatch::open_or_ask`]): the document then opens, and goes on the recent
-/// files, once the question is answered.
+/// files, once the question is answered. A PDF opens with the `pdfTextAs` preference unless `p`
+/// gives `textAs` ([`dialogs::import_pdf::with_preferred_text_as`]).
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
+    let p = &dialogs::import_pdf::with_preferred_text_as(app, name, bytes, p);
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     let file = fileio::read_for_open_asking(name, bytes, path.clone(), p, update_links, low_res_proxy_eps, true).map_err(|e| e.to_string())?;
@@ -557,6 +563,12 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A tracing presets file is read up to its size limit, as Import… reads it.
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens_as(path) {
+        dialogs::tracing_presets::open_path(app, path)?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
@@ -570,7 +582,8 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
             note_recent(app, path);
             return Ok(Value::Null);
         }
-        match crate::opening::start(app, path, bytes) {
+        let params = crate::dialogs::import_pdf::with_preferred_text_as(app, path, &bytes, &Value::Null);
+        match crate::opening::start_with(app, path, bytes, params) {
             Ok(r) => return Ok(r),
             // No thread: at once.
             Err(back) => bytes = back,

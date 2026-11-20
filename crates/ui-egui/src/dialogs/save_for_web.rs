@@ -232,7 +232,7 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         o.insert("path".into(), json!(path));
         o.insert("output".into(), json!("html"));
     }
-    let r = app.run("document.exportForWeb", q)?;
+    let r = app.run("document.exportForWeb", q).inspect_err(|_| remove_preview_folder(&dir))?;
     app.open_url(&io::file_url(&path));
     if has_warnings(&r) {
         io::report_saved(app, &path, &r);
@@ -257,7 +257,26 @@ fn temp_folder() -> Result<String, String> {
 /// `root` ([`preview_folder_under`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn temp_folder_under(root: &str) -> Result<String, String> {
+    #[cfg(test)]
+    if let Some(tmp) = TEST_TMP.with_borrow(Clone::clone) {
+        return preview_folder_under(&tmp, root, PREVIEW_KEEP);
+    }
     preview_folder_under(&std::env::temp_dir(), root, PREVIEW_KEEP)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+thread_local! {
+    /// The folder this test thread's browser previews go to instead of the system's temporary
+    /// folder, when set.
+    pub(super) static TEST_TMP: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Remove the folder `dir` made for a browser preview whose files could not all be written, so
+/// a failed preview leaves no folder behind. The log says when it can't be removed.
+pub(super) fn remove_preview_folder(dir: &str) {
+    if let Err(e) = std::fs::remove_dir_all(dir) {
+        log::warn!("vectorcraft: the browser preview folder {dir} can't be removed: {e}");
+    }
 }
 
 /// A new folder for a Save for Web browser preview in the temporary folder `tmp`
