@@ -89,7 +89,9 @@ pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: 
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
                     cancel::scope(&raised, None, || {
-                        fileio::read_for_open(&name, &file, Some(name.clone()), &params, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                        // A profile question Edit › Color Settings asks waits for the UI thread.
+                        fileio::read_for_open_asking(&name, &file, Some(name.clone()), &params, update_links, low_res_proxy_eps, true)
+                            .map_err(|e| e.to_string())
                     })
                 })
             })
@@ -106,6 +108,37 @@ pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: 
     app.opening.next_id += 1;
     let id = app.opening.next_id;
     app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope: opener, token, hidden: false });
+    let status = format!("{label}…");
+    app.status(status.clone());
+    Ok(json!({ "background": true, "status": status }))
+}
+
+/// Do the rest of the read of `file`, read for File › Open from `path` once its profile question
+/// is answered or gone (its linked files and type, [`ReadFile::finish_read`]), on a thread of its
+/// own under `scope`; it then opens as a file read off the UI thread does → `{background: true,
+/// status}`, or the file back when no thread could start (the caller opens it at once).
+pub(crate) fn finish_answered(app: &mut VectorcraftApp, path: &str, file: ReadFile, scope: ScopeHandle) -> Result<Value, Option<Box<ReadFile>>> {
+    let (tx, done) = channel();
+    let slot = Arc::new(std::sync::Mutex::new(Some(file)));
+    let taken = slot.clone();
+    let run = scope.clone();
+    let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
+        let Some(mut file) = taken.lock().ok().and_then(|mut f| f.take()) else { return };
+        let r = run
+            .run(|| vectorcraft_engine::guard::catch_panic(|| file.finish_read().map_err(|e| e.to_string())))
+            .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));
+        let r = r.map(|()| file);
+        // The app may have quit meanwhile: nothing to hand it to.
+        let _ = tx.send(r);
+    });
+    if spawned.is_err() {
+        return Err(slot.lock().ok().and_then(|mut f| f.take()).map(Box::new));
+    }
+    let label = format!("Opening {}", fileio::file_name(path));
+    app.opening.next_id += 1;
+    let id = app.opening.next_id;
+    let token = CancelToken::new();
+    app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope, token, hidden: false });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))
@@ -234,15 +267,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Open a file read off the UI thread, as [`crate::io::open_reporting`] opens one read at once.
+/// Open a file read off the UI thread, as [`crate::io::open_reporting`] opens one read at once,
+/// after the profile question Edit › Color Settings asks about it, if any
+/// ([`crate::dialogs::profile_mismatch::open_or_ask`]).
 fn finish(app: &mut VectorcraftApp, path: &str, r: Result<ReadFile, String>) {
-    let opened = r.and_then(|file| fileio::open_read(&mut app.session, file).map_err(|e| e.to_string()));
-    match opened {
-        Ok(r) => {
-            crate::io::opened(app, &r);
-            crate::io::note_recent(app, path);
-        }
-        Err(e) => crate::io::report_open_error(app, &fileio::file_name(path), &e),
+    let opened = r.and_then(|file| crate::dialogs::profile_mismatch::open_or_ask(app, file, Some(path.to_string()), true));
+    if let Err(e) = opened {
+        crate::io::report_open_error(app, &fileio::file_name(path), &e);
     }
 }
 

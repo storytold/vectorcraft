@@ -102,17 +102,18 @@ pub(crate) fn pen_bearing(q: PenPose) -> Option<f64> {
     (from_upright >= 1.0).then(|| (-y).atan2(x).to_degrees())
 }
 
-/// The 0..1 that each of the Eraser's variation modes Pressure, Tilt, Bearing and Rotation reads
-/// from a pen at `pressure` (0..1) held as `pose`, leaning toward `bearing` (degrees, from
-/// [`pen_bearing`]): 0 gives the value less its variation and 1 the value plus it, as
-/// `path.eraseRegion` reads a stroke's points. Tilt reads 1 upright and 0 lying flat; Bearing and
-/// Rotation read ½ plus the angle over 360°, the rotation turned counter-clockwise. What the pen
-/// does not give reads ½, the value itself.
-pub(crate) fn pen_controls(pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 4] {
+/// The 0..1 that each of the Eraser's variation modes Pressure, Tilt, Bearing, Rotation and Stylus
+/// Wheel reads, in that order, from a pen at `pressure` (0..1) held as `pose`, leaning toward
+/// `bearing` (degrees, from [`pen_bearing`]): 0 gives the value less its variation and 1 the value
+/// plus it, as `path.eraseRegion` reads a stroke's points. Tilt reads 1 upright and 0 lying flat;
+/// Bearing and Rotation read ½ plus the angle over 360°, the rotation turned counter-clockwise;
+/// Stylus Wheel reads the pen's wheel (0..1). What the pen does not give reads ½, the value itself.
+pub(crate) fn pen_controls(pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 5] {
     let tilt = pose.and_then(|q| q.tilt).map_or(0.5, |t| 1.0 - pen_lean(t).1 / 90.0);
     let rotation = pose.and_then(|q| q.rotation).map_or(0.5, |r| 0.5 + vectorcraft_geom::normalize_deg(-f64::from(r)) / 360.0);
     let bearing = bearing.map_or(0.5, |b| 0.5 + b / 360.0);
-    [pressure, tilt, bearing, rotation].map(|c| if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
+    let wheel = pose.and_then(|q| q.wheel).map_or(0.5, f64::from);
+    [pressure, tilt, bearing, rotation, wheel].map(|c| if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
 }
 
 /// Create a drawing tool by id (None = not one of ours).
@@ -365,7 +366,7 @@ pub(crate) fn walk_pickable<'a>(cx: &ToolContext<'a>, mut f: impl FnMut(&'a vect
 }
 
 /// Editable path nodes, selected ones first, then the rest top-most first ([`walk_pickable`]).
-fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
+pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
     let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(|n| n.path_data().is_some())).collect();
     let mut rest = vec![];
     walk_pickable(cx, |n| {
@@ -374,8 +375,9 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
-        if !v.contains(&id) {
+        if seen.insert(id) {
             v.push(id);
         }
     }

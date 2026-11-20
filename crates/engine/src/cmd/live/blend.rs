@@ -214,6 +214,25 @@ fn spine_points_param(p: &Value, cmd: &str) -> Result<Vec<usize>> {
     list.iter().map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(wrong)).collect()
 }
 
+/// Whether linking handle `out` of spine point `index` at `q` would leave the blend's spine as it
+/// is (false when the blend or the point is not there, for the edit to report it).
+fn spine_link_unchanged(s: &Session, p: &Value, cmd: &str, index: usize, out: bool, q: Point) -> Result<bool> {
+    let id = match crate::cmd::object_param(p, "id", cmd)? {
+        Some(id) => Some(id),
+        None => selected_of(s, is_blend).first().copied(),
+    };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Blend { children, spec }) = id.and_then(|id| d.node(id)).map(|n| &n.kind) else { return Ok(false) };
+    let Some((path, _)) = live::pin_spine(children, spec) else { return Ok(false) };
+    Ok(path.subpaths.first().is_some_and(|sp| {
+        sp.anchors.get(index).is_some_and(|a| {
+            let mut linked = *a;
+            linked.link_handle(out, q, sp.has_segment(index, !out));
+            linked == *a
+        })
+    }))
+}
+
 pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.spine.moveAnchor";
     let index = index_param(p, "anchor", C)?;
@@ -225,15 +244,49 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "handle must be in or out")),
     };
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    let link = switch_or(p, "link", false, C)?;
     let with = spine_points_param(p, C)?;
     // Any `with`, even an empty list, asks to move points, which a handle drag doesn't.
     if handle.is_some() && p.get("with").is_some_and(|v| !v.is_null()) {
         return Err(bad(C, "`with` moves points, not a handle"));
     }
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
+    if symmetric && handle.is_none() {
+        return Err(bad(C, "`symmetric` places a handle: give `handle`"));
+    }
+    if link && symmetric {
+        return Err(bad(C, "`link` and `symmetric` cannot both be true"));
+    }
+    if link && independent {
+        return Err(bad(C, "`link` and `independent` cannot both be true"));
+    }
+    if link && handle.is_none() {
+        return Err(bad(C, "`link` places a handle: give `handle`"));
+    }
+    if link && let Some(out) = handle {
+        // A spine point the linked handles would leave as it is records no undo step.
+        if spine_link_unchanged(s, p, C, index, out, q)? {
+            return ok();
+        }
+    }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
+        let pull_out = handle.is_some_and(|out| sp.has_segment(index, !out));
+        // At an open end of the spine the handle moves as it would without `symmetric`.
+        let symmetric = symmetric && pull_out;
         let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
         if let Some(out) = handle {
-            a.set_handle(out, q, independent);
+            if link {
+                a.link_handle(out, q, pull_out);
+            } else {
+                a.set_handle(out, q, independent);
+            }
+            if symmetric {
+                let opposite = a.p - (q - a.p);
+                if out { a.h_in = opposite } else { a.h_out = opposite }
+            }
             return Ok(());
         }
         let delta = q - a.p;

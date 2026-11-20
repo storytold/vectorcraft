@@ -433,6 +433,31 @@ impl FontMatch {
     }
 }
 
+/// The generic font family names that SVG and HTML files name in place of a font and no font file
+/// provides; compared in any ASCII case ([`is_generic_family`]). The names follow CSS Fonts Module
+/// Level 4, except `emoji`, which that module dropped and this list keeps. The list does not match
+/// the functional `generic(...)` forms, and it leaves out `fangsong`, which is also the family name
+/// of a Chinese font (FangSong).
+pub const GENERIC_FAMILIES: &[&str] = &[
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "math",
+    "emoji",
+];
+
+/// Whether `family` (surrounding spaces ignored) is one of the [`GENERIC_FAMILIES`], in any ASCII case.
+pub fn is_generic_family(family: &str) -> bool {
+    GENERIC_FAMILIES.iter().any(|g| g.eq_ignore_ascii_case(family.trim()))
+}
+
 /// A face's (family, style) names.
 pub(super) fn face_names(f: &skrifa::FontRef<'_>) -> Option<(String, String)> {
     let family = name(f, &[StringId::TYPOGRAPHIC_FAMILY_NAME, StringId::FAMILY_NAME])?;

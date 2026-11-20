@@ -43,10 +43,13 @@ use vectorcraft_text::{FontDb, TextLayout, edit};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, SurroundingUnit, Tool, ToolContext, ToolKey};
 
+mod missing;
 mod plain;
 mod ports;
 mod tool;
 
+pub use missing::MISSING_FONT_EDIT;
+use missing::PendingEdit;
 #[cfg(test)]
 use plain::char_range_to_bytes;
 use plain::common_affixes;
@@ -228,6 +231,8 @@ pub struct TypeTool {
     stepped: bool,
     /// The state at the start of each `command.batch` still running, innermost last.
     batches: Vec<HistoryState>,
+    /// The edit of type set in fonts that aren't available whose question is open ([`missing`]).
+    pending_edit: Option<PendingEdit>,
     cache: Mutex<Option<CachedLayout>>,
     /// The other frames' layouts the last overlays drew ([`FrameLayouts`]): each overlays call
     /// keeps only the frames it draws.
@@ -815,18 +820,69 @@ impl TypeTool {
 
     /// Start editing the type under `p` with the caret there → the actions (ending the previous
     /// edit, selecting the type); None when no type is under `p`. A click among the characters
-    /// edits them, whatever Type Object Selection by Path Only says.
+    /// edits them, whatever Type Object Selection by Path Only says, and so does a click anywhere
+    /// inside area type's frame. When the story of that type is drawn in a font that isn't
+    /// available as named and is not the story being edited, nothing starts yet: the action asks the
+    /// UI to open the [`MISSING_FONT_EDIT`] question, and OK starts the edit ([`Self::resume_edit`]).
     fn edit_at(&mut self, cx: &ToolContext, p: Point) -> Option<Vec<Action>> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { type_path_only: false, ..cx.hit_options() })?;
+        self.pending_edit = None;
+        let opt = vectorcraft_doc::hit::HitOptions { type_path_only: false, area_type_interior: true, ..cx.hit_options() };
+        let h = hit_test(cx.doc, p, opt)?;
         let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind) else { return None };
         let lay = self.layout(t);
         let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * p);
+        let same_story = self.editing.is_some_and(|e| cx.doc.story_of(e).contains(&h.leaf));
+        if !same_story {
+            let fonts = missing::unavailable_fonts(cx.doc, h.leaf);
+            if !fonts.0.is_empty() {
+                let token = next_edit_session();
+                self.pending_edit = Some(PendingEdit { token, revision: cx.revision, id: h.leaf, byte, accepted: false });
+                self.clicks = (None, 0);
+                return Some(vec![Action::Dialog(MISSING_FONT_EDIT.into(), missing::question(token, h.leaf, &fonts))]);
+            }
+        }
+        Some(self.begin_edit(cx, h.leaf, byte, p))
+    }
+
+    /// End the previous edit and edit type `id` with the caret at `byte` (clicked at `p`), selecting
+    /// it → the actions.
+    fn begin_edit(&mut self, cx: &ToolContext, id: NodeId, byte: usize, p: Point) -> Vec<Action> {
         let mut out = self.finish(cx);
-        self.start_editing(h.leaf, byte);
+        self.start_editing(id, byte);
         self.remember(cx);
         self.clicks = (Some(p), 1);
-        out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
-        Some(out)
+        out.push(Action::Exec("select.set".into(), json!({"ids": [id.0]})));
+        out
+    }
+
+    /// The answer to the [`MISSING_FONT_EDIT`] question whose token is `token`: OK (`ok`) lets the
+    /// next [`Tool::poll`] start the edit, Cancel forgets it. An answer to another question is
+    /// ignored.
+    fn answer_edit(&mut self, token: u64, ok: bool) {
+        let Some(e) = self.pending_edit.as_mut().filter(|e| e.token == token) else { return };
+        if ok {
+            e.accepted = true;
+        } else {
+            self.pending_edit = None;
+        }
+    }
+
+    /// Start the edit OK accepted: the caret goes where the type was clicked. Nothing starts when
+    /// the document changed since the question, or the type is gone.
+    fn resume_edit(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let Some(e) = self.pending_edit.take_if(|e| e.accepted) else { return vec![] };
+        if e.revision != cx.revision {
+            return vec![];
+        }
+        let Some(t) = Self::text(cx, e.id) else { return vec![] };
+        let text = t.plain_text();
+        let mut byte = e.byte.min(text.len());
+        while !text.is_char_boundary(byte) {
+            byte -= 1;
+        }
+        let out = self.begin_edit(cx, e.id, byte, Point::ZERO);
+        self.clicks = (None, 0);
+        out
     }
 
     /// The button released after a press at `start` (new type goes at `at`). While type is being

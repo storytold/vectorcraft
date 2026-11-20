@@ -323,6 +323,7 @@ fn headless_command_list_includes_ui_commands() {
         "app.quit",
         "window.arrange.tile",
         "align.horizontalLeft",
+        "align.toKeyObject",
         "ui.action.play",
     ];
     for (n, id) in want.iter().enumerate() {
@@ -335,6 +336,23 @@ fn headless_command_list_includes_ui_commands() {
     let r = call(&mut s, 40, "command_run", json!({"id": "view.fitArtboard", "params": {}}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(text_of(&r).contains("--connect"), "{r}");
+}
+
+/// Desktop commands that the app refuses for every automated request are not offered through
+/// `--connect`: the headless error says only the person at the keyboard can run them.
+#[test]
+fn headless_does_not_send_keyboard_only_commands_to_connect() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    for (n, id) in ["attributes.openUrl", "file.export.svg.browser", "file.saveForWeb.browser", "file.showPackage"].iter().enumerate() {
+        assert!(crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| cid == id), "{id} is not a desktop UI command");
+        let r = call(&mut s, 10 + n as u64, "command_run", json!({"id": id, "params": {}}));
+        assert_eq!(r["isError"], true, "{id}: {r}");
+        let text = text_of(&r);
+        assert!(text.contains("only the person at the keyboard"), "{id}: {r}");
+        assert!(!text.contains("start `vectorcraft --control"), "{id}: {r}");
+    }
 }
 
 // ---------- headless end-to-end ----------
@@ -1661,6 +1679,45 @@ fn transform_refused_by_a_later_operation_changes_nothing() {
     // No undo step was recorded: one undo removes the rectangle.
     assert_eq!(call(&mut s, 7, "undo", json!({}))["isError"], false);
     assert_eq!(count(&mut s), base, "one undo removes the rectangle");
+}
+
+#[test]
+fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10 L30 25 Z"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40 L60 55 Z"})));
+    let before = inspect(&mut s, 3);
+    let cases = [
+        ("object.reflect", json!({"dx": 10, "reflect": 42, "copy": true})),
+        ("object.reflect", json!({"dx": 10, "reflect": true})),
+        ("copy", json!({"dx": 10, "copy": "yes"})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": "center", "copy": true})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5]})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5, "a"]})),
+    ];
+    for (index, (says, mut args)) in cases.into_iter().enumerate() {
+        args["ids"] = json!([first]);
+        let request_id = 4 + index as u64 * 2;
+        let rejected = call(&mut s, request_id, "transform", args.clone());
+        assert_eq!(rejected["isError"], true, "{args}: {rejected}");
+        assert!(text_of(&rejected).contains(says), "{args}: {rejected}");
+        // The document, the selection and the undo history are as they were.
+        assert_eq!(inspect(&mut s, request_id + 1), before, "{args}");
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let applied = call(&mut s, 20, "transform", json!({"ids": [second], "dx": 10, "reflect": null, "copy": null, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move"]));
+    let applied = call(&mut s, 21, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    // The schema allows null for every argument but `ids`.
+    let tools = tool_definitions();
+    let props = &tools.iter().find(|t| t["name"] == "transform").unwrap()["inputSchema"]["properties"];
+    for key in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear", "reflect", "copy", "origin"] {
+        assert!(props[key]["anyOf"].as_array().is_some_and(|a| a.contains(&json!({"type": "null"}))), "{key}: {}", props[key]);
+    }
 }
 
 #[test]
