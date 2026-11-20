@@ -284,12 +284,18 @@ pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, p
                     copy.appearance.effects = own.clone();
                     crate::raster::follow_contents(&mut copy.appearance.effects, a, Affine::IDENTITY);
                     follow_carried(copy, &original, n.id, a);
+                    // These copies depend on the container bounds; their paint owners do not change.
+                    crate::bake::query_geometry(n, copy);
                 }
             }
         }
     }
     let later: Vec<&Effect> = rest.iter().skip(1).filter(|e| e.visible && is_geometry(&e.id)).collect();
     let carry = reshape_leaves_apart(&mut art, &later, &n.appearance.effects, Budget::EFFECTS, (false, false), doc);
+    if !later.is_empty() {
+        // Later geometry can also move the original. Untagged rendering is unchanged.
+        crate::bake::query_geometry(n, &mut art);
+    }
     let mut ran = n.appearance.effects.clone();
     if carry.skipped() {
         carry.hide_skipped(&mut ran);

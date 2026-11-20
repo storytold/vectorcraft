@@ -128,13 +128,62 @@ impl Contours {
 
     /// Keep candidate eligibility inside the constrained nearest-contact search.
     pub(super) fn on_line_with(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool, valid: impl Fn(Point) -> bool) -> Option<Point> {
+        self.on_line_with_minimum(at, dir, near, tol, (ray, None), valid)
+    }
+
+    /// An initial shape may require a minimum ray distance before it can begin drawing.
+    pub(super) fn on_line_with_minimum(
+        &self,
+        at: Point,
+        dir: Vec2,
+        near: Point,
+        tol: f64,
+        (ray, minimum): (bool, Option<f64>),
+        valid: impl Fn(Point) -> bool,
+    ) -> Option<Point> {
         let len = dir.hypot();
         if !finite_point(at) || !finite_point(near) || !len.is_finite() || len == 0.0 || !tol.is_finite() || tol < 0.0 {
             return None;
         }
         let u = dir / len;
         let center = at + u * (near - at).dot(u);
-        let line = Line::new(center - u * tol, center + u * tol);
+        let mut line = Line::new(center - u * tol, center + u * tol);
+        if let Some(minimum) = minimum.filter(|_| ray) {
+            let upper = (line.p1 - at).dot(u);
+            if !upper.is_finite() || minimum > upper {
+                return None;
+            }
+            if minimum > (line.p0 - at).dot(u) {
+                let mut point = at + u * minimum;
+                if !finite_point(point) {
+                    return None;
+                }
+                if point.distance(at) < minimum {
+                    // The nominal floor can round just below the Shape tool's strict onset.
+                    // Keep a representable accepted endpoint on this same finite ray.
+                    let mut accepted = line.p1;
+                    if !finite_point(accepted) || accepted.distance(at) < minimum {
+                        return None;
+                    }
+                    let (mut lo, mut hi) = (minimum, upper);
+                    for _ in 0..64 {
+                        let mid = lo + (hi - lo) * 0.5;
+                        if mid == lo || mid == hi {
+                            break;
+                        }
+                        let candidate = at + u * mid;
+                        if candidate.distance(at) >= minimum {
+                            hi = mid;
+                            accepted = candidate;
+                        } else {
+                            lo = mid;
+                        }
+                    }
+                    point = accepted;
+                }
+                line.p0 = point;
+            }
+        }
         self.contours
             .iter()
             .filter(|c| contains_closed(c.bounds.inflate(tol, tol), near))

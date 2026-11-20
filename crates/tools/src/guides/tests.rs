@@ -2745,3 +2745,199 @@ fn review_599225_extra_scale_anchor_must_lie_on_its_handle_trajectory() {
         "REGRESSION: an off-trajectory extra anchor cannot steal the feasible painted contact: {actual:?}"
     );
 }
+
+fn review_7909_onset_document(alternative: bool) -> Document {
+    let mut d = Document::new(2000.0, 1200.0);
+    review_597185_path(&mut d, &[Point::new(100.0, -1000.0), Point::new(100.0, 2000.0)], Some(1.0));
+    if alternative {
+        review_597185_vertical(&mut d, 104.25);
+    }
+    d
+}
+
+fn review_7909_onset_shape(d: &Document, on: bool, moves: &[Point]) -> (serde_json::Value, Vec<Overlay>) {
+    use crate::{Action, Mods, PointerEvent, PointerKind, Tool};
+
+    let original = d.clone();
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { snap_to_stroke_edges: on, snapping_tolerance: 4.0, zoom: 1.0, ..cx(d, &selection, &paint) };
+    let mut tool = crate::shape::ShapeTool::new("rectangle");
+    let shift = Mods { shift: true, ..Mods::default() };
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+    let mut value = None;
+    for (i, raw) in moves.iter().enumerate() {
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, raw.x, raw.y).with_mods(shift));
+        assert_eq!(actions.iter().filter(|a| matches!(a, Action::Begin(_))).count(), usize::from(i == 0), "one real begin: {actions:?}");
+        value = actions.iter().find_map(|a| match a {
+            Action::Preview(id, v) if id == "shape.rectangle" => Some(v.clone()),
+            _ => None,
+        });
+        let v = value.as_ref().expect("the actual Shape tool emits a Rectangle preview");
+        assert_eq!((v["x"].as_f64(), v["y"].as_f64()), (Some(100.0), Some(100.0)), "the existing pressed point is unchanged");
+        assert!(v["width"].as_f64().unwrap() > 0.0 && v["width"] == v["height"], "a real nonempty square: {v}");
+    }
+    let overlays = tool.overlays(&c);
+    let raw = moves.last().unwrap();
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, raw.x, raw.y).with_mods(shift));
+    assert!(matches!(actions.as_slice(), [Action::Commit]), "a begun gesture commits instead of opening the click-size dialog: {actions:?}");
+    assert!(!tool.busy());
+    assert_eq!(d, &original, "only real actions are emitted; source art is untouched");
+    (value.unwrap(), overlays)
+}
+
+fn review_7909_onset_collinear_document() -> Document {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, StrokeAlign};
+
+    let mut d = Document::new(2000.0, 1200.0);
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((1000.0, 1000.0));
+    path.line_to((0.0, 1000.0));
+    path.close_path();
+    let mut appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    appearance.stroke_mut().unwrap().align = StrokeAlign::Inside;
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&path), appearance)).unwrap();
+    // A real anchor fixes the pressed point, while the distant x=103 guide gives
+    // the ordinary Shift result enough travel even though raw(101,101) is nearer.
+    review_597185_anchor(&mut d, Point::new(100.0, 100.0));
+    review_597185_anchor(&mut d, Point::new(103.0, 500.0));
+    d
+}
+
+fn review_7909_onset_collinear(d: &Document) {
+    let (v, guides) = review_7909_onset_shape(d, true, &[Point::new(101.0, 101.0)]);
+    let width = v["width"].as_f64().unwrap();
+    let distance = width.hypot(width);
+    assert!(distance >= 2.0 && distance < 2.0 + 1e-6, "the nearest representable accepted onset, not a far collinear endpoint: {v}");
+    assert!(review_597185_stroke_label(&guides), "the real collinear painted edge wins: {guides:?}");
+}
+
+#[test]
+fn review_7909_shape_onset_keeps_legacy_begin_and_next_feasible_paint() {
+    let raw = Point::new(102.0, 102.0);
+    let d = review_7909_onset_document(false);
+    let (ordinary, _) = review_7909_onset_shape(&d, false, &[raw]);
+    assert_eq!(ordinary["width"], 2.0, "CONTROL: this actual OFF gesture already begins");
+    let (small, guides) = review_7909_onset_shape(&d, true, &[Point::new(110.0, 110.0), Point::new(100.5, 100.5)]);
+    assert_eq!(small["width"], 0.5, "CONTROL: paint below the onset threshold remains legal after Begin");
+    assert!(review_597185_stroke_label(&guides));
+    let collinear = review_7909_onset_collinear_document();
+    let (legacy, _) = review_7909_onset_shape(&collinear, false, &[Point::new(101.0, 101.0)]);
+    assert_eq!(legacy["width"], 3.0, "CONTROL: the actual ordinary guide begins despite subthreshold raw travel");
+
+    let (on, guides) = review_7909_onset_shape(&d, true, &[raw]);
+    assert_eq!(on, ordinary, "REGRESSION: the painted100.5 contact cannot turn an existing Begin into a click");
+    assert!(!review_597185_stroke_label(&guides), "a rejected painted contact leaves no false stroke label");
+    let alternative = review_7909_onset_document(true);
+    let (v, guides) = review_7909_onset_shape(&alternative, true, &[raw]);
+    assert_eq!(v["width"], 4.0, "REGRESSION: reject100.5 before choosing the next real edge104");
+    assert!(review_597185_stroke_label(&guides));
+    review_7909_onset_collinear(&collinear);
+}
+
+fn review_7909_copy_document(copies: bool) -> (Document, NodeId, NodeId, NodeId) {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Effect};
+
+    let mut d = Document::new(800.0, 600.0);
+    let (owner, left, right) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let children = [(left, 100.0), (right, 200.0)]
+        .into_iter()
+        .map(|(id, x)| {
+            let mut path = BezPath::new();
+            path.move_to((x, 100.0));
+            path.line_to((x, 200.0));
+            Arc::new(Node::path(
+                id,
+                vectorcraft_geom::PathData::from_bezpath(&path),
+                Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0),
+            ))
+        })
+        .collect();
+    let mut group = Node::group(owner, children);
+    group.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x":10,"y":0,"blur":0}), visible: true });
+    if copies {
+        group.appearance.effects.push(Effect {
+            id: "distort.transform".into(),
+            params: serde_json::json!({"copies":1,"scaleH":200,"reference":4}),
+            visible: true,
+        });
+    }
+    d.insert(Some(d.layers[0].id), 0, group).unwrap();
+    (d, owner, left, right)
+}
+
+fn review_7909_copy_snap(d: &Document, on: bool, selected: &[NodeId], probe: Point) -> (Point, Vec<Overlay>) {
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { snap_to_stroke_edges: on, snapping_tolerance: 4.0, ..cx(d, &selection, &paint) };
+    let original = d.clone();
+    let targets = Targets::collect(d, selected, None).styled(&c).with_stroke_edges(&c, selected, None);
+    let q = targets.snap_point(probe, 4.0);
+    assert_eq!(d, &original, "queries preserve the actual source group, effects and member paint");
+    q
+}
+
+fn review_7909_copy_contact(d: &Document, selected: &[NodeId], edge: f64) {
+    let (p, guides) = review_7909_copy_snap(d, true, selected, Point::new(edge + 2.0, 140.0));
+    assert!(p.distance(Point::new(edge, 140.0)) < 1e-6, "actual visible stroke edge{edge}: {p:?}");
+    assert!(review_597185_stroke_label(&guides), "the visible band, not a legacy anchor or center: {guides:?}");
+}
+
+fn review_7909_copy_excluded(d: &Document, selected: &[NodeId], edge: f64) {
+    let raw = Point::new(edge + 2.0, 140.0);
+    let (p, guides) = review_7909_copy_snap(d, true, selected, raw);
+    assert_eq!(p, raw, "a dependency of a moving member must not attract that selection");
+    assert!(!review_597185_stroke_label(&guides), "excluded paint gives no stale label");
+}
+
+fn review_7909_copy_later_control(d: &Document, owner: NodeId, left: NodeId) {
+    let mut later = d.clone();
+    later.node_mut(owner).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH":30}),
+        visible: true,
+    });
+    review_7909_copy_contact(&later, &[], 235.0);
+    review_7909_copy_excluded(&later, &[left], 235.0);
+}
+
+#[test]
+fn review_7909_raster_group_copies_exclude_bounds_dependencies_only() {
+    let (plain, plain_owner, plain_left, _) = review_7909_copy_document(false);
+    review_7909_copy_contact(&plain, &[plain_left], 205.0);
+    review_7909_copy_later_control(&plain, plain_owner, plain_left);
+    let (d, owner, left, right) = review_7909_copy_document(true);
+    let raw = Point::new(257.0, 140.0);
+    assert_eq!(review_7909_copy_snap(&d, false, &[], raw).0, raw, "CONTROL: OFF cannot produce the copy's stroke contact");
+    review_7909_copy_contact(&d, &[], 255.0);
+    review_7909_copy_excluded(&d, &[right], 255.0);
+    review_7909_copy_excluded(&d, &[right], 205.0);
+    review_7909_copy_excluded(&d, &[owner], 255.0);
+    review_7909_copy_contact(&d, &[left], 205.0);
+    let mut moved = d.clone();
+    moved.node_mut(left).unwrap().transform(Affine::translate((20.0, 0.0)), Default::default());
+    review_7909_copy_contact(&moved, &[], 245.0);
+    review_7909_copy_contact(&moved, &[left], 205.0);
+    // Moving only the left member changes the group-centred copy of the right
+    // member from255 to245, while its independent original stays at205.
+    review_7909_copy_excluded(&d, &[left], 255.0);
+    review_7909_copy_excluded(&moved, &[left], 245.0);
+    review_7909_copy_later_regression(&d, owner, left);
+}
+
+fn review_7909_copy_later_regression(d: &Document, owner: NodeId, left: NodeId) {
+    let mut later = d.clone();
+    later.node_mut(owner).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH":30}),
+        visible: true,
+    });
+    // Unlike an unchanged original, art rewritten after copying depends on the
+    // container too. This is a regression oracle, not a claimed Before control.
+    for edge in [235.0, 285.0] {
+        review_7909_copy_contact(&later, &[], edge);
+        review_7909_copy_excluded(&later, &[left], edge);
+    }
+}

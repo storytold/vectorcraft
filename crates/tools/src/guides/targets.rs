@@ -806,7 +806,11 @@ impl Targets {
     /// that way into line with the nearest target; else, before lining up, it lands on a
     /// construction guide through it, where a target's line crosses the guide if one does nearby.
     pub fn snap_from(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>) {
-        self.snap_from_inner(p, from, tol, true)
+        self.snap_from_with_stroke_minimum(p, from, tol, None)
+    }
+
+    pub(super) fn snap_from_with_stroke_minimum(&self, p: Point, from: Option<&Leave>, tol: f64, minimum: Option<f64>) -> (Point, Vec<Overlay>) {
+        self.snap_from_inner(p, from, tol, true, minimum)
     }
 
     /// Preserve legacy point/segment priority, then contact only a solver-placed Scale grab.
@@ -820,11 +824,11 @@ impl Targets {
         valid_contact: impl Fn(Point) -> bool,
     ) -> (Point, Vec<Overlay>) {
         if self.nearest_point(raw, tol).is_some_and(|(q, _)| valid_contact(q)) {
-            return self.snap_from_inner(raw, None, tol, false);
+            return self.snap_from_inner(raw, None, tol, false, None);
         }
         let Some(stroke) = self.snap_stroke_point_with_domain((raw, actual), &[], along, tol, domain, |handle, _| valid_contact(handle)) else {
             // Without an eligible painted contact, preserve the ordinary legacy route exactly.
-            return self.snap_from_inner(raw, None, tol, false);
+            return self.snap_from_inner(raw, None, tol, false, None);
         };
         if let Some((q, kind)) = self.nearest_point_with(raw, tol, &valid_contact) {
             return (q, self.label(q, kind.label()).into_iter().collect());
@@ -838,14 +842,18 @@ impl Targets {
         stroke
     }
 
-    fn snap_from_inner(&self, p: Point, from: Option<&Leave>, tol: f64, stroke_edges: bool) -> (Point, Vec<Overlay>) {
+    fn snap_from_inner(&self, p: Point, from: Option<&Leave>, tol: f64, stroke_edges: bool, minimum: Option<f64>) -> (Point, Vec<Overlay>) {
         if let Some(f) = from
             && let Some(q) = f.constrained(p)
         {
-            if stroke_edges && let Some((q, kind)) = self.stroke_line(f.at, q - f.at, q, tol, true) {
+            // Only an initial shape needs the ordinary result before choosing paint. Keep it
+            // for fallback, while other consumers retain their paint-first query order.
+            let legacy = minimum.map(|_| self.slide(f.at, q - f.at, q, tol, true));
+            let minimum = minimum.filter(|m| legacy.flatten().map_or(q, |(p, _)| p).distance(f.at) >= *m);
+            if stroke_edges && let Some((q, kind)) = self.stroke_line_with_minimum(f.at, q - f.at, q, tol, true, minimum) {
                 return (q, self.label(q, kind.label()).into_iter().collect());
             }
-            return match self.slide(f.at, q - f.at, q, tol, true) {
+            return match legacy.unwrap_or_else(|| self.slide(f.at, q - f.at, q, tol, true)) {
                 Some((q, target)) => (q, self.lined_up(q, target)),
                 None => (q, vec![]),
             };
@@ -1155,6 +1163,10 @@ impl Targets {
     }
 
     fn stroke_line(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool) -> Option<(Point, Kind)> {
+        self.stroke_line_with_minimum(at, dir, near, tol, ray, None)
+    }
+
+    fn stroke_line_with_minimum(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool, minimum: Option<f64>) -> Option<(Point, Kind)> {
         if !self.stroke_points || self.stroke_contours.is_empty() {
             return None;
         }
@@ -1179,7 +1191,9 @@ impl Targets {
         if has_anchor {
             return None;
         }
-        self.stroke_contours.on_line(at, dir, near, tol, ray).map(|q| (q, Kind::StrokeEdge))
+        self.stroke_contours
+            .on_line_with_minimum(at, dir, near, tol, (ray, minimum), |q| minimum.is_none_or(|m| q.distance(at) >= m))
+            .map(|q| (q, Kind::StrokeEdge))
     }
 
     pub(crate) fn snap_stroke_along(&self, p: Point, dir: Vec2, tol: f64) -> Option<(Point, Vec<Overlay>)> {

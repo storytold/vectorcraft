@@ -165,6 +165,10 @@ impl PointSnap {
     /// Where a drawn point `p` leaving `from` goes ([`Targets::snap_from`]), and the guides
     /// showing why. Pixels and the grid round it before Shift turns it onto its angle.
     pub fn snap_from(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> (Point, Vec<Overlay>) {
+        self.snap_from_with_stroke_minimum(cx, p, from, None)
+    }
+
+    fn snap_from_with_stroke_minimum(&self, cx: &ToolContext, p: Point, from: Option<&Leave>, minimum: Option<f64>) -> (Point, Vec<Overlay>) {
         let keep = |q: Point| from.and_then(|f| f.constrained(q)).unwrap_or(q);
         if cx.snaps_to_pixel(self.op) {
             return (keep(Point::new(p.x.round(), p.y.round())), vec![]);
@@ -173,7 +177,7 @@ impl PointSnap {
             return (keep(vectorcraft_geom::snap::snap_point_to_grid(p, cx.grid_step())), vec![]);
         }
         match &self.targets {
-            Some((t, tol)) => t.snap_from(p, from, cx.tol(*tol)),
+            Some((t, tol)) => t.snap_from_with_stroke_minimum(p, from, cx.tol(*tol), minimum),
             None => (keep(p), vec![]),
         }
     }
@@ -423,14 +427,14 @@ impl DrawSnap {
         if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
             self.gather(cx, key);
         }
-        self.snap(cx, p, from)
+        self.snap(cx, p, from, None)
     }
 
     /// Snap the point pressed at `p`, the targets gathered afresh: the drag that follows keeps
     /// them ([`Self::drag`]).
     pub fn press(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
         self.gather(cx, SnapKey::of(cx, exclude));
-        self.snap(cx, p, from)
+        self.snap(cx, p, from, None)
     }
 
     /// Snap an end of a measurement at `p` ([`Targets::for_measure`]), reusing the targets while
@@ -443,7 +447,7 @@ impl DrawSnap {
             let snap = PointSnap::new(cx, || Targets::for_measure(cx.doc, visible(cx), key.snap_to_glyph).with_stroke_edges(cx, &[], visible(cx)));
             self.targets = Some((Some(key), snap));
         }
-        let q = self.snap(cx, p, from);
+        let q = self.snap(cx, p, from, None);
         if !glyphs {
             self.guides.clear();
         }
@@ -461,7 +465,7 @@ impl DrawSnap {
         }
         let targets = targets.styled(cx).anchors_and_paths();
         self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)), op: PixelOp::Drawing }));
-        self.snap(cx, p, None)
+        self.snap(cx, p, None, None)
     }
 
     /// Gather `targets` other than the art for the drag a press starts (a point being dragged
@@ -490,10 +494,15 @@ impl DrawSnap {
 
     /// Snap `p`, dragged since the press, with the targets the press gathered.
     pub fn drag(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
+        self.drag_with_stroke_minimum(cx, p, from, None)
+    }
+
+    /// Keep an initial shape's constrained painted contact far enough from its start to begin.
+    pub(crate) fn drag_with_stroke_minimum(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>, minimum: Option<f64>) -> Point {
         if self.targets.is_none() {
             self.gather(cx, SnapKey::of(cx, &[]));
         }
-        self.snap(cx, p, from)
+        self.snap(cx, p, from, minimum)
     }
 
     /// How far from `p` the nearest Smart Guides point (an anchor or a center) or crossing of the
@@ -553,9 +562,9 @@ impl DrawSnap {
         self.targets = Some((Some(key), snap));
     }
 
-    fn snap(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> Point {
+    fn snap(&mut self, cx: &ToolContext, p: Point, from: Option<&Leave>, minimum: Option<f64>) -> Point {
         let (q, guides) = match &self.targets {
-            Some((_, t)) => t.snap_from(cx, p, from),
+            Some((_, t)) => t.snap_from_with_stroke_minimum(cx, p, from, minimum),
             None => (p, vec![]),
         };
         self.guides = guides;
