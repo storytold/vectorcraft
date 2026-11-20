@@ -715,6 +715,9 @@ pub(crate) mod testutil {
 }
 
 #[cfg(test)]
+mod widget_order_tests;
+
+#[cfg(test)]
 mod cursor_tests {
     use super::testutil::{cx, doc_with_rect, paint};
     use super::*;

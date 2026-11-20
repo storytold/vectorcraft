@@ -98,11 +98,15 @@ impl PieWidget {
         if !selection.anchors.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return vec![];
         }
-        let editable = doc.editable();
-        let shown = |id: &&NodeId| editable(**id) && !selection.segments.contains_key(*id);
+        // Made for the first ellipse, then shared: on a locked artboard it measures the art of the
+        // layer object that holds each ellipse.
+        let editable = std::cell::OnceCell::new();
         let mut out = vec![];
-        for id in selection.objects.iter().filter(shown) {
+        for id in selection.objects.iter().filter(|id| !selection.segments.contains_key(*id)) {
             let Some((e, (start, end))) = Ellipse::of(doc, *id) else { continue };
+            if !editable.get_or_init(|| doc.editable())(*id) {
+                continue;
+            }
             let c = e.center();
             for (which, deg) in [(PieEnd::End, end), (PieEnd::Start, start)] {
                 let on = e.point_at(deg);

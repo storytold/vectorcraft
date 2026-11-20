@@ -597,8 +597,13 @@ pub(crate) fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
 /// Direct Selection's does (#4891).
 pub(crate) fn hit_center(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Point)> {
     let (symbols, editable) = (cx.doc.symbol_boxes(), cx.doc.editable());
-    cx.selection.objects.iter().copied().filter(|id| editable(*id) && crate::direct::in_scope(cx.doc, cx.isolation, *id)).find_map(|id| {
-        let c = cx.doc.node(id).filter(|n| n.shows_center())?.geometric_bounds_with(&symbols)?.center();
+    cx.selection.objects.iter().copied().find_map(|id| {
+        let n = cx.doc.node(id).filter(|n| n.shows_center())?;
+        // After the center: on a locked artboard it measures the art of the layer object holding `id`.
+        if !crate::direct::in_scope(cx.doc, cx.isolation, id) || !editable(id) {
+            return None;
+        }
+        let c = n.geometric_bounds_with(&symbols)?.center();
         (c.distance(p) <= tol).then_some((id, c))
     })
 }
