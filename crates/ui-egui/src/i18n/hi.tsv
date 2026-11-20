@@ -10477,3 +10477,6 @@ theme	Appearance	अपीयरेंस
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	मूल फ़ाइल इसमें एडिट करें:
 file-filter	Applications	ऐप्स
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	क्लिपबोर्ड पर कॉपी किया गया

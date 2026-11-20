@@ -8094,3 +8094,6 @@ shape	Open	Otvoren
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Uredi original pomoću:
 file-filter	Applications	Aplikacije
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Kopirano u međuspremnik

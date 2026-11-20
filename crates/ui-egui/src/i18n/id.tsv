@@ -9091,3 +9091,6 @@ file-filter	Applications	Aplikasi
 @msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya tidak akan membentuk bangun cembung
 @msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya akan melewati cakrawala distorsi
 @msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya terlalu berdekatan untuk pemetaan perspektif
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Disalin ke papan klip

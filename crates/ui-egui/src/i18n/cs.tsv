@@ -10871,3 +10871,6 @@ breakText	Glyphs	Glyfy
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Upravit originál v:
 file-filter	Applications	Aplikace
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Zkopírováno do schránky

@@ -8755,3 +8755,6 @@ breakText	Glyphs	Glyph
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Chỉnh sửa bản gốc bằng:
 file-filter	Applications	Ứng dụng
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Đã sao chép vào bảng nhớ tạm

@@ -9055,3 +9055,6 @@ breakText	Glyphs	Γλύφοι
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Επεξεργασία πρωτοτύπου με:
 file-filter	Applications	Εφαρμογές
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	Αντιγράφηκε στο πρόχειρο

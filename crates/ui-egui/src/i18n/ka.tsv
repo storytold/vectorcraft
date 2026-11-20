@@ -11190,3 +11190,6 @@ font-script	Japanese	იაპონური
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	ორიგინალის რედაქტირება პროგრამით:
 file-filter	Applications	აპლიკაციები
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	დაკოპირდა ბუფერში

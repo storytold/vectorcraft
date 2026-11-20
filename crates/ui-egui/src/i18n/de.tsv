@@ -10513,3 +10513,6 @@ breakText	Glyphs	Glyphen
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Original bearbeiten mit:
 file-filter	Applications	Anwendungen
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	In die Zwischenablage kopiert

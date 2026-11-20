@@ -10510,3 +10510,6 @@ breakText	Glyphs	글리프
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	원본 편집 앱:
 file-filter	Applications	응용 프로그램
+
+# #8432 information readout copy confirmation.
+	Copied to clipboard	클립보드에 복사됨
