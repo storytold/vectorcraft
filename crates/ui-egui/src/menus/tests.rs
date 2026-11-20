@@ -1931,4 +1931,20 @@ fn alt_let_go_after_an_access_key_does_not_switch_the_quick_pen() {
     frame(&mut app, vec![egui::Event::ModifiersChanged(alt)]);
     frame(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
     assert_eq!(app.session.tool_options()["action"], "sharpArc", "the next tap counts");
+
+    // Escape, Alt let go and a new Alt press in one frame: the new press is followed, so its
+    // release is a tap.
+    let before = app.session.tool_options()["action"].clone();
+    frame(&mut app, vec![egui::Event::ModifiersChanged(alt)]);
+    frame(&mut app, vec![key(egui::Key::F, true, alt), egui::Event::Text("f".into()), key(egui::Key::F, false, alt)]);
+    assert!(keyboard::active(&ctx), "Alt+F opens the File menu");
+    frame(
+        &mut app,
+        vec![key(egui::Key::Escape, true, alt), egui::Event::ModifiersChanged(egui::Modifiers::NONE), egui::Event::ModifiersChanged(alt)],
+    );
+    assert!(!keyboard::active(&ctx), "Escape closes it");
+    assert_eq!(app.session.tool_options()["action"], before, "the batched frame is no tap");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    assert_ne!(app.session.tool_options()["action"], before, "the press that came after Escape counts as a tap");
+    assert!(!keyboard::active(&ctx), "it does not activate the menu bar");
 }

@@ -36,11 +36,21 @@ impl AltTap {
         self.spoiled = true;
     }
 
-    /// A frame whose keys the menu bar took: Alt held at its end is no tap, and Alt let go during
-    /// it ends the press, so the next press starts afresh.
+    /// A frame whose keys the menu bar took: an Alt press under way is no tap, and Alt let go
+    /// during the frame ends it. A press that starts later in the same frame is followed as usual.
     pub(crate) fn taken_by_menu_bar(&mut self, ctx: &egui::Context) {
-        let alt = ctx.input(|i| i.modifiers.alt);
-        *self = Self { down: alt, spoiled: alt };
+        self.spoiled = self.down;
+        let alt = ctx.input(|i| {
+            for e in &i.events {
+                self.event(e);
+            }
+            i.modifiers.alt
+        });
+        if !alt {
+            *self = Self::default();
+        } else if !self.down {
+            *self = Self { down: true, spoiled: true };
+        }
     }
 
     /// Whether the last of `events`, the start of a frame's events, ends an Alt tap after the
