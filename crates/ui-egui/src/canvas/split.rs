@@ -10,6 +10,19 @@ struct DividerDrag {
     view: u32,
     orientation: SplitOrientation,
     start: f32,
+    motion: DividerMotion,
+}
+
+#[derive(Clone, Copy)]
+struct DividerMotion {
+    axis: f32,
+    moved: bool,
+}
+
+impl DividerMotion {
+    fn new(orientation: SplitOrientation, p: Pos2) -> Self {
+        Self { axis: divider_axis(orientation, p), moved: false }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -189,7 +202,7 @@ fn completed_divider_press(
     rect: egui::Rect,
     after: Option<usize>,
     before: Option<usize>,
-) -> Option<(usize, Pos2, Pos2)> {
+) -> Option<(usize, Pos2, usize, Pos2)> {
     if !enabled(app) || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some()) || ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
     {
         return None;
@@ -211,8 +224,32 @@ fn completed_divider_press(
     });
     presses.into_iter().find_map(|(down, p)| {
         let (up, released) = primary_release(ui, Some(down))?;
-        (up < latest && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p)).then_some((up, p, released))
+        (up < latest && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p)).then_some((down, p, up, released))
     })
+}
+
+/// Finish only the old divider's release before navigation can handle a later press.
+/// Escape remains owned by divider_input, which restores the original fraction.
+pub(super) fn finish_held_divider_before_press(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, modal: bool) -> Option<usize> {
+    if modal || !enabled(app) || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return None;
+    }
+    let mut held = ui.data(|d| d.get_temp::<DividerDrag>(divider_id()))?;
+    let uid = app.session.active()?.uid;
+    let (_, view) = crate::doc_windows::current(app)?;
+    let settings = app.view()?.split;
+    if held.doc != uid || held.view != view || held.orientation != settings.orientation {
+        return None;
+    }
+    let release = primary_release(ui, None)?;
+    let (down, _) = primary_press(ui)?;
+    if down <= release.0 {
+        return None;
+    }
+    move_divider(app, ui, rect, held.orientation, &mut held.motion, (None, Some(release)));
+    ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
+    ui.ctx().request_repaint();
+    Some(release.0)
 }
 
 /// Whether divider input owned this frame, or ended an old press before a later Down.
@@ -241,7 +278,7 @@ pub(super) fn divider_input(
     let Some((_, view)) = crate::doc_windows::current(app) else { return DividerInput::Ignored };
     let Some(settings) = app.view().map(|v| v.split).filter(|_| enabled(app)) else { return DividerInput::Ignored };
     let held = ui.data(|d| d.get_temp::<DividerDrag>(divider_id()));
-    let mut handoff = if let Some(held) = held {
+    let mut handoff = if let Some(mut held) = held {
         if held.doc != uid || held.view != view || held.orientation != settings.orientation || modal {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
             return DividerInput::Ignored;
@@ -256,19 +293,18 @@ pub(super) fn divider_input(
             return DividerInput::Consumed;
         }
         let release = primary_release(ui, None);
-        let at = release.map(|(_, p)| p).or_else(|| ui.input(|i| i.pointer.interact_pos()));
-        if let Some(p) = at {
-            move_divider(app, rect, settings.orientation, p);
-        }
+        move_divider(app, ui, rect, settings.orientation, &mut held.motion, (None, release));
         if release.is_some() || !ui.input(|i| i.pointer.primary_down()) {
             ui.data_mut(|d| d.remove::<DividerDrag>(divider_id()));
+        } else {
+            ui.data_mut(|d| d.insert_temp(divider_id(), held));
         }
         ui.ctx().request_repaint();
         // A later press is a new gesture, admitted against the divider's final position.
         if !release.is_some_and(|(up, _)| primary_press(ui).is_some_and(|(down, _)| down > up)) {
             return DividerInput::Consumed;
         }
-        after = release.map(|(up, _)| up);
+        after = after.max(release.map(|(up, _)| up));
         true
     } else {
         after.is_some()
@@ -289,13 +325,20 @@ pub(super) fn divider_input(
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
         // A completed press applies its own release, never a later hover or another press.
-        if let Some((_, released)) = primary_release(ui, Some(index)) {
-            if released != p {
-                move_divider(app, rect, settings.orientation, released);
-                ui.ctx().request_repaint();
-            }
-        } else if ui.input(|i| i.pointer.primary_down()) {
-            ui.data_mut(|d| d.insert_temp(divider_id(), DividerDrag { doc: uid, view, orientation: settings.orientation, start: settings.ratio() }));
+        let mut held = DividerDrag {
+            doc: uid,
+            view,
+            orientation: settings.orientation,
+            start: settings.ratio(),
+            motion: DividerMotion::new(settings.orientation, p),
+        };
+        let release = primary_release(ui, Some(index));
+        move_divider(app, ui, rect, settings.orientation, &mut held.motion, (Some(index), release));
+        if release.is_none() && ui.input(|i| i.pointer.primary_down()) {
+            ui.data_mut(|d| d.insert_temp(divider_id(), held));
+        }
+        if held.motion.moved {
+            ui.ctx().request_repaint();
         }
         app.session.tool_press_elsewhere();
     }
@@ -313,10 +356,11 @@ pub(super) fn finish_completed_dividers(
     mut after: Option<usize>,
     before: Option<usize>,
 ) -> Option<usize> {
-    while let Some((up, p, released)) = completed_divider_press(app, ui, resp, rect, after, before) {
+    while let Some((down, p, up, released)) = completed_divider_press(app, ui, resp, rect, after, before) {
         let Some(settings) = app.view().map(|v| v.split) else { break };
-        if released != p {
-            move_divider(app, rect, settings.orientation, released);
+        let mut motion = DividerMotion::new(settings.orientation, p);
+        move_divider(app, ui, rect, settings.orientation, &mut motion, (Some(down), Some((up, released))));
+        if motion.moved {
             ui.ctx().request_repaint();
         }
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
@@ -327,7 +371,39 @@ pub(super) fn finish_completed_dividers(
     after
 }
 
-fn move_divider(app: &mut VectorcraftApp, rect: egui::Rect, orientation: SplitOrientation, p: Pos2) {
+fn divider_axis(orientation: SplitOrientation, p: Pos2) -> f32 {
+    match orientation {
+        SplitOrientation::Vertical => p.x,
+        SplitOrientation::Horizontal => p.y,
+    }
+}
+
+fn move_divider(
+    app: &mut VectorcraftApp,
+    ui: &Ui,
+    rect: egui::Rect,
+    orientation: SplitOrientation,
+    motion: &mut DividerMotion,
+    interval: (Option<usize>, Option<(usize, Pos2)>),
+) {
+    let (after, release) = interval;
+    // Look only at this owner's samples. A move out and back still starts a drag;
+    // a stationary or transverse-only press inside the hit strip does not.
+    motion.moved |= ui.input(|i| {
+        i.events.iter().enumerate().any(|(index, event)| {
+            after.is_none_or(|down| index > down)
+                && release.is_none_or(|(up, _)| index <= up)
+                && match event {
+                    egui::Event::PointerMoved(p) => divider_axis(orientation, *p) != motion.axis,
+                    _ => false,
+                }
+        })
+    });
+    let Some(p) = release.map(|(_, p)| p).or_else(|| ui.input(|i| i.pointer.interact_pos())) else { return };
+    motion.moved |= divider_axis(orientation, p) != motion.axis;
+    if !motion.moved {
+        return;
+    }
     let value = match orientation {
         SplitOrientation::Vertical => (p.x - rect.left()) / rect.width().max(1.0),
         SplitOrientation::Horizontal => (p.y - rect.top()) / rect.height().max(1.0),

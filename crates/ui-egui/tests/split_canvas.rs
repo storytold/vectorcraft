@@ -777,6 +777,9 @@ synchronous_test!(split_canvas_comparison_modes_independent_pixel_region_and_sha
     assert!(s.app.view().unwrap().rotation.abs() > 45.0, "real Rotate View drag rotates the shared camera");
     s.size = vec2(480.0, 360.0);
     s.idle();
+    // The resized request must be observed before waiting for its still-view deadline.
+    s.time += canvas::STILL_SECS + 1.0 / 60.0;
+    s.frame(vec![]);
     let p = Point::new(180.0, 120.0);
     let xf = s.xf();
     let screen = s.screen(p);
@@ -2763,4 +2766,378 @@ synchronous_test!(review_598151_animated_zoom_owned_excursion_is_not_a_click, {
     review_598151_scrub_out_and_back(false, false);
     review_598151_scrub_out_and_back(false, true);
     review_598151_scrub_out_and_back(true, false);
+});
+
+fn review_599336_name_position(shape: &Shape) -> Option<Pos2> {
+    match shape {
+        Shape::Vec(shapes) => shapes.iter().find_map(review_599336_name_position),
+        Shape::Text(text) if text.galley.job.text.starts_with("01 -") => Some(text.pos + text.galley.rect.center().to_vec2()),
+        _ => None,
+    }
+}
+
+fn review_599336_name_mapped_scene() -> (Scene, Pos2, Pos2) {
+    let (mut s, _) = review8211_mapped_scene();
+    s.app.run("artboard.new", json!({"x":500,"y":0,"width":320,"height":240,"name":"Other"})).unwrap();
+    s.app.select_tool("selection");
+    s.app.run("select.set", json!({"ids":[s.rectangle.0]})).unwrap();
+    let view = s.app.view_mut().unwrap();
+    view.fitted = true;
+    view.center = Point::new(160.0, 120.0);
+    view.zoom = 1.5;
+    view.artboard = 1;
+    for _ in 0..3 {
+        s.review8211_materials_frame(vec![]);
+    }
+    let name = s
+        .output
+        .shapes
+        .iter()
+        .find_map(|shape| review_599336_name_position(&shape.shape))
+        .expect("CONTROL: the actual first artboard name is painted");
+    let handle = review_598046_current_mapped_handle(&s);
+    assert!(s.rect().contains(name) && s.rect().contains(handle));
+    assert!((name.x - s.point_on_divider().x).abs() > 20.0 && (handle.x - s.point_on_divider().x).abs() > 20.0);
+    assert_eq!(s.app.session.active().unwrap().doc.artboards.len(), 2);
+    (s, name, handle)
+}
+
+fn review_599336_finish_mapping(s: &mut Scene, handle: Pos2, before: &Value, graphics: &Value, history: usize) -> Value {
+    let selection = s.app.session.active().unwrap().selection.objects.clone();
+    let up = handle + vec2(20.0, 4.0);
+    s.review8211_materials_frame(vec![Event::PointerMoved(up)]);
+    assert_ne!(review8211_graphics(s), *graphics, "the actual mapped owner previews its movement");
+    s.review8211_materials_frame(vec![review_597489_primary(up, false), Event::PointerMoved(up + vec2(13.0, 11.0))]);
+    let result = review8211_graphics(s);
+    assert_ne!(result, *graphics, "the actual release commits the mapped edit");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1);
+    assert_eq!(s.app.session.active().unwrap().selection.objects, selection);
+    let after = s.document();
+    s.review8211_materials_frame(vec![Event::PointerMoved(up + vec2(30.0, 18.0))]);
+    assert_eq!(s.document(), after, "button-up hover cannot resume either completed owner");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history + 1);
+    s.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(s.document(), *before, "one Undo restores the mapped edit without undoing navigation");
+    assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+    result
+}
+
+fn review_599336_name_then_mapping(coalesced: bool) -> Value {
+    let (mut s, name, handle) = review_599336_name_mapped_scene();
+    let before = s.document();
+    let graphics = review8211_graphics(&s);
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let camera = review_597943_camera(&s);
+    s.review8211_materials_frame(vec![Event::PointerMoved(name), review_597489_primary(name, true)]);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "CONTROL: a name selects only at its Up");
+    assert_eq!(s.document(), before);
+    if coalesced {
+        s.review8211_materials_frame(vec![review_597489_primary(name, false), review_597489_primary(handle, true)]);
+    } else {
+        s.review8211_materials_frame(vec![review_597489_primary(name, false)]);
+        assert_eq!(s.app.view().unwrap().artboard, 0, "CONTROL: an ordinary name release selects the named board");
+        s.review8211_materials_frame(vec![review_597489_primary(handle, true)]);
+    }
+    assert_eq!(s.app.view().unwrap().artboard, 0, "REGRESSION: the stored name finishes at its own Up before the fresh mapped Down");
+    review_597943_camera_eq(&s, camera);
+    let result = review_599336_finish_mapping(&mut s, handle, &before, &graphics, history);
+    s.app.view_mut().unwrap().artboard = 1;
+    s.review8211_materials_frame(vec![Event::PointerMoved(handle + vec2(40.0, 15.0))]);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "a later hover cannot finish a stale name press");
+    result
+}
+
+synchronous_test!(review_599336_name_release_precedes_fresh_mapped_handle, {
+    let _globals = Globals::new();
+    let ordinary = review_599336_name_then_mapping(false);
+    assert_eq!(review_599336_name_then_mapping(true), ordinary);
+});
+
+fn review_599336_lone_mapping_control() {
+    let (mut s, handle) = review8211_mapped_scene();
+    let (before, graphics) = (s.document(), review8211_graphics(&s));
+    let history = s.app.session.active().unwrap().history.undo.len();
+    s.review8211_materials_frame(vec![review_597489_primary(handle, true)]);
+    review_599336_finish_mapping(&mut s, handle, &before, &graphics, history);
+}
+
+fn review_599336_pan_then_mapping(expected: Option<((Point, f64, f64), Pos2)>, hit: bool) -> ((Point, f64, f64), Pos2, Value) {
+    let (mut s, _) = review8211_mapped_scene();
+    s.app.run("view.splitView", json!({})).unwrap();
+    s.review8211_materials_frame(vec![]);
+    assert!(!s.app.view().unwrap().split.enabled);
+    let (before, graphics) = (s.document(), review8211_graphics(&s));
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let old_handle = review_598046_current_mapped_handle(&s);
+    let start = s.rect().left_top() + vec2(50.0, 70.0);
+    let end = start + vec2(60.0, 24.0);
+    let initial = review_597943_camera(&s);
+    let (camera, handle) = if let Some(expected) = expected {
+        expected
+    } else {
+        s.review8211_materials_frame(vec![key(Key::Space, true), Event::PointerMoved(start), review_597489_primary(start, true)]);
+        s.review8211_materials_frame(vec![Event::PointerMoved(end)]);
+        s.review8211_materials_frame(vec![review_597489_primary(end, false), key(Key::Space, false)]);
+        (review_597943_camera(&s), review_598046_current_mapped_handle(&s))
+    };
+    assert!(
+        camera.0.distance(initial.0) > 1e-6 && handle.distance(old_handle) > 20.0,
+        "CONTROL: a real pan moves the actual handle beyond its eight-point hit reach"
+    );
+    let pressed = if hit { handle } else { old_handle };
+    assert!(s.rect().contains(pressed));
+    if expected.is_some() {
+        s.review8211_materials_frame(vec![
+            key(Key::Space, true),
+            Event::PointerMoved(start),
+            review_597489_primary(start, true),
+            Event::PointerMoved(end),
+            review_597489_primary(end, false),
+            key(Key::Space, false),
+            review_597489_primary(pressed, true),
+        ]);
+    } else {
+        s.review8211_materials_frame(vec![review_597489_primary(pressed, true)]);
+    }
+    assert!(
+        s.app.view().unwrap().center.distance(camera.0) < 1e-6,
+        "REGRESSION: the completed Space-pan updates the camera before the fresh mapped pick"
+    );
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.app.session.tool_id(), "selection", "the completed Space-pan does not replace Selection");
+    let result = if hit {
+        review_599336_finish_mapping(&mut s, pressed, &before, &graphics, history)
+    } else {
+        s.review8211_materials_frame(vec![review_597489_primary(pressed, false)]);
+        assert_eq!(review8211_graphics(&s), graphics, "REGRESSION: the old screen position must not pick a handle using the pre-pan camera");
+        assert_eq!(s.document(), before, "the ordinary selection click changes no artwork");
+        assert_eq!(s.app.session.active().unwrap().history.undo.len(), history);
+        s.review8211_materials_frame(vec![Event::PointerMoved(pressed + vec2(25.0, 15.0))]);
+        assert_eq!(s.document(), before);
+        graphics
+    };
+    review_597943_camera_eq(&s, camera);
+    (camera, handle, result)
+}
+
+synchronous_test!(review_599336_completed_space_pan_precedes_fresh_mapped_picking, {
+    let _globals = Globals::new();
+    review_599336_lone_mapping_control();
+    let miss = review_599336_pan_then_mapping(None, false);
+    let hit = review_599336_pan_then_mapping(None, true);
+    let missed = review_599336_pan_then_mapping(Some((miss.0, miss.1)), false);
+    assert_eq!(missed.2, miss.2);
+    let picked = review_599336_pan_then_mapping(Some((hit.0, hit.1)), true);
+    assert_eq!(picked.2, hit.2);
+});
+
+fn review_599336_button(at: Pos2, button: PointerButton, pressed: bool) -> Event {
+    Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE }
+}
+
+fn review_599336_middle_stays_owned() {
+    let mut s = Scene::new();
+    s.enable();
+    let before = s.snapshot();
+    let start = s.rect().left_top() + vec2(60.0, 80.0);
+    let divider = s.point_on_divider();
+    let later = review_597489_divider_point(&s, 0.7);
+    let camera = review_597943_camera(&s);
+    s.press(start, PointerButton::Middle);
+    s.frame(vec![Event::PointerMoved(divider), review_597489_primary(divider, true)]);
+    s.frame(vec![Event::PointerMoved(later)]);
+    assert!((s.fraction() - 0.5).abs() < 1e-6, "CONTROL: an unreleased Middle owner keeps the divider from taking Primary Down");
+    assert!(s.app.view().unwrap().center.distance(camera.0) > 1e-6, "the held Middle pan may still navigate");
+    s.frame(vec![review_597489_primary(later, false)]);
+    s.release(later, PointerButton::Middle);
+    assert_eq!(s.snapshot(), before);
+}
+
+fn review_599336_middle_then_divider(expected: Option<(Point, f64, f64)>) -> (Point, f64, f64) {
+    let mut s = Scene::new();
+    s.enable();
+    let before = s.snapshot();
+    let start = s.rect().left_top() + vec2(60.0, 80.0);
+    let preview = start + vec2(12.0, 4.0);
+    let released = start + vec2(40.0, 16.0);
+    let divider = s.point_on_divider();
+    let end = review_597489_divider_point(&s, 0.7);
+    s.press(start, PointerButton::Middle);
+    s.frame(vec![Event::PointerMoved(preview)]);
+    let prior = review_597943_camera(&s);
+    let camera = if let Some(expected) = expected {
+        s.frame(vec![review_599336_button(released, PointerButton::Middle, false), review_597489_primary(divider, true)]);
+        expected
+    } else {
+        s.frame(vec![Event::PointerMoved(released)]);
+        s.release(released, PointerButton::Middle);
+        let camera = review_597943_camera(&s);
+        s.press(divider, PointerButton::Primary);
+        camera
+    };
+    assert!(camera.0.distance(prior.0) > 1e-6, "CONTROL: the actual Middle Up contributes remaining pan motion");
+    review_597943_camera_eq(&s, camera);
+    s.frame(vec![Event::PointerMoved(end)]);
+    s.release(end, PointerButton::Primary);
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "REGRESSION: Middle Up finishes before the fresh divider Down, rather than dropping that Down");
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.snapshot(), before);
+    camera
+}
+
+synchronous_test!(review_599336_middle_release_precedes_fresh_divider_down, {
+    let _globals = Globals::new();
+    review_599336_middle_stays_owned();
+    let ordinary = review_599336_middle_then_divider(None);
+    review_599336_middle_then_divider(Some(ordinary));
+});
+
+fn review_599336_held_divider_prefix(coalesced: bool, off_seam: bool) -> ((Point, f64, f64), (Point, f64, f64)) {
+    let mut s = Scene::new();
+    s.enable();
+    s.app.select_tool("hand");
+    let before = s.snapshot();
+    let down = s.point_on_divider();
+    let held = review_597489_divider_point(&s, 0.6);
+    let old_up = review_597489_divider_point(&s, 0.7);
+    let pair_down = review_597489_divider_point(&s, if off_seam { 0.75 } else { 0.7 });
+    let pair_up = review_597489_divider_point(&s, 0.8);
+    let latest = review_597489_divider_point(&s, 0.9);
+    let last_up = review_597489_divider_point(&s, 0.95);
+    let original_camera = review_597943_camera(&s);
+    s.press(down, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(held)]);
+    assert!((s.fraction() - 0.6).abs() < 1e-6);
+    if coalesced {
+        s.frame(vec![
+            review_597489_primary(old_up, false),
+            review_597489_primary(pair_down, true),
+            review_597489_primary(pair_up, false),
+            review_597489_primary(latest, true),
+        ]);
+    } else {
+        s.release(old_up, PointerButton::Primary);
+        s.press(pair_down, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(pair_up)]);
+        s.release(pair_up, PointerButton::Primary);
+        s.press(latest, PointerButton::Primary);
+    }
+    let expected_fraction = if off_seam { 0.7 } else { 0.8 };
+    assert!((s.fraction() - expected_fraction).abs() < 1e-6);
+    let after_pair = review_597943_camera(&s);
+    if off_seam {
+        assert!(after_pair.0.distance(original_camera.0) > 1e-6, "CONTROL: the off-seam Hand pair remains eligible to pan");
+    } else {
+        review_597943_camera_eq(&s, original_camera);
+    }
+    assert_eq!(s.snapshot(), before, "view gestures do not change art, selection or history");
+    s.frame(vec![Event::PointerMoved(last_up)]);
+    s.release(last_up, PointerButton::Primary);
+    let after_latest = review_597943_camera(&s);
+    assert!(after_latest.0.distance(after_pair.0) > 1e-6, "the fresh off-seam Hand owns its later motion");
+    assert!((s.fraction() - expected_fraction).abs() < 1e-6);
+    s.frame(vec![Event::PointerMoved(pair_down)]);
+    review_597943_camera_eq(&s, after_latest);
+    assert_eq!(s.snapshot(), before);
+    (after_pair, after_latest)
+}
+
+synchronous_test!(review_599336_held_divider_finishes_before_later_view_pairs, {
+    let _globals = Globals::new();
+    let off_seam = review_599336_held_divider_prefix(false, true);
+    let coalesced = review_599336_held_divider_prefix(true, true);
+    assert!(
+        coalesced.0.0.distance(off_seam.0.0) < 1e-6 && coalesced.1.0.distance(off_seam.1.0) < 1e-6,
+        "CONTROL: the off-seam Hand prefix is applied once in either packing"
+    );
+    let ordinary = review_599336_held_divider_prefix(false, false);
+    let actual = review_599336_held_divider_prefix(true, false);
+    assert!(
+        actual.0.0.distance(ordinary.0.0) < 1e-6 && actual.1.0.distance(ordinary.1.0) < 1e-6,
+        "REGRESSION: the held divider and later seam pair do not also pan the camera"
+    );
+});
+
+fn review_599336_axis_point(s: &Scene, axis: f32, transverse: f32) -> Pos2 {
+    let seam = s.point_on_divider();
+    if s.app.view().unwrap().split.orientation == SplitOrientation::Horizontal {
+        seam + vec2(transverse, axis)
+    } else {
+        seam + vec2(axis, transverse)
+    }
+}
+
+fn review_599336_axis_controls(command: &str) {
+    let mut s = Scene::new();
+    s.enable();
+    s.command(command);
+    let before = s.snapshot();
+    let camera = review_597943_camera(&s);
+    let pressed = review_599336_axis_point(&s, 2.0, 0.0);
+    let horizontal = s.app.view().unwrap().split.orientation == SplitOrientation::Horizontal;
+    let target = if horizontal {
+        pos2(pressed.x, s.rect().top() + s.rect().height() * 0.72)
+    } else {
+        pos2(s.rect().left() + s.rect().width() * 0.72, pressed.y)
+    };
+    s.press(pressed, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(target)]);
+    assert!((s.fraction() - 0.72).abs() < 1e-6, "CONTROL: real movement on the divider axis still updates its ratio");
+    s.frame(vec![Event::PointerMoved(pressed)]);
+    let expected = if horizontal { (pressed.y - s.rect().top()) / s.rect().height() } else { (pressed.x - s.rect().left()) / s.rect().width() };
+    assert!((s.fraction() - expected).abs() < 1e-6, "CONTROL: after axis movement begins, returning to Down keeps ordinary absolute positioning");
+    s.release(pressed, PointerButton::Primary);
+    let at = s.point_on_divider();
+    s.press(at, PointerButton::Primary);
+    let beyond = if horizontal { pos2(at.x, s.rect().bottom() + 40.0) } else { pos2(s.rect().right() + 40.0, at.y) };
+    s.frame(vec![Event::PointerMoved(beyond)]);
+    s.release(beyond, PointerButton::Primary);
+    assert_eq!(s.fraction(), 1.0, "CONTROL: the ordinary endpoint clamp and owned outside release remain intact");
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.snapshot(), before);
+}
+
+fn review_599336_stationary_divider(command: &str, coalesced: bool, transverse: bool) {
+    let mut s = Scene::new();
+    s.enable();
+    s.command(command);
+    let before = s.snapshot();
+    let camera = review_597943_camera(&s);
+    let initial = s.fraction();
+    let pressed = review_599336_axis_point(&s, 2.0, 0.0);
+    let released = review_599336_axis_point(&s, 2.0, if transverse { 24.0 } else { 0.0 });
+    // An unrelated earlier pointer position in this same raw frame does not belong to the divider.
+    let earlier = review_599336_axis_point(&s, 25.0, 0.0);
+    if coalesced {
+        s.frame(vec![
+            Event::PointerMoved(earlier),
+            Event::PointerMoved(pressed),
+            review_597489_primary(pressed, true),
+            Event::PointerMoved(released),
+            review_597489_primary(released, false),
+        ]);
+    } else {
+        s.frame(vec![Event::PointerMoved(pressed)]);
+        s.frame(vec![Event::PointerMoved(earlier), Event::PointerMoved(pressed), review_597489_primary(pressed, true)]);
+        s.frame(vec![]);
+        assert_eq!(s.fraction(), initial, "REGRESSION: a held off-center stationary press cannot jump the seam");
+        s.frame(vec![Event::PointerMoved(released)]);
+        s.release(released, PointerButton::Primary);
+    }
+    assert_eq!(s.fraction(), initial, "REGRESSION: stationary and transverse-only gestures preserve the original ratio in either packing");
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.snapshot(), before);
+}
+
+synchronous_test!(review_599336_divider_moves_only_after_its_axis_changes, {
+    let _globals = Globals::new();
+    for orientation in ["view.splitVertical", "view.splitHorizontal"] {
+        review_599336_axis_controls(orientation);
+        review_599336_stationary_divider(orientation, true, false);
+    }
+    for orientation in ["view.splitVertical", "view.splitHorizontal"] {
+        review_599336_stationary_divider(orientation, false, false);
+        review_599336_stationary_divider(orientation, true, true);
+        review_599336_stationary_divider(orientation, false, true);
+    }
 });

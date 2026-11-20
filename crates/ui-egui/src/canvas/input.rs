@@ -37,11 +37,10 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let view = super::split::input_view(app, ui, rect, view_at);
     let (backquote_now, backquote_before) = backquote_seen(ui);
     touch_gestures(app, ui, rect, view, modal);
-    // Finish an old primary owner before a later Down is qualified against the divider.
+    // Finish the old owner's matching button release before a later primary Down.
     // The old owner uses its camera and picking mode; the new press gets the resulting view.
     let mut finished = if let Some(d) = ui.data(|data| data.get_temp::<Drag>(drag_id()))
-        && !matches!(d, Drag::Pan { middle: true, .. } | Drag::Gesture | Drag::Present)
-        && let Some((up, p)) = super::split::primary_release(ui, None)
+        && let Some((up, p)) = owner_release(ui, d)
         && press.is_some_and(|(down, _)| down > up)
     {
         let old = Pointing {
@@ -69,6 +68,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         None
     };
     if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() {
+        finished = finished.max(super::split::finish_held_divider_before_press(app, ui, rect, modal));
         let frame =
             Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal, paired_moves: &paired_moves, release: None };
         finished = finish_view_presses(app, ui, &frame, finished);
@@ -306,35 +306,81 @@ struct Pointing<'a> {
     modal: bool,
 }
 
+/// The first release matching a stored owner; unrelated buttons cannot end its gesture.
+fn owner_release(ui: &Ui, drag: Drag) -> Option<(usize, Pos2)> {
+    match drag {
+        Drag::Pan { middle: true, .. } => ui.input(|i| {
+            i.events.iter().enumerate().find_map(|(index, event)| match event {
+                egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed: false, .. } => Some((index, *pos)),
+                _ => None,
+            })
+        }),
+        Drag::Gesture | Drag::Present => None,
+        _ => super::split::primary_release(ui, None),
+    }
+}
+
+fn view_presses_allowed(app: &VectorcraftApp, ui: &Ui, modal: bool) -> bool {
+    !modal
+        && app.ui.screen_mode != 3
+        && !crate::touch::finger_navigates_only()
+        && !super::split::dragging(ui.ctx())
+        && ui.data(|d| d.get_temp::<Drag>(drag_id()).is_none() && d.get_temp::<(usize, bool)>(name_press_id()).is_none())
+        && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
+}
+
+fn view_press_space(app: &VectorcraftApp, ui: &Ui, down: usize) -> Option<bool> {
+    let space = primary_press_state(app, ui, down).1;
+    (space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView")).then_some(space)
+}
+
+/// Admission shared by the read-only mapped-handle deferral and actual VIEW replay.
+fn view_press_eligible(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, down: usize, pressed: Pos2) -> bool {
+    let Some(space) = view_press_space(app, ui, down) else { return false };
+    let v = *app.view().unwrap_or(&View::default());
+    let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
+    on_canvas(ui, resp, pressed)
+        && artboard_name_at(app, ui, &xf, pressed).is_none()
+        && (space || !super::split::enabled(app) || !super::split::divider_press_at(app, ui, resp, rect, pressed))
+}
+
+/// A complete earlier VIEW episode must update the camera before a fresh mapped pick.
+/// This query never dispatches input or changes the view, divider or stored owners.
+pub(super) fn pending_view_press(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
+    let Some((latest, _)) = super::split::primary_press(ui) else { return false };
+    if !view_presses_allowed(app, ui, crate::panel_docking::modal_open(app, ui.ctx())) {
+        return false;
+    }
+    let mut scanned = None;
+    while let Some((down, pressed, up, _)) = super::split::completed_primary_press(ui, scanned, latest) {
+        if view_press_eligible(app, ui, resp, rect, down, pressed) {
+            return true;
+        }
+        scanned = Some(up);
+    }
+    false
+}
+
 /// Complete earlier view-tool clicks/drags before a later primary Down chooses its owner.
 /// Ordinary Tool/name/mapped presses keep their existing admission; only view tools are replayed.
 fn finish_view_presses(app: &mut VectorcraftApp, ui: &Ui, frame: &Pointing, mut after: Option<usize>) -> Option<usize> {
-    if frame.modal
-        || app.ui.screen_mode == 3
-        || crate::touch::finger_navigates_only()
-        || ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
-        || frame.pointer.button_down(egui::PointerButton::Middle)
-    {
+    if !view_presses_allowed(app, ui, frame.modal) {
         return after;
     }
     let Some((latest, _)) = super::split::primary_press(ui) else { return after };
     let mut scanned = after;
     while let Some((down, pressed, up, released)) = super::split::completed_primary_press(ui, scanned, latest) {
         scanned = Some(up);
-        let space = primary_press_state(app, ui, down).1;
-        if !space && !matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
+        if view_press_space(app, ui, down).is_none() {
             continue;
         }
-        // An earlier divider may have moved the seam before this press chooses its side.
+        // Earlier dividers settle before this press is tested against its actual camera/seam.
         after = super::split::finish_completed_dividers(app, ui, frame.resp, frame.rect, after, Some(down));
+        if !view_press_eligible(app, ui, frame.resp, frame.rect, down, pressed) {
+            continue;
+        }
         let v = *app.view().unwrap_or(&View::default());
         let xf = Xf::at(frame.rect, &v, app.canvas_ui_zoom);
-        if !on_canvas(ui, frame.resp, pressed)
-            || artboard_name_at(app, ui, &xf, pressed).is_some()
-            || (!space && super::split::enabled(app) && super::split::divider_press_at(app, ui, frame.resp, frame.rect, pressed))
-        {
-            continue;
-        }
         let view = super::split::input_view(app, ui, frame.rect, Some(pressed));
         let f = Pointing { v, xf, view, ..*frame };
         begin_drag(app, ui, &f, pressed, down);
