@@ -1,5 +1,7 @@
 //! History panel: the document's states; click one to go back (or forward) to it.
 
+use std::sync::Arc;
+
 use egui::{Sense, Ui, vec2};
 use serde_json::json;
 
@@ -45,7 +47,9 @@ pub(crate) fn shown(h: &vectorcraft_engine::HistoryEntry) -> String {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
+    let context_state_id = ui.scope_id().with("history-context-state");
     let Some(st) = app.session.active() else {
+        ui.ctx().data_mut(|d| d.remove::<Arc<vectorcraft_doc::Document>>(context_state_id));
         super::empty_state(ui, "history", tl!("No document"), tl!("Open a document to see its history."));
         return;
     };
@@ -53,7 +57,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     rows.extend(st.history.undo.iter().map(|h| (shown(h), false)));
     let current = rows.len() - 1;
     rows.extend(st.history.redo.iter().rev().map(|h| (shown(h), true)));
-    let mut target: Option<usize> = None;
+    let mut target: Option<Arc<vectorcraft_doc::Document>> = None;
+    let mut context_open = false;
     crate::widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         egui::ScrollArea::vertical().id_salt("hist").max_height(260.0).stick_to_bottom(true).show(ui, |ui| {
@@ -75,25 +80,41 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let col = if *future { t.text_disabled } else { t.text };
                 ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
                 if resp.clicked() && i != current {
-                    target = Some(i);
+                    target = app.session.active().and_then(|st| st.history.state(&st.doc, i)).cloned();
+                }
+                if resp.secondary_clicked()
+                    && let Some(snapshot) = app.session.active().and_then(|st| st.history.state(&st.doc, i)).cloned()
+                {
+                    ui.ctx().data_mut(|d| d.insert_temp(context_state_id, snapshot));
                 }
                 resp.context_menu(|ui| {
-                    if menu_item(ui, tl!("New Document from State"), crate::menus::enabled(app, "edit.newDocumentFromState"), false)
-                        && let Some(row) = resolve_state(app, i, false)
+                    let snapshot = ui.ctx().data(|d| d.get_temp::<Arc<vectorcraft_doc::Document>>(context_state_id));
+                    if menu_item(
+                        ui,
+                        tl!("New Document from State"),
+                        snapshot.is_some() && crate::menus::enabled(app, "edit.newDocumentFromState"),
+                        false,
+                    ) && let Some(snapshot) = snapshot.clone()
+                        && let Some(row) = resolve_state(app, snapshot, false)
                     {
                         crate::menus::invoke(app, "edit.newDocumentFromState", json!({ "index": row }));
                     }
-                    if menu_item(ui, tl!("Step to This State"), i != current, false) {
-                        target = Some(i);
+                    let can_step = snapshot.as_ref().zip(app.session.active()).is_some_and(|(snapshot, st)| !Arc::ptr_eq(snapshot, &st.doc));
+                    if menu_item(ui, tl!("Step to This State"), can_step, false) {
+                        target = snapshot;
                     }
                     ui.separator();
                     if menu_item(ui, tl!("Clear History"), crate::menus::enabled(app, "edit.clearHistory"), false) {
                         crate::menus::invoke(app, "edit.clearHistory", json!({}));
                     }
                 });
+                context_open |= resp.context_menu_opened();
             }
         });
     });
+    if !context_open {
+        ui.ctx().data_mut(|d| d.remove::<Arc<vectorcraft_doc::Document>>(context_state_id));
+    }
     if let Some(target) = target {
         step_to_state(app, target);
     }
@@ -109,10 +130,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// Keep the clicked snapshot while pending edits settle: they can add or trim history rows.
-fn resolve_state(app: &mut VectorcraftApp, row: usize, keep_typing: bool) -> Option<usize> {
-    use std::sync::Arc;
-
-    let target = app.session.active().and_then(|st| st.history.state(&st.doc, row)).cloned()?;
+fn resolve_state(app: &mut VectorcraftApp, target: Arc<vectorcraft_doc::Document>, keep_typing: bool) -> Option<usize> {
     let requests = app.session.finish_tool_edit();
     let failed = requests.is_err();
     crate::canvas::apply_requests(app, requests);
@@ -140,8 +158,8 @@ fn resolve_state(app: &mut VectorcraftApp, row: usize, keep_typing: bool) -> Opt
     row
 }
 
-fn step_to_state(app: &mut VectorcraftApp, row: usize) {
-    let Some(row) = resolve_state(app, row, true) else { return };
+fn step_to_state(app: &mut VectorcraftApp, target: Arc<vectorcraft_doc::Document>) {
+    let Some(row) = resolve_state(app, target, true) else { return };
     let Some(st) = app.session.active() else { return };
     let steps = steps_to(st.history.undo.len(), row);
     let (cmd, n) = if steps < 0 { ("edit.undo", -steps) } else { ("edit.redo", steps) };
@@ -517,7 +535,7 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         use vectorcraft_tools::{PointerEvent, PointerKind};
 
-        for row in [0, 1] {
+        for (row, finishes_while_open) in [(0, false), (1, false), (0, true), (1, true)] {
             let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
             app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
             // A Shape Builder merge over this many segments computes on another thread.
@@ -537,6 +555,11 @@ mod tests {
             crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Up, 15.0, 10.0), view);
             assert!(app.session.tool_waiting());
             let mut h = row_menu_harness(app, row);
+            if finishes_while_open {
+                let requests = h.state_mut().session.finish_tool_edit();
+                crate::canvas::apply_requests(h.state_mut(), requests);
+                h.run_steps(2);
+            }
             h.get_by_label("   New Document from State").click();
             h.run_steps(2);
             let app = h.state();
