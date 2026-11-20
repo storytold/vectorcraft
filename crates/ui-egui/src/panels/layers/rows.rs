@@ -110,6 +110,29 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
+/// Resolve the target circle clicked this frame by the rules of a row name click
+/// ([`widgets::row_click`], #8639): plain targets it, Ctrl/Cmd adds it to the selection or takes
+/// it out, Shift selects the art of every row from the last circle clicked (else the targeted row)
+/// to it, and Shift+Ctrl/Cmd adds that art to the selection.
+pub(super) fn resolve_target_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
+    let Some((id, m)) = out.target_click.take() else { return };
+    let anchor = ui.data(|d| d.get_temp::<NodeId>(key("target-anchor"))).or(view.target);
+    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
+    // The circles have no highlighted rows of their own: a range starts only at the anchor.
+    let click = widgets::row_click(&order, &[], anchor, id, m);
+    if click.moves_anchor() {
+        ui.data_mut(|d| d.insert_temp(key("target-anchor"), id));
+    }
+    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    let params = match click {
+        widgets::RowClick::Only(id) => json!({"id": id.0}),
+        widgets::RowClick::Toggle(id) => json!({"id": id.0, "add": true}),
+        widgets::RowClick::Range(rows) => json!({"range": ids(&rows)}),
+        widgets::RowClick::AddRange(rows) => json!({"range": ids(&rows), "add": true}),
+    };
+    out.actions.push(("layer.target".into(), params));
+}
+
 /// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
 /// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
 /// be intertwined.
@@ -515,7 +538,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let m = ui.input(|i| i.modifiers);
     let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
     if tresp.clicked() {
-        out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
+        out.target_click = Some((n.id, m));
     } else if sq_resp.clicked() {
         out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if resp.clicked() {
