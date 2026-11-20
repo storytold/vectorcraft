@@ -502,6 +502,11 @@ struct HandleDrag {
     owner: (u64, Vec<u64>),
 }
 
+/// Whether a mapped graphic already owns a drag, without delivering or changing its input.
+pub(crate) fn graphic_handle_drag_active(ctx: &egui::Context) -> bool {
+    ctx.data(|data| data.get_temp::<HandleDrag>(handle_drag_id()).is_some())
+}
+
 /// The active document's uid and its selected objects' ids: what a handle drag moves graphics for.
 fn drag_owner(app: &VectorcraftApp) -> (u64, Vec<u64>) {
     app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect())).unwrap_or_default()

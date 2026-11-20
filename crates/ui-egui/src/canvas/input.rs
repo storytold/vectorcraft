@@ -10,8 +10,17 @@ use super::view::{
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
-/// Dispatch canvas pointer, keyboard and drop events through the active document view.
-pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+struct NavigationInput {
+    cancelled: bool,
+    modal: bool,
+    pointer: egui::PointerState,
+    m: egui::Modifiers,
+    space: bool,
+    hover: Option<Pos2>,
+}
+
+/// The shared view-navigation phase, before any canvas primary input is delivered.
+fn navigation_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> NavigationInput {
     if let Some(feed) = app.services.stylus.as_ref() {
         feed.bind_repaint(ui.ctx());
     }
@@ -19,6 +28,17 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let cancelled = crate::dialogs::refresh_brush_key_color(app);
     let modal = crate::panel_docking::modal_open(app, ui.ctx());
     let (pointer, m, space, hover) = wheel_view(app, ui, resp, rect, modal);
+    NavigationInput { cancelled, modal, pointer, m, space, hover }
+}
+
+/// Navigate while the sampler owns primary input, without delivering that input to another tool.
+pub(super) fn handle_navigation(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    let _ = navigation_input(app, ui, resp, rect);
+}
+
+/// Dispatch canvas pointer, keyboard and drop events through the active document view.
+pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
+    let NavigationInput { cancelled, modal, pointer, m, space, hover } = navigation_input(app, ui, resp, rect);
     if (cancelled && pointer.primary_pressed()) || crate::dialogs::brush_key_color_input(app, ui, resp, rect) {
         return;
     }
