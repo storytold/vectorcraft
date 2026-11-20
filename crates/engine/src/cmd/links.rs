@@ -36,7 +36,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param, switch_or};
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param, switch_or, text_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to)",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds; written as stored (here and with folder), an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path, so Open, Place, Relink and Update Links read the file with that clip group. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds. One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -634,7 +634,8 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
 
 /// The linked image file `bytes` (read from `path`, when there is one), read with its preview: a
 /// DCS file's plates, else its image ([`super::place::dcs::raster`]); an error when its pixels
-/// can't be read ([`readable`]).
+/// can't be read ([`readable`]). A PNG or TIFF that Unembed wrote from a PSD or PSB file's image
+/// is read with the clipping path it keeps ([`fileio::raster_image`]).
 fn linked_image(bytes: &[u8], path: Option<&str>) -> Result<RasterImage> {
     let mut img = super::place::dcs::raster(bytes, path)?;
     img.blob = readable(img.blob, kept_unread(bytes), true)?;
@@ -713,12 +714,12 @@ type FileClip = (PathData, FillRule);
 
 /// The clipping path the file of image content `blob` draws it through, in its pixel space, as it
 /// was kept when the file was read: a DCS file's ([`ImageBlob::separated_clip`]) or a PSD or PSB
-/// file's ([`fileio::png_clip`]).
+/// file's ([`fileio::image_clip`]).
 fn file_clip(blob: &ImageBlob) -> Option<FileClip> {
     if let Some(path) = blob.separated_clip() {
         return Some((path, FillRule::NonZero));
     }
-    (blob.mime == "image/png").then(|| fileio::png_clip(&blob.bytes)).flatten().map(|path| (path, FillRule::EvenOdd))
+    fileio::image_clip(blob).map(|path| (path, FillRule::EvenOdd))
 }
 
 /// What happens to the clip of an object a link update remakes.
@@ -1210,6 +1211,16 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
+/// Distorted image `im` shows the file read for `link` (`img`) and keeps its corners and its
+/// clipping: the new pixels fill them. Its transform is scaled to the new pixel size, so a reader
+/// that places it by the transform still gives it its old size.
+fn refill_distorted(im: &mut ImageObject, link: &LinkInfo, img: &RasterImage) {
+    if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
+        im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
+    }
+    (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+}
+
 /// Image objects `ids` (in the layers or outside them) show the file read for `link` (`img`), each
 /// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
@@ -1234,7 +1245,12 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         let mut make = |n: &Node, held: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
+            let distorted = n.is_distorted_image();
             if let NodeKind::Image(im) = &mut n.kind {
+                if distorted {
+                    refill_distorted(im, &link, &img);
+                    return (n, clip);
+                }
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
                 let (old_pt, old_clip) = match old.get(&im.key) {
@@ -1250,6 +1266,14 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
     for id in ids {
+        if d.node(*id).is_some_and(Node::is_distorted_image) {
+            if let Some(n) = d.node_mut(*id)
+                && let NodeKind::Image(im) = &mut n.kind
+            {
+                refill_distorted(im, &link, &img);
+            }
+            continue;
+        }
         let Some(NodeKind::Image(im)) = d.node(*id).map(|n| &n.kind) else { continue };
         let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
         let size = |w: u32, h: u32| (w as f64, h as f64);
@@ -2067,6 +2091,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
+    // Whether the images were found as the missing links (nothing selected, a folder given) rather
+    // than named or selected.
+    let mut found_missing = false;
     let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids", C)?) {
         (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
         (None, Some(ids)) => ids,
@@ -2074,6 +2101,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
                 Some(_) if selected.is_empty() => {
+                    found_missing = true;
                     groups(&st.doc, None).into_iter().filter(|g| probe(g, LinkBase::of(st)).0 == Status::Missing).flat_map(|g| g.ids).collect()
                 }
                 _ => selected,
@@ -2085,6 +2113,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if ids.is_empty() {
         return Err(bad(C, "select the images to relink, or pass ids"));
+    }
+    // A named or selected distorted image is refused before a folder is searched, whether or not
+    // its file is found there.
+    if !found_missing && let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
+        return Err(super::xform::distorted_image_error(C, *id));
     }
     // All Instances: the other stored objects linked to the same files, each once.
     if scope == Scope::All {
@@ -2129,6 +2162,11 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         (None, None, None) => return Err(bad(C, "give path (a file) or folder")),
+    }
+    // A new file's placement options place a plain image: a distorted one is left as it is.
+    let distorted = files.iter().flat_map(|(ids, _)| ids).find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image));
+    if let Some(id) = distorted {
+        return Err(super::xform::distorted_image_error(C, *id));
     }
     // Every file is read and checked before any is copied.
     let mut checked = vec![];
@@ -2592,6 +2630,9 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the linked images or placed documents, or pass ids"));
     }
+    if let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
+        return Err(super::xform::distorted_image_error(C, *id));
+    }
     // A DCS file's plates print from its file.
     let separated = |id: &NodeId| match kind(id) {
         Some(NodeKind::Image(im)) => st.doc.images.get(&im.key).is_some_and(ImageBlob::is_separated),
@@ -2686,27 +2727,53 @@ fn convert_image(bytes: &[u8], ext: &str) -> std::result::Result<Vec<u8>, String
     craft_image_codecs::encode(&raw, format, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
 }
 
+/// The extension of the format embedded image `blob` is stored in (PNG for one Unembed doesn't
+/// name).
+fn stored_extension(blob: &vectorcraft_doc::ImageBlob) -> &'static str {
+    fileio::FORMATS.iter().find(|f| f.raster && f.mime == blob.mime).map_or("png", |f| f.extensions.first().copied().unwrap_or("png"))
+}
+
+/// The bytes of embedded image `blob` in the format of extension `ext`: its own bytes when it is
+/// stored in that format, else converted.
+fn unembed_bytes(blob: &vectorcraft_doc::ImageBlob, ext: &str) -> std::result::Result<Vec<u8>, String> {
+    let same = fileio::format(ext).is_some_and(|f| f.mime == blob.mime);
+    if same { Ok(blob.bytes.to_vec()) } else { convert_image(&blob.bytes, ext) }
+}
+
 fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.unembed";
+    let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
+    // `id` with `ids`, and `path` with `folder`, are refused, in a replayed step too.
+    super::params::check_exclusive_keys(C, p)?;
+    let ids = ids_param(p, "ids", C)?;
+    if given("folder") || ids.as_ref().is_some_and(|ids| ids.len() != 1) {
+        return unembed_to_folder(s, p, ids);
+    }
     let st = s.doc()?;
     let doc = with_brush_art(&st.doc);
-    let id = image_param(st, &doc, p, C)?;
+    // `ids` of one image is `id`.
+    let id = match ids.as_deref() {
+        Some(&[id]) => id,
+        _ => image_param(st, &doc, p, C)?,
+    };
     let n = stored(&doc, id).ok_or(crate::EngineError::NoNode(id))?;
     let im = image_of(&doc, id).ok_or_else(|| bad(C, format!("object {} is not an image", id.0)))?;
     if im.link.is_some() {
         return Err(bad(C, format!("image {} is linked already", id.0)));
     }
+    if n.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
     // As stored (PNG, JPEG, GIF, WebP), unless the path names another format.
-    let stored = fileio::FORMATS.iter().find(|f| f.raster && f.mime == blob.mime).map_or("png", |f| f.extensions.first().copied().unwrap_or("png"));
+    let stored = stored_extension(blob);
     let path = str_param(p, "path");
     let ext = match path.map(fileio::extension) {
         Some(e) if UNEMBED_EXTS.contains(&e.as_str()) => e,
         Some(e) if !e.is_empty() => return Err(bad(C, format!("can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp"))),
         _ => stored.to_string(),
     };
-    let same = fileio::format(&ext).is_some_and(|f| f.mime == blob.mime);
-    let bytes = if same { blob.bytes.to_vec() } else { convert_image(&blob.bytes, &ext).map_err(|e| bad(C, e))? };
+    let bytes = unembed_bytes(blob, &ext).map_err(|e| bad(C, e))?;
     let Some(path) = path else {
         let name = n.display_name();
         let stem = Path::new(&name).file_stem().map_or_else(|| name.clone(), |s| s.to_string_lossy().into_owned());
@@ -2720,6 +2787,149 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     drop(doc);
     s.edit("Unembed", |d, _| editing_brush_art(d, |d| install(d, &[id], read, Some(Preserve::Bounds), None)))?;
     Ok(json!({ "id": id.0, "path": path }))
+}
+
+/// `links.unembed {ids?, folder}`: each embedded image of `ids` (`id` as `ids` of one; default: the
+/// selected embedded images) written to a new file in `folder` as stored (as PNG when that format is not one of
+/// VectorCraft's raster file formats) and linked to it, in one undo step. Linked images are skipped. When any image fails, the files written before it
+/// are removed and the document does not change.
+fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Result<Value> {
+    const C: &str = "links.unembed";
+    let folder = text_param(p, "folder", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `folder`"))?;
+    let ids = match ids {
+        Some(ids) => Some(ids),
+        None => object_param(p, "id", C)?.map(|id| vec![id]),
+    };
+    let st = s.doc()?;
+    let doc = with_brush_art(&st.doc);
+    let ids = ids.unwrap_or_else(|| selected_images(st, |im| im.link.is_none()));
+    let mut seen = BTreeSet::new();
+    if !ids.iter().all(|id| seen.insert(id.0)) {
+        return Err(bad(C, "`ids` names an object twice"));
+    }
+    let (mut embedded, mut skipped) = (vec![], vec![]);
+    for &id in &ids {
+        let n = stored(&doc, id).ok_or(crate::EngineError::NoNode(id))?;
+        let im = image_of(&doc, id).ok_or_else(|| bad(C, format!("object {} is not an image", id.0)))?;
+        if im.link.is_some() {
+            skipped.push(id);
+            continue;
+        }
+        if n.is_distorted_image() {
+            return Err(super::xform::distorted_image_error(C, id));
+        }
+        let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
+        embedded.push((id, n.display_name(), blob));
+    }
+    match (embedded.is_empty(), skipped.first()) {
+        (true, Some(id)) => return Err(bad(C, format!("image {} is linked already", id.0))),
+        (true, None) => return Err(bad(C, "select an image")),
+        _ => {}
+    }
+    let dir = absolute_path(folder);
+    writable_folder(&dir)?;
+    // One image at a time: its bytes are read before its file is written, so pixels that can't be
+    // read leave no file behind.
+    let mut written: Vec<String> = vec![];
+    let mut reads = Vec::with_capacity(embedded.len());
+    let wrote = embedded.iter().try_for_each(|(id, name, blob)| {
+        vectorcraft_doc::cancel::check()?;
+        let ext = stored_extension(blob);
+        let bytes = unembed_bytes(blob, ext).map_err(|e| bad(C, e))?;
+        let name = format!("{}.{ext}", unembed_stem(name));
+        let img = linked_image(&bytes, Some(Path::new(&dir).join(&name).to_string_lossy().as_ref()))?;
+        let path = write_numbered(&dir, &name, &bytes)?;
+        written.push(path.clone());
+        reads.push((*id, (link_info(&path, &bytes), img)));
+        Ok(())
+    });
+    let remove_written = |written: &[String]| {
+        for path in written {
+            let _ = std::fs::remove_file(path);
+        }
+    };
+    if let Err(e) = wrote {
+        remove_written(&written);
+        return Err(e);
+    }
+    drop(doc);
+    let done: Vec<Value> = reads.iter().map(|(id, (l, _))| json!({ "id": id.0, "path": l.path })).collect();
+    let edited = s.edit("Unembed", |d, _| {
+        editing_brush_art(d, |d| reads.into_iter().try_for_each(|(id, read)| install(d, &[id], read, Some(Preserve::Bounds), None)))
+    });
+    if let Err(e) = edited {
+        remove_written(&written);
+        return Err(e);
+    }
+    Ok(json!({ "unembedded": done, "skipped": ids_json(&skipped) }))
+}
+
+/// The name Unembed gives image `name`'s file in a folder, before its extension: the name without
+/// a folder part or extension, each character a file name can't hold on some system
+/// (`/ \ : * ? " < > |` and control characters) as `_`, without leading spaces or trailing dots and
+/// spaces, at most 150 bytes long, and `Image` when nothing is left. A name Windows keeps for a
+/// device (`CON`, `NUL`, `COM1` …) gets `_` after it.
+fn unembed_stem(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or_default();
+    let stem = match base.rfind('.') {
+        Some(i) if i > 0 => &base[..i],
+        _ => base,
+    };
+    let mut clean = String::new();
+    for c in stem.chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }) {
+        if clean.len() + c.len_utf8() > 150 {
+            break;
+        }
+        clean.push(c);
+    }
+    let clean = clean.trim_start_matches(' ').trim_end_matches(['.', ' ']);
+    if clean.is_empty() {
+        return "Image".to_string();
+    }
+    let device = clean.split('.').next().unwrap_or_default().trim_end().to_ascii_uppercase();
+    let numbered = |prefix: &str| device.strip_prefix(prefix).is_some_and(|d| d.len() == 1 && matches!(d.as_bytes().first(), Some(b'1'..=b'9')));
+    if matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL") || numbered("COM") || numbered("LPT") {
+        format!("{clean}_")
+    } else {
+        clean.to_string()
+    }
+}
+
+/// Folder `path` may take Unembed's files: inside the automation write roots, and a folder.
+#[cfg(not(target_arch = "wasm32"))]
+fn writable_folder(path: &str) -> Result<()> {
+    crate::file_access::check_write(path).map_err(EngineError::Other)?;
+    if !std::fs::metadata(path).is_ok_and(|m| m.is_dir()) {
+        return Err(EngineError::Other(format!("{path} is not a folder")));
+    }
+    Ok(())
+}
+
+/// Write `bytes` to a new file named `name` in folder `dir`, never replacing a file there: `Name.ext`,
+/// else `Name 2.ext` up to `Name 99.ext`, as [`fileio::copy_new`] names them → its path.
+#[cfg(not(target_arch = "wasm32"))]
+fn write_numbered(dir: &str, name: &str, bytes: &[u8]) -> Result<String> {
+    use std::io::Write as _;
+    let create = |to: &Path| {
+        crate::file_access::check_write(&to.to_string_lossy()).map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))?;
+        vectorcraft_format::write_new_with(to, |f| f.write_all(bytes))
+    };
+    match fileio::copy_new(Path::new(name), Path::new(dir), create, |_, _| false) {
+        Ok(Some(fileio::Placed::Copied(to) | fileio::Placed::Kept(to))) => Ok(to.to_string_lossy().into_owned()),
+        Ok(None) => Err(EngineError::Other(format!("every numbered name for {name} is taken in that folder"))),
+        Err(e) => Err(EngineError::Other(format!("{dir}: {e}"))),
+    }
+}
+
+/// The web has no folders to write to.
+#[cfg(target_arch = "wasm32")]
+fn writable_folder(_: &str) -> Result<()> {
+    Err(EngineError::Other("no file system here".into()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_numbered(_: &str, _: &str, _: &[u8]) -> Result<String> {
+    Err(EngineError::Other("no file system here".into()))
 }
 
 /// Placement Options as `{preserve, align, clip}`.
@@ -2820,7 +3030,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let (px, py) = file_pt(&st.doc, &im.key);
     out["effectivePpi"] = out["ppi"].take();
     out["ppi"] = json!([72.0 / px, 72.0 / py]);
-    (out["scale"], out["rotation"]) = scale_rotation(im.xf, (px, py));
+    // A distorted image is measured at its middle, as its effective resolution is.
+    let xf = stored(&doc, id).and_then(vectorcraft_doc::image_quad::nearest_affine).unwrap_or(im.xf);
+    (out["scale"], out["rotation"]) = scale_rotation(xf, (px, py));
     out["format"] = json!(format_label(&st.doc, im));
     out["placement"] = placement_json(im.placement);
     out["status"] = json!("embedded");
@@ -2900,5 +3112,29 @@ mod tests {
         write(&path, &png(40, 20, [1, 2, 3]));
         let c = read();
         assert!(!Arc::ptr_eq(&a.blob.bytes, &c.blob.bytes));
+    }
+
+    #[test]
+    fn unembed_names_a_file_after_the_image_with_only_characters_a_file_name_holds() {
+        for (name, stem) in [
+            ("photo.png", "photo"),
+            ("Image", "Image"),
+            ("../../etc/passwd", "passwd"),
+            ("C:\\art\\logo.tif", "logo"),
+            ("a:b*c?d\"e<f>g|h", "a_b_c_d_e_f_g_h"),
+            ("tab\there", "tab_here"),
+            ("  name. .png", "name"),
+            ("..", "Image"),
+            ("", "Image"),
+            (".hidden", ".hidden"),
+            ("CON.png", "CON_"),
+            ("lpt1", "lpt1_"),
+            ("COM0", "COM0"),
+            ("console", "console"),
+        ] {
+            assert_eq!(unembed_stem(name), stem, "{name:?}");
+        }
+        let long = unembed_stem(&"é".repeat(200));
+        assert!(long.len() <= 150 && long.chars().all(|c| c == 'é'), "{}", long.len());
     }
 }

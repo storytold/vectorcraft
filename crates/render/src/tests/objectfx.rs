@@ -611,6 +611,65 @@ fn a_shadow_on_an_image_paints_offset_pixels() {
     assert!(worst <= 4, "max channel difference {worst}");
 }
 
+/// A distorted opaque image is drawn opaque between its corners, where the pieces of its mesh
+/// meet too; its drop shadow is the shape between its corners moved, and nothing paints where its
+/// rectangle was.
+#[test]
+fn a_distorted_image_is_opaque_between_its_corners_and_its_shadow_follows_them() {
+    let mut d = image_doc(vec![fx("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().set_image_corners([(35.0, 20.0), (45.0, 20.0), (50.0, 50.0), (20.0, 50.0)].map(|(x, y)| Point::new(x, y))).unwrap();
+    let img = render(&d);
+    let mut faded = vec![];
+    for y in 30..42 {
+        for x in 30..40 {
+            let p = img.pixel(x, y);
+            // A seam shows the white page (green) or the shadow below (darker red) through.
+            if p[0] < 200 || p[1] > 48 {
+                faded.push((x, y, p));
+            }
+        }
+    }
+    assert_eq!(faded, vec![], "the image's red, also where its pieces meet");
+    assert!(lum(img.pixel(40, 55)) < 100, "the shadow below the quad: {:?}", img.pixel(40, 55));
+    assert_eq!(lum(img.pixel(24, 28)), WHITE, "outside the quad, inside the old rectangle");
+    // The rectangle's shadow would reach (58, 36); the quad's shadow ends at x = 56 there.
+    assert_eq!(lum(img.pixel(58, 36)), WHITE, "outside the quad's shadow, inside the rectangle's");
+}
+
+/// A distorted opaque image draws opaque inside its corners at any zoom, where the pieces of its
+/// mesh meet too, and nothing of it draws outside its corners.
+#[test]
+fn a_distorted_image_is_opaque_inside_its_corners_at_every_zoom() {
+    let mut d = image_doc(vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(35.0, 20.0), (45.0, 20.0), (50.0, 50.0), (20.0, 50.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    for scale in [0.5, 1.0, 3.0] {
+        let size = (100.0 * scale) as u32;
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let img = Renderer::new().render(&d, size, size, Affine::scale(scale), &opts);
+        let at = |x: f64, y: f64| img.pixel((x * scale) as u32, (y * scale) as u32);
+        let mut faded = vec![];
+        // Points at least 2.5 pt inside the corners: the left side runs from (35, 20) to (20, 50)
+        // and the right side from (45, 20) to (50, 50).
+        for y in [24.0, 30.0, 36.0, 42.0, 47.0] {
+            let t = (y - 20.0) / 30.0;
+            let (left, right) = (35.0 - 15.0 * t + 2.5, 45.0 + 5.0 * t - 2.5);
+            let mid = (left + right) / 2.0;
+            for x in [left, (left + mid) / 2.0, mid, (mid + right) / 2.0, right] {
+                let p = at(x, y);
+                if p[1] > 12 || p[2] > 12 {
+                    faded.push((x, y, p));
+                }
+            }
+        }
+        assert_eq!(faded, vec![], "the image's red at {scale}x");
+        assert_eq!(lum(at(24.0, 28.0)), WHITE, "outside the corners at {scale}x");
+        assert_eq!(lum(at(36.0, 17.0)), WHITE, "above the top edge at {scale}x");
+    }
+}
+
 #[test]
 fn blur_on_a_symbol_instance_softens_its_edges() {
     let plain = render(&symbol_doc(vec![]));
@@ -1241,9 +1300,10 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     let inst = d.layers[0].children().unwrap()[0].clone();
     let mut r = Renderer::new();
     r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
-    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    let symbols = d.symbol_boxes();
+    assert!(r.charge_fx_instance(&symbols, &inst), "one object fits");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
-    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert!(!r.charge_fx_instance(&symbols, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
 }
 

@@ -379,7 +379,7 @@ fn a_stroke_left_out_of_the_art_casts_no_shadow() {
         let p = crate::merged_params(id, &json!({"shadow": true}));
         let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
         let mut built: Vec<Option<SolidFaces>> =
-            built_solids_cast(id, &p, &parts, bounds, MAX_OBJECT_FACES, true).map(|r| r.unwrap().and_then(|(_, faces)| faces)).collect();
+            built_solids_cast(id, &p, &parts, bounds, MAX_OBJECT_FACES, true, false, None).map(|r| r.unwrap().and_then(|(_, faces)| faces)).collect();
         let stroke = parts.iter().position(|(item, ..)| matches!(item, AppearanceItem::Stroke(_))).unwrap();
         assert!(built.len() == 2 && built.iter().all(Option::is_some), "{id}");
         let (both, _, cast) = cast_built(id, &p, &shapes, built.clone()).unwrap().unwrap();

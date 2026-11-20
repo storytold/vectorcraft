@@ -262,6 +262,9 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove(ASKED);
         o.remove(DROPPED);
     }
+    if matches!(read, Read::ForUser { .. }) {
+        crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
+    }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);
@@ -433,7 +436,8 @@ fn line(i: Result<Value, String>, units: vectorcraft_doc::Unit) -> String {
     match (i["pixelWidth"].as_u64(), i["pixelHeight"].as_u64()) {
         (Some(w), Some(h)) => {
             let ppi = i["ppi"][0].as_f64().unwrap_or(72.0);
-            format!("{w} × {h} px, {} ppi, {} ({size})", fmt_ppi(ppi), i["colorMode"].as_str().unwrap_or("RGB"))
+            let ppi = crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &fmt_ppi(ppi))]);
+            format!("{w} × {h} px, {ppi}, {} ({size})", i["colorMode"].as_str().unwrap_or("RGB"))
         }
         _ => format!("{} ({size})", i["format"].as_str().unwrap_or_default().to_uppercase()),
     }
@@ -552,12 +556,17 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             });
             // Placing shows its own errors in the status bar.
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
-        } else if crate::placing::available(app) {
-            if let Err(e) = crate::placing::start(app, p, false) {
-                app.status(e);
-            }
         } else {
-            let _ = engine(app, "file.place", p);
+            // An embedded PDF takes the `pdfTextAs` preference, as one placed from the Place dialog.
+            let mut p = p.clone();
+            crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
+            if crate::placing::available(app) {
+                if let Err(e) = crate::placing::start(app, &p, false) {
+                    app.status(e);
+                }
+            } else {
+                let _ = engine(app, "file.place", &p);
+            }
         }
     });
 }
@@ -690,7 +699,7 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 // ---------- drops ----------
 
 impl VectorcraftApp {
-    /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
+    /// Where file `name` dropped with the pointer at `pos` (screen points) goes:
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
@@ -741,8 +750,9 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
             }
             DropTarget::Open => match path.as_deref() {
                 Some(path) if app.services.read.is_some() => io::open_path(app, path).map(|_| ()),
-                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
-                    if let Some(path) = &path {
+                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|r| {
+                    // A document that asks a question first goes on the recent files once it opens.
+                    if let Some(path) = path.as_ref().filter(|_| !io::asks_first(&r)) {
                         io::note_recent(app, path);
                     }
                 }),
@@ -927,5 +937,22 @@ pub(crate) fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64,
         }
     } else if button(ui, tl!("Unembed…"), UNEMBED_WIDTH) {
         crate::panels::links::unembed(app, id, name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Place dialog's line about an image writes its resolution with the `{n} ppi` row.
+    #[test]
+    fn the_file_line_writes_the_ppi_unit_in_the_interface_language() {
+        let info = json!({ "pixelWidth": 300, "pixelHeight": 150, "ppi": [300.0, 300.0], "colorMode": "RGB", "width": 72.0, "height": 36.0 });
+        let en = line(Ok(info.clone()), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let fr = line(Ok(info), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(en.starts_with("300 × 150 px, 300 ppi, RGB ("), "{en}");
+        assert!(fr.starts_with("300 × 150 px, 300 ppp, RGB ("), "{fr}");
     }
 }

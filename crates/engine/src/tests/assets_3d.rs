@@ -246,6 +246,269 @@ fn export_3d_writes_into_a_folder_or_one_zip() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A blue 100 × 100 square extruded straight on, with a red 10 × 20 graphic "Mark" mapped onto its
+/// front at its center and onto its back 30 pt to the right (as the back is seen from behind),
+/// collected as a 3D asset in `format`.
+fn mapped(format: &str) -> (Session, u64) {
+    let mut s = session();
+    let mark = run(&mut s, "path.create", json!({"d": "M300 300L310 300L310 320L300 320Z"}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "threeD.addGraphic", json!({"name": "Mark", "ids": [mark]}));
+    let id = run(&mut s, "path.create", json!({"d": "M100 100L200 100L200 200L100 200Z"}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+    run(&mut s, "effect.apply", json!({"effect": "threeD.extrude", "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0, "depth": 20.0}}));
+    run(&mut s, "threeD.mapGraphic", json!({"symbol": "Mark", "ids": [id]}));
+    run(&mut s, "threeD.mapGraphic", json!({"symbol": "Mark", "face": "back", "x": 30.0, "ids": [id]}));
+    run(&mut s, "layer.setProps", json!({"id": id, "name": "Box"}));
+    let asset = run(&mut s, "assets.add3D", json!({"ids": [id], "format": format}))["assets"][0].as_u64().unwrap();
+    (s, asset)
+}
+
+/// The color of pixel `(x, y)` of PNG `png`.
+fn pixel(png: &[u8], x: u32, y: u32) -> [u8; 4] {
+    image::load_from_memory(png).unwrap().to_rgba8().get_pixel(x, y).0
+}
+
+fn is_red(p: [u8; 4]) -> bool {
+    p[0] > 200 && p[1] < 50 && p[2] < 50 && p[3] == 255
+}
+
+fn is_blue(p: [u8; 4]) -> bool {
+    p[0] < 50 && p[1] < 50 && p[2] > 200 && p[3] == 255
+}
+
+#[test]
+fn export_3d_paints_mapped_graphics_on_their_caps_in_every_format() {
+    for (format, names) in [
+        ("usda", vec!["Box.usda", "Box-texture-1.png", "Box-texture-2.png"]),
+        ("usdz", vec!["Box.usdz"]),
+        ("gltf", vec!["Box.gltf"]),
+        ("obj", vec!["Box.obj", "Box.mtl", "Box-texture-1.png", "Box-texture-2.png"]),
+    ] {
+        let (mut s, _) = mapped(format);
+        let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+        assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), names, "{format}");
+    }
+    // The front's picture: the cap's 100 pt across 128 pixels, blue with the red graphic at the
+    // middle; the back's: the graphic 30 pt to the right as seen from behind, which is to the left
+    // in the art's plane.
+    let (mut s, _) = mapped("usda");
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (front, back) = (&out[1].1, &out[2].1);
+    assert_eq!(image::load_from_memory(front).unwrap().to_rgba8().dimensions(), (128, 128));
+    assert!(is_red(pixel(front, 64, 64)) && is_blue(pixel(front, 2, 2)) && is_blue(pixel(front, 64, 10)));
+    let at = |pt: f64| (pt * 1.28) as u32;
+    assert!(is_red(pixel(back, at(20.0), 64)) && is_blue(pixel(back, 64, 64)), "{:?}", pixel(back, 64, 64));
+    // The USDA's front cap shows the front picture through st, up from the picture's bottom.
+    let usda = String::from_utf8(out[0].1.clone()).unwrap();
+    assert_eq!(usda.matches("primvars:st").count(), 2);
+    assert_eq!(usda.matches("def Mesh").count(), 3, "the walls, the front cap and the back cap");
+    // glTF holds both pictures, and a cap's coordinates stay inside its picture.
+    let (mut s, _) = mapped("gltf");
+    let out = files(&run(&mut s, "assets.export3D", json!({})));
+    let g: Value = serde_json::from_slice(&out[0].1).unwrap();
+    assert_eq!(g["images"].as_array().map(Vec::len), Some(2));
+    let png = vectorcraft_format::base64_decode(g["images"][0]["uri"].as_str().unwrap().split(',').nth(1).unwrap()).unwrap();
+    assert_eq!(image::load_from_memory(&png).unwrap().to_rgba8().dimensions(), (1024, 1024), "1024 pixels by default");
+}
+
+/// A blue 100 × 100 square revolved straight on about its left edge with `params`, with the red
+/// 10 × 20 graphic "Mark" mapped onto its side `x` pt from the middle, collected as a 3D asset named
+/// "Ball" in `format`.
+fn revolved(format: &str, params: Value, x: f64) -> (Session, u64) {
+    let mut s = session();
+    let mark = run(&mut s, "path.create", json!({"d": "M300 300L310 300L310 320L300 320Z"}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "threeD.addGraphic", json!({"name": "Mark", "ids": [mark]}));
+    let id = run(&mut s, "path.create", json!({"d": "M100 100L200 100L200 200L100 200Z"}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+    let mut p = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0});
+    p.as_object_mut().unwrap().extend(params.as_object().unwrap().clone());
+    run(&mut s, "effect.apply", json!({"effect": "threeD.revolve", "params": p}));
+    run(&mut s, "threeD.mapGraphic", json!({"symbol": "Mark", "x": x, "ids": [id]}));
+    run(&mut s, "layer.setProps", json!({"id": id, "name": "Ball"}));
+    let asset = run(&mut s, "assets.add3D", json!({"ids": [id], "format": format}))["assets"][0].as_u64().unwrap();
+    (s, asset)
+}
+
+#[test]
+fn export_3d_paints_graphics_mapped_onto_a_revolves_side_in_every_format() {
+    for (format, names) in [
+        ("usda", vec!["Ball.usda", "Ball-texture-1.png"]),
+        ("usdz", vec!["Ball.usdz"]),
+        ("gltf", vec!["Ball.gltf"]),
+        ("obj", vec!["Ball.obj", "Ball.mtl", "Ball-texture-1.png"]),
+    ] {
+        let (mut s, _) = revolved(format, json!({}), 0.0);
+        let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+        assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), names, "{format}");
+    }
+    // The side unrolled is 200π around the axis (the square's far edge is 100 from it) by 300
+    // along the profile (its edge on the axis sweeps nothing): 512 × 245 pixels, blue with the red
+    // graphic at the middle.
+    let (mut s, _) = revolved("usda", json!({}), 0.0);
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 512})));
+    let picture = &out[1].1;
+    let scale = 512.0 / (200.0 * std::f64::consts::PI);
+    assert_eq!(image::load_from_memory(picture).unwrap().to_rgba8().dimensions(), (512, (300.0 * scale).ceil() as u32));
+    let middle = (150.0 * scale) as u32;
+    assert!(is_red(pixel(picture, 256, middle)) && is_blue(pixel(picture, 10, 10)), "{:?}", pixel(picture, 256, middle));
+    let usda = String::from_utf8(out[0].1.clone()).unwrap();
+    assert_eq!((usda.matches("def Mesh").count(), usda.matches("primvars:st").count()), (1, 1), "the side is the only face");
+    // Moved 50 pt around the axis, the graphic moves as far across the picture.
+    let (mut s, _) = revolved("usda", json!({}), 50.0);
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 512})));
+    let moved = (256.0 + 50.0 * scale).round() as u32;
+    assert!(is_red(pixel(&out[1].1, moved, middle)) && is_blue(pixel(&out[1].1, 256, middle)));
+    // An OBJ's texture coordinates stay inside the picture, as OBJ reads them (up from its bottom).
+    let (mut s, _) = revolved("obj", json!({}), 0.0);
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let obj = String::from_utf8(out[0].1.clone()).unwrap();
+    let vt: Vec<f64> = obj.lines().filter_map(|l| l.strip_prefix("vt ")).flat_map(|l| l.split(' ').map(|v| v.parse::<f64>().unwrap())).collect();
+    assert!(!vt.is_empty() && vt.iter().all(|v| (-1e-9..=1.0 + 1e-9).contains(v)), "{vt:?}");
+    assert!(String::from_utf8(out[1].1.clone()).unwrap().contains("map_Kd -clamp on Ball-texture-1.png"));
+    // glTF embeds the picture, and the side's coordinates are its TEXCOORD_0.
+    let (mut s, _) = revolved("gltf", json!({}), 0.0);
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let g: Value = serde_json::from_slice(&out[0].1).unwrap();
+    assert_eq!(g["images"].as_array().map(Vec::len), Some(1));
+    assert!(g["meshes"].as_array().unwrap().iter().any(|m| !m["primitives"][0]["attributes"]["TEXCOORD_0"].is_null()));
+}
+
+#[test]
+fn a_partial_revolve_keeps_its_cut_sides_plain_beside_its_textured_side() {
+    let (mut s, asset) = revolved("usda", json!({"angle": 270.0}), 0.0);
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Ball.usda", "Ball-texture-1.png"]);
+    let usda = String::from_utf8(out[0].1.clone()).unwrap();
+    assert_eq!((usda.matches("def Mesh").count(), usda.matches("primvars:st").count()), (2, 1), "the cut sides and the side");
+    let d = &s.doc().unwrap().doc;
+    let id = d.asset(asset).unwrap().nodes[0].0;
+    // Without its graphics the surface is one plain mesh, as before.
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "effect.setParams", json!({"index": 0, "params": {"graphics": []}}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Ball.usda"]);
+    assert_eq!(String::from_utf8(out[0].1.clone()).unwrap().matches("def Mesh").count(), 1);
+}
+
+#[test]
+fn a_revolved_groups_graphics_export_on_its_longest_members_side_only() {
+    let mut s = session();
+    let mark = run(&mut s, "path.create", json!({"d": "M300 300L310 300L310 320L300 320Z"}))["id"].clone();
+    run(&mut s, "threeD.addGraphic", json!({"name": "Mark", "ids": [mark]}));
+    let a = run(&mut s, "path.create", json!({"d": "M100 100L140 100L140 200L100 200Z"}))["id"].as_u64().unwrap();
+    let b = run(&mut s, "path.create", json!({"d": "M100 120L160 120L160 130L100 130Z"}))["id"].as_u64().unwrap();
+    let g = run(&mut s, "object.group", json!({"ids": [a, b]}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [g]}));
+    run(&mut s, "effect.apply", json!({"effect": "threeD.revolve", "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}));
+    run(&mut s, "threeD.mapGraphic", json!({"symbol": "Mark", "ids": [g]}));
+    let d = &s.doc().unwrap().doc;
+    let parts = vectorcraft_render::effects::three_d_meshes_in(Some(d), d.node(vectorcraft_doc::NodeId(g)).unwrap()).unwrap();
+    assert_eq!(parts.len(), 2);
+    let textured: Vec<usize> = parts.iter().enumerate().filter(|(_, p)| p.graphics.is_some()).map(|(k, _)| k).collect();
+    assert_eq!(textured, [0], "the taller member's side");
+    // A half-opaque member: as on the canvas, its opacity applies to its side and the graphics
+    // together, and the graphics keep the opacity of the fill.
+    run(&mut s, "transparency.set", json!({"ids": [a], "opacity": 50}));
+    let d = &s.doc().unwrap().doc;
+    let parts = vectorcraft_render::effects::three_d_meshes_in(Some(d), d.node(vectorcraft_doc::NodeId(g)).unwrap()).unwrap();
+    let graphics = parts[0].graphics.as_ref().unwrap();
+    assert_eq!((graphics.opacity, graphics.object), (1.0, 0.5));
+    assert!((parts[0].color[3] - 0.5).abs() < 1e-6, "{:?}", parts[0].color);
+}
+
+#[test]
+fn a_texture_takes_the_opacity_of_the_fill_and_of_the_object_as_the_canvas_draws_them() {
+    let half = |a: u8| (120..=135).contains(&a);
+    // A half-opaque fill: the face and the graphic over it are each drawn at half opacity, so the
+    // graphic covers three quarters.
+    let (mut s, asset) = mapped("usda");
+    let doc = &s.active().unwrap().doc;
+    let id = doc.asset(asset).unwrap().nodes[0];
+    let fill = doc.node(id).unwrap().appearance.items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "transparency.set", json!({"item": fill, "opacity": 50}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(on[0] > on[2] && (185..=197).contains(&on[3]), "{on:?}");
+    assert!(around[2] > 200 && half(around[3]), "{around:?}");
+    let usda = String::from_utf8(out[0].1.clone()).unwrap();
+    assert!(usda.contains("float inputs:opacity.connect"), "the texture's alpha is the opacity");
+    // An OBJ's opacity map has the alpha as gray levels.
+    run(&mut s, "assets.set3DFormat", json!({"assets": [asset], "format": "obj"}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out[3].0, "Box-texture-1-opacity.png");
+    let gray = image::load_from_memory(&out[3].1).unwrap().to_luma8();
+    let (g_on, g_around) = (gray.get_pixel(64, 64).0[0], gray.get_pixel(2, 2).0[0]);
+    assert!((185..=197).contains(&g_on) && half(g_around), "{g_on} {g_around}");
+    // A half-opaque object: the face and the graphic are drawn opaque, and the whole picture at
+    // half opacity.
+    let (mut s, asset) = mapped("usda");
+    let id = s.active().unwrap().doc.asset(asset).unwrap().nodes[0];
+    run(&mut s, "transparency.set", json!({"ids": [id.0], "opacity": 50}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(on[0] > 200 && on[2] < 50 && half(on[3]), "{on:?}");
+    assert!(around[2] > 200 && around[0] < 50 && half(around[3]), "{around:?}");
+    // A gradient whose stops are clear: the face is clear, and the graphic keeps its opacity.
+    let (mut s, asset) = mapped("usda");
+    let id = s.active().unwrap().doc.asset(asset).unwrap().nodes[0];
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let clear = json!({"stops": [{"offset": 0, "color": "#0000ff", "opacity": 0}, {"offset": 1, "color": "#0000ff", "opacity": 0}]});
+    run(&mut s, "paint.setFill", json!({"gradient": clear}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(is_red(on), "{on:?}");
+    assert_eq!(around[3], 0, "{around:?}");
+}
+
+#[test]
+fn export_3d_keeps_flat_colors_without_graphics_and_refuses_bad_texture_sizes() {
+    let (mut s, asset) = mapped("obj");
+    for bad in [json!(64), json!(5000), json!(512.5), json!("512"), json!(-1)] {
+        assert!(s.execute("assets.export3D", &json!({"textureSize": bad})).is_err(), "{bad}");
+    }
+    // Without its graphics the box is one plain mesh, as before.
+    let id = s.doc().unwrap().doc.asset(asset).unwrap().nodes[0].0;
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "effect.setParams", json!({"index": 0, "params": {"graphics": []}}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Box.obj", "Box.mtl"]);
+    let obj = String::from_utf8(out[0].1.clone()).unwrap();
+    assert!(!obj.contains("vt ") && obj.lines().filter(|l| l.starts_with("g ")).count() == 1);
+}
+
+#[test]
+fn texture_pixels_are_counted_across_one_export() {
+    let (s, asset) = mapped("gltf");
+    let d = &s.doc().unwrap().doc;
+    let node = d.node(d.asset(asset).unwrap().nodes[0]).unwrap();
+    let parts = vectorcraft_render::effects::three_d_meshes_in(Some(d), node).unwrap();
+    let mut pixels = 0;
+    let made = crate::cmd::fileio::textures(d, &parts, 128, &mut pixels).unwrap();
+    assert_eq!((made.iter().flatten().count(), pixels), (2, 2 * 128 * 128));
+    let mut pixels = crate::cmd::fileio::MAX_TEXTURE_PIXELS - 128 * 128;
+    let e = crate::cmd::fileio::textures(d, &parts, 128, &mut pixels).unwrap_err();
+    assert!(e.contains("textureSize"), "{e}");
+}
+
+#[test]
+fn only_graphics_that_draw_count_as_textures() {
+    let parts_of = |s: &Session, asset: u64| {
+        let d = &s.doc().unwrap().doc;
+        let node = d.node(d.asset(asset).unwrap().nodes[0]).unwrap();
+        vectorcraft_render::effects::three_d_meshes_in(Some(d), node).unwrap()
+    };
+    let (mut s, asset) = mapped("obj");
+    assert!(crate::cmd::fileio::draws_textures(&s.doc().unwrap().doc, &parts_of(&s, asset)));
+    // With its symbol gone the graphic draws nothing, so the export writes no texture.
+    run(&mut s, "symbol.delete", json!({"name": "Mark"}));
+    assert!(!crate::cmd::fileio::draws_textures(&s.doc().unwrap().doc, &parts_of(&s, asset)));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Box.obj", "Box.mtl"]);
+}
+
 #[test]
 fn three_d_assets_round_trip_through_the_native_format() {
     let mut s = session();

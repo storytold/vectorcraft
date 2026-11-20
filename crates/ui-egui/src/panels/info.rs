@@ -14,7 +14,7 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
-/// Colour values in the colour's own model, like Illustrator's Info panel.
+/// Color values in the color's own model, for the Info panel.
 pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
     match *c {
         Color::Rgb { r, g, b } => vec![("R", format!("{:.0}", r * 255.0)), ("G", format!("{:.0}", g * 255.0)), ("B", format!("{:.0}", b * 255.0))],
@@ -111,7 +111,9 @@ impl Rows {
             }
             Some(Readout::Scale { sx, sy }) => rows.right = vec![format!("W: {:.1}%", sx * 100.0), format!("H: {:.1}%", sy * 100.0)],
             Some(Readout::Rotate { angle, .. } | Readout::Reflect { angle, .. }) => rows.right = vec![format!("A: {angle:.1}°")],
-            Some(Readout::Shear { axis, angle, .. }) => rows.right = vec![format!("A: {axis:.1}°"), format!("{}: {angle:.1}°", tl!("Shear"))],
+            Some(Readout::Shear { axis, angle, .. }) => {
+                rows.right = vec![format!("A: {axis:.1}°"), format!("{} {angle:.1}°", crate::i18n::colon(tl!("Shear")))]
+            }
             Some(Readout::Brush { .. }) | None => {
                 let (w, h) = s.size.map(|(w, h, _)| (len(w), len(h))).unwrap_or_default();
                 rows.right = vec![format!("W: {w}"), format!("H: {h}")];
@@ -177,7 +179,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if app.session.tool_id() == "zoom" {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        mono(ui, format!("{}: {}", tl!("Zoom"), crate::state::zoom_label(zoom, app.session.prefs.display_print_size)));
+        mono(ui, format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size)));
     }
     if let Some(Readout::Brush { name: Some(name) }) = readout {
         mono(ui, name);
@@ -315,6 +317,22 @@ mod tests {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
         let want = format!("Zoom: {}", crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
         assert!(texts(&mut app).contains(&want), "{want}: {:?}", texts(&mut app));
+    }
+
+    /// The Shear and Zoom readouts write their colon as the UI language does (#7991).
+    #[test]
+    fn readout_labels_use_the_language_colon() {
+        let mut app = app_with_rect();
+        app.session.select_tool("zoom", view()).unwrap();
+        let fr = crate::i18n::Lang::from_code("fr").unwrap();
+        crate::i18n::set_current(fr);
+        let shear = shown(Some(&Readout::Shear { center: Point::new(60.0, 70.0), axis: 90.0, angle: -12.5 }), true);
+        let shown_texts = texts(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(shear.right[1], format!("{}\u{a0}: -12.5°", crate::i18n::tr(fr, "Shear")));
+        let zoom = app.view().map_or(1.0, |v| v.zoom);
+        let want = format!("{}\u{a0}: {}", crate::i18n::tr(fr, "Zoom"), crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
+        assert!(shown_texts.contains(&want), "{want}: {shown_texts:?}");
     }
 
     #[test]

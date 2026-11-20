@@ -1515,6 +1515,26 @@ fn the_width_profile_shows_for_a_variable_width_or_the_width_tool() {
     assert_eq!(WidthProfile::id_of(profile.as_ref()), "taperStart");
 }
 
+/// A brushed stroke with a variable width: the Width Profile list lists only Uniform, which removes
+/// the profile.
+#[test]
+fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
+    let mut app = new_app();
+    let line = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("brush.apply", json!({"ids": [line], "name": "3 pt. Round"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let texts = press(&mut app, &ctx, text_at(&texts, "Profile:").right_center() + vec2(spacing + 50.0, 0.0));
+    assert!(!shows(&texts, "Taper Start"), "{texts:?}");
+    press(&mut app, &ctx, text_at(&texts, "Uniform").center());
+    let profile =
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(line.as_u64().unwrap())).unwrap().appearance.stroke().unwrap().profile.clone();
+    assert_eq!(profile, None);
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
@@ -1555,11 +1575,11 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     // The whole path selected.
     app.run("select.set", json!({"ids": [star]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Corner:"), "no corner selected");
-    // A live rectangle's corner: its own Corner Radius row, once.
+    // A live rectangle's corner: its own Corner Radius row and Corner menu, once each.
     let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
     app.run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(!shows(&texts, "Corner:"), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
 }
 

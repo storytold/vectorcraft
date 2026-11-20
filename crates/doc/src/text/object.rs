@@ -304,17 +304,40 @@ impl TextObject {
     /// Update the paragraph styles for replacing bytes `start..end` of the current plain text by
     /// `insert` (call before changing the runs). The paragraph the range starts in keeps its
     /// style (merging paragraphs: the first one's wins); paragraphs the insertion starts take that
-    /// style too (Return continues the paragraph it splits); later paragraphs keep theirs.
+    /// style too (Return continues the paragraph it splits), without the number its list gives it
+    /// ([`ParaList::start`]); later paragraphs keep theirs. When an insertion that starts new
+    /// paragraphs is made at the start of a paragraph and some of that paragraph's text stays
+    /// after it, that number moves with the text to the last paragraph the insertion starts.
     pub fn splice_paras(&mut self, start: usize, end: usize, insert: &str) {
-        if self.paras.is_empty() {
+        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let numbered = |p: &ParaStyle| p.list.is_some_and(|l| l.start.is_some());
+        // With one style for every paragraph, the new paragraphs take it as it is unless its list
+        // gives the paragraph a number.
+        if self.paras.is_empty() && (added == 0 || !numbered(&self.para)) {
             return;
         }
         let r = self.paragraphs_in(start, end);
         let v = self.paragraph_styles();
-        let Some(keep) = v.get(r.start).cloned() else { return };
-        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let Some(mut keep) = v.get(r.start).cloned() else { return };
+        let given = keep.list.and_then(|l| l.start);
+        if let Some(l) = keep.list.as_mut() {
+            l.start = None;
+        }
         let mut out: Vec<ParaStyle> = v.iter().take(r.start + 1).cloned().collect();
         out.extend(std::iter::repeat_n(keep, added));
+        let text = self.plain_text();
+        let (at, to) = (start.min(end).min(text.len()), start.max(end).min(text.len()));
+        let at_para_start = text.as_bytes().get(..at).is_some_and(|b| b.last().is_none_or(|&c| c == b'\n'));
+        // The paragraph's text after the replaced bytes, which the last new paragraph then holds.
+        let text_kept = r.len() == 1 && text.as_bytes().get(to).is_some_and(|&c| c != b'\n');
+        if given.is_some() && added > 0 && at_para_start && text_kept {
+            if let Some(l) = out.get_mut(r.start).and_then(|p| p.list.as_mut()) {
+                l.start = None;
+            }
+            if let Some(l) = out.last_mut().and_then(|p| p.list.as_mut()) {
+                l.start = given;
+            }
+        }
         out.extend(v.iter().skip(r.end).cloned());
         self.paras = out;
         if let Some(first) = self.paras.first() {
@@ -428,12 +451,25 @@ impl TextObject {
     /// fractions of the path. False, changing nothing, for other type, when the anchor doesn't
     /// exist, a degenerate `xf` or a path that would not be finite.
     pub fn set_path_handle(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool) -> bool {
+        self.set_path_handle_with_symmetry((si, ai), out, pos, independent, false)
+    }
+    /// [`Self::set_path_handle`] with an optional mirror of the opposite handle about the anchor
+    /// in document space, preserving the anchor kind. `independent` takes precedence, and at an
+    /// open end of the path, where no segment leaves the anchor on that side, the handle moves as
+    /// it would without `symmetric`. Both handles are edited in one reshape, using the same validated
+    /// document-to-text map.
+    pub fn set_path_handle_with_symmetry(&mut self, (si, ai): (usize, usize), out: bool, pos: Point, independent: bool, symmetric: bool) -> bool {
         let xf = self.xf;
         matches!(self.kind, TextKind::OnPath { .. })
             && self.reshape_local(|path, to_text| {
+                let mirror = symmetric && !independent && path.subpaths.get(si).is_some_and(|sp| sp.has_segment(ai, !out));
                 let Some(a) = path.anchor_mut(si, ai) else { return false };
                 let mut drawn = a.transform(xf);
                 drawn.set_handle(out, pos, independent);
+                if mirror {
+                    let opposite = drawn.p - (pos - drawn.p);
+                    if out { drawn.h_in = opposite } else { drawn.h_out = opposite }
+                }
                 *a = drawn.transform(to_text);
                 true
             })

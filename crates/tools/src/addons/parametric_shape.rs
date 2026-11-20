@@ -475,6 +475,32 @@ impl Tool for ParametricShapeTool {
             self.next = s;
         }
     }
+
+    /// The numbers [`Self::options`] shows, each as [`apply`] checks it; null is not a value.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if self.options().get(key).is_none() {
+            return Err(crate::option_check::unknown(key));
+        }
+        if v.is_null() {
+            return Err(format!("`{key}` must not be null"));
+        }
+        apply(self.next, &json!({ key: v })).map(|_| ())
+    }
+
+    /// The options together, as [`apply`] takes them: a `kind` given with them sets the kind
+    /// first, and the other values are checked against that kind's ranges.
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        let options = self.options();
+        for (key, v) in values {
+            if options.get(key).is_none() {
+                return Err(crate::option_check::unknown(key));
+            }
+            if v.is_null() {
+                return Err(format!("`{key}` must not be null"));
+            }
+        }
+        apply(self.next, &Value::Object(values.clone())).map(|_| ())
+    }
 }
 
 #[cfg(test)]

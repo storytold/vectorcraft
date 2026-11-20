@@ -187,7 +187,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             let mut reply = json!({"applied": applied, "objects": objects});
             if objects == 0 {
                 reply["note"] = json!(
-                    "no object was painted (nothing selected, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                    "no object was painted (nothing selected, the Live Paint Bucket is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
                 );
             }
             j(reply)
@@ -275,7 +275,15 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             select_ids(b, a)?;
             j(exec(b, &format!("object.pathfinder.{}", req_str(a, "operation")?), json!({}))?)
         }
-        "transform" => j(transform(b, a)?),
+        "transform" => {
+            // Validate all numeric steps before the handler changes selection or runs a step.
+            for field in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear"] {
+                if a.get(field).is_some_and(|value| !value.is_null() && value.as_f64().is_none()) {
+                    return Err(format!("`{field}` must be a number"));
+                }
+            }
+            j(transform(b, a)?)
+        }
         "create_graph" => {
             let mut p = Value::Object(a.clone());
             if p.get("type").is_none() {

@@ -1,4 +1,4 @@
-//! Edit → Preferences (⌘K): Illustrator-style category list + fields, rendered from the engine's
+//! Edit → Preferences (⌘K): a category list + its fields, rendered from the engine's
 //! preference table ([`PREF_SPECS`]). The dialog edits a working copy in `Dialog::fields`
 //! (one field per preference key, so agents can `ui.dialog.set` any of them) and OK applies it
 //! through `prefs.set`. Also: persistence of engine prefs inside `UiState` and the per-frame
@@ -29,9 +29,15 @@ const RESET_UNITS: &str = "__resetUnits";
 const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
 
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
+    crate::original_editor::open(app);
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
     fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
+    // A restored settings file can hold a Hold Shortcut Delay outside its range: the dialog shows,
+    // and OK sets, the delay in use.
+    if fields.contains_key("keyHoldDelay") {
+        fields.insert("keyHoldDelay".into(), json!(app.session.prefs.key_hold_delay()));
+    }
     // Units ▸ General shows (and OK sets) the open document's units.
     if let Some(st) = app.session.active() {
         fields.insert("unitsGeneral".into(), json!(st.doc.units.key()));
@@ -72,6 +78,7 @@ fn settings() -> impl Iterator<Item = Setting> {
         "appTitleBar" => APP_TITLE_BAR_SHOWN,
         "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
         "monitorProfileDisplay" => !cfg!(target_arch = "wasm32"),
+        "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
         _ => true,
     };
     let prefs =
@@ -224,6 +231,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.ui.view.smart_guides = d.fields.get("__smartGuides").and_then(Value::as_bool).unwrap_or(app.ui.view.smart_guides);
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
     app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
+    crate::original_editor::commit(app);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
     app.prefs_changed = true;
@@ -332,6 +340,10 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
         app.canvas.key = None;
         ctx.data_mut(|d| d.insert_temp(id, Some(want)));
     }
+    // Cards show only with Show Tool Tips on: an open card goes away as soon as tool tips are turned off.
+    let p = &app.session.prefs;
+    let cards = crate::toolbar::card::CardPrefs { on: p.show_tool_cards && p.show_tool_tips, animated_zoom: crate::canvas::animated_zoom(p) };
+    crate::toolbar::card::set_prefs(ctx, cards);
     let z = app.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32;
     if (ctx.zoom_factor() - z).abs() > 1e-3 {
         ctx.set_zoom_factor(z);
@@ -462,6 +474,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     app.ui.dialog = Some(d);
     if cancel {
+        crate::original_editor::cancel(app);
         app.ui.dialog = None;
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
@@ -551,6 +564,27 @@ impl DescribedRows {
     }
 }
 
+/// Whether the checkbox of the setting `key` is enabled, for a setting that acts only while
+/// another setting allows it and is dimmed otherwise. `None` for every other setting.
+fn bool_enabled(d: &Dialog, key: &str) -> Option<bool> {
+    match key {
+        // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+        // is off: dimmed while it is on.
+        "ctrlWheelScrollsSideways" => Some(!d.bool("zoomWithMouseWheel")),
+        // Units › Numbers Without Units Are Points only tells points from picas: dimmed
+        // unless a unit is Picas.
+        "numbersWithoutUnitsArePoints" => Some(picas_in_use(d)),
+        // General › Show Tool Cards replaces the tool tips: dimmed while Show Tool Tips is off.
+        "showToolCards" => Some(d.bool("showToolTips")),
+        // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
+        "animatedZoom" => Some(d.bool("gpuPerformance")),
+        // Type › Show samples on white draws the samples that Enable in-menu font previews
+        // shows: dimmed while previews are off.
+        "fontSamplesOnWhite" => Some(d.bool("fontPreview")),
+        _ => None,
+    }
+}
+
 /// The fields of the category `cat`. → The rows under the pointer and with the keyboard focus.
 fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) -> DescribedRows {
     let t = Tokens::get(ui.ctx());
@@ -590,25 +624,10 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         let top = ui.cursor().top();
         let mark = found_mark(ui, d, sp.key);
+        let enabled = bool_enabled(d, sp.key);
         match sp.kind {
-            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
-            // is off: dimmed while it is on.
-            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
-                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Units › Numbers Without Units Are Points only tells points from picas: dimmed
-            // unless a unit is Picas.
-            PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
-                ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
-            PrefKind::Bool if sp.key == "animatedZoom" => {
-                ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
-            }
-            // Type › Show samples on white draws the samples that Enable in-menu font previews
-            // shows: dimmed while previews are off.
-            PrefKind::Bool if sp.key == "fontSamplesOnWhite" => {
-                ui.add_enabled_ui(d.bool("fontPreview"), |ui| bool_row(ui, d, sp.key, sp.label));
+            PrefKind::Bool if enabled.is_some() => {
+                ui.add_enabled_ui(enabled == Some(true), |ui| bool_row(ui, d, sp.key, sp.label));
             }
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
@@ -651,32 +670,18 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
+            PrefKind::Bool if sp.key == "editOriginalSystemDefaults" => {
+                bool_row(ui, d, sp.key, sp.label);
+                crate::original_editor::show(ui, app, d);
+            }
             // The desktop app only: the web build has no display profile to read. A note says
             // which profile the canvas is drawn through, or why none.
-            PrefKind::Bool if sp.key == "monitorProfileDisplay" => {
-                if !cfg!(target_arch = "wasm32") {
-                    bool_row(ui, d, sp.key, sp.label);
-                    let note = app.display_profile.note(d.bool(sp.key));
-                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
-                }
-            }
+            PrefKind::Bool if sp.key == "monitorProfileDisplay" => monitor_profile_row(ui, app, d, sp.key, sp.label, &t),
+            // The desktop app only: it sets the window's present mode when it starts, so a note
+            // says the change applies at the next start.
+            PrefKind::Bool if sp.key == "lowLatencyDrawing" => desktop_startup_bool_row(ui, d, sp.key, sp.label, &t),
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
-            PrefKind::Num { min, max, unit } => {
-                labeled(ui, sp.label, |ui, label_id| {
-                    let mut x = v.as_f64().unwrap_or(min);
-                    let new = if sp.key == "uiScaling" {
-                        // Without internal text, both slider controls inherit the row's name across focus changes.
-                        let response = widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05)).labelled_by(label_id);
-                        ui.add(egui::Label::new(tl!("Smaller ↔ Larger")).wrap_mode(egui::TextWrapMode::Extend));
-                        response.changed().then_some(x)
-                    } else {
-                        widgets::range_field(ui, sp.key, x, min..=max, &format!(" {unit}"), 3, 110.0)
-                    };
-                    if let Some(x) = new {
-                        d.fields.insert(sp.key.into(), json!(x));
-                    }
-                });
-            }
+            PrefKind::Num { min, max, unit } => num_row(ui, d, sp.key, sp.label, min..=max, unit, &v),
             PrefKind::Length { min, max, measure } => {
                 // In the dialog's own Units choice, so a change there shows right away.
                 let unit = vectorcraft_doc::Unit::named(&d.str(measure.pref_key())).unwrap_or_default();
@@ -875,12 +880,62 @@ fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &
     });
 }
 
+fn monitor_profile_row(ui: &mut egui::Ui, app: &VectorcraftApp, d: &mut Dialog, key: &str, label: &str, t: &theme::Tokens) {
+    if !cfg!(target_arch = "wasm32") {
+        bool_row(ui, d, key, label);
+        let note = app.display_profile.note(d.bool(key));
+        ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
+    }
+}
+
+/// The row of the number preference `key` within `range`: a slider for Interface Scaling, a field
+/// shown with `unit` otherwise.
+fn num_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, range: std::ops::RangeInclusive<f64>, unit: &str, v: &Value) {
+    if key == "uiScaling" {
+        labeled(ui, label, |ui, label_id| {
+            let mut x = v.as_f64().unwrap_or(*range.start());
+            // Without internal text, both slider controls inherit the row's name across focus changes.
+            let response = widgets::slider(ui, egui::Slider::new(&mut x, range).step_by(0.05)).labelled_by(label_id);
+            ui.add(egui::Label::new(tl!("Smaller ↔ Larger")).wrap_mode(egui::TextWrapMode::Extend));
+            if response.changed() {
+                d.fields.insert(key.into(), json!(x));
+            }
+        });
+    } else if key == "keyHoldDelay" {
+        // General › Hold Shortcut Delay acts only while Hold Shortcuts is on: dimmed while it
+        // is off, as in Edit › Keyboard Shortcuts, which shows it only then.
+        ui.add_enabled_ui(d.bool("holdShortcuts"), |ui| num_field_row(ui, d, key, label, range, unit, v));
+    } else {
+        num_field_row(ui, d, key, label, range, unit, v);
+    }
+}
+
+/// A number field for the preference `key`, kept within `range` and shown with `unit`.
+fn num_field_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, range: std::ops::RangeInclusive<f64>, unit: &str, v: &Value) {
+    labeled(ui, label, |ui, _| {
+        let x = v.as_f64().unwrap_or(*range.start());
+        if let Some(x) = widgets::range_field(ui, key, x, range, &format!(" {unit}"), 3, 110.0) {
+            d.fields.insert(key.into(), json!(x));
+        }
+    });
+}
+
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     // The app's outlined checkbox (it translates `label`): egui's own has no border at rest.
     let on = d.bool(key);
     if widgets::check(ui, label, on, ui.is_enabled()) {
         d.fields.insert(key.into(), json!(!on));
     }
+}
+
+/// A checkbox the desktop app reads once, when it starts (Performance › Low-Latency Drawing, which
+/// sets the window's present mode), with its restart note. The web build doesn't show it.
+fn desktop_startup_bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, t: &Tokens) {
+    if cfg!(target_arch = "wasm32") {
+        return;
+    }
+    bool_row(ui, d, key, label);
+    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
 }
 
 fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id)) {

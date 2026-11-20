@@ -1010,7 +1010,7 @@ fn an_edit_out_of_sight_builds_nothing() {
     let drawn_hidden = extruded(&mut d, 70.0);
     let ids = [d.insert(Some(l), 0, hidden).unwrap(), group.children().unwrap()[0].id, d.insert(Some(l), 0, drawn_hidden).unwrap()];
     d.insert(Some(l), 0, group).unwrap();
-    let opts = RenderOptions { hidden: vec![ids[2]], ..Default::default() };
+    let opts = RenderOptions { hidden: [ids[2]].into(), ..Default::default() };
     let mut r = Renderer::new();
     r.render(&d, 100, 100, Affine::IDENTITY, &opts);
     let mut e = d.clone();
@@ -1066,7 +1066,7 @@ fn a_measuring_pass_sweeps_the_bounds_of_held_art_as_they_double() {
     }
     let mut r = Renderer::new();
     // Held here, as the art kept to draw is.
-    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d, n)).collect();
+    let held: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| r.measured_fx_art(&d.symbol_boxes(), n)).collect();
     assert_eq!((held.len(), r.three_d_bounds.len()), (3000, 3000));
     assert!(r.three_d_sweeps <= 2, "{} sweeps", r.three_d_sweeps);
 }
@@ -1193,7 +1193,7 @@ fn drawing_takes_measured_art_out_of_the_budget() {
     let mut r = Renderer::new();
     r.bounds_of(&d.symbol_boxes(), &n);
     assert!(r.measured_bytes > 0);
-    r.fx_art(&d, &n, true);
+    r.fx_art(&d.symbol_boxes(), &n, true);
     assert_eq!((r.measured_bytes, r.measured.len()), (0, 0), "taken out when drawn");
     let mut r = Renderer::new();
     r.render(&d, 800, 100, Affine::IDENTITY, &RenderOptions::default());
@@ -1343,11 +1343,11 @@ fn art_measured_again_takes_the_place_of_the_held() {
     let n = d.layers[0].children().unwrap()[0].clone();
     let key = Arc::as_ptr(&n) as usize;
     let mut r = Renderer::new();
-    let art = r.measured_fx_art(&d, &n);
+    let art = r.measured_fx_art(&d.symbol_boxes(), &n);
     let bytes = r.measured_bytes;
     // As if it had read something else then.
     r.measured.insert(key, (n.clone(), art, Some(7)));
-    r.measured_fx_art(&d, &n);
+    r.measured_fx_art(&d.symbol_boxes(), &n);
     assert_eq!((r.measured_bytes, r.measured.len()), (bytes, 1));
 }
 

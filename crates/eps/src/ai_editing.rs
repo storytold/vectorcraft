@@ -118,9 +118,16 @@
 //!   `%AI24_EndSymbolList`); each instance as `/SymbolInstance :`, `(name) /SymbolRef ,`, the
 //!   matrix taking the art to art space as `a b c d tx ty /RTransformMatrix`, `;`, then its name
 //!   and opacity mask and a state block as a group's with its opacity and blending mode (an
-//!   instance with isolation, knockout or knockout shape of its own is written as its art). The
+//!   instance with isolation, knockout or knockout shape of its own is written as its art). A
+//!   dynamic symbol's art dictionary also holds `VectorCraftDynamicSymbol` (`/Int`, 1), and the
+//!   dictionary of an instance with changes of its own (`symbol_overrides`) holds
+//!   `VectorCraftSymbolOverrides`, a `/String` of the changes as hex-coded JSON: the format's own
+//!   entries, as other apps' editing data is not documented, read back by this reader and left out by
+//!   others. The
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
-//!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//!   a gradient's take the art to the canvas's space turned y up about art space's origin there,
+//!   and a gradient mesh's corners are in that space; an envelope's contents in its dictionary are
+//!   in the canvas's space with y down.
 //! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
 //!   group with live effects or linked to a graphic style is written as its drawn look (`u`, its
 //!   vector art as its geometry effects leave it, without shadows, glows or feathers, `U`, its
@@ -147,6 +154,13 @@
 //!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
 //!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
 //!   any other graph, and a graph with art left out, as its art, with a warning.
+//! - Gradient meshes, as the reader reads them (`mesh.rs`): `/Mesh X!`, `2 /Version`, the grid's type
+//!   and size, `/Data` (the reader passes over the version and `/Data`), and each patch's place, color
+//!   space and four corners (color, opacity, point and handles) as `X#` entries on `%_` lines,
+//!   `/End X!`; the mesh's transparency before it, its name and opacity mask after it
+//!   (`writer::meshes`). A mesh is written as it is only when the reader reads it back so, when every
+//!   patch turns the same way (a reflected mesh's columns are written in reverse order), and outside
+//!   pattern tiles, art cut to a clipping object and a large canvas.
 //! - Blends, as the reader reads them (`blend.rs`): the blend's key objects and spine as a group on
 //!   `%_` lines, each key's `/ArtDictionary` naming it a key and its id and the spine's naming it the
 //!   spine (written when the blend has a spine of its own); its steps drawn, a group;
@@ -182,7 +196,9 @@
 //! and instances of
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
-//! guides, export types and dynamic type left out, blends the reader wouldn't read back live as
+//! guides, export types left out, gradient meshes the reader wouldn't read back as
+//! they are, folded meshes, meshes in pattern tiles and in art cut to a clipping object and every mesh
+//! on a large canvas as their drawn look, blends the reader wouldn't read back live as
 //! their steps, other live objects (placed documents included) as their art,
 //! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
@@ -209,6 +225,7 @@ use vectorcraft_pdf::PrivateData;
 use crate::ps;
 
 mod writer;
+pub(crate) use writer::{DYNAMIC_KEY, OVERRIDES_KEY, hex_decode};
 
 use writer::Writer;
 
@@ -328,6 +345,7 @@ fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
     w.brushes_live = scale == 1.0;
+    w.meshes_live = scale == 1.0;
     w.blends_live = scale == 1.0;
     w.unbaked_blends = unbaked_blends;
     w.symbol_doc = symbol_doc;
