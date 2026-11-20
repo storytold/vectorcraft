@@ -69,6 +69,14 @@ pub(super) fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Po
     }
 }
 
+/// Right-click at `pos` over three frames of `f` (hover, press, release).
+pub(super) fn right_click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) {
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+        frame_events(ctx, app, vec![e], &mut f);
+    }
+}
+
 /// The rect of the first drawn text equal to `s`.
 pub(super) fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
     texts.iter().find(|(t, _)| t == s).unwrap_or_else(|| panic!("`{s}` not drawn: {texts:?}")).1
@@ -2109,4 +2117,85 @@ fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
     shows(&mut app, "35%", "60%");
     run(&mut app, "edit.undo", json!({}));
     shows(&mut app, "60%", "35%");
+}
+
+/// Right-clicking a stroke row selects it and exposes the context menu.
+#[test]
+fn right_clicking_a_stroke_row_selects_it_and_exposes_context_menu() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    assert_eq!(app.session.appearance_item(), None);
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    assert_eq!(app.session.appearance_item(), Some(1), "right-clicking stroke row selected it");
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Stroke"), "menu has Duplicate Stroke: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Stroke"), "menu has Delete Stroke: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Hide Stroke"), "menu has Hide Stroke: {texts:?}");
+}
+
+/// Clicking "Duplicate Stroke" duplicates the stroke in one undo step.
+#[test]
+fn clicking_duplicate_stroke_duplicates_the_stroke_with_one_undo_step() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    assert_eq!(stack_items(&app), [(true, None), (false, Some(1.0))]);
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let dup = text_rect(&texts, "   Duplicate Stroke").center();
+    click(&ctx, &mut app, dup, appearance::show);
+    let items = stack_items(&app);
+    assert_eq!(items.len(), 3, "now 3 items: {items:?}");
+    assert_eq!(items.iter().filter(|(f, _)| !*f).count(), 2, "now 2 strokes: {items:?}");
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(stack_items(&app), [(true, None), (false, Some(1.0))], "undo restored original appearance stack");
+}
+
+/// Clicking "Delete Effect" removes the effect from the object's appearance.
+#[test]
+fn clicking_delete_effect_removes_the_effect_from_appearance() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "stylize.dropShadow"}));
+    assert_eq!(object_effects(&app), ["stylize.dropShadow"]);
+    let ctx = egui::Context::default();
+    let shadow = row_point(&ctx, &mut app, "Drop Shadow", 0);
+    right_click(&ctx, &mut app, shadow, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Edit Effect…"), "menu has Edit Effect…");
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Effect"), "menu has Duplicate Effect");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Effect"), "menu has Delete Effect");
+    assert!(texts.iter().any(|(t, _)| t == "   Hide Effect"), "menu has Hide Effect");
+    let del = text_rect(&texts, "   Delete Effect").center();
+    click(&ctx, &mut app, del, appearance::show);
+    assert!(object_effects(&app).is_empty(), "effect removed from appearance: {:?}", object_effects(&app));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(object_effects(&app), ["stylize.dropShadow"], "undo restored effect");
+}
+
+/// Right-clicking the root object row exposes Clear Appearance and Reduce to Basic Appearance.
+#[test]
+fn right_clicking_root_object_row_exposes_clear_and_reduce_appearance() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    appearance::select_row(&mut app, &ctx, appearance::Sel::Item(1));
+    assert_eq!(app.session.appearance_item(), Some(1));
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    assert_eq!(app.session.appearance_item(), None, "selecting root resets item selection");
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Clear Appearance"), "menu has Clear Appearance: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Reduce to Basic Appearance"), "menu has Reduce to Basic Appearance: {texts:?}");
+    let clear = text_rect(&texts, "   Clear Appearance").center();
+    click(&ctx, &mut app, clear, appearance::show);
+    assert_eq!(
+        first_selected(&app).unwrap().appearance,
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0)
+    );
+    // One undo step restores original appearance.
+    run(&mut app, "edit.undo", json!({}));
+    assert_ne!(
+        first_selected(&app).unwrap().appearance,
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0)
+    );
 }
