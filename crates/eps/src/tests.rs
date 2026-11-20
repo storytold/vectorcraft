@@ -2151,7 +2151,13 @@ fn tiff_preview_round_trips_when_postscript_is_unreadable() {
         let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
         let imported = import_with(&wrapped, false).unwrap();
         assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
-        assert!(imported.document.layers.iter().flat_map(|l| &l.nodes).any(|n| matches!(n.kind, NodeKind::Raster(_))));
+        let mut has_image = false;
+        imported.document.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                has_image = true;
+            }
+        });
+        assert!(has_image, "{kind:?}: expected preview image node");
         assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
     }
 }
