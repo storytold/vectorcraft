@@ -5062,7 +5062,16 @@ fn review_8687_node(nodes: &[egui::accesskit::Node], name: &str, role: egui::acc
 
 fn review_8687_click(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32, node: &egui::accesskit::Node) {
     let b = node.bounds().expect("an actual visible control");
-    assert!(b.x0 >= 0.0 && b.x1 <= width as f64 && b.y0 >= 0.0 && b.y1 <= 300.0);
+    assert!(
+        b.x0 >= 0.0 && b.x1 <= width as f64 && b.y0 >= 0.0 && b.y1 <= 300.0,
+        "target {:?} {:?}: bounds ({}, {}, {}, {}) outside viewport ({width}, 300)",
+        node.role(),
+        node.label(),
+        b.x0,
+        b.y0,
+        b.x1,
+        b.y1
+    );
     let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     bar_frame(app, ctx, width, None, vec![egui::Event::PointerMoved(at), button(true)], super::status_bar);
