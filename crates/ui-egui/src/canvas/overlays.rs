@@ -10,6 +10,9 @@ use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_pa
 use super::selection_marks::{MarkOptions, SelectionMarks};
 use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
+/// The width (screen px) of the cut corner drawn while the pointer is over its Live Corners widget.
+const CORNER_HOVER_WIDTH: f32 = 2.0;
+
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
     // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on and Snap to Grid and Pixel Preview off.
@@ -229,6 +232,14 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             app.session.prefs.hide_corner_widget_above,
         )
     {
+        // The pointer within 5 px of a widget, the distance at which a press picks it: the cut
+        // corner it controls drawn thicker, under the widgets. Not while the tool is busy (from
+        // the press to the release) or a mouse button is down (a pan drag leaves the tool idle).
+        let reach = 5.0 / xf.zoom.max(1e-9);
+        let idle = !app.session.tool_busy() && !p.ctx().input(|i| i.pointer.any_down());
+        if let Some((id, cut)) = app.hover_doc.filter(|_| idle).and_then(|h| w.hovered_cut(&st.doc, h, reach)) {
+            stroke_path(p, &cut, xf, Stroke::new(CORNER_HOVER_WIDTH, c32(st.doc.layer_color(id))));
+        }
         for (id, q) in w.visible_on() {
             let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
             p.circle_filled(sp, 3.0, Color32::WHITE);
