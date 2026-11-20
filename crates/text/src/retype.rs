@@ -153,6 +153,32 @@ impl RetypeIndex {
                 }
             }
         }
+        Self::indexed(kept, entries)
+    }
+
+    /// Index the outline glyphs of `face`, a face read for one search and not loaded
+    /// ([`FontDb::read_unloaded_file`]), whose [`shape_key`] is in `keys`, as [`Self::build`]
+    /// does. The face's keys are not kept for a later search, so the keys of loaded faces stay
+    /// kept. Each of its encoded glyphs ([`encoded_glyphs`]) is drawn once, for its key and its sampling both.
+    pub fn build_unloaded(db: &FontDb, face: Arc<FontFace>, keys: &BTreeSet<u64>) -> Self {
+        let mut entries = vec![];
+        for (gid, ch) in matched_glyphs(&face) {
+            if entries.len() >= MAX_GLYPHS {
+                break;
+            }
+            let outline = db.outline_uncached(&face, gid);
+            if !shape_key(&outline).is_some_and(|key| keys.contains(&key)) {
+                continue;
+            }
+            if let Some(sig) = signatures(&outline, false).into_iter().next() {
+                entries.push(Entry { face: 0, gid, ch, sig, outline });
+            }
+        }
+        Self::indexed(vec![face], entries)
+    }
+
+    /// The index of `entries`, glyphs of `kept`.
+    fn indexed(kept: Vec<Arc<FontFace>>, entries: Vec<Entry>) -> Self {
         let mut buckets: HashMap<usize, Vec<usize>> = HashMap::new();
         for (i, e) in entries.iter().enumerate() {
             buckets.entry(e.sig.contours).or_default().push(i);
@@ -297,16 +323,7 @@ fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
             return keys.clone();
         }
     }
-    let mut by_gid: HashMap<u32, char> = HashMap::new();
-    for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
-        if c.is_whitespace() || c.is_control() || is_shape_symbol(c) {
-            continue;
-        }
-        by_gid.entry(gid).and_modify(|e| *e = (*e).min(c)).or_insert(c);
-    }
-    let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
-    gids.sort_unstable();
-    let keys: FaceKeys = Arc::new(gids.into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect());
+    let keys = read_keys(db, face);
     let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
     if k.generation != generation {
         return keys;
@@ -320,6 +337,33 @@ fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
         k.faces.insert(at, keys.clone());
     }
     keys
+}
+
+/// The glyphs of `face` that are matched, under the lowest character that maps to each: its
+/// encoded characters (the first [`MAX_GLYPHS_PER_FACE`]) less spaces, controls and
+/// [`is_shape_symbol`]s.
+fn matched_glyphs(face: &FontFace) -> Vec<(u32, char)> {
+    let mut by_gid: HashMap<u32, char> = HashMap::new();
+    for &(c, gid) in face.mapped_chars().iter().take(MAX_GLYPHS_PER_FACE) {
+        if c.is_whitespace() || c.is_control() || is_shape_symbol(c) {
+            continue;
+        }
+        by_gid.entry(gid).and_modify(|e| *e = (*e).min(c)).or_insert(c);
+    }
+    let mut gids: Vec<(u32, char)> = by_gid.into_iter().collect();
+    gids.sort_unstable();
+    gids
+}
+
+/// How many glyphs of `face` an index draws to read their keys: at most [`MAX_GLYPHS_PER_FACE`].
+/// Reads the face's cmap only.
+pub fn encoded_glyphs(face: &FontFace) -> usize {
+    face.mapped_chars().len().min(MAX_GLYPHS_PER_FACE)
+}
+
+/// [`FaceKeys`] of `face`, each matched glyph drawn once, past the outline cache.
+fn read_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
+    Arc::new(matched_glyphs(face).into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect())
 }
 
 /// Characters whose glyphs are plain shapes (box drawing, blocks, geometric shapes, legacy
@@ -594,6 +638,20 @@ pub fn shape_key(path: &BezPath) -> Option<u64> {
     }
     Some(h)
 }
+
+/// Is `path` a plain shape: one contour of at most [`PLAIN_EDGES`] straight edges, as
+/// [`contours`] reads it (a rectangle, a triangle, a bar)? Many fonts have a glyph of such a shape
+/// (a hyphen, a bar, a mark), so it does not tell which font outlined text is in. `false` for an
+/// empty shape or one past the size caps.
+pub fn is_plain(path: &BezPath) -> bool {
+    match contours(path).as_deref() {
+        Some([c]) => c.len() <= PLAIN_EDGES && c.iter().all(|s| matches!(s, PathSeg::Line(_))),
+        _ => false,
+    }
+}
+
+/// The most straight edges of a plain shape ([`is_plain`]).
+const PLAIN_EDGES: usize = 4;
 
 /// `path` read for matching: one reading per choice of starting corners (the corner of each contour
 /// farthest from the centre of all the shape's corners; every tied corner when `all_ties`, else the
@@ -941,5 +999,52 @@ mod tests {
             all[..MAX_CANDIDATES].iter().map(|m| m.face.id()).collect::<Vec<_>>(),
             index.matches(&shape).iter().map(|m| m.face.id()).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn plain_shapes_are_one_contour_of_up_to_four_straight_edges() {
+        let rect = kurbo::Rect::new(0.0, 0.0, 80.0, 40.0).to_path(0.1);
+        assert!(is_plain(&rect));
+        let mut triangle = BezPath::new();
+        triangle.move_to((0.0, 0.0));
+        triangle.line_to((50.0, 0.0));
+        // A straight edge split in two reads as one.
+        triangle.line_to((50.0, 20.0));
+        triangle.line_to((50.0, 40.0));
+        triangle.close_path();
+        assert!(is_plain(&triangle));
+        let mut pentagon = BezPath::new();
+        pentagon.move_to((0.0, 0.0));
+        for p in [(40.0, 0.0), (50.0, 30.0), (20.0, 50.0), (-10.0, 30.0)] {
+            pentagon.line_to(p);
+        }
+        pentagon.close_path();
+        assert!(!is_plain(&pentagon));
+        assert!(!is_plain(&kurbo::Circle::new((0.0, 0.0), 10.0).to_path(0.1)), "curves");
+        assert!(!is_plain(&letter()), "two contours");
+        assert!(!is_plain(&BezPath::new()));
+    }
+
+    /// A face read from an installed file and not loaded is indexed as a loaded one is, and the
+    /// count of glyphs its index draws comes from its cmap.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn an_unloaded_face_is_indexed_as_a_loaded_one() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts");
+        let db = FontDb::with_font_dirs(vec![]);
+        let loaded = db.face("Source Sans 3", "Regular").unwrap();
+        let read = db.read_unloaded_file(&dir.join("SourceSans3-Regular.ttf"), u64::MAX);
+        let face = read.into_iter().find(|f| f.family == "Source Sans 3").unwrap();
+        assert_ne!(face.id(), loaded.id());
+        assert_eq!(encoded_glyphs(&face), face.mapped_chars().len().min(MAX_GLYPHS_PER_FACE));
+        let shape = Affine::translate((40.0, 90.0)) * Affine::scale(0.03) * db.outline_uncached(&face, face.glyph_for('g'));
+        let keys: BTreeSet<u64> = std::iter::once(shape_key(&shape).unwrap()).collect();
+        let unloaded = RetypeIndex::build_unloaded(&db, face.clone(), &keys);
+        let built = RetypeIndex::build(&db, [loaded.clone()], &keys);
+        assert_eq!(unloaded.len(), built.len());
+        let (a, b) = (unloaded.matches(&shape), built.matches(&shape));
+        assert_eq!(a.first().map(|m| (m.face.id(), m.ch)), Some((face.id(), 'g')));
+        assert_eq!(b.first().map(|m| m.ch), Some('g'));
+        assert!(a.first().unwrap().origin.distance(b.first().unwrap().origin) < 1e-9);
     }
 }

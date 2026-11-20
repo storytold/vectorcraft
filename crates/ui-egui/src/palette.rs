@@ -596,6 +596,7 @@ fn availability_key(app: &VectorcraftApp) -> u64 {
     app.session.active().map(|d| (d.path.is_some(), d.converted, d.is_dirty())).hash(&mut h);
     let plugins = (crate::plugin_runs::any_running(app), crate::plugin_runs::any_shown(app));
     (plugins, crate::trace_runs::any_running(app), crate::trace_runs::any_shown(app)).hash(&mut h);
+    crate::retype_runs::any_running(app).hash(&mut h);
     h.finish()
 }
 

@@ -209,7 +209,7 @@ fn an_open_path_along_a_glyph_is_not_a_glyph() {
     })
     .unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    assert!(s.execute("type.retype", &json!({})).is_err(), "nothing matches");
+    assert!(s.execute("type.retype", &json!({"installed": false})).is_err(), "nothing matches");
 }
 
 #[test]
@@ -386,7 +386,8 @@ fn a_drawn_dot_or_bar_beside_type_stays_art() {
     // A bar that is exactly a hyphen of the font, somewhere else: the worst case.
     let bar = outlined(&mut s, json!({"x": 200, "y": 300, "text": "-", "size": 50}));
     s.execute("select.set", &json!({"ids": [g, dot, bar]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["AB"]), "{r}");
     let un = r["unmatched"].as_array().unwrap();
     assert!(un.contains(&json!(dot)) && un.len() == 2, "the dot and the bar stay art: {r}");
@@ -548,8 +549,9 @@ fn two_overlapping_lone_glyphs_beside_art_stay_outlines() {
     let b = outlined(&mut s, json!({"x": 49, "y": 100, "text": "M", "size": 30}));
     let dot = s.execute("shape.ellipse", &json!({"x": 300, "y": 60, "width": 8, "height": 8})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [a, b, dot]})).unwrap();
-    // Nothing is left to retype: both stay outlines, as the lone bar beside art does.
-    let e = s.execute("type.retype", &json!({})).unwrap_err();
+    // Nothing is left to retype: both stay outlines, as the lone bar beside art does. The installed
+    // fonts are left out, so what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err();
     assert!(format!("{e:?}").contains("no selected shape matches"), "{e:?}");
 }
 

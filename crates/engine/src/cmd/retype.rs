@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…]} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error when no shape matches",
+        "{fonts?: [family…], installed?: bool} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation (exact matches only); shapes none of those match are then compared with the installed fonts not loaded yet, unless installed is false (true, omitted or null: compared): their files are read smallest first, one at a time, until each such shape matches a font read, leaving out files over 256 MiB and the files and faces past 2 GiB read or 500,000 glyphs drawn in all, and a font whose glyphs match is loaded; a plain shape (one contour of up to four straight edges, such as a rectangle) starts no such reading and matches only a font the other shapes found; a cancel stops between files; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool)}], unmatched: [id…], truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out), installed: {read (installed faces compared), skipped (installed faces those limits left out)}}; an error when no shape matches, and when installed is not true, false or null",
         has_selected_path,
         retype
     )]
@@ -49,6 +49,10 @@ pub fn specs() -> Vec<CommandSpec> {
 
 #[path = "retype_fonts.rs"]
 pub(super) mod fonts;
+#[path = "retype_installed.rs"]
+mod installed;
+
+pub use installed::{RetypeFound, RetypeRun, RetypeSearch};
 
 /// A shape to match: a path or compound path, in document space.
 struct Piece {
@@ -126,7 +130,8 @@ fn type_can_paint(ap: &Appearance) -> bool {
     ap.is_basic() && ap.stroke().is_none_or(|s| s.start_arrow.is_none() && s.end_arrow.is_none() && s.profile.is_none() && s.brush.is_none())
 }
 
-/// The faces to match against: the families in `fonts`, the document's fonts, then every loaded face.
+/// The faces to match against: the families in `fonts`, the document's fonts, the faces earlier
+/// searches of the installed fonts loaded ([`installed::found`]), then every other loaded face.
 fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vectorcraft_text::FontFace>> {
     let mut families: Vec<String> = fonts.iter().take(MAX_FONT_PARAMS).cloned().collect();
     d.walk(|n| {
@@ -153,7 +158,8 @@ fn candidate_faces(db: &FontDb, d: &Document, fonts: &[String]) -> Vec<Arc<vecto
             }
         }
     }
-    for face in db.loaded_faces() {
+    // The faces earlier searches of the installed fonts found, then the other loaded faces.
+    for face in installed::found(db).into_iter().chain(db.loaded_faces()) {
         if faces.len() >= cap {
             break;
         }
@@ -1079,19 +1085,45 @@ fn new_line(pc: &Piece, cands: &[GlyphMatch]) -> Option<Line> {
     })
 }
 
+/// `type.retype`'s `fonts` param: the family names it lists.
+fn fonts_param(p: &Value) -> Result<Vec<String>> {
+    const C: &str = "type.retype";
+    match p.get("fonts") {
+        None | Some(Value::Null) => Ok(vec![]),
+        Some(Value::Array(a)) => {
+            a.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| bad(C, "fonts must be a list of family names"))).collect()
+        }
+        Some(_) => Err(bad(C, "fonts must be a list of family names")),
+    }
+}
+
+/// The shapes of the selected objects, in paint order, and whether shapes past the limits were
+/// left out; an error when the selection holds none.
+fn selected_pieces(s: &Session) -> Result<(Vec<Piece>, bool)> {
+    let roots = selected_roots(s)?;
+    let d = &s.doc()?.doc;
+    let mut pieces = vec![];
+    let (mut barrier, mut truncated) = (true, false);
+    for r in &roots {
+        if let Some(n) = d.node(*r) {
+            collect(n, d.parent_of(*r), 0, &mut barrier, &mut truncated, &mut pieces);
+        }
+    }
+    if pieces.is_empty() {
+        return Err(EngineError::Other("Retype: select outlined text (paths or compound paths)".into()));
+    }
+    Ok((pieces, truncated))
+}
+
 fn retype(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.retype";
-    let fonts: Vec<String> = match p.get("fonts") {
-        None | Some(Value::Null) => vec![],
-        Some(Value::Array(a)) => {
-            a.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| bad(C, "fonts must be a list of family names"))).collect::<Result<_>>()?
-        }
-        Some(_) => return Err(bad(C, "fonts must be a list of family names")),
-    };
+    let fonts = fonts_param(p)?;
+    let search_installed = installed::wanted(C, p)?;
+    let handed = installed::handed(s);
     let roots = selected_roots(s)?;
     let db = FontDb::global();
     let system_layout = s.doc()?.doc.setup.system_layout;
-    let (lines, unmatched, truncated) = {
+    let (lines, unmatched, truncated, installed) = {
         let d = &s.doc()?.doc;
         let mut pieces = vec![];
         let mut truncated = false;
@@ -1119,8 +1151,20 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let wanted: std::collections::BTreeSet<u64> =
             pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
         // Nothing to match (every shape stays an outline): no font is read.
-        let index = if wanted.is_empty() { RetypeIndex::default() } else { RetypeIndex::build(db, candidate_faces(db, d, &fonts), &wanted) };
-        let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
+        let cands = if wanted.is_empty() { vec![] } else { candidate_faces(db, d, &fonts) };
+        let compared: Vec<u32> = cands.iter().map(|f| f.id()).collect();
+        let index = if wanted.is_empty() { RetypeIndex::default() } else { RetypeIndex::build(db, cands, &wanted) };
+        let mut found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
+        // Shapes no face matched are compared with the installed fonts not loaded yet, or with
+        // what a search made off the UI thread found for them.
+        let installed = match handed {
+            Some(handed) => {
+                add_installed(db, &pieces, &mut found, &handed, &compared);
+                handed
+            }
+            None if search_installed => from_installed(db, &pieces, &mut found)?,
+            None => installed::Installed::default(),
+        };
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];
@@ -1194,7 +1238,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         // Joining lines takes at most four tries' work per glyph (see [`Block::made`]), with room
         // for small blocks.
         let mut budget = lines.iter().map(|l| l.pieces.len()).fold(0usize, usize::saturating_add).saturating_mul(24).saturating_add(256);
-        (blocks(lines, follows, system_layout, &mut budget), unmatched, truncated)
+        (blocks(lines, follows, system_layout, &mut budget), unmatched, truncated, installed)
     };
     if lines.is_empty() {
         return Err(EngineError::Other(format!("Retype: no selected shape matches a glyph of an available font ({} checked)", unmatched.len())));
@@ -1317,7 +1361,35 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             .collect::<Vec<_>>(),
         "unmatched": unmatched.iter().map(|i| i.0).collect::<Vec<_>>(),
         "truncated": truncated,
+        "installed": installed.json(),
     }))
+}
+
+/// Look for the shapes of `pieces` that `found` holds no glyph for (and that may become type) in
+/// the installed faces not loaded yet ([`installed::search`], which plain shapes do not start).
+/// Every shape that may become type then also gets its matches in the faces found, after the ones
+/// `found` holds.
+fn from_installed(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>]) -> Result<installed::Installed> {
+    let left: Vec<&BezPath> = pieces.iter().zip(found.iter()).filter(|(pc, ms)| !pc.keeps_outline && ms.is_empty()).map(|(pc, _)| &pc.path).collect();
+    let installed = installed::search(db, &left, false)?;
+    add_installed(db, pieces, found, &installed, &[]);
+    Ok(installed)
+}
+
+/// Gives every shape of `pieces` that may become type its matches in the faces `installed` found,
+/// after the ones `found` holds, leaving out the faces of `compared` (the faces `found` comes
+/// from), whose matches it holds already.
+fn add_installed(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>], installed: &installed::Installed, compared: &[u32]) {
+    let faces: Vec<_> = installed.faces.iter().filter(|f| !compared.contains(&f.id())).cloned().collect();
+    if faces.is_empty() {
+        return;
+    }
+    let keys: std::collections::BTreeSet<u64> =
+        pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
+    let index = RetypeIndex::build(db, faces, &keys);
+    for (pc, ms) in pieces.iter().zip(found.iter_mut()).filter(|(pc, _)| !pc.keeps_outline) {
+        ms.extend(index.matches(&pc.path));
+    }
 }
 
 #[cfg(test)]
