@@ -822,6 +822,14 @@ font-technology	Variable	可變
 	Delete Color	刪除顏色
 	Restore Generated Table	還原產生的色彩表
 	Unshift All Colors	取消位移所有顏色
+	Load Color Table…	載入色彩表…
+	Load Color Table	載入色彩表
+	Save Color Table…	儲存色彩表…
+	Save Color Table	儲存色彩表
+@msg	`{format}` has no color table: use gif or png8	`{format}` 沒有色彩表：請使用 gif 或 png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	不是色彩表：.act 檔案長 768 或 772 位元組，使用 1 到 256 種顏色
+@msg	give exactly one of `path` and `dataBase64`	`path` 和 `dataBase64` 請只提供其中一個
+@msg	`slice` is a slice number from `slice.list`	`slice` 是 `slice.list` 中的切片編號
 	Delete Character Style	刪除字元樣式
 	Delete Empty Artboards	刪除空白工作區域
 	Delete Freeform Point	刪除任意形狀錨點

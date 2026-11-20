@@ -844,6 +844,53 @@ fn colour_table_shift_unshift_and_unshift_all() {
     assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["deleted"]), (&json!({}), &json!(["#222222"])));
 }
 
+/// Save Color Table… writes the table the preview shows to a picked `.act` file without changing
+/// the dialog or the image's `path`; Load Color Table… makes a picked file the fixed palette.
+#[test]
+fn color_table_menu_saves_and_loads_act_files() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-color-table");
+    let (mut app, _) = app(&dir, false);
+    let picked = dir.join("loaded.act").to_string_lossy().into_owned();
+    let open = picked.clone();
+    app.services.pick_open = Some(Box::new(move |p: &crate::FilePick| {
+        assert_eq!(p.filters, [("Color tables".to_string(), vec!["act".to_string()])]);
+        Some(open.clone())
+    }));
+    app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("dither", json!("none")), ("transparency", json!(false)), ("path", json!("/elsewhere/page.gif"))] {
+        set(&mut app, k, v);
+    }
+    frame(&mut app);
+    let settings = save_for_web::table_params(app.ui.dialog.as_ref().unwrap());
+    let want = app.run("document.exportForWeb.saveColorTable", settings).unwrap();
+    let want = vectorcraft_format::base64_decode(want["dataBase64"].as_str().unwrap()).unwrap();
+    let before = app.ui.dialog.as_ref().unwrap().fields.clone();
+    set(&mut app, "__saveColorTable", json!(true));
+    frame(&mut app);
+    let written = std::fs::read(dir.join("Untitled-1.act")).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
+    assert_eq!((written.len(), &written), (772, &want));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, before, "the dialog does not change");
+    assert!(app.ui.status.contains("Untitled-1.act"), "{}", app.ui.status);
+    // Load: three colors, the second one transparent.
+    let mut file = vec![0x11, 0x22, 0x33, 0, 0, 0, 0x44, 0x55, 0x66];
+    file.resize(768, 0);
+    file.extend_from_slice(&[0, 3, 0, 1]);
+    std::fs::write(&picked, &file).unwrap();
+    set(&mut app, "__loadColorTable", json!(true));
+    frame(&mut app);
+    let fields = &app.ui.dialog.as_ref().unwrap().fields;
+    assert_eq!((&fields["colors"], &fields["colorTable"]["customPalette"]), (&json!(3), &json!(["#112233", "#445566"])));
+    assert_eq!(fields["path"], "/elsewhere/page.gif");
+    // A file that is not a color table changes nothing and says why.
+    std::fs::write(&picked, [0u8; 10]).unwrap();
+    let before = app.ui.dialog.as_ref().unwrap().fields.clone();
+    set(&mut app, "__loadColorTable", json!(true));
+    frame(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, before);
+    assert!(app.ui.status.contains("not a color table"), "{}", app.ui.status);
+}
+
 /// One frame of `app` in `ctx`, 50 ms after the last.
 fn tick(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     let time = ctx.input(|i| i.time) + 0.05;

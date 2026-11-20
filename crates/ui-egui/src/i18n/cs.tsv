@@ -3739,6 +3739,14 @@ theme	Appearance	Motiv
 	Delete Color	Odstranit barvu
 	Restore Generated Table	Obnovit vygenerovanou tabulku
 	Unshift All Colors	Zrušit posun všech barev
+	Load Color Table…	Načíst tabulku barev…
+	Load Color Table	Načíst tabulku barev
+	Save Color Table…	Uložit tabulku barev…
+	Save Color Table	Uložit tabulku barev
+@msg	`{format}` has no color table: use gif or png8	`{format}` nemá tabulku barev: použijte gif nebo png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	není tabulka barev: soubor .act má 768 nebo 772 bajtů a používá 1 až 256 barev
+@msg	give exactly one of `path` and `dataBase64`	zadejte právě jedno z `path` a `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` je číslo řezu ze `slice.list`
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?

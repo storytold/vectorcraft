@@ -1634,6 +1634,14 @@ arrowhead	Feather	पंख
 	Delete Color	रंग हटाएँ
 	Restore Generated Table	जनरेट की गई तालिका पुनर्स्थापित करें
 	Unshift All Colors	सभी रंग अनशिफ़्ट करें
+	Load Color Table…	रंग तालिका लोड करें…
+	Load Color Table	रंग तालिका लोड करें
+	Save Color Table…	रंग तालिका सेव करें…
+	Save Color Table	रंग तालिका सेव करें
+@msg	`{format}` has no color table: use gif or png8	`{format}` में रंग तालिका नहीं है: gif या png8 का उपयोग करें
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	यह रंग तालिका नहीं है: .act फ़ाइल 768 या 772 बाइट लंबी होती है और 1 से 256 रंगों का उपयोग करती है
+@msg	give exactly one of `path` and `dataBase64`	`path` और `dataBase64` में से ठीक एक दें
+@msg	`slice` is a slice number from `slice.list`	`slice`, `slice.list` से स्लाइस संख्या है
 	Delete Character Style	कैरेक्टर स्टाइल हटाएँ
 	Delete Data Set	डेटा सेट हटाएँ
 	Delete Data Sets	डेटा सेट्स हटाएँ

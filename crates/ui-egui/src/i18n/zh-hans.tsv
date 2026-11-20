@@ -801,6 +801,14 @@ antiAlias	Sharp	锐利
 	Delete Color	删除颜色
 	Restore Generated Table	恢复生成的颜色表
 	Unshift All Colors	取消偏移所有颜色
+	Load Color Table…	加载颜色表…
+	Load Color Table	加载颜色表
+	Save Color Table…	保存颜色表…
+	Save Color Table	保存颜色表
+@msg	`{format}` has no color table: use gif or png8	`{format}` 没有颜色表：请使用 gif 或 png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	不是颜色表：.act 文件长 768 或 772 字节，使用 1 到 256 种颜色
+@msg	give exactly one of `path` and `dataBase64`	`path` 和 `dataBase64` 中必须且只能给出一个
+@msg	`slice` is a slice number from `slice.list`	`slice` 是 `slice.list` 中的切片编号
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点

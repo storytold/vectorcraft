@@ -786,6 +786,14 @@ antiAlias	Sharp	Nítido
 	Delete Color	Excluir Cor
 	Restore Generated Table	Restaurar Tabela Gerada
 	Unshift All Colors	Desfazer Mudança de Todas as Cores
+	Load Color Table…	Carregar Tabela de Cores…
+	Load Color Table	Carregar Tabela de Cores
+	Save Color Table…	Salvar Tabela de Cores…
+	Save Color Table	Salvar Tabela de Cores
+@msg	`{format}` has no color table: use gif or png8	`{format}` não tem tabela de cores: use gif ou png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	não é uma tabela de cores: um arquivo .act tem 768 ou 772 bytes e usa de 1 a 256 cores
+@msg	give exactly one of `path` and `dataBase64`	informe exatamente um de `path` e `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` é um número de fatia de `slice.list`
 	Delete Character Style	Excluir Estilo de Caractere
 	Delete Empty Artboards	Excluir Mesas de Trabalho Vazias
 	Delete Freeform Point	Excluir Ponto Livre

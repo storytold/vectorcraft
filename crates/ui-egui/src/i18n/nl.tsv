@@ -4085,6 +4085,14 @@ theme	Appearance	Vormgeving
 	Delete Color	Kleur verwijderen
 	Restore Generated Table	Gegenereerde tabel herstellen
 	Unshift All Colors	Verschuiving van alle kleuren ongedaan maken
+	Load Color Table…	Kleurentabel laden…
+	Load Color Table	Kleurentabel laden
+	Save Color Table…	Kleurentabel opslaan…
+	Save Color Table	Kleurentabel opslaan
+@msg	`{format}` has no color table: use gif or png8	`{format}` heeft geen kleurentabel: gebruik gif of png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	geen kleurentabel: een .act-bestand is 768 of 772 bytes lang en gebruikt 1 tot 256 kleuren
+@msg	give exactly one of `path` and `dataBase64`	geef precies een van `path` en `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` is een slicenummer uit `slice.list`
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?

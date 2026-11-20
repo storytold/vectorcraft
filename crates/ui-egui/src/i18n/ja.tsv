@@ -1630,6 +1630,14 @@ antiAlias	Sharp	シャープ
 	Delete Color	カラーを削除
 	Restore Generated Table	生成されたテーブルを復元
 	Unshift All Colors	すべてのカラーのシフトを戻す
+	Load Color Table…	カラーテーブルを読み込み…
+	Load Color Table	カラーテーブルを読み込み
+	Save Color Table…	カラーテーブルを保存…
+	Save Color Table	カラーテーブルを保存
+@msg	`{format}` has no color table: use gif or png8	`{format}` にはカラーテーブルがありません: gif または png8 を使ってください
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	カラーテーブルではありません: .act ファイルは 768 または 772 バイトで、1 から 256 色を使います
+@msg	give exactly one of `path` and `dataBase64`	`path` と `dataBase64` のうち 1 つだけを指定してください
+@msg	`slice` is a slice number from `slice.list`	`slice` は `slice.list` のスライス番号です
 	Delete Character Style	文字スタイルを削除
 	Delete Empty Artboards	空のアートボードを削除
 	Delete Freeform Point	フリーフォームポイントを削除

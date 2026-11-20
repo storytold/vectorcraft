@@ -5497,6 +5497,14 @@ theme	Appearance	იერსახე
 	Delete Color	ფერის წაშლა
 	Restore Generated Table	გენერირებული ცხრილის აღდგენა
 	Unshift All Colors	ყველა ფერის წანაცვლების მოხსნა
+	Load Color Table…	ფერების ცხრილის ჩატვირთვა…
+	Load Color Table	ფერების ცხრილის ჩატვირთვა
+	Save Color Table…	ფერების ცხრილის შენახვა…
+	Save Color Table	ფერების ცხრილის შენახვა
+@msg	`{format}` has no color table: use gif or png8	`{format}`-ს არ აქვს ფერების ცხრილი: გამოიყენეთ gif ან png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	ეს არ არის ფერების ცხრილი: .act ფაილი 768 ან 772 ბაიტია და იყენებს 1-დან 256 ფერამდე
+@msg	give exactly one of `path` and `dataBase64`	მიუთითეთ ზუსტად ერთი: `path` ან `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` არის ნაჭრის ნომერი `slice.list`-დან
 	Delete Symbol	სიმბოლოს წაშლა
 	Delete the selected symbol?	წაიშალოს მონიშნული სიმბოლო?
 	Delete the selected symbols?	წაიშალოს მონიშნული სიმბოლოები?

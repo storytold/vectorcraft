@@ -1106,6 +1106,14 @@ arrowhead	Target	Céltábla
 	Delete Color	Szín törlése
 	Restore Generated Table	Előállított tábla visszaállítása
 	Unshift All Colors	Az összes szín eltolásának visszavonása
+	Load Color Table…	Színtábla betöltése…
+	Load Color Table	Színtábla betöltése
+	Save Color Table…	Színtábla mentése…
+	Save Color Table	Színtábla mentése
+@msg	`{format}` has no color table: use gif or png8	a(z) `{format}` formátumnak nincs színtáblája: használj gif vagy png8 formátumot
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	nem színtábla: egy .act fájl 768 vagy 772 bájt hosszú, és 1 és 256 közötti számú színt használ
+@msg	give exactly one of `path` and `dataBase64`	pontosan egyet adj meg ezek közül: `path`, `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	a `slice` egy szeletszám a `slice.list` listából
 	Delete Character Style	Karakterstílus törlése
 	Delete Data Set	Adatkészlet törlése
 	Delete Empty Artboards	Üres rajztáblák törlése

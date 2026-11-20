@@ -3676,6 +3676,14 @@ theme	Appearance	Ulkoasu
 	Delete Color	Poista väri
 	Restore Generated Table	Palauta luotu taulukko
 	Unshift All Colors	Peru kaikkien värien siirto
+	Load Color Table…	Lataa väritaulukko…
+	Load Color Table	Lataa väritaulukko
+	Save Color Table…	Tallenna väritaulukko…
+	Save Color Table	Tallenna väritaulukko
+@msg	`{format}` has no color table: use gif or png8	muodossa `{format}` ei ole väritaulukkoa: käytä muotoa gif tai png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	ei väritaulukko: .act-tiedosto on 768 tai 772 tavua pitkä ja käyttää vähintään 1 ja enintään 256 väriä
+@msg	give exactly one of `path` and `dataBase64`	anna täsmälleen yksi näistä: `path` tai `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` on siivun numero luettelosta `slice.list`
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
 	Delete the selected symbols?	Poistetaanko valitut symbolit?

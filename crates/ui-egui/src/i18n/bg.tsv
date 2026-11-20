@@ -826,6 +826,10 @@ font-technology	Variable	Променливи
 	Delete Color	Изтриване на цвят
 	Restore Generated Table	Възстановяване на генерираната таблица
 	Unshift All Colors	Преместване назад на всички цветове
+	Load Color Table…	Зареди цветова таблица…
+	Load Color Table	Зареди цветова таблица
+	Save Color Table…	Запази цветова таблица…
+	Save Color Table	Запази цветова таблица
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка

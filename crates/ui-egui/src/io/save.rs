@@ -158,6 +158,7 @@ const FILE_TYPES: &[(&str, &[&str])] = &[
     ("Action sets", &[crate::panels::actions::ACTIONS_EXT]),
     ("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS),
     ("Composite fonts", vectorcraft_engine::cmd::compositefonts::EXTS),
+    ("Color tables", &[vectorcraft_engine::cmd::webexport::COLOR_TABLE_EXT]),
     ("CSS", &["css"]),
     ("PostScript", &["ps"]),
     ("Preferences", &["json"]),

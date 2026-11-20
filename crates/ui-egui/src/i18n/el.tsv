@@ -811,6 +811,14 @@ font-technology	Variable	Μεταβλητές
 	Delete Color	Διαγραφή χρώματος
 	Restore Generated Table	Επαναφορά του παραγόμενου πίνακα
 	Unshift All Colors	Αναίρεση μετατόπισης όλων των χρωμάτων
+	Load Color Table…	Φόρτωση πίνακα χρωμάτων…
+	Load Color Table	Φόρτωση πίνακα χρωμάτων
+	Save Color Table…	Αποθήκευση πίνακα χρωμάτων…
+	Save Color Table	Αποθήκευση πίνακα χρωμάτων
+@msg	`{format}` has no color table: use gif or png8	το `{format}` δεν έχει πίνακα χρωμάτων: χρησιμοποιήστε gif ή png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	δεν είναι πίνακας χρωμάτων: ένα αρχείο .act έχει μήκος 768 ή 772 byte και χρησιμοποιεί 1 έως 256 χρώματα
+@msg	give exactly one of `path` and `dataBase64`	δώστε ακριβώς ένα από τα `path` και `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	το `slice` είναι αριθμός τομής από το `slice.list`
 	Delete Character Style	Διαγραφή στυλ χαρακτήρων
 	Delete Empty Artboards	Διαγραφή κενών πινάκων σχεδίασης
 	Delete Freeform Point	Διαγραφή ελεύθερου σημείου

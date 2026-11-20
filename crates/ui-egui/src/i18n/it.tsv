@@ -860,6 +860,14 @@ font-technology	Variable	Variabili
 	Delete Color	Elimina colore
 	Restore Generated Table	Ripristina tabella generata
 	Unshift All Colors	Annulla spostamento di tutti i colori
+	Load Color Table…	Carica tabella colori…
+	Load Color Table	Carica tabella colori
+	Save Color Table…	Salva tabella colori…
+	Save Color Table	Salva tabella colori
+@msg	`{format}` has no color table: use gif or png8	`{format}` non ha una tabella colori: usa gif o png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	non è una tabella colori: un file .act è lungo 768 o 772 byte e usa da 1 a 256 colori
+@msg	give exactly one of `path` and `dataBase64`	indica esattamente uno tra `path` e `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` è un numero di sezione da `slice.list`
 	Delete Character Style	Elimina stile carattere
 	Delete Empty Artboards	Elimina tavole da disegno vuote
 	Delete Freeform Point	Elimina punto libero
