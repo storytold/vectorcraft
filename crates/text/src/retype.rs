@@ -829,6 +829,9 @@ fn fits_within(results: Vec<((f64, f64), f64)>, limit: f64) -> Vec<((f64, f64), 
 /// Rounds of pairing and fitting [`near_fit`] gives each turn, at most.
 const REFITS: usize = 4;
 
+/// Anchor points of a contour [`clusters`] tests against a candidate container, at most.
+const MAX_CONTAINMENT_PROBES: usize = 8;
+
 /// `path`'s contours in groups that can each be one glyph: a contour with the contours that lie
 /// inside it (a letter's counters, and what lies inside those), in the order the outer contours
 /// come. A path of several glyphs (a word outlined as one compound path) gives one group per glyph
@@ -853,16 +856,33 @@ pub fn clusters(path: &BezPath) -> Vec<BezPath> {
         }
     }
     let boxes: Vec<kurbo::Rect> = subs.iter().map(Shape::bounding_box).collect();
-    let starts: Vec<Option<Point>> = subs.iter().map(|s| s.elements().first().and_then(|e| e.end_point())).collect();
+    // Up to MAX_CONTAINMENT_PROBES of each contour's anchor points, evenly spread: a contour lies in
+    // another only when every one of them does.
+    let probes: Vec<Vec<Point>> = subs
+        .iter()
+        .map(|s| {
+            let anchors: Vec<Point> = s.elements().iter().filter_map(|e| e.end_point()).collect();
+            let step = anchors.len().div_ceil(MAX_CONTAINMENT_PROBES).max(1);
+            anchors.into_iter().step_by(step).collect()
+        })
+        .collect();
     // Each contour's container: the smallest contour around it.
     let parent: Vec<Option<usize>> = (0..subs.len())
         .map(|i| {
-            let (Some(bi), Some(Some(p))) = (boxes.get(i), starts.get(i)) else { return None };
+            let (Some(bi), Some(pi)) = (boxes.get(i), probes.get(i)) else { return None };
+            if pi.is_empty() {
+                return None;
+            }
             (0..subs.len())
                 .filter(|&j| j != i)
                 .filter_map(|j| Some((j, boxes.get(j)?, subs.get(j)?)))
                 .filter(|(_, bj, sj)| {
-                    bj.area() > bi.area() && bj.x0 <= bi.x0 && bj.y0 <= bi.y0 && bj.x1 >= bi.x1 && bj.y1 >= bi.y1 && sj.winding(*p) != 0
+                    bj.area() > bi.area()
+                        && bj.x0 <= bi.x0
+                        && bj.y0 <= bi.y0
+                        && bj.x1 >= bi.x1
+                        && bj.y1 >= bi.y1
+                        && pi.iter().all(|p| sj.winding(*p) != 0)
                 })
                 .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
                 .map(|(j, _, _)| j)
@@ -2065,6 +2085,28 @@ mod tests {
         let mut wide = square(0.0, 0.0, 100.0, 100.0, false);
         wide.extend(square(10.0, 10.0, 90.0, 90.0, false).iter());
         assert!(!narrow_contour(&wide, 3.0 * tol));
+    }
+
+    #[test]
+    fn a_contour_reaching_outside_a_concave_one_is_no_counter_of_it() {
+        // An L, and a triangle that starts inside the L and inside its box but reaches outside it.
+        let mut l = BezPath::new();
+        for (i, (x, y)) in [(0.0, 0.0), (100.0, 0.0), (100.0, 20.0), (20.0, 20.0), (20.0, 100.0), (0.0, 100.0)].into_iter().enumerate() {
+            if i == 0 { l.move_to((x, y)) } else { l.line_to((x, y)) }
+        }
+        l.close_path();
+        let mut tri = BezPath::new();
+        tri.move_to((5.0, 5.0));
+        tri.line_to((90.0, 90.0));
+        tri.line_to((5.0, 50.0));
+        tri.close_path();
+        let mut both = l.clone();
+        both.extend(tri.iter());
+        assert_eq!(clusters(&both).len(), 2);
+        // A contour wholly inside stays with its container.
+        let mut inside = l.clone();
+        inside.extend(kurbo::Rect::new(5.0, 5.0, 15.0, 15.0).to_path(0.1).iter());
+        assert_eq!(clusters(&inside).len(), 1);
     }
 
     #[test]

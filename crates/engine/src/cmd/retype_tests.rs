@@ -1312,6 +1312,31 @@ fn a_split_takes_a_shorter_run_when_the_longest_leaves_a_group_unmatched() {
     assert!(super::parts(&p, &groups, &none, &|_, _| true).is_empty());
 }
 
+#[test]
+fn a_split_the_paint_check_rejects_gives_way_to_another_complete_split() {
+    use kurbo::Shape;
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0, 200.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, 0, 140) => vec!["AB"],
+            (true, 0, 40) => vec!["A"],
+            (true, 100, 140) => vec!["B"],
+            (true, 200, 240) => vec!["C"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    // The longest runs first (AB, C) are rejected; the three single glyphs are kept.
+    let singles = |runs: &[kurbo::BezPath], _near: bool| runs.len() == 3;
+    assert_eq!(super::parts(&p, &groups, &find, &singles), vec![vec!["A"], vec!["B"], vec!["C"]]);
+    // When no complete split is accepted, nothing.
+    assert!(super::parts(&p, &groups, &find, &|_, _| false).is_empty());
+}
+
 /// `path`'s contour groups, with no limit on the contours grouped.
 fn all_groups(path: &kurbo::BezPath) -> Vec<kurbo::BezPath> {
     let mut budget = usize::MAX;

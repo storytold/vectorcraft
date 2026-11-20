@@ -1210,39 +1210,51 @@ fn split_parts<M>(groups: &[BezPath], find: &dyn Fn(&BezPath) -> Vec<M>, togethe
         return vec![];
     }
     let g = groups.len();
-    // From the last group back: the run that starts at each group, the longest that matches and
-    // leaves a rest that can all be matched, with its candidates. Runs past such a start are
-    // never tried for one whose rest cannot be matched.
-    let mut chosen: Vec<Option<(usize, Vec<M>)>> = (0..g).map(|_| None).collect();
-    for i in (0..g).rev() {
-        for n in (1..=MAX_RUN.min(g - i)).rev() {
-            let rest_ok = i + n == g || chosen.get(i + n).is_some_and(Option::is_some);
-            if !rest_ok {
-                continue;
+    // The split with the longest runs first; when `together` rejects it, the one with the shortest
+    // runs, which is the other end of the complete splits.
+    for longest in [true, false] {
+        // From the last group back: the run that starts at each group, the longest (or shortest)
+        // that matches and leaves a rest that can all be matched, with its candidates. Runs past
+        // such a start are never tried for one whose rest cannot be matched.
+        let mut chosen: Vec<Option<(usize, Vec<M>)>> = (0..g).map(|_| None).collect();
+        for i in (0..g).rev() {
+            let mut lens: Vec<usize> = (1..=MAX_RUN.min(g - i)).collect();
+            if longest {
+                lens.reverse();
             }
-            let Some(run) = groups.get(i..i + n) else { continue };
-            let cands = find(&joined(run));
-            if !cands.is_empty() {
-                if let Some(c) = chosen.get_mut(i) {
-                    *c = Some((n, cands));
+            for n in lens {
+                let rest_ok = i + n == g || chosen.get(i + n).is_some_and(Option::is_some);
+                if !rest_ok {
+                    continue;
                 }
-                break;
+                let Some(run) = groups.get(i..i + n) else { continue };
+                let cands = find(&joined(run));
+                if !cands.is_empty() {
+                    if let Some(c) = chosen.get_mut(i) {
+                        *c = Some((n, cands));
+                    }
+                    break;
+                }
             }
         }
+        let mut out = vec![];
+        let mut runs = vec![];
+        let mut i = 0;
+        while i < g {
+            let Some(Some((n, cands))) = chosen.get_mut(i).map(Option::take) else { return vec![] };
+            out.push(cands);
+            runs.push(groups.get(i..i + n).map(joined).unwrap_or_default());
+            i += n;
+        }
+        if out.len() == 1 || together(&runs) {
+            return out;
+        }
+        // Every run a single group: the other order gives the same split.
+        if out.len() == g {
+            break;
+        }
     }
-    let mut out = vec![];
-    let mut runs = vec![];
-    let mut i = 0;
-    while i < g {
-        let Some(Some((n, cands))) = chosen.get_mut(i).map(Option::take) else { return vec![] };
-        out.push(cands);
-        runs.push(groups.get(i..i + n).map(joined).unwrap_or_default());
-        i += n;
-    }
-    if out.len() > 1 && !together(&runs) {
-        return vec![];
-    }
-    out
+    vec![]
 }
 
 /// Contour groups joined into one path.
