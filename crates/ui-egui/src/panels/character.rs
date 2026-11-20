@@ -2012,7 +2012,7 @@ fn ruby_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             "below" => "Below",
             _ => "Above",
         });
-        egui::ComboBox::from_id_salt("ruby-position").selected_text(position).width(64.0).show_ui(ui, |ui| {
+        craft_ui::ComboBox::from_id_salt("ruby-position").selected_text(position).width(64.0).show_ui(ui, |ui| {
             for (value, label) in [("above", "Above"), ("below", "Below")] {
                 if ui.selectable_label(f.position == value, tl!(label)).clicked() && f.position != value {
                     f.position = value.into();
@@ -2026,7 +2026,7 @@ fn ruby_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             "end" => "End",
             _ => "Center",
         });
-        egui::ComboBox::from_id_salt("ruby-align").selected_text(align).width(64.0).show_ui(ui, |ui| {
+        craft_ui::ComboBox::from_id_salt("ruby-align").selected_text(align).width(64.0).show_ui(ui, |ui| {
             for (value, label) in [("start", "Start"), ("center", "Center"), ("end", "End")] {
                 if ui.selectable_label(f.align == value, tl!(label)).clicked() && f.align != value {
                     f.align = value.into();
