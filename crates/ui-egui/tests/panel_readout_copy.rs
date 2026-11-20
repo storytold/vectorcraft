@@ -133,7 +133,14 @@ impl App {
         // A newly opened egui popup first measures an invisible sizing pass. Read its painted
         // category only after normal subsequent layout frames, as the user sees it.
         let menu = self.settle();
-        let item = painted(&menu, category).0.center();
+        // menu_item_name paints the check column in the same galley as the label.
+        // Match that real menu text without trimming any copied readout or user data.
+        let item = ["   ", "✓ "]
+            .into_iter()
+            .map(|prefix| format!("{prefix}{category}"))
+            .find(|text| visible_text_count(&menu, text) > 0)
+            .map(|text| painted(&menu, &text).0.center())
+            .unwrap_or_else(|| panic!("fixture: no painted category menu item {category:?}"));
         self.tap(item);
         self.settle()
     }
