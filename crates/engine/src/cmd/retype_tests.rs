@@ -1290,6 +1290,49 @@ fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
 }
 
 #[test]
+fn a_translucent_compound_whose_glyphs_overlap_stays_an_outline() {
+    // Two i's, the second moved half onto the first and down off its baseline, made into one
+    // compound path filled by the nonzero rule with every contour running one way: the parts paint
+    // the shape's area, but on two lines they become two objects, and at 50% opacity their
+    // overlap would be painted twice.
+    for opacity in [1.0f32, 0.5] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ii", "size": 40}));
+        let kids = children_of(&s, g);
+        let dx = shape_box(&s, kids[0]).x0 - shape_box(&s, kids[1]).x0 + 2.0;
+        s.execute("object.move", &json!({"ids": [kids[1]], "dx": dx, "dy": 6})).unwrap();
+        s.execute("select.set", &json!({"ids": kids})).unwrap();
+        let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let paths = children_of(&s, c);
+        s.edit("test", |d, _| {
+            // Make Compound Path turns the second glyph's contours the other way round.
+            for p in &paths {
+                let data = d.node_mut(NodeId(*p)).unwrap().path_data_mut().unwrap();
+                let b = data.to_bezpath();
+                if kurbo::Shape::area(&b) < 0.0 {
+                    *data = vectorcraft_geom::PathData::from_bezpath(&b.reverse_subpaths());
+                }
+            }
+            let n = d.node_mut(NodeId(c)).unwrap();
+            n.opacity = opacity;
+            if let NodeKind::Compound { rule, .. } = &mut n.kind {
+                *rule = vectorcraft_geom::FillRule::NonZero;
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        let r = s.execute("type.retype", &json!({}));
+        if opacity == 1.0 {
+            let r = r.unwrap();
+            assert_eq!(r["texts"], json!(["i", "i"]), "opaque, the two lines become type: {r}");
+        } else {
+            assert!(r.is_err(), "translucent, the compound stays an outline: {r:?}");
+        }
+    }
+}
+
+#[test]
 fn overlapping_exact_glyphs_stay_an_outline_when_near_matches_are_allowed() {
     // Exact parts the even-odd rule rejects stay rejected when the near phase finds them again.
     for dx in [-9.0, -11.0, -12.0, -13.0, -14.0] {

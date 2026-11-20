@@ -11338,7 +11338,9 @@ whose inner contour runs the same way as its outer one paints its center, so a r
 outline tolerance across in some direction, turned or not, cannot be checked this way and stays an outline: at `tolerance` 0.05, a
 counter 10 units wide in a 100 by 100 shape, or a 60 by 10 one turned 45 degrees. So does a shape whose outline is too large to check. The glyphs of a compound path that splits into several are set one beside
 another, so a split whose parts overlap where the shape's fill rule leaves the overlap unpainted (two o's on each
-other under the even-odd rule) stays an outline. When the split with the longest runs fails that check, the split with the
+other under the even-odd rule) stays an outline. A split whose parts overlap at all also stays an outline when the
+compound has an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke, since the
+glyphs may become separate objects that paint the overlap twice. When the split with the longest runs fails that check, the split with the
 shortest runs is checked, then the other complete splits in order, up to 32 splits per shape for exact matches and 32
 for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups, 512 contours
 or 65,536 path elements is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
