@@ -344,6 +344,15 @@ fn the_panel_menu_shows_the_harmony_and_picks_the_rule() {
     h.get_by_label("   Pentagram").click();
     h.run_steps(2);
     assert_eq!(h.state().ui.color_wheel.harmony_rule, Harmony::Pentagram);
+    // The checked rule runs no command.
+    if h.query_by_label("✓ Pentagram").is_none() {
+        h.get_by_label("   Harmony Rule").click();
+        h.run_steps(2);
+    }
+    let commands = h.state().run_count;
+    h.get_by_label("✓ Pentagram").click();
+    h.run_steps(2);
+    assert_eq!(h.state().run_count, commands, "the checked rule runs no command");
     h.state_mut().run("ui.colorWheel", json!({"view": "box"})).unwrap();
     h.run_steps(2);
     assert!(h.get_by_label("✓ Show Harmony").accesskit_node().data().is_disabled(), "gray while the box shows");

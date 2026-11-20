@@ -338,7 +338,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_enabled_ui(set.view == View::Wheel, |ui| {
         ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
             for rule in harmony_rules() {
-                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) && rule != set.harmony_rule {
                     run(app, json!({ "harmonyRule": rule.id() }));
                 }
             }
