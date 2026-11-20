@@ -340,6 +340,18 @@ pub(super) fn space_before(ui: &Ui, index: usize) -> bool {
     })
 }
 
+/// Middle-button state at a raw event boundary, before a later press or release.
+pub(super) fn middle_before(ui: &Ui, index: usize) -> bool {
+    ui.input(|i| {
+        let step = |event: &egui::Event| match event {
+            egui::Event::PointerButton { button: egui::PointerButton::Middle, pressed, .. } => Some(*pressed),
+            _ => None,
+        };
+        let start = i.events.iter().find_map(step).map_or(i.pointer.button_down(egui::PointerButton::Middle), |pressed| !pressed);
+        i.events.iter().take(index).filter_map(step).fold(start, |_, pressed| pressed)
+    })
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {

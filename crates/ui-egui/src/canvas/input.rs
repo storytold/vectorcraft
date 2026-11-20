@@ -1,7 +1,7 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, mods, move_pose, on_canvas, paired_frame_moves, pen_pose, pen_pressure, pen_pressure_before, primary_press_state,
+    drop_press, middle_before, mods, move_pose, on_canvas, paired_frame_moves, pen_pose, pen_pressure, pen_pressure_before, primary_press_state,
     released_tool_frame_moves, space_before, space_lends_view_tools, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves,
     tool_holds, tool_press_doc_id,
 };
@@ -71,7 +71,8 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         finished = finished.max(super::split::finish_held_divider_before_press(app, ui, rect, modal));
         let frame =
             Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal, paired_moves: &paired_moves, release: None };
-        finished = finish_view_presses(app, ui, &frame, finished);
+        finished = finish_name_or_view_presses(app, ui, &frame, finished);
+        finished = finished.max(super::split::finish_completed_dividers_before_middle(app, ui, resp, rect, modal, finished));
         let handoff = match super::split::divider_input(app, ui, resp, rect, modal, space, finished) {
             super::split::DividerInput::Consumed => {
                 poll_tool(app, ui, view);
@@ -82,6 +83,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             super::split::DividerInput::Ignored => finished.is_some(),
         };
         if handoff
+            && press.is_some_and(|(down, _)| fresh_primary_after_handoff(ui, resp, finished, down))
             && !modal
             && !press.is_some_and(|(down, _)| primary_press_state(app, ui, down).1)
             && !crate::touch::finger_navigates_only()
@@ -171,7 +173,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         && !f.modal
         && !middle_pan
         && drag.is_none()
-        && let Some((down, p)) = press.filter(|(down, _)| finished.is_none_or(|up| *down > up))
+        && let Some((down, p)) = press.filter(|(down, _)| fresh_primary_after_handoff(ui, resp, finished, *down))
         && on_canvas(ui, resp, p)
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
@@ -199,10 +201,10 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             }
         }
     } else if drag.is_none()
-        && resp.hovered()
         && !f.modal
         && pointer.button_pressed(egui::PointerButton::Middle)
-        && let Some(start) = hover
+        && let Some(start) = super::split::middle_press(ui).map(|(_, p)| p).or(hover)
+        && on_canvas(ui, resp, start)
     {
         // Middle-button drag pans the view whatever the tool.
         ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
@@ -320,13 +322,21 @@ fn owner_release(ui: &Ui, drag: Drag) -> Option<(usize, Pos2)> {
     }
 }
 
-fn view_presses_allowed(app: &VectorcraftApp, ui: &Ui, modal: bool) -> bool {
+/// Only a supported completed handoff defers a later primary to an admitted Middle owner.
+/// Ordinary admission without that handoff keeps its existing policy.
+fn fresh_primary_after_handoff(ui: &Ui, resp: &egui::Response, finished: Option<usize>, down: usize) -> bool {
+    finished.is_none_or(|up| down > up)
+        && !(finished.is_some()
+            && middle_before(ui, down)
+            && super::split::middle_press(ui).is_some_and(|(middle, p)| middle < down && on_canvas(ui, resp, p)))
+}
+
+fn prefix_presses_allowed(app: &VectorcraftApp, ui: &Ui, modal: bool) -> bool {
     !modal
         && app.ui.screen_mode != 3
         && !crate::touch::finger_navigates_only()
         && !super::split::dragging(ui.ctx())
         && ui.data(|d| d.get_temp::<Drag>(drag_id()).is_none() && d.get_temp::<(usize, bool)>(name_press_id()).is_none())
-        && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
 }
 
 fn view_press_space(app: &VectorcraftApp, ui: &Ui, down: usize) -> Option<bool> {
@@ -334,26 +344,32 @@ fn view_press_space(app: &VectorcraftApp, ui: &Ui, down: usize) -> Option<bool> 
     (space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView")).then_some(space)
 }
 
-/// Admission shared by the read-only mapped-handle deferral and actual VIEW replay.
-fn view_press_eligible(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, down: usize, pressed: Pos2) -> bool {
-    let Some(space) = view_press_space(app, ui, down) else { return false };
-    let v = *app.view().unwrap_or(&View::default());
-    let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
-    on_canvas(ui, resp, pressed)
-        && artboard_name_at(app, ui, &xf, pressed).is_none()
-        && (space || !super::split::enabled(app) || !super::split::divider_press_at(app, ui, resp, rect, pressed))
+/// Only supported Name/VIEW episodes before a later primary or middle press are replayed.
+fn prefix_press_boundary(ui: &Ui) -> Option<usize> {
+    super::split::primary_press(ui).map(|(down, _)| down).max(super::split::middle_press(ui).map(|(down, _)| down))
 }
 
-/// A complete earlier VIEW episode must update the camera before a fresh mapped pick.
+/// Admission shared by the read-only mapped-handle deferral and actual Name/VIEW replay.
+fn prefix_press_eligible(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, down: usize, pressed: Pos2) -> bool {
+    let space = primary_press_state(app, ui, down).1;
+    let v = *app.view().unwrap_or(&View::default());
+    let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
+    !middle_before(ui, down)
+        && on_canvas(ui, resp, pressed)
+        && (space || !super::split::enabled(app) || !super::split::divider_press_at(app, ui, resp, rect, pressed))
+        && (artboard_name_at(app, ui, &xf, pressed).is_some() || view_press_space(app, ui, down).is_some())
+}
+
+/// A complete earlier Name/VIEW episode must finish before a fresh mapped pick.
 /// This query never dispatches input or changes the view, divider or stored owners.
-pub(super) fn pending_view_press(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
-    let Some((latest, _)) = super::split::primary_press(ui) else { return false };
-    if !view_presses_allowed(app, ui, crate::panel_docking::modal_open(app, ui.ctx())) {
+pub(super) fn pending_name_or_view_press(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
+    let Some(latest) = prefix_press_boundary(ui) else { return false };
+    if !prefix_presses_allowed(app, ui, crate::panel_docking::modal_open(app, ui.ctx())) {
         return false;
     }
     let mut scanned = None;
     while let Some((down, pressed, up, _)) = super::split::completed_primary_press(ui, scanned, latest) {
-        if view_press_eligible(app, ui, resp, rect, down, pressed) {
+        if prefix_press_eligible(app, ui, resp, rect, down, pressed) {
             return true;
         }
         scanned = Some(up);
@@ -361,31 +377,36 @@ pub(super) fn pending_view_press(app: &VectorcraftApp, ui: &Ui, resp: &egui::Res
     false
 }
 
-/// Complete earlier view-tool clicks/drags before a later primary Down chooses its owner.
-/// Ordinary Tool/name/mapped presses keep their existing admission; only view tools are replayed.
-fn finish_view_presses(app: &mut VectorcraftApp, ui: &Ui, frame: &Pointing, mut after: Option<usize>) -> Option<usize> {
-    if !view_presses_allowed(app, ui, frame.modal) {
+/// Complete earlier Name/VIEW pairs in order before the later Down chooses its owner.
+/// Ordinary Tool/mapped presses keep their existing admission and are not replayed.
+fn finish_name_or_view_presses(app: &mut VectorcraftApp, ui: &Ui, frame: &Pointing, mut after: Option<usize>) -> Option<usize> {
+    if !prefix_presses_allowed(app, ui, frame.modal) {
         return after;
     }
-    let Some((latest, _)) = super::split::primary_press(ui) else { return after };
+    let Some(latest) = prefix_press_boundary(ui) else { return after };
     let mut scanned = after;
     while let Some((down, pressed, up, released)) = super::split::completed_primary_press(ui, scanned, latest) {
         scanned = Some(up);
-        if view_press_space(app, ui, down).is_none() {
-            continue;
-        }
         // Earlier dividers settle before this press is tested against its actual camera/seam.
         after = super::split::finish_completed_dividers(app, ui, frame.resp, frame.rect, after, Some(down));
-        if !view_press_eligible(app, ui, frame.resp, frame.rect, down, pressed) {
+        if !prefix_press_eligible(app, ui, frame.resp, frame.rect, down, pressed) {
             continue;
         }
         let v = *app.view().unwrap_or(&View::default());
         let xf = Xf::at(frame.rect, &v, app.canvas_ui_zoom);
-        let view = super::split::input_view(app, ui, frame.rect, Some(pressed));
-        let f = Pointing { v, xf, view, ..*frame };
-        begin_drag(app, ui, &f, pressed, down);
-        if let Some(drag) = ui.data(|d| d.get_temp::<Drag>(drag_id())) {
-            drag_released(app, ui, &f, drag, released, Some((down, up)));
+        if let Some(index) = artboard_name_at(app, ui, &xf, pressed) {
+            let shift = primary_press_state(app, ui, down).0.shift;
+            ui.ctx().memory_mut(|mem| mem.stop_text_input());
+            app.ui.flyout = None;
+            ui.data_mut(|data| data.insert_temp(name_press_id(), (index, shift)));
+            finish_name_press(app, ui, Some(up));
+        } else {
+            let view = super::split::input_view(app, ui, frame.rect, Some(pressed));
+            let f = Pointing { v, xf, view, ..*frame };
+            begin_drag(app, ui, &f, pressed, down);
+            if let Some(drag) = ui.data(|d| d.get_temp::<Drag>(drag_id())) {
+                drag_released(app, ui, &f, drag, released, Some((down, up)));
+            }
         }
         after = Some(up);
     }

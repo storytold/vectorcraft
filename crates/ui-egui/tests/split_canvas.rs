@@ -3141,3 +3141,220 @@ synchronous_test!(review_599336_divider_moves_only_after_its_axis_changes, {
         review_599336_stationary_divider(orientation, false, true);
     }
 });
+
+fn review_599512_primary(at: Pos2, pressed: bool, shift: bool) -> Event {
+    Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers { shift, ..Modifiers::NONE } }
+}
+
+fn review_599512_name_only_control() {
+    let (mut s, name, _) = review_599336_name_mapped_scene();
+    let before = s.snapshot();
+    s.review8211_materials_frame(vec![Event::PointerMoved(name), review_597489_primary(name, true), review_597489_primary(name, false)]);
+    assert_eq!(s.app.view().unwrap().artboard, 0, "CONTROL: a cold completed name click works without a later press");
+    assert_eq!(s.snapshot(), before);
+    s.app.view_mut().unwrap().artboard = 1;
+    s.review8211_materials_frame(vec![]);
+    assert_eq!(s.app.view().unwrap().artboard, 1, "the completed name has no owner left for a later frame");
+}
+
+fn review_599512_name_selection(s: &Scene, artboard_tool: bool, own_shift: bool) {
+    assert_eq!(s.app.view().unwrap().artboard, 0, "the cold name click finishes at its own Up before mapped preview");
+    if artboard_tool {
+        let options = s.app.session.tool_options();
+        let mut selected: Vec<_> = options["selected"].as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect();
+        selected.sort_unstable();
+        assert_eq!(selected, if own_shift { vec![0, 1] } else { vec![0] }, "only the name's own Down/Up Shift metadata controls artboard selection");
+    }
+}
+
+fn review_599512_cold_name_mapping(coalesced: bool, artboard_tool: bool, own_shift: (bool, bool), later_shift: bool) -> Value {
+    let (mut s, mut name, mut handle) = review_599336_name_mapped_scene();
+    if artboard_tool {
+        // These are actual public tool options, not injected pointer owners. Keep
+        // the mapped object's real selection while making Shift-name observable.
+        s.app.select_tool("artboard");
+        s.app.run("select.set", json!({"ids":[s.rectangle.0]})).unwrap();
+        s.app.session.set_tool_option("active", &json!(1));
+        s.review8211_materials_frame(vec![]);
+        name = s.output.shapes.iter().find_map(|s| review_599336_name_position(&s.shape)).expect("the actual unselected first name is painted");
+        handle = review_598046_current_mapped_handle(&s);
+        assert_eq!(s.app.session.active().unwrap().selection.objects, vec![s.rectangle]);
+        assert_eq!(s.app.session.tool_options()["selected"], json!([1]));
+    }
+    let (before, graphics) = (s.document(), review8211_graphics(&s));
+    let history = s.app.session.active().unwrap().history.undo.len();
+    let camera = review_597943_camera(&s);
+    let down = review_599512_primary(name, true, own_shift.0);
+    let up = review_599512_primary(name, false, own_shift.1);
+    let mapped = review_599512_primary(handle, true, later_shift);
+    if coalesced {
+        s.review8211_materials_frame(vec![Event::PointerMoved(name), down, up, mapped]);
+    } else {
+        s.review8211_materials_frame(vec![Event::PointerMoved(name), down]);
+        assert_eq!(s.app.view().unwrap().artboard, 1, "CONTROL: Down alone does not select the named board");
+        s.review8211_materials_frame(vec![up]);
+        review_599512_name_selection(&s, artboard_tool, own_shift.0 || own_shift.1);
+        s.review8211_materials_frame(vec![mapped]);
+    }
+    review_599512_name_selection(&s, artboard_tool, own_shift.0 || own_shift.1);
+    review_597943_camera_eq(&s, camera);
+    assert_eq!(s.document(), before, "name selection and mapped Down do not edit before preview");
+    let result = review_599336_finish_mapping(&mut s, handle, &before, &graphics, history);
+    review_597943_camera_eq(&s, camera);
+    result
+}
+
+synchronous_test!(review_599512_cold_name_pair_precedes_fresh_mapped_handle, {
+    let _globals = Globals::new();
+    review_599336_lone_mapping_control();
+    review_599512_name_only_control();
+    review_599336_name_then_mapping(false);
+    let ordinary = review_599512_cold_name_mapping(false, false, (false, false), false);
+    assert_eq!(review_599512_cold_name_mapping(true, false, (false, false), false), ordinary);
+    for (own_shift, later_shift) in [((true, false), false), ((false, true), false), ((false, false), true)] {
+        let ordinary = review_599512_cold_name_mapping(false, true, own_shift, later_shift);
+        assert_eq!(review_599512_cold_name_mapping(true, true, own_shift, later_shift), ordinary);
+    }
+});
+
+fn review_599512_middle_retains_owner(command: &str, release_in_frame: bool) {
+    let mut s = Scene::new();
+    s.enable();
+    s.command(command);
+    let before = s.snapshot();
+    let camera = review_597943_camera(&s);
+    let start = s.rect().left_top() + vec2(60.0, 80.0);
+    let primary = s.point_on_divider();
+    let end = review_597489_divider_point(&s, 0.7);
+    s.press(start, PointerButton::Middle);
+    let mut events = vec![review_597489_primary(primary, true), Event::PointerMoved(end)];
+    if release_in_frame {
+        events.push(review_599336_button(end, PointerButton::Middle, false));
+    }
+    s.frame(events);
+    assert_eq!(s.fraction(), 0.5, "CONTROL: Middle already owned the pointer at this Primary Down, even if its Up is later");
+    assert!(s.app.view().unwrap().center.distance(camera.0) > 1e-6, "the real Middle owner may pan");
+    s.release(end, PointerButton::Primary);
+    if !release_in_frame {
+        s.frame(vec![Event::PointerMoved(end + vec2(12.0, 6.0))]);
+        assert_eq!(s.fraction(), 0.5, "an unreleased Middle owner keeps the divider excluded");
+        s.release(end + vec2(12.0, 6.0), PointerButton::Middle);
+    }
+    assert_eq!(s.snapshot(), before);
+}
+
+fn review_599512_divider_then_middle(command: &str, coalesced: bool, held: bool, later_primary: bool) -> (Point, f64, f64) {
+    let mut s = Scene::new();
+    s.enable();
+    s.command(command);
+    let before = s.snapshot();
+    let camera = review_597943_camera(&s);
+    let down = s.point_on_divider();
+    let released = review_597489_divider_point(&s, 0.7);
+    let middle = s.rect().center() + vec2(-60.0, 50.0);
+    let moved = middle + vec2(24.0, 12.0);
+    let middle_up = middle + vec2(48.0, 18.0);
+    if held {
+        s.press(down, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(review_597489_divider_point(&s, 0.6))]);
+        assert!((s.fraction() - 0.6).abs() < 1e-6, "CONTROL: the old divider really owns the prior frame");
+    }
+    if coalesced {
+        let mut events = if held {
+            vec![review_597489_primary(released, false)]
+        } else {
+            vec![Event::PointerMoved(down), review_597489_primary(down, true), Event::PointerMoved(released), review_597489_primary(released, false)]
+        };
+        events.push(review_599336_button(middle, PointerButton::Middle, true));
+        if later_primary {
+            events.push(review_597489_primary(released, true));
+        }
+        s.frame(events);
+    } else {
+        if !held {
+            s.press(down, PointerButton::Primary);
+            s.frame(vec![Event::PointerMoved(released)]);
+        }
+        s.release(released, PointerButton::Primary);
+        s.press(middle, PointerButton::Middle);
+        if later_primary {
+            s.frame(vec![review_597489_primary(released, true)]);
+        }
+    }
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "the completed divider precedes Middle Down and is not suppressed by final button state");
+    review_597943_camera_eq(&s, camera);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!(s.app.view().unwrap().center.distance(camera.0) > 1e-6, "the new real Middle owner retains its subsequent motion");
+    s.release(middle_up, PointerButton::Middle);
+    if later_primary {
+        s.release(middle_up, PointerButton::Primary);
+    }
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "a Primary candidate while Middle owns input cannot steal the seam");
+    let result = review_597943_camera(&s);
+    s.frame(vec![Event::PointerMoved(middle_up + vec2(13.0, 11.0))]);
+    review_597943_camera_eq(&s, result);
+    assert_eq!(s.snapshot(), before, "both completed view gestures leave document, selection and history intact");
+    result
+}
+
+fn review_599512_off_canvas_middle_control(command: &str, off_canvas_middle: bool) -> (Point, f64, f64) {
+    let mut s = Scene::new();
+    s.enable();
+    s.command(command);
+    s.app.select_tool("hand");
+    let before = s.snapshot();
+    let camera = review_597943_camera(&s);
+    let down = s.point_on_divider();
+    let released = review_597489_divider_point(&s, 0.7);
+    let outside = s.rect().left_top() - vec2(20.0, 20.0);
+    assert!(!s.rect().contains(outside), "the Middle press is genuinely outside the canvas");
+    let hand = s.rect().center() + vec2(-60.0, 50.0);
+    let mut events =
+        vec![Event::PointerMoved(down), review_597489_primary(down, true), Event::PointerMoved(released), review_597489_primary(released, false)];
+    if off_canvas_middle {
+        events.push(review_599336_button(outside, PointerButton::Middle, true));
+    }
+    events.push(review_597489_primary(hand, true));
+    s.frame(events);
+    assert!((s.fraction() - 0.7).abs() < 1e-6);
+    review_597943_camera_eq(&s, camera);
+    let moved = hand + vec2(24.0, 12.0);
+    s.frame(vec![Event::PointerMoved(moved)]);
+    assert!(s.app.view().unwrap().center.distance(camera.0) > 1e-6, "an off-canvas Middle press does not steal the later ordinary Hand press");
+    let up = hand + vec2(48.0, 18.0);
+    s.release(up, PointerButton::Primary);
+    if off_canvas_middle {
+        s.release(up, PointerButton::Middle);
+    }
+    assert!((s.fraction() - 0.7).abs() < 1e-6, "ordinary Hand motion does not move the divider");
+    let result = review_597943_camera(&s);
+    s.frame(vec![Event::PointerMoved(up + vec2(13.0, 11.0))]);
+    review_597943_camera_eq(&s, result);
+    assert_eq!(s.snapshot(), before);
+    result
+}
+
+fn review_599512_compare_middle(command: &str, held: bool, later_primary: bool) {
+    let ordinary = review_599512_divider_then_middle(command, false, held, later_primary);
+    let actual = review_599512_divider_then_middle(command, true, held, later_primary);
+    assert!(
+        actual.0.distance(ordinary.0) < 1e-6 && (actual.1 - ordinary.1).abs() < 1e-9 && (actual.2 - ordinary.2).abs() < 1e-9,
+        "the real later Middle pan has the separate-frame camera"
+    );
+}
+
+synchronous_test!(review_599512_completed_divider_keeps_later_middle_pan, {
+    let _globals = Globals::new();
+    for command in ["view.splitVertical", "view.splitHorizontal"] {
+        review_599512_middle_retains_owner(command, false);
+        review_599512_middle_retains_owner(command, true);
+    }
+    for command in ["view.splitVertical", "view.splitHorizontal"] {
+        review_599512_compare_middle(command, false, false);
+        review_599512_compare_middle(command, true, false);
+        review_599512_compare_middle(command, false, true);
+        let ordinary = review_599512_off_canvas_middle_control(command, false);
+        let actual = review_599512_off_canvas_middle_control(command, true);
+        assert!(actual.0.distance(ordinary.0) < 1e-6 && (actual.1 - ordinary.1).abs() < 1e-9 && (actual.2 - ordinary.2).abs() < 1e-9);
+    }
+});

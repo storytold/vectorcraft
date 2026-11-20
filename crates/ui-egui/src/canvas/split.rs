@@ -147,6 +147,16 @@ pub(crate) fn primary_press(ui: &Ui) -> Option<(usize, Pos2)> {
     })
 }
 
+/// The last actual middle-button press in this frame, with its event index.
+pub(super) fn middle_press(ui: &Ui) -> Option<(usize, Pos2)> {
+    ui.input(|i| {
+        i.events.iter().enumerate().rev().find_map(|(index, event)| match event {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed: true, .. } => Some((index, *pos)),
+            _ => None,
+        })
+    })
+}
+
 /// The first primary release, optionally restricted to events after a particular press.
 pub(crate) fn primary_release(ui: &Ui, after: Option<usize>) -> Option<(usize, Pos2)> {
     ui.input(|i| {
@@ -181,8 +191,9 @@ pub(super) fn completed_primary_press(ui: &Ui, after: Option<usize>, before: usi
 pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
     enabled(app)
         && !ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some())
-        && !ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
-        && primary_press(ui).is_some_and(|(down, p)| !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p))
+        && primary_press(ui).is_some_and(|(down, p)| {
+            !drag::middle_before(ui, down) && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p)
+        })
 }
 
 pub(super) fn divider_press_at(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, p: Pos2) -> bool {
@@ -203,8 +214,7 @@ fn completed_divider_press(
     after: Option<usize>,
     before: Option<usize>,
 ) -> Option<(usize, Pos2, usize, Pos2)> {
-    if !enabled(app) || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some()) || ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
-    {
+    if !enabled(app) || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some()) {
         return None;
     }
     let latest = before.or_else(|| primary_press(ui).map(|(down, _)| down))?;
@@ -224,7 +234,8 @@ fn completed_divider_press(
     });
     presses.into_iter().find_map(|(down, p)| {
         let (up, released) = primary_release(ui, Some(down))?;
-        (up < latest && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p)).then_some((down, p, up, released))
+        (up < latest && !drag::middle_before(ui, down) && !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p))
+            .then_some((down, p, up, released))
     })
 }
 
@@ -242,7 +253,7 @@ pub(super) fn finish_held_divider_before_press(app: &mut VectorcraftApp, ui: &Ui
         return None;
     }
     let release = primary_release(ui, None)?;
-    let (down, _) = primary_press(ui)?;
+    let down = primary_press(ui).map(|(down, _)| down).max(middle_press(ui).map(|(down, _)| down))?;
     if down <= release.0 {
         return None;
     }
@@ -345,6 +356,27 @@ pub(super) fn divider_input(
     app.session.tool_hover_ended(app.view_info());
     ui.data_mut(|d| d.insert_temp(egui::Id::unique("canvas-hovered"), false));
     DividerInput::Consumed
+}
+
+/// Finish completed divider pairs before a fresh middle press can start panning.
+pub(super) fn finish_completed_dividers_before_middle(
+    app: &mut VectorcraftApp,
+    ui: &Ui,
+    resp: &egui::Response,
+    rect: egui::Rect,
+    modal: bool,
+    after: Option<usize>,
+) -> Option<usize> {
+    if modal
+        || crate::touch::finger_navigates_only()
+        || !enabled(app)
+        || dragging(ui.ctx())
+        || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some())
+    {
+        return after;
+    }
+    let Some((before, _)) = middle_press(ui) else { return after };
+    finish_completed_dividers(app, ui, resp, rect, after, Some(before))
 }
 
 /// Each completed pair is hit-tested against the seam left by the previous pair.

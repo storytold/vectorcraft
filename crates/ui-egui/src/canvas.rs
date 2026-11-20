@@ -794,7 +794,7 @@ pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         || ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some() || d.get_temp::<(usize, bool)>(artboards::name_press_id()).is_some())
         || (ui.input(|i| i.pointer.primary_pressed())
             && (split::press_on_divider(app, ui, resp, rect) || split::completed_press_on_divider(app, ui, resp, rect)))
-        || input::pending_view_press(app, ui, resp, rect);
+        || input::pending_name_or_view_press(app, ui, resp, rect);
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
         // The artboard's 3D gizmo owns these gestures while its options are open.
         // Do not let a ring drag also move or deselect the editable source path.

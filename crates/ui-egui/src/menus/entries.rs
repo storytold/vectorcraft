@@ -165,10 +165,19 @@ const MENU_ONLY_COMMANDS: [&str; 5] = ["imageTrace.make", "imageTrace.makeAndExp
 /// action ([`plays_in_app`]): Outline, Pixel Preview, Trim View, Presentation Mode and Screen Mode,
 /// the zoom, fit and rotate view items, and the items that show or hide or turn snapping on or off.
 /// The saved-view slots are not among them.
-const UI_STEP_COMMANDS: [&str; 30] = [
+const UI_STEP_COMMANDS: [&str; 39] = [
     "view.outline",
     "view.pixelPreview",
     "view.trimView",
+    "view.splitView",
+    "view.splitVertical",
+    "view.splitHorizontal",
+    "view.splitPreview",
+    "view.splitOutline",
+    "view.splitPixelPreview",
+    "view.splitOverprintPreview",
+    "view.splitTrimView",
+    "view.splitReset",
     "view.presentation",
     "view.screenMode",
     "view.zoomIn",
