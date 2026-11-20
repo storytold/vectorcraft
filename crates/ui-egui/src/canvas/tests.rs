@@ -9028,7 +9028,9 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
     let ctx = egui::Context::default();
     let id = start_typing(&mut app, &ctx);
     let rect = app.canvas_rect.unwrap();
-    let at = rect.center() - vec2(100.0, 50.0);
+    // The caret and its floating Type bar were established by start_typing above. Keep this
+    // independent view gesture above that real bar, rather than pressing its formatting controls.
+    let at = rect.min + vec2(100.0, 100.0);
     let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
     let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
     let diagnostics = std::cell::RefCell::new(Vec::<serde_json::Value>::new());
@@ -9093,6 +9095,10 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
             crate::shortcuts::handle(app, ui.ctx());
             record(&format!("{label}: before canvas (previous canvas rect)"), app, Some(ui));
             show(app, ui);
+            if ui.input(|i| i.pointer.primary_pressed()) {
+                let response = ctx.read_response(egui::Id::unique("canvas")).expect("the actual canvas response");
+                assert!(drag::on_canvas(ui, &response, at), "Cmd+Space presses the unobstructed canvas, not the floating Type bar");
+            }
             record(&format!("{label}: after canvas"), app, Some(ui));
             crate::ime::end_of_pass(app, ui.ctx());
             crate::ime::finish_ui(app, ui.ctx());
@@ -9141,6 +9147,10 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
     // Space held since the Cmd+Space press sizes the marquee, also once Cmd is let go.
     typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
     diagnostic_frame("after Down8982", &mut app, vec![button(at, true, Modifiers::COMMAND)]);
+    assert!(
+        matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::ZoomBox { start }) if start == at),
+        "the admitted Cmd+Space Down owns the actual zoom marquee"
+    );
     diagnostic_frame("after move8983", &mut app, vec![Event::PointerMoved(at + vec2(50.0, 25.0))]);
     diagnostic_frame("after Cmd-up8984", &mut app, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at + vec2(80.0, 40.0))]);
     diagnostic_frame("after move8985", &mut app, vec![Event::PointerMoved(at + vec2(100.0, 50.0))]);
