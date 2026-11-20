@@ -456,6 +456,10 @@ antiAlias	Sharp	锐利
 	Cusp	尖点
 	Straight segment	直线段
 	Circle too large	圆形过大
+	Show Radii	显示半径
+	Show Diameter	显示直径
+	Anchors at Standard Positions	锚点位于标准位置
+	Third Point by Dragging	拖动放置第三点
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -557,9 +561,14 @@ antiAlias	Sharp	锐利
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色轮视图
 	Box View	方块视图
+	Show Out-of-Gamut Colors	显示超出色域的颜色
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
+	Show Document Colors	显示文档颜色
+	Document Colors	文档颜色
+	Selection Colors	所选对象的颜色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	显示协调
 	Harmony Rule	协调规则
 	Harmony color	协调颜色
@@ -1863,6 +1872,10 @@ file-filter	Templates	模板
 	Rename Preset	重命名预设
 	Save Image Trace Preset	保存图像描摹预设
 	Delete Image Trace Preset	删除图像描摹预设
+	Tracing Presets…	描摹预设…
+	Import Image Trace Presets	导入图像描摹预设
+	Export Image Trace Presets	导出图像描摹预设
+	Replace the saved presets that have these names?	替换具有这些名称的已存储预设？
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -2066,6 +2079,8 @@ file-filter	Templates	模板
 	List Workspaces	列出工作区
 	Live Paint	实时上色
 	Live Paint Bucket	实时上色工具
+	Fill Area	填充区域
+	Fill Area Tool	填充区域工具
 	Live Paint Bucket (Stroke)	实时上色工具 (描边)
 	Live Paint Info	实时上色信息
 	Live Paint Selection Tool	实时上色选择工具
@@ -2691,6 +2706,13 @@ file-filter	Templates	模板
 	Pen Tool	钢笔工具
 	Quick Pen Tool	快速钢笔工具
 	Quick Pen	快速钢笔
+	Quick Pen Toolbar	快速钢笔工具栏
+	Continuous Arc	连续弧线
+	Sharp Corner Arc	尖角弧线
+	Flip Arc	翻转弧线
+	Hide Toolbar	隐藏工具栏
+	Pin Toolbar Position	固定工具栏位置
+	Reset Toolbar Position	重置工具栏位置
 	Pencil	铅笔
 	Pencil Tool	铅笔工具
 	per slice	每个切片
@@ -3137,6 +3159,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit Arrowheads	编辑箭头
 	Edit Arrowheads…	编辑箭头…
 	Reload Arrowheads	重新载入箭头
+	Bevels	斜角列表
+	Edit Bevels	编辑斜角
+	Edit Bevels…	编辑斜角…
+	{name} (document)	{name} (文档)
+	Reload Bevels	重新载入斜角
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
@@ -3274,6 +3301,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit type set in fonts that aren't available?	要编辑使用了不可用字体的文字吗？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处加断字连字符，没有连字符则从不断字，与语言和大小写无关。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及通过“确定”设置新文件夹时载入，安全模式除外；请求权限的增效工具只在您授予权限后载入。Web 版不载入任何增效工具。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	“大”为滤镜或命令增效工具的每次运行提供至少 2.5 亿条指令，时间限制不变；“正常”保留增效工具自己的预算。实时效果、导出器和导入器保留各自的预算。
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与语言和大小写无关。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	“正常”保留每个增效工具自身的限制；选择“大”时，增效工具的滤镜或命令除处理其输入所需的指令外，至少可运行 2.5 亿条指令。时间限制不变。
@@ -3288,8 +3319,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具栏中把每个工具组的名称显示在其工具上方；关闭此项后，各组依次排列，中间没有任何内容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	从现在起，打开或新建的文档以标签页打开；关闭此项后，每个文档在浮动窗口中打开。已打开的文档保持原位。
 	Makes the document tabs taller and their names larger.	让文档标签页更高，标签上的名称更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 变量优先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏或 VECTORCRAFT_TITLEBAR 变量选择了标题栏。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或缩小界面；在相同缩放比例下，画布上的图稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 绘制的工具指针随界面缩放一起变大变小；关闭此项后，指针保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	界面的语言；“自动”使用系统的语言。选择一种语言后，对话框会立即切换到该语言。
@@ -3315,6 +3346,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	“打开最近文件”和主页屏幕最多列出这么多最近文件；为 0 时不列出，但 VectorCraft 仍会记住最多 30 个。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	打开文档时，显示已保存预览的链接 EPS 图像会保留该预览，而不重新读取 EPS 文件；已更改的文件仍按“更新链接”处理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素预览中，图像以平滑方式绘制；关闭此项后，像素边缘清晰锐利。像素预览之外，图像始终平滑显示。
+	PDF Text	PDF 文本
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	打开或嵌入的 PDF 中的文本以可编辑文本导入，或以轮廓导入，在没有其字体的电脑上看起来也一样。
+	Linked pages show the file's own text.	链接的页面显示文件本身的文本。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	链接文件更改时，“自动”会重新读取，“修改时询问”会先询问你，“手动”则保持不变并在状态栏显示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，“从模板新建…”和“存为模板…”打开时所在的文件夹；留空则使用文档文件夹中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	“编辑原稿”用系统中该类型的默认应用打开链接文件；关闭此项后，若已安装 PhotoCraft，链接的栅格图像会在 PhotoCraft 中打开。
@@ -3542,6 +3576,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
 	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
+	Clear Recent Commands	清除最近使用的命令
 	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
@@ -4703,6 +4738,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Fill Area: no enclosed area under the pointer	填充区域：指针下方没有封闭区域
 @msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
@@ -5351,6 +5387,10 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	对象 {_1} 是经过透视扭曲或自由变形的图像，此命令不适用于它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	无法这样扭曲图像 {_1}：其角点不会构成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	无法这样扭曲图像 {_1}：其角点会越过扭曲的地平线
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	无法这样扭曲图像 {_1}：其角点会太靠近，无法进行透视映射
 @msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
@@ -6704,7 +6744,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
-@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必须是 none、{_1} 之一，或带 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，即斜角的点
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必须是字符串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必须是 2 到 {most} 个 [x, y] 点，每个比例在 0 到 1 之间，从 [0, 0]（端面的边缘）到 [1, 1]（侧壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
@@ -6730,9 +6773,11 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
-	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	图形映射到平面、突出、回转和膨胀对象类型上
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	图形映射到平面、突出、回转和膨胀对象类型上。
 @msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨胀将图形映射到正面和背面，不映射到侧面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	对象 {_1}：只有打开“双面”和“封口”后，膨胀的背面才能贴图
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
 @msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
@@ -10600,6 +10645,24 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Nature Icons	自然图标
+	Flower	花朵
+	Tree	树木
+	Mountain	山脉
+	Ornamental	装饰纹样
+	Scrollwork	卷饰
+	Filigree Arrow	花丝箭头
+	Petal Sweep	花瓣曲线
+	Twin Curl	双重卷饰
+	Vector Packs	矢量画笔包
+	Compass Rose	罗盘玫瑰
+	Botanical Sprig	植物枝条
+	Facet Diamond	切面钻石
+	Tide Crest	浪尖
+	Leaf Vine	叶藤
+	Blossom Chain	花链
+	Pennant Garland	旗帜花环
+	Lantern String	灯笼串
 	Orbit Lines	轨道线
 	Petal Garland	花瓣花环
 	Lattice Braid	格纹编织

@@ -12,6 +12,11 @@
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes.
 //!
+//! Show Out-of-Gamut Colors grays out the cells of the wheel's square and the box's field whose
+//! colors the CMYK space cannot print, by the out-of-gamut warning's test ([`Cms::out_of_gamut`]),
+//! on a [`GAMUT_CELLS`] by [`GAMUT_CELLS`] grid kept until the channel, its value, the color
+//! settings or the loaded profiles change.
+//!
 //! Show Harmony puts a marker on the ring for each other color of the harmony rule picked under
 //! Harmony Rule (the Color Guide's rules whose colors each have a hue of their own), filled with
 //! that color. The markers follow the current color, and a click on one applies its color as a
@@ -22,6 +27,11 @@
 //! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
 //! simulation.
 //!
+//! The panel menu's Show Document Colors adds a row under the wheel or the box with the colors
+//! of the selection, or with nothing selected of the art Select All takes, most used first
+//! (`color.used`). A click on one applies it as a pick does. The active proxy and a selected
+//! gradient stop keep its swatch link; a freeform point takes the color alone.
+//!
 //! Panel menu › OKLCH Sliders shows L, C and H rows under the wheel or the box that edit the color
 //! by OKLCH lightness, chroma and hue (CSS Color 4:
 //! <https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch>), while the active document's RGB
@@ -31,13 +41,17 @@
 //! (<https://www.w3.org/TR/css-color-4/#the-hsl-notation>). The choice is kept with the
 //! preferences too.
 //!
-//! The view, the channel, the slider rows, Show Harmony, Harmony Rule and Show Color Vision
-//! Preview are kept with the preferences (`ui.colorWheel`).
+//! The view, the channel, the slider rows, Show Out-of-Gamut Colors, Show Harmony, Harmony Rule,
+//! Show Color Vision Preview and Show Document Colors are kept with the preferences
+//! (`ui.colorWheel`).
+
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Cms, ProofSetup, ProofTarget};
+use vectorcraft_color::cms::{self, Cms, ColorSettings, ProofSetup, ProofTarget};
 use vectorcraft_color::harmony::Harmony;
 use vectorcraft_color::oklab::{self, CHROMA_FULL};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to_hsl};
@@ -94,6 +108,9 @@ pub struct Settings {
     pub channel: Channel,
     #[serde(deserialize_with = "deserialize_sliders")]
     pub sliders: Sliders,
+    /// Show Out-of-Gamut Colors: gray out the colors the CMYK space cannot print.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub gamut: bool,
     /// Show Harmony: markers on the ring for the other colors of `harmony_rule`.
     #[serde(deserialize_with = "deserialize_flag")]
     pub harmony: bool,
@@ -104,6 +121,9 @@ pub struct Settings {
     /// `true` shows the row and any other value hides it.
     #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub vision: bool,
+    /// Show Document Colors: the row of the colors the art uses, under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub document_colors: bool,
 }
 
 /// The slider rows under the wheel or the box (panel menu, `ui.colorWheel {sliders}`).
@@ -146,9 +166,11 @@ impl Default for Settings {
             view: View::default(),
             channel: Channel::default(),
             sliders: Sliders::default(),
+            gamut: false,
             harmony: false,
             harmony_rule: Harmony::Complementary,
             vision: false,
+            document_colors: false,
         }
     }
 }
@@ -199,11 +221,12 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?, sliders?, harmony?, harmonyRule?, vision?}`: show the wheel or
-/// the box, pick the box's channel, show OKLCH Sliders, HSL Sliders or neither, show the colors of
-/// a harmony rule on the wheel, and show or hide the color vision row. Keys left out or null keep
-/// their values; params that are not an object, another key or a value off the list are an error
-/// and change nothing.
+/// `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?, harmonyRule?, vision?,
+/// documentColors?}`: show the wheel or the box, pick the box's channel, show OKLCH Sliders, HSL
+/// Sliders or neither, show or hide the out-of-gamut shading, show the colors of a harmony rule on
+/// the wheel, and show or hide the color vision row and the Show Document Colors row. Keys left
+/// out or null keep their values; params that are not an object, another key or a value off the
+/// list are an error and change nothing.
 /// `sliders: "oklch"` is an error while the active document's RGB space (its assigned profile,
 /// else the working RGB space) is not sRGB. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -214,7 +237,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// Set the keys of `ui.colorWheel` params `p` in `settings`, with the color settings `cms`; on an
 /// error `settings` stay as they were.
 pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), String> {
-    const KEYS: [&str; 6] = ["view", "channel", "sliders", "harmony", "harmonyRule", "vision"];
+    const KEYS: [&str; 8] = ["view", "channel", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -243,6 +266,11 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
             set.sliders = sliders;
         }
     }
+    let key = "gamut";
+    match p.get(key) {
+        None | Some(Value::Null) => {}
+        Some(v) => set.gamut = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?,
+    }
     let key = "harmony";
     match p.get(key) {
         None | Some(Value::Null) => {}
@@ -261,13 +289,16 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
     if let Some(on) = crate::menus::opt_bool(p, "vision")? {
         set.vision = on;
     }
+    if let Some(on) = crate::menus::opt_bool(p, "documentColors")? {
+        set.document_colors = on;
+    }
     *settings = set;
     Ok(())
 }
 
-/// The panel menu: Wheel View and Box View, and Box Channel while the box shows; HSL Sliders and
-/// OKLCH Sliders; Show Harmony and Harmony Rule while the wheel shows; and Show Color Vision
-/// Preview.
+/// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Out-of-Gamut
+/// Colors; HSL Sliders and OKLCH Sliders; Show Harmony and Harmony Rule while the wheel shows; Show
+/// Color Vision Preview; and Show Document Colors.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -285,6 +316,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.separator();
+    if menu_item(ui, tl!("Show Out-of-Gamut Colors"), true, set.gamut) {
+        command(app, &json!({ "gamut": !set.gamut })).ok();
+    }
     let on = set.sliders == Sliders::Hsl;
     if menu_item(ui, tl!("HSL Sliders"), true, on) {
         let sliders = if on { Sliders::None } else { Sliders::Hsl };
@@ -316,6 +350,215 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
         command(app, &json!({ "vision": !set.vision })).ok();
     }
+    if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
+        command(app, &json!({ "documentColors": !set.document_colors })).ok();
+    }
+}
+
+/// Panel state: the Show Document Colors row's colors, with the [`UsedKey`] they were read for.
+const USED: &str = "color-wheel-used";
+/// The fewest chips the row asks `color.used` for; a row wider than this many chips asks for as
+/// many as it holds.
+const MAX_CHIPS: usize = 128;
+/// Above this many color uses, an edit makes the row read the colors again at most once every
+/// [`LARGE_EVERY`] seconds; a change of document or selection still reads them at once.
+const LARGE_USES: u64 = 5_000;
+const LARGE_EVERY: f64 = 0.5;
+
+/// What the Show Document Colors row depends on: the document, its revision, and the number of
+/// selected objects with a hash of their ids.
+type UsedKey = Option<(u64, u64, usize, u64)>;
+
+/// The row's colors as last read, kept in the panel state behind an `Arc`, so a frame that reads
+/// them back copies no list.
+#[derive(Debug, PartialEq)]
+struct UsedCache {
+    key: UsedKey,
+    /// The frame time the colors were read at.
+    at: f64,
+    /// The uses of every color (`color.used`'s `uses`).
+    uses: u64,
+    /// Whether the colors are the selection's.
+    selected: bool,
+    /// The most colors asked for.
+    limit: usize,
+    colors: Vec<Used>,
+}
+
+/// A color of the row: the color, its hex value, how many times the art uses it, and the global
+/// swatch it is linked to with the tint (0..1) of that swatch it is.
+#[derive(Clone, Debug, PartialEq)]
+struct Used {
+    color: Color,
+    hex: String,
+    count: u64,
+    link: Option<(String, f32)>,
+}
+
+impl Used {
+    /// The paint the color applies and drags: linked to its swatch at its tint when it has one.
+    fn paint(&self) -> Paint {
+        match &self.link {
+            Some((name, tint)) => Paint::Solid { color: self.color, swatch: Some(name.clone()), tint: *tint },
+            None => Paint::solid(self.color),
+        }
+    }
+}
+
+/// The colors the row shows and whether they are the selection's, read with `color.used` once per
+/// document revision and selection and kept as they are while an interaction is in progress (a
+/// preview raises the revision on every frame of a drag). In art with more than [`LARGE_USES`]
+/// color uses, an edit reads them again only after [`LARGE_EVERY`] seconds. A row that holds more
+/// than the colors last asked for reads them again once no interaction is in progress, and in such
+/// art only after the same wait.
+fn used_colors(app: &mut VectorcraftApp, ui: &Ui, per_row: usize) -> Arc<UsedCache> {
+    let limit = per_row.max(MAX_CHIPS);
+    let key: UsedKey = app.session.active().map(|d| {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        d.selection.objects.hash(&mut h);
+        (d.uid, d.revision, d.selection.objects.len(), h.finish())
+    });
+    let now = ui.input(|i| i.time);
+    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED) {
+        let fits = cache.limit >= per_row || cache.colors.len() < cache.limit;
+        if app.session.in_interaction() || (cache.key == key && fits) {
+            return cache;
+        }
+        let scope = |k: &UsedKey| k.map(|(doc, _, n, h)| (doc, n, h));
+        let wait = LARGE_EVERY - (now - cache.at);
+        if cache.uses > LARGE_USES && scope(&cache.key) == scope(&key) && wait > 0.0 {
+            ui.ctx().request_repaint_after_secs(wait as f32);
+            return cache;
+        }
+    }
+    let r = key.as_ref().and_then(|_| app.session.execute("color.used", &json!({ "limit": limit })).ok());
+    let colors: Vec<Used> = r
+        .as_ref()
+        .and_then(|r| r["colors"].as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| {
+                    let color = serde_json::from_value::<Color>(c["color"].clone()).ok()?;
+                    let hex = c["hex"].as_str().map_or_else(|| color.to_hex(), str::to_string);
+                    let link = c["swatch"].as_str().zip(c["tint"].as_f64()).map(|(n, t)| (n.to_string(), (t / 100.0).clamp(0.0, 1.0) as f32));
+                    Some(Used { color, hex, count: c["count"].as_u64().unwrap_or(0), link })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let selected = r.as_ref().is_some_and(|r| r["selection"] == true);
+    let uses = r.as_ref().and_then(|r| r["uses"].as_u64()).unwrap_or(0);
+    let cache = Arc::new(UsedCache { key, at: now, uses, selected, limit, colors });
+    set_pstate(ui.ctx(), USED, Some(Arc::clone(&cache)));
+    cache
+}
+
+/// The Show Document Colors row: a heading (Selection Colors or Document Colors) and the colors,
+/// most used first, as many as fit in one row. Returns the color clicked.
+fn document_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) -> Option<Used> {
+    let width = ui.available_width();
+    // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge, as
+    // in the Recent Colors row.
+    let per_row = (((width - 21.0) / 19.0).floor().max(0.0) as usize + 1).max(1);
+    let cache = used_colors(app, ui, per_row);
+    widgets::subheader(ui, if cache.selected { tl!("Selection Colors") } else { tl!("Document Colors") });
+    let t = Tokens::get(ui.ctx());
+    let (r, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
+    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    let mut chosen = None;
+    for (i, u) in cache.colors.iter().take(per_row).enumerate() {
+        let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
+        let resp = ui.interact(cell, ui.scope_id().with(("document-color", i)), Sense::click_and_drag());
+        let paint = u.paint();
+        widgets::drag_source(ui, &resp, || widgets::PanelDrag::paint(paint.clone()));
+        widgets::swatch_tile(ui, cell, &paint, false, resp.hovered());
+        let tip = format!("{}\n{}", u.hex, crate::i18n::tn(u.count, "Used {n} time", "Used {n} times"));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
+        if resp.on_hover_text(&tip).clicked() {
+            chosen = Some(u.clone());
+        }
+    }
+    chosen
+}
+
+/// Apply a color of the Show Document Colors row as a pick does, to the inactive proxy when
+/// `behind`. A color linked to a swatch stays linked at its tint, except at a freeform gradient's
+/// point, which takes the color alone.
+fn apply_used(app: &mut VectorcraftApp, tgt: &Target, u: &Used, behind: bool) {
+    let Some((name, tint)) = &u.link else { return apply(app, tgt, u.color, Live::Released, behind) };
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } if !behind => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.set_color(u.color, Some((name.clone(), *tint)));
+            }
+            super::gradient::set_stops(app, &stops, None, Live::Released);
+        }
+        Target::Point { .. } if !behind => apply(app, tgt, u.color, Live::Released, behind),
+        _ => {
+            let mut p = super::paint_params(&u.paint());
+            p["focus"] = json!(!behind);
+            super::live_run(app, "Color", super::proxy_cmd(app, behind), p, Live::Released);
+        }
+    }
+}
+
+/// The cells across and down of the grid the out-of-gamut shading tests.
+pub(crate) const GAMUT_CELLS: usize = 16;
+
+/// The cells of a field whose colors are out of the CMYK gamut, a row per [`GAMUT_CELLS`] from the
+/// top: bit `i` of a row is its cell `i` from the left.
+pub(crate) type GamutGrid = [u16; GAMUT_CELLS];
+
+/// The out-of-gamut cells of the box of channel `ch` at strip value `z` through `cms`, each tested
+/// at its center by the out-of-gamut warning's test ([`Cms::out_of_gamut`]) on the working-RGB
+/// color of a pick there, before any conversion to CMYK or Lab in [`stored`]. The wheel's square is
+/// the box of [`Channel::Hue`] at the ring's hue.
+pub(crate) fn gamut_grid(cms: &Cms, ch: Channel, z: f32) -> GamutGrid {
+    let n = GAMUT_CELLS as f32;
+    let mut grid = [0; GAMUT_CELLS];
+    for (row, bits) in grid.iter_mut().enumerate() {
+        for col in 0..GAMUT_CELLS {
+            let (x, y) = ((col as f32 + 0.5) / n, (row as f32 + 0.5) / n);
+            // A gray has no hue, and the hue a gray keeps does not change its color.
+            let [r, g, b] = cms.srgb_to_rgb(hsb_to_rgb(box_pick(ch, z, x, y, [0.0; 3])));
+            if cms.out_of_gamut(&Color::rgb(r, g, b)) {
+                *bits |= 1 << col;
+            }
+        }
+    }
+    grid
+}
+
+/// What the out-of-gamut grid depends on: the channel, its value's bits, the color settings and
+/// [`cms::profiles_generation`], which changes when a profile is loaded again under the same name.
+pub(crate) type GamutKey = (Channel, u32, ColorSettings, u64);
+
+/// The grid for `key` from `slot`, computed with `compute` and kept in `slot` when `slot` holds
+/// another key's.
+pub(crate) fn cached_grid(slot: &mut Option<(GamutKey, GamutGrid)>, key: GamutKey, compute: impl FnOnce() -> GamutGrid) -> GamutGrid {
+    match slot {
+        Some((k, grid)) if *k == key => *grid,
+        _ => {
+            let grid = compute();
+            *slot = Some((key, grid));
+            grid
+        }
+    }
+}
+
+/// Panel state: the out-of-gamut grid drawn last and its [`GamutKey`].
+pub(crate) const GAMUT: &str = "color-wheel-gamut";
+
+/// The out-of-gamut grid of channel `ch` at value `z` through `cms`, kept in the panel state so a
+/// frame with the same channel, value, color settings and loaded profiles does not test the colors
+/// again.
+fn gamut_shade(ui: &Ui, cms: &Cms, ch: Channel, z: f32) -> GamutGrid {
+    let mut slot = pstate::<Option<(GamutKey, GamutGrid)>>(ui.ctx(), GAMUT);
+    let key = (ch, z.to_bits(), cms.settings().clone(), cms::profiles_generation());
+    let grid = cached_grid(&mut slot, key, || gamut_grid(cms, ch, z));
+    set_pstate(ui.ctx(), GAMUT, slot);
+    grid
 }
 
 /// The display values of HSB `hsb` in `ch`'s space, from 0 to 1: hue, saturation and brightness,
@@ -362,16 +605,19 @@ fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
 }
 
 /// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
-/// markers when `marked`. Returns the HSB a click, a drag, a key or a screen reader's action picks,
-/// and its phase.
-fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<([f32; 3], Live)> {
+/// markers when `marked` and the field's out-of-gamut cells grayed out when `gamut`. Returns the
+/// HSB a click, a drag, a key or a screen reader's action picks, and its phase.
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, gamut: Option<&Cms>) -> Option<([f32; 3], Live)> {
     let (z, x, y) = box_pos(ch, hsb);
     let mut pick = None;
+    let grid = gamut.map(|cms| gamut_shade(ui, cms, ch, z));
+    let shade = grid.as_ref().map_or(&[][..], |g| &g[..]);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = STRIP_GAP;
         let field = vec2((size - STRIP_GAP - STRIP).max(1.0), size);
         let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
-        if let (Some((x, y)), phase) = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at) {
+        let labels = (tl!("Color box"), ch.field_axes());
+        if let (Some((x, y)), phase) = widgets::color_field_shaded(ui, "color-wheel-box", labels, field, (x, y), marked, (&at, shade)) {
             pick = Some((box_pick(ch, z, x, y, hsb), phase));
         }
         // The hue strip shows the whole spectrum; the others change only their own component.
@@ -789,6 +1035,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
     };
     let marked = color.is_some();
+    let gamut = app.ui.color_wheel.gamut.then_some(&*cms);
     let mut pick: Option<([f32; 3], Live)> = None;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
@@ -797,7 +1044,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         let size = ui.available_width().min(MAX_WHEEL);
         if app.ui.color_wheel.view == View::Box {
-            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size);
+            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size, gamut);
             return;
         }
         let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, hsb[0], marked);
@@ -807,7 +1054,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             [FieldAxis { name: tl!("Saturation"), units: 100.0, suffix: "%" }, FieldAxis { name: tl!("Brightness"), units: 100.0, suffix: "%" }];
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
         let name = tl!("Saturation and brightness");
-        let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
+        // The square is the hue box at the ring's hue, so it shares the box's grid.
+        let grid = gamut.map(|cms| gamut_shade(ui, cms, Channel::Hue, box_pos(Channel::Hue, hsb).0));
+        let shade = grid.as_ref().map_or(&[][..], |g| &g[..]);
+        let pos = (hsb[1], 1.0 - hsb[2]);
+        let (field, field_phase) = widgets::color_field_shaded(&mut field_ui, "field", (name, axes), square.size(), pos, marked, (&at, shade));
         // Show Harmony: the rule's other colors for the current one, which follow it. While a press
         // is held on a marker, the ring's drag under it picks nothing.
         let set = &app.ui.color_wheel;
@@ -870,6 +1121,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         vision_row(ui, &cms, color.as_ref());
     }
     let behind = super::alt_held(ui);
+    if app.ui.color_wheel.document_colors
+        && let Some(u) = document_colors_row(app, ui)
+    {
+        apply_used(app, &tgt, &u, behind);
+        return;
+    }
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let rows = match (picked_hsl, picked_lch) {
         (Some((hsl, phase)), _) => Some((hsl_to_rgb(hsl), phase, HSL_MEMORY, Remembered::Hsl(hsl))),

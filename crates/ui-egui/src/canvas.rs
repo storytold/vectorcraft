@@ -28,6 +28,7 @@ mod input;
 mod outline;
 mod overlays;
 mod panes;
+mod quick_pen_bar;
 mod raster;
 mod selection_marks;
 mod split;
@@ -71,6 +72,7 @@ use overlays::{
 };
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+pub(crate) use quick_pen_bar::quick_pen_bar_rect;
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub use selection_marks::SelectionMarks;
@@ -341,7 +343,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         paint_paper(app, st, ui, &painter, &xf, rect, (&t, app.outline_view()));
     }
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
-    let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
+    let grid_look = (app.ui.view.grid_shown() && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
@@ -407,7 +409,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let view_info = split::input_view(app, ui, rect, ui.input(|i| i.pointer.hover_pos()));
     if !presenting {
         paint_view_modes(app, ui, &painter, &xf, &t, split_view, v.zoom);
-        if app.ui.view.guides {
+        if app.ui.view.guides_shown() {
             guide_lines(app, &painter, &xf, rect, &t);
         }
         nine_slice_overlay(app, &painter, &xf);
@@ -455,6 +457,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
+        // The Quick Pen toolbar gives way to a drag as the task bar does.
+        quick_pen_bar::quick_pen_bar(app, ui, &xf);
         contour_bar::contour_bar(app, ui, &xf);
         // After the task bar, which the row of character alternates keeps clear of.
         alternates_bar::alternates_bar(app, ui, &xf);
@@ -952,7 +956,7 @@ fn cache_key(
         outline: app.outline_view(),
         trim: app.ui.view.trim_view,
         templates: app.ui.view.templates,
-        guides: app.ui.view.guides,
+        guides: app.ui.view.guides_shown(),
         ppp,
         hidden: vec![],
         rot: v.rotation,
@@ -1165,7 +1169,7 @@ fn frame_options(
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
         trim: app.ui.view.trim_view,
         hide_templates: !app.ui.view.templates,
-        hide_guides: !app.ui.view.guides,
+        hide_guides: !app.ui.view.guides_shown(),
         tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
             let [r, g, b, _] = c.to_rgba8(1.0);
             [r, g, b]

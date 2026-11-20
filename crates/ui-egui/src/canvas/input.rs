@@ -39,7 +39,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     touch_gestures(app, ui, rect, view, modal);
     // Finish an old primary owner before a later Down is qualified against the divider.
     // The old owner uses its camera and picking mode; the new press gets the resulting view.
-    let finished = if let Some(d) = ui.data(|data| data.get_temp::<Drag>(drag_id()))
+    let mut finished = if let Some(d) = ui.data(|data| data.get_temp::<Drag>(drag_id()))
         && !matches!(d, Drag::Pan { middle: true, .. } | Drag::Gesture | Drag::Present)
         && let Some((up, p)) = super::split::primary_release(ui, None)
         && press.is_some_and(|(down, _)| down > up)
@@ -69,6 +69,9 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         None
     };
     if ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id())).is_none() {
+        let frame =
+            Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal, paired_moves: &paired_moves, release: None };
+        finished = finish_view_presses(app, ui, &frame, finished);
         let handoff = match super::split::divider_input(app, ui, resp, rect, modal, space, finished) {
             super::split::DividerInput::Consumed => {
                 poll_tool(app, ui, view);
@@ -98,6 +101,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // tool's press is dropped, as a right-click presses nothing. Under a modal dialog it drops nothing.
     if resp.long_touched() && !modal {
         drop_press(app, ui, view);
+        ui.data_mut(|data| data.remove::<(u64, usize)>(scrub_press_id()));
     }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
     // A modifier or Backtick pressed or released over the canvas re-hovers the tool, so what it
@@ -302,6 +306,69 @@ struct Pointing<'a> {
     modal: bool,
 }
 
+/// Complete earlier view-tool clicks/drags before a later primary Down chooses its owner.
+/// Ordinary Tool/name/mapped presses keep their existing admission; only view tools are replayed.
+fn finish_view_presses(app: &mut VectorcraftApp, ui: &Ui, frame: &Pointing, mut after: Option<usize>) -> Option<usize> {
+    if frame.modal
+        || app.ui.screen_mode == 3
+        || crate::touch::finger_navigates_only()
+        || ui.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+        || frame.pointer.button_down(egui::PointerButton::Middle)
+    {
+        return after;
+    }
+    let Some((latest, _)) = super::split::primary_press(ui) else { return after };
+    let mut scanned = after;
+    while let Some((down, pressed, up, released)) = super::split::completed_primary_press(ui, scanned, latest) {
+        scanned = Some(up);
+        let space = primary_press_state(app, ui, down).1;
+        if !space && !matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
+            continue;
+        }
+        // An earlier divider may have moved the seam before this press chooses its side.
+        after = super::split::finish_completed_dividers(app, ui, frame.resp, frame.rect, after, Some(down));
+        let v = *app.view().unwrap_or(&View::default());
+        let xf = Xf::at(frame.rect, &v, app.canvas_ui_zoom);
+        if !on_canvas(ui, frame.resp, pressed)
+            || artboard_name_at(app, ui, &xf, pressed).is_some()
+            || (!space && super::split::enabled(app) && super::split::divider_press_at(app, ui, frame.resp, frame.rect, pressed))
+        {
+            continue;
+        }
+        let view = super::split::input_view(app, ui, frame.rect, Some(pressed));
+        let f = Pointing { v, xf, view, ..*frame };
+        begin_drag(app, ui, &f, pressed, down);
+        if let Some(drag) = ui.data(|d| d.get_temp::<Drag>(drag_id())) {
+            drag_released(app, ui, &f, drag, released, Some((down, up)));
+        }
+        after = Some(up);
+    }
+    after
+}
+
+fn scrub_press_id() -> egui::Id {
+    egui::Id::unique("canvas-zoom-scrub-press")
+}
+
+/// A repeated UI pass may still contain moves before this owner's Down. The last raw Down is
+/// not necessarily its owner; only begin_drag records the actual index for this physical frame.
+fn scrub_press_start(ui: &Ui) -> Option<usize> {
+    let frame = ui.ctx().cumulative_frame_nr();
+    ui.data(|data| data.get_temp::<(u64, usize)>(scrub_press_id())).filter(|(began, _)| *began == frame).map(|(_, down)| down)
+}
+
+/// Movement is sticky over this owner's physical interval, even when it returns to its start.
+fn scrub_crossed_slop(ui: &Ui, start: Pos2, at: Pos2, interval: (Option<usize>, Option<usize>)) -> bool {
+    (at - start).length() > SCRUB_SLOP
+        || ui.input(|i| {
+            i.events.iter().enumerate().any(|(index, event)| {
+                interval.0.is_none_or(|down| index > down)
+                    && interval.1.is_none_or(|up| index < up)
+                    && matches!(event, egui::Event::PointerMoved(p) if (*p - start).length() > SCRUB_SLOP)
+            })
+        })
+}
+
 /// Zoom around the pointer, and scroll ([`wheel`]); a trackpad rotation turns the view. While a modal dialog is open
 /// (`modal`), and for the rest of a wheel turn made under it, the view does not move. Returns the pointer, the
 /// modifiers, whether Space is held and where the pointer hovers over the canvas.
@@ -464,8 +531,12 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2, down: us
     }
     // Read before `data_mut`: the context is locked inside it.
     let edge = edge_scroll_at_press(ui, p);
+    let frame = ui.ctx().cumulative_frame_nr();
     ui.data_mut(|dd| {
         dd.insert_temp(drag_id(), d);
+        if matches!(d, Drag::ZoomScrub { .. }) {
+            dd.insert_temp(scrub_press_id(), (frame, down));
+        }
         dd.insert_temp(drag_pos_id(), p);
         dd.insert_temp(drag_layer_id(), resp.layer_id);
         // A new press has not dragged yet, whatever an interrupted one left behind.
@@ -508,7 +579,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2, 
         }
         Drag::ZoomScrub { start, held, moved } => {
             let dt = ui.input(|i| i.unstable_dt).min(0.25);
-            let (held, moved) = (held + dt, moved || (p - start).length() > SCRUB_SLOP);
+            let (held, moved) = (held + dt, moved || scrub_crossed_slop(ui, start, p, (scrub_press_start(ui), f.release)));
             // Dragged sideways it zooms with the pointer, held still it zooms on (Alt: out).
             let exponent = if moved {
                 f64::from(motion.unwrap_or_else(|| pointer.delta()).x) * SCRUB_ZOOM
@@ -679,7 +750,7 @@ fn finish_name_press(app: &mut VectorcraftApp, ui: &Ui, up: Option<usize>) -> bo
 }
 
 /// Settle an actual Up's remaining view motion before clearing the owner or picking a new press.
-fn release_view_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) -> Drag {
+fn release_view_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2, owned: Option<(usize, usize)>) -> Drag {
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         // Pan and rotation use absolute start-to-Up math, so already previewed motion is not repeated.
@@ -690,7 +761,7 @@ fn release_view_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p
         // A release contributes only unpreviewed physical motion, never another hold-time tick.
         Drag::ZoomScrub { start, held, moved } => {
             let before = ui.data(|data| data.get_temp::<Pos2>(drag_pos_id())).unwrap_or(start);
-            let moved = moved || (p - start).length() > SCRUB_SLOP;
+            let moved = moved || scrub_crossed_slop(ui, start, p, (owned.map(|(down, _)| down).or_else(|| scrub_press_start(ui)), f.release));
             let exponent = if moved { f64::from((p - before).x) * SCRUB_ZOOM } else { 0.0 };
             if exponent != 0.0
                 && let Some(vm) = app.view_mut()
@@ -720,7 +791,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     let release_index = boundary;
     let released = Pointing { m, space, release: release_index, ..*f };
     let ui_zoom = app.canvas_ui_zoom;
-    let d = if boundary.is_some() { release_view_drag(app, ui, &released, d, p) } else { d };
+    let d = if boundary.is_some() { release_view_drag(app, ui, &released, d, p, owned) } else { d };
     // The last position the tool's drag got: none if the press never dragged.
     let last_drag: Option<Point> = ui.data(|dd| dd.get_temp(tool_drag_doc_id()));
     let press_doc: Option<Point> = ui.data(|dd| dd.get_temp(tool_press_doc_id()));
@@ -728,6 +799,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     let before: Option<Pos2> = ui.data(|dd| dd.get_temp(drag_pos_id()));
     ui.data_mut(|dd| {
         dd.remove::<Drag>(drag_id());
+        dd.remove::<(u64, usize)>(scrub_press_id());
         dd.remove::<Pos2>(drag_pos_id());
         dd.remove::<Point>(tool_drag_doc_id());
         dd.remove::<Point>(tool_press_doc_id());

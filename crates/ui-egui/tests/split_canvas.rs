@@ -526,6 +526,7 @@ synchronous_test!(split_canvas_real_modes_share_geometry_and_complementary_clips
     let outlined = s.raster_at(comparison, p);
     assert!(filled.r() > filled.g().saturating_add(60) && filled.a() > 200, "Preview contains the original coloured fill");
     assert!(outlined.a() < 40 || outlined.r().abs_diff(outlined.g()) < 12, "Outline does not rasterize the coloured interior");
+    review_598151_outline_edge_ink(&s, comparison);
     // This painted curved shape is clipped by an actual public clipping-mask group.
     assert!(s.raster_at(main, Point::new(120.0, 215.0)).a() > 200);
     assert!(s.raster_at(main, Point::new(215.0, 215.0)).a() < 40);
@@ -2601,4 +2602,165 @@ synchronous_test!(review_598046_old_view_final_up_precedes_new_hit_testing, {
     assert!((actual.1 - expected.1).abs() < 1e-6);
     assert!((actual.2 - expected.2).abs() < 1e-6);
     review_598046_stationary_scrub_release();
+});
+
+fn review_598151_outline_edge_ink(s: &Scene, comparison: TextureId) {
+    assert_eq!(s.app.view().unwrap().split.comparison, SplitMode::Outline);
+    let bounds = s.bounds();
+    let edge = s.screen(Point::new(bounds.x1, (bounds.y0 + bounds.y1) * 0.5));
+    assert!(s.rect().contains(edge) && edge.x > s.point_on_divider().x + 8.0, "CONTROL: the unobstructed right edge is in the Outline half");
+    let mut ink = false;
+    for dx in [-1.0, 0.0, 1.0] {
+        for dy in [-1.0, 0.0, 1.0] {
+            let c = s.raster_at(comparison, s.xf().to_doc(edge + vec2(dx, dy)));
+            ink |= c.a() > 80 && c.r() < 200 && c.g() < 200 && c.b() < 200 && c.r().abs_diff(c.g()) < 12 && c.g().abs_diff(c.b()) < 12;
+        }
+    }
+    assert!(ink, "Outline uploads actual nontransparent neutral edge ink, not an empty texture");
+}
+
+fn review_598151_hand_before_divider(coalesced: bool, moved: bool) -> (Point, f64, f64) {
+    let mut s = review_597704_zoom_scene();
+    s.app.select_tool("hand");
+    s.idle();
+    assert_eq!(s.app.session.tool_id(), "hand");
+    let document = s.snapshot();
+    let initial = review_597943_camera(&s);
+    let start = s.rect().left_top() + vec2(100.0, 100.0);
+    let up = start + if moved { vec2(40.0, 20.0) } else { egui::Vec2::ZERO };
+    let divider = s.point_on_divider();
+    assert!(s.rect().contains(up) && up.x < divider.x - 8.0);
+    if coalesced {
+        s.frame(vec![
+            Event::PointerMoved(start),
+            review_597489_primary(start, true),
+            Event::PointerMoved(up),
+            review_597489_primary(up, false),
+            Event::PointerMoved(divider),
+            review_597489_primary(divider, true),
+        ]);
+    } else {
+        s.press(start, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(up)]);
+        s.release(up, PointerButton::Primary);
+        if moved {
+            assert!(s.app.view().unwrap().center.distance(initial.0) > 1.0, "CONTROL: a separate completed Hand gesture pans");
+        } else {
+            review_597943_camera_eq(&s, initial);
+        }
+        s.press(divider, PointerButton::Primary);
+    }
+    let completed = review_597943_camera(&s);
+    if !moved {
+        review_597943_camera_eq(&s, initial);
+    }
+    let divider_up = review_597489_divider_point(&s, 0.65);
+    s.frame(vec![Event::PointerMoved(divider_up)]);
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "the later fresh press owns the divider");
+    review_597943_camera_eq(&s, completed);
+    s.release(divider_up, PointerButton::Primary);
+    s.frame(vec![Event::PointerMoved(start)]);
+    review_597943_camera_eq(&s, completed);
+    assert!((s.fraction() - 0.65).abs() < 1e-6, "button-up hover cannot continue the completed divider");
+    assert_eq!(s.app.session.tool_id(), "hand");
+    assert_eq!(s.snapshot(), document, "Hand and divider gestures preserve art, selection and history");
+    completed
+}
+
+synchronous_test!(review_598151_complete_hand_episode_precedes_fresh_divider_down, {
+    let _globals = Globals::new();
+    review_598151_hand_before_divider(false, false);
+    review_598151_hand_before_divider(true, false);
+    let expected = review_598151_hand_before_divider(false, true);
+    let actual = review_598151_hand_before_divider(true, true);
+    assert!(actual.0.distance(expected.0) < 1e-6, "the complete earlier Hand episode must pan before the later divider Down");
+    assert!((actual.1 - expected.1).abs() < 1e-6);
+    assert!((actual.2 - expected.2).abs() < 1e-6);
+});
+
+fn review_598151_scrub_scene() -> Scene {
+    let mut s = review_597704_zoom_scene();
+    s.app.run("prefs.set", json!({"key":"gpuPerformance","value":true})).unwrap();
+    s.app.run("prefs.set", json!({"key":"animatedZoom","value":true})).unwrap();
+    s.idle();
+    assert!(s.app.session.prefs.gpu_performance && s.app.session.prefs.animated_zoom);
+    s
+}
+
+fn review_598151_scrub_idle(s: &mut Scene, before: &Value, camera: (Point, f64, f64), at: Pos2) {
+    assert!(!s.ctx.input(|i| i.pointer.primary_down()));
+    s.frame(vec![Event::PointerMoved(at + vec2(17.0, 13.0))]);
+    s.idle();
+    review_597943_camera_eq(s, camera);
+    assert_eq!(s.snapshot(), *before, "view-only scrub/click gestures preserve document, selection and history");
+    assert_eq!(s.fraction(), 0.5);
+    assert_eq!(s.app.session.tool_id(), "zoom");
+}
+
+fn review_598151_stationary_scrub(coalesced: bool, earlier_motion: bool) -> (Point, f64, f64) {
+    let mut s = review_598151_scrub_scene();
+    let before = s.snapshot();
+    let initial = review_597943_camera(&s);
+    let at = s.rect().left_top() + vec2(100.0, 100.0);
+    if coalesced {
+        let mut events = Vec::new();
+        if earlier_motion {
+            // These are hover events BEFORE the new Zoom owner exists.
+            events.push(Event::PointerMoved(s.rect().left_top() - vec2(20.0, 20.0)));
+            events.push(Event::PointerMoved(at + vec2(90.0, 0.0)));
+        }
+        events.extend([Event::PointerMoved(at), review_597489_primary(at, true), review_597489_primary(at, false)]);
+        s.frame(events);
+    } else {
+        s.click(at);
+    }
+    let clicked = review_597943_camera(&s);
+    assert!(clicked.1 > initial.1, "CONTROL: a stationary Animated Zoom gesture remains an ordinary zoom-in click");
+    review_598151_scrub_idle(&mut s, &before, clicked, at);
+    clicked
+}
+
+fn review_598151_scrub_out_and_back(coalesced: bool, return_with_up: bool) {
+    let mut s = review_598151_scrub_scene();
+    let before = s.snapshot();
+    let initial = review_597943_camera(&s);
+    let at = s.rect().left_top() + vec2(100.0, 100.0);
+    let out = at + vec2(40.0, 0.0);
+    if coalesced {
+        s.frame(vec![
+            Event::PointerMoved(at),
+            review_597489_primary(at, true),
+            Event::PointerMoved(out),
+            Event::PointerMoved(at),
+            review_597489_primary(at, false),
+        ]);
+    } else {
+        s.press(at, PointerButton::Primary);
+        s.frame(vec![Event::PointerMoved(out)]);
+        assert!(s.app.view().unwrap().zoom > initial.1, "CONTROL: actual held horizontal motion zooms before returning");
+        if return_with_up {
+            s.frame(vec![Event::PointerMoved(at), review_597489_primary(at, false)]);
+        } else {
+            s.frame(vec![Event::PointerMoved(at)]);
+            review_597943_camera_eq(&s, initial);
+            s.release(at, PointerButton::Primary);
+        }
+    }
+    review_597943_camera_eq(&s, initial);
+    review_598151_scrub_idle(&mut s, &before, initial, at);
+}
+
+synchronous_test!(review_598151_animated_zoom_owned_excursion_is_not_a_click, {
+    let _globals = Globals::new();
+    let expected = review_598151_stationary_scrub(false, false);
+    let ordinary = review_598151_stationary_scrub(true, false);
+    let earlier = review_598151_stationary_scrub(true, true);
+    for actual in [ordinary, earlier] {
+        assert!(actual.0.distance(expected.0) < 1e-6, "earlier hover cannot change the new stationary click's camera");
+        assert!((actual.1 - expected.1).abs() < 1e-6);
+        assert!((actual.2 - expected.2).abs() < 1e-6);
+    }
+    review_598151_scrub_out_and_back(false, false);
+    review_598151_scrub_out_and_back(false, true);
+    review_598151_scrub_out_and_back(true, false);
 });

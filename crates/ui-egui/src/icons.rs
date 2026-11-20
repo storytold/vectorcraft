@@ -81,6 +81,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-puppet" => "dc-puppet",
         "tool-shape-builder" => "dc-shape-builder",
         "tool-bucket" => "dc-live-bucket",
+        "tool-fill-area" => "dc-fill-area",
         "tool-live-select" => "dc-live-select",
         "tool-perspective" => "dc-perspective",
         "tool-perspective-select" => "dc-perspective",

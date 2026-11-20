@@ -209,7 +209,8 @@ pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
             (text, Some(next))
         }
         StatusBarShow::Undos => {
-            let text = st.map(|d| format!("{}: {}  {}: {}", tl!("Undos"), d.history.undo.len(), tl!("Redos"), d.history.redo.len()));
+            let (undos, redos) = (crate::i18n::colon(tl!("Undos")), crate::i18n::colon(tl!("Redos")));
+            let text = st.map(|d| format!("{undos} {}  {redos} {}", d.history.undo.len(), d.history.redo.len()));
             (text.unwrap_or_default(), None)
         }
         StatusBarShow::ColorProfile => (st.map(|d| color_profile_name(&d.doc)).unwrap_or_default(), None),

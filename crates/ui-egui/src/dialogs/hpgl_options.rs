@@ -8,7 +8,8 @@
 //! an option or artboard choice the export refuses, or a save panel shown in line that is canceled,
 //! keeps the dialog open. A canceled save panel keeps the options remembered before. Opened by Export
 //! Selection, it checks and writes the selection alone. A typed Curve Tolerance is kept within 0.01
-//! to 10 points.
+//! to 10 points. OK after another document has become the active one closes the dialog and writes
+//! nothing.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
@@ -42,6 +43,9 @@ const SET_ASIDE: &str = "__pens";
 /// Why Pen Table could not start from the art's pens, shown under the Pens row.
 const PEN_ERROR: &str = "__penError";
 
+/// The field that holds the uid of the document the dialog was opened for.
+const DOC: &str = "__doc";
+
 /// The Origin menu's names, in [`Origin::ALL`] order.
 pub(crate) const ORIGIN_NAMES: [&str; 2] = ["Bottom Left", "Center"];
 
@@ -71,6 +75,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
         }
     }
     fields.insert("format".into(), json!("hpgl"));
+    fields.insert(DOC.into(), json!(app.session.active().map(|st| st.uid)));
     app.ui.dialog = Some(Dialog::new(KIND, Value::Object(fields)));
 }
 
@@ -236,8 +241,13 @@ fn rgb(hex: &str) -> Option<[u8; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?])
 }
 
-/// Check the options, remember them, and write the file(s).
+/// Check the options, remember them, and write the file(s). When another document has become the
+/// active one since the dialog opened, it closes as Cancel does and writes nothing.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|st| st.uid) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let params = super::form::params(d);
     let st = app.session.active().ok_or("no document")?;
     // A bad option or artboard choice, nothing selected, or no art to export keeps the dialog open.

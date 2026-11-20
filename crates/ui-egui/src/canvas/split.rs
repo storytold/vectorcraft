@@ -148,6 +148,22 @@ pub(crate) fn primary_release(ui: &Ui, after: Option<usize>) -> Option<(usize, P
     })
 }
 
+/// The first complete primary pair in this frame's prefix, after an already finished owner.
+pub(super) fn completed_primary_press(ui: &Ui, after: Option<usize>, before: usize) -> Option<(usize, Pos2, usize, Pos2)> {
+    let (down, pressed) = ui.input(|i| {
+        i.events.iter().enumerate().find_map(|(index, event)| match event {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. }
+                if index < before && after.is_none_or(|up| index > up) =>
+            {
+                Some((index, *pos))
+            }
+            _ => None,
+        })
+    })?;
+    let (up, released) = primary_release(ui, Some(down))?;
+    (up < before).then_some((down, pressed, up, released))
+}
+
 /// Whether the new primary press belongs to the divider, using that event's position.
 pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
     enabled(app)
@@ -156,14 +172,14 @@ pub(super) fn press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Respo
         && primary_press(ui).is_some_and(|(down, p)| !drag::primary_press_state(app, ui, down).1 && divider_press_at(app, ui, resp, rect, p))
 }
 
-fn divider_press_at(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, p: Pos2) -> bool {
+pub(super) fn divider_press_at(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, p: Pos2) -> bool {
     drag::on_canvas(ui, resp, p) && app.view().is_some_and(|v| hit(rect, v.split, p))
 }
 
 /// The first completed divider press before this frame's latest Down. This read-only query
 /// also keeps fresh mapped handles from taking a later Down before the divider can finish.
 pub(super) fn completed_press_on_divider(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
-    completed_divider_press(app, ui, resp, rect, None).is_some()
+    completed_divider_press(app, ui, resp, rect, None, None).is_some()
 }
 
 fn completed_divider_press(
@@ -172,12 +188,13 @@ fn completed_divider_press(
     resp: &egui::Response,
     rect: egui::Rect,
     after: Option<usize>,
+    before: Option<usize>,
 ) -> Option<(usize, Pos2, Pos2)> {
     if !enabled(app) || ui.data(|d| d.get_temp::<Drag>(drag::drag_id()).is_some()) || ui.input(|i| i.pointer.button_down(egui::PointerButton::Middle))
     {
         return None;
     }
-    let (latest, _) = primary_press(ui)?;
+    let latest = before.or_else(|| primary_press(ui).map(|(down, _)| down))?;
     let presses = ui.input(|i| {
         i.events
             .iter()
@@ -258,7 +275,7 @@ pub(super) fn divider_input(
     };
     // Earlier completed divider pairs apply their own Up before ordinary latest-Down admission.
     if !modal && !crate::touch::finger_navigates_only() {
-        after = finish_completed_dividers(app, ui, resp, rect, after);
+        after = finish_completed_dividers(app, ui, resp, rect, after, None);
         handoff |= after.is_some();
     }
     let Some(settings) = app.view().map(|v| v.split) else { return DividerInput::Ignored };
@@ -288,8 +305,15 @@ pub(super) fn divider_input(
 }
 
 /// Each completed pair is hit-tested against the seam left by the previous pair.
-fn finish_completed_dividers(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, mut after: Option<usize>) -> Option<usize> {
-    while let Some((up, p, released)) = completed_divider_press(app, ui, resp, rect, after) {
+pub(super) fn finish_completed_dividers(
+    app: &mut VectorcraftApp,
+    ui: &Ui,
+    resp: &egui::Response,
+    rect: egui::Rect,
+    mut after: Option<usize>,
+    before: Option<usize>,
+) -> Option<usize> {
+    while let Some((up, p, released)) = completed_divider_press(app, ui, resp, rect, after, before) {
         let Some(settings) = app.view().map(|v| v.split) else { break };
         if released != p {
             move_divider(app, rect, settings.orientation, released);
