@@ -489,6 +489,10 @@ font-technology	Variable	Променливи
 	Circle	Кръг
 	Circle Tool	Инструмент Кръг
 	Circle too large	Кръгът е твърде голям
+	Show Radii	Показване на радиуси
+	Show Diameter	Показване на диаметър
+	Anchors at Standard Positions	Опорни точки в стандартни позиции
+	Third Point by Dragging	Трета точка чрез плъзгане
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -586,9 +590,14 @@ font-technology	Variable	Променливи
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Изглед „Колело“
 	Box View	Изглед „Квадрат“
+	Show Out-of-Gamut Colors	Показване на цветовете извън цветовата гама
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Show Harmony	Показване на хармонията
 	Harmony Rule	Правило за хармония
 	Harmony color	Цвят от хармонията
@@ -1830,6 +1839,10 @@ font-technology	Variable	Променливи
 	Rename Preset	Преименуване на предварителна настройка
 	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
 	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
+	Tracing Presets…	Предварителни настройки за трасиране…
+	Import Image Trace Presets	Импортиране на предварителни настройки за трасиране на изображения
+	Export Image Trace Presets	Експортиране на предварителни настройки за трасиране на изображения
+	Replace the saved presets that have these names?	Да се заменят ли запазените предварителни настройки с тези имена?
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2062,6 +2075,8 @@ font-technology	Variable	Променливи
 	List Workspaces	Извеждане на работни пространства
 	Live Paint	Динамично оцветяване
 	Live Paint Bucket	Кофа за динамично оцветяване
+	Fill Area	Запълване на област
+	Fill Area Tool	Инструмент „Запълване на област“
 	Live Paint Bucket (Stroke)	Кофа за динамично оцветяване (Щрих)
 	Live Paint Info	Информация за динамично оцветяване
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
@@ -2701,6 +2716,13 @@ font-technology	Variable	Променливи
 	Pen Tool	Инструмент „Перо“
 	Quick Pen Tool	Инструмент „Бързо перо“
 	Quick Pen	Бързо перо
+	Quick Pen Toolbar	Лента на бързото перо
+	Continuous Arc	Непрекъсната дъга
+	Sharp Corner Arc	Дъга с остър ъгъл
+	Flip Arc	Обръщане на дъгата
+	Hide Toolbar	Скриване на лентата с инструменти
+	Pin Toolbar Position	Закачане на позицията на лентата с инструменти
+	Reset Toolbar Position	Нулиране на позицията на лентата с инструменти
 	Pencil	Молив
 	Pencil Tool	Инструмент „Молив“
 	per slice	на отрязък
@@ -3141,6 +3163,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редактиране на върхове на стрелки
 	Edit Arrowheads…	Редактиране на върхове на стрелки…
 	Reload Arrowheads	Презареждане на върхове на стрелки
+	Bevels	Фаски
+	Edit Bevels	Редактиране на фаски
+	Edit Bevels…	Редактиране на фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Презареждане на фаски
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
@@ -3279,6 +3306,10 @@ digits	Malayalam	Малаялам
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показва номера на всяка отрязана част в каре в горния ѝ ляв ъгъл върху платното; когато е изключено, контурите на отрязаните части остават видими.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цветът на контурите на потребителските и обектните отрязани части и на каретата с номерата им; автоматичните отрязани части използват по-блед нюанс на този цвят.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ и [Нормален стил на знак] не задава език; текстът, който вече е в документа, запазва своя език.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	В абзаците с включено Пренасяне на думи изброената дума получава пренос само при въведените в нея тирета или никога, ако няма такива, независимо от езика и регистъра ѝ.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	В настолната версия .wasm приставките от тази папка се зареждат при стартиране и когато ОК зададе нова папка, освен в Безопасен режим; приставка, която иска разрешения, се зарежда едва след като ги дадете. Уеб версията не зарежда нито една.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Голям дава на всяко изпълнение на приставка за филтър или команда поне 250 милиона инструкции при същия лимит на време; Нормално запазва собствения бюджет на приставката. Живите ефекти, експортерите и импортерите запазват своя.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новият текст получава този език, докато езикът в Настройка на документ е Английски: САЩ; текстът, който вече е в документа, запазва своя език.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзаците с включено Пренасяне на думи изброената дума се пренася само при въведените в нея тирета или никъде, ако няма такива, независимо от езика и регистъра ѝ.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настолната версия .wasm приставките в тази папка се зареждат при стартиране и когато щракнете върху ОК с нова папка тук, освен в Безопасен режим; уеб версията не ги зарежда.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	„Нормално“ запазва собствените ограничения на всеки плъгин; с „Голям“ филтър или команда на плъгин може да изпълни поне 250 милиона инструкции освен тези за входните си данни. Ограничението по време остава същото.
@@ -3293,8 +3324,8 @@ digits	Malayalam	Малаялам
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Показва името на всяка група инструменти над инструментите ѝ в лентата с инструменти; изключено, групите следват една след друга без нищо между тях.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Отсега нататък документите, които отваряте или създавате, се отварят като подпрозорци; изключено, всеки се отваря в плаващ прозорец. Вече отворените документи остават на мястото си.
 	Makes the document tabs taller and their names larger.	Прави подпрозорците на документите по-високи, а имената им по-големи.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	От следващото стартиране системата изчертава заглавната лента на прозореца там, където иначе VectorCraft би изчертал своя.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	От следващото стартиране VectorCraft изчертава заглавната лента на прозореца дори там, където работният плот би я изчертал, освен ако Заглавна лента на системата е включена.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	От следващото стартиране системата изчертава заглавната лента на прозореца там, където иначе VectorCraft би изчертал своя; в Linux и BSD системите променливата VECTORCRAFT_TITLEBAR има предимство.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	От следващото стартиране VectorCraft изчертава заглавната лента на прозореца дори там, където работният плот би я изчертал, освен ако Заглавна лента на системата е включена или променливата VECTORCRAFT_TITLEBAR я избира.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Уголемява или смалява интерфейса; рисунката в платното запазва размера си при същия мащаб.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Показалците на инструментите, които VectorCraft изчертава, растат и се смаляват с Мащабиране на потребителския интерфейс; изключено, запазват размера си.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Езикът на интерфейса; Автоматично използва езика на системата. Диалоговият прозорец сменя езика веднага щом изберете някой.
@@ -3320,6 +3351,9 @@ digits	Malayalam	Малаялам
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„Скорошни файлове“ и екранът „Начало“ показват най-много толкова скорошни файла; 0 не показва нито един, а VectorCraft пак помни до 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	При отваряне на документ свързано EPS изображение, което показва запазения си преглед, го запазва, вместо да чете EPS файла отново; променените файлове пак следват „Актуализиране на връзките“.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	В „Пикселен преглед“ изображенията се рисуват изгладени; изключено, пикселите им имат остри ръбове. Извън „Пикселен преглед“ изображенията винаги се изглаждат.
+	PDF Text	Текст на PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Текстът на PDF, който отваряте или вграждате, идва като редактируем текст или като контури, които изглеждат същите на компютър без шрифтовете му.
+	Linked pages show the file's own text.	Свързаните страници показват собствения текст на файла.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Когато свързан файл се промени, „Автоматично“ го прочита отново, „Питане при промяна“ първо ви пита, а „Ръчно“ го оставя както е и показва бележка в лентата на състоянието.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	В настолната версия папката, в която започват „Нов от шаблон…“ и „Запази като шаблон…“; оставете я празна за VectorCraft Templates в папката ви с документи.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„Редактиране на оригинал“ отваря свързан файл в стандартното приложение на системата за неговия тип; изключено, свързано растерно изображение се отваря в PhotoCraft, ако е инсталиран.
@@ -3564,6 +3598,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
 	Type to search commands, tools, panels and effects	Въведете текст, за да търсите команди, инструменти, панели и ефекти
+	Clear Recent Commands	Изчистване на последните команди
 	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
@@ -4753,6 +4788,7 @@ axis	Both	И двете
 @msg	Saved {path}	Записано: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Изберете текст или щракнете в текста с инструмента „Текст“, за да вмъкнете глифи
 @msg	Shape Builder: no region under the pointer	Инструмент за създаване на форми: няма област под показалеца
+@msg	Fill Area: no enclosed area under the pointer	Запълване на област: няма затворена област под показалеца
 @msg	Shape Builder: select paths or compound paths	Инструмент за създаване на форми: изберете пътища или съставни пътища
 @msg	Show All Hidden Attributes: nothing is hidden	Показване на всички скрити атрибути: нищо не е скрито
 @msg	Split Into Grid: select paths large enough for the grid	Разделяне на мрежа: изберете пътища, достатъчно големи за мрежата
@@ -7898,6 +7934,24 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Nature Icons	Природни икони
+	Flower	Цвете
+	Tree	Дърво
+	Mountain	Планина
+	Ornamental	Орнаментални
+	Scrollwork	Завитък
+	Filigree Arrow	Филигранна стрела
+	Petal Sweep	Венчелистен замах
+	Twin Curl	Двоен завитък
+	Vector Packs	Векторни пакети
+	Compass Rose	Роза на компаса
+	Botanical Sprig	Ботаническо клонче
+	Facet Diamond	Фасетиран ромб
+	Tide Crest	Гребен на вълна
+	Leaf Vine	Листна лоза
+	Blossom Chain	Цветна верига
+	Pennant Garland	Гирлянд от знаменца
+	Lantern String	Низ от фенери
 	Orbit Lines	Орбитални линии
 	Petal Garland	Гирлянд от венчелистчета
 	Lattice Braid	Решетъчна плетка

@@ -508,6 +508,10 @@ font-technology	Variable	Variables
 	Cusp	Point de rebroussement
 	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
+	Show Radii	Afficher les rayons
+	Show Diameter	Afficher le diamètre
+	Anchors at Standard Positions	Points d’ancrage aux positions standard
+	Third Point by Dragging	Troisième point par glissement
 	Classic Defaults	Valeurs par défaut classiques
 	Clean Up…	Nettoyer…
 	Clear	Effacer
@@ -611,9 +615,14 @@ font-technology	Variable	Variables
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Affichage roue
 	Box View	Affichage carré
+	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Show Harmony	Afficher l’harmonie
 	Harmony Rule	Règle d’harmonie
 	Harmony color	Couleur de l’harmonie
@@ -1898,6 +1907,10 @@ font-technology	Variable	Variables
 	Rename Preset	Renommer le paramètre prédéfini
 	Save Image Trace Preset	Enregistrer le paramètre prédéfini de vectorisation de l’image
 	Delete Image Trace Preset	Supprimer le paramètre prédéfini de vectorisation de l’image
+	Tracing Presets…	Paramètres prédéfinis de vectorisation…
+	Import Image Trace Presets	Importer des paramètres prédéfinis de vectorisation de l’image
+	Export Image Trace Presets	Exporter les paramètres prédéfinis de vectorisation de l’image
+	Replace the saved presets that have these names?	Remplacer les paramètres prédéfinis enregistrés qui portent ces noms ?
 	Image Trace Presets	Paramètres prédéfinis de vectorisation de l’image
 	Image:	Image :
 	Images:	Images :
@@ -2144,6 +2157,8 @@ font-technology	Variable	Variables
 	List Workspaces	Lister les espaces de travail
 	Live Paint	Peinture dynamique
 	Live Paint Bucket	Pot de peinture dynamique
+	Fill Area	Remplir la zone
+	Fill Area Tool	Outil Remplir la zone
 	Live Paint Bucket (Stroke)	Pot de peinture dynamique (contour)
 	Live Paint Info	Informations sur la peinture dynamique
 	Live Paint Selection Tool	Outil Sélection de peinture dynamique
@@ -2792,6 +2807,13 @@ font-technology	Variable	Variables
 	Pen Tool	Outil Plume
 	Quick Pen Tool	Outil Plume rapide
 	Quick Pen	Plume rapide
+	Quick Pen Toolbar	Barre d’outils Plume rapide
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc à angle vif
+	Flip Arc	Retourner l’arc
+	Hide Toolbar	Masquer la barre d’outils
+	Pin Toolbar Position	Épingler la position de la barre d’outils
+	Reset Toolbar Position	Réinitialiser la position de la barre d’outils
 	Pencil	Crayon
 	Pencil Tool	Outil Crayon
 	per slice	par tranche
@@ -3235,6 +3257,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Modifier les pointes de flèche
 	Edit Arrowheads…	Modifier les pointes de flèche…
 	Reload Arrowheads	Recharger les pointes de flèche
+	Bevels	Biseaux
+	Edit Bevels	Modifier les biseaux
+	Edit Bevels…	Modifier les biseaux…
+	{name} (document)	{name} (document)
+	Reload Bevels	Recharger les biseaux
 	Reset Rotate View	Réinitialiser la rotation de l’affichage
 	Rotate View to Selection	Faire pivoter l’affichage selon la sélection
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
@@ -3373,6 +3400,10 @@ digits	Malayalam	Malayalam
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Affiche sur la zone de travail le numéro de chaque tranche dans un cadre en haut à gauche de la tranche. Désactivée, les contours des tranches restent affichés.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	La couleur des contours des tranches utilisateur et objet et de leurs cadres de numéro. Les tranches automatiques utilisent une nuance plus terne de cette couleur.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Le nouveau texte prend cette langue tant que la langue de Format de document est l’anglais des États-Unis et que [Style de caractère normal] n’en définit aucune. Le texte déjà présent dans un document garde sa langue.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Dans les paragraphes où Césure est activée, un mot de la liste ne reçoit de trait de césure qu’aux traits d’union saisis dedans, ou jamais s’il n’en a pas, quelles que soient sa langue et sa casse.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Dans la version de bureau, les modules externes .wasm de ce dossier se chargent au démarrage et quand OK définit un nouveau dossier, sauf en mode sans échec. Un module qui demande des autorisations ne se charge qu’une fois celles-ci accordées. La version web n’en charge aucun.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Grand donne à chaque exécution d’un module externe de filtre ou de commande au moins 250 millions d’instructions, avec la même limite de temps. Normal garde le budget propre du module. Les effets dynamiques, exportateurs et importateurs gardent le leur.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Le nouveau texte prend cette langue tant que la langue de Format de document est l’anglais des États-Unis. Le texte déjà présent dans un document garde sa langue.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Dans les paragraphes où Césure est activée, un mot de la liste n’est coupé qu’aux traits d’union saisis dedans, ou nulle part s’il n’en a pas, quelles que soient sa langue et sa casse.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Dans la version de bureau, les modules externes .wasm de ce dossier se chargent au démarrage et lorsque vous cliquez sur OK avec un nouveau dossier ici, sauf en mode sans échec. La version web ne les charge pas.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal conserve les limites propres à chaque module externe. Avec Grand, un filtre ou une commande d’un module externe peut exécuter au moins 250 millions d’instructions en plus de celles de son entrée. La limite de temps reste la même.
@@ -3387,8 +3418,8 @@ digits	Malayalam	Malayalam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Affiche le nom de chaque groupe d’outils au-dessus de ses outils dans la barre d’outils. Désactivé, les groupes se suivent sans rien entre eux.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Désormais, les documents que vous ouvrez ou créez s’ouvrent dans des onglets. Désactivé, chacun s’ouvre dans une fenêtre flottante. Les documents déjà ouverts restent où ils sont.
 	Makes the document tabs taller and their names larger.	Rend les onglets des documents plus hauts et leurs noms plus grands.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	À partir du prochain démarrage, le système dessine la barre de titre de la fenêtre là où VectorCraft dessinerait sinon la sienne.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	À partir du prochain démarrage, VectorCraft dessine la barre de titre de la fenêtre même là où le bureau la dessinerait, sauf si Barre de titre du système est activée.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	À partir du prochain démarrage, le système dessine la barre de titre de la fenêtre là où VectorCraft dessinerait sinon la sienne. Sous Linux et les BSD, la variable VECTORCRAFT_TITLEBAR a la priorité.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	À partir du prochain démarrage, VectorCraft dessine la barre de titre de la fenêtre même là où le bureau la dessinerait, sauf si Barre de titre du système est activée ou si la variable VECTORCRAFT_TITLEBAR la choisit.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Agrandit ou réduit l’interface. L’illustration de la zone de travail garde sa taille au même zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Les pointeurs d’outil que dessine VectorCraft grandissent et rétrécissent avec la Mise à l’échelle de l’interface. Désactivé, ils gardent leur taille.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	La langue de l’interface. Auto utilise la langue du système. La boîte de dialogue change de langue dès que vous en choisissez une.
@@ -3414,6 +3445,9 @@ digits	Malayalam	Malayalam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Ouvrir les fichiers récents et l’écran Accueil listent au plus ce nombre de fichiers récents. 0 n’en liste aucun, et VectorCraft en retient toujours jusqu’à 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	À l’ouverture d’un document, une image EPS liée qui montre son aperçu enregistré le garde au lieu de relire le fichier EPS. Les fichiers modifiés suivent toujours Mettre à jour les liens.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	En Aperçu en pixels, les images sont dessinées lissées. Désactivée, leurs pixels ont des bords nets. Hors de l’Aperçu en pixels, les images sont toujours lissées.
+	PDF Text	Texte PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Le texte d’un PDF que vous ouvrez ou incorporez arrive en texte modifiable, ou en contours qui s’affichent de la même façon sur un ordinateur sans ses polices.
+	Linked pages show the file's own text.	Les pages liées affichent le texte propre au fichier.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Quand un fichier lié change, Automatiquement le relit, Demander en cas de modification vous le demande d’abord, et Manuellement le laisse tel quel avec une note dans la barre d’état.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Dans la version de bureau, Nouveau d’après un modèle… et Enregistrer comme modèle… s’ouvrent dans ce dossier. Laissez-le vide pour VectorCraft Templates dans votre dossier de documents.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Modifier l’original ouvre un fichier lié dans l’application par défaut du système pour son type. Désactivée, une image matricielle liée s’ouvre dans PhotoCraft s’il est installé.
@@ -3670,6 +3704,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
 	Type to search commands, tools, panels and effects	Tapez pour rechercher des commandes, des outils, des panneaux et des effets
+	Clear Recent Commands	Effacer les commandes récentes
 	Search commands	Chercher des commandes
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
@@ -5094,6 +5129,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
 @msg	Select text or click into text with the Type tool to insert glyphs	Sélectionnez du texte ou cliquez dans un texte avec l’outil Texte pour insérer des glyphes
+@msg	Fill Area: no enclosed area under the pointer	Remplir la zone : aucune zone fermée sous le pointeur
 @msg	Shape Builder: no region under the pointer	Concepteur de forme : aucune zone sous le pointeur
 @msg	Shape Builder: select all paths you want to merge	Concepteur de forme : sélectionnez tous les tracés à fusionner
 @msg	Shape Builder: select paths or compound paths	Concepteur de forme : sélectionnez des tracés ou des tracés transparents
@@ -5565,6 +5601,10 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	cette vectorisation créerait plus de {max} points d’ancrage, plus que le document ne peut afficher de façon fluide : augmentez Bruit, réduisez Tracés ou Couleurs, ou choisissez un paramètre prédéfini moins fidèle
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l’objet {_1} est une image modifiée par Distorsion de perspective ou Distorsion manuelle, sur laquelle cette commande ne fonctionne pas
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	l’image {_1} ne peut pas être déformée ainsi, car ses coins ne formeraient pas une forme convexe
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	l’image {_1} ne peut pas être déformée ainsi, car ses coins franchiraient l’horizon de la déformation
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	l’image {_1} ne peut pas être déformée ainsi, car ses coins seraient trop proches pour une projection en perspective
 @msg	`background` must be edges, corners or colors	`background` doit valoir edges, corners ou colors
 @msg	`match` must be distance or channels	`match` doit valoir distance ou channels
 @msg	`{key}` must be from 0 to 100	`{key}` doit être compris entre 0 et 100
@@ -6407,7 +6447,10 @@ lighting	Light	Lumière
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objet n’a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
-@msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel doit valoir none, l’une des valeurs {_1}, ou custom avec {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom nécessite {BEVEL_PROFILE}, les points du biseau
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} doit être une chaîne
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} doit contenir de 2 à {most} points [x, y], chaque proportion entre 0 et 1, de [0, 0] (le bord de la face) à [1, 1] (la paroi latérale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ne peut pas construire de volumes à partir de cette illustration : ses occurrences de symbole, dégradés de formes et groupes de découpe contiennent trop d’objets
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ne peut pas construire de volume à partir de l’occurrence du symbole « {symbol} » : l’illustration du symbole n’est pas disponible
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1} : le tracé de découpe est trop complexe pour découper l’illustration
@@ -6434,8 +6477,10 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s’appliquent aux types d’objet Plan, Extrusion et Révolution
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Les graphiques s’appliquent aux types d’objet Plan, Extrusion, Révolution et Gonfler
 @msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gonfler applique les graphiques sur la face avant et l’arrière, pas sur une face latérale
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objet {_1} : l’arrière de Gonfler n’accepte des graphiques qu’avec Deux côtés et Fermeture activés
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l’illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n’a qu’une face : appliquez ses graphiques sur la face avant
@@ -10721,6 +10766,24 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Nature Icons	Icônes de nature
+	Flower	Fleur
+	Tree	Arbre
+	Mountain	Montagne
+	Ornamental	Ornemental
+	Scrollwork	Volute
+	Filigree Arrow	Flèche filigrane
+	Petal Sweep	Courbe de pétales
+	Twin Curl	Double volute
+	Vector Packs	Packs vectoriels
+	Compass Rose	Rose des vents
+	Botanical Sprig	Rameau botanique
+	Facet Diamond	Diamant facetté
+	Tide Crest	Crête de vague
+	Leaf Vine	Liane feuillue
+	Blossom Chain	Chaîne de fleurs
+	Pennant Garland	Guirlande de fanions
+	Lantern String	Guirlande de lanternes
 	Orbit Lines	Lignes orbitales
 	Petal Garland	Guirlande de pétales
 	Lattice Braid	Tresse en treillis

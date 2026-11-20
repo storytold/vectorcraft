@@ -505,6 +505,10 @@ font-technology	Variable	Вариативные
 	Cusp	Точка возврата
 	Straight segment	Прямой сегмент
 	Circle too large	Круг слишком большой
+	Show Radii	Показать радиусы
+	Show Diameter	Показать диаметр
+	Anchors at Standard Positions	Опорные точки в стандартных позициях
+	Third Point by Dragging	Третья точка перетаскиванием
 	Classic Defaults	Классические значения по умолчанию
 	Clean Up…	Очистить…
 	Clear	Очистить
@@ -608,9 +612,14 @@ font-technology	Variable	Вариативные
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вид «Круг»
 	Box View	Вид «Квадрат»
+	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
+	Show Document Colors	Показать цвета документа
+	Document Colors	Цвета документа
+	Selection Colors	Цвета выделения
+@plural	Used {n} time|Used {n} times	Используется {n} раз|Используется {n} раза|Используется {n} раз
 	Show Harmony	Показать гармонию
 	Harmony Rule	Правило гармонии
 	Harmony color	Цвет гармонии
@@ -1932,6 +1941,10 @@ file-filter	Templates	Шаблоны
 	Rename Preset	Переименовать набор
 	Save Image Trace Preset	Сохранить набор трассировки изображения
 	Delete Image Trace Preset	Удалить набор трассировки изображения
+	Tracing Presets…	Наборы трассировки…
+	Import Image Trace Presets	Импортировать наборы трассировки изображения
+	Export Image Trace Presets	Экспортировать наборы трассировки изображения
+	Replace the saved presets that have these names?	Заменить сохранённые наборы с этими именами?
 	Image Trace Presets	Наборы трассировки изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2182,6 +2195,8 @@ file-filter	Templates	Шаблоны
 	List Workspaces	Перечислить рабочие среды
 	Live Paint	Быстрая заливка
 	Live Paint Bucket	Быстрая заливка (ведро)
+	Fill Area	Заливка области
+	Fill Area Tool	Инструмент «Заливка области»
 	Live Paint Bucket (Stroke)	Быстрая заливка (обводка)
 	Live Paint Info	Сведения о быстрой заливке
 	Live Paint Selection Tool	Инструмент «Выделение быстрой заливки»
@@ -2830,6 +2845,13 @@ file-filter	Templates	Шаблоны
 	Pen Tool	Инструмент «Перо»
 	Quick Pen Tool	Инструмент «Быстрое перо»
 	Quick Pen	Быстрое перо
+	Quick Pen Toolbar	Панель быстрого пера
+	Continuous Arc	Непрерывная дуга
+	Sharp Corner Arc	Дуга с острым углом
+	Flip Arc	Отразить дугу
+	Hide Toolbar	Скрыть панель инструментов
+	Pin Toolbar Position	Закрепить положение панели инструментов
+	Reset Toolbar Position	Сбросить положение панели инструментов
 	Pencil	Карандаш
 	Pencil Tool	Инструмент «Карандаш»
 	per slice	на фрагмент
@@ -3277,6 +3299,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редактировать стрелки
 	Edit Arrowheads…	Редактировать стрелки…
 	Reload Arrowheads	Перезагрузить стрелки
+	Bevels	Фаски
+	Edit Bevels	Редактировать фаски
+	Edit Bevels…	Редактировать фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Перезагрузить фаски
 	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
 	Rotate View to Selection	Повернуть вид по выделению
@@ -3415,6 +3442,10 @@ digits	Malayalam	Малаялам
 	Edit type set in fonts that aren't available?	Редактировать текст, набранный недоступными шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	В абзацах с включённым параметром «Расставлять переносы» слово из списка получает знак переноса только по введённым в нём дефисам или никогда, если их нет, независимо от языка и регистра.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	В настольной версии модули .wasm из этой папки загружаются при запуске и когда ОК задаёт новую папку, кроме безопасного режима; модуль, запрашивающий разрешения, загружается только после того, как вы их дадите. Веб-версия не загружает ни одного.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	«Большой» даёт каждому запуску модуля фильтра или команды не менее 250 миллионов инструкций при том же лимите времени; «Обычный» сохраняет собственный бюджет модуля. Живые эффекты, экспортёры и импортёры сохраняют свой.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новый текст получает этот язык, пока в «Параметрах документа» выбран язык Английский: США; текст, который уже есть в документе, сохраняет свой язык.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах с включённым параметром «Расставлять переносы» слово из списка переносится только по введённым в нём дефисам или нигде, если их нет, независимо от языка и регистра.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настольной версии модули .wasm из этой папки загружаются при запуске и при нажатии ОК с новой папкой здесь, кроме безопасного режима; веб-версия их не загружает.
 	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	«Обычный» сохраняет собственные ограничения каждого модуля; с «Большой» фильтр или команда модуля может выполнить не менее 250 миллионов инструкций сверх тех, что нужны для её входных данных. Ограничение по времени не меняется.
@@ -3429,8 +3460,8 @@ digits	Malayalam	Малаялам
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Показывает название каждой группы инструментов над её инструментами на панели инструментов; если выключено, группы идут друг за другом без промежутков.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Теперь документы, которые вы открываете или создаёте, открываются во вкладках; если выключено, каждый открывается в плавающем окне. Уже открытые документы остаются на месте.
 	Makes the document tabs taller and their names larger.	Делает вкладки документов выше, а их названия крупнее.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Со следующего запуска система рисует строку заголовка окна там, где иначе VectorCraft рисовал бы свою.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	Со следующего запуска VectorCraft рисует строку заголовка окна даже там, где её нарисовала бы среда рабочего стола, если не включена «Системная строка заголовка».
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Со следующего запуска система рисует строку заголовка окна там, где иначе VectorCraft рисовал бы свою; в Linux и BSD приоритет у переменной VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Со следующего запуска VectorCraft рисует строку заголовка окна даже там, где её нарисовала бы среда рабочего стола, если не включена «Системная строка заголовка» и её не выбирает переменная VECTORCRAFT_TITLEBAR.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Увеличивает или уменьшает интерфейс; графика на холсте сохраняет размер при том же масштабе.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Указатели инструментов, которые рисует VectorCraft, растут и уменьшаются вместе с «Масштабом интерфейса»; если выключено, сохраняют свой размер.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Язык интерфейса; «Авто» использует язык системы. Диалог переключает язык, как только вы выбираете один из них.
@@ -3456,6 +3487,9 @@ digits	Malayalam	Малаялам
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	«Открыть последние файлы» и экран «Домой» показывают не больше стольких последних файлов; 0 не показывает ни одного, а VectorCraft всё равно помнит до 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	При открытии документа связанное изображение EPS, показывающее свой сохранённый просмотр, оставляет его вместо повторного чтения файла EPS; изменённые файлы по-прежнему следуют «Обновить связи».
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	В «Просмотре пикселей» изображения рисуются сглаженными; если выключено, их пиксели видны с резкими краями. Вне «Просмотра пикселей» изображения всегда сглаживаются.
+	PDF Text	Текст PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Текст открываемого или встраиваемого PDF поступает как редактируемый текст или как контуры, которые выглядят так же на компьютере без его шрифтов.
+	Linked pages show the file's own text.	Связанные страницы показывают собственный текст файла.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Когда связанный файл меняется, «Автоматически» перечитывает его, «Спрашивать при изменении» сначала спрашивает вас, а «Вручную» оставляет его как есть и показывает заметку в строке состояния.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	В настольной версии папка, с которой начинают «Создать из шаблона…» и «Сохранить как шаблон…»; оставьте пустой для VectorCraft Templates в вашей папке документов.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	«Редактировать оригинал» открывает связанный файл в стандартном приложении системы для его типа; если выключено, связанное растровое изображение открывается в PhotoCraft, если он установлен.
@@ -3715,6 +3749,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
 	Type to search commands, tools, panels and effects	Начните вводить для поиска команд, инструментов, панелей и эффектов
+	Clear Recent Commands	Очистить список недавних команд
 	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
@@ -5158,6 +5193,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Saved {path}	Сохранено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Выделите текст или щёлкните внутри текста инструментом «Текст», чтобы вставить глифы
 @msg	Shape Builder: no region under the pointer	Создание фигур: под указателем нет области
+@msg	Fill Area: no enclosed area under the pointer	Заливка области: под указателем нет замкнутой области
 @msg	Shape Builder: select all paths you want to merge	Создание фигур: выделите все контуры, которые нужно объединить
 @msg	Shape Builder: select paths or compound paths	Создание фигур: выделите контуры или составные контуры
 @msg	Show All Hidden Attributes: nothing is hidden	Показать все скрытые атрибуты: ничего не скрыто
@@ -5630,6 +5666,10 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	объект {_1} — изображение, изменённое с помощью «Искажение перспективы» или «Свободная деформация», и эта команда с ним не работает
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	изображение {_1} нельзя так деформировать: его углы не образуют выпуклую фигуру
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	изображение {_1} нельзя так деформировать: его углы пересекут горизонт деформации
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	изображение {_1} нельзя так деформировать: его углы окажутся слишком близко друг к другу для перспективного отображения
 @msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
 @msg	`match` must be distance or channels	`match` должен быть distance или channels
 @msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100
@@ -6453,7 +6493,10 @@ lighting	Light	Свет
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` должен быть объектом только с полем `mode` со значением shaded или wireframe
 @msg	its 3D effect builds no solid	его 3D-эффект не строит тела
-@msg	bevel must be none or one of {_1}	bevel должен быть none или одним из: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel должен быть none, одним из: {_1}, или custom с {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom нужен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} должно быть строкой
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} должен содержать от 2 до {most} точек [x, y], каждая доля от 0 до 1, от [0, 0] (край торца) до [1, 1] (боковая стенка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: нельзя построить тела из этой иллюстрации: её экземпляры символов, переходы и обтравочные группы содержат слишком много объектов
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: нельзя построить тело из экземпляра символа «{symbol}»: иллюстрация символа недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: обтравочный контур слишком сложен, чтобы обрезать им иллюстрацию
@@ -6479,8 +6522,10 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front, back or side	face в `{GRAPHICS}` должен быть front, back или side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графика наносится на объекты типов «Плоскость», «Выдавливание», «Вращение» и «Надувание»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надувание» наносит графику на переднюю и заднюю стороны, а не на боковую поверхность
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	объект {_1}: задняя сторона «Надувания» принимает графику только при включённых параметрах «С обеих сторон» и «Торцы»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
@@ -10814,6 +10859,24 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Nature Icons	Значки природы
+	Flower	Цветок
+	Tree	Дерево
+	Mountain	Гора
+	Ornamental	Орнаментальные
+	Scrollwork	Завиток
+	Filigree Arrow	Филигранная стрела
+	Petal Sweep	Лепестковый росчерк
+	Twin Curl	Двойной завиток
+	Vector Packs	Векторные наборы
+	Compass Rose	Роза ветров
+	Botanical Sprig	Ботаническая ветвь
+	Facet Diamond	Гранёный бриллиант
+	Tide Crest	Гребень волны
+	Leaf Vine	Лиственная лоза
+	Blossom Chain	Цветочная цепочка
+	Pennant Garland	Гирлянда флажков
+	Lantern String	Цепочка фонариков
 	Orbit Lines	Орбитальные линии
 	Petal Garland	Гирлянда лепестков
 	Lattice Braid	Решётчатое плетение

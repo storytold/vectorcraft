@@ -1735,7 +1735,7 @@ fn review_ruler_597368_move(
     assert!(!targets.has_point_near(probe, 1.5), "CONTROL: no old anchor/center preempts this contact");
     let original = d.clone();
     let start = Point::new(50.0, 50.0);
-    let snap = crate::select::MoveSnap::by_anchor(&c);
+    let mut snap = crate::select::MoveSnap::by_anchor(&c);
     let (delta, guides) = snap.snap(&c, start, probe - start, false);
     assert_eq!(d, original, "CONTROL: real MoveSnap queries do not change source art");
     (start + delta, guides)
@@ -2148,7 +2148,7 @@ fn review_597702_shift_move_display(
     let targets = Targets::for_move_by_anchor(&c, &selection.objects);
     assert_eq!(targets.has_point_near(raw, 4.0), anchor.is_some(), "CONTROL: distant stroke endpoints and center introduce no nearby legacy anchor");
     let start = Point::new(if edge { 60.0 } else { 50.0 }, 150.0);
-    let snap = if edge { crate::select::MoveSnap::by_edge(&c) } else { crate::select::MoveSnap::by_anchor(&c) };
+    let mut snap = if edge { crate::select::MoveSnap::by_edge(&c) } else { crate::select::MoveSnap::by_anchor(&c) };
     let original = d.clone();
     let (delta, guides) = snap.snap_along(&c, start, raw - start, false);
     assert_eq!(d, original, "the actual selected-anchor/edge constrained query leaves the source document intact");
@@ -2279,7 +2279,7 @@ fn review_597942_bounds_move(edge: Option<f64>, ruler: Option<f64>, on: bool, sh
     let targets = Targets::for_move(&c, &selection.objects);
     assert!(!targets.has_point_near(raw, 4.0), "CONTROL: the ordinary body grab is not near an anchor");
     assert!(targets.stroke_contours.nearest(raw, 4.0).is_none(), "CONTROL: the grab cannot contact the paint directly");
-    let snap = crate::select::MoveSnap::new(&c);
+    let mut snap = crate::select::MoveSnap::new(&c);
     let original = d.clone();
     let (delta, guides) = if shift { snap.snap_along(&c, start, raw - start, false) } else { snap.snap(&c, start, raw - start, false) };
     assert_eq!(d, original, "actual body-move snapping does not mutate the document or selected artwork");
@@ -2327,4 +2327,95 @@ fn review_597942_body_bounds_preserve_the_ordinary_ruler_priority() {
     let free = review_597942_bounds_move(Some(201.0), Some(193.0), true, false, true);
     assert_eq!(free.0, Point::new(193.0, 150.0), "REGRESSION: free movement preserves held-grab ruler priority even when bounds paint is closer");
     assert!(!review_597185_stroke_label(&free.1));
+}
+
+/// A compound shape's fill becomes an Outline stroke through its actual Pathfinder style
+/// source. Query-only provenance must survive that source without changing ordinary artwork.
+#[test]
+fn stroke_review_compound_outline_fill_origin() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Effect, QueryPaintKind};
+    use vectorcraft_geom::{FillRule, shapes};
+
+    fn document(compound: bool) -> (Document, NodeId, NodeId) {
+        let mut d = Document::new(500.0, 500.0);
+        let (layer, owner, child, second) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let filled = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 1.0);
+        let rect = |id, bounds, appearance| Arc::new(Node::path(id, shapes::rectangle(bounds), appearance));
+        let children = if compound {
+            vec![
+                rect(child, Rect::new(100.0, 100.0, 175.0, 200.0), Appearance::default()),
+                rect(second, Rect::new(150.0, 100.0, 200.0, 200.0), Appearance::default()),
+            ]
+        } else {
+            vec![rect(child, Rect::new(100.0, 100.0, 200.0, 200.0), filled.clone())]
+        };
+        let mut group = Node::group(owner, children);
+        if compound {
+            group.extras_mut().compound_shape = true;
+            group.appearance = filled.into();
+        }
+        group.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({}), visible: true });
+        d.insert(Some(layer), 0, group).unwrap();
+        (d, owner, child)
+    }
+
+    let probe = Point::new(202.0, 140.0);
+    for compound in [false, true] {
+        let (d, owner, child) = document(compound);
+        let original = d.clone();
+        assert_eq!(d.node(owner).unwrap().is_compound_shape(), compound);
+        // Independently resolve the ordinary painted result first: a missing target must not
+        // be confused with a hidden or unpainted Outline result.
+        let art = vectorcraft_effects::pathfinder_children(Some(&d), d.node(owner).unwrap(), None).unwrap();
+        assert!(!art.is_empty(), "CONTROL: Outline produces real artwork");
+        let contact = art
+            .iter()
+            .filter_map(|n| {
+                assert!(n.extras().query_origin.0.is_none(), "ordinary rendering invents no query metadata");
+                let path = n.path_data().expect("Outline returns path geometry");
+                let stroke = n.appearance.stroke().expect("Outline returns a stroke");
+                assert!(stroke.visible && !stroke.paint.is_none() && stroke.width == 1.0, "CONTROL: the result really paints its one-point stroke");
+                let band = vectorcraft_effects::stroke::outline_region(path, FillRule::NonZero, stroke).to_bezpath();
+                band.segments()
+                    .map(|s| s.eval(s.nearest(probe, 1e-6).t))
+                    .min_by(|a, b| a.distance_squared(probe).total_cmp(&b.distance_squared(probe)))
+            })
+            .min_by(|a, b| a.distance_squared(probe).total_cmp(&b.distance_squared(probe)))
+            .unwrap();
+        assert!(contact.distance(Point::new(200.5, 140.0)) < 1e-6, "CONTROL: the actual painted contour is independently resolved: {contact:?}");
+        let (selection, paint) = (Selection::default(), paint());
+        let on = ToolContext { smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+        let off = ToolContext { snap_to_stroke_edges: false, ..on };
+        assert!(stroke::gather(&off, &[], None, None).nearest(probe, 4.0).is_none(), "CONTROL: the disabled option emits no stroke targets");
+        assert!(stroke::gather(&on, &[owner], None, None).nearest(probe, 4.0).is_none(), "CONTROL: selected owner is excluded");
+        assert!(
+            stroke::gather(&on, &[child], None, None).nearest(probe, 4.0).is_none(),
+            "CONTROL: a selected child excludes dependent container geometry"
+        );
+        let roots = [owner];
+        let actual = stroke::gather(&on, &[], None, Some(&roots)).nearest(probe, 4.0);
+        assert!(
+            actual.is_some_and(|q| q.distance(contact) < 1e-6),
+            "REGRESSION: compound={compound}, target {actual:?} must match the visible Outline contour {contact:?}"
+        );
+        if compound {
+            let view = vectorcraft_effects::stroke_paint_view(&d);
+            let mut strokes = 0;
+            for layer in &view.layers {
+                layer.walk(&mut |n| {
+                    if n.appearance.stroke().is_some_and(|s| s.visible && !s.paint.is_none()) {
+                        let origin = n.extras().query_origin.0.expect("the Outline child retains its actual style owner's query origin");
+                        assert_eq!((origin.geometry_source, origin.paint_owner, origin.kind), (owner, owner, QueryPaintKind::Geometry));
+                        strokes += 1;
+                    }
+                });
+            }
+            assert!(strokes > 0, "the provenance oracle reaches actual Outline strokes");
+        }
+        assert_eq!(d, original, "query gathering leaves source art and its serialized state unchanged");
+        for layer in &d.layers {
+            layer.walk(&mut |n| assert!(n.extras().query_origin.0.is_none(), "source nodes keep no transient query metadata"));
+        }
+    }
 }

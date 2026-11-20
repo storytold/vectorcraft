@@ -1658,7 +1658,7 @@ impl DirectSelectionTool {
         // The grabbed anchor snaps and the others follow it. Shift keeps the move at its
         // angle, and the anchor slides along it onto what Smart Guides find there (#886).
         self.guides.clear();
-        if segment && let Some(grid) = &self.partial_grid {
+        if segment && let Some(grid) = &mut self.partial_grid {
             (d, self.guides) = if ev.mods.shift { grid.snap_along(cx, grab, d, false) } else { grid.snap(cx, grab, d, false) };
         } else if let Some(snap) = &self.anchor_snap {
             let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
@@ -1714,7 +1714,7 @@ impl DirectSelectionTool {
             && let Some(snap) = &self.partial_snap
         {
             let held = grab.unwrap_or(hold);
-            if let Some(grid) = &self.partial_grid {
+            if let Some(grid) = &mut self.partial_grid {
                 (d, self.guides) = if ev.mods.shift { grid.snap_along(cx, held, d, false) } else { grid.snap(cx, held, d, false) };
             } else {
                 let shift = ev.mods.shift.then(|| Leave::segment(cx, held, true));
@@ -1734,7 +1734,7 @@ impl DirectSelectionTool {
             let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
             let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref());
             (d, self.guides) = (q - grab, guides);
-        } else if let Some(snap) = &self.move_snap {
+        } else if let Some(snap) = &mut self.move_snap {
             (d, self.guides) = if ev.mods.shift { snap.snap_along(cx, hold, d, ev.mods.alt) } else { snap.snap(cx, hold, d, ev.mods.alt) };
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);

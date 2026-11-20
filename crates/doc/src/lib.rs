@@ -22,6 +22,7 @@ pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub mod image_quad;
 pub use id_index::{path_lookups, tree_walks};
 pub mod inks;
 mod inline;
