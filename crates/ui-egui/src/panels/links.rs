@@ -519,11 +519,11 @@ pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
         _ => None,
     };
     let tip = match art {
-        Some(kind) => format!("{tip}\n{kind}: {name}"),
+        Some(kind) => format!("{tip}\n{} {name}", crate::i18n::colon(kind)),
         None => tip,
     };
     match owner["maskOf"].as_u64() {
-        Some(id) => format!("{tip}\n{}: {}", tl!("Opacity Mask"), mask.unwrap_or_else(|| id.to_string())),
+        Some(id) => format!("{tip}\n{} {}", crate::i18n::colon(tl!("Opacity Mask")), mask.unwrap_or_else(|| id.to_string())),
         None => tip,
     }
 }

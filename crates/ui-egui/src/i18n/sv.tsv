@@ -496,6 +496,10 @@ font-technology	Variable	Variabla
 	Cusp	Spets
 	Straight segment	Rakt segment
 	Circle too large	Cirkeln är för stor
+	Show Radii	Visa radier
+	Show Diameter	Visa diameter
+	Anchors at Standard Positions	Ankarpunkter på standardpositioner
+	Third Point by Dragging	Tredje punkt genom att dra
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
 	Clear	Rensa
@@ -597,6 +601,10 @@ font-technology	Variable	Variabla
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Document Colors	Visa dokumentfärger
+	Document Colors	Dokumentfärger
+	Selection Colors	Markeringens färger
+@plural	Used {n} time|Used {n} times	Används {n} gång|Används {n} gånger
 	Show Harmony	Visa harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifärg
@@ -1855,6 +1863,10 @@ font-technology	Variable	Variabla
 	Rename Preset	Byt namn på förinställning
 	Save Image Trace Preset	Spara förinställning för bildkalkering
 	Delete Image Trace Preset	Radera förinställning för bildkalkering
+	Tracing Presets…	Förinställningar för vektorisering…
+	Import Image Trace Presets	Importera förinställningar för bildkalkering
+	Export Image Trace Presets	Exportera förinställningar för bildkalkering
+	Replace the saved presets that have these names?	Ersätta sparade förinställningar med dessa namn?
 	Image Trace Presets	Förinställningar för bildkalkering
 	Image:	Bild:
 	Images:	Bilder:
@@ -2085,6 +2097,8 @@ font-technology	Variable	Variabla
 	List Workspaces	Lista arbetslayouter
 	Live Paint	Direktmålning
 	Live Paint Bucket	Direktmålningshink
+	Fill Area	Fyll område
+	Fill Area Tool	Verktyget Fyll område
 	Live Paint Bucket (Stroke)	Direktmålningshink (kontur)
 	Live Paint Info	Direktmålningsinfo
 	Live Paint Selection Tool	Markeringsverktyg för direktmålning
@@ -2726,6 +2740,13 @@ font-technology	Variable	Variabla
 	Pen Tool	Pennverktyg
 	Quick Pen Tool	Snabbpennverktyg
 	Quick Pen	Snabbpenna
+	Quick Pen Toolbar	Snabbpennans verktygsfält
+	Continuous Arc	Kontinuerlig båge
+	Sharp Corner Arc	Båge med skarpt hörn
+	Flip Arc	Vänd båge
+	Hide Toolbar	Dölj verktygsfältet
+	Pin Toolbar Position	Fäst verktygsfältets position
+	Reset Toolbar Position	Återställ verktygsfältets position
 	Pencil	Blyertspenna
 	Pencil Tool	Blyertsverktyg
 	per slice	per skiva
@@ -5046,6 +5067,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Saved {path}	Sparade {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markera text eller klicka i text med textverktyget för att infoga glyfer
 @msg	Shape Builder: no region under the pointer	Formbyggare: inget område under pekaren
+@msg	Fill Area: no enclosed area under the pointer	Fyll område: inget slutet område under pekaren
 @msg	Shape Builder: select all paths you want to merge	Formbyggare: markera alla banor du vill sammanfoga
 @msg	Shape Builder: select paths or compound paths	Formbyggare: markera banor eller sammansatta banor
 @msg	Show All Hidden Attributes: nothing is hidden	Visa alla dolda attribut: ingenting är dolt
@@ -6366,9 +6388,11 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` face must be front, back or side	face i `{GRAPHICS}` måste vara front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
-	Graphics map onto the Plane, Extrude and Revolve object types.	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel.
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	Grafik placeras på objekttyperna Plan, Extrudera, Rotera runt axel och Blås upp.
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Blås upp placerar grafik på framsidan och baksidan, inte på en sida
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekt {_1}: baksidan av Blås upp tar emot grafik bara när Båda sidor och Lock är på
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
 @msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
@@ -10871,6 +10895,15 @@ digits	Hindi	Hindi
 @msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
 @msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Nature Icons	Naturikoner
+	Flower	Blomma
+	Tree	Träd
+	Mountain	Berg
+	Ornamental	Ornament
+	Scrollwork	Snirkel
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvep
+	Twin Curl	Dubbel snirkel
 	Vector Packs	Vektorpaket
 	Compass Rose	Kompassros
 	Botanical Sprig	Botanisk kvist

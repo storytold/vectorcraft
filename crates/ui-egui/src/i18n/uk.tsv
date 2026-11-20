@@ -503,6 +503,11 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	Show Radii	Показати радіуси
+	Show Diameter	Показати діаметр
+	Anchors at Standard Positions	Опорні точки в стандартних позиціях
+	Third Point by Dragging	Третя точка перетягуванням
+	Gray	Сірий
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -610,6 +615,10 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Show Harmony	Показати гармонію
 	Harmony Rule	Правило гармонії
 	Harmony color	Колір гармонії
@@ -1941,6 +1950,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:
@@ -2190,6 +2203,8 @@ file-filter	Templates	Шаблони
 	List Workspaces	Перелічити робочі середовища
 	Live Paint	Швидка заливка
 	Live Paint Bucket	Швидка заливка (відро)
+	Fill Area	Заливка області
+	Fill Area Tool	Інструмент «Заливка області»
 	Live Paint Bucket (Stroke)	Швидка заливка (обведення)
 	Live Paint Info	Відомості про швидку заливку
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
@@ -2840,6 +2855,13 @@ file-filter	Templates	Шаблони
 	Pen Tool	Інструмент «Перо»
 	Quick Pen Tool	Інструмент «Швидке перо»
 	Quick Pen	Швидке перо
+	Quick Pen Toolbar	Панель швидкого пера
+	Continuous Arc	Неперервна дуга
+	Sharp Corner Arc	Дуга з гострим кутом
+	Flip Arc	Відобразити дугу
+	Hide Toolbar	Сховати панель інструментів
+	Pin Toolbar Position	Закріпити положення панелі інструментів
+	Reset Toolbar Position	Скинути положення панелі інструментів
 	Pencil	Олівець
 	Pencil Tool	Інструмент «Олівець»
 	per slice	на фрагмент
@@ -5159,6 +5181,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Fill Area: no enclosed area under the pointer	Заливка області: під вказівником немає замкненої області
 @msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
@@ -6481,8 +6504,10 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання», «Обертання» та «Надування»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надування» наносить графіку на передній і задній боки, а не на бічну поверхню
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	об’єкт {_1}: задній бік «Надування» приймає графіку лише з увімкненими параметрами «З обох боків» і «Торці»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
@@ -10429,6 +10454,15 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Nature Icons	Значки природи
+	Flower	Квітка
+	Tree	Дерево
+	Mountain	Гора
+	Ornamental	Орнаментальні
+	Scrollwork	Завиток
+	Filigree Arrow	Філігранна стріла
+	Petal Sweep	Пелюстковий розчерк
+	Twin Curl	Подвійний завиток
 	Vector Packs	Векторні набори
 	Compass Rose	Роза вітрів
 	Botanical Sprig	Ботанічна гілочка

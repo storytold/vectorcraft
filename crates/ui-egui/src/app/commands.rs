@@ -479,6 +479,10 @@ impl VectorcraftApp {
         if crate::touch::is_drawing_tool(now) {
             self.ui.touch_drawing_tool = Some(now.to_string());
         }
+        // Selecting the Quick Pen tool shows its toolbar, even after Hide Toolbar.
+        if now == vectorcraft_tools::quickpen::ID {
+            self.ui.quick_pen_bar = true;
+        }
         Ok(())
     }
 

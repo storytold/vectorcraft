@@ -707,6 +707,12 @@ impl Targets {
         self
     }
 
+    /// These targets without the ruler guides, once they stop showing during the drag they were
+    /// gathered for (#8363).
+    pub(crate) fn forget_rulers(&mut self) {
+        self.rulers.clear();
+    }
+
     /// The ruler guides alone ([`Self::with_rulers`]): what a dragged selection's grabbed point
     /// still snaps to with View → Snap to Point when Smart Guides line the selection up.
     pub(crate) fn rulers(cx: &ToolContext) -> Self {

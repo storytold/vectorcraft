@@ -13,6 +13,7 @@ mod layers;
 mod pdf_deps;
 mod pngsuite;
 mod sha256;
+mod shards;
 mod stats;
 mod test262;
 mod ui_commands;
@@ -37,6 +38,11 @@ commands:
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
   ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
+  ci shard        shard $GATE_SHARD of $GATE_SHARDS of ci (xtask/src/shards.rs): a test shard runs
+                  the tests and doctests of its crates, the last shard the other steps
+  ci warm         build what every shard builds, without running it (fills the gate's cache)
+  shards          list the crates each shard tests; fails when a member is in no shard or in two,
+                  or builds with other features in its shard than in the whole workspace
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -66,7 +72,10 @@ fn main() -> ExitCode {
         Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
         Some("test") => cmd_test().and_then(|()| cmd_doctests()),
+        Some("ci") if rest.first() == Some(&"shard") => cmd_ci_shard(),
+        Some("ci") if rest.first() == Some(&"warm") => cmd_ci_warm(),
         Some("ci") => cmd_ci(),
+        Some("shards") => shards::run().map(drop),
         Some("corpus") if rest.contains(&"--affinity") => affinity_corpus::fetch(),
         Some("corpus") => cmd_corpus(rest.contains(&"--download")),
         Some("bundle") => bundle::run(&root()),
@@ -246,30 +255,162 @@ fn has_nextest() -> bool {
 /// The workspace's unit and integration tests, without examples (clippy still checks those).
 /// nextest runs each test in its own process, in parallel across all test binaries.
 fn cmd_test() -> Result<(), String> {
+    test_packages(&["--workspace".to_owned()], "--workspace")
+}
+
+/// [`cmd_test`] for the packages `select` picks (`--workspace` or `-p` ids), shown as `shown`.
+fn test_packages(select: &[String], shown: &str) -> Result<(), String> {
     const TARGETS: [&str; 3] = ["--lib", "--bins", "--tests"];
     let mut c = cargo();
     if has_nextest() {
-        c.args(["nextest", "run", "--workspace"]).args(TARGETS);
-        run(c, "cargo nextest run --workspace --lib --bins --tests")
+        c.args(["nextest", "run"]).args(select).args(TARGETS);
+        run(c, &format!("cargo nextest run {shown} --lib --bins --tests"))
     } else {
         eprintln!("note: cargo-nextest is not installed; running cargo test (cargo install cargo-nextest for faster runs)");
-        c.args(["test", "--workspace"]).args(TARGETS);
-        run(c, "cargo test --workspace --lib --bins --tests")
+        c.arg("test").args(select).args(TARGETS);
+        run(c, &format!("cargo test {shown} --lib --bins --tests"))
     }
 }
 
 /// The doctests, which nextest doesn't run.
 fn cmd_doctests() -> Result<(), String> {
-    let mut c = cargo();
-    c.args(["test", "--workspace", "--doc"]);
-    run(c, "cargo test --workspace --doc")
+    doctest_packages(&["--workspace".to_owned()], "--workspace")
 }
+
+/// [`cmd_doctests`] for the packages `select` picks, shown as `shown`.
+fn doctest_packages(select: &[String], shown: &str) -> Result<(), String> {
+    let mut c = cargo();
+    c.arg("test").args(select).arg("--doc");
+    run(c, &format!("cargo test {shown} --doc"))
+}
+
+/// One `cargo xtask ci` step: its name and what it runs.
+type Step = (&'static str, Box<dyn Fn() -> Result<(), String>>);
+
+/// The `ci` steps that build and run tests of the whole workspace; `ci shard` runs them per shard.
+const TEST_STEPS: [&str; 3] = ["test", "doctests", "i18n-report"];
 
 /// `cargo xtask ci`: each step in turn, stopping at the first that fails; the summary names the
 /// steps that passed and, after a failure, the one that failed and those skipped.
 fn cmd_ci() -> Result<(), String> {
-    type Step = (&'static str, Box<dyn Fn() -> Result<(), String>>);
-    let steps: Vec<Step> = vec![
+    run_steps(&ci_steps())
+}
+
+/// `cargo xtask ci shard`: shard `GATE_SHARD` of `GATE_SHARDS` (1-based, as the shared gate
+/// workflow sets them). A test shard runs the shard checks, then the tests and doctests of its
+/// crates, and the i18n report where it tests vectorcraft-ui-egui. The checks shard runs every
+/// other `ci` step and the shard checks.
+fn cmd_ci_shard() -> Result<(), String> {
+    let number = |key: &str| -> Result<usize, String> {
+        let value = std::env::var(key).map_err(|_| format!("ci shard: {key} is not set (the gate workflow sets it)"))?;
+        value.trim().parse().map_err(|_| format!("ci shard: {key} is `{value}`, not a number"))
+    };
+    let (shard, count) = (number("GATE_SHARD")?, number("GATE_SHARDS")?);
+    if count != shards::GROUPS.len() {
+        return Err(format!(
+            "ci shard: GATE_SHARDS is {count}, and xtask/src/shards.rs has {} shards (test-shards in .github/workflows/ci.yml)",
+            shards::GROUPS.len()
+        ));
+    }
+    if !(1..=count).contains(&shard) {
+        return Err(format!("ci shard: GATE_SHARD is {shard}, not 1 to {count}"));
+    }
+    let checked = shards::run()?;
+    let mut steps: Vec<Step> = Vec::new();
+    match &checked[shard - 1] {
+        shards::Shard::Tests(crates) => {
+            let names = shards::names(crates);
+            eprintln!("ci shard {shard}/{count}: the tests of {names}");
+            let select = shards::select(crates);
+            let shown = crates.iter().map(|m| format!("-p {}", m.name)).collect::<Vec<_>>().join(" ");
+            let (s, w) = (select.clone(), shown.clone());
+            steps.push(("test", Box::new(move || test_packages(&s, &w))));
+            let (s, w) = (select.clone(), shown.clone());
+            steps.push(("doctests", Box::new(move || doctest_packages(&s, &w))));
+            if crates.iter().any(|m| m.name == "vectorcraft-ui-egui") {
+                steps.push(("i18n-report", Box::new(move || i18n_report_packages(&select, &shown))));
+            }
+        }
+        shards::Shard::Checks => {
+            eprintln!("ci shard {shard}/{count}: the ci steps other than the tests");
+            steps.extend(ci_steps().into_iter().filter(|(name, _)| !TEST_STEPS.contains(name)));
+        }
+    }
+    run_steps(&steps)
+}
+
+/// `cargo xtask ci warm`: for each test shard, builds its crates' library and binary tests without
+/// running them, then builds what the checks shard builds, so one dependency-cache entry holds the
+/// dependencies of every shard with the features that shard builds them with (cargo resolves
+/// features over the packages each command selects). The integration tests are left out: they
+/// build no dependency that the library tests do not, since both take the crate's dev-dependencies.
+fn cmd_ci_warm() -> Result<(), String> {
+    let checked = shards::run()?;
+    let mut steps: Vec<Step> = Vec::new();
+    for shard in checked {
+        if let shards::Shard::Tests(crates) = shard {
+            steps.push((
+                "build tests",
+                Box::new(move || {
+                    let mut c = cargo();
+                    c.arg("test").args(shards::select(&crates)).args(["--lib", "--bins", "--no-run"]);
+                    run(c, &format!("cargo test --lib --bins --no-run ({})", shards::names(&crates)))
+                }),
+            ));
+        }
+    }
+    steps.push((
+        "clippy",
+        Box::new(|| {
+            let mut c = cargo();
+            c.args(["clippy", "--workspace", "--all-targets", "--keep-going"]);
+            run(c, "cargo clippy --workspace --all-targets --keep-going")
+        }),
+    ));
+    steps.push((
+        "no-bundled-fonts",
+        Box::new(|| {
+            let mut c = cargo();
+            c.args(["test", "-p", "vectorcraft-text", "--no-default-features", "--test", "without_bundled_fonts", "--no-run"]);
+            run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts --no-run")?;
+            let mut c = cargo();
+            c.args(["clippy", "-p", "vectorcraft-ui-egui", "--no-default-features", "--all-targets"]);
+            run(c, "cargo clippy -p vectorcraft-ui-egui --no-default-features --all-targets")?;
+            let mut c = cargo();
+            c.args(["test", "-p", "vectorcraft-ui-egui", "--no-default-features", "--test", "install_fonts", "--no-run"]);
+            run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts --no-run")
+        }),
+    ));
+    steps.push(("wasm", Box::new(cmd_wasm)));
+    run_steps(&steps)
+}
+
+/// Runs `steps` in turn, stopping at the first that fails; the summary names the steps that passed
+/// and, after a failure, the one that failed and those skipped.
+fn run_steps(steps: &[Step]) -> Result<(), String> {
+    let mut done = Vec::new();
+    for (name, f) in steps {
+        eprintln!("\n=== ci: {name} ===");
+        if let Err(e) = f() {
+            println!("\nCI summary:");
+            for d in &done {
+                println!("  ok    {d}");
+            }
+            println!("  FAIL  {name}: {e}");
+            for (n, _) in steps.iter().skip(done.len() + 1) {
+                println!("  skip  {n}");
+            }
+            return Err(format!("ci failed at `{name}`"));
+        }
+        done.push(*name);
+    }
+    println!("\nCI summary: all {} steps passed ({})", done.len(), done.join(", "));
+    Ok(())
+}
+
+/// Every `cargo xtask ci` step, in order.
+fn ci_steps() -> Vec<Step> {
+    vec![
         (
             "fmt",
             Box::new(|| {
@@ -316,25 +457,7 @@ fn cmd_ci() -> Result<(), String> {
         ("ui-commands", Box::new(|| ui_commands::run(&root(), true))),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
-    ];
-    let mut done = Vec::new();
-    for (name, f) in &steps {
-        eprintln!("\n=== ci: {name} ===");
-        if let Err(e) = f() {
-            println!("\nCI summary:");
-            for d in &done {
-                println!("  ok    {d}");
-            }
-            println!("  FAIL  {name}: {e}");
-            for (n, _) in steps.iter().skip(done.len() + 1) {
-                println!("  skip  {n}");
-            }
-            return Err(format!("ci failed at `{name}`"));
-        }
-        done.push(*name);
-    }
-    println!("\nCI summary: all {} steps passed ({})", done.len(), done.join(", "));
-    Ok(())
+    ]
 }
 
 fn cmd_corpus(download: bool) -> Result<(), String> {
@@ -379,7 +502,12 @@ fn cmd_i18n_report() -> Result<(), String> {
 /// differently and recompiled for about 3.5 minutes. Every other test binary runs with no test
 /// matching the filter.
 fn cmd_ci_i18n_report() -> Result<(), String> {
+    i18n_report_packages(&["--workspace".to_owned()], "--workspace")
+}
+
+/// [`cmd_ci_i18n_report`] for the packages `select` picks (a `ci shard`'s), shown as `shown`.
+fn i18n_report_packages(select: &[String], shown: &str) -> Result<(), String> {
     let mut c = cargo();
-    c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
-    run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
+    c.arg("test").args(select).args(["--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, &format!("cargo test {shown} --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture"))
 }
