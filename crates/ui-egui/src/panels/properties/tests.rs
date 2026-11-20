@@ -1850,13 +1850,19 @@ fn type_quick_actions_show_text_commands_and_create_outlines() {
     press(&mut app, &ctx, text_at(&texts, "Find and Replace…").center());
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("findReplace"), "opens findReplace dialog");
 
-    // Retype quick action opens the Retype panel.
+    // Retype quick action reveals the Retype panel and leaves it open if already visible.
     app.ui.dialog = None;
+    let retype_panel = crate::panels::retype::ID;
+    assert!(!crate::panel_docking::visible(&app.ui, retype_panel), "Retype is initially hidden");
+
     let texts = tall(&mut app, &ctx, vec![]);
     press(&mut app, &ctx, text_at(&texts, "Retype").center());
-    let retype_panel = crate::panels::retype::ID;
-    let layout = crate::panel_docking::layout_of(&app.ui);
-    assert!(layout.contains(&retype_panel.to_string()) || app.ui.open_panel.as_deref() == Some(retype_panel), "Retype panel is opened");
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel is revealed when initially hidden");
+
+    // Clicking Retype again leaves the panel open rather than toggling it closed.
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel remains visible when already open");
 }
 
 /// A dynamic symbol instance with appearance changes of its own has Reset in Quick Actions, which

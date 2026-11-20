@@ -1253,7 +1253,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             let empty = serde_json::Map::new();
             crate::dialogs::find_replace::open(app, &empty)
         }
-        "ui.retype" => app.run("window.panel", json!({"panel": crate::panels::retype::ID})),
+        "ui.retype" => crate::panel_docking::reveal_panel(app, crate::panels::retype::ID),
 
         _ => return None,
     };
