@@ -8704,8 +8704,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
 @msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ფაილის წაუკითხავი ნაწილები: {n}|ფაილის წაუკითხავი ნაწილები: {n}
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ფაილის წაუკითხავი ნაწილები: {n}
 # Upstream sync 2026-10-16: legacy .ai export, screen color sampler, Hidden Objects, Dimension tool.
 	Color blindness – Tritanopia-type	დალტონიზმი – ტრიტანოპიის ტიპი
 	Show Color Vision Preview	ფერთა აღქმის გადახედვის ჩვენება
