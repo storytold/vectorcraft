@@ -757,8 +757,8 @@ fn point_down_the_add_menu(app: &mut VectorcraftApp, ctx: &egui::Context, size: 
 }
 
 /// On a toolbar made with New Toolbar that holds many tools, the + button sits low in the window,
-/// with less room under it than the Add Tool… menu needs. The menu then stays where it opened, as
-/// tall as it opened, while the pointer moves down its rows.
+/// with less room under it than the Add Tool… menu needs. The menu then opens above the button and
+/// stays where it opened, as tall as it opened, while the pointer moves down its rows.
 #[test]
 fn the_add_tool_menu_stays_put_under_a_long_toolbar() {
     let mut app = app();
@@ -768,6 +768,7 @@ fn the_add_tool_menu_stays_put_under_a_long_toolbar() {
     assert!(plus.bottom() > size.y * 0.6, "the + button is low in the window: {plus:?}");
     let (opened, seen) = point_down_the_add_menu(&mut app, &ctx, size, plus);
     assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(opened), "the menu at {opened:?} is inside the window");
+    assert!(opened.bottom() <= plus.top(), "the menu at {opened:?} opens above the + button at {plus:?}");
     assert!(seen.iter().all(|s| *s == (true, Some(opened))), "opened at {opened:?}, then {seen:?}");
 }
 
@@ -782,7 +783,7 @@ fn the_add_tool_menu_stays_put_below_a_button_mid_window() {
     assert!((size.y * 0.3..size.y * 0.7).contains(&plus.center().y), "the + button is in the middle of the window: {plus:?}");
     let (opened, seen) = point_down_the_add_menu(&mut app, &ctx, size, plus);
     assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(opened), "the menu at {opened:?} is inside the window");
-    assert!(opened.top() >= plus.center().y, "the menu at {opened:?} opens below the + button at {plus:?}");
+    assert!(opened.top() >= plus.bottom(), "the menu at {opened:?} opens below the + button at {plus:?}");
     assert!(seen.iter().all(|s| *s == (true, Some(opened))), "opened at {opened:?}, then {seen:?}");
 }
 
