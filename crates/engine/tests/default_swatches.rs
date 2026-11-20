@@ -377,7 +377,7 @@ fn assert_resources(doc: &Document, bytes: &[u8], profile: &Document, source: &D
 fn review_598487_badge_definition(doc: &Document, name: &str, source: &Document) {
     let actual = doc.symbols.iter().find(|s| s.name == name).unwrap();
     let mut expected = source.symbols.iter().find(|s| s.name == "Badge").unwrap().clone();
-    assert!(matches!(&expected.art.kind, NodeKind::Path(_)), "CONTROL: the source Badge is one path");
+    assert!(matches!(&expected.art.kind, NodeKind::Path { .. }), "CONTROL: the source Badge is one path");
     expected.name = name.to_string();
     Arc::make_mut(&mut expected.art).id = actual.art.id;
     assert_eq!(actual, &expected, "Badge geometry, paint and dynamic option survive the supported ID/name remap");
