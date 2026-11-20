@@ -49,6 +49,7 @@ mod invoke;
 mod keyboard;
 mod labels;
 mod run;
+pub(crate) use run::TRIM_VIEW_HIDES;
 mod slots;
 mod state;
 mod submenus;

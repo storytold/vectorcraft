@@ -1941,6 +1941,10 @@ file-filter	Templates	Шаблоны
 	Rename Preset	Переименовать набор
 	Save Image Trace Preset	Сохранить набор трассировки изображения
 	Delete Image Trace Preset	Удалить набор трассировки изображения
+	Tracing Presets…	Наборы трассировки…
+	Import Image Trace Presets	Импортировать наборы трассировки изображения
+	Export Image Trace Presets	Экспортировать наборы трассировки изображения
+	Replace the saved presets that have these names?	Заменить сохранённые наборы с этими именами?
 	Image Trace Presets	Наборы трассировки изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -2191,6 +2195,8 @@ file-filter	Templates	Шаблоны
 	List Workspaces	Перечислить рабочие среды
 	Live Paint	Быстрая заливка
 	Live Paint Bucket	Быстрая заливка (ведро)
+	Fill Area	Заливка области
+	Fill Area Tool	Инструмент «Заливка области»
 	Live Paint Bucket (Stroke)	Быстрая заливка (обводка)
 	Live Paint Info	Сведения о быстрой заливке
 	Live Paint Selection Tool	Инструмент «Выделение быстрой заливки»
@@ -2839,6 +2845,13 @@ file-filter	Templates	Шаблоны
 	Pen Tool	Инструмент «Перо»
 	Quick Pen Tool	Инструмент «Быстрое перо»
 	Quick Pen	Быстрое перо
+	Quick Pen Toolbar	Панель быстрого пера
+	Continuous Arc	Непрерывная дуга
+	Sharp Corner Arc	Дуга с острым углом
+	Flip Arc	Отразить дугу
+	Hide Toolbar	Скрыть панель инструментов
+	Pin Toolbar Position	Закрепить положение панели инструментов
+	Reset Toolbar Position	Сбросить положение панели инструментов
 	Pencil	Карандаш
 	Pencil Tool	Инструмент «Карандаш»
 	per slice	на фрагмент
@@ -5179,6 +5192,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Saved {path}	Сохранено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Выделите текст или щёлкните внутри текста инструментом «Текст», чтобы вставить глифы
 @msg	Shape Builder: no region under the pointer	Создание фигур: под указателем нет области
+@msg	Fill Area: no enclosed area under the pointer	Заливка области: под указателем нет замкнутой области
 @msg	Shape Builder: select all paths you want to merge	Создание фигур: выделите все контуры, которые нужно объединить
 @msg	Shape Builder: select paths or compound paths	Создание фигур: выделите контуры или составные контуры
 @msg	Show All Hidden Attributes: nothing is hidden	Показать все скрытые атрибуты: ничего не скрыто
@@ -6507,8 +6521,10 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front, back or side	face в `{GRAPHICS}` должен быть front, back или side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графика наносится на объекты типов «Плоскость», «Выдавливание», «Вращение» и «Надувание»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надувание» наносит графику на переднюю и заднюю стороны, а не на боковую поверхность
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	объект {_1}: задняя сторона «Надувания» принимает графику только при включённых параметрах «С обеих сторон» и «Торцы»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
@@ -10842,6 +10858,11 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Ornamental	Орнаментальные
+	Scrollwork	Завиток
+	Filigree Arrow	Филигранная стрела
+	Petal Sweep	Лепестковый росчерк
+	Twin Curl	Двойной завиток
 	Vector Packs	Векторные наборы
 	Compass Rose	Роза ветров
 	Botanical Sprig	Ботаническая ветвь

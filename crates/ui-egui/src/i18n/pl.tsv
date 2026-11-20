@@ -2048,6 +2048,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Zmień nazwę ustawienia
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
+	Tracing Presets…	Ustawienia obrysu…
+	Import Image Trace Presets	Importuj ustawienia obrysu obrazu
+	Export Image Trace Presets	Eksportuj ustawienia obrysu obrazu
+	Replace the saved presets that have these names?	Zastąpić zapisane ustawienia o tych nazwach?
 	Method:	Metoda:
 	Pad	Przedłuż
 	Repeats	Liczba powtórzeń
@@ -3677,6 +3681,8 @@ theme	Appearance	Wygląd
 	Symbolism Tool	Narzędzie symboli
 	Image Trace Presets	Ustawienia obrysu obrazu
 	Live Paint Bucket	Wiadro aktywnego malowania
+	Fill Area	Wypełnij obszar
+	Fill Area Tool	Narzędzie Wypełnij obszar
 	Live Paint Bucket (Stroke)	Wiadro aktywnego malowania (obrys)
 	Live Paint Info	Informacje o aktywnym malowaniu
 	Shape Builder	Kreator kształtów
@@ -4187,6 +4193,13 @@ theme	Appearance	Wygląd
 	Pen Tool	Narzędzie Pióro
 	Quick Pen Tool	Narzędzie Szybkie pióro
 	Quick Pen	Szybkie pióro
+	Quick Pen Toolbar	Pasek narzędzi szybkiego pióra
+	Continuous Arc	Łuk ciągły
+	Sharp Corner Arc	Łuk z ostrym narożnikiem
+	Flip Arc	Odwróć łuk
+	Hide Toolbar	Ukryj pasek narzędzi
+	Pin Toolbar Position	Przypnij położenie paska narzędzi
+	Reset Toolbar Position	Resetuj położenie paska narzędzi
 	Picas	Pica
 	Portuguese	Portugalski
 	Preserve Appearance and Overprints	Zachowaj wygląd i nadruki
@@ -5289,6 +5302,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved {path}	Zapisano {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Zaznacz tekst lub kliknij w tekst narzędziem Tekst, aby wstawić glify
 @msg	Shape Builder: no region under the pointer	Kreator kształtów: brak obszaru pod wskaźnikiem
+@msg	Fill Area: no enclosed area under the pointer	Wypełnij obszar: brak zamkniętego obszaru pod wskaźnikiem
 @msg	Shape Builder: select all paths you want to merge	Kreator kształtów: zaznacz wszystkie ścieżki, które chcesz scalić
 @msg	Shape Builder: select paths or compound paths	Kreator kształtów: zaznacz ścieżki lub ścieżki złożone
 @msg	Show All Hidden Attributes: nothing is hidden	Pokaż wszystkie ukryte atrybuty: nic nie jest ukryte
@@ -6722,8 +6736,10 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front, back or side	face w `{GRAPHICS}` musi mieć wartość front, back lub side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie, Obrót i Nadmuchanie
 @msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	Inflate maps graphics onto its front and back, not onto a side	Nadmuchanie nakłada grafiki na przednią i tylną stronę, a nie na powierzchnię boczną
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	obiekt {_1}: tył Nadmuchania przyjmuje grafiki tylko przy włączonych opcjach Obie strony i Zakończenie
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość kompozycje symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
@@ -10651,6 +10667,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Ornamental	Ornamentalne
+	Scrollwork	Zawijas
+	Filigree Arrow	Filigranowa strzałka
+	Petal Sweep	Smuga płatków
+	Twin Curl	Podwójny zawijas
 	Vector Packs	Pakiety wektorowe
 	Compass Rose	Róża wiatrów
 	Botanical Sprig	Gałązka botaniczna

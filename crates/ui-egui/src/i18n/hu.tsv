@@ -2681,6 +2681,8 @@ file-filter	Templates	Sablonok
 	List Workspaces	Munkaterületek listázása
 	Live Paint	Élő festés
 	Live Paint Bucket	Élő festékesvödör
+	Fill Area	Terület kitöltése
+	Fill Area Tool	Területkitöltő eszköz
 	Live Paint Bucket (Stroke)	Élő festékesvödör (körvonal)
 	Live Paint Info	Élő festés adatai
 	Live Paint Selection Tool	Élőfestés-kijelölés
@@ -3346,6 +3348,13 @@ file-filter	Templates	Sablonok
 	Pen Tool	Toll
 	Quick Pen Tool	Gyorstoll
 	Quick Pen	Gyorstoll
+	Quick Pen Toolbar	Gyorstoll eszköztár
+	Continuous Arc	Folytonos ív
+	Sharp Corner Arc	Éles sarkú ív
+	Flip Arc	Ív tükrözése
+	Hide Toolbar	Eszköztár elrejtése
+	Pin Toolbar Position	Eszköztár helyének rögzítése
+	Reset Toolbar Position	Eszköztár helyének visszaállítása
 	Pencil	Ceruza
 	Pencil Tool	Ceruza
 	Pentagram	Pentagram
@@ -5103,6 +5112,10 @@ mark-style	Japanese	Japán
 	Rename Preset	Előbeállítás átnevezése
 	Save Image Trace Preset	Képvektorizálási előbeállítás mentése
 	Delete Image Trace Preset	Képvektorizálási előbeállítás törlése
+	Tracing Presets…	Vektorizálási előbeállítások…
+	Import Image Trace Presets	Képvektorizálási előbeállítások importálása
+	Export Image Trace Presets	Képvektorizálási előbeállítások exportálása
+	Replace the saved presets that have these names?	Lecseréli az ilyen nevű mentett előbeállításokat?
 	Tracing Result	Vektorizálás eredménye
 	Tracing Result with Outlines	Vektorizálás eredménye vázlattal
 	Tracking	Betűköz
@@ -6455,6 +6468,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	shadings of more than 4096 patches or triangles were left out	kimaradtak a 4096-nál több foltból vagy háromszögből álló árnyalások
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	az ismeretlen típusú függvényt használó árnyalások a középső színükkel kitöltve jelennek meg
 @msg	Shape Builder: no region under the pointer	Alakzatépítő: a mutató alatt nincs terület
+@msg	Fill Area: no enclosed area under the pointer	Terület kitöltése: a mutató alatt nincs zárt terület
 @msg	Shape Builder: select all paths you want to merge	Alakzatépítő: jelöld ki az összes egyesítendő útvonalat
 @msg	Shape Builder: select paths or compound paths	Alakzatépítő: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	shortcut for `{k}` must be a string	`{k}` billentyűparancsa csak szöveg lehet
@@ -6881,8 +6895,10 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	`{GRAPHICS}` face must be front, back or side	a `{GRAPHICS}` face értéke front, back vagy side lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	A grafikák a Sík, a Kihúzás, a Forgatás tengely körül és a Felfújás objektumtípusra kerülnek
 @msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	Inflate maps graphics onto its front and back, not onto a side	A Felfújás a grafikákat az elülső és a hátoldalra helyezi, nem az oldalára
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	{_1} objektum: a Felfújás hátoldala csak a Mindkét oldal és a Zárólap bekapcsolásával fogad grafikát
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
@@ -10775,6 +10791,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Ornamental	Díszítőmotívumok
+	Scrollwork	Kacskaringó
+	Filigree Arrow	Filigrán nyíl
+	Petal Sweep	Sziromív
+	Twin Curl	Kettős kacskaringó
 	Vector Packs	Vektorcsomagok
 	Compass Rose	Iránytűrózsa
 	Botanical Sprig	Növényi ágacska

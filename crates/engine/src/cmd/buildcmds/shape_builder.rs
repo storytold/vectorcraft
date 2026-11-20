@@ -1,7 +1,7 @@
 use super::{
     Arc, Beside, BuilderMap, EngineError, FillRule, Node, NodeId, PathData, Point, Rect, Result, Session, Touched, Value, b, bad, check_numbers,
-    f64_or, fill_param, finite, gap_param, ids_json, json, marquee_param, po, points_param, remnant, replace_leaves, replace_with_pieces, root_ids,
-    shape_node, switch_or,
+    f64_or, fill_param, finite, gap_param, ids_json, json, marquee_param, named_ids, number_or, outermost, paint_param, po, point_param,
+    points_param, remnant, replace_leaves, replace_with_pieces, root_ids, shape_node, switch_or,
 };
 
 pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
@@ -181,6 +181,49 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         out["split"] = json!(e.0);
     }
     Ok(out)
+}
+
+pub(super) fn sb_copy_region(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shapeBuilder.copyRegion";
+    let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let open_filled_as_closed = switch_or(p, "openFilledAsClosed", true, C)?;
+    let gap = number_or(p, "gap", 0.0, C)?;
+    if !(0.0..=po::SHAPE_BUILDER_MAX_GAP).contains(&gap) {
+        return Err(bad(C, format!("gap must be 0 to {} pt, not {gap}", po::SHAPE_BUILDER_MAX_GAP)));
+    }
+    let fill = paint_param(s, p, "fill", C)?.unwrap_or_else(|| s.paint.fill.clone());
+    let stroke = paint_param(s, p, "stroke", C)?.unwrap_or_else(|| s.paint.stroke.clone());
+    let look = s.new_art_look(fill, stroke, s.paint.stroke_width);
+    let area = {
+        let st = s.doc()?;
+        let d = &st.doc;
+        let named = match named_ids(p)? {
+            Some(ids) => {
+                if let Some(bad_id) = ids.iter().find(|i| d.node(**i).is_none()) {
+                    return Err(EngineError::NoNode(*bad_id));
+                }
+                // An object listed with a layer or group that holds it counts once.
+                Some(outermost(d, ids))
+            }
+            None => None,
+        };
+        // In isolation mode only the isolated layer or group's paths bound areas, and the new path
+        // goes inside it.
+        b::fill_area_roots(d, st.isolation, named.as_deref())
+            .and_then(|(roots, scope)| b::AreaFinder::new(d, &roots, scope, gap, open_filled_as_closed).find(pt))
+    };
+    let Some(area) = area else { return Err(EngineError::Other("Fill Area: no enclosed area under the pointer".into())) };
+    let id = s.edit("Fill Area", |d, sel| {
+        let mut n = shape_node(d, area.path.clone(), None);
+        look.apply(d, &mut n);
+        let id = n.id;
+        let mut above = Beside::above(d, &[area.above]);
+        above.put(d, area.above, vec![n])?;
+        above.finish(d)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0, "above": area.above.0 }))
 }
 
 pub(super) fn sb_regions(s: &mut Session, p: &Value) -> Result<Value> {
