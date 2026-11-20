@@ -2092,6 +2092,23 @@ mod tests {
         assert_eq!(samples, [12, 34, 56, 78]);
     }
 
+    /// Distinguishes the shared `craft-image-codecs` CMYK TIFF read/write path from the old
+    /// `tiff`-crate implementation: `write_cmyk_tiff` writes Deflate with horizontal differencing
+    /// (`Predictor = 2`), and `tiff_source` keeps the four CMYK inks of a multiband CMYK TIFF with
+    /// four non-alpha extra samples (`ExtraSamples = [0, 0, 0, 0]`).
+    #[test]
+    fn cmyk_tiff_read_and_write_use_shared_codec_behavior() {
+        let written = ImageBlob::cmyk_tiff(&inks()).unwrap();
+        let mut decoder = tiff::decoder::Decoder::new(Cursor::new(&written.bytes)).unwrap();
+        assert_eq!(decoder.find_tag_unsigned::<u16>(tiff::tags::Tag::Predictor).ok().flatten(), Some(2));
+
+        let multiband = extras_tiff::<Cmyk8x8>(&[0, 0, 0, 0], &[255, 0, 0, 0, 9, 10, 11, 12]);
+        let source = tiff_source(&multiband).expect("shared decoder keeps CMYK inks with four non-alpha extra samples");
+        assert_eq!((source.width, source.height), (1, 1));
+        let Samples::Eight(samples) = source.samples else { panic!("expected stored eight-bit samples") };
+        assert_eq!(samples, [255, 0, 0, 0]);
+    }
+
     #[test]
     fn a_cmyk_tiff_keeps_its_ink_amounts_and_shows_as_rgb() {
         let b = ImageBlob::cmyk_tiff(&inks()).unwrap();
