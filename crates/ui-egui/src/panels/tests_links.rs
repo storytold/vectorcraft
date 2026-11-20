@@ -611,15 +611,21 @@ fn link_infos_location_row_shows_the_file_in_its_folder() {
     assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
     app.run("select.set", json!({"ids": [other]})).unwrap();
     assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
-    assert_eq!(*revealed.borrow(), [linked_path, other_path.clone()]);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone()]);
+    // Both images selected: Link Info shows the first selected, `linked`, while the list has `other`
+    // (on top) first. Only the file of the image Link Info shows is handed over.
+    app.run("select.set", json!({"ids": [linked, other]})).unwrap();
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone(), linked_path]);
     // A missing file: the row stays, the button is off.
+    app.run("select.set", json!({"ids": [other]})).unwrap();
     std::fs::remove_file(&other_path).unwrap();
     assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(false));
     // Without a file manager (the web): off.
     app.run("select.set", json!({"ids": [linked]})).unwrap();
     app.services.reveal = None;
     assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(false));
-    assert_eq!(revealed.borrow().len(), 2, "nothing more was shown");
+    assert_eq!(revealed.borrow().len(), 3, "nothing more was shown");
 }
 
 /// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
