@@ -6035,7 +6035,8 @@ fn scrolls_and_pans_move_a_lowered_frame_by_whole_pixels() {
 /// another document, or when the device pixels a point changed.
 #[test]
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
-    let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
+    let view =
+        View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false, split: Default::default() };
     let mut v = view;
     let rest = scroll_by(&mut v, 1, (1.0, 1.0), vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
@@ -9027,29 +9028,139 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
     let ctx = egui::Context::default();
     let id = start_typing(&mut app, &ctx);
     let rect = app.canvas_rect.unwrap();
-    let at = rect.center() - vec2(100.0, 50.0);
+    // The caret and its floating Type bar were established by start_typing above. Keep this
+    // independent view gesture above that real bar, rather than pressing its formatting controls.
+    let at = rect.min + vec2(100.0, 100.0);
     let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
     let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    let diagnostics = std::cell::RefCell::new(Vec::<serde_json::Value>::new());
+    let rectangle_strokes = std::cell::RefCell::new(Vec::<serde_json::Value>::new());
+    let record = |label: &str, app: &VectorcraftApp, ui: Option<&egui::Ui>| {
+        let held = ctx.data(|d| d.get_temp::<Drag>(drag_id()));
+        let kind = match held {
+            None => "none",
+            Some(Drag::Tool) => "Tool",
+            Some(Drag::Art) => "Art",
+            Some(Drag::Pan { .. }) => "Pan",
+            Some(Drag::ZoomBox { .. }) => "ZoomBox",
+            Some(Drag::ZoomScrub { .. }) => "ZoomScrub",
+            Some(Drag::RotateView { .. }) => "RotateView",
+            Some(Drag::Gesture) => "Gesture",
+            Some(Drag::Present) => "Present",
+        };
+        let zoom_start = if let Some(Drag::ZoomBox { start }) = held { Some([start.x, start.y]) } else { None };
+        let (pressed, released, down, m, space, press, focused) = ctx.input(|i| {
+            let press = i.events.iter().rev().find_map(|e| match e {
+                Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => Some(*pos),
+                _ => None,
+            });
+            (
+                i.pointer.primary_pressed(),
+                i.pointer.primary_released(),
+                i.pointer.primary_down(),
+                i.modifiers,
+                i.key_down(egui::Key::Space),
+                press,
+                i.focused,
+            )
+        });
+        let static_on_canvas = ui.and_then(|ui| {
+            app.canvas_rect
+                .zip(press)
+                .map(|(rect, p)| rect.contains(p) && ui.clip_rect().contains(p) && ctx.layer_id_at(p).is_none_or(|layer| layer == ui.layer_id()))
+        });
+        diagnostics.borrow_mut().push(json!({
+            "frame": label, "pass": ctx.cumulative_pass_nr_for(ctx.viewport_id()), "focused": focused,
+            "tool": app.session.tool_id(), "wants_text": app.session.tool_wants_text(), "tool_waiting": app.session.tool_waiting(),
+            "drag": kind, "zoom_box_start": zoom_start, "zooming": dragging_zoom(&ctx),
+            "primary_pressed": pressed, "primary_released": released, "primary_down": down,
+            "latest_raw_down": press.map(|p| [p.x, p.y]), "static_on_canvas_using_observed_rect": static_on_canvas,
+            "middle_pan": matches!(held, Some(Drag::Pan { middle: true, .. })), "gesture": held == Some(Drag::Gesture),
+            "modal": crate::panel_docking::modal_open(app, &ctx),
+            "command": m.command, "ctrl": m.ctrl, "shift": m.shift, "alt": m.alt, "space_down": space,
+            "space_lends_view": drag::space_lends_view_tools(app, m, space),
+            "animated_zoom": app.session.prefs.animated_zoom, "gpu_performance": app.session.prefs.gpu_performance,
+            "canvas_rect": app.canvas_rect.map(|r| [r.min.x, r.min.y, r.max.x, r.max.y]),
+            "clip": ui.map(|ui| { let r = ui.clip_rect(); [r.min.x, r.min.y, r.max.x, r.max.y] }),
+            "split_enabled": app.view().is_some_and(|v| v.split.enabled), "divider_held": split::dragging(&ctx),
+            "screen_mode": app.ui.screen_mode, "keyboard_focus": ctx.egui_wants_keyboard_input()
+        }));
+    };
+    // These four frames keep the typing pipeline, adding read-only observations around canvas input.
+    let diagnostic_frame = |label: &str, app: &mut VectorcraftApp, events: Vec<Event>| {
+        VectorcraftApp::install_ime_reset_hooks(&ctx);
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            crate::ime::begin_ui(app, ui.ctx());
+            crate::shortcuts::handle(app, ui.ctx());
+            record(&format!("{label}: before canvas (previous canvas rect)"), app, Some(ui));
+            show(app, ui);
+            if ui.input(|i| i.pointer.primary_pressed()) {
+                let response = ctx.read_response(egui::Id::unique("canvas")).expect("the actual canvas response");
+                assert!(drag::on_canvas(ui, &response, at), "Cmd+Space presses the unobstructed canvas, not the floating Type bar");
+            }
+            record(&format!("{label}: after canvas"), app, Some(ui));
+            crate::ime::end_of_pass(app, ui.ctx());
+            crate::ime::finish_ui(app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        out.platform_output.ime
+    };
     let corners = |app: &mut VectorcraftApp| -> (Pos2, Pos2) {
-        let lines: Vec<Vec<Pos2>> = shapes(app, &ctx)
+        let drawn = shapes(app, &ctx);
+        record("marquee oracle: after shapes frame", app, None);
+        let candidates: Vec<_> = drawn
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Path(p) if matches!(p.points.len(), 4 | 5) => {
+                    let rgba = match &p.stroke.color {
+                        egui::epaint::ColorMode::Solid(c) => Some(c.to_array()),
+                        _ => None,
+                    };
+                    Some(json!({"kind": "path", "width": p.stroke.width, "rgba": rgba, "closed": p.closed,
+                    "points": p.points.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>() }))
+                }
+                Shape::Rect(r) => Some(json!({"kind": "rect", "width": r.stroke.width, "rgba": r.stroke.color.to_array(),
+                "bounds": [r.rect.min.x, r.rect.min.y, r.rect.max.x, r.rect.max.y]})),
+                _ => None,
+            })
+            .collect();
+        rectangle_strokes.replace(candidates);
+        let lines: Vec<Vec<Pos2>> = drawn
             .into_iter()
             .filter_map(|s| match s {
                 Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(Color32::from_white_alpha(230)) => Some(p.points),
                 _ => None,
             })
             .collect();
-        let [line] = &lines[..] else { panic!("one marquee: {lines:?}") };
+        let [line] = &lines[..] else {
+            panic!(
+                "one marquee: {lines:?}\nzoom frames: {}\nrectangle strokes: {}",
+                json!(&*diagnostics.borrow()),
+                json!(&*rectangle_strokes.borrow())
+            )
+        };
         (line[0], line[2])
     };
     typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
     let z0 = app.view().unwrap().zoom;
     // Space held since the Cmd+Space press sizes the marquee, also once Cmd is let go.
     typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
-    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
-    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(50.0, 25.0))]);
-    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at + vec2(80.0, 40.0))]);
-    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(100.0, 50.0))]);
-    assert_eq!(corners(&mut app), (at, at + vec2(100.0, 50.0)), "Space held since the press sizes it");
+    diagnostic_frame("after Down8982", &mut app, vec![button(at, true, Modifiers::COMMAND)]);
+    assert!(
+        matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::ZoomBox { start }) if start == at),
+        "the admitted Cmd+Space Down owns the actual zoom marquee"
+    );
+    diagnostic_frame("after move8983", &mut app, vec![Event::PointerMoved(at + vec2(50.0, 25.0))]);
+    diagnostic_frame("after Cmd-up8984", &mut app, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at + vec2(80.0, 40.0))]);
+    diagnostic_frame("after move8985", &mut app, vec![Event::PointerMoved(at + vec2(100.0, 50.0))]);
+    assert_eq!(
+        corners(&mut app),
+        (at, at + vec2(100.0, 50.0)),
+        "Space held since the press sizes it\nzoom frames: {}\nrectangle strokes: {}",
+        json!(&*diagnostics.borrow()),
+        json!(&*rectangle_strokes.borrow())
+    );
     // Let go and pressed again, Space moves the marquee on this frame and the frames after it.
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
     typing_frame(&mut app, &ctx, vec![space(true, Modifiers::NONE), Event::Text(" ".into()), Event::PointerMoved(at + vec2(120.0, 60.0))]);

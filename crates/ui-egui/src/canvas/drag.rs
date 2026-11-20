@@ -16,6 +16,8 @@ pub(super) struct HoverContext {
     pub(super) center: Point,
     pub(super) zoom: f64,
     pub(super) rotation: f64,
+    pub(super) outline: bool,
+    pub(super) pixel: bool,
     /// A pen turning in place changes a Bristle tip even when its pointer stays still.
     pub(super) pen: Option<PenPose>,
     /// The active document's id and revision (which moves with every edit, undo and selection
@@ -29,6 +31,7 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
         d.remove::<Drag>(drag_id());
         d.remove::<Pos2>(drag_pos_id());
     });
+    super::split::forget(ctx);
 }
 
 /// Whether a Selection tool move has left the canvas ([`drag_art_out`]) and still waits there.
@@ -115,7 +118,7 @@ pub(super) fn backquote_seen(ui: &Ui) -> (bool, Option<bool>) {
 /// key without a release), it is `before`; with neither, it is its state now. The frame's presses,
 /// releases and focus losses before the button-up then apply in the order they came. Without a
 /// button-up in this frame, its state now.
-pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before: Option<bool>) -> bool {
+pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before: Option<bool>, owned: Option<(usize, usize)>) -> bool {
     ui.input(|i| {
         let now = i.key_down(egui::Key::Backtick);
         // A press or release of Backtick (`Some(pressed)`), or a focus loss (`None`).
@@ -124,7 +127,10 @@ pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before:
             egui::Event::WindowFocused(false) => Some(None),
             _ => None,
         };
-        let Some(up) = i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button)) else {
+        let Some(up) = owned
+            .map(|(_, up)| up)
+            .or_else(|| i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button)))
+        else {
             return now;
         };
         let start = match i.events.iter().find_map(step) {
@@ -142,10 +148,15 @@ pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before:
 /// after it), else the last one seen since the press (`pressed`: a new press, whose mouse has none
 /// until a pen reports it). A mouse presses fully (1).
 pub(super) fn pen_pressure(ui: &Ui, app: &VectorcraftApp, pressed: bool) -> f32 {
+    pen_pressure_before(ui, app, pressed, None)
+}
+
+/// The selected owner's force, without taking a later owner's touch from this raw frame.
+pub(super) fn pen_pressure_before(ui: &Ui, app: &VectorcraftApp, pressed: bool, through: Option<usize>) -> f32 {
     let stylus = app.services.stylus.as_ref();
     let id = egui::Id::unique("canvas-pressure");
     let force = ui.input(|i| {
-        i.events.iter().rev().find_map(|e| match e {
+        i.events.iter().take(through.map_or(i.events.len(), |index| index + 1)).rev().find_map(|e| match e {
             egui::Event::Touch { force: Some(f), .. } if f.is_finite() => Some(f.clamp(0.0, 1.0)),
             _ => None,
         })
@@ -201,17 +212,14 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// position is the pointer's. The last move before it is left out only when it is at that
 /// position; its tilt and rotation come second either way.
 pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
+    let moves = paired_frame_moves(ui, stylus);
+    interval_frame_moves(ui, &moves, release, None)
+}
+
+/// Pair the host samples with the full raw frame once, before either owner selects its interval.
+pub(super) fn paired_frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> Vec<FrameMove> {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
-        // How many of the frame's moves came before the button-up, and where it came, if it came.
-        let before_up = release.and_then(|b| {
-            i.events.iter().enumerate().find_map(|(k, e)| match e {
-                egui::Event::PointerButton { pos, button, pressed: false, .. } if *button == b => {
-                    Some((i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count(), *pos))
-                }
-                _ => None,
-            })
-        });
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
             let mut force = None;
@@ -232,28 +240,61 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
         } else {
             moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
-        // Cut after pairing: the feed's samples pair with every move of the frame.
-        // The pointer's position is the button-up's: a last move before it that is elsewhere
-        // stays a move. Its tilt and rotation are still the pose.
-        let last_pose = match before_up {
-            Some((n, up_at)) => {
-                moves.truncate(n);
-                let pose = moves.last().and_then(|&(_, _, q)| q);
-                if moves.last().is_some_and(|&(p, _, _)| p == up_at) {
-                    moves.pop();
-                }
-                pose
-            }
-            None => moves.pop().and_then(|(_, _, q)| q),
-        };
-        // A burst of events (a stalled frame) is thinned to a bounded count.
-        const MAX: usize = 64;
-        if moves.len() > MAX {
-            let step = moves.len().div_ceil(MAX);
-            moves = moves.into_iter().step_by(step).collect();
-        }
-        (moves, last_pose)
+        moves
     })
+}
+
+fn interval_frame_moves(
+    ui: &Ui,
+    paired: &[FrameMove],
+    release: Option<egui::PointerButton>,
+    owned: Option<(usize, usize)>,
+) -> (Vec<FrameMove>, Option<PenPose>) {
+    let (first, before_up) = ui.input(|i| {
+        let first = owned.map_or(0, |(down, _)| i.events.iter().take(down + 1).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count());
+        let up = owned.map(|(_, up)| up).or_else(|| {
+            release.and_then(|button| {
+                i.events.iter().position(|event| matches!(event, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button))
+            })
+        });
+        let before_up = up.and_then(|up| match i.events.get(up) {
+            Some(egui::Event::PointerButton { pos, .. }) => {
+                Some((i.events.iter().take(up).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count(), *pos))
+            }
+            _ => None,
+        });
+        (first, before_up)
+    });
+    let end = before_up.map_or(paired.len(), |(n, _)| n).min(paired.len());
+    let mut moves = paired[first.min(end)..end].to_vec();
+    let last_pose = match before_up {
+        Some((_, up_at)) => {
+            let pose = moves.last().and_then(|&(_, _, q)| q);
+            if moves.last().is_some_and(|&(p, _, _)| p == up_at) {
+                moves.pop();
+            }
+            pose
+        }
+        None => moves.pop().and_then(|(_, _, q)| q),
+    };
+    // Keep the existing per-owner cap after selecting the actual interval.
+    const MAX: usize = 64;
+    if moves.len() > MAX {
+        let step = moves.len().div_ceil(MAX);
+        moves = moves.into_iter().step_by(step).collect();
+    }
+    (moves, last_pose)
+}
+
+/// The released owner's moves, selected from the frame pairing borrowed by its dispatcher.
+pub(super) fn released_tool_frame_moves(
+    ui: &Ui,
+    app: &VectorcraftApp,
+    paired: &[FrameMove],
+    owned: Option<(usize, usize)>,
+) -> (Vec<FrameMove>, Option<PenPose>) {
+    let (moves, pose) = interval_frame_moves(ui, paired, Some(egui::PointerButton::Primary), owned);
+    (if app.session.tool_wants_samples() { moves } else { vec![] }, pose)
 }
 
 /// The moves of this frame ([`frame_moves`]) the active tool gets before the pointer's position:
@@ -278,9 +319,31 @@ pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, s
     space && (m.command || !app.session.tool_wants_text())
 }
 
+/// Event modifiers and the Space navigation policy at this primary Down, before later keys.
+pub(crate) fn primary_press_state(app: &VectorcraftApp, ui: &Ui, index: usize) -> (egui::Modifiers, bool) {
+    let modifiers = ui.input(|i| match i.events.get(index) {
+        Some(egui::Event::PointerButton { modifiers, .. }) => *modifiers,
+        _ => i.modifiers,
+    });
+    (modifiers, space_lends_view_tools(app, modifiers, space_before(ui, index)))
+}
+
+/// Space at a particular raw event boundary, including changes before this owner's Down.
+pub(super) fn space_before(ui: &Ui, index: usize) -> bool {
+    ui.input(|i| {
+        let step = |event: &egui::Event| match event {
+            egui::Event::Key { key: egui::Key::Space, pressed, repeat: false, .. } => Some(*pressed),
+            _ => None,
+        };
+        let start = i.events.iter().find_map(step).map_or(i.key_down(egui::Key::Space), |pressed| !pressed);
+        i.events.iter().take(index).filter_map(step).fold(start, |_, pressed| pressed)
+    })
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
+    super::split::cancel_divider(ui.ctx());
     match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
         Some(Drag::Tool | Drag::Art) => {
             // The tool drops the press, and a mouse-up returns it to rest with the options it had

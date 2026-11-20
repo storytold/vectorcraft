@@ -65,6 +65,7 @@ impl VectorcraftApp {
             view_uids,
             services,
             canvas: CanvasCache {
+                split: Default::default(),
                 renderer: vectorcraft_render::Renderer::new(),
                 texture: None,
                 key: None,

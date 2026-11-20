@@ -313,10 +313,16 @@ fn run(r: &mut Renderer, mut job: Job) {
     let mut body = || {
         match make(r, &job.object, &job.blob, job.step, job.key.2) {
             Some(pm) => {
-                if !lock(&BITMAPS).insert(job.key.clone(), pm, job.step, job.keep, (BUDGET, MAX_BYTES)) {
-                    lock(&UNKEPT).insert(job.key.clone());
+                // Publish pixels (or the exact-render fallback) with their generation: a
+                // reader must not observe either before made() records the completed file.
+                let mut bitmaps = lock(&BITMAPS);
+                if bitmaps.insert(job.key.clone(), pm, job.step, job.keep, (BUDGET, MAX_BYTES)) {
+                    made(&job.key.0);
+                } else {
+                    let mut unkept = lock(&UNKEPT);
+                    unkept.insert(job.key.clone());
+                    made(&job.key.0);
                 }
-                made(&job.key.0);
             }
             None => {
                 lock(&FAILED).insert(job.key.clone());

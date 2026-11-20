@@ -294,6 +294,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // with the frame's text, below: the loop then skips Enter, the first key.
     let enter_types = app.session.tool_wants_text();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)].into_iter().skip(usize::from(enter_types)) {
+        // The divider owns Escape before a tool can clear its key anchor or consume the key.
+        if k == Key::Escape && crate::canvas::dragging_split(ctx) {
+            continue;
+        }
         if !typing && !composing && !take_claimed_repeat(app, ctx, k, tk, view) && pressed_anew(ctx, k) {
             // A chord a command is bound to (Cmd+Enter) runs only that command, in the shortcuts
             // below, also when the tool claims the key. While the Type tool edits text only Cmd
@@ -542,13 +546,13 @@ fn hold_back_key(app: &VectorcraftApp, ctx: &egui::Context, key: Key) {
 }
 
 /// The key of the mark that the Escape held down ended a ruler-origin drag, a floating Tools move
-/// or a Control bar gripper drag.
+/// or a Control bar gripper or split divider drag.
 fn escape_ended_gesture_id() -> egui::Id {
     egui::Id::unique("escape-ended-gesture")
 }
 
 /// Does this frame's Escape end a ruler-origin drag, a floating Tools move or a Control bar gripper
-/// drag? The repeats of an Escape that ended one do too, up to the frame that releases Escape or
+/// or split divider drag? The repeats of an Escape that ended one do too, up to the frame that releases Escape or
 /// presses it again.
 fn escape_ended_gesture(ctx: &egui::Context) -> bool {
     let (down, pressed, repeated) = ctx.input(|i| {
@@ -556,7 +560,11 @@ fn escape_ended_gesture(ctx: &egui::Context) -> bool {
             |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
         (i.key_down(Key::Escape), escape(false), escape(true))
     });
-    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) || crate::chrome::control_bar_moving(ctx) {
+    if crate::canvas::ruler_origin_dragging(ctx)
+        || crate::tools_float::escape_cancelled_move(ctx)
+        || crate::chrome::control_bar_moving(ctx)
+        || crate::canvas::dragging_split(ctx)
+    {
         if down {
             ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
         }
