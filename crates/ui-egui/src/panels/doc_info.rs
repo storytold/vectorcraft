@@ -22,10 +22,16 @@ struct Cache {
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
 /// stays as it is.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
+    row_with(ui, label, value, |_| {});
+}
+
+/// A [`row`] with `end` drawn at its right end, after the value.
+pub(crate) fn row_with(ui: &mut Ui, label: &str, value: String, end: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            end(ui);
             // Long values (paths) are cut to the panel's width; hovering shows them whole.
             ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
         });
