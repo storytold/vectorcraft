@@ -32,7 +32,7 @@ struct ArcWheel {
 const TURN_GAP: f64 = 0.150;
 const GESTURE_GAP: f64 = 1.0;
 
-/// Most steps one frame makes: from 1° to 359° is fewer than 24 steps of 15°.
+/// Most steps one wheel event makes: from 1° to 359° is fewer than 24 steps of 15°.
 const MOST_STEPS: i32 = 24;
 
 /// Ctrl alone (the Control key on macOS too).
@@ -51,6 +51,11 @@ pub(super) fn arc_size(app: &mut VectorcraftApp, ui: &Ui, over: bool) -> bool {
     let line = ui.ctx().options(|o| o.input_options.line_scroll_speed).max(1.0);
     let takes = over && app.session.tool_id() == vectorcraft_tools::quickpen::ID;
     let mut now = before;
+    // The steps to make, in event order: the command and how many times to run it.
+    let mut runs: Vec<(&str, i32)> = Vec::new();
+    // Whether the tool took any of this frame's wheel events, even one of a turn that a later event
+    // of the frame ended: the view does not move for this frame's events then.
+    let mut took = false;
     let (any, scrolling) = ui.input(|i| {
         let mut any = false;
         for e in &i.events {
@@ -80,6 +85,7 @@ pub(super) fn arc_size(app: &mut VectorcraftApp, ui: &Ui, over: bool) -> bool {
                 continue;
             }
             now.taken = true;
+            took = true;
             // Only Move events move, as egui's scroll; momentum after the fingers lift makes no step.
             if *phase != egui::TouchPhase::Move || *source == egui::MouseWheelSource::Momentum {
                 continue;
@@ -96,8 +102,18 @@ pub(super) fn arc_size(app: &mut VectorcraftApp, ui: &Ui, over: bool) -> bool {
             } else {
                 s
             };
-            if d.is_finite() {
-                now.rest += d;
+            if !d.is_finite() {
+                continue;
+            }
+            // Each event's whole steps are made before the next event's, in the order the events
+            // came, so a step refused at an end of the range does not cancel a later step back; only
+            // the fraction of a wheel line is left for later motion.
+            now.rest += d;
+            let whole = now.rest.trunc();
+            now.rest -= whole;
+            if whole != 0.0 {
+                let cmd = if whole > 0.0 { "tool.quickPen.arcLarger" } else { "tool.quickPen.arcSmaller" };
+                runs.push((cmd, (whole.abs().min(MOST_STEPS as f32)) as i32));
             }
         }
         (any, i.is_scrolling())
@@ -105,21 +121,20 @@ pub(super) fn arc_size(app: &mut VectorcraftApp, ui: &Ui, over: bool) -> bool {
     if !any && !scrolling {
         now = ArcWheel::default();
     }
-    let steps = now.rest.trunc();
-    now.rest -= steps;
-    let (cmd, n) = if steps > 0.0 { ("tool.quickPen.arcLarger", steps) } else { ("tool.quickPen.arcSmaller", -steps) };
-    for _ in 0..(n as i32).min(MOST_STEPS) {
-        match app.run(cmd, json!({})) {
-            Ok(serde_json::Value::Bool(true)) => {}
-            Ok(_) => break,
-            Err(e) => {
-                app.ui.status = e;
-                break;
+    'runs: for (cmd, n) in runs {
+        for _ in 0..n {
+            match app.run(cmd, json!({})) {
+                Ok(serde_json::Value::Bool(true)) => {}
+                Ok(_) => break,
+                Err(e) => {
+                    app.ui.status = e;
+                    break 'runs;
+                }
             }
         }
     }
     if now != before {
         ui.data_mut(|d| d.insert_temp(id, now));
     }
-    now.taken
+    now.taken || took
 }

@@ -363,6 +363,65 @@ fn ctrl_wheel_steps_per_notch_and_not_under_a_dialog() {
     assert_eq!(arc_size(&app), 180.0, "the rest of a turn begun under the dialog");
 }
 
+/// Wheel events in one frame step in the order they came: a notch up refused at the top of the
+/// range does not cancel the notch down after it, and a touchpad gesture that starts later in the
+/// frame keeps the steps of the motion before it and does not let that motion move the view.
+#[test]
+fn ctrl_wheel_steps_in_event_order() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    app.run("tool.setOption", json!({"key": "turn", "value": 345})).unwrap();
+    let ctrl = Modifiers { ctrl: true, command: true, ..Modifiers::NONE };
+    let at = app.canvas_rect.unwrap().center();
+    let notch = |dy: f32| Event::MouseWheel {
+        unit: MouseWheelUnit::Line,
+        delta: vec2(0.0, dy),
+        phase: egui::TouchPhase::Move,
+        modifiers: ctrl,
+        source: MouseWheelSource::Wheel,
+    };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), notch(1.0), notch(-1.0)]);
+    assert_eq!(arc_size(&app), 330.0, "up refused at 345°, then down");
+    for _ in 0..40 {
+        frame(&mut app, &ctx, vec![]);
+    }
+
+    let line = ctx.options(|o| o.input_options.line_scroll_speed);
+    let pad = |phase, dy: f32| Event::MouseWheel {
+        unit: MouseWheelUnit::Point,
+        delta: vec2(0.0, dy),
+        phase,
+        modifiers: ctrl,
+        source: MouseWheelSource::Trackpad,
+    };
+    frame_at(
+        &mut app,
+        &ctx,
+        vec![pad(egui::TouchPhase::Start, 0.0), pad(egui::TouchPhase::Move, -line), pad(egui::TouchPhase::Start, 0.0)],
+        Some(500.0),
+    );
+    assert_eq!(arc_size(&app), 315.0, "a line down before a later Start");
+    for k in 1..=40 {
+        frame_at(&mut app, &ctx, vec![], Some(500.0 + f64::from(k) / 60.0));
+    }
+
+    // A Ctrl notch followed in the same frame by the Start of a touchpad gesture without Ctrl: the
+    // notch steps the arc size and does not move the view.
+    let still = view(&app);
+    let plain_start = Event::MouseWheel {
+        unit: MouseWheelUnit::Point,
+        delta: vec2(0.0, 0.0),
+        phase: egui::TouchPhase::Start,
+        modifiers: Modifiers::NONE,
+        source: MouseWheelSource::Trackpad,
+    };
+    frame_at(&mut app, &ctx, vec![Event::PointerMoved(at), notch(1.0), plain_start], Some(600.0));
+    assert_eq!(arc_size(&app), 330.0);
+    assert_eq!(view(&app), still, "the notch did not move the view");
+}
+
 /// With another tool, Ctrl+wheel leaves the Quick Pen's arc size and moves the view as before.
 #[test]
 fn ctrl_wheel_with_another_tool_moves_the_view() {
