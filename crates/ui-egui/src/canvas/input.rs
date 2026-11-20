@@ -248,7 +248,12 @@ fn wheel_view(
     if carried != was_carried {
         ui.data_mut(|d| d.insert_temp(carried_id, carried));
     }
-    let muted = modal || carried;
+    // A Ctrl-wheel turn with the Quick Pen tool changes its arc size and leaves the view alone.
+    // Not over a floating panel, a menu or a toolbar drawn on top of the canvas ([`on_canvas`]), and not for a
+    // wheel turn that went on under a modal dialog.
+    let over = !modal && !carried && resp.hovered() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| on_canvas(ui, resp, p));
+    let arc_turn = super::quick_pen_wheel::arc_size(app, ui, over);
+    let muted = modal || carried || arc_turn;
     let navigates = resp.hovered() && !muted;
     // A docked field may be drawn later and has not consumed its wheel event yet. Only canvas
     // hover may start a zoom glide; existing glides still decay outside the canvas in `wheel`.

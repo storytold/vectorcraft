@@ -5474,7 +5474,7 @@ mod tests {
         let mut window = Window::new();
         window.app.ui.toolbar = false;
         window.app.ui.custom_toolbars.push(drawing_toolbar([100.0, 120.0]));
-        window.search("pen tool");
+        window.search("pen tools");
         let small = window.popup();
         window.app.ui.custom_toolbars[0].pos = [small.center().x, small.bottom() + 2.0];
         window.frame(vec![]);
