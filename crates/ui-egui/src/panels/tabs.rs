@@ -1,4 +1,5 @@
-//! Tabs panel: tab-stop alignment, X position (Y in vertical type), leader and "align on", and a
+//! Tabs panel: tab-stop alignment, X position (Y in vertical type; a position typed there for a
+//! paragraph with no stops adds a stop at it), leader and "align on", and a
 //! ruler numbered in the General unit on which a click adds a stop, dragging moves one and dragging
 //! it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the stops by the
 //! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
@@ -462,6 +463,32 @@ fn apply_moved(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<Ta
     })
 }
 
+/// Select the stop at `position` and clear the selected indent marker, first adding a stop there
+/// with alignment `align`, no leader and "align on" `.` in one `text.tabs.set` when no stop is
+/// there. Returns the stop's index, or `None` when `stops` already holds [`TabStop::MAX_STOPS`]
+/// stops (the status bar shows the limit) or the stops are not set; `stops` and the selection
+/// then stay as they were.
+fn add_stop(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Vec<TabStop>, position: f64, align: TabAlign) -> Option<usize> {
+    let mut added = stops.clone();
+    if !added.iter().any(|s| s.position == position) {
+        let max = TabStop::MAX_STOPS;
+        if added.len() >= max {
+            app.status(format!("at most {max} tab stops"));
+            return None;
+        }
+        added.push(TabStop { position, align, leader: String::new(), align_on: '.' });
+        added.sort_by(|a, b| a.position.total_cmp(&b.position));
+        if !apply(app, &added) {
+            return None;
+        }
+    }
+    let i = added.iter().position(|s| s.position == position).unwrap_or(0);
+    *stops = added;
+    set_pstate::<Option<IndentMarker>>(ctx, "tabs-marker-sel", None);
+    set_pstate(ctx, "tabs-sel", i);
+    Some(i)
+}
+
 /// `stops` with every stop moved by the distance that takes stop `i` to `position`, or by less
 /// when that would put a stop below 0 or past [`MAX_STOP`], so the leftmost stop ends at 0 or the
 /// rightmost at [`MAX_STOP`] and the stops keep their spacing. The stops keep their order,
@@ -622,6 +649,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(v) = widgets::spin_field(ui, "tabs-x", x, app.session.general_unit(), 90.0, 1.0, 0.0, &[]) {
             if let Some(marker) = selected_marker {
                 set_marker(app, marker, v, &para, span, &targets, false);
+            } else if stops.is_empty() {
+                // With no stops, the typed position adds the first one, as a click on the ruler does.
+                if let Some(i) = add_stop(app, ui.ctx(), &mut stops, v.max(0.0), ALIGNS[align_idx.min(3)].0) {
+                    sel = i;
+                }
             } else if let Some(i) = apply_moved(app, ui.ctx(), &mut stops, sel, v.max(0.0)) {
                 sel = i;
             }
@@ -800,27 +832,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     set_pstate(ui.ctx(), "tabs-sel", i);
                 }
                 None => {
-                    let position = place(pos.x);
                     // A click that lands on a stop's whole point or tick selects that stop and records no
-                    // undo step.
-                    let added = !stops.iter().any(|s| s.position == position);
-                    let max = TabStop::MAX_STOPS;
-                    if added && stops.len() >= max {
-                        // A full list takes no more stops: the click leaves the stops and the
-                        // selection as they are and shows the limit.
-                        app.status(format!("at most {max} tab stops"));
-                    } else {
-                        if added {
-                            stops.push(TabStop { position, align: ALIGNS[align_idx.min(3)].0, leader: String::new(), align_on: '.' });
-                            stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                        }
-                        let i = stops.iter().position(|s| s.position == position).unwrap_or(0);
-                        set_pstate::<Option<IndentMarker>>(ui.ctx(), "tabs-marker-sel", None);
-                        set_pstate(ui.ctx(), "tabs-sel", i);
-                        if added {
-                            apply(app, &stops);
-                        }
-                    }
+                    // undo step. A full list takes no more stops: the click leaves the stops and the
+                    // selection as they are and shows the limit.
+                    add_stop(app, ui.ctx(), &mut stops, place(pos.x), ALIGNS[align_idx.min(3)].0);
                 }
             }
         }
