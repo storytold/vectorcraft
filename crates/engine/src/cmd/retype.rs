@@ -1147,6 +1147,10 @@ fn partial_lines(lines: &[Vec<NodeId>], glyphs_of: &std::collections::HashMap<No
 /// Glyph runs longer than this (in contour groups) are not tried when a shape is split.
 const MAX_RUN: usize = 3;
 
+/// Complete splits of one shape that one [`split_parts`] search (exact or near) checks the paint
+/// of, at most. When none of them is accepted, that search leaves the shape whole.
+const MAX_SPLIT_TRIES: usize = 32;
+
 /// A shape of more contour groups than this is not split: it is matched whole only.
 const MAX_SPLIT_GROUPS: usize = 256;
 
@@ -1203,58 +1207,169 @@ fn parts<M>(
 }
 
 /// [`parts`] of a shape split into contour `groups`, each run's candidates from `find`; empty for
-/// no groups, when the groups cannot all be matched and when `together` rejects the runs of a split
-/// of several parts.
+/// no groups, when the groups cannot all be matched and when `together` rejects every split of
+/// several parts it is asked about. The complete splits are tried with the longest runs first,
+/// then with the shortest runs, then the others in order, a longer run at an earlier group first.
+/// `together` is asked about at most [`MAX_SPLIT_TRIES`] splits. `find` is asked about a run only
+/// when the search reaches it, and about each run at most once, so at most [`MAX_RUN`] times per
+/// group.
 fn split_parts<M>(groups: &[BezPath], find: &dyn Fn(&BezPath) -> Vec<M>, together: &dyn Fn(&[BezPath]) -> bool) -> Vec<Vec<M>> {
-    if groups.is_empty() {
+    let g = groups.len();
+    let mut s = Splits { groups, find, found: (0..g).map(|_| (0..MAX_RUN).map(|_| None).collect()).collect(), whole: vec![None; g] };
+    // A split is the runs it takes, each as (start, number of groups).
+    let mut first = vec![];
+    if g == 0 || !s.extend(&mut first, false) {
         return vec![];
     }
-    let g = groups.len();
-    // The split with the longest runs first; when `together` rejects it, the one with the shortest
-    // runs, which is the other end of the complete splits.
-    for longest in [true, false] {
-        // From the last group back: the run that starts at each group, the longest (or shortest)
-        // that matches and leaves a rest that can all be matched, with its candidates. Runs past
-        // such a start are never tried for one whose rest cannot be matched.
-        let mut chosen: Vec<Option<(usize, Vec<M>)>> = (0..g).map(|_| None).collect();
-        for i in (0..g).rev() {
-            let mut lens: Vec<usize> = (1..=MAX_RUN.min(g - i)).collect();
-            if longest {
-                lens.reverse();
+    let runs_of =
+        |split: &[(usize, usize)]| -> Vec<BezPath> { split.iter().map(|&(at, n)| groups.get(at..at + n).map(joined).unwrap_or_default()).collect() };
+    let accepted = 'search: {
+        if first.len() == 1 {
+            break 'search Some(first);
+        }
+        // The shortest runs are looked up only once the longest are rejected.
+        let mut shortest = vec![];
+        let mut shortest_next = true;
+        let mut rest = first.clone();
+        let mut candidate = Some(first.clone());
+        let mut tried = 0;
+        while let Some(split) = candidate.take() {
+            if tried == MAX_SPLIT_TRIES {
+                break;
             }
-            for n in lens {
-                let rest_ok = i + n == g || chosen.get(i + n).is_some_and(Option::is_some);
-                if !rest_ok {
-                    continue;
+            tried += 1;
+            if together(&runs_of(&split)) {
+                break 'search Some(split);
+            }
+            if std::mem::take(&mut shortest_next) && s.extend(&mut shortest, true) && shortest != first {
+                candidate = Some(shortest.clone());
+                continue;
+            }
+            candidate = loop {
+                if !s.advance(&mut rest) {
+                    break None;
                 }
-                let Some(run) = groups.get(i..i + n) else { continue };
-                let cands = find(&joined(run));
-                if !cands.is_empty() {
-                    if let Some(c) = chosen.get_mut(i) {
-                        *c = Some((n, cands));
+                if rest != shortest {
+                    break Some(rest.clone());
+                }
+            };
+        }
+        None
+    };
+    let Some(split) = accepted else { return vec![] };
+    let mut out = vec![];
+    for (at, n) in split {
+        let Some(Some(cands)) = s.found.get_mut(at).and_then(|f| f.get_mut(n.wrapping_sub(1))).map(Option::take) else { return vec![] };
+        out.push(cands);
+    }
+    out
+}
+
+/// The state of one [`split_parts`] search: each run's candidates and whether the groups from each
+/// start can all be matched, each found when the search first needs it.
+struct Splits<'a, M> {
+    groups: &'a [BezPath],
+    find: &'a dyn Fn(&BezPath) -> Vec<M>,
+    /// By start and length less one: the run's candidates, once looked up.
+    found: Vec<Vec<Option<Vec<M>>>>,
+    /// By start: whether the groups from there on can all be matched, once known.
+    whole: Vec<Option<bool>>,
+}
+
+impl<M> Splits<'_, M> {
+    /// Whether the run of `n` groups at `at` matches, looking it up the first time.
+    fn matches(&mut self, at: usize, n: usize) -> bool {
+        let Some(slot) = self.found.get_mut(at).and_then(|f| f.get_mut(n.wrapping_sub(1))) else { return false };
+        if slot.is_none() {
+            let cands = self.groups.get(at..at + n).map(|run| (self.find)(&joined(run))).unwrap_or_default();
+            *slot = Some(cands);
+        }
+        slot.as_ref().is_some_and(|c| !c.is_empty())
+    }
+
+    /// Whether the groups from `at` on can all be matched. The search goes from `at` forward, the
+    /// longest run first, and no start is searched twice, so it ends after at most [`MAX_RUN`]
+    /// lookups and checks per group.
+    fn completes(&mut self, at: usize) -> bool {
+        let g = self.groups.len();
+        if at >= g {
+            return at == g;
+        }
+        if let Some(known) = self.whole.get(at).copied().flatten() {
+            return known;
+        }
+        // From `at`: the starts still to settle, each with the run length to try next.
+        let mut stack: Vec<(usize, usize)> = vec![(at, MAX_RUN.min(g - at))];
+        while let Some(&(i, n)) = stack.last() {
+            if self.whole.get(i).copied().flatten().is_some() {
+                stack.pop();
+                continue;
+            }
+            if n == 0 {
+                if let Some(w) = self.whole.get_mut(i) {
+                    *w = Some(false);
+                }
+                stack.pop();
+                continue;
+            }
+            if let Some(top) = stack.last_mut() {
+                top.1 = n - 1;
+            }
+            if !self.matches(i, n) {
+                continue;
+            }
+            let next = i + n;
+            match if next == g { Some(true) } else { self.whole.get(next).copied().flatten() } {
+                Some(true) => {
+                    if let Some(w) = self.whole.get_mut(i) {
+                        *w = Some(true);
                     }
-                    break;
+                    stack.pop();
+                }
+                Some(false) => {}
+                None => {
+                    // Settle `next` first, then try this run again.
+                    if let Some(top) = stack.last_mut() {
+                        top.1 = n;
+                    }
+                    stack.push((next, MAX_RUN.min(g - next)));
                 }
             }
         }
-        let mut out = vec![];
-        let mut runs = vec![];
-        let mut i = 0;
+        self.whole.get(at).copied().flatten() == Some(true)
+    }
+
+    /// Whether `n` groups at `at` are a run a complete split can take.
+    fn fits(&mut self, at: usize, n: usize) -> bool {
+        self.matches(at, n) && self.completes(at + n)
+    }
+
+    /// Takes `split` on to the last group, with the longest run that fits at each start (or, with
+    /// `shortest`, the shortest); false when no run fits.
+    fn extend(&mut self, split: &mut Vec<(usize, usize)>, shortest: bool) -> bool {
+        let g = self.groups.len();
+        let mut i = split.last().map_or(0, |&(at, n)| at + n);
         while i < g {
-            let Some(Some((n, cands))) = chosen.get_mut(i).map(Option::take) else { return vec![] };
-            out.push(cands);
-            runs.push(groups.get(i..i + n).map(joined).unwrap_or_default());
+            let most = MAX_RUN.min(g - i);
+            let lens: Vec<usize> = if shortest { (1..=most).collect() } else { (1..=most).rev().collect() };
+            let Some(n) = lens.into_iter().find(|&n| self.fits(i, n)) else { return false };
+            split.push((i, n));
             i += n;
         }
-        if out.len() == 1 || together(&runs) {
-            return out;
-        }
-        // Every run a single group: the other order gives the same split.
-        if out.len() == g {
-            break;
-        }
+        true
     }
-    vec![]
+
+    /// Moves `split` on to the next complete split, in order: the runs before the last start where
+    /// a shorter run fits kept, that shorter run, and the longest runs after it. False past the last.
+    fn advance(&mut self, split: &mut Vec<(usize, usize)>) -> bool {
+        while let Some((at, n)) = split.pop() {
+            if let Some(m) = (1..n).rev().find(|&m| self.fits(at, m)) {
+                split.push((at, m));
+                return self.extend(split, false);
+            }
+        }
+        false
+    }
 }
 
 /// Contour groups joined into one path.

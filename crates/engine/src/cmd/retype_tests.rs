@@ -1355,6 +1355,75 @@ fn a_split_the_paint_check_rejects_gives_way_to_another_complete_split() {
     assert!(super::parts(&p, &groups, &find, &|_, _| false).is_empty());
 }
 
+#[test]
+fn a_split_between_the_longest_and_the_shortest_runs_is_tried() {
+    use kurbo::Shape;
+    // Four groups A, B, C and D. ABC and D (the longest runs first) and the four single glyphs
+    // (the shortest) are complete splits the paint check rejects; AB and CD is the one it accepts.
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0, 200.0, 300.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, 0, 240) => vec!["ABC"],
+            (true, 0, 140) => vec!["AB"],
+            (true, 200, 340) => vec!["CD"],
+            (true, 0, 40) => vec!["A"],
+            (true, 100, 140) => vec!["B"],
+            (true, 200, 240) => vec!["C"],
+            (true, 300, 340) => vec!["D"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    let pairs = |runs: &[kurbo::BezPath], _near: bool| runs.len() == 2 && runs.first().is_some_and(|r| r.bounding_box().x1.round() as i64 == 140);
+    assert_eq!(super::parts(&p, &groups, &find, &pairs), vec![vec!["AB"], vec!["CD"]]);
+}
+
+#[test]
+fn at_most_max_split_tries_complete_splits_are_checked() {
+    use kurbo::Shape;
+    // Twelve groups, every run of up to three of them a glyph: far more complete splits than the
+    // cap. The paint check is asked about the cap's number of them and no more, and each run is
+    // looked up at most once.
+    let mut p = kurbo::BezPath::new();
+    for i in 0..12 {
+        let x = f64::from(i) * 100.0;
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let groups = all_groups(&p);
+    assert_eq!(groups.len(), 12);
+    let looked_up = std::cell::Cell::new(0usize);
+    let find = |_: &kurbo::BezPath| -> Vec<&'static str> {
+        looked_up.set(looked_up.get() + 1);
+        vec!["glyph"]
+    };
+    let asked = &std::cell::Cell::new(0usize);
+    let accept_at = |n: usize| {
+        move |_: &[kurbo::BezPath]| {
+            asked.set(asked.get() + 1);
+            asked.get() == n
+        }
+    };
+    // Rejected every time: the search stops at the cap.
+    assert!(super::split_parts(&groups, &find, &accept_at(usize::MAX)).is_empty());
+    assert_eq!(asked.get(), super::MAX_SPLIT_TRIES);
+    assert!(looked_up.get() <= super::MAX_RUN * groups.len(), "{} lookups", looked_up.get());
+    // A first split that is accepted looks up its own runs only: four runs of three groups.
+    asked.set(0);
+    looked_up.set(0);
+    assert_eq!(super::split_parts(&groups, &find, &accept_at(1)).len(), 4);
+    assert_eq!(looked_up.get(), 4);
+    // The last split tried is still taken; the one past the cap is not tried.
+    asked.set(0);
+    assert!(super::split_parts(&groups, &find, &accept_at(super::MAX_SPLIT_TRIES)).len() > 1);
+    asked.set(0);
+    assert!(super::split_parts(&groups, &find, &accept_at(super::MAX_SPLIT_TRIES + 1)).is_empty());
+    assert_eq!(asked.get(), super::MAX_SPLIT_TRIES);
+}
+
 /// `path`'s contour groups, with no limit on the contours grouped.
 fn all_groups(path: &kurbo::BezPath) -> Vec<kurbo::BezPath> {
     let mut budget = usize::MAX;
