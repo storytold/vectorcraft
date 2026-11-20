@@ -1816,6 +1816,43 @@ pub fn pair_kerning_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`positive_kerning_font`].
+pub const POSITIVE_KERNING_FAMILY: &str = "Poskern Sans";
+
+/// The units [`positive_kerning_font`] adds to the advance of an i that another i follows.
+pub const POSITIVE_KERNING_UNITS: i16 = 120;
+
+/// The bundled Source Sans 3 Regular as family [`POSITIVE_KERNING_FAMILY`], its `GPOS` replaced by
+/// one `kern` pair, i followed by i, that adds [`POSITIVE_KERNING_UNITS`] to the first glyph's
+/// advance. `None` when it can't be built.
+pub fn positive_kerning_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PairPos, PairSet, PairValueRecord, PositionLookup, PositionLookupList, ValueRecord};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let i = GlyphId16::new(u16::try_from(font.charmap().map('i')?.to_u32()).ok()?);
+    let record = PairValueRecord::new(i, ValueRecord::new().with_x_advance(POSITIVE_KERNING_UNITS), ValueRecord::new());
+    let coverage = CoverageFormat1::new(vec![i]);
+    let pos = PairPos::format_1(coverage.into(), vec![PairSet::new(vec![record])]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0])), vec![]))]);
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"kern"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Pair(Lookup::new(Default::default(), vec![pos]))]);
+    let family = POSITIVE_KERNING_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Poskern Sans Regular"), (6, "PoskernSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gpos::new(scripts, features, lookups)).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`twin_font`]: two versions of one family and style.
 pub const TWIN_FAMILY: &str = "Twintest Sans";
 

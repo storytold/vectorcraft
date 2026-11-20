@@ -886,13 +886,19 @@ fn slight_tracking_without_spaces_is_kept() {
 /// The lines Retype reads from the outlines in group `g` (all in the face of its first glyph's
 /// first match), before their tracking is measured and their layout checked.
 fn lines_in(s: &Session, g: u64) -> Vec<super::Line> {
+    lines_in_family(s, g, None)
+}
+
+/// [`lines_in`] with the face of the first glyph's match in `family` when given.
+fn lines_in_family(s: &Session, g: u64, family: Option<&str>) -> Vec<super::Line> {
     let d = &s.doc().unwrap().doc;
     let (mut barrier, mut truncated, mut pieces) = (true, false, vec![]);
     super::collect(d.node(NodeId(g)).unwrap(), d.parent_of(NodeId(g)), 0, &mut barrier, &mut truncated, &mut pieces);
     let db = vectorcraft_text::FontDb::global();
     let wanted = pieces.iter().filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
     let index = super::RetypeIndex::build(db, super::candidate_faces(db, d, &[]), &wanted);
-    let face = index.matches(&pieces[0].path)[0].face.id();
+    let first = index.matches(&pieces[0].path);
+    let face = first.iter().find(|m| family.is_none_or(|f| m.face.family == f)).unwrap_or(&first[0]).face.id();
     let mut lines: Vec<super::Line> = vec![];
     for pc in &pieces {
         let cands: Vec<_> = index.matches(&pc.path).into_iter().filter(|m| m.face.id() == face).collect();
@@ -1098,6 +1104,42 @@ fn a_long_rest_tracked_past_a_negative_space_advance_keeps_its_word_spaces_after
         let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
         assert_eq!(texts, vec![(&text[1..], tracking)], "{times}");
     }
+}
+
+#[test]
+fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_after_a_split() {
+    // The font adds 120 units to each i before an i. Tracking that leaves a space 120 wide makes the
+    // gap a kerned pair leaves the same as the gap a word space leaves; the joined reading wins the
+    // tie, as it does for the glyphs the tracking is measured from.
+    use vectorcraft_text::test_fonts::{POSITIVE_KERNING_FAMILY, POSITIVE_KERNING_UNITS, positive_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(positive_kerning_font().unwrap());
+    let mut s = session();
+    let text = "i".repeat(60);
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "i", "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in_family(&s, pg, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap();
+    let space = super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0;
+    let tracking = (f64::from(POSITIVE_KERNING_UNITS) - space).round();
+    assert!(space + tracking >= space / 2.0, "the space must stay at least half its width: {space} {tracking}");
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let mut l = lines_in_family(&s, g, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    l.matches[0].gid += 1;
+    let mut unmatched = vec![];
+    let out = super::verified(vec![l], false, &mut unmatched);
+    assert_eq!(unmatched.len(), 1);
+    let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
+    assert_eq!(texts, vec![(&text[1..], tracking)]);
 }
 
 #[test]

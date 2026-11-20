@@ -247,6 +247,52 @@ impl Line {
     }
 
     fn push(&mut self, id: NodeId, m: &GlyphMatch) {
+        self.push_joined(id, m, None);
+    }
+
+    /// For each of `ms`'s glyphs, the distance along the line to the next when untracked type sets
+    /// them with no spaces (their advances and pair kerning), and when it sets one space between
+    /// them (the glyph's own advance plus a space where type draws no such layout), taking the
+    /// characters laid out from `budget`; `None` when the budget is short or type does not draw
+    /// every glyph without spaces.
+    fn pair_steps(&self, ms: &[GlyphMatch], system_layout: bool, budget: &mut usize) -> Option<Vec<(f64, f64)>> {
+        *budget = budget.checked_sub(ms.len().saturating_mul(3))?;
+        let dir = self.dir();
+        let mut bare = self.clone();
+        bare.tracking = 0.0;
+        let mut origins = |text: String| -> Vec<Point> {
+            bare.text = text;
+            let t = bare.probe(system_layout);
+            let lay = vectorcraft_text::layout(FontDb::global(), &t);
+            lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf * (g.xf * Point::ORIGIN)).collect()
+        };
+        let joined = origins(ms.iter().map(|m| m.ch).collect());
+        if joined.len() != ms.len() {
+            return None;
+        }
+        let spaced = origins(ms.iter().map(|m| m.ch.to_string()).collect::<Vec<_>>().join(" "));
+        let space = space_advance(&self.face) * self.scale;
+        let spaced_ok = spaced.len() == ms.len();
+        Some(
+            ms.iter()
+                .enumerate()
+                .zip(joined.windows(2))
+                .map(|((i, m), p)| {
+                    let own = m.face.advance(m.gid) * m.scale + space;
+                    let apart = match (spaced_ok, spaced.get(i), spaced.get(i + 1)) {
+                        (true, Some(a), Some(b)) => (*b - *a).dot(dir),
+                        _ => own,
+                    };
+                    ((p[1] - p[0]).dot(dir), apart)
+                })
+                .collect(),
+        )
+    }
+
+    /// [`Line::push`], with `steps` the distances [`Line::pair_steps`] gives for the pair of the
+    /// line's last glyph and `m`. A gap reads as spaces only when they fit it better than the
+    /// joined pair does, as when the tracking is measured.
+    fn push_joined(&mut self, id: NodeId, m: &GlyphMatch, steps: Option<(f64, f64)>) {
         // A gap, past the tracking, wider than half a space before the glyph is spaces the
         // outlines left no shape for. Each space takes the tracking too.
         let dir = self.dir();
@@ -256,7 +302,16 @@ impl Line {
         let spaces = if space.abs() > 1e-9 { gap / space } else { 0.0 };
         if spaces.is_finite() && spaces > 0.5 {
             let n = (spaces.round() as usize).clamp(1, 64);
-            self.text.extend(std::iter::repeat_n(' ', n));
+            let d = (m.origin - self.matches.last().map_or(self.origin, |p| p.origin)).dot(dir);
+            let tr = self.tracking_pt();
+            let joined_fits = steps.is_some_and(|(joined, apart)| {
+                let face_space = space_advance(&self.face) * self.scale;
+                let spaced_err = (d - apart + face_space - tr - n as f64 * (face_space + tr)).abs();
+                (d - joined - tr).abs() <= spaced_err + self.size() * 1e-5
+            });
+            if !joined_fits {
+                self.text.extend(std::iter::repeat_n(' ', n));
+            }
         }
         self.text.push(m.ch);
         self.pieces.push(id);
@@ -728,8 +783,13 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                                 track_budget = track_budget.saturating_sub(n - k);
                                 return whole.tracked(system_layout, &mut track_budget);
                             }
-                            for (id, m) in l.pieces.iter().zip(&l.matches).skip(k + span) {
-                                r.push(*id, m);
+                            // The glyphs after those measured follow at that tracking; a gap reads as
+                            // spaces only when they fit it better than the joined pair does, as in
+                            // the glyphs measured, while the budget for laying the pairs out lasts.
+                            let steps =
+                                l.matches.get(k + span - 1..).and_then(|ms| r.pair_steps(ms, system_layout, &mut track_budget)).unwrap_or_default();
+                            for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(k + span).enumerate() {
+                                r.push_joined(*id, m, steps.get(j).copied());
                             }
                             r
                         })
