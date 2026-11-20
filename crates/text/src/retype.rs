@@ -451,7 +451,8 @@ impl RetypeIndex {
     /// than 8 contours. A shape is compared with at most the 256 glyphs closest to it in proportion
     /// (the spread-to-length ratio, and the share of the length each contour has), closest first,
     /// in at most 50 million point comparisons, and the index's calls make at most 2 billion in
-    /// all; once they are spent, the glyphs not yet compared are left out.
+    /// all (ranking a glyph by proportion counts as one per contour and one more); once they are
+    /// spent, the glyphs not yet ranked or compared are left out.
     pub fn near_matches(&self, shape: &BezPath, tolerance: f64) -> Vec<GlyphMatch> {
         // NaN too.
         if tolerance.is_nan() || tolerance <= 0.0 {
@@ -463,30 +464,12 @@ impl RetypeIndex {
             return vec![];
         }
         let Some(s) = near_signature(shape) else { return vec![] };
-        let Some(list) = self.buckets.get(&s.contours) else { return vec![] };
-        let lo = s.invariant * (1.0 - NEAR_INVARIANT_SLACK);
-        let hi = s.invariant * (1.0 + NEAR_INVARIANT_SLACK);
-        let start = list.partition_point(|i| self.entries.get(*i).is_some_and(|e| e.sig.invariant < lo));
+        if !self.buckets.contains_key(&s.contours) {
+            return vec![];
+        }
         let tol = s.spread * OUTLINE_TOLERANCE.max(3.0 * tolerance);
         let mut shape_flat: Option<Option<Flat>> = None;
         let mut out: Vec<(usize, GlyphMatch)> = vec![];
-        // The glyphs closest to the shape in proportion, at most NEAR_FITS, closest first: their
-        // spread-to-length ratio, and the share of the length each contour has, longest first.
-        let shares = |sig: &Signature| {
-            let total: f64 = sig.lens.iter().sum();
-            let mut v: Vec<f64> = sig.lens.iter().map(|l| l / total).collect();
-            v.sort_by(|a, b| b.total_cmp(a));
-            v
-        };
-        let own = shares(&s);
-        let apart = |e: &Entry| {
-            let d = (e.sig.invariant - s.invariant).abs() / s.invariant + shares(&e.sig).iter().zip(&own).map(|(a, b)| (a - b).abs()).sum::<f64>();
-            if d.is_finite() { d } else { f64::INFINITY }
-        };
-        let mut near: Vec<(f64, &Entry)> =
-            list.iter().skip(start).filter_map(|i| self.entries.get(*i)).take_while(|e| e.sig.invariant <= hi).map(|e| (apart(e), e)).collect();
-        near.sort_by(|a, b| a.0.total_cmp(&b.0));
-        near.truncate(NEAR_FITS);
         // This call's allowance comes out of the index's budget in one step, so calls that overlap
         // never spend the same comparisons; what it leaves unspent goes back afterward.
         let mut seen = self.near_work.load(Ordering::Acquire);
@@ -497,6 +480,7 @@ impl RetypeIndex {
                 Err(now) => seen = now,
             }
         };
+        let near = self.ranked_near(&s, &mut work);
         for (_, e) in near {
             if work == 0 {
                 break;
@@ -534,6 +518,47 @@ impl RetypeIndex {
         });
         keep_per_face(&mut out);
         out.into_iter().map(|(_, m)| m).collect()
+    }
+
+    /// The glyphs of as many contours as near-matching shape `s` that are closest to it in
+    /// proportion, at most [`NEAR_FITS`], closest first: their spread-to-length ratio, and the
+    /// share of the length each contour has, longest first. Ranking a glyph takes one comparison
+    /// per contour, and one more, from `work`; once it is spent, the glyphs not yet ranked are
+    /// left out.
+    fn ranked_near(&self, s: &Signature, work: &mut u64) -> Vec<(f64, &Entry)> {
+        let Some(list) = self.buckets.get(&s.contours) else { return vec![] };
+        let lo = s.invariant * (1.0 - NEAR_INVARIANT_SLACK);
+        let hi = s.invariant * (1.0 + NEAR_INVARIANT_SLACK);
+        let start = list.partition_point(|i| self.entries.get(*i).is_some_and(|e| e.sig.invariant < lo));
+        // Each contour's share of the length, longest first (a near-matched shape has at most
+        // MAX_NEAR_CONTOURS contours, and the glyphs ranked as many).
+        let shares = |sig: &Signature| {
+            let mut v = [0.0f64; MAX_NEAR_CONTOURS];
+            let total: f64 = sig.lens.iter().sum();
+            for (o, l) in v.iter_mut().zip(&sig.lens) {
+                *o = l / total;
+            }
+            v.sort_by(|a, b| b.total_cmp(a));
+            v
+        };
+        let own = shares(s);
+        let apart = |e: &Entry| {
+            let d = (e.sig.invariant - s.invariant).abs() / s.invariant + shares(&e.sig).iter().zip(&own).map(|(a, b)| (a - b).abs()).sum::<f64>();
+            if d.is_finite() { d } else { f64::INFINITY }
+        };
+        let cost = s.contours as u64 + 1;
+        let mut near: Vec<(f64, &Entry)> = vec![];
+        for e in list.iter().skip(start).filter_map(|i| self.entries.get(*i)).take_while(|e| e.sig.invariant <= hi) {
+            let Some(left) = work.checked_sub(cost) else { break };
+            *work = left;
+            near.push((apart(e), e));
+        }
+        if near.len() > NEAR_FITS {
+            near.select_nth_unstable_by(NEAR_FITS, |a, b| a.0.total_cmp(&b.0));
+            near.truncate(NEAR_FITS);
+        }
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        near
     }
 }
 
@@ -2179,6 +2204,24 @@ mod tests {
         index.near_work.store(0, Ordering::Release);
         assert!(index.near_matches(&shape, 0.02).is_empty());
         assert_eq!(index.near_work.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn ranking_near_match_candidates_takes_from_the_work_budget() {
+        let db = FontDb::global();
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let gid = face.mapped_chars().iter().find(|(c, _)| *c == 'o').map(|(_, g)| *g).unwrap();
+        let shape = Affine::translate((100.0, 200.0)) * Affine::scale(0.04) * simplified(&db.outline_uncached(&face, gid), 4.0);
+        let index = RetypeIndex::build_near(db, [face], &BTreeSet::new(), &[near_key(&shape).unwrap()]);
+        let s = near_signature(&shape).unwrap();
+        let mut all = u64::MAX;
+        let ranked = index.ranked_near(&s, &mut all).len();
+        assert!(ranked >= 1, "the o is ranked");
+        assert_eq!(u64::MAX - all, ranked as u64 * 3, "each glyph of two contours takes three");
+        // Enough to rank one glyph of two contours and nothing more.
+        let mut work = 4;
+        assert_eq!(index.ranked_near(&s, &mut work).len(), 1);
+        assert_eq!(work, 1);
     }
 
     #[test]

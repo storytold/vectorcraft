@@ -11345,8 +11345,8 @@ shortest runs is checked, then the other complete splits in order, up to 32 spli
 for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups, 512 contours
 or 65,536 path elements is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
 matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
-most 50 million point comparisons per shape and 2 billion per command; past them, the glyphs not yet compared are left
-out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in
+most 50 million point comparisons per shape and 2 billion per command, ranking a glyph by proportion counting as one
+comparison per contour and one more; past them, the glyphs not yet ranked or compared are left out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in
 selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
 limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
 are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
