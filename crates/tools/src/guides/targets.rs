@@ -1403,12 +1403,13 @@ impl Targets {
     /// line): onto the point of that line nearest an anchor or center within `tol` of `p`, labeled
     /// at the anchor or center, else to where the nearest target line or ruler guide crosses the
     /// line, at most twice `tol` away ([`Self::slide`]). Returns where it goes and the guides.
+    #[cfg(test)]
     pub(crate) fn snap_point_along(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>) {
         let (q, overlays, _) = self.snap_point_along_contact(p, dir, tol);
         (q, overlays)
     }
 
-    /// As `snap_point_along`, with actual contact evidence independent of drawn guides.
+    /// Snap along the constraint with actual contact evidence independent of drawn guides.
     pub(crate) fn snap_point_along_contact(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>, bool) {
         let l2 = dir.hypot2();
         if !l2.is_finite() || l2 <= 1e-18 {

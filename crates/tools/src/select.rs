@@ -415,7 +415,7 @@ impl MoveSnap {
     /// slides along the line by the shorter of the two distances that put it on a gridline or a
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
     /// with the other art ([`Targets::snap_rects_along_contact`]) and the grabbed point lands where the line
-    /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
+    /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along_contact`]). A move of zero
     /// length does not snap, and Snap to Last Location goes back to where the move began first, as
     /// in [`Self::snap`].
     pub(crate) fn snap_along(&mut self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
