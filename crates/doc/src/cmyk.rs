@@ -639,8 +639,7 @@ fn jpeg_icc(bytes: &[u8]) -> Option<Vec<u8>> {
     craft_image_codecs::jpeg_inks::jpeg_icc_profile(bytes)
 }
 
-/// The bytes after an `ICC_PROFILE` APP2 segment's length: its name, then the segment's number and
-/// the count of segments.
+#[cfg(test)]
 const ICC_SEGMENT: &[u8; 12] = b"ICC_PROFILE\0";
 
 /// JPEG `bytes` carrying `icc` in place of the ICC profile they carry, if any: every
@@ -649,63 +648,14 @@ const ICC_SEGMENT: &[u8; 12] = b"ICC_PROFILE\0";
 /// for bytes whose segments before the scan can't be read, an empty `icc`, and one longer than 255
 /// segments hold.
 pub fn jpeg_with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
-    // A segment's length counts itself (2 bytes) and the name, number and count (14).
-    const CHUNK: usize = 0xFFFF - 2 - ICC_SEGMENT.len() - 2;
-    let chunks: Vec<&[u8]> = icc.chunks(CHUNK).collect();
-    let count = u8::try_from(chunks.len()).ok().filter(|n| *n > 0)?;
-    let mut segments = Vec::with_capacity(icc.len() + 18 * chunks.len());
-    for (i, chunk) in chunks.iter().enumerate() {
-        let len = u16::try_from(chunk.len() + 2 + ICC_SEGMENT.len() + 2).ok()?;
-        segments.extend_from_slice(&[0xFF, 0xE2]);
-        segments.extend_from_slice(&len.to_be_bytes());
-        segments.extend_from_slice(ICC_SEGMENT);
-        segments.extend_from_slice(&[u8::try_from(i + 1).ok()?, count]);
-        segments.extend_from_slice(chunk);
-    }
-    with_icc_segments(bytes, segments)
+    craft_image_codecs::jpeg_inks::jpeg_with_icc(bytes, icc)
 }
 
 /// JPEG `bytes` without the ICC profile they carry: every `ICC_PROFILE` APP2 segment before the
 /// scan taken out, and the other segments and the scan as they are. `None` for bytes whose
 /// segments before the scan can't be read.
 pub fn jpeg_without_icc(bytes: &[u8]) -> Option<Vec<u8>> {
-    with_icc_segments(bytes, vec![])
-}
-
-/// JPEG `bytes` with every `ICC_PROFILE` APP2 segment before the scan taken out and `segments`
-/// written after the leading application segments; `None` when the bytes don't start a JPEG or
-/// their segments before the scan can't be read.
-fn with_icc_segments(bytes: &[u8], segments: Vec<u8>) -> Option<Vec<u8>> {
-    if !bytes.starts_with(&[0xFF, 0xD8]) {
-        return None;
-    }
-    let mut out = Vec::with_capacity(bytes.len() + segments.len());
-    out.extend_from_slice(&[0xFF, 0xD8]);
-    let mut icc_segments = Some(segments);
-    let mut at = 2;
-    // The segments before the scan (SOS), each with its length; a marker without one ends them.
-    // Fill bytes (0xFF) before a marker are left out.
-    loop {
-        while bytes.get(at..at + 2) == Some(&[0xFF, 0xFF]) {
-            at += 1;
-        }
-        let (Some(&0xFF), Some(&marker)) = (bytes.get(at), bytes.get(at + 1)) else { return None };
-        let app = (0xE0..=0xEF).contains(&marker);
-        if !app && let Some(s) = icc_segments.take() {
-            out.extend_from_slice(&s);
-        }
-        if matches!(marker, 0xDA | 0xD8 | 0xD9 | 0x01 | 0xD0..=0xD7) {
-            break;
-        }
-        let len = usize::from(u16::from_be_bytes(bytes.get(at + 2..at + 4)?.try_into().ok()?));
-        let segment = bytes.get(at..(at + 2).checked_add(len)?).filter(|_| len >= 2)?;
-        if !(marker == 0xE2 && segment.get(4..16) == Some(ICC_SEGMENT.as_slice())) {
-            out.extend_from_slice(segment);
-        }
-        at += segment.len();
-    }
-    out.extend_from_slice(bytes.get(at..)?);
-    Some(out)
+    craft_image_codecs::jpeg_inks::jpeg_without_icc(bytes)
 }
 
 /// `icc` when it is a profile of CMYK colors, which the samples of a CMYK image are in.
