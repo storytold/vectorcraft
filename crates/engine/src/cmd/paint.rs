@@ -203,10 +203,11 @@ impl Session {
     /// The object whose fill (or stroke) the proxy shows, with the Appearance panel's active item
     /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art. With
     /// an object of a dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that
-    /// object as the instance draws it. None while the Live Paint Bucket is the active tool: the
-    /// proxies show the colors it paints with.
+    /// object as the instance draws it. None while the Live Paint Bucket is the active tool (or
+    /// another tool works for it, [`Session::bucket_paints`]): the proxies show the colors it
+    /// paints with.
     pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(Cow<'_, Node>, Option<usize>)> {
-        if self.tool_id() == LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return None;
         }
         let st = self.active()?;
@@ -215,12 +216,15 @@ impl Session {
         }
         let first = st.doc.node(*st.selection.subjects().first()?)?;
         let item = self.appearance_item();
+        // Only an active Appearance row is shown here: it is a row of the first selected object.
         if first.appearance.item_of_kind(item, !stroke).is_some() {
             return Some((Cow::Borrowed(first), item));
         }
         // A Live Paint group without faces (or edges) shows the next selected object's paint; any other
-        // object without a painted object shows the defaults for new art.
-        for id in st.selection.subjects() {
+        // object without a painted object shows the defaults for new art. A face or edge selected with
+        // its Live Paint group counts with the group, wherever it is in the selection.
+        let covered = live_paint_covered(&st.doc, st.selection.subjects());
+        for id in st.selection.subjects().iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
             painted(n, true, stroke, &mut nodes);
@@ -270,14 +274,6 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
         (Paint::Gradient(x), Paint::Gradient(y)) => x.gradient == y.gradient,
         _ => a == b,
     }
-}
-
-/// The ids of the faces and edges of `n` when it is a Live Paint group, else none.
-pub(crate) fn live_paint_parts(n: &Node) -> Vec<NodeId> {
-    if !is_live_paint(n) {
-        return vec![];
-    }
-    faces(n).into_iter().chain(edges(n)).map(|part| part.id).collect()
 }
 
 /// The objects whose paints the proxies show for a selected `n`, the ones the paint commands
@@ -330,8 +326,9 @@ impl DocState {
         // Looking the first object up builds the id cache when there is none.
         let first = self.selection.objects.first().and_then(|id| self.doc.node(*id));
         let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
-        // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
-        let mut covered = std::collections::HashSet::new();
+        // The faces and edges of the selected Live Paint groups (or of those inside selected groups): selected as well,
+        // they count with their group's.
+        let covered = live_paint_covered(&self.doc, &self.selection.objects);
         // Every node with a selected id, in tree order: a repeated id (a damaged file) counts at each
         // place it appears.
         for n in self.doc.nodes_in_order(self.selection.objects.iter().copied()) {
@@ -341,7 +338,6 @@ impl DocState {
             if covered.contains(&n.id) {
                 continue;
             }
-            covered.extend(live_paint_parts(n));
             painted(n, true, false, &mut fills);
             painted(n, true, true, &mut strokes);
         }
@@ -378,11 +374,28 @@ impl DocState {
 }
 
 impl Session {
+    /// Do the fill and stroke proxies, and the paint commands that name no objects, stand for the
+    /// colors the Live Paint Bucket paints with? They do while the bucket is the active tool, while
+    /// a Cmd+click with the bucket uses the Selection tool, and while the Eyedropper samples into a
+    /// stop of the bucket's gradient for the Gradient panel's eyedropper, up to and including the
+    /// sample its click takes before it switches back to the bucket.
+    pub fn bucket_paints(&self) -> bool {
+        let for_bucket = |t: &dyn vectorcraft_tools::Tool| t.id() == LIVE_PAINT_BUCKET || t.returns_to() == Some(LIVE_PAINT_BUCKET);
+        // A Cmd+click lends the Selection tool to the bucket, or to the Eyedropper armed for it.
+        self.back_to_bucket || for_bucket(self.tool.as_ref()) || self.lender.as_deref().is_some_and(for_bucket)
+    }
+
+    /// The tool the active tool's armed one-shot pick switches back to after its click
+    /// ([`vectorcraft_tools::Tool::returns_to`]).
+    pub fn tool_returns_to(&self) -> Option<String> {
+        self.tool.returns_to().map(str::to_string)
+    }
+
     /// [`DocState::proxy_mixed`] of the active document for the Appearance panel's active item.
     /// A gradient mesh with points picked ([`Session::fill_mesh_points`]) counts with their colors.
     /// Neither is mixed while the Live Paint Bucket is the active tool ([`Session::proxy_source`]).
     pub fn proxy_mixed(&self) -> (bool, bool) {
-        if self.tool_id() == LIVE_PAINT_BUCKET {
+        if self.bucket_paints() {
             return (false, false);
         }
         self.active().map_or((false, false), |st| st.proxy_mixed_with(self.appearance_item(), &self.fill_mesh_points()))
@@ -737,12 +750,13 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
 }
 
-/// Is the Live Paint Bucket the active tool while `p` names no `ids`, `id` or `item`? A fill,
+/// Is the Live Paint Bucket the active tool ([`Session::bucket_paints`]) while `p` names no `ids`,
+/// `id` or `item`? A fill,
 /// stroke or stroke weight chosen then is what the bucket paints with, so it goes to the defaults
 /// and the selection keeps its paint.
 pub(crate) fn for_bucket(s: &Session, p: &Value) -> bool {
     // A null `ids` or `id` is no target, as `given_nodes` reads it; `item: null` names the top row.
-    s.tool_id() == LIVE_PAINT_BUCKET && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
+    s.bucket_paints() && ["ids", "id"].iter().all(|k| p.get(k).is_none_or(Value::is_null)) && p.get("item").is_none()
 }
 
 /// `p` with `ids: []` when [`for_bucket`]: the paint goes to the defaults only. None otherwise.
@@ -818,6 +832,36 @@ pub(crate) fn live_paint_parts_skipped(d: &Document, roots: &[NodeId], fill: boo
         }
     }
     out
+}
+
+/// Faces, edges and the other objects (the hidden source paths) of Live Paint groups.
+pub(crate) type LivePaintParts = (std::collections::HashSet<NodeId>, std::collections::HashSet<NodeId>, std::collections::HashSet<NodeId>);
+
+/// The faces, the edges and the hidden source paths of the Live Paint groups in `roots` (or inside them),
+/// found as [`live_paint_parts_skipped`] finds them.
+pub(crate) fn live_paint_split(d: &Document, roots: &[NodeId]) -> LivePaintParts {
+    let groups = live_paint_groups(d, roots);
+    let mut hidden = inside_live_paint(d, &groups);
+    let (mut faces, mut edges) = (std::collections::HashSet::new(), std::collections::HashSet::new());
+    for (_, f, e) in &groups {
+        faces.extend(f.iter().copied());
+        edges.extend(e.iter().copied());
+    }
+    hidden.retain(|id| !faces.contains(id) && !edges.contains(id));
+    (faces, edges, hidden)
+}
+
+/// The faces and edges in `selected` whose Live Paint group is selected too, itself or inside another selected
+/// object: they count with their group, wherever they are in `selected`. The groups are looked for only when an
+/// object in `selected` is inside a Live Paint group.
+pub(crate) fn live_paint_covered(d: &Document, selected: &[NodeId]) -> std::collections::HashSet<NodeId> {
+    let inside = |id: &NodeId| d.ancestry(*id).is_some_and(|up| up.iter().rev().skip(1).filter_map(|a| d.node(*a)).any(is_live_paint));
+    if !selected.iter().any(inside) {
+        return std::collections::HashSet::new();
+    }
+    let (mut parts, edges, _) = live_paint_split(d, selected);
+    parts.extend(edges);
+    parts
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path
@@ -1337,7 +1381,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
     // Read before the check below, so that a bad param (such as `target` or `aligned`, or an explicit `item` the art has
     // no row for) is still an error.
-    let targets = super::appearance::drop_design_art_rows(s, item.targets(s, p)?, item, !stroke, cmd)?;
+    let targets = super::appearance::drop_design_art_rows(s, item.targets_for(s, p, !stroke)?, item, !stroke, cmd)?;
     let of = match item {
         ItemTarget::Item { .. } => super::appearance::reference_of(s, p, item, cmd)?,
         ItemTarget::Top => None,

@@ -212,12 +212,26 @@ pub fn mesh_warp_cost(cells: usize) -> usize {
 /// partly transparent image keeps its own alpha there. More cells than [`MAX_GENERATED`] objects
 /// allow make an empty group.
 pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
+    mesh_warp_image_with(n, im, f, cells, pixelated, masked, None)
+}
+
+/// [`mesh_warp_image`], each piece reaching `overlap` points past its edges when given.
+pub(crate) fn mesh_warp_image_with(
+    n: &Node,
+    im: &ImageObject,
+    f: &dyn Fn(Point) -> Point,
+    cells: usize,
+    pixelated: bool,
+    masked: bool,
+    overlap: Option<f64>,
+) -> Node {
     let k = cells.max(1);
     let mut g = n.clone();
     g.kind = NodeKind::Group { children: vec![], clip: false };
     g.knockout = crate::Knockout::On;
     if let Some(e) = g.extras_if_any() {
         e.colorize = None;
+        e.image_quad = None;
     }
     if mesh_warp_cost(k) > MAX_GENERATED {
         return g;
@@ -228,24 +242,31 @@ pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, c
     let color_mask = n.extras().color_mask.clone();
     let (pw, ph) = (im.width as f64, im.height as f64);
     let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
+    // A distorted image's pixels reach the page through its projective map.
+    let to_page = n.image_map().filter(|_| n.is_distorted_image());
+    let place = |p: Point| to_page.and_then(|m| m.apply(p)).unwrap_or(im.xf * p);
     let mut pieces = Vec::with_capacity(2 * k * k);
     for j in 0..k {
         for i in 0..k {
             let s = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
-            let d = s.map(|p| f(im.xf * p));
+            let d = s.map(|p| f(place(p)));
             for t in [[0, 1, 2], [0, 2, 3]] {
                 let (st, dt) = (t.map(|v| s[v]), t.map(|v| d[v]));
                 let Some(xf) = affine_between(st, dt) else { continue };
                 let c = Point::new((dt[0].x + dt[1].x + dt[2].x) / 3.0, (dt[0].y + dt[1].y + dt[2].y) / 3.0);
-                let grow = (dt[0].distance(dt[1]).max(dt[1].distance(dt[2])) * 0.02).min(0.5);
-                let tri: Vec<Point> = dt
-                    .iter()
-                    .map(|p| {
-                        let v = *p - c;
-                        let len = v.hypot();
-                        if len > 1e-12 { *p + v * (grow / len) } else { *p }
-                    })
-                    .collect();
+                let tri: Vec<Point> = match overlap {
+                    Some(g) => grown_triangle(dt, g),
+                    None => {
+                        let grow = (dt[0].distance(dt[1]).max(dt[1].distance(dt[2])) * 0.02).min(0.5);
+                        dt.iter()
+                            .map(|p| {
+                                let v = *p - c;
+                                let len = v.hypot();
+                                if len > 1e-12 { *p + v * (grow / len) } else { *p }
+                            })
+                            .collect()
+                    }
+                };
                 let shape = PathData::single(SubPath::polyline(&tri, true));
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 image.extras_mut().pixelated = pixelated;
@@ -272,6 +293,23 @@ pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, c
     }
     g.kind = NodeKind::Group { children: pieces, clip: false };
     g
+}
+
+/// Triangle `t` with each side moved `g` outward: `t` scaled about its incenter. A corner moves
+/// at most 8 `g`, so a very thin triangle's sides move less than `g`.
+fn grown_triangle(t: [Point; 3], g: f64) -> Vec<Point> {
+    let side = |i: usize| t[(i + 1) % 3].distance(t[(i + 2) % 3]);
+    let (a, b, c) = (side(0), side(1), side(2));
+    let perimeter = a + b + c;
+    let area = ((t[1] - t[0]).cross(t[2] - t[0]) / 2.0).abs();
+    if !(perimeter > 1e-12 && area > 0.0 && g.is_finite() && g > 0.0) {
+        return t.to_vec();
+    }
+    let center = Point::new((a * t[0].x + b * t[1].x + c * t[2].x) / perimeter, (a * t[0].y + b * t[1].y + c * t[2].y) / perimeter);
+    let r = 2.0 * area / perimeter;
+    let far = t.iter().map(|p| p.distance(center)).fold(0.0, f64::max);
+    let grow = (g / r).min(8.0 * g / far.max(1e-12));
+    t.iter().map(|p| center + (*p - center) * (1.0 + grow)).collect()
 }
 
 /// Distort Pattern Fills: path or compound path `n` with each visible pattern fill turned into the
@@ -353,6 +391,13 @@ pub fn is_live(n: &Node) -> bool {
     )
 }
 
+/// Is this drawn and written as evaluated art: a live object ([`is_live`]) or a distorted image
+/// ([`Node::image_quad`]), whose art is [`crate::image_quad::distorted_art`]. Effects and
+/// container paint treat a distorted image as an image, not as live art.
+pub fn is_drawn_live(n: &Node) -> bool {
+    is_live(n) || n.is_distorted_image()
+}
+
 /// Mesh tessellation as flat-filled paths (no stroke): each patch cut `n`×`n`, its quads joined
 /// where the colour hardly changes ([`GradientMesh::pieces`]).
 pub fn mesh_quad_nodes(m: &GradientMesh, n: usize) -> Vec<Node> {
@@ -388,6 +433,7 @@ pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
         NodeKind::Repeat(r) => r.expand(hooks.symbols),
         NodeKind::PlacedDocument(p) => p.art(n),
         NodeKind::Intertwine { children } => crate::intertwine::expand(children),
+        NodeKind::Image(_) => vec![crate::image_quad::distorted_art(n).unwrap_or_else(|| n.clone())],
         _ => vec![n.clone()],
     }
 }
@@ -429,7 +475,7 @@ pub fn expand_deep(n: &Node, outline: Outliner) -> Node {
 /// expands to nothing.
 pub fn expand_deep_hooks(n: &Node, hooks: Hooks) -> Node {
     let _generating = Generating::enter();
-    let mut out = if is_live(n) {
+    let mut out = if is_drawn_live(n) {
         let g = expanded_group_hooks(n, hooks);
         if !Generating::charge(g.count()) {
             return Node::new(n.id, NodeKind::Group { children: vec![], clip: false });
@@ -440,7 +486,12 @@ pub fn expand_deep_hooks(n: &Node, hooks: Hooks) -> Node {
     };
     if let Some(ch) = out.children_mut() {
         for c in ch.iter_mut() {
-            if subtree_has_live(c) {
+            // A distorted image with fills, strokes or effects of its own stays an image: whoever
+            // draws the art draws it with them, as it draws a distorted image anywhere else.
+            if c.is_distorted_image() && !(c.appearance.items.is_empty() && c.appearance.effects.is_empty()) {
+                continue;
+            }
+            if subtree_has_drawn_live(c) {
                 *c = Arc::new(expand_deep_hooks(c, hooks));
             }
         }
@@ -494,6 +545,13 @@ impl Drop for Generating {
 pub fn subtree_has_live(n: &Node) -> bool {
     let mut any = false;
     n.walk(&mut |c| any |= is_live(c));
+    any
+}
+
+/// Does `n` or any descendant draw as evaluated art ([`is_drawn_live`])?
+fn subtree_has_drawn_live(n: &Node) -> bool {
+    let mut any = false;
+    n.walk(&mut |c| any |= is_drawn_live(c));
     any
 }
 

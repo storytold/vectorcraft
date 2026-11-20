@@ -1,5 +1,6 @@
 //! Window › 3D and Materials › Materials › Graphics: art kept as a document symbol (Add as Single
-//! Graphic) and mapped onto 3D objects (Extrude & Bevel's caps, a plane, Revolve's side). The
+//! Graphic) and mapped onto 3D objects (Extrude & Bevel's caps, a plane, Revolve's side, Inflate's
+//! puffed front and back). The
 //! graphics an object shows are the `graphics` parameter of its 3D effect, which `effect.setParams`
 //! also edits.
 
@@ -28,7 +29,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Map Graphic",
             [],
             None,
-            "{symbol: name of a document symbol, face?: front|back|side (front; Plane has only a front; the back reads left to right as seen from behind; side is Extrude & Bevel's walls and bevels; on Revolve the front is its swept side, which is the only face), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on a side from the middle of the side unrolled flat: on Extrude & Bevel x along the outline, clockwise from its top, and y from the front toward the back; on Revolve x around the axis and y along the profile), scale?: % (1..10000; default 100, or less so the graphic fits inside the object, on Extrude & Bevel's side inside the side unrolled about x = 0, short of its cut, on Revolve inside the half of the side seen from the front), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it (on a side wrapped around it, and drawn only where its outside faces the viewer); every object's 3D effect must be Extrude & Bevel (on a solid cap, or on the side, hollow or not), Rotate (the Plane type) or Revolve; one undo step → {ids, graphic}",
+            "{symbol: name of a document symbol, face?: front|back|side (front; Plane has only a front; the back reads left to right as seen from behind; side is Extrude & Bevel's walls and bevels; on Revolve the front is its swept side, which is the only face; on Inflate the back takes graphics only with Both sides and Cap on), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on Inflate in the art's plane, the graphic carried straight out onto the puffed face; on a side from the middle of the side unrolled flat: on Extrude & Bevel x along the outline, clockwise from its top, and y from the front toward the back; on Revolve x around the axis and y along the profile), scale?: % (1..10000; default 100, or less so the graphic fits inside the object, on Extrude & Bevel's side inside the side unrolled about x = 0, short of its cut, on Revolve inside the half of the side seen from the front), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it (on a side wrapped around it, and on Inflate following the puff, Twist and Taper carrying the back's, each drawn only where its outside faces the viewer); every object's 3D effect must be Extrude & Bevel (on a solid cap, or on the side, hollow or not), Rotate (the Plane type), Revolve or Inflate; one undo step → {ids, graphic}",
             has_doc,
             map_graphic
         ),
@@ -133,6 +134,13 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
         // With a depth of 0 the art is a plane, which has only a front.
         if base.face != effects::PlanarFace::Front && extrude.is_some_and(|o| o.depth <= 0.0) {
             return Err(bad(C, format!("object {}: with a depth of 0 the object has one face: map its graphics onto the front", id.0)));
+        }
+        // Inflate's back takes graphics where it puffs out: with Both sides and Cap on.
+        if base.face == effects::PlanarFace::Back && effect.id == effects::INFLATE {
+            let o = effects::inflate_options(&merged);
+            if !(o.both_sides && o.cap) {
+                return Err(bad(C, format!("object {}: Inflate's back takes graphics with Both sides and Cap on", id.0)));
+            }
         }
         let mut graphic = base.clone();
         if p.get("scale").is_none()

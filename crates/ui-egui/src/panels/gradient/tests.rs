@@ -740,6 +740,9 @@ fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     assert!(texts.iter().any(|(t, _)| t == "#FFFFFF"), "the stop's colour row: {texts:?}");
     stop_eyedropper(&mut app);
     assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
+    // A second click on the eyedropper while the pick is armed still hands back to the Gradient tool.
+    stop_eyedropper(&mut app);
+    assert_eq!(app.session.tool_options()["stop"], "gradient");
 }
 
 /// #8024: Escape ends the stop eyedropper's pick and returns to the Gradient tool. The stop keeps
