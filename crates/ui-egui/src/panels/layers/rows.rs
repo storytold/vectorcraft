@@ -2,8 +2,8 @@ use super::controls::collect_for_export_menu;
 use super::model::{Place, Row, opens, painted_name};
 use super::thumbs::{node_arc, real_thumb, thumb};
 use super::{
-    Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
-    StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
+    Arc, COLUMN, Color32, ColumnDrag, Document, HashSet, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense,
+    Stroke, StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
 use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
@@ -499,6 +499,8 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             n.walk(&mut |c| any |= c.id != n.id && view.sel.contains(&c.id));
             any
         });
+    // A layer or sublayer whose selectable art is all selected shows the full-sized square.
+    let full = view.full_layers.contains(&n.id);
     row_background(ui, view, n, r, &resp);
     eye_and_lock(ui, view, n, r, out);
     // Layer colour bar (every row shows the colour of its layer).
@@ -523,7 +525,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let tc = egui::pos2(r.right() - TARGET_X, r.center().y);
     let tresp = target_circle(ui, n, tc, h, shows_targeted(view, n, is_sel), &mut out.actions, t);
     let sq = egui::pos2(r.right() - SQUARE_X, r.center().y);
-    if is_sel {
+    if is_sel || full {
         let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
         ui.painter().rect_filled(q, 0.0, color);
         ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
@@ -938,15 +940,42 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
 fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
     match view.target {
         Some(id) => id == n.id,
-        None if n.is_layer() => {
-            if view.sel.is_empty() {
-                return false;
-            }
-            let art = n.layer_art(true);
-            !art.is_empty() && art.iter().all(|id| view.sel.contains(id))
-        }
+        None if n.is_layer() => view.full_layers.contains(&n.id),
         None => is_sel,
     }
+}
+
+/// The layers and sublayers of `doc` whose [`Node::layer_art`] with `editable` is not empty and
+/// all in `sel`, found in one pass over the layers and their direct children.
+pub(super) fn full_layers(doc: &Document, sel: &HashSet<NodeId>) -> HashSet<NodeId> {
+    /// Adds `layer` to `out` when it is full, and returns its art's count and selected count.
+    fn visit(layer: &Node, sel: &HashSet<NodeId>, out: &mut HashSet<NodeId>) -> (usize, usize) {
+        let (mut art, mut selected) = (0, 0);
+        for c in layer.children().into_iter().flatten() {
+            let counts = !(c.is_ruler_guide() || !c.visible || c.locked || c.is_template());
+            if c.is_layer() {
+                let (a, s) = visit(c, sel, out);
+                if counts {
+                    art += a;
+                    selected += s;
+                }
+            } else if counts {
+                art += 1;
+                selected += usize::from(sel.contains(&c.id));
+            }
+        }
+        if art > 0 && selected == art {
+            out.insert(layer.id);
+        }
+        (art, selected)
+    }
+    let mut out = HashSet::new();
+    if !sel.is_empty() {
+        for layer in doc.layers.iter().filter(|l| l.is_layer()) {
+            visit(layer, sel, &mut out);
+        }
+    }
+    out
 }
 
 /// The radius of the inner ring of a targeted item's target circle (the double ring); the outer
