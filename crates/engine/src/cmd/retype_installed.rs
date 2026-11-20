@@ -50,6 +50,9 @@ pub(super) struct Installed {
     pub(super) read: usize,
     /// Faces left out by the limits ([`LIMITS`]).
     pub(super) skipped: usize,
+    /// For a search made away from its command, the ids of the loaded faces it compared: the
+    /// command does not compare them again.
+    pub(super) scanned: Vec<u32>,
 }
 
 impl Installed {
@@ -72,6 +75,37 @@ pub(super) fn search(db: &FontDb, shapes: &[&BezPath], every: bool) -> Result<In
 /// found that `listed` turns down is loaded and not listed, and takes no place of the `faces`.
 pub(super) fn search_listed(db: &FontDb, shapes: &[&BezPath], faces: usize, listed: &dyn Fn(&FontFace) -> bool) -> Result<Installed> {
     search_within(db, shapes, true, Limits { faces: faces.min(MAX_FACES), ..LIMITS }, listed)
+}
+
+/// Would a search for `shapes` read any installed file: is one of them not plain, with a glyph's
+/// key ([`shape_key`])?
+pub(super) fn starts_search(shapes: &[&BezPath]) -> bool {
+    shapes.iter().any(|s| !is_plain(s) && shape_key(s).is_some())
+}
+
+/// The loaded faces that are not among `compared` (those past the [`MAX_FACES`] a Retype compares
+/// first) whose glyphs match one of `shapes` that is not plain ([`is_plain`]), compared
+/// [`MAX_FACES`] at a time. A cancel stops it between those groups.
+pub(super) fn loaded_rest(db: &FontDb, shapes: &[&BezPath], compared: &[u32]) -> Result<Vec<Arc<FontFace>>> {
+    let shapes: Vec<&BezPath> = shapes.iter().copied().filter(|s| !is_plain(s)).collect();
+    let keys: BTreeSet<u64> = shapes.iter().filter_map(|s| shape_key(s)).collect();
+    let mut out: Vec<Arc<FontFace>> = vec![];
+    if keys.is_empty() {
+        return Ok(out);
+    }
+    let rest: Vec<Arc<FontFace>> = db.loaded_faces().into_iter().filter(|f| !compared.contains(&f.id())).collect();
+    for group in rest.chunks(MAX_FACES) {
+        vectorcraft_doc::cancel::check()?;
+        let index = RetypeIndex::build(db, group.iter().cloned(), &keys);
+        for s in &shapes {
+            for m in index.all_matches(s) {
+                if !out.iter().any(|f| f.id() == m.face.id()) {
+                    out.push(m.face);
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// An installed font file: its path, its length and the (family, style) of the faces wanted from it.
@@ -122,7 +156,7 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
         for (j, face) in faces.iter().enumerate() {
             if out.faces.len() >= limits.faces {
                 // The faces not compared past the cap: the rest of this file's and the later files'.
-                out.skipped += faces.len() - j + files.iter().skip(i + 1).map(|f| f.2.len()).sum::<usize>();
+                out.skipped += styles.len().saturating_sub(j) + files.iter().skip(i + 1).map(|f| f.2.len()).sum::<usize>();
                 return Ok(out);
             }
             let n = encoded_glyphs(face);
@@ -151,9 +185,12 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
             if fits.is_empty() {
                 continue;
             }
-            remember(db, &loaded);
-            if listed(&loaded) && !out.faces.iter().any(|f| f.id() == loaded.id()) {
-                out.faces.push(loaded);
+            // A face `listed` turns down (another version shadows it) is not compared ahead of others.
+            if listed(&loaded) {
+                remember(db, &loaded);
+                if !out.faces.iter().any(|f| f.id() == loaded.id()) {
+                    out.faces.push(loaded);
+                }
             }
             for k in fits {
                 if let Some(m) = matched.get_mut(k) {
@@ -237,8 +274,9 @@ pub struct RetypeSearch {
     faces: Vec<Arc<FontFace>>,
 }
 
-/// What a [`RetypeSearch`] found in the installed fonts: the faces whose glyphs match, loaded, and
-/// what it read.
+/// What a [`RetypeSearch`] found: for `type.retype`, the faces it compared first that match, the
+/// loaded faces past those that match ([`loaded_rest`]), the installed faces whose glyphs match,
+/// loaded, and the loaded faces it compared; and what it read of the installed fonts.
 pub struct RetypeFound {
     doc: u64,
     installed: Installed,
@@ -250,6 +288,12 @@ impl RetypeFound {
     /// such command takes it; one in another document compares only what is loaded.
     pub fn hand_in(self, s: &mut Session) {
         s.retype_hand_off = Some(self);
+    }
+
+    /// Drop what was handed in and no command took, as when the command failed before it took
+    /// it: a later command searches for itself.
+    pub fn drop_handed(s: &mut Session) {
+        s.retype_hand_off = None;
     }
 
     /// What it read, as the commands report it.
@@ -352,7 +396,29 @@ impl RetypeSearch {
             let keys: BTreeSet<u64> = shapes.iter().filter_map(|sh| shape_key(sh)).collect();
             let index = RetypeIndex::build(db, self.faces.iter().cloned(), &keys);
             let left: Vec<&BezPath> = shapes.iter().copied().filter(|sh| index.matches(sh).is_empty()).collect();
-            search(db, &left, false)?
+            // The first faces that match are handed in too: loading the faces found can move one
+            // past the first 96 the command compares.
+            let mut first: Vec<Arc<FontFace>> = vec![];
+            for m in shapes.iter().flat_map(|sh| index.all_matches(sh)) {
+                if !first.iter().any(|f| f.id() == m.face.id()) {
+                    first.push(m.face);
+                }
+            }
+            // The loaded faces past the ones compared first, then the installed fonts for what
+            // none of them matches; the command takes both from what is handed in.
+            let compared: Vec<u32> = self.faces.iter().map(|f| f.id()).collect();
+            // Every face loaded now is compared, among the first ones or with the rest.
+            let scanned: Vec<u32> = compared.iter().copied().chain(db.loaded_faces().iter().map(|f| f.id())).collect();
+            let rest = loaded_rest(db, &left, &compared)?;
+            let mut left = left;
+            for group in rest.chunks(MAX_FACES) {
+                let index = RetypeIndex::build(db, group.iter().cloned(), &keys);
+                left.retain(|sh| index.matches(sh).is_empty());
+            }
+            let mut found = search(db, &left, false)?;
+            found.faces.splice(0..0, first.into_iter().chain(rest));
+            found.scanned = scanned;
+            found
         };
         Ok(RetypeFound { doc: self.doc, installed })
     }

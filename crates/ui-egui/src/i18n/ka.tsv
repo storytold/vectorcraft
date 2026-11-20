@@ -89,6 +89,7 @@
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	გამოსახულების ვექტორიზაცია ვერ მოხერხდა: შიდა შეცდომა: მისი ნაკადი შეჩერდა (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	Image Trace failed: {e}	გამოსახულების ვექტორიზაცია ვერ მოხერხდა: {e}
 @msg	Image Trace finished, but its document was closed	გამოსახულების ვექტორიზაცია დასრულდა, მაგრამ მისი დოკუმენტი დაიხურა
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	ხელახლა აკრეფა ვერ მოხერხდა: შიდა შეცდომა: მისი ნაკადი შეჩერდა (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	ხელახლა აკრეფა დასრულდა, მაგრამ ამასობაში დოკუმენტი ან მისი მონიშვნა შეიცვალა: გაუშვით ხელახლა
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	გამოსახულების ვექტორიზაცია დასრულდა, მაგრამ ამასობაში გამოსახულება ან მისი პარამეტრები შეიცვალა: გაუშვით ვექტორიზაცია ხელახლა
 @msg	Import SVG Filter reads SVG files, not SVGZ	„SVG ფილტრის იმპორტი“ კითხულობს SVG ფაილებს და არა SVGZ-ს

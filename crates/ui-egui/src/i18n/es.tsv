@@ -9267,6 +9267,7 @@ breakText	Glyphs	Glifos
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Error de Calco de imagen: error interno: su hilo se detuvo (informa de este error)
 @msg	Image Trace failed: {e}	Error de Calco de imagen: {e}
 @msg	Image Trace finished, but its document was closed	Calco de imagen terminó, pero su documento se cerró
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Error de Reescribir: error interno: su hilo se detuvo (informa de este error)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Reescribir terminó, pero el documento o su selección cambiaron mientras tanto: ejecútalo de nuevo
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Calco de imagen terminó, pero la imagen o sus ajustes cambiaron mientras tanto: cálcala de nuevo
 @msg	Invalid dimension offset	Desplazamiento de cota no válido

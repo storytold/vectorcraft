@@ -177,6 +177,8 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Result<RetypeFound,
     // The command compares the faces found without reading the installed fonts again.
     found.hand_in(&mut app.session);
     let result = if r.from_panel { crate::panels::retype::search(app, r.run.params()) } else { app.run(r.run.command(), r.run.params().clone()) };
+    // A command that failed before it took the faces found leaves them for no later command.
+    RetypeFound::drop_handed(&mut app.session);
     if let Err(e) = result {
         app.status(e);
     }

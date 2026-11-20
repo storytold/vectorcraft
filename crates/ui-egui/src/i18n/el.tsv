@@ -7285,6 +7285,7 @@ axis	Y Axis	Άξονας Y
 	The plug-in is computing…	Το πρόσθετο υπολογίζει…
 	Inspect Plug-in	Επιθεώρηση προσθέτου
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Η Επαναπληκτρολόγηση απέτυχε: εσωτερικό σφάλμα: το νήμα της σταμάτησε (αναφέρετε αυτό το σφάλμα)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Η Επαναπληκτρολόγηση ολοκληρώθηκε, αλλά το έγγραφο ή η επιλογή του άλλαξε στο μεταξύ: εκτελέστε την ξανά
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…

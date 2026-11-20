@@ -8578,6 +8578,7 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	이미지 추적 실패: 내부 오류: 스레드가 멈췄습니다(이 버그를 보고해 주세요)
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	리타입 실패: 내부 오류: 스레드가 멈췄습니다(이 버그를 보고해 주세요)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	리타입이 끝났지만 그 사이에 문서나 선택 영역이 바뀌었습니다: 다시 실행하세요
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
 @msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요

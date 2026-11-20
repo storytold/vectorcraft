@@ -7362,6 +7362,7 @@ axis	Y Axis	Y-akseli
 	The plug-in is computing…	Laajennus laskee…
 	Inspect Plug-in	Tarkastele laajennusta
 	Cancel Plug-in Run	Peruuta laajennuksen ajo
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Kirjoita uudelleen epäonnistui: sisäinen virhe: sen säie pysähtyi (ilmoita tästä virheestä)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Kirjoita uudelleen valmistui, mutta asiakirja tai sen valinta muuttui sillä välin: suorita se uudelleen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} valmistui, mutta asiakirja tai laajennus muuttui sillä välin: suorita se uudelleen
 @msg	Running “{name}”…	Suoritetaan ”{name}”…

@@ -12638,7 +12638,10 @@ installed faces not compared count as skipped, and `more` does not count them.
 ## Retype installed fonts
 
 `type.retype {fonts?, installed?}` compares the shapes that no loaded font, document font or font in `fonts` matches
-with the installed fonts that are not loaded yet. It reads their files one at a time, smallest first, and stops when
+with the installed fonts that are not loaded yet. Every loaded font is compared first: the document's fonts, the fonts
+in `fonts` and the fonts earlier searches loaded come first, and the loaded fonts past the first 96 are compared, 96 at
+a time, with the shapes that are not plain and that the first 96 do not match. The search of the installed fonts reads
+their files one at a time, smallest first, and stops when
 every such shape matches a font it has read. It leaves out files larger than 256 MiB, and the files and faces past
 2 GiB read or 500,000 glyphs drawn in all. A file is read for the search and then released; a font whose glyphs match
 a shape is loaded from what the search read, without the family's other files. A plain shape (one contour of up to

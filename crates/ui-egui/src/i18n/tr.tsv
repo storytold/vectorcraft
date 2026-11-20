@@ -8074,6 +8074,7 @@ axis	Y Axis	Y ekseni
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Görüntü İzleme başarısız oldu: iç hata: iş parçacığı durdu (lütfen bu hatayı bildirin)
 @msg	Image Trace failed: {e}	Görüntü İzleme başarısız oldu: {e}
 @msg	Image Trace finished, but its document was closed	Görüntü İzleme tamamlandı, ancak belgesi kapatılmıştı
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Yeniden Yaz başarısız oldu: iç hata: iş parçacığı durdu (lütfen bu hatayı bildirin)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Yeniden Yaz tamamlandı, ancak bu sırada belge veya seçimi değişti: yeniden çalıştırın
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Görüntü İzleme tamamlandı, ancak bu sırada görüntü veya ayarları değişti: yeniden izleyin
 @msg	Image Trace finished, but its document was reverted: trace it again	Görüntü İzleme tamamlandı, ancak belgesi geri döndürüldü: yeniden izleyin

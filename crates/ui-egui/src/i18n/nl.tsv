@@ -6445,6 +6445,7 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Afbeelding traceren is mislukt: interne fout: de thread ervan is gestopt (meld deze bug alsjeblieft)
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Opnieuw typen is mislukt: interne fout: de thread ervan is gestopt (meld deze bug alsjeblieft)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Opnieuw typen is voltooid, maar het document of de selectie ervan is intussen gewijzigd: voer het opnieuw uit
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
 @msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw

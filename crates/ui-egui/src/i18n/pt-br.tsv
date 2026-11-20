@@ -8992,6 +8992,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	O Rastreamento de Imagem falhou: erro interno: a thread dele parou (informe este erro)
 @msg	Image Trace failed: {e}	O Rastreamento de Imagem falhou: {e}
 @msg	Image Trace finished, but its document was closed	O Rastreamento de Imagem terminou, mas o documento dele foi fechado
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	O Redigitar falhou: erro interno: a thread dele parou (informe este erro)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	O Redigitar terminou, mas o documento ou a seleção dele mudou nesse meio-tempo: execute-o novamente
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	O Rastreamento de Imagem terminou, mas a imagem ou as configurações dela mudaram nesse meio-tempo: rastreie-a novamente
 @msg	Image Trace finished, but its document was reverted: trace it again	O Rastreamento de Imagem terminou, mas o documento dele foi revertido: rastreie-a novamente

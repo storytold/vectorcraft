@@ -1152,18 +1152,25 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
         // Nothing to match (every shape stays an outline): no font is read.
         let cands = if wanted.is_empty() { vec![] } else { candidate_faces(db, d, &fonts) };
-        let compared: Vec<u32> = cands.iter().map(|f| f.id()).collect();
+        let mut compared: Vec<u32> = cands.iter().map(|f| f.id()).collect();
         let index = if wanted.is_empty() { RetypeIndex::default() } else { RetypeIndex::build(db, cands, &wanted) };
         let mut found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
-        // Shapes no face matched are compared with the installed fonts not loaded yet, or with
-        // what a search made off the UI thread found for them.
+        // Shapes no face matched are compared with the other loaded faces, then with the installed
+        // fonts not loaded yet; or with what a search made off the UI thread found for them.
         let installed = match handed {
             Some(handed) => {
-                add_installed(db, &pieces, &mut found, &handed, &compared);
+                add_faces(db, &pieces, &mut found, &handed.faces, &compared);
+                compared.extend(handed.faces.iter().map(|f| f.id()));
+                // The shapes still left are compared with the loaded faces the search did not
+                // compare: none, unless a face was loaded after it looked.
+                compared.extend(handed.scanned.iter().copied());
+                add_loaded_rest(db, &pieces, &mut found, &mut compared)?;
                 handed
             }
-            None if search_installed => from_installed(db, &pieces, &mut found)?,
-            None => installed::Installed::default(),
+            None => {
+                add_loaded_rest(db, &pieces, &mut found, &mut compared)?;
+                if search_installed { from_installed(db, &pieces, &mut found)? } else { installed::Installed::default() }
+            }
         };
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
@@ -1370,25 +1377,43 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
 /// Every shape that may become type then also gets its matches in the faces found, after the ones
 /// `found` holds.
 fn from_installed(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>]) -> Result<installed::Installed> {
-    let left: Vec<&BezPath> = pieces.iter().zip(found.iter()).filter(|(pc, ms)| !pc.keeps_outline && ms.is_empty()).map(|(pc, _)| &pc.path).collect();
-    let installed = installed::search(db, &left, false)?;
-    add_installed(db, pieces, found, &installed, &[]);
+    let installed = installed::search(db, &left_shapes(pieces, found), false)?;
+    add_faces(db, pieces, found, &installed.faces, &[]);
     Ok(installed)
 }
 
-/// Gives every shape of `pieces` that may become type its matches in the faces `installed` found,
-/// after the ones `found` holds, leaving out the faces of `compared` (the faces `found` comes
-/// from), whose matches it holds already.
-fn add_installed(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>], installed: &installed::Installed, compared: &[u32]) {
-    let faces: Vec<_> = installed.faces.iter().filter(|f| !compared.contains(&f.id())).cloned().collect();
+/// Gives the shapes of `pieces` that `found` holds no glyph for their matches in the loaded faces
+/// not among `compared` ([`installed::loaded_rest`]), as [`add_faces`] does, and adds those faces
+/// to `compared`.
+fn add_loaded_rest(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>], compared: &mut Vec<u32>) -> Result<()> {
+    let rest = installed::loaded_rest(db, &left_shapes(pieces, found), compared)?;
+    add_faces(db, pieces, found, &rest, compared);
+    compared.extend(rest.iter().map(|f| f.id()));
+    Ok(())
+}
+
+/// The shapes of `pieces` that may become type and that `found` holds no glyph for.
+fn left_shapes<'a>(pieces: &'a [Piece], found: &[Vec<GlyphMatch>]) -> Vec<&'a BezPath> {
+    pieces.iter().zip(found.iter()).filter(|(pc, ms)| !pc.keeps_outline && ms.is_empty()).map(|(pc, _)| &pc.path).collect()
+}
+
+/// Gives every shape of `pieces` that may become type its matches in `faces`, after the ones
+/// `found` holds, leaving out the faces of `compared` (the faces `found` comes from), whose
+/// matches it holds already. The faces are compared [`MAX_FACES`] at a time, so none is left out.
+///
+/// [`MAX_FACES`]: vectorcraft_text::retype::MAX_FACES
+fn add_faces(db: &FontDb, pieces: &[Piece], found: &mut [Vec<GlyphMatch>], faces: &[Arc<vectorcraft_text::FontFace>], compared: &[u32]) {
+    let faces: Vec<_> = faces.iter().filter(|f| !compared.contains(&f.id())).cloned().collect();
     if faces.is_empty() {
         return;
     }
     let keys: std::collections::BTreeSet<u64> =
         pieces.iter().filter(|pc| !pc.keeps_outline).filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
-    let index = RetypeIndex::build(db, faces, &keys);
-    for (pc, ms) in pieces.iter().zip(found.iter_mut()).filter(|(pc, _)| !pc.keeps_outline) {
-        ms.extend(index.matches(&pc.path));
+    for group in faces.chunks(vectorcraft_text::retype::MAX_FACES) {
+        let index = RetypeIndex::build(db, group.iter().cloned(), &keys);
+        for (pc, ms) in pieces.iter().zip(found.iter_mut()).filter(|(pc, _)| !pc.keeps_outline) {
+            ms.extend(index.matches(&pc.path));
+        }
     }
 }
 

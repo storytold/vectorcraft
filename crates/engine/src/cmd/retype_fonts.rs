@@ -115,7 +115,10 @@ pub(super) fn rank_fonts(
     } else if !search_installed {
         Installed::default()
     } else if room == 0 {
-        Installed { skipped: db.unloaded_installed_faces().len(), ..Default::default() }
+        // The list is full: the installed faces a search would compare count as skipped, none
+        // when no shape would start one.
+        let skipped = if super::installed::starts_search(shapes) { db.unloaded_installed_faces().len() } else { 0 };
+        Installed { skipped, ..Default::default() }
     } else {
         super::installed::search_listed(db, shapes, room, &|f| by_name(db, f))?
     };

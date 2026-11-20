@@ -8810,6 +8810,7 @@ breakText	Glyphs	Glifák
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	A képvektorizálás nem sikerült: belső hiba: a szála leállt (kérjük, jelentsd ezt a hibát)
 @msg	Image Trace failed: {e}	A képvektorizálás nem sikerült: {e}
 @msg	Image Trace finished, but its document was closed	A képvektorizálás elkészült, de a dokumentumát bezárták
+@msg	Retype failed: internal error: its thread stopped (please report this bug)	Az újragépelés nem sikerült: belső hiba: a szála leállt (kérjük, jelentsd ezt a hibát)
 @msg	Retype finished, but the document or its selection changed meanwhile: run it again	Az újragépelés elkészült, de a dokumentum vagy a kijelölése közben megváltozott: futtasd újra
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	A képvektorizálás elkészült, de a kép vagy a beállításai közben megváltoztak: vektorizáld újra
 @msg	Image Trace finished, but its document was reverted: trace it again	A képvektorizálás elkészült, de a dokumentumát visszaállították a mentett változatra: vektorizáld újra

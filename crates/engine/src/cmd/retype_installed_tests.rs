@@ -192,6 +192,9 @@ fn faces_a_list_turns_down_are_loaded_and_take_no_place() {
     assert_eq!(families, ["Retype Copy S", "Retype Copy T"]);
     assert_eq!((found.read, found.skipped), (3, 0));
     assert!(!unloaded(&db, "Retype Copy R"), "the face turned down was loaded");
+    // Only the faces listed are compared ahead of the other loaded faces later.
+    let ahead: Vec<String> = super::found(&db).iter().map(|f| f.family.clone()).collect();
+    assert!(ahead.iter().any(|f| f == "Retype Copy S") && !ahead.iter().any(|f| f == "Retype Copy R"), "{ahead:?}");
 }
 
 #[test]
@@ -356,4 +359,91 @@ fn installed_must_be_a_bool_or_null() {
     // false: no installed font is read, and the result says so.
     let r = s.execute("type.retypeFonts", &json!({"installed": false})).unwrap();
     assert_eq!(r["installed"], json!({"read": 0, "skipped": 0}), "{r}");
+}
+
+/// A database with no installed fonts and `n` copies of the bundled Source Sans 3 Regular loaded,
+/// named `{tag} 0` to `{tag} n-1`, after `inter` copies of Inter named `{tag} Inter 0` and on.
+fn loaded_copies(tag: &str, inter: usize, n: usize) -> FontDb {
+    let db = FontDb::with_font_dirs(vec![]);
+    let copies = (0..inter).map(|i| (true, format!("{tag} Inter {i}"))).chain((0..n).map(|i| (false, format!("{tag} {i}"))));
+    for (inter, family) in copies {
+        let postscript = format!("{}-Regular", family.replace(' ', ""));
+        db.add_font(vectorcraft_text::test_fonts::named_copy(inter, (&family, "Regular", "Version 1.000", &postscript)).unwrap());
+    }
+    db
+}
+
+#[test]
+fn loaded_faces_past_the_ones_compared_first_are_compared_too() {
+    let n = vectorcraft_text::retype::MAX_FACES + 4;
+    let db = loaded_copies("Retype Rest", 0, n);
+    let shapes = glyphs(&db, "Rx");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    // Every loaded face that matches, more than one index takes.
+    let rest = super::loaded_rest(&db, &refs, &[]).unwrap();
+    for i in 0..n {
+        assert!(rest.iter().any(|f| f.family == format!("Retype Rest {i}")), "copy {i} of {}", rest.len());
+    }
+    // The faces compared already are left out.
+    let last = format!("Retype Rest {}", n - 1);
+    let compared: Vec<u32> = db.loaded_faces().iter().filter(|f| f.family != last).map(|f| f.id()).collect();
+    let rest = super::loaded_rest(&db, &refs, &compared).unwrap();
+    assert_eq!(rest.iter().map(|f| f.family.as_str()).collect::<Vec<_>>(), [last.as_str()]);
+    // A plain shape alone compares none.
+    let bar = [kurbo::Rect::new(0.0, 0.0, 80.0, 10.0).to_path(0.1)];
+    assert!(super::loaded_rest(&db, &[&bar[0]], &[]).unwrap().is_empty());
+}
+
+#[test]
+fn a_run_away_from_the_command_hands_in_the_loaded_faces_past_the_ones_compared_first() {
+    let db = loaded_copies("Retype Run Rest", vectorcraft_text::retype::MAX_FACES, 1);
+    let shapes = glyphs(&db, "Rx");
+    // The Inter copies are compared first: none matches, and the copy loaded after them does.
+    let faces: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family.starts_with("Retype Run Rest Inter")).collect();
+    assert_eq!(faces.len(), vectorcraft_text::retype::MAX_FACES);
+    let search = super::RetypeSearch { command: "type.retype", doc: 1, shapes: shapes.clone(), faces };
+    let found = search.run_in(&db).unwrap();
+    assert!(found.installed.faces.iter().any(|f| f.family == "Retype Run Rest 0"), "the loaded copy is handed in");
+    assert_eq!((found.installed.read, found.installed.skipped), (0, 0), "no installed file is read for it");
+    // Every loaded face was compared: the command does not compare them again.
+    assert!(db.loaded_faces().iter().all(|f| found.installed.scanned.contains(&f.id())));
+    // A face compared first that matches is handed in too, as loading others may move it past
+    // the faces the command compares first.
+    let copy: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Run Rest 0").collect();
+    let found = super::RetypeSearch { command: "type.retype", doc: 1, shapes, faces: copy }.run_in(&db).unwrap();
+    assert_eq!(found.installed.faces.first().map(|f| f.family.as_str()), Some("Retype Run Rest 0"));
+}
+
+#[test]
+fn a_full_list_counts_skipped_installed_faces_only_when_a_shape_would_start_a_search() {
+    let (db, _) = installed("full-list", &["Retype Copy Full"]);
+    for i in 0..super::super::fonts::MAX_COUNT {
+        let family = format!("Retype Full {i}");
+        let postscript = format!("RetypeFull{i}-Regular");
+        db.add_font(vectorcraft_text::test_fonts::named_copy(false, (&family, "Regular", "Version 1.000", &postscript)).unwrap());
+    }
+    let faces: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family.starts_with("Retype Full ")).collect();
+    // A hyphen is plain: it fills the list and would start no search, so nothing is skipped.
+    let hyphen = glyphs(&db, "-");
+    let refs: Vec<&BezPath> = hyphen.iter().collect();
+    let (ranked, found) = super::super::fonts::rank_fonts(&db, faces.clone(), &refs, true, None).unwrap();
+    assert_eq!(ranked.len(), super::super::fonts::MAX_COUNT);
+    assert_eq!((found.read, found.skipped), (0, 0));
+    // A shape that is not plain would: the installed face counts as skipped.
+    let shapes = glyphs(&db, "-q");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    let (_, found) = super::super::fonts::rank_fonts(&db, faces, &refs, true, None).unwrap();
+    assert_eq!((found.read, found.skipped), (0, 1));
+    assert!(unloaded(&db, "Retype Copy Full"));
+}
+
+#[test]
+fn what_is_handed_in_and_not_taken_can_be_dropped() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    let doc = s.doc().unwrap().uid;
+    super::RetypeFound { doc, installed: super::Installed::default() }.hand_in(&mut s);
+    assert!(s.retype_hand_off.is_some());
+    super::RetypeFound::drop_handed(&mut s);
+    assert!(s.retype_hand_off.is_none());
 }
