@@ -1146,9 +1146,10 @@ fn a_lone_period_in_a_compound_selected_alone_stays_an_outline() {
 #[test]
 fn lines_from_one_compound_path_keep_their_order() {
     let mut s = session();
-    // Two lines of outlines made into one compound path.
+    // Two lines of outlines made into one compound path, farther apart than the lines of one
+    // paragraph, so each stays an object of its own.
     let top = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
-    let low = outlined(&mut s, json!({"x": 40, "y": 220, "text": "Ham", "size": 40}));
+    let low = outlined(&mut s, json!({"x": 40, "y": 300, "text": "Ham", "size": 40}));
     let mut glyphs = children_of(&s, top);
     glyphs.extend(children_of(&s, low));
     s.execute("select.set", &json!({"ids": glyphs})).unwrap();
@@ -1164,6 +1165,23 @@ fn lines_from_one_compound_path_keep_their_order() {
     let first = texts.iter().position(|t| t == "Tim").unwrap();
     let second = texts.iter().position(|t| t == "Ham").unwrap();
     assert!(at[first] < at[second], "{texts:?} at {at:?}");
+}
+
+#[test]
+fn stacked_lines_from_one_compound_path_become_one_object() {
+    let mut s = session();
+    // Two lines of one paragraph, outlined and made into one compound path: they join as the
+    // lines of separate outlines do.
+    let text = "Tim\nHam";
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 40}));
+    let glyphs = children_of(&s, g);
+    s.execute("select.set", &json!({"ids": glyphs})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["unmatched"], json!([]), "{r}");
+    assert!(s.doc().unwrap().doc.node(NodeId(c)).is_none(), "the compound becomes the type");
 }
 
 #[test]

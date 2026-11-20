@@ -12526,7 +12526,7 @@ tracking their own gaps give. These rules are VectorCraft's own. Each entry of t
 
 ## Retype several lines
 
-`type.retype` joins lines that follow each other in paint order, with the same group, paint, font, size, turn and
+`type.retype` joins lines that follow each other in paint order (lines split from one compound path do), with the same group, paint, font, size, turn and
 tracking (an untracked line of one or two glyphs takes the tracking of the others), into one type object when each
 line's baseline is the same distance below the one before (between 0.25 and 3 times the size) and the lines line up at their starts, ends or centers. The object is area type with Convert To Area
 Type's frame, its lines separated by line breaks, with left, right or center alignment, checked in that order. Its

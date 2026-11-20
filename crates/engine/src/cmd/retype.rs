@@ -999,7 +999,7 @@ fn share_tracking(lines: &mut [Line], system_layout: bool) {
 
 /// `lines`, in paint order, as the objects Retype makes: runs of lines that stack as the lines of
 /// one paragraph do become one object ([`Block`]). `follows(a, b)`: shape `b` comes right after
-/// shape `a`, with nothing between them in paint order. `budget`: see [`Block::made`].
+/// shape `a`, or is `a`, with nothing between them in paint order. `budget`: see [`Block::made`].
 fn blocks(lines: Vec<Line>, follows: impl Fn(NodeId, NodeId) -> bool, system_layout: bool, budget: &mut usize) -> Vec<Made> {
     let mut out = vec![];
     let mut block: Option<Block> = None;
@@ -1489,8 +1489,9 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let mut seen = std::collections::HashSet::new();
         unmatched.retain(|id| !kept.contains(id) && seen.insert(*id));
         let at: std::collections::HashMap<NodeId, usize> = pieces.iter().enumerate().map(|(i, pc)| (pc.id, i)).collect();
+        // Lines split from one compound path share its shape, with nothing between them.
         let follows = |a: NodeId, b: NodeId| match (at.get(&a), at.get(&b)) {
-            (Some(i), Some(j)) => *j == i + 1 && pieces.get(*j).is_some_and(|pc| !pc.after_barrier),
+            (Some(i), Some(j)) => *j == *i || (*j == i + 1 && pieces.get(*j).is_some_and(|pc| !pc.after_barrier)),
             _ => false,
         };
         // Joining lines takes at most four tries' work per glyph (see [`Block::made`]), with room
