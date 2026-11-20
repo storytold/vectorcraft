@@ -356,6 +356,7 @@ pub struct FillAttrs {
 
 impl FillAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true };
+    pub const NONE: Self = Self { color: false, transparency: false, overprint: false };
 }
 
 impl Default for FillAttrs {
@@ -383,6 +384,8 @@ pub struct StrokeAttrs {
 
 impl StrokeAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true, weight: true, cap: true, join: true, miter: true, dash: true };
+    pub const NONE: Self =
+        Self { color: false, transparency: false, overprint: false, weight: false, cap: false, join: false, miter: false, dash: false };
 }
 
 impl Default for StrokeAttrs {

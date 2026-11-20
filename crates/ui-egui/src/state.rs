@@ -349,6 +349,19 @@ impl Default for ViewFlags {
     }
 }
 
+impl ViewFlags {
+    /// Whether the ruler guides and guide paths draw: View › Show Guides, unless Trim View hides
+    /// them while it is on (#8363). `guides` keeps the choice, so they come back as they were.
+    pub fn guides_shown(&self) -> bool {
+        self.guides && !self.trim_view
+    }
+
+    /// Whether the grid draws: View › Show Grid, unless Trim View hides it while it is on (#8363).
+    pub fn grid_shown(&self) -> bool {
+        self.grid && !self.trim_view
+    }
+}
+
 /// An open modal dialog. `fields` are string-valued so agents can set them uniformly.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Dialog {
@@ -506,6 +519,14 @@ pub struct UiState {
     /// Actions has off (`window.taskBar.actions`); none: the bar shows every action it offers.
     #[serde(deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
     pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
+    /// Window › Quick Pen Toolbar: the Quick Pen tool shows its toolbar on the canvas. Hide Toolbar
+    /// turns it off until the tool is selected again. Not saved.
+    #[serde(skip, default = "yes")]
+    pub quick_pen_bar: bool,
+    /// Where the Quick Pen toolbar was dragged or pinned. Not saved: the toolbar starts beside the
+    /// drawing at every launch.
+    #[serde(skip)]
+    pub quick_pen_bar_place: QuickPenBarPlace,
     /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
     /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
     #[serde(default)]
@@ -1138,6 +1159,25 @@ pub struct ToolbarEdits {
     pub advanced: Option<Vec<ToolbarCategory>>,
 }
 
+/// Where the Quick Pen toolbar sits once its handle has moved it (`window.quickPenToolbar.pin`,
+/// `window.quickPenToolbar.reset`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct QuickPenBarPlace {
+    /// More Options › Pin Toolbar Position: the toolbar stays where it is on the canvas instead of
+    /// following the drawing.
+    pub pinned: bool,
+    /// Where a pinned toolbar's top-left corner sits from the canvas's top-left (none when it was
+    /// pinned before it ever showed, until it is drawn). Unpinning leaves it for the next frame to
+    /// turn into `offset`.
+    pub pin_at: Option<egui::Vec2>,
+    /// Where the toolbar was last drawn, from the canvas's top-left: where pinning holds it.
+    pub shown_at: Option<egui::Vec2>,
+    /// How far an unpinned toolbar was dragged from its place, the document (`DocState::uid`) it
+    /// was moved in, and whether it was beside a path being drawn then (false: resting with no path
+    /// being drawn). It applies only in that document and that kind of place.
+    pub offset: Option<(u64, bool, egui::Vec2)>,
+}
+
 /// Where the Contextual Task Bar sits once its handle has moved it (`window.taskBar.pin`,
 /// `window.taskBar.reset`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -1285,6 +1325,8 @@ impl Default for UiState {
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
             task_bar_hidden_actions: Default::default(),
+            quick_pen_bar: true,
+            quick_pen_bar_place: QuickPenBarPlace::default(),
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,

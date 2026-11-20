@@ -67,6 +67,7 @@ mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
+mod fill_area;
 mod flatpresets;
 mod flatpreview;
 mod flatten;

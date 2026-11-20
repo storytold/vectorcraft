@@ -1127,7 +1127,7 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
         got,
         json!({
             "view": "box", "channel": "red", "opacity": false, "hexField": false, "sliders": "oklch", "gamut": false,
-            "harmony": false, "harmonyRule": "complementary", "vision": false
+            "harmony": false, "harmonyRule": "complementary", "vision": false, "documentColors": false
         })
     );
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();
@@ -1142,11 +1142,11 @@ fn ui_color_wheel_keeps_a_key_given_as_null() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let set = json!({
         "view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch",
-        "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true
+        "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
     });
     let all = app.run("ui.colorWheel", set.clone()).unwrap();
     assert_eq!(all, set);
-    for key in ["view", "channel", "opacity", "hexField", "sliders", "gamut", "harmony", "harmonyRule", "vision"] {
+    for key in ["view", "channel", "opacity", "hexField", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"] {
         assert_eq!(app.run("ui.colorWheel", json!({ key: null })).unwrap(), all, "{key}: null");
     }
     let got = app.run("ui.colorWheel", json!({"view": null, "channel": "blue", "opacity": null, "hexField": false})).unwrap();
@@ -1154,7 +1154,7 @@ fn ui_color_wheel_keeps_a_key_given_as_null() {
         got,
         json!({
             "view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch",
-            "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true
+            "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
         })
     );
 }

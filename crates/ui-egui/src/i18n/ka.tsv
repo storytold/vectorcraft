@@ -2949,6 +2949,10 @@
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
+	Show Document Colors	დოკუმენტის ფერების ჩვენება
+	Document Colors	დოკუმენტის ფერები
+	Selection Colors	მონიშნულის ფერები
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ
 	Show Harmony	ჰარმონიის ჩვენება
 	Harmony Rule	ჰარმონიის წესი
 	Harmony color	ჰარმონიის ფერი
@@ -4081,6 +4085,10 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Tracing Presets…	ვექტორიზაციის პრესეტები…
+	Import Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების იმპორტირება
+	Export Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების ექსპორტირება
+	Replace the saved presets that have these names?	ჩავანაცვლოთ ამ სახელების მქონე შენახული პრესეტები?
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Pad	გაგრძელება
@@ -5556,6 +5564,8 @@ theme	Appearance	იერსახე
 	Symbolism Tool	სიმბოლოების ხელსაწყო
 	Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტები
 	Live Paint Bucket	ცოცხალი შეღებვის სათლი
+	Fill Area	არის შევსება
+	Fill Area Tool	არის შევსების ხელსაწყო
 	Live Paint Bucket (Stroke)	ცოცხალი შეღებვის სათლი (კონტური)
 	Live Paint Info	ცოცხალი შეღებვის ინფორმაცია
 	Shape Builder	ფიგურების კონსტრუქტორი
@@ -6060,6 +6070,13 @@ theme	Appearance	იერსახე
 	Pen Tool	კალმის ხელსაწყო
 	Quick Pen Tool	სწრაფი კალმის ხელსაწყო
 	Quick Pen	სწრაფი კალამი
+	Quick Pen Toolbar	სწრაფი კალმის ხელსაწყოთა ზოლი
+	Continuous Arc	უწყვეტი რკალი
+	Sharp Corner Arc	მახვილკუთხიანი რკალი
+	Flip Arc	რკალის არეკვლა
+	Hide Toolbar	ხელსაწყოთა ზოლის დამალვა
+	Pin Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამაგრება
+	Reset Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამოყრა
 	Picas	პიკები
 	Portuguese	პორტუგალიური
 	Preserve Appearance and Overprints	იერსახისა და ზედდაბეჭდვების შენარჩუნება
@@ -6675,6 +6692,10 @@ font-technology	Variable	ცვლადი
 	Cusp	წვეტი
 	Straight segment	სწორი სეგმენტი
 	Circle too large	წრე ზედმეტად დიდია
+	Show Radii	რადიუსების ჩვენება
+	Show Diameter	დიამეტრის ჩვენება
+	Anchors at Standard Positions	საყრდენი წერტილები სტანდარტულ პოზიციებზე
+	Third Point by Dragging	მესამე წერტილი გადათრევით
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6950,6 +6971,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Fill Area: no enclosed area under the pointer	არის შევსება: მაჩვენებლის ქვეშ დახურული არე არ არის
 @msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
@@ -8215,8 +8237,10 @@ arrowhead	Feather	ბუმბული
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“, „ბრუნვა“ და „გაბერვა“
 @msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	Inflate maps graphics onto its front and back, not onto a side	გაბერვა გრაფიკას წინა და უკანა მხარეზე ათავსებს და არა გვერდით ზედაპირზე
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	ობიექტი {_1}: გაბერვის უკანა მხარე გრაფიკას იღებს მხოლოდ ჩართული „ორივე მხარე“ და „თავსახური“ პარამეტრებით
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
@@ -11074,6 +11098,20 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Nature Icons	ბუნების ხატულები
+	Flower	ყვავილი
+	Tree	ხე
+	Mountain	მთა
+	Ornamental	ორნამენტული
+	Scrollwork	ხვეული
+	Filigree Arrow	ფილიგრანული ისარი
+	Petal Sweep	ფურცლების რკალი
+	Twin Curl	ორმაგი ხვეული
+	Vector Packs	ვექტორული პაკეტები
+	Compass Rose	კომპასის ვარდი
+	Botanical Sprig	ბოტანიკური ტოტი
+	Facet Diamond	წახნაგოვანი ბრილიანტი
+	Tide Crest	ტალღის ქედი
 	Leaf Vine	ფოთლების ვაზი
 	Blossom Chain	ყვავილების ჯაჭვი
 	Pennant Garland	ალმების გირლანდა

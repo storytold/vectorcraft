@@ -1745,3 +1745,43 @@ fn selection_tools_toggle_propagates_a_failed_valid_choice() {
     }
     assert_eq!(failures, vec![Err(failure.to_string()), Err(failure.to_string())], "both failed valid choices must reach the command caller");
 }
+
+/// #8363: while Trim View is on, View › Guides › Show/Hide Guides and View › Show/Hide Grid are
+/// greyed out (in the menu bar, on their keys and in the canvas context menu, where they stay
+/// listed), refuse to run and leave the choices they keep alone; turning it off brings them back.
+#[test]
+fn trim_view_greys_out_show_guides_and_show_grid() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.grid = true;
+    let listed = |app: &VectorcraftApp, id: &str| {
+        fn find(items: &[Item], id: &str) -> bool {
+            items.iter().any(|it| match it {
+                Item::Cmd(_, c, _) => *c == id,
+                Item::Sub(_, children) => find(children, id),
+                _ => false,
+            })
+        }
+        find(&context_items(app), id)
+    };
+    for id in ["view.guides", "view.grid"] {
+        assert!(enabled(&app, id), "{id} runs with Trim View off");
+        assert!(listed(&app, id), "{id} is in the canvas context menu");
+    }
+
+    app.run("view.trimView", json!({})).unwrap();
+    for id in ["view.guides", "view.grid"] {
+        assert!(!enabled(&app, id), "{id} is greyed out while Trim View is on");
+        assert!(listed(&app, id), "{id} stays in the canvas context menu, greyed out");
+        assert!(app.run(id, json!({})).is_err(), "{id} does not run while Trim View is on");
+    }
+    assert!(app.ui.view.guides && app.ui.view.grid, "the choices stay as they were");
+    assert_eq!((checked(&app, "view.grid", &Value::Null), dynamic_label(&app, "view.guides", "Show Guides").as_str()), (Some(true), "Hide Guides"));
+
+    app.run("view.trimView", json!({})).unwrap();
+    for id in ["view.guides", "view.grid"] {
+        assert!(enabled(&app, id), "{id} runs again with Trim View off");
+    }
+    app.run("view.guides", json!({})).unwrap();
+    assert!(!app.ui.view.guides);
+}
