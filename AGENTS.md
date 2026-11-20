@@ -80,7 +80,6 @@ For the crates you changed: `cargo fmt`, `cargo clippy -p <crate> --all-targets`
 - Attribution file: [`ASSETS.md`](ASSETS.md) (a row for every asset); licence texts next to the assets, summarised in `NOTICE`. Code-drawn defaults are preferred for swatches, brushes, cursors.
 - Fonts: [storytold/craft-fonts](https://github.com/storytold/craft-fonts) through the optional `CRAFT_FONTS_DIR` build option, read by `crates/text/build.rs`; everything builds with it empty.
 - Crash handling: `vectorcraft_engine::guard` wraps every entry point. Hostile-input tests: `crates/engine/tests/{import_fuzz,command_sweep}.rs`, `crates/format/tests/prop_format.rs`, `crates/mcp/tests/protocol_props.rs`.
-- Integration tests: one binary per crate, `tests/it/main.rs`.
 - Large corpora: [storytold/photocraft-corpus](https://github.com/storytold/photocraft-corpus), fetched pinned and sha256-verified.
 - Run: `cargo run --release -p vectorcraft -- --control 7979 [file]` (JSON lines on `127.0.0.1:7979`). `vectorcraft-cli perf` and `bench FILE` check performance budgets.
 - Contributor credits: `docs/contributors.md`.
