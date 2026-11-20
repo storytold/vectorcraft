@@ -479,6 +479,10 @@ impl VectorcraftApp {
         if crate::touch::is_drawing_tool(now) {
             self.ui.touch_drawing_tool = Some(now.to_string());
         }
+        // Selecting the Quick Pen tool shows its toolbar, even after Hide Toolbar.
+        if now == vectorcraft_tools::quickpen::ID {
+            self.ui.quick_pen_bar = true;
+        }
         Ok(())
     }
 
@@ -519,6 +523,7 @@ impl VectorcraftApp {
         }
         self.ui.flyout = None;
         switched?;
+        crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {

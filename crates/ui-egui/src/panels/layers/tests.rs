@@ -7,7 +7,8 @@ use super::*;
 fn filled_targets(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
     out.textures_delta.clear();
-    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 3.2 && cs.fill != Color32::TRANSPARENT)).count()
+    let dot = |r: f32| r == rows::TARGET_DOT || r == rows::TARGET_DOT_IN_RING;
+    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if dot(cs.radius) && cs.fill != Color32::TRANSPARENT)).count()
 }
 
 /// A generated `<Kind>` name is translated where painted; an unnamed text object's text never
@@ -399,13 +400,74 @@ fn clicking_a_target_circle_targets_the_layer() {
     }
     let st = app.session.active().unwrap();
     assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(a), vec![a]));
-    // Shift-clicking another object's circle adds it to the selection (#901), and again takes
-    // it out; nothing is targeted meanwhile.
-    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    // Ctrl/Cmd-clicking another object's circle adds it to the selection, as Ctrl/Cmd-clicking a
+    // name adds the row (#901, #8639), and again takes it out; nothing is targeted meanwhile.
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::COMMAND);
     let st = app.session.active().unwrap();
     assert_eq!((st.selection.target, st.selection.objects.clone()), (None, vec![a, b]));
-    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::COMMAND);
     assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
+}
+
+/// Shift-clicking a target circle selects the art of every row from the last circle clicked to
+/// it, as Shift-clicking a name highlights a range of rows (#8639); Shift+Ctrl/Cmd adds a range to
+/// the selection. Nothing is targeted, and hidden art in the range is left out.
+#[test]
+fn shift_clicking_a_target_circle_selects_a_range_of_rows() {
+    let (mut app, _, [a, b]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let c3 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 120, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let d = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 60, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    let ctx = egui::Context::default();
+    // Rows top down: the layer, d, c3, b, a.
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(c.len(), 5);
+    let selected = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let mut ids = st.selection.objects.clone();
+        ids.sort();
+        (st.selection.target, ids)
+    };
+    // From c3 down to a: b in between is selected too.
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    assert_eq!(selected(&app), (Some(c3), vec![c3]));
+    click_with(&mut app, &ctx, c[4], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![a, b, c3]));
+    // A Shift range starts at the last circle clicked, not at the end of the last range.
+    click_with(&mut app, &ctx, c[3], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![b, c3]));
+    // Shift+Ctrl/Cmd adds a range: from c3 up to d.
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT | egui::Modifiers::COMMAND);
+    assert_eq!(selected(&app), (None, vec![b, c3, d]));
+    // Hidden art in a range stays unselected.
+    run(&mut app, "select.set", json!({"ids": [b.0]}));
+    run(&mut app, "object.hide", json!({}));
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    click_with(&mut app, &ctx, c[4], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![a, c3]));
+}
+
+/// The Shift-click anchor of the target circles belongs to the document it was clicked in: node
+/// ids are per document, so in another document a Shift-click with no circle clicked there yet
+/// targets only its own row, never a range from a row that has the old anchor's id.
+#[test]
+fn the_target_circle_anchor_does_not_carry_over_to_another_document() {
+    let (mut app, _, [a, _]) = two_rects();
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    // Rows top down: the layer, b, a. The anchor is a.
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let b2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    assert_eq!(a2, a, "the new document reuses the old anchor's id, so a stale anchor would find a row");
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(b2), vec![b2]));
 }
 
 /// The rows whose target circle shows as targeted (its inner ring drawn), as indexes into the
@@ -417,10 +479,65 @@ fn targeted_rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<usize> {
     let rings: Vec<egui::Pos2> = out
         .shapes
         .iter()
-        .filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 2.8))
+        .filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == rows::TARGET_RING))
         .map(|c| c.shape.visual_bounding_rect().center())
         .collect();
     circles.iter().enumerate().filter(|(_, c)| rings.iter().any(|r| r.distance(**c) < 0.5)).map(|(i, _)| i).collect()
+}
+
+/// The marks one headless frame paints inside the outer ring of each target circle, top row
+/// first: per circle, its (radius, fill, stroke width) circles, sorted by radius.
+fn target_marks_painted(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Vec<(f32, bool, f32)>> {
+    let (circles, _) = frame(app, ctx, vec![], false);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    circles
+        .iter()
+        .map(|c| {
+            let mut marks: Vec<(f32, bool, f32)> = out
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Circle(cs) if cs.radius < 5.0 && cs.center.distance(*c) < 0.01 => {
+                        Some((cs.radius, cs.fill != Color32::TRANSPARENT, cs.stroke.width))
+                    }
+                    _ => None,
+                })
+                .collect();
+            marks.sort_by(|a, b| a.0.total_cmp(&b.0));
+            marks
+        })
+        .collect()
+}
+
+/// A targeted item with an appearance of its own keeps its inner ring in view: the appearance
+/// dot sits inside the ring with a gap, so the four looks (neither, targeted, with an appearance,
+/// both) differ, as the target icons the Appearance attributes help describes do (#8711).
+#[test]
+fn a_targeted_circle_with_an_appearance_shows_both_ring_and_dot() {
+    let (mut app, _layer, [a, b]) = two_rects();
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: the layer, b, a.
+    let marks = target_marks_painted(&mut app, &ctx);
+    assert_eq!(marks.len(), 3);
+    let (neither, styled) = (marks[1].clone(), marks[2].clone());
+    app.session.execute("layer.target", &json!({"id": b.0})).unwrap();
+    let targeted = target_marks_painted(&mut app, &ctx)[1].clone();
+    app.session.execute("layer.target", &json!({"id": a.0})).unwrap();
+    let both = target_marks_painted(&mut app, &ctx)[2].clone();
+    // The inner ring is painted, and nothing filled reaches its inner edge.
+    let ring = both.iter().find(|m| m.0 == rows::TARGET_RING && !m.1).expect("the inner ring");
+    let inner_edge = ring.0 - ring.2 / 2.0;
+    let dot = both.iter().find(|m| m.1).expect("the appearance dot");
+    assert!(dot.0 + dot.2 / 2.0 < inner_edge - 0.5, "the dot {dot:?} covers the ring {ring:?}");
+    let looks = [&neither, &targeted, &styled, &both];
+    for (i, x) in looks.iter().enumerate() {
+        for y in &looks[i + 1..] {
+            assert_ne!(x, y, "two states look the same: {looks:?}");
+        }
+    }
+    assert_eq!(neither, vec![]);
 }
 
 /// A layer added to the selection from its target circle shows as targeted, as an object added

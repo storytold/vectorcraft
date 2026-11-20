@@ -45,7 +45,7 @@ use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, 
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag, slide_along};
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
@@ -320,10 +320,24 @@ impl MoveSnap {
         Self { bounds, targets: None, points: None, copy_targets: None, copy_points: None, rulers: None, by_edge: false }
     }
 
+    /// The ruler guides stopped showing since the move began (View › Hide Guides, or Trim View,
+    /// #8363): the move no longer snaps to them, for the rest of it, while its other targets stay.
+    /// They were gathered when it began, and nothing pulls toward a guide the canvas does not draw.
+    fn forget_hidden_rulers(&mut self, cx: &ToolContext) {
+        if cx.guides {
+            return;
+        }
+        self.rulers = None;
+        for t in [&mut self.points, &mut self.copy_points].into_iter().flatten() {
+            t.forget_rulers();
+        }
+    }
+
     /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
     /// guides. With Smart Guides › Snap to Last Location, a move within Snapping Tolerance of where
     /// it began goes back there before anything else snaps ([`Targets::snap_back`]).
-    pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
+    pub(crate) fn snap(&mut self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
+        self.forget_hidden_rulers(cx);
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
         if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
             return (Vec2::ZERO, ov);
@@ -402,22 +416,14 @@ impl MoveSnap {
     /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
     /// length does not snap, and Snap to Last Location goes back to where the move began first, as
     /// in [`Self::snap`].
-    pub(crate) fn snap_along(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
+    pub(crate) fn snap_along(&mut self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
+        self.forget_hidden_rulers(cx);
         let len = d.hypot();
         if !len.is_finite() || len <= 1e-9 {
             return (d, vec![]);
         }
         let u = d / len;
-        // The way along the line that takes away the offset `pull` on one axis: on the axis the
-        // line runs along, the shorter way of the two.
-        let along = |pull: Vec2| {
-            [(pull.x, u.x), (pull.y, u.y)]
-                .into_iter()
-                .filter(|(_, c)| c.abs() > 1e-9)
-                .map(|(p, c)| p / c)
-                .min_by(|a, b| a.abs().total_cmp(&b.abs()))
-                .unwrap_or(0.0)
-        };
+        let along = |pull: Vec2| slide_along(pull, u);
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
         if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
             return (Vec2::ZERO, ov);
@@ -2001,7 +2007,7 @@ impl SelectionTool {
         }
         let mut d = move_delta(start, p, m.shift, cx.constrain_angle);
         let unsnapped = d;
-        if let Some(snap) = &self.moving {
+        if let Some(snap) = &mut self.moving {
             (d, self.guides) = if m.shift { snap.snap_along(cx, hold, d, m.alt) } else { snap.snap(cx, hold, d, m.alt) };
         }
         // Shift has already constrained `d`: any change is a snap.

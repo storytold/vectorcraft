@@ -1856,25 +1856,41 @@ fn a_text_shows_only_while_its_center_is_inside_its_clip() {
 /// with their rectangles, and the description of the accessibility node with the keyboard focus, if
 /// it has one.
 fn description_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> (Vec<(String, egui::Rect)>, Option<String>) {
+    frame_texts(a, ctx, events, |clip, r| shows_in_clip(r, clip))
+}
+
+/// [`description_frame`], keeping only the texts whose whole rectangle is inside their clip
+/// rectangle, so that the pointer can reach the center of each one.
+fn whole_texts_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    frame_texts(a, ctx, events, |clip, r| clip.contains_rect(r)).0
+}
+
+/// [`description_frame`] with the texts that `keep(clip rectangle, text rectangle)` accepts.
+fn frame_texts(
+    a: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    keep: fn(egui::Rect, egui::Rect) -> bool,
+) -> (Vec<(String, egui::Rect)>, Option<String>) {
     let time = ctx.input(|i| i.time) + 0.25;
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
     let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(a, ui.ctx()));
     out.textures_delta.clear();
-    fn walk(s: &egui::Shape, clip: egui::Rect, v: &mut Vec<(String, egui::Rect)>) {
+    fn walk(s: &egui::Shape, clip: egui::Rect, keep: fn(egui::Rect, egui::Rect) -> bool, v: &mut Vec<(String, egui::Rect)>) {
         match s {
             egui::Shape::Text(t) => {
                 let r = egui::Rect::from_min_size(t.pos, t.galley.size());
-                if shows_in_clip(r, clip) {
+                if keep(clip, r) {
                     v.push((t.galley.text().to_string(), r));
                 }
             }
-            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, clip, v)),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, clip, keep, v)),
             _ => {}
         }
     }
     let mut texts = vec![];
-    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts));
+    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, keep, &mut texts));
     let focused = out.platform_output.accesskit_update.and_then(|u| {
         let focus = u.focus;
         u.nodes.into_iter().find(|(id, _)| *id == focus).and_then(|(_, n)| n.description().map(str::to_string))
@@ -1890,6 +1906,40 @@ fn preferences_window(ctx: &egui::Context) -> egui::Rect {
 /// Whether one of `texts` is `sentence`.
 fn painted(texts: &[(String, egui::Rect)], sentence: &str) -> bool {
     texts.iter().any(|(t, _)| t == sentence)
+}
+
+/// Tab presses from where the focus is, at most 40, until each of `keys` has had its sentence shown.
+/// → The keys in the order Tab first showed their sentences, each with the description the focused
+/// control carried in that frame.
+fn tab_order(a: &mut VectorcraftApp, ctx: &egui::Context, keys: &[&'static str]) -> Vec<(&'static str, Option<String>)> {
+    let sentences: Vec<_> =
+        keys.iter().map(|key| (*key, descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence")))).collect();
+    let mut reached: Vec<(&'static str, Option<String>)> = vec![];
+    for _ in 0..40 {
+        if reached.len() == keys.len() {
+            break;
+        }
+        let (texts, described) = description_frame(a, ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        for (key, sentence) in &sentences {
+            if painted(&texts, sentence) && !reached.iter().any(|(k, _)| k == key) {
+                reached.push((key, described.clone()));
+            }
+        }
+    }
+    reached
+}
+
+/// Tab from where the focus is reaches the controls of `keys` in that order, the first time round:
+/// the line shows each one's sentence in turn, and a screen reader gets it as the focused control's
+/// description.
+fn assert_tab_order(a: &mut VectorcraftApp, ctx: &egui::Context, keys: &[&'static str]) {
+    let reached = tab_order(a, ctx, keys);
+    let order: Vec<_> = reached.iter().map(|(key, _)| *key).collect();
+    assert_eq!(order, keys, "Tab first reaches the controls in this order");
+    for (key, described) in &reached {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        assert_eq!(described.as_deref(), Some(sentence), "the focused `{key}` control carries the sentence");
+    }
 }
 
 /// The pointer over a Units row shows that row's sentence at the bottom of the dialog, and the
@@ -1980,6 +2030,37 @@ fn description_line_rects(ctx: &egui::Context) -> DescriptionRects {
     DescriptionRects { column, line }
 }
 
+/// Scrolls the field list with the wheel until the last text `label` in `texts` lies wholly inside
+/// the list, above the spacing and the gap over the description line, and stays put there (the
+/// wheel scrolls smoothly over several frames) → the texts of the last frame.
+fn scroll_into_view(a: &mut VectorcraftApp, ctx: &egui::Context, mut texts: Vec<(String, egui::Rect)>, label: &str) -> Vec<(String, egui::Rect)> {
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let at = |texts: &[(String, egui::Rect)]| texts.iter().rev().find(|(t, _)| t == label).map(|(_, r)| *r);
+    let inside = |r: Option<egui::Rect>| {
+        let DescriptionRects { column, line } = description_line_rects(ctx);
+        let bottom = line.min.y - DESCRIPTION_GAP - ctx.global_style().spacing.item_spacing.y;
+        let list = egui::Rect::from_min_max(column.min, egui::pos2(column.max.x, bottom));
+        r.is_some_and(|r| list.contains_rect(r))
+    };
+    for _ in 0..80 {
+        let shown = inside(at(&texts));
+        let next = description_frame(a, ctx, if shown { vec![] } else { vec![wheel.clone()] }).0;
+        let still = shown && at(&next) == at(&texts);
+        texts = next;
+        if still {
+            break;
+        }
+    }
+    assert!(inside(at(&texts)), "`{label}` lies wholly inside the field list: {texts:?}");
+    texts
+}
+
 /// A row with no sentence leaves the description line empty, also after another category's row
 /// was described, and the dialog keeps its size.
 #[test]
@@ -2032,11 +2113,11 @@ fn a_row_without_a_description_leaves_the_line_empty() {
 }
 
 /// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
-/// Hyphenation, Plug-ins & Scratch Disks, User Interface, Performance, File Handling and Clipboard
-/// Handling categories show on this platform, the Smart Guides box included, has exactly one
-/// sentence, and no key has two.
+/// Hyphenation, Plug-ins & Scratch Disks, User Interface, Performance, File Handling, Clipboard
+/// Handling, Appearance of Black and Devices categories show on this platform, the Smart Guides box
+/// included, has exactly one sentence, and no key has two.
 #[test]
-fn every_setting_from_general_to_clipboard_handling_has_one_description() {
+fn every_setting_from_general_to_devices_has_one_description() {
     let mut bad = vec![];
     let categories = [
         "General",
@@ -2050,6 +2131,8 @@ fn every_setting_from_general_to_clipboard_handling_has_one_description() {
         "Performance",
         "File Handling",
         "Clipboard Handling",
+        "Appearance of Black",
+        "Devices",
     ];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
@@ -2380,6 +2463,38 @@ fn keyboard_focus_on_a_slices_row_shows_its_description() {
     assert!(described.iter().any(|d| d == numbers), "the focused control carries the sentence: {described:?}");
 }
 
+/// Whether `sentence` is one of `texts` and is drawn on the description line of the frame that
+/// painted them.
+fn painted_on_line(ctx: &egui::Context, texts: &[(String, egui::Rect)], sentence: &str) -> bool {
+    let line = description_line_rects(ctx).line;
+    texts.iter().any(|(t, r)| t == sentence && r.intersects(line))
+}
+
+/// Tab from the search field, which must have the keyboard, until each of `sentences` has shown on
+/// the description line. Other controls may come between them, but a sentence that shows before the
+/// ones ahead of it in `sentences` fails the test. → For each sentence, the description of the focused
+/// accessibility node and the focused widget when it first showed.
+fn tab_to_each(a: &mut VectorcraftApp, ctx: &egui::Context, sentences: &[&str]) -> Vec<(Option<String>, Option<egui::Id>)> {
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the keyboard before the first Tab");
+    let mut first = vec![];
+    for _ in 0..40 {
+        if first.len() == sentences.len() {
+            break;
+        }
+        let (texts, described) = description_frame(a, ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if let Some(i) = sentences.iter().position(|s| painted_on_line(ctx, &texts, s)) {
+            assert!(i <= first.len(), "Tab reaches {:?} before {:?}", sentences[i], sentences[first.len()]);
+            if i == first.len() {
+                first.push((described, ctx.memory(|m| m.focused())));
+            }
+        }
+    }
+    if let Some(missing) = sentences.get(first.len()) {
+        panic!("Tab does not reach the row of {missing:?}");
+    }
+    first
+}
+
 /// The pointer over Hyphenation's Default Language row and over its Exceptions row shows each
 /// row's sentence.
 #[test]
@@ -2397,10 +2512,10 @@ fn hovering_a_hyphenation_row_shows_its_description() {
     let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Default Language:"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    assert!(painted(&after, language) && !painted(&after, exceptions), "the Default Language row's sentence shows: {after:?}");
+    assert!(painted_on_line(&ctx, &after, language) && !painted(&after, exceptions), "the Default Language row's sentence shows: {after:?}");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Exceptions"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    assert!(painted(&after, exceptions) && !painted(&after, language), "the Exceptions row's sentence shows: {after:?}");
+    assert!(painted_on_line(&ctx, &after, exceptions) && !painted(&after, language), "the Exceptions row's sentence shows: {after:?}");
 }
 
 /// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
@@ -2415,27 +2530,7 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the search field has the focus on open");
-    let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
-    let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
-    let mut language_seen = false;
-    let mut exceptions_seen = false;
-    for _ in 0..40 {
-        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-        assert!(!ctx.memory(|m| m.has_focus(search_edit_id())), "Tab came back to the search field before both rows were reached");
-        if painted(&texts, language) {
-            assert!(!exceptions_seen, "Tab reached the Exceptions row before the Default Language row");
-            assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
-            language_seen = true;
-        } else if painted(&texts, exceptions) {
-            assert!(language_seen, "Tab reached the Exceptions row before the Default Language row");
-            assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
-            exceptions_seen = true;
-            break;
-        }
-    }
-    assert!(language_seen, "Tab reaches the Default Language row and its sentence shows");
-    assert!(exceptions_seen, "Tab goes on to the Exceptions row and its sentence shows");
+    assert_tab_order(&mut a, &ctx, &["hyphenationLanguage", "hyphenationExceptions"]);
 }
 
 /// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Plug-in
@@ -2453,7 +2548,7 @@ fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
     };
     let rows = [
         ("Additional Plug-ins Folder:", "pluginsFolder"),
-        ("Plug-in Instruction Budget", "pluginInstructionBudget"),
+        ("Plug-in Instruction", "pluginInstructionBudget"),
         ("Primary:", "scratchPrimary"),
         ("Secondary:", "scratchSecondary"),
     ];
@@ -2462,16 +2557,46 @@ fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
-            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+            let shown = if i == j { painted_on_line(&ctx, &after, sentence) } else { painted(&after, sentence) };
+            assert_eq!(shown, i == j, "pointer over `{label}`, sentence {j}: {after:?}");
         }
     }
 }
 
 /// Tab from the search field reaches the Additional Plug-ins Folder field, then Primary, then
 /// Secondary: the line shows each one's sentence in turn, and a screen reader gets it as the focused
-/// field's description.
+/// field's description. With a folder picker, Choose… shares the folder's row, and the folder's
+/// text field still has the keyboard when its sentence first shows.
 #[test]
 fn keyboard_focus_on_a_plugins_and_scratch_disks_row_shows_its_description() {
+    let keys = ["pluginsFolder", "scratchPrimary", "scratchSecondary"];
+    let sentences: Vec<_> = keys.iter().map(|key| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for picker in [false, true] {
+        let mut a = app();
+        if picker {
+            a.services.pick_folder = Some(Box::new(|| None));
+        }
+        open(&mut a, Some("Plug-ins & Scratch Disks"));
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        description_frame(&mut a, &ctx, vec![]);
+        let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+        assert_eq!(texts.iter().any(|(t, _)| t == "Choose…"), picker, "Choose… shows only with a folder picker: {texts:?}");
+        let visits = tab_to_each(&mut a, &ctx, &sentences);
+        for ((described, focused), (key, sentence)) in visits.iter().zip(keys.iter().zip(&sentences)) {
+            let field = focused.is_some_and(|id| egui::text_edit::TextEditState::load(&ctx, id).is_some());
+            assert!(field, "the `{key}` text field has the keyboard (picker {picker})");
+            assert!(described.iter().any(|d| d == sentence), "the focused `{key}` field carries the sentence (picker {picker}): {described:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the Additional Plug-ins Folder field, the Plug-in Instruction
+/// Budget menu, then Primary, then Secondary: the line shows each one's sentence in turn, and a
+/// screen reader gets it as the focused control's description.
+#[test]
+fn keyboard_focus_on_the_plugin_instruction_budget_menu_shows_its_description() {
     let mut a = app();
     open(&mut a, Some("Plug-ins & Scratch Disks"));
     let ctx = egui::Context::default();
@@ -2479,20 +2604,7 @@ fn keyboard_focus_on_a_plugins_and_scratch_disks_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
-    };
-    for key in ["pluginsFolder", "scratchPrimary", "scratchSecondary"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` field and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` field carries the sentence: {described:?}");
-    }
+    assert_tab_order(&mut a, &ctx, &["pluginsFolder", "pluginInstructionBudget", "scratchPrimary", "scratchSecondary"]);
 }
 
 /// System Title Bar and VectorCraft Title Bar on Every Desktop, which only some platforms show,
@@ -2514,7 +2626,8 @@ fn hovering_a_user_interface_row_shows_its_description() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
-    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    // Only rows the list shows whole: the pointer goes to the center of a row it can reach.
+    let texts = whole_texts_frame(&mut a, &ctx, vec![]);
     let row = |texts: &[(String, egui::Rect)], label: &str| {
         texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
@@ -2533,26 +2646,15 @@ fn hovering_a_user_interface_row_shows_its_description() {
     ];
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
     // The Language row is under the bottom of the list: the wheel scrolls it into view.
-    let wheel = egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        delta: egui::vec2(0.0, -40.0),
-        phase: egui::TouchPhase::Move,
-        modifiers: Default::default(),
-        source: egui::MouseWheelSource::Unknown,
-    };
     let mut texts = texts;
     for (i, (label, _)) in rows.iter().enumerate() {
-        for _ in 0..20 {
-            if texts.iter().any(|(t, _)| t == label) {
-                break;
-            }
-            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
-        }
+        texts = scroll_into_view(&mut a, &ctx, texts, label);
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
             assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
         }
+        texts = after;
     }
 }
 
@@ -2568,20 +2670,7 @@ fn keyboard_focus_on_a_user_interface_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
-    };
-    for key in ["uiBrightness", "uiColorScheme", "uiAccent", "canvasColor", "autoCollapseIconPanels"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
-    }
+    assert_tab_order(&mut a, &ctx, &["uiBrightness", "uiColorScheme", "uiAccent", "canvasColor", "autoCollapseIconPanels"]);
 }
 
 /// Linux Display Server, which only Linux shows, and Use Monitor Profile for Canvas, which the
@@ -2609,17 +2698,15 @@ fn hovering_a_performance_row_shows_its_description() {
     let row = |texts: &[(String, egui::Rect)], label: &str| {
         texts.iter().rev().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
-    let mut rows = vec![
-        ("GPU Performance", "gpuPerformance"),
-        ("Animated Zoom", "animatedZoom"),
-        ("Graphics Processor:", "gpuPreference"),
+    let mut rows = vec![("GPU Performance", "gpuPerformance"), ("Animated Zoom", "animatedZoom"), ("Graphics Processor:", "gpuPreference")];
+    if !cfg!(target_arch = "wasm32") {
+        rows.push(("Low-Latency Drawing", "lowLatencyDrawing"));
+    }
+    rows.extend([
         ("History States:", "historyStates"),
         ("Real-time Drawing and Editing", "realTimeDrawing"),
         ("Render Threads (-1 = Automatic):", "renderThreads"),
-    ];
-    if !cfg!(target_arch = "wasm32") {
-        rows.insert(3, ("Low-Latency Drawing", "lowLatencyDrawing"));
-    }
+    ]);
     if cfg!(target_os = "linux") {
         rows.push(("Linux Display Server:", "linuxDisplayServer"));
     }
@@ -2628,30 +2715,9 @@ fn hovering_a_performance_row_shows_its_description() {
     }
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
     // The last rows can be under the bottom of the list: the wheel scrolls them into view.
-    let wheel = egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        delta: egui::vec2(0.0, -40.0),
-        phase: egui::TouchPhase::Move,
-        modifiers: Default::default(),
-        source: egui::MouseWheelSource::Unknown,
-    };
     let mut texts = texts;
     for (i, (label, _)) in rows.iter().enumerate() {
-        for _ in 0..20 {
-            if texts.iter().any(|(t, _)| t == label) {
-                break;
-            }
-            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
-        }
-        // The wheel scrolls smoothly over several frames: wait until the row stays put.
-        for _ in 0..60 {
-            let next = description_frame(&mut a, &ctx, vec![]).0;
-            let still = row(&next, label) == row(&texts, label);
-            texts = next;
-            if still {
-                break;
-            }
-        }
+        texts = scroll_into_view(&mut a, &ctx, texts, label);
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
@@ -2662,8 +2728,9 @@ fn hovering_a_performance_row_shows_its_description() {
 }
 
 /// Tab from the search field reaches the GPU Performance checkbox, then Animated Zoom, the
-/// Graphics Processor menu and the History States field: the line shows each one's sentence in
-/// turn, and a screen reader gets it as the focused control's description.
+/// Graphics Processor menu, the Low-Latency Drawing checkbox on the desktop and the History States
+/// field: the line shows each one's sentence in turn, and a screen reader gets it as the focused
+/// control's description.
 #[test]
 fn keyboard_focus_on_a_performance_row_shows_its_description() {
     let mut a = app();
@@ -2673,23 +2740,15 @@ fn keyboard_focus_on_a_performance_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
-    };
-    for key in ["gpuPerformance", "animatedZoom", "gpuPreference", "historyStates"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    let mut keys = vec!["gpuPerformance", "animatedZoom", "gpuPreference"];
+    if !cfg!(target_arch = "wasm32") {
+        keys.push("lowLatencyDrawing");
     }
+    keys.push("historyStates");
+    assert_tab_order(&mut a, &ctx, &keys);
 }
 
-/// The pointer over each of the 14 File Handling rows, from Enable Background Save to Use
+/// The pointer over each of the 15 File Handling rows, from Enable Background Save to Use
 /// Compression, shows that row's sentence and no other row's.
 #[test]
 fn hovering_a_file_handling_row_shows_its_description() {
@@ -2713,6 +2772,7 @@ fn hovering_a_file_handling_row_shows_its_description() {
         ("Use Low Resolution Proxy for Linked EPS", "lowResProxyEps"),
         ("Display Bitmaps as Anti-aliased Images in Pixel Preview", "antiAliasedBitmaps"),
         ("Update Links:", "updateLinks"),
+        ("PDF Text:", "pdfTextAs"),
         ("Templates Folder:", "templatesFolder"),
         ("Use System Defaults for Edit Original", "editOriginalSystemDefaults"),
         ("Mark Older Files as [Converted] When Opened", "appendConverted"),
@@ -2720,30 +2780,9 @@ fn hovering_a_file_handling_row_shows_its_description() {
     ];
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
     // The last rows can be under the bottom of the list: the wheel scrolls them into view.
-    let wheel = egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        delta: egui::vec2(0.0, -40.0),
-        phase: egui::TouchPhase::Move,
-        modifiers: Default::default(),
-        source: egui::MouseWheelSource::Unknown,
-    };
     let mut texts = texts;
     for (i, (label, _)) in rows.iter().enumerate() {
-        for _ in 0..20 {
-            if texts.iter().any(|(t, _)| t == label) {
-                break;
-            }
-            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
-        }
-        // The wheel scrolls smoothly over several frames: wait until the row stays put.
-        for _ in 0..60 {
-            let next = description_frame(&mut a, &ctx, vec![]).0;
-            let still = row(&next, label) == row(&texts, label);
-            texts = next;
-            if still {
-                break;
-            }
-        }
+        texts = scroll_into_view(&mut a, &ctx, texts, label);
         description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
         let (after, _) = description_frame(&mut a, &ctx, vec![]);
         for (j, sentence) in sentences.iter().enumerate() {
@@ -2765,20 +2804,7 @@ fn keyboard_focus_on_a_file_handling_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
-    };
-    for key in ["backgroundSave", "backgroundExport", "autosaveRecovery", "autosaveInterval"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
-    }
+    assert_tab_order(&mut a, &ctx, &["backgroundSave", "backgroundExport", "autosaveRecovery", "autosaveInterval"]);
 }
 
 /// The pointer over each of the five Clipboard Handling rows, from Include SVG Code to When
@@ -2824,20 +2850,84 @@ fn keyboard_focus_on_a_clipboard_handling_row_shows_its_description() {
     crate::theme::install_fonts(&ctx);
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
-    let mut tab_to = |sentence: &str| {
-        for _ in 0..40 {
-            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-            if painted(&texts, sentence) {
-                return Some(described);
-            }
-        }
-        None
+    assert_tab_order(&mut a, &ctx, &["copyAsSvg", "copyAsPdf", "copyAicb", "aicbMode", "pasteTextFormatting"]);
+}
+
+/// The pointer over each of the two Appearance of Black rows, On Screen and Printing / Exporting,
+/// shows that row's sentence and not the other row's.
+#[test]
+fn hovering_an_appearance_of_black_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Appearance of Black"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
     };
-    for key in ["copyAsSvg", "copyAsPdf", "copyAicb", "aicbMode", "pasteTextFormatting"] {
-        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
-        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
-        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    let rows = [("On Screen:", "blackOnScreen"), ("Printing / Exporting:", "blackOutput")];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for (i, (label, _)) in rows.iter().enumerate() {
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
     }
+}
+
+/// Tab from the search field reaches the On Screen and Printing / Exporting menus: the line shows
+/// each one's sentence in turn, and a screen reader gets it as the focused control's description.
+#[test]
+fn keyboard_focus_on_an_appearance_of_black_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Appearance of Black"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    assert_tab_order(&mut a, &ctx, &["blackOnScreen", "blackOutput"]);
+}
+
+/// The pointer over each of the two Devices rows, Enable Touch Workspace and Enable Touch Gestures,
+/// shows that row's sentence and not the other row's.
+#[test]
+fn hovering_a_devices_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Devices"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let rows = [("Enable Touch Workspace", "touchWorkspace"), ("Enable Touch Gestures", "touchGestures")];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for (i, (label, _)) in rows.iter().enumerate() {
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the Enable Touch Workspace and Enable Touch Gestures boxes: the
+/// line shows each one's sentence in turn, and a screen reader gets it as the focused control's
+/// description.
+#[test]
+fn keyboard_focus_on_a_devices_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Devices"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    assert_tab_order(&mut a, &ctx, &["touchWorkspace", "touchGestures"]);
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the
