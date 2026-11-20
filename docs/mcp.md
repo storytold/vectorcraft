@@ -11340,8 +11340,8 @@ counter 10 units wide in a 100 by 100 shape, or a 60 by 10 one turned 45 degrees
 another, so a split whose parts overlap where the shape's fill rule leaves the overlap unpainted (two o's on each
 other under the even-odd rule) stays an outline. When the split with the longest runs fails that check, the split with the
 shortest runs is checked, then the other complete splits in order, up to 32 splits per shape for exact matches and 32
-for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups or 512 contours
-is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
+for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups, 512 contours
+or 65,536 path elements is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
 matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
 most 50 million point comparisons per shape and 2 billion per command; past them, the glyphs not yet compared are left
 out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in

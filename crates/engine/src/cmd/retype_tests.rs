@@ -1566,6 +1566,30 @@ fn a_shape_that_lost_a_glyph_drops_the_lines_of_its_other_glyphs() {
 }
 
 #[test]
+fn a_compound_of_too_many_path_elements_is_not_grouped() {
+    // Two contours side by side, each a polygon of `k` corners.
+    let two = |k: usize| {
+        let mut p = kurbo::BezPath::new();
+        for x in [0.0, 300.0] {
+            for i in 0..k {
+                let a = i as f64 / k as f64 * std::f64::consts::TAU;
+                let q = kurbo::Point::new(x + 100.0 + 100.0 * a.cos(), 100.0 + 100.0 * a.sin());
+                if i == 0 { p.move_to(q) } else { p.line_to(q) }
+            }
+            p.close_path();
+        }
+        p
+    };
+    let mut budget = usize::MAX;
+    assert_eq!(super::split_groups(&two(100), &mut budget).len(), 2, "a small compound is grouped");
+    let big = two(super::MAX_SPLIT_ELEMENTS / 2);
+    assert!(big.elements().len() > super::MAX_SPLIT_ELEMENTS);
+    let mut budget = usize::MAX;
+    assert!(super::split_groups(&big, &mut budget).is_empty(), "past the element limit it is matched whole only");
+    assert_eq!(budget, usize::MAX, "and takes no contours from the budget");
+}
+
+#[test]
 fn the_runs_and_near_keys_a_selection_is_looked_up_by_are_bounded() {
     use kurbo::Shape;
     use vectorcraft_text::retype::MAX_NEAR_KEYS;
