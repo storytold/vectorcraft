@@ -73,7 +73,7 @@ VectorCraft is an open-source, Rust-native vector illustration app (Illustrator-
 - Build, test, fonts, localisation, cursors and robustness details: [`docs/development.md`](docs/development.md). Releases: [`docs/releasing.md`](docs/releasing.md).
 
 ### Checks
-For the crates you changed: `cargo fmt`, `cargo clippy -p <crate> --all-targets`, `cargo xtask test` or `cargo nextest run -p <crate>`. Repository-wide steps when they apply: `cargo xtask assets`, `cargo xtask cleanroom`, `cargo xtask brands`, `cargo xtask layers`, `cargo xtask wasm`. `cargo xtask ci` runs all of them. Workspace lints (`unsafe_code = "deny"`, no `unwrap`/`expect`/`panic!` outside tests) are in `Cargo.toml`.
+For the crates you changed: `cargo fmt`, `cargo clippy -p <crate> --all-targets`, `cargo xtask test` or `cargo nextest run -p <crate>`. Repository-wide steps when they apply: `cargo xtask assets`, `cargo xtask brands`, `cargo xtask layers`, `cargo xtask wasm`. `cargo xtask ci` runs all of them. Workspace lints (`unsafe_code = "deny"`, no `unwrap`/`expect`/`panic!` outside tests) are in `Cargo.toml`.
 
 ### Paths and conventions
 - `unsafe`: none; the workspace denies it.
