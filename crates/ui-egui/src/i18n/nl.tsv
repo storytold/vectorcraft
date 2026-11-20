@@ -1401,6 +1401,10 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Document Colors	Documentkleuren tonen
+	Document Colors	Documentkleuren
+	Selection Colors	Kleuren van de selectie
+@plural	Used {n} time|Used {n} times	{n} keer gebruikt|{n} keer gebruikt
 	Show Harmony	Harmonie tonen
 	Harmony Rule	Harmonieregel
 	Harmony color	Harmoniekleur
@@ -2564,6 +2568,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Voorinstelling hernoemen
 	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
 	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
+	Tracing Presets…	Traceervoorinstellingen…
+	Import Image Trace Presets	Voorinstellingen voor afbeeldingtracering importeren
+	Export Image Trace Presets	Voorinstellingen voor afbeeldingtracering exporteren
+	Replace the saved presets that have these names?	Opgeslagen voorinstellingen met deze namen vervangen?
 	Method:	Methode:
 	Pad	Doortrekken
 	Repeats	Herhalingen
@@ -4140,6 +4148,8 @@ theme	Appearance	Vormgeving
 	Symbolism Tool	Symbolisatiegereedschap
 	Image Trace Presets	Voorinstellingen voor afbeeldingtracering
 	Live Paint Bucket	Live Paint-emmer
+	Fill Area	Gebied vullen
+	Fill Area Tool	Gereedschap Gebied vullen
 	Live Paint Bucket (Stroke)	Live Paint-emmer (streek)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Vormopbouw
@@ -4643,6 +4653,13 @@ theme	Appearance	Vormgeving
 	Pen Tool	Pen-gereedschap
 	Quick Pen Tool	Snelpen-gereedschap
 	Quick Pen	Snelpen
+	Quick Pen Toolbar	Snelpen-werkbalk
+	Continuous Arc	Doorlopende boog
+	Sharp Corner Arc	Boog met scherpe hoek
+	Flip Arc	Boog spiegelen
+	Hide Toolbar	Werkbalk verbergen
+	Pin Toolbar Position	Werkbalkpositie vastzetten
+	Reset Toolbar Position	Werkbalkpositie herstellen
 	Picas	Pica's
 	Portuguese	Portugees
 	Preserve Appearance and Overprints	Vormgeving en overprint behouden
@@ -4758,6 +4775,11 @@ theme	Appearance	Vormgeving
 	Edit Arrowheads	Pijlpunten bewerken
 	Edit Arrowheads…	Pijlpunten bewerken…
 	Reload Arrowheads	Pijlpunten opnieuw laden
+	Bevels	Afschuiningen
+	Edit Bevels	Afschuiningen bewerken
+	Edit Bevels…	Afschuiningen bewerken…
+	{name} (document)	{name} (document)
+	Reload Bevels	Afschuiningen opnieuw laden
 	Stroke Options	Lijnopties
 	Width Profiles	Breedteprofielen
 	Apply Graphic Style	Grafische stijl toepassen
@@ -5278,6 +5300,10 @@ font-technology	Variable	Variabel
 	Cusp	Keerpunt
 	Straight segment	Recht segment
 	Circle too large	Cirkel te groot
+	Show Radii	Stralen tonen
+	Show Diameter	Diameter tonen
+	Anchors at Standard Positions	Ankerpunten op standaardposities
+	Third Point by Dragging	Derde punt door slepen
 	Clip to Art	Clippen op artwork
 	Colorize	Inkleuren
 	Gamma	Gamma
@@ -5578,6 +5604,7 @@ imageTrace	Outline	Contour
 @msg	Saved {path}	{path} opgeslagen
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecteer tekst of klik met het tekstgereedschap in tekst om glyphs in te voegen
 @msg	Shape Builder: no region under the pointer	Vormbouwer: geen gebied onder de aanwijzer
+@msg	Fill Area: no enclosed area under the pointer	Gebied vullen: geen gesloten gebied onder de aanwijzer
 @msg	Shape Builder: select all paths you want to merge	Vormbouwer: selecteer alle paden die je wilt samenvoegen
 @msg	Shape Builder: select paths or compound paths	Vormbouwer: selecteer paden of samengestelde paden
 @msg	Show All Hidden Attributes: nothing is hidden	Alle verborgen kenmerken tonen: er is niets verborgen
@@ -8602,7 +8629,10 @@ mark-style	Japanese	Japans
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` moet een object zijn met alleen `mode`, ingesteld op shaded of wireframe
 @msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
-@msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel moet none, een van {_1} of custom met {BEVEL_PROFILE} zijn
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom heeft {BEVEL_PROFILE} nodig, de punten van de afschuining
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} moet een tekenreeks zijn
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} moet 2 tot {most} punten [x, y] bevatten, elk aandeel tussen 0 en 1, van [0, 0] (de rand van de bovenkant) tot [1, 1] (de zijwand)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan van deze illustratie geen massieve objecten maken: de symboolinstanties, vermengingen en knipgroepen ervan bevatten te veel objecten
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan geen massief object maken van de instantie van symbool "{symbol}": de illustratie van het symbool is niet beschikbaar
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: het knippad is te complex om de illustratie mee uit te knippen
@@ -8629,8 +8659,10 @@ mark-style	Japanese	Japans
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Illustraties worden op de objecttypen Vlak, Extruderen en Draaien geplaatst
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Illustraties worden op de objecttypen Vlak, Extruderen, Draaien en Opblazen geplaatst
 @msg	Revolve maps graphics onto its side: map them onto the front	Draaien plaatst illustraties op de zijkant: plaats ze op de voorkant
+@msg	Inflate maps graphics onto its front and back, not onto a side	Opblazen plaatst illustraties op de voorkant en de achterkant, niet op een zijkant
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	object {_1}: de achterkant van Opblazen neemt alleen afbeeldingen aan met Beide zijden en Dop ingeschakeld
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	De illustraties zijn te complex voor dit oppervlak: vereenvoudig de illustraties van de symbolen of verlaag Segmenten
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` neemt maximaal {MAX_GRAPHICS} illustraties op
 @msg	A plane has one face: map its graphics onto the front	Een vlak heeft één zijde: plaats de illustraties ervan op de voorkant
@@ -10809,6 +10841,20 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Nature Icons	Natuurpictogrammen
+	Flower	Bloem
+	Tree	Boom
+	Mountain	Berg
+	Ornamental	Ornamentaal
+	Scrollwork	Krulwerk
+	Filigree Arrow	Filigraanpijl
+	Petal Sweep	Bloemblaadjeszwaai
+	Twin Curl	Dubbele krul
+	Vector Packs	Vectorpakketten
+	Compass Rose	Kompasroos
+	Botanical Sprig	Botanisch takje
+	Facet Diamond	Gefacetteerde diamant
+	Tide Crest	Golfkam
 	Leaf Vine	Bladrank
 	Blossom Chain	Bloemenketting
 	Pennant Garland	Vlaggetjesslinger

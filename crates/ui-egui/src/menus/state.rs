@@ -99,6 +99,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .get("action")
             .and_then(Value::as_str)
             .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
+        "window.quickPenToolbar" => app.ui.quick_pen_bar,
+        "window.quickPenToolbar.pin" => app.ui.quick_pen_bar_place.pinned,
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -216,22 +218,39 @@ pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
 /// Can command `id` run now? An engine command asks the engine, a UI command the app's state;
 /// none that would act on text an input method is still composing.
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    why_off(app, id).is_none()
+}
+
+/// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
+/// engine's reason when the engine's check of an engine command fails. The engine's check runs at
+/// most once.
+pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
-        return false;
+        return Some(None);
     }
     if SUBJECT_COMMANDS.contains(&id) {
-        return has_subject(app);
+        return (!has_subject(app)).then_some(None);
     }
     // The Artboard tool's canvas menu measured this when it opened.
     if id == "artboard.deleteEmpty"
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
-        return facts.any_empty;
+        return (!facts.any_empty).then_some(None);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
-        // The system clipboard's contents can be pasted with an empty internal clipboard.
-        return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
+        return match (c.enabled)(&app.session) {
+            Ok(()) => None,
+            // The system clipboard's contents can be pasted into an open document with an empty
+            // internal clipboard.
+            Err(_) if app.system_paste && app.session.active().is_some() && id.starts_with("edit.paste") => None,
+            Err(why) => Some(Some(why)),
+        };
     }
+    (!ui_enabled(app, id)).then_some(None)
+}
+
+/// Can UI command `id` run now?
+fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
@@ -352,6 +371,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        // Trim View hides the guides and the grid while it is on, so their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),

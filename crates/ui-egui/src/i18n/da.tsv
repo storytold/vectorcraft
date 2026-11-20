@@ -432,7 +432,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
-@msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel skal være none, en af {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kræver {BEVEL_PROFILE}, facettens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} skal være en streng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} skal være 2 til {most} punkter [x, y], hver andel mellem 0 og 1, fra [0, 0] (dækfladens kant) til [1, 1] (sidevæggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan ikke danne et legeme af forekomsten af symbolet "{symbol}": symbolets grafik er ikke tilgængelig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: beskæringskurven er for kompleks til at skære grafikken med
@@ -458,8 +461,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`: face skal være front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér, Omdrej og Pust op
 @msg	Revolve maps graphics onto its side: map them onto the front	Omdrej kortlægger grafik på siden: kortlæg den på forsiden
+@msg	Inflate maps graphics onto its front and back, not onto a side	Pust op kortlægger grafik på forsiden og bagsiden, ikke på en side
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objektet {_1}: bagsiden af Pust op tager kun imod grafik, når Begge sider og Kappe er slået til
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikken er for kompleks til denne overflade: forenkl symbolernes grafik, eller reducér Segmenter
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tager højst {MAX_GRAPHICS} grafikelementer
 @msg	A plane has one face: map its graphics onto the front	Et plan har én flade: kortlæg dets grafik på forsiden
@@ -3532,6 +3537,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
 	Show Harmony	Vis harmoni
 	Harmony Rule	Harmoniregel
 	Harmony color	Harmonifarve
@@ -4693,6 +4702,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Omdøb forudindstilling
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
+	Tracing Presets…	Vektoriseringsforudindstillinger…
+	Import Image Trace Presets	Importér forudindstillinger til billedsporing
+	Export Image Trace Presets	Eksportér forudindstillinger til billedsporing
+	Replace the saved presets that have these names?	Vil du erstatte de gemte forudindstillinger med disse navne?
 	Method:	Metode:
 	Pad	Forlæng
 	Repeats	Gentagelser
@@ -6269,6 +6282,8 @@ theme	Appearance	Udseende
 	Symbolism Tool	Symbolværktøj
 	Image Trace Presets	Forudindstillinger til billedsporing
 	Live Paint Bucket	Live Paint-spand
+	Fill Area	Udfyld område
+	Fill Area Tool	Værktøjet Udfyld område
 	Live Paint Bucket (Stroke)	Live Paint-spand (kontur)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Formbygger
@@ -6772,6 +6787,13 @@ theme	Appearance	Udseende
 	Pen Tool	Pen-værktøj
 	Quick Pen Tool	Hurtigpen-værktøj
 	Quick Pen	Hurtigpen
+	Quick Pen Toolbar	Hurtigpennens værktøjslinje
+	Continuous Arc	Fortløbende bue
+	Sharp Corner Arc	Bue med skarpt hjørne
+	Flip Arc	Vend bue
+	Hide Toolbar	Skjul værktøjslinjen
+	Pin Toolbar Position	Fastgør værktøjslinjens placering
+	Reset Toolbar Position	Nulstil værktøjslinjens placering
 	Picas	Pica
 	Portuguese	Portugisisk
 	Preserve Appearance and Overprints	Bevar udseende og overprint
@@ -6887,6 +6909,11 @@ theme	Appearance	Udseende
 	Edit Arrowheads	Redigér pilespidser
 	Edit Arrowheads…	Redigér pilespidser…
 	Reload Arrowheads	Genindlæs pilespidser
+	Bevels	Facetter
+	Edit Bevels	Redigér facetter
+	Edit Bevels…	Redigér facetter…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Genindlæs facetter
 	Stroke Options	Konturindstillinger
 	Width Profiles	Breddeprofiler
 	Apply Graphic Style	Anvend grafikstil
@@ -7407,6 +7434,10 @@ font-technology	Variable	Variable
 	Cusp	Spids
 	Straight segment	Lige segment
 	Circle too large	Cirklen er for stor
+	Show Radii	Vis radier
+	Show Diameter	Vis diameter
+	Anchors at Standard Positions	Ankerpunkter i standardpositioner
+	Third Point by Dragging	Tredje punkt ved træk
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -7706,6 +7737,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Fill Area: no enclosed area under the pointer	Udfyld område: intet lukket område under markøren
 @msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
@@ -10832,6 +10864,20 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Nature Icons	Naturikoner
+	Flower	Blomst
+	Tree	Træ
+	Mountain	Bjerg
+	Ornamental	Ornamentik
+	Scrollwork	Slyngværk
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvirp
+	Twin Curl	Dobbelt slyng
+	Vector Packs	Vektorpakker
+	Compass Rose	Kompasrose
+	Botanical Sprig	Botanisk kvist
+	Facet Diamond	Facetteret diamant
+	Tide Crest	Bølgetop
 	Leaf Vine	Bladranke
 	Blossom Chain	Blomsterkæde
 	Pennant Garland	Vimpelguirlande

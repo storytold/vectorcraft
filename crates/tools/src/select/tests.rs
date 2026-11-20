@@ -2198,7 +2198,7 @@ fn move_follows_the_while_moving_option() {
     let p = paint();
     let pixel_snap = PixelSnap { moving: false, ..PixelSnap::default() };
     let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
-    let snap = MoveSnap::new(&c);
+    let mut snap = MoveSnap::new(&c);
     let (dv, _) = snap.snap(&c, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
     assert!((dv - Vec2::new(3.3, 4.6)).hypot() < 1e-9, "{dv:?}");
     let on = ToolContext { pixel_snap: PixelSnap::default(), ..c };

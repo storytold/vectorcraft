@@ -456,6 +456,10 @@ antiAlias	Sharp	锐利
 	Cusp	尖点
 	Straight segment	直线段
 	Circle too large	圆形过大
+	Show Radii	显示半径
+	Show Diameter	显示直径
+	Anchors at Standard Positions	锚点位于标准位置
+	Third Point by Dragging	拖动放置第三点
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -561,6 +565,10 @@ antiAlias	Sharp	锐利
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
+	Show Document Colors	显示文档颜色
+	Document Colors	文档颜色
+	Selection Colors	所选对象的颜色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	显示协调
 	Harmony Rule	协调规则
 	Harmony color	协调颜色
@@ -1864,6 +1872,10 @@ file-filter	Templates	模板
 	Rename Preset	重命名预设
 	Save Image Trace Preset	保存图像描摹预设
 	Delete Image Trace Preset	删除图像描摹预设
+	Tracing Presets…	描摹预设…
+	Import Image Trace Presets	导入图像描摹预设
+	Export Image Trace Presets	导出图像描摹预设
+	Replace the saved presets that have these names?	替换具有这些名称的已存储预设？
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -2067,6 +2079,8 @@ file-filter	Templates	模板
 	List Workspaces	列出工作区
 	Live Paint	实时上色
 	Live Paint Bucket	实时上色工具
+	Fill Area	填充区域
+	Fill Area Tool	填充区域工具
 	Live Paint Bucket (Stroke)	实时上色工具 (描边)
 	Live Paint Info	实时上色信息
 	Live Paint Selection Tool	实时上色选择工具
@@ -2692,6 +2706,13 @@ file-filter	Templates	模板
 	Pen Tool	钢笔工具
 	Quick Pen Tool	快速钢笔工具
 	Quick Pen	快速钢笔
+	Quick Pen Toolbar	快速钢笔工具栏
+	Continuous Arc	连续弧线
+	Sharp Corner Arc	尖角弧线
+	Flip Arc	翻转弧线
+	Hide Toolbar	隐藏工具栏
+	Pin Toolbar Position	固定工具栏位置
+	Reset Toolbar Position	重置工具栏位置
 	Pencil	铅笔
 	Pencil Tool	铅笔工具
 	per slice	每个切片
@@ -3138,6 +3159,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit Arrowheads	编辑箭头
 	Edit Arrowheads…	编辑箭头…
 	Reload Arrowheads	重新载入箭头
+	Bevels	斜角列表
+	Edit Bevels	编辑斜角
+	Edit Bevels…	编辑斜角…
+	{name} (document)	{name} (文档)
+	Reload Bevels	重新载入斜角
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
@@ -4712,6 +4738,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Fill Area: no enclosed area under the pointer	填充区域：指针下方没有封闭区域
 @msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
@@ -6717,7 +6744,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
-@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必须是 none、{_1} 之一，或带 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，即斜角的点
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必须是字符串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必须是 2 到 {most} 个 [x, y] 点，每个比例在 0 到 1 之间，从 [0, 0]（端面的边缘）到 [1, 1]（侧壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
@@ -6743,9 +6773,11 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
-	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	图形映射到平面、突出、回转和膨胀对象类型上
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	图形映射到平面、突出、回转和膨胀对象类型上。
 @msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨胀将图形映射到正面和背面，不映射到侧面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	对象 {_1}：只有打开“双面”和“封口”后，膨胀的背面才能贴图
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
 @msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
@@ -10613,6 +10645,20 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Nature Icons	自然图标
+	Flower	花朵
+	Tree	树木
+	Mountain	山脉
+	Ornamental	装饰纹样
+	Scrollwork	卷饰
+	Filigree Arrow	花丝箭头
+	Petal Sweep	花瓣曲线
+	Twin Curl	双重卷饰
+	Vector Packs	矢量画笔包
+	Compass Rose	罗盘玫瑰
+	Botanical Sprig	植物枝条
+	Facet Diamond	切面钻石
+	Tide Crest	浪尖
 	Leaf Vine	叶藤
 	Blossom Chain	花链
 	Pennant Garland	旗帜花环

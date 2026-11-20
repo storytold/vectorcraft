@@ -16,9 +16,9 @@
 
 use serde_json::json;
 use vectorcraft_doc::NodeId;
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{ParamCurve, Point};
 
-use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
+use super::{FEEDBACK, hit_anchor, hit_segment, insert_anchor, remove_anchor};
 use crate::direct::hit_handle;
 use crate::guides::{DrawSnap, HandleSnap};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -95,10 +95,48 @@ enum SpaceResume {
     SpineHandle { id: NodeId, ai: usize, out: bool },
 }
 
+/// A cut chosen with the same anchor/segment priority for preview and press.
+enum ScissorsCut {
+    Anchor { id: NodeId, si: usize, ai: usize },
+    Segment { id: NodeId, si: usize, seg: usize, t: f64 },
+}
+
+impl ScissorsCut {
+    fn point(&self, cx: &ToolContext) -> Option<Point> {
+        let (id, si) = match *self {
+            Self::Anchor { id, si, .. } | Self::Segment { id, si, .. } => (id, si),
+        };
+        let sp = cx.doc.node(id)?.path_data()?.subpaths.get(si)?;
+        if sp.anchors.len() < 2 {
+            return None;
+        }
+        let ai = match *self {
+            Self::Anchor { ai, .. } => ai,
+            Self::Segment { seg, t, .. } => {
+                if seg >= sp.segment_count() || !(0.0..=1.0).contains(&t) {
+                    return None;
+                }
+                // path.split canonicalizes cuts near segment ends to the existing anchor.
+                if t <= 1e-6 {
+                    seg
+                } else if t >= 1.0 - 1e-6 {
+                    (seg + 1) % sp.anchors.len()
+                } else {
+                    return Some(sp.segment(seg).eval(t));
+                }
+            }
+        };
+        let anchor = sp.anchors.get(ai)?;
+        // An open path cannot be split at either of its existing end points.
+        (sp.closed || (ai > 0 && ai + 1 < sp.anchors.len())).then_some(anchor.p)
+    }
+}
+
 /// The cursor reuses the last hover's point, with DrawSnap checking its target inputs. The
 /// Scissors-only inputs also bind the resolved point to the current cut eligibility.
 struct ScissorsHover {
     raw: Point,
+    shared: Point,
     snapped: Point,
     zoom: f64,
     isolation: Option<NodeId>,
@@ -160,7 +198,7 @@ impl AnchorTool {
 
     /// Keep a shared art snap unless it prevents a cut the raw pointer could make. Outside art
     /// still supplies alignment and intersection guides; pixel and grid snapping keep precedence.
-    fn resolve_scissors_snap(&mut self, cx: &ToolContext, raw: Point, snapped: Point) -> Point {
+    fn scissors_point(cx: &ToolContext, raw: Point, snapped: Point) -> (Point, bool) {
         let eligible = |p| hit_anchor(cx, p, 0.0).is_some() || hit_segment(cx, p, cx.pick_tol()).is_some();
         let fallback = (cx.smart_guides || cx.snap_to_point)
             && !cx.snaps_to_pixel(PixelOp::Drawing)
@@ -168,14 +206,16 @@ impl AnchorTool {
             && snapped != raw
             && !eligible(snapped)
             && eligible(raw);
-        let snapped = if fallback {
+        (if fallback { raw } else { snapped }, fallback)
+    }
+
+    fn resolve_scissors_snap(&mut self, cx: &ToolContext, raw: Point, shared: Point) -> Point {
+        let (snapped, fallback) = Self::scissors_point(cx, raw, shared);
+        if fallback {
             self.scissors_snap.clear();
-            raw
-        } else {
-            snapped
-        };
+        }
         self.scissors_hover =
-            Some(ScissorsHover { raw, snapped, zoom: cx.zoom, isolation: cx.isolation, selection_tolerance: cx.selection_tolerance });
+            Some(ScissorsHover { raw, shared, snapped, zoom: cx.zoom, isolation: cx.isolation, selection_tolerance: cx.selection_tolerance });
         snapped
     }
 
@@ -198,18 +238,27 @@ impl AnchorTool {
         }
         let snapped = self.scissors_snap.press(cx, p, &[], None);
         let p = self.resolve_scissors_snap(cx, p, snapped);
+        match Self::scissors_cut(cx, p) {
+            Some(ScissorsCut::Anchor { id, si, ai }) => {
+                vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))]
+            }
+            Some(ScissorsCut::Segment { id, si, seg, t }) => {
+                vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t}))]
+            }
+            None => vec![],
+        }
+    }
+
+    fn scissors_cut(cx: &ToolContext, p: Point) -> Option<ScissorsCut> {
         let point = cx.point_tol();
         // A path snap must not be pulled to a nearby anchor by the larger pick radius.
         // Shared anchor targets and the path's anchors use the same stored coordinates.
         let snapping = cx.smart_guides || cx.snap_to_point || cx.snaps_to_pixel(PixelOp::Drawing) || cx.snap_to_grid;
         let anchor_tol = if snapping { 0.0 } else { point };
         if let Some((id, si, ai)) = hit_anchor(cx, p, anchor_tol) {
-            return vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))];
+            return Some(ScissorsCut::Anchor { id, si, ai });
         }
-        match Self::scissors_segment(cx, p) {
-            Some((id, si, seg, t)) => vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t}))],
-            None => vec![],
-        }
+        Self::scissors_segment(cx, p).map(|(id, si, seg, t)| ScissorsCut::Segment { id, si, seg, t })
     }
 
     /// The Anchor Point tool as the Pen lends it with Alt held: an Alt-drag on a handle moves only
@@ -694,8 +743,17 @@ impl Tool for AnchorTool {
         if matches!(self.state, State::Handle { .. }) {
             out.extend(self.guides.iter().cloned());
         }
-        if self.id == "scissors" && self.current_scissors_hover(cx).is_some() {
-            out.extend_from_slice(self.scissors_snap.guides());
+        if self.id == "scissors"
+            && let Some(h) = self.current_scissors_hover(cx)
+        {
+            // Selection priority can change without changing DrawSnap's geometry key.
+            let (p, _) = Self::scissors_point(cx, h.raw, h.shared);
+            if p == h.snapped {
+                out.extend_from_slice(self.scissors_snap.guides());
+            }
+            if let Some(p) = Self::scissors_cut(cx, p).and_then(|cut| cut.point(cx)) {
+                out.push(Overlay::Anchor { p, color: FEEDBACK, filled: false, size: 7.0 });
+            }
         }
         if cx.measurement_labels
             && let Some((p, dx, dy)) = self.measure
