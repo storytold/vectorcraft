@@ -1056,6 +1056,32 @@ fn a_long_run_after_a_split_keeps_the_fraction_of_its_tracking() {
 }
 
 #[test]
+fn a_long_spaced_run_after_a_split_keeps_the_fraction_of_its_tracking() {
+    // Tracking 300.04 read as 300 moves the last of the 192 glyphs after the irregular gaps by less
+    // than the tolerance, counting the glyphs alone, but the word spaces between them take the
+    // tracking too: the run keeps 300.04 and stays one object.
+    let mut s = session();
+    let text = vec!["ii"; 100].join(" ");
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 300.04})).unwrap();
+    // The first eight glyphs, at 0, 1, 3, 4, 6, 7, 9 and 10 (a space after each two).
+    for (i, t) in [50, 170, 90, 230, 130, 410, 20, 520].into_iter().enumerate() {
+        let at = i + i / 2;
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": at, "end": at + 1, "tracking": t})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat().replace(' ', ""), "i".repeat(200), "{r}");
+    assert!(texts.len() <= 9, "at most one object per irregular gap, then the run: {texts:?}");
+    let run = text_of(&s, r["ids"].as_array().unwrap().last().unwrap().as_u64().unwrap());
+    assert_eq!(run.plain_text().chars().filter(|c| *c == 'i').count(), 192, "{texts:?}");
+    assert!(run.runs.iter().all(|r| near(r.style.tracking, 300.04, 1e-3)), "{texts:?}");
+}
+
+#[test]
 fn a_long_run_after_a_split_keeps_a_tracking_under_one_unit_that_adds_up() {
     // Tracking 0.2 moves none of the 32 glyphs measured by more than the tolerance, but moves the
     // glyphs 399 places on: the rest after a split keeps it and stays one object.
@@ -1140,6 +1166,97 @@ fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_
     assert_eq!(unmatched.len(), 1);
     let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
     assert_eq!(texts, vec![(&text[1..], tracking)]);
+}
+
+#[test]
+fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_when_the_budget_runs_short() {
+    // As above, with a measuring budget that covers the tracking's measure but not the layout of
+    // the pairs after the glyphs measured: those pairs still read no space.
+    use vectorcraft_text::test_fonts::{POSITIVE_KERNING_FAMILY, POSITIVE_KERNING_UNITS, positive_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(positive_kerning_font().unwrap());
+    let mut s = session();
+    let text = "i".repeat(60);
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "i", "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in_family(&s, pg, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap();
+    let space = super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0;
+    let tracking = (f64::from(POSITIVE_KERNING_UNITS) - space).round();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let l = lines_in_family(&s, g, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    // What measuring the tracking of the rest's first 32 glyphs takes.
+    let span = super::MEASURE_SPAN;
+    let mut measure = 100_000;
+    let measured = l.respaced(1, 1 + span, 0.0).unwrap().tracked_reaching(false, &mut measure, 59);
+    assert_eq!(measured.tracking, tracking);
+    let measure = 100_000 - measure;
+    // The pairs after the glyphs measured take three characters each.
+    let pairs = (60 - 1 - span + 1) * 3;
+    for short in (0..pairs).step_by(7) {
+        let mut track_budget = (span + measure + short).max(span * 6);
+        let (mut glyphs, mut remeasured) = (100_000, 100_000);
+        let r = super::rest_after_split(&l, 1, false, &mut glyphs, &mut remeasured, &mut track_budget).unwrap();
+        assert_eq!(r.text, text[1..], "a budget {short} short of the pairs");
+    }
+}
+
+#[test]
+fn a_word_space_after_a_glyph_kerned_against_it_reads_as_one_space_past_the_glyphs_measured() {
+    // The font adds 130 units to an i before a space, so the gap before the next glyph is more than
+    // one and a half spaces wide; the distance the pair with one space between them is laid out at
+    // fits one space.
+    use vectorcraft_text::test_fonts::{SPACE_KERNING_FAMILY, space_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(space_kerning_font().unwrap());
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "ii ii", "size": 10, "font": SPACE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let l = lines_in_family(&s, g, Some(SPACE_KERNING_FAMILY)).into_iter().next().unwrap();
+    assert_eq!(l.pieces.len(), 4);
+    let mut r = l.respaced(0, 2, 0.0).unwrap();
+    let mut budget = 1_000;
+    let steps = r.pair_steps(&l.matches[1..], false, &mut budget).unwrap();
+    for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(2).enumerate() {
+        r.push_joined(*id, m, steps.get(j).copied());
+    }
+    assert_eq!(r.text, "ii ii");
+}
+
+#[test]
+fn a_word_space_after_a_glyph_kerned_toward_it_is_kept_past_the_glyphs_measured() {
+    // The font takes 130 units off an i before a space, so the gap before the next glyph is under
+    // half a space wide; the distance the pair with one space between them is laid out at fits it.
+    use vectorcraft_text::test_fonts::{SPACE_NARROWING_FAMILY, space_narrowing_font};
+
+    vectorcraft_text::FontDb::global().add_font(space_narrowing_font().unwrap());
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "ii ii", "size": 10, "font": SPACE_NARROWING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let l = lines_in_family(&s, g, Some(SPACE_NARROWING_FAMILY)).into_iter().next().unwrap();
+    assert_eq!(l.pieces.len(), 4);
+    let mut r = l.respaced(0, 2, 0.0).unwrap();
+    let mut budget = 1_000;
+    let steps = r.pair_steps(&l.matches[1..], false, &mut budget).unwrap();
+    for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(2).enumerate() {
+        r.push_joined(*id, m, steps.get(j).copied());
+    }
+    assert_eq!(r.text, "ii ii");
 }
 
 #[test]

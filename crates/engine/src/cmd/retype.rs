@@ -290,29 +290,41 @@ impl Line {
     }
 
     /// [`Line::push`], with `steps` the distances [`Line::pair_steps`] gives for the pair of the
-    /// line's last glyph and `m`. A gap reads as spaces only when they fit it better than the
-    /// joined pair does, as when the tracking is measured.
+    /// line's last glyph and `m`. With `steps`, a gap reads as spaces only when they fit it better
+    /// than the joined pair does, as when the tracking is measured, however narrow the gap is.
     fn push_joined(&mut self, id: NodeId, m: &GlyphMatch, steps: Option<(f64, f64)>) {
-        // A gap, past the tracking, wider than half a space before the glyph is spaces the
-        // outlines left no shape for. Each space takes the tracking too.
+        // Without `steps`, a gap, past the tracking, wider than half a space before the glyph is
+        // spaces the outlines left no shape for. Each space takes the tracking too.
         let dir = self.dir();
-        let gap = (m.origin - self.end).dot(dir) - self.tracking_pt();
+        let tr = self.tracking_pt();
+        let gap = (m.origin - self.end).dot(dir) - tr;
         // Tracking tighter than a space's width gives each space a negative advance.
-        let space = space_advance(&self.face) * self.scale + self.tracking_pt();
+        let face_space = space_advance(&self.face) * self.scale;
+        let space = face_space + tr;
         let spaces = if space.abs() > 1e-9 { gap / space } else { 0.0 };
-        if spaces.is_finite() && spaces > 0.5 {
-            let n = (spaces.round() as usize).clamp(1, 64);
-            let d = (m.origin - self.matches.last().map_or(self.origin, |p| p.origin)).dot(dir);
-            let tr = self.tracking_pt();
-            let joined_fits = steps.is_some_and(|(joined, apart)| {
-                let face_space = space_advance(&self.face) * self.scale;
-                let spaced_err = (d - apart + face_space - tr - n as f64 * (face_space + tr)).abs();
-                (d - joined - tr).abs() <= spaced_err + self.size() * 1e-5
-            });
-            if !joined_fits {
-                self.text.extend(std::iter::repeat_n(' ', n));
+        let n = match steps {
+            Some((joined, apart)) => {
+                let d = (m.origin - self.matches.last().map_or(self.origin, |p| p.origin)).dot(dir);
+                // How far `n` spaces set the glyph from where the outlines put it: the pair with one
+                // space between them is `apart`, and each further space adds a space and the tracking.
+                let spaced_err = |n: usize| (d - apart + face_space - tr - n as f64 * space).abs();
+                // Kerning against a space widens or narrows the gap, so the count the gap gives, the
+                // counts next to it and the count the measured distance gives are compared; the
+                // rounded count wins a tie.
+                let measured = (d - apart + face_space - tr) / space;
+                let best = [spaces.round(), spaces.floor(), spaces.ceil(), measured.round()]
+                    .into_iter()
+                    .filter(|c| c.is_finite())
+                    .map(|c| (c.max(1.0) as usize).min(64))
+                    .min_by(|a, b| spaced_err(*a).total_cmp(&spaced_err(*b)))
+                    .unwrap_or(1);
+                // The joined pair wins a tie.
+                if (d - joined - tr).abs() <= spaced_err(best) + self.size() * 1e-5 { 0 } else { best }
             }
-        }
+            None if spaces.is_finite() && spaces > 0.5 => (spaces.round() as usize).clamp(1, 64),
+            None => 0,
+        };
+        self.text.extend(std::iter::repeat_n(' ', n));
         self.text.push(m.ch);
         self.pieces.push(id);
         self.matches.push(m.clone());
@@ -455,13 +467,14 @@ impl Line {
     /// its characters, spaces included, from `budget` before it runs; without enough left, the
     /// line stays as it is, or becomes the best tracked reading laid out before the budget ran out.
     fn tracked(self, system_layout: bool, budget: &mut usize) -> Line {
-        let reach = self.pieces.len();
+        let reach = self.text.chars().count();
         self.tracked_reaching(system_layout, budget, reach)
     }
 
-    /// [`Line::tracked`] for a line whose tracking is applied to `reach` glyphs: a measured tracking
-    /// within 0.05 of a whole number is read as that number only when the difference moves the
-    /// glyph `reach` places on by no more than the tolerance [`first_mismatch`] allows.
+    /// [`Line::tracked`] for a line whose tracking is applied to `reach` characters, its glyphs and
+    /// the spaces between them: a measured tracking within 0.05 of a whole number is read as that
+    /// number only when the difference moves the character `reach` places on by no more than the
+    /// tolerance [`first_mismatch`] allows.
     fn tracked_reaching(self, system_layout: bool, budget: &mut usize, reach: usize) -> Line {
         let size = self.size();
         let n = self.pieces.len();
@@ -743,61 +756,10 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                 // The glyphs before the mismatch, then the rest, each checked as a line of its
                 // own: the type before the mismatch may draw otherwise without what follows it (a
                 // font can place a glyph by the glyph after it), and the first glyph on its own
-                // may still be drawn as it was (a contextual form changed it in the line). The
-                // rest takes the tracking its own glyphs are spaced by, while the budget for
-                // measuring it lasts and when type draws its first glyph as it was, followed by the
-                // next two (else that glyph splits off first, and the tracking is measured from the
-                // next one); past it, an untracked line's rest keeps its text as it is. The tracking
-                // is measured from the rest's first [`MEASURE_SPAN`] glyphs at most, and the glyphs
-                // after them follow at that tracking, so each split costs the same however long the
-                // rest is, and splits at irregular gaps early in a line leave the budget for a long
-                // evenly tracked run after them.
+                // may still be drawn as it was (a contextual form changed it in the line).
                 Some(k) => {
                     let k = k.max(1);
-                    let span = (n - k).min(MEASURE_SPAN);
-                    // A measure takes at least six times the glyphs it reads from each budget.
-                    let measurable = n - k >= 3 && remeasured >= span.saturating_mul(6) && track_budget >= span.saturating_mul(6);
-                    let first_drawn = measurable && {
-                        budget = budget.saturating_sub(3);
-                        l.respaced(k, k + 3, l.tracking).is_some_and(|p| p.first_mismatch(&p.probe(system_layout)) != Some(0))
-                    };
-                    let rest = if first_drawn {
-                        // Rebuilding the glyphs measured takes them from the budget.
-                        remeasured = remeasured.saturating_sub(span.saturating_mul(6));
-                        track_budget = track_budget.saturating_sub(span);
-                        l.respaced(k, k + span, 0.0).map(|r| {
-                            let mut r = r.tracked_reaching(system_layout, &mut track_budget, n - k);
-                            // Tracking that leaves a space under half its advance: the gaps alone
-                            // do not show the spaces past the glyphs measured (only the kerning a
-                            // space breaks may), so the whole rest is measured while the budget
-                            // lasts.
-                            let more = n - k - span;
-                            let space = space_advance(&r.face) * r.scale;
-                            if more > 0
-                                && space + r.tracking_pt() < space / 2.0
-                                && remeasured >= (n - k).saturating_mul(6)
-                                && track_budget >= (n - k).saturating_mul(6)
-                                && let Some(whole) = l.respaced(k, n, 0.0)
-                            {
-                                remeasured = remeasured.saturating_sub((n - k).saturating_mul(6));
-                                track_budget = track_budget.saturating_sub(n - k);
-                                return whole.tracked(system_layout, &mut track_budget);
-                            }
-                            // The glyphs after those measured follow at that tracking; a gap reads as
-                            // spaces only when they fit it better than the joined pair does, as in
-                            // the glyphs measured, while the budget for laying the pairs out lasts.
-                            let steps =
-                                l.matches.get(k + span - 1..).and_then(|ms| r.pair_steps(ms, system_layout, &mut track_budget)).unwrap_or_default();
-                            for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(k + span).enumerate() {
-                                r.push_joined(*id, m, steps.get(j).copied());
-                            }
-                            r
-                        })
-                    } else if l.tracking == 0.0 {
-                        l.part(k, n)
-                    } else {
-                        l.respaced(k, n, 0.0)
-                    };
+                    let rest = rest_after_split(&l, k, system_layout, &mut budget, &mut remeasured, &mut track_budget);
                     match rest {
                         Some(r) => todo.push_front(r),
                         None => unmatched.extend(l.pieces.get(k..).unwrap_or_default().iter().copied()),
@@ -809,6 +771,75 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
         }
     }
     out
+}
+
+/// The rest of `l` from glyph `k` (at least 1) after [`verified`] splits it there. The rest takes
+/// the tracking its own glyphs are spaced by, while the budgets for measuring it last and when type
+/// draws its first glyph as it was, followed by the next two (else that glyph splits off first, and
+/// the tracking is measured from the next one); past it, an untracked line's rest keeps its text as
+/// it is. The tracking is measured from the rest's first [`MEASURE_SPAN`] glyphs at most, and the
+/// glyphs after them follow at that tracking, so each split costs the same however long the rest
+/// is, and splits at irregular gaps early in a line leave the budget for a long evenly tracked run
+/// after them. A gap after the glyphs measured reads as spaces only when they fit it better than
+/// the joined pair does, as in the glyphs measured: laying those pairs out is set aside from
+/// `track_budget` before the tracking is measured, and without enough for both the rest is not
+/// measured.
+fn rest_after_split(l: &Line, k: usize, system_layout: bool, budget: &mut usize, remeasured: &mut usize, track_budget: &mut usize) -> Option<Line> {
+    let n = l.pieces.len();
+    let span = (n - k).min(MEASURE_SPAN);
+    let more = n - k - span;
+    // What [`Line::pair_steps`] takes for the last glyph measured and the glyphs after it.
+    let pairs = if more > 0 { more.saturating_add(1).saturating_mul(3) } else { 0 };
+    // A measure takes at least six times the glyphs it reads from each budget.
+    let measurable = n - k >= 3 && *remeasured >= span.saturating_mul(6) && *track_budget >= span.saturating_mul(6).saturating_add(pairs);
+    let first_drawn = measurable && {
+        *budget = budget.saturating_sub(3);
+        l.respaced(k, k + 3, l.tracking).is_some_and(|p| p.first_mismatch(&p.probe(system_layout)) != Some(0))
+    };
+    if !first_drawn {
+        return if l.tracking == 0.0 { l.part(k, n) } else { l.respaced(k, n, 0.0) };
+    }
+    // Rebuilding the glyphs measured takes them from the budget.
+    *remeasured = remeasured.saturating_sub(span.saturating_mul(6));
+    *track_budget = track_budget.saturating_sub(span).saturating_sub(pairs);
+    let mut pair_budget = pairs;
+    // The characters the rest's tracking applies to: its glyphs and the spaces between them (a
+    // space before glyph `at` follows glyph `at - 1`).
+    let reach = l
+        .text
+        .chars()
+        .scan(0usize, |glyph, c| {
+            let at = *glyph;
+            *glyph += usize::from(c != ' ');
+            Some(if c == ' ' { at > k } else { at >= k })
+        })
+        .filter(|kept| *kept)
+        .count()
+        .max(n - k);
+    let mut r = l.respaced(k, k + span, 0.0)?.tracked_reaching(system_layout, track_budget, reach);
+    // Tracking that leaves a space under half its advance: the gaps alone do not show the spaces
+    // past the glyphs measured (only the kerning a space breaks may), so the whole rest is measured
+    // while the budget lasts.
+    let space = space_advance(&r.face) * r.scale;
+    if more > 0
+        && space + r.tracking_pt() < space / 2.0
+        && *remeasured >= (n - k).saturating_mul(6)
+        && track_budget.saturating_add(pair_budget) >= (n - k).saturating_mul(6)
+        && let Some(whole) = l.respaced(k, n, 0.0)
+    {
+        *remeasured = remeasured.saturating_sub((n - k).saturating_mul(6));
+        *track_budget = track_budget.saturating_add(pair_budget).saturating_sub(n - k);
+        return Some(whole.tracked(system_layout, track_budget));
+    }
+    // The glyphs after those measured follow at that tracking.
+    let steps = match more {
+        0 => vec![],
+        _ => l.matches.get(k + span - 1..).and_then(|ms| r.pair_steps(ms, system_layout, &mut pair_budget)).unwrap_or_default(),
+    };
+    for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(k + span).enumerate() {
+        r.push_joined(*id, m, steps.get(j).copied());
+    }
+    Some(r)
 }
 
 /// Most units (anchors, subpaths and shapes) that Text Wrap objects may copy into the wrap shapes
