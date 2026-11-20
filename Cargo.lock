@@ -6683,6 +6683,7 @@ dependencies = [
  "craft-image-codecs",
  "crc32fast",
  "proptest",
+ "vectorcraft-affinity",
 ]
 
 [[package]]
@@ -7044,6 +7045,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom 0.24.1",
+ "vectorcraft-pdf",
  "vectorcraft-testkit",
  "vectorcraft-text",
 ]
