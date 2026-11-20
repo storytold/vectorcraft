@@ -237,10 +237,21 @@ fn a_wheel_scroll_under_a_still_press_near_the_edge_does_not_start_edge_scrollin
 fn a_press_and_a_move_to_the_edge_in_one_frame_scroll_once_held() {
     let (mut app, ctx, _) = zoomed_in("selection");
     let rect = app.canvas_rect.unwrap();
-    let start = pos2(rect.center().x, rect.bottom() - 30.0);
+    let start = pos2(rect.right() - 40.0, rect.bottom() - 30.0);
     let edge = pos2(start.x, rect.bottom() - 4.0);
     let c0 = center(&app);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), button(start, true), egui::Event::PointerMoved(edge)]);
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+        events: vec![egui::Event::PointerMoved(start), button(start, true), egui::Event::PointerMoved(edge)],
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(raw, |ui| {
+        let response = ui.ctx().read_response(egui::Id::unique("canvas")).expect("the existing actual canvas response");
+        assert!(super::drag::on_canvas(ui, &response, start), "the press reaches the canvas beside the task bar");
+        show(&mut app, ui);
+        assert!(matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)), "the actual Selection press owns the drag");
+    });
+    out.textures_delta.clear();
     for _ in 0..3 {
         frame(&mut app, &ctx, vec![]);
     }
