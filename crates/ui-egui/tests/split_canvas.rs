@@ -3217,6 +3217,14 @@ synchronous_test!(review_599512_cold_name_pair_precedes_fresh_mapped_handle, {
     }
 });
 
+fn review_599512_divider_point(s: &Scene, fraction: f32) -> Pos2 {
+    let rect = s.rect();
+    match s.app.view().unwrap().split.orientation {
+        SplitOrientation::Vertical => pos2(rect.left() + rect.width() * fraction, rect.center().y),
+        SplitOrientation::Horizontal => pos2(rect.center().x, rect.top() + rect.height() * fraction),
+    }
+}
+
 fn review_599512_middle_retains_owner(command: &str, release_in_frame: bool) {
     let mut s = Scene::new();
     s.enable();
@@ -3225,7 +3233,7 @@ fn review_599512_middle_retains_owner(command: &str, release_in_frame: bool) {
     let camera = review_597943_camera(&s);
     let start = s.rect().left_top() + vec2(60.0, 80.0);
     let primary = s.point_on_divider();
-    let end = review_597489_divider_point(&s, 0.7);
+    let end = review_599512_divider_point(&s, 0.7);
     s.press(start, PointerButton::Middle);
     let mut events = vec![review_597489_primary(primary, true), Event::PointerMoved(end)];
     if release_in_frame {
@@ -3250,13 +3258,13 @@ fn review_599512_divider_then_middle(command: &str, coalesced: bool, held: bool,
     let before = s.snapshot();
     let camera = review_597943_camera(&s);
     let down = s.point_on_divider();
-    let released = review_597489_divider_point(&s, 0.7);
+    let released = review_599512_divider_point(&s, 0.7);
     let middle = s.rect().center() + vec2(-60.0, 50.0);
     let moved = middle + vec2(24.0, 12.0);
     let middle_up = middle + vec2(48.0, 18.0);
     if held {
         s.press(down, PointerButton::Primary);
-        s.frame(vec![Event::PointerMoved(review_597489_divider_point(&s, 0.6))]);
+        s.frame(vec![Event::PointerMoved(review_599512_divider_point(&s, 0.6))]);
         assert!((s.fraction() - 0.6).abs() < 1e-6, "CONTROL: the old divider really owns the prior frame");
     }
     if coalesced {
@@ -3323,7 +3331,7 @@ fn review_599512_off_canvas_middle_control(command: &str, off_canvas_middle: boo
     let before = s.snapshot();
     let camera = review_597943_camera(&s);
     let down = s.point_on_divider();
-    let released = review_597489_divider_point(&s, 0.7);
+    let released = review_599512_divider_point(&s, 0.7);
     let outside = s.rect().left_top() - vec2(20.0, 20.0);
     assert!(!s.rect().contains(outside), "the Middle press is genuinely outside the canvas");
     let hand = s.rect().center() + vec2(-60.0, 50.0);
