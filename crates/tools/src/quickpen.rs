@@ -12,6 +12,9 @@
 //! point closes the path, a click on an end of an open path goes on drawing from it, and Escape
 //! or Enter ends the path. The path's points show as circles, without handles, and a preview
 //! shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step.
+//! While no path is being drawn, the tool edits the selected paths ([`edit`]).
+
+mod edit;
 
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
@@ -24,6 +27,7 @@ use crate::draw2::FEEDBACK;
 use crate::guides::{DrawSnap, Leave};
 use crate::pen::{continue_from, open_end_at};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use edit::{Edit, Grab};
 
 /// The tool's id.
 pub const ID: &str = "quickPen";
@@ -282,13 +286,15 @@ pub struct QuickPenTool {
     turn: f64,
     drawing: Option<Drawing>,
     press: Option<Press>,
+    /// A press on an anchor or a segment of a selected path while no path is being drawn.
+    edit: Option<Edit>,
     hover: Option<Point>,
     snap: DrawSnap,
 }
 
 impl Default for QuickPenTool {
     fn default() -> Self {
-        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, hover: None, snap: DrawSnap::default() }
+        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, edit: None, hover: None, snap: DrawSnap::default() }
     }
 }
 
@@ -409,8 +415,9 @@ impl QuickPenTool {
     }
 
     /// What a press draws: a piece on the path being drawn, its closing piece, or a new path (from
-    /// an end of an open path, the path goes on).
-    fn press_down(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+    /// an end of an open path, the path goes on). With no path being drawn, a press on an anchor
+    /// or a segment of a selected path waits to see whether it drags ([`edit`]).
+    fn press_down(&mut self, cx: &ToolContext, p: Point, shift: bool) -> Vec<Action> {
         if self.drawing.is_some() && self.active(cx).is_none() {
             self.drawing = None;
         }
@@ -442,27 +449,72 @@ impl QuickPenTool {
             self.press = Some(Press { at: p, dragged: false, begun: true });
             return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
+        if let Some(grab) = edit::grab_at(cx, p, tol) {
+            self.edit = Some(Edit::new(grab, p, shift));
+            return vec![];
+        }
         if let Some((id, si, at_first)) = open_end_at(cx, p, tol, None)
             && cx.doc.is_editable(id)
         {
-            // From its start, `continue_from` reverses the path first; the tool then sees it.
-            self.drawing = Some(Drawing { id: Some(id), si, ..Drawing::default() });
-            let mut out = continue_from(cx, id, si, at_first);
-            out.push(drawn());
-            return out;
+            return self.continue_path(cx, id, si, at_first);
         }
+        self.start_path(cx, p)
+    }
+
+    /// Goes on drawing from an end of subpath `si` of path `id`.
+    fn continue_path(&mut self, cx: &ToolContext, id: NodeId, si: usize, at_first: bool) -> Vec<Action> {
+        // From its start, `continue_from` reverses the path first; the tool then sees it.
+        self.drawing = Some(Drawing { id: Some(id), si, ..Drawing::default() });
+        let mut out = vec![];
+        // Anchors selected by an earlier click or drag: the path is selected whole again.
+        if !cx.selection.anchors.is_empty() || !cx.selection.segments.is_empty() {
+            let top = cx.doc.parent_of(id).filter(|p| cx.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))).unwrap_or(id);
+            out.push(Action::Exec("select.set".into(), json!({"ids": [top.0]})));
+        }
+        out.extend(continue_from(cx, id, si, at_first));
+        out.push(drawn());
+        out
+    }
+
+    /// Starts a new path at `p`.
+    fn start_path(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let q = self.snap.press(cx, p, &[], None);
         self.drawing = Some(Drawing { start: Some(q), ..Drawing::default() });
         vec![Action::Exec(COMMAND.into(), self.params(false)), Action::Notify("created".into())]
     }
 
-    /// Ends the path being drawn; a press that added a piece is taken back.
+    /// Ends the path being drawn; a press that added a piece, or moved part of a path, is taken
+    /// back.
     fn end(&mut self) -> Vec<Action> {
         self.drawing = None;
         self.snap.clear();
+        let moved = self.edit.take().is_some_and(|e| e.began);
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Cancel],
+            _ if moved => vec![Action::Cancel],
             _ => vec![],
+        }
+    }
+
+    /// The release of a press on an anchor or a segment of a selected path: a drag moves what it
+    /// holds to `p` and ends its undo step. A click on an end of an open path goes on drawing from
+    /// it, a click on another anchor selects it alone (with Shift, adds it to the selected anchors
+    /// or takes it out), and a click on a segment starts a new path there.
+    fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
+        if e.began {
+            let mut out = e.drag(cx, p);
+            out.push(Action::Commit);
+            return out;
+        }
+        match e.grab {
+            Grab::Anchor { id, si, ai, .. } if e.shift => {
+                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))]
+            }
+            Grab::Anchor { id, si, ai, end: true, .. } => self.continue_path(cx, id, si, ai == 0),
+            Grab::Anchor { id, si, ai, .. } => {
+                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))]
+            }
+            Grab::Segment { .. } => self.start_path(cx, e.start),
         }
     }
 
@@ -490,7 +542,7 @@ impl Tool for QuickPenTool {
     }
 
     fn busy(&self) -> bool {
-        self.press.is_some()
+        self.press.is_some() || self.edit.is_some()
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -502,12 +554,18 @@ impl Tool for QuickPenTool {
                 vec![]
             }
             PointerKind::Down => {
-                if self.press.is_some() {
+                if self.press.is_some() || self.edit.is_some() {
                     return vec![];
                 }
-                self.press_down(cx, p)
+                self.press_down(cx, p, ev.mods.shift)
             }
             PointerKind::Drag => {
+                if let Some(e) = self.edit.as_mut() {
+                    if !e.began && p.distance(e.start) < cx.tol(DRAG_PX) {
+                        return vec![];
+                    }
+                    return e.drag(cx, p);
+                }
                 let Some(mut pr) = self.press else { return vec![] };
                 if !pr.dragged && p.distance(pr.at) < cx.tol(DRAG_PX) {
                     return vec![];
@@ -520,6 +578,9 @@ impl Tool for QuickPenTool {
                 self.drag_to(cx, p)
             }
             PointerKind::Up => {
+                if let Some(e) = self.edit.take() {
+                    return self.release_edit(cx, e, p);
+                }
                 let out = match self.press {
                     // The piece ends where the press is let go, also past the last drag.
                     Some(pr) if pr.begun => {
@@ -595,6 +656,8 @@ impl Tool for QuickPenTool {
     /// The drawing goes on only when the path is back as it was before the press.
     fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.snap.clear();
+        // The session takes back what an edit moved; the release that follows does nothing.
+        self.edit = None;
         if self.press.take().is_some_and(|pr| pr.begun)
             && let Some(dr) = self.drawing.as_mut()
         {
@@ -655,8 +718,10 @@ impl Tool for QuickPenTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.drawing = None;
         self.snap.clear();
+        let moved = self.edit.take().is_some_and(|e| e.began);
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Commit],
+            _ if moved => vec![Action::Commit],
             _ => vec![],
         }
     }
@@ -674,6 +739,9 @@ impl Tool for QuickPenTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
+        if let Some(e) = &self.edit {
+            o.extend(e.guides.iter().cloned());
+        }
         let Some((id, sp)) = self.active(cx) else { return o };
         if self.press.is_none()
             && let Some(h) = self.hover
@@ -702,6 +770,12 @@ impl Tool for QuickPenTool {
         if let Some((_, sp)) = self.active(cx) {
             let close = sp.anchors.len() >= 2 && sp.anchors.first().is_some_and(|f| f.p.distance(p) <= tol);
             return if close { Cursor::PenClose } else { Cursor::PenDrawing };
+        }
+        if let Some(e) = &self.edit {
+            return if e.began { Cursor::Move } else { edit::cursor(cx, e.grab) };
+        }
+        if let Some(grab) = edit::grab_at(cx, p, tol) {
+            return edit::cursor(cx, grab);
         }
         if open_end_at(cx, p, tol, None).is_some() { Cursor::PenContinue } else { Cursor::Pen }
     }

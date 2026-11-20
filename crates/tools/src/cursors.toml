@@ -47,14 +47,20 @@ look = "The same pointer as Arrow, hollow: white with a dark outline."
 [[cursor]]
 id = "DirectAnchor"
 group = "Selection"
-shown_when = ["Direct Selection over an anchor of a path that isn't selected."]
+shown_when = [
+    "Direct Selection over an anchor of a path that isn't selected.",
+    "The Quick Pen, with no path being drawn, over an anchor of a selected path that is not itself selected (a click selects it, a drag moves it).",
+]
 hotspot = "The arrow's tip."
 look = "ArrowHollow with a small hollow square badge (an unselected anchor)."
 
 [[cursor]]
 id = "DirectAnchorSelected"
 group = "Selection"
-shown_when = ["Direct Selection over an anchor of a selected path."]
+shown_when = [
+    "Direct Selection over an anchor of a selected path.",
+    "The Quick Pen, with no path being drawn, over a selected anchor.",
+]
 hotspot = "The arrow's tip."
 look = "ArrowHollow with a small filled square badge (a selected anchor)."
 
@@ -137,6 +143,7 @@ shown_when = [
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
     "Selection and Objects on Path over an Objects on Path group's Move All widget, and while dragging it.",
+    "The Quick Pen, with no path being drawn, over a segment of a selected path, and while a drag moves an anchor or a segment.",
 ]
 hotspot = "The centre."
 look = "A four-way move cursor."
@@ -242,6 +249,7 @@ group = "Pen"
 shown_when = [
     "The Pen (not drawing) over an end of an open path (a click continues it).",
     "The Curvature tool over an open end.",
+    "The Quick Pen (not drawing) over an end of an open path (a click continues it, a drag on a selected path's end moves it).",
 ]
 hotspot = "The nib's tip."
 look = "The Pen nib with a slash badge."
