@@ -400,6 +400,14 @@ impl Line {
     /// its characters, spaces included, from `budget` before it runs; without enough left, the
     /// line stays as it is, or becomes the best tracked reading laid out before the budget ran out.
     fn tracked(self, system_layout: bool, budget: &mut usize) -> Line {
+        let reach = self.pieces.len();
+        self.tracked_reaching(system_layout, budget, reach)
+    }
+
+    /// [`Line::tracked`] for a line whose tracking is applied to `reach` glyphs: a measured tracking
+    /// within 0.05 of a whole number is read as that number only when the difference moves the
+    /// glyph `reach` places on by no more than the tolerance [`first_mismatch`] allows.
+    fn tracked_reaching(self, system_layout: bool, budget: &mut usize, reach: usize) -> Line {
         let size = self.size();
         let n = self.pieces.len();
         if n < 3 || size <= 0.0 {
@@ -506,7 +514,12 @@ impl Line {
         let mut tries = vec![];
         for seed in [lower, median(extra, true), spaced_seed].into_iter().flatten() {
             let Some(measured) = measure(seed) else { continue };
-            for t in [round_tracking(measured), measured] {
+            let rounded = round_tracking(measured);
+            let drift = (rounded - measured).abs() / 1000.0 * size * reach.saturating_sub(1) as f64;
+            for t in [rounded, measured] {
+                if t != measured && drift > (size * 0.01).max(0.01) {
+                    continue;
+                }
                 if !tries.contains(&t) {
                     tries.push(t);
                 }
@@ -554,7 +567,12 @@ impl Line {
             match (tracked.first_mismatch(&tracked.probe(system_layout)), plain_miss) {
                 // Under a unit of tracking, or a word space the tracked reading drops, where
                 // untracked type draws the line: no tracking.
-                (None, None) if t.abs() < 1.0 || drops_a_word_space => return self,
+                (None, None)
+                    if (t.abs() < 1.0 && t.abs() / 1000.0 * size * reach.saturating_sub(1) as f64 <= (size * 0.01).max(0.01))
+                        || drops_a_word_space =>
+                {
+                    return self;
+                }
                 (None, _) => return tracked,
                 (Some(k), Some(p)) if k > p && best.as_ref().is_none_or(|(b, _)| k > *b) => best = Some((k, tracked)),
                 _ => {}
@@ -693,7 +711,7 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                         remeasured = remeasured.saturating_sub(span.saturating_mul(6));
                         track_budget = track_budget.saturating_sub(span);
                         l.respaced(k, k + span, 0.0).map(|r| {
-                            let mut r = r.tracked(system_layout, &mut track_budget);
+                            let mut r = r.tracked_reaching(system_layout, &mut track_budget, n - k);
                             // Tracking that leaves a space under half its advance: the gaps alone
                             // do not show the spaces past the glyphs measured (only the kerning a
                             // space breaks may), so the whole rest is measured while the budget
@@ -701,13 +719,13 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
                             let more = n - k - span;
                             let space = space_advance(&r.face) * r.scale;
                             if more > 0
-                                && (space + r.tracking_pt()).abs() < space / 2.0
-                                && remeasured >= more.saturating_mul(6)
-                                && track_budget >= more.saturating_mul(6)
+                                && space + r.tracking_pt() < space / 2.0
+                                && remeasured >= (n - k).saturating_mul(6)
+                                && track_budget >= (n - k).saturating_mul(6)
                                 && let Some(whole) = l.respaced(k, n, 0.0)
                             {
-                                remeasured = remeasured.saturating_sub(more.saturating_mul(6));
-                                track_budget = track_budget.saturating_sub(more);
+                                remeasured = remeasured.saturating_sub((n - k).saturating_mul(6));
+                                track_budget = track_budget.saturating_sub(n - k);
                                 return whole.tracked(system_layout, &mut track_budget);
                             }
                             for (id, m) in l.pieces.iter().zip(&l.matches).skip(k + span) {
