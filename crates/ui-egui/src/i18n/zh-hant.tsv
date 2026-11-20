@@ -10461,6 +10461,10 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Nature Icons	自然圖示
+	Flower	花朵
+	Tree	樹木
+	Mountain	山脈
 	Ornamental	裝飾紋樣
 	Scrollwork	卷飾
 	Filigree Arrow	花絲箭頭

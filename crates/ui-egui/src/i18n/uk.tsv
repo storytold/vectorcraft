@@ -10454,6 +10454,10 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Nature Icons	Значки природи
+	Flower	Квітка
+	Tree	Дерево
+	Mountain	Гора
 	Ornamental	Орнаментальні
 	Scrollwork	Завиток
 	Filigree Arrow	Філігранна стріла
