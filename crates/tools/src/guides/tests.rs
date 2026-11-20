@@ -35,6 +35,12 @@ fn objects_past_the_anchor_budget_keep_their_edges_and_centre() {
 }
 
 #[test]
+fn a_bounds_walk_has_no_segment_budget_to_keep_it_going() {
+    assert_eq!(super::targets::start_budgets(super::targets::Gather::Bounds, 7), (super::targets::BUDGET, 0, 7));
+    assert_eq!(super::targets::start_budgets(super::targets::Gather::Segments, 7).1, super::targets::BUDGET);
+}
+
+#[test]
 fn objects_past_the_bounds_budget_keep_their_anchors() {
     let (d, _) = doc_with_rect();
     let t = Targets::collect_bounds_capped(&d, 0);

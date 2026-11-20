@@ -73,13 +73,20 @@ pub(super) const BOUNDS_BUDGET: usize = 100_000;
 
 /// What [`Targets::collect_inner`] gathers from each path besides its anchors and bounds.
 #[derive(Clone, Copy, PartialEq)]
-enum Gather {
+pub(super) enum Gather {
     /// Nothing more: a moved or resized selection lines up with bounds.
     Bounds,
     /// Its segments, which a dragged anchor lands on.
     Segments,
     /// Its segments, and its anchors as lines too: a drawn point lines up with them.
     Drawing,
+}
+
+/// The anchor, segment and bounds budgets a walk starts with. A walk that gathers no segments
+/// starts with none to spend, so it stops once its anchors and bounds run out.
+pub(super) fn start_budgets(gather: Gather, bounds_budget: usize) -> (usize, usize, usize) {
+    let segment_budget = if gather == Gather::Bounds { 0 } else { BUDGET };
+    (BUDGET, segment_budget, bounds_budget)
 }
 
 /// The entries of `sorted` (ascending by `key`) whose key is within `tol` of `v`, found by
@@ -651,7 +658,7 @@ impl Targets {
                 add_rect(&mut t, doc.setup.bleed_rect(ab.rect), Kind::Bleed);
             }
         }
-        let (mut budget, mut segment_budget, mut bounds_budget) = (BUDGET, BUDGET, bounds_budget);
+        let (mut budget, mut segment_budget, mut bounds_budget) = start_budgets(gather, bounds_budget);
         walk_but(&doc.layers, &exclude.iter().copied().collect(), &mut |n| {
             // Each budget caps only its own targets: the anchors and segments running out leave
             // the objects visited after that (the topmost, newest ones) their edges and centre
