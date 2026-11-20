@@ -739,7 +739,10 @@ the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-f
 space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
 Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting
 the spaces, tabs, line breaks and form feeds around it; other whitespace, such as a vertical tab or a no-break space,
-makes the text an error. A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
+makes the text an error. The command reads a subset of CSS: a function's arguments are literal numbers, percentages,
+angles and `none`, so `calc()`, `var()`, `color-mix()`, relative color syntax and every other nested function are
+errors, as are named colors and the functions and color spaces not listed above (`hwb()`, `lab()`, `oklab()` and
+`color()`). A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
 `#rrggbb` does in every command, and `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH
 Sliders lower it; `oklch()` is an error while the working RGB space is not sRGB. Values are clamped where CSS clamps
 them when it parses them (red, green and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH
