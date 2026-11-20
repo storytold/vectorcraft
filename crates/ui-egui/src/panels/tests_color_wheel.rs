@@ -12,9 +12,11 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_engine::Session;
 
 use super::color_wheel::{
-    ID, Settings, Sliders, chroma_tick, display_hsb, oklch_rows, oklch_track, remembered_hsb, remembered_hsl, remembered_oklch, set, show, stored,
+    ID, Settings, Sliders, chroma_tick, display_hsb, oklch_row_edit, oklch_rows, oklch_track, remembered_hsb, remembered_hsl, remembered_oklch, set,
+    show, stored,
 };
 use crate::VectorcraftApp;
+use crate::widgets::Live;
 
 /// An app with a selected rectangle filled with `fill`.
 fn app(fill: serde_json::Value) -> VectorcraftApp {
@@ -646,6 +648,40 @@ fn a_drag_on_lightness_keeps_the_chroma_asked_for() {
     assert!((l2 - l0).abs() < 0.01 && (c2 - c0).abs() < 0.01, "{:?} → {:?}", [l0, c0], [l2, c2]);
 }
 
+/// A lightness typed in the L field and committed by a click on the C rail in one frame keeps both
+/// edits: the color takes the typed L and the clicked C.
+#[test]
+fn a_typed_lightness_committed_by_a_click_on_chroma_keeps_both() {
+    let mut h = oklch_harness(app(json!("#ff0000")));
+    let h0 = fill_oklch(h.state())[2];
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Lightness").click();
+    h.run_steps(1);
+    h.key_press_modifiers(Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Lightness").type_text("50");
+    h.run_steps(1);
+    let rail = oklch_slider(&h, "Chroma").rect();
+    quick_click(&mut h, on_rail(rail, 0.2));
+    let [l, c, hue] = fill_oklch(h.state());
+    assert!((l - 0.5).abs() < 0.01, "the typed lightness stays: {l}");
+    assert!((c - 0.08).abs() < 0.01, "the click sets the chroma: {c}");
+    assert!((hue - h0).abs() < 1.0, "the hue stays: {h0} → {hue}");
+}
+
+/// When a drag on one OKLCH row and a field commit on another come in one frame, the frame's edit
+/// keeps both values and the drag stays in progress, in either order.
+#[test]
+fn a_field_commit_beside_a_drag_keeps_the_drag_going() {
+    let lch = [0.6, 0.2, 30.0];
+    let drag = |out| oklch_row_edit(out, lch, [0.8, 0.0, 0.0], 0, Live::Dragging);
+    let field = |out| oklch_row_edit(out, lch, [0.0, 0.0, 200.0], 2, Live::Released);
+    for (out, order) in [(field(Some(drag(None))), "drag first"), (drag(Some(field(None))), "field first")] {
+        assert_eq!(out.0, [0.8, 0.2, 200.0], "{order}");
+        assert_eq!(out.1, [true, false, true], "{order}");
+        assert!(matches!(out.2, Live::Dragging), "{order}");
+    }
+}
+
 /// A press on a row gives it the keyboard focus, and → raises it by one unit as one undo step.
 /// Each row reports its range and the adjust actions to screen readers.
 #[test]
@@ -1095,6 +1131,30 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "sliders": "hwb"})).unwrap_err();
     assert_eq!(e, "`sliders` must be none, oklch or hsl");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
+}
+
+/// An explicit null for any `ui.colorWheel` key keeps that key's value, as leaving the key out does,
+/// and the other keys of the same call still apply.
+#[test]
+fn ui_color_wheel_keeps_a_key_given_as_null() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let set = json!({
+        "view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch",
+        "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
+    });
+    let all = app.run("ui.colorWheel", set.clone()).unwrap();
+    assert_eq!(all, set);
+    for key in ["view", "channel", "opacity", "hexField", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"] {
+        assert_eq!(app.run("ui.colorWheel", json!({ key: null })).unwrap(), all, "{key}: null");
+    }
+    let got = app.run("ui.colorWheel", json!({"view": null, "channel": "blue", "opacity": null, "hexField": false})).unwrap();
+    assert_eq!(
+        got,
+        json!({
+            "view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch",
+            "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
+        })
+    );
 }
 
 /// A hue given to a Gray color does not change how it displays, so its paint stays a Gray color

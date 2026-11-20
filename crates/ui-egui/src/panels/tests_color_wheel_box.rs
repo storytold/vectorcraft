@@ -167,13 +167,13 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let harmony = json!({
+    let others = json!({
         "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false, "opacity": false,
         "hexField": false, "documentColors": false
     });
     let with = |v: serde_json::Value| {
         let mut v = v;
-        v.as_object_mut().unwrap().extend(harmony.as_object().unwrap().clone());
+        v.as_object_mut().unwrap().extend(others.as_object().unwrap().clone());
         v
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), with(json!({"view": "wheel", "channel": "hue"})));

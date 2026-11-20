@@ -314,6 +314,117 @@ fn a_text_typed_for_one_object_does_not_go_to_another_with_the_same_hex() {
     assert_eq!(undo_count(h.state()), before, "nothing was applied");
 }
 
+/// Selects the field's text and types `text` over it, without committing it.
+fn type_pending(h: &mut Harness<'static, VectorcraftApp>, text: &str) {
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").click();
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run_steps(1);
+    h.get_by_role_and_label(Role::TextInput, "Hex or CSS color").type_text(text);
+    h.run_steps(1);
+}
+
+/// A click at `pos` whose press and release come in one frame.
+fn quick_click(h: &mut Harness<'static, VectorcraftApp>, pos: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(pos));
+    h.run_steps(1);
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    h.input_mut().events.extend([button(true), button(false)]);
+    h.run_steps(2);
+}
+
+/// A click on the square in one frame that takes the focus from an edited field applies the text,
+/// then the click's saturation and brightness at the hue the text gave: a gradient stop keeps the
+/// typed alpha.
+#[test]
+fn a_wheel_click_in_one_frame_after_typing_applies_both() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    let before = undo_count(&app);
+    let mut h = harness(app);
+    type_pending(&mut h, "#33669980");
+    let square = h.get_by_label("Saturation and brightness").rect();
+    quick_click(&mut h, square.right_top() + vec2(-1.0, 1.0));
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let stop = &g.gradient.stops[0];
+    assert!((stop.opacity - 0.502).abs() < 1e-4, "the typed alpha stays: {}", stop.opacity);
+    let hex = stop.color.to_hex();
+    assert_ne!(hex, "#336699", "the click picked a color");
+    let ch = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap();
+    assert!(ch(5) > 0xf0 && ch(1) < 0x10 && ch(3) > 0x60 && ch(3) < 0xa0, "the pick keeps the typed hue: {hex}");
+    assert_eq!(undo_count(h.state()), before + 2);
+}
+
+/// A text that leaves a white as it was, committed by a click on the square in one frame, keeps the
+/// hue the white was picked from: the click's saturation brings that hue back.
+#[test]
+fn a_click_that_commits_the_same_white_keeps_the_remembered_hue() {
+    let mut app = app();
+    let rect = selected(&app)[0];
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    let mut h = harness(app);
+    let square = h.get_by_label("Saturation and brightness").rect();
+    quick_click(&mut h, square.left_top());
+    assert_eq!(rgb8(&fill_color(h.state(), rect)), [255, 255, 255], "the square picks white");
+    type_pending(&mut h, "#ffffff");
+    quick_click(&mut h, square.right_top() + vec2(-1.0, 1.0));
+    let [r, g, b] = rgb8(&fill_color(h.state(), rect));
+    assert!(g > 0xf0 && r < 0x10 && b < 0x10, "the green comes back: {r:02x}{g:02x}{b:02x}");
+}
+
+/// A press on the opacity slider in one frame that takes the focus from a field holding hex with an
+/// alpha applies the typed color and keeps the opacity the press set, not the typed alpha.
+#[test]
+fn an_opacity_click_in_one_frame_keeps_its_opacity_over_a_typed_alpha() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    app.run("ui.colorWheel", json!({"opacity": true})).unwrap();
+    let mut h = harness(app);
+    type_pending(&mut h, "#33669900");
+    let rail = h.get_by_role_and_label(Role::Slider, "Opacity").rect();
+    quick_click(&mut h, rail.center());
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let stop = &g.gradient.stops[0];
+    assert_eq!(stop.color.to_hex(), "#336699", "the text applies");
+    assert!(stop.opacity > 0.2 && stop.opacity < 0.8, "the press sets the opacity: {}", stop.opacity);
+}
+
+/// A text typed for one object of a dynamic symbol instance is dropped when another object of the
+/// same instance showing the same hex is selected: Enter then changes neither of them.
+#[test]
+fn a_text_typed_for_one_object_of_a_symbol_instance_does_not_go_to_another() {
+    let mut app = app();
+    let a = selected(&app)[0];
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let b = selected(&app)[0];
+    let inst = app.run("symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})).unwrap()["id"].as_u64().unwrap();
+    app.run("symbol.instance.selectPart", json!({"id": inst, "path": [0]})).unwrap();
+    let before = undo_count(&app);
+    let mut h = harness(app);
+    type_pending(&mut h, "#336699");
+    h.state_mut().run("symbol.instance.selectPart", json!({"id": inst, "path": [1]})).unwrap();
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let Paint::Solid { color, .. } = crate::panels::current_paints(h.state()).0 else { panic!("a solid fill") };
+    assert_eq!(rgb8(&color), [255, 0, 0], "the second object keeps its color");
+    assert_eq!(undo_count(h.state()), before, "nothing was applied");
+}
+
+/// A text with a character `color.parse` does not read as whitespace (a no-break space) is refused,
+/// as `color.parse` refuses it, and changes nothing.
+#[test]
+fn a_no_break_space_in_the_text_is_refused() {
+    let app = app();
+    let doc = app.session.doc().unwrap().doc.clone();
+    let mut h = harness(app);
+    type_in(&mut h, "\u{a0}#336699");
+    assert_eq!(*h.state().session.doc().unwrap().doc, *doc);
+    assert!(!h.state().ui.status.is_empty(), "the status bar says why");
+    assert!(h.state_mut().run("color.parse", json!({"text": "\u{a0}#336699"})).is_err());
+}
+
 /// A press on the opacity slider that takes the focus from an edited field applies the text and
 /// keeps the opacity the press set: a gradient stop takes both.
 #[test]

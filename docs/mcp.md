@@ -698,7 +698,7 @@ box with a slider and a percent field sets the opacity of the fill row (`paint.s
 when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
 a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
 `{"documentColors": true}` shows the row the panel
-menu's Show Document Colors adds under the wheel or the box. Keys left out keep their values.
+menu's Show Document Colors adds under the wheel or the box. Keys left out or null keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
 returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors}`, and the
 settings are kept with the preferences.
@@ -739,7 +739,10 @@ the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-f
 space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
 Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting
 the spaces, tabs, line breaks and form feeds around it; other whitespace, such as a vertical tab or a no-break space,
-makes the text an error. A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
+makes the text an error. The command reads a subset of CSS: a function's arguments are literal numbers, percentages,
+angles and `none`, so `calc()`, `var()`, `color-mix()`, relative color syntax and every other nested function are
+errors, as are named colors and the functions and color spaces not listed above (`hwb()`, `lab()`, `oklab()` and
+`color()`). A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
 `#rrggbb` does in every command, and `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH
 Sliders lower it; `oklch()` is an error while the working RGB space is not sRGB. Values are clamped where CSS clamps
 them when it parses them (red, green and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH
@@ -960,7 +963,7 @@ its own. A color for a grayscale or 1-bit image's drawing color creates no fill 
 to a fill row the image has. With New Art Has Basic Appearance off, the next shape copies the first selected object's
 appearance after any command, its opacity included. Without a new paint, `objects` counts only the targets that took the opacity. `paint.proxies` answers it as `fillOpacity` and `strokeOpacity`, from the first selected object that has
 that row (a selected path of a compound path answers with its compound path's row, which the commands edit, and a
-selected Live Paint group answers with its faces' fills and its edges' strokes). It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket paints (it is the active tool, or a Cmd+click or an Eyedropper pick works for it),
+selected Live Paint group answers with its faces' fills and its edges' strokes). With a layer targeted, it reads the layer's visible, unlocked art, as the commands do. It answers null with nothing selected, for an object selected in a symbol instance, while the Live Paint Bucket paints (it is the active tool, or a Cmd+click or an Eyedropper pick works for it),
 while the Type tool has characters selected, and when only type characters (which have no opacity of their own) or objects without that
 row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and

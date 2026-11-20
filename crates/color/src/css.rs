@@ -7,6 +7,11 @@
 //! take the comma-separated legacy form (<https://www.w3.org/TR/css-color-4/#legacy-color-syntax>).
 //! Hues take the angle units of CSS Values 4 (<https://www.w3.org/TR/css-values-4/#angles>). A hex
 //! color may leave out its `#`. [`format`] writes a color in these forms.
+//!
+//! The module reads a subset of CSS. A function's arguments are literal numbers, percentages,
+//! angles and `none`. A parenthesis inside the arguments makes the text invalid, so `calc()`,
+//! `var()`, `color-mix()`, relative color syntax and every other nested function are refused, as are
+//! named colors and the other color spaces and functions (`hwb()`, `lab()`, `oklab()`, `color()`).
 
 use crate::oklab::{self, CHROMA_FULL};
 
