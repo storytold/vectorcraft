@@ -1200,7 +1200,7 @@ fn document_mode_index_keeps_ineligible_first_name_shadowing() {
             s.edit("legacy duplicate palette", |d, _| {
                 let first = mode_index_swatch("Shadow", paint.clone(), *global);
                 let later = mode_index_swatch("Shadow", Paint::solid(Color::rgb(0.1, 0.8, 0.2)), true);
-                d.swatches = vec![mode_index_swatch("Underlying", Paint::solid(Color::rgb(0.2, 0.4, 0.6)), true)];
+                d.swatches = vec![mode_index_swatch("Underlying", Paint::solid(Color::rgb(0.2, 0.4, 0.6)), true)].into();
                 d.swatch_groups.clear();
                 if grouped {
                     d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
@@ -1234,7 +1234,7 @@ fn document_mode_index_uses_the_first_global_base_across_groups() {
         s.edit("legacy grouped palette", |d, _| {
             let first = mode_index_swatch("Shared", Paint::solid(base), true);
             let later = mode_index_swatch("Shared", Paint::solid(other), true);
-            d.swatches = vec![mode_index_swatch("Shared tint", mode_index_link(base.tinted(0.3), "Shared", 0.3), false)];
+            d.swatches = vec![mode_index_swatch("Shared tint", mode_index_link(base.tinted(0.3), "Shared", 0.3), false)].into();
             d.swatch_groups.clear();
             if grouped {
                 d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
@@ -1321,7 +1321,7 @@ fn document_mode_index_keeps_registration_and_missing_link_fallbacks() {
         let mark = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(stored));
         let missing = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!(stored));
         s.edit("legacy registration and missing link", |d, _| {
-            d.swatches = if explicit { vec![registration().clone()] } else { vec![] };
+            d.swatches = (if explicit { vec![registration().clone()] } else { vec![] }).into();
             d.swatch_groups.clear();
             d.node_mut(mark).unwrap().appearance.set_fill(mode_index_link(stored, REGISTRATION, 0.25));
             d.node_mut(missing).unwrap().appearance.set_fill(mode_index_link(stored, "Missing", 0.5));
