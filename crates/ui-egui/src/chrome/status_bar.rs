@@ -8,6 +8,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .exact_size(24.0)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(8, 0)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
+            // Keep the menu inside the panel even when earlier controls expand the row.
+            let row_rect = ui.available_rect_before_wrap();
             ui.horizontal_centered(|ui| {
                 let zoom = app.view().map(|v| v.zoom).unwrap_or(1.0);
                 let print = app.session.prefs.display_print_size;
@@ -104,14 +106,14 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 {
                     app.status(e);
                 }
-                status_readouts_and_snapping(app, ui, &t);
+                status_readouts_and_snapping(app, ui, &t, row_rect);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
 }
 
 /// Reserve the right-side convenience controls before the optional readouts shrink.
-fn status_readouts_and_snapping(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+fn status_readouts_and_snapping(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, row_rect: egui::Rect) {
     let gap = ui.spacing().item_spacing.x;
     let menu_width = status_snapping_menu_width(ui);
     let full_width = 3.0 * 18.0 + 3.0 * gap + menu_width;
@@ -134,8 +136,11 @@ fn status_readouts_and_snapping(app: &mut VectorcraftApp, ui: &mut Ui, t: &Token
     if direct {
         status_snapping_buttons(app, ui);
     }
-    let height = ui.spacing().interact_size.y.min(ui.available_height());
-    ui.scope(|ui| {
+    let height = ui.spacing().interact_size.y.min(row_rect.height());
+    let mut menu_rect = ui.available_rect_before_wrap();
+    menu_rect.min.y = row_rect.min.y;
+    menu_rect.max.y = row_rect.max.y;
+    ui.scope_builder(egui::UiBuilder::new().max_rect(menu_rect), |ui| {
         ui.spacing_mut().interact_size.y = height;
         ui.menu_button(tl!("Snapping"), |ui| super::control_bar::snapping_menu_contents(app, ui));
     });
