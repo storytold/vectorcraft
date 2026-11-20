@@ -1169,6 +1169,28 @@ fn a_remembered_hue_is_dropped_after_the_paint_changes() {
     }
 }
 
+/// The hue given to a gray is also dropped when the paint changes and comes back while the rows are
+/// hidden, so showing the rows again shows the gray's own hue, 0°.
+#[test]
+fn a_remembered_hue_is_dropped_after_the_paint_changes_while_the_rows_are_hidden() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!("#808080"));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        set_slider_value(&mut h, hue, 240.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(240.0), "{rows}");
+        h.state_mut().run("ui.colorWheel", json!({"sliders": "none"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        h.run_steps(2);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(0.0), "{rows}: the gray's own hue");
+    }
+}
+
 /// Hiding the rows, or showing the other rows, during a drag on a row keeps the color the drag
 /// previewed as one undo step and leaves no interaction open.
 #[test]

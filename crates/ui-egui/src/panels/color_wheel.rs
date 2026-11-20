@@ -710,11 +710,15 @@ fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
 }
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
-/// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
-/// the pick stored. The wheel shows that HSB only while all of them are unchanged.
+/// the appearance item, the proxy, the gradient stop or freeform point, its paint, the color the
+/// pick stored, and the document's undo step. The wheel shows that HSB only while all of them are
+/// unchanged.
 #[derive(Clone, Debug, PartialEq)]
 struct Owner {
     doc: Option<u64>,
+    /// The document's [`History::step`](vectorcraft_engine::History::step): another edit, an Undo
+    /// or a Redo changes it, also when the same color comes back.
+    step: Option<(u64, u64)>,
     selection: Vec<NodeId>,
     /// The Type tool's selected characters, when it edits the paint.
     text_selection: Option<(NodeId, usize, usize)>,
@@ -738,6 +742,7 @@ impl Owner {
         };
         Self {
             doc: st.map(|d| d.uid),
+            step: st.map(|d| d.history.step()),
             selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
             text_selection: super::character::text_editing(app),
             appearance_item: app.session.appearance_item(),

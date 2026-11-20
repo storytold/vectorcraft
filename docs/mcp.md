@@ -702,7 +702,8 @@ the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while 
 not sRGB: the profile assigned to the document when it has one, else the working RGB space of Edit › Color Settings.
 `ui.colorWheel {"sliders": "hsl"}` shows HSL Sliders in their place: H, S and L rows with the hue (0 to 360°),
 saturation and lightness (0 to 100 %) of the color's display sRGB, as CSS Color 4's `hsl()` defines them.
-`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB.
+`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH of its display sRGB in an object with
+`model: "oklch"` and `values: [L %, C, H°]`, next to the `hex`, `lab`, `outOfGamut` and `deltaE` of every conversion.
 A color outside sRGB (a Lab or CMYK color, an RGB color in a wider RGB space, or RGB numbers past 0 to 1) is clipped
 to sRGB first.
 The answer of `ui.colorWheel` and the settings also carry `sliders`.
