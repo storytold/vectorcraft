@@ -50,6 +50,121 @@ fn concurrent_fallback_lookups_all_find_the_installed_face() {
     std::fs::remove_dir(dir).unwrap();
 }
 
+/// Two [`test_fonts::steady_fonts`] guards on one thread hold font changes back until the last of
+/// them is dropped, whichever was made first.
+#[test]
+fn steady_fonts_hold_back_font_changes_until_the_last_guard_is_dropped() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let outer = crate::test_fonts::steady_fonts(&db);
+    let inner = crate::test_fonts::steady_fonts(&db);
+    drop(outer);
+    assert!(crate::test_fonts::font_changes_held_back(), "the inner guard is still held");
+    drop(inner);
+    let first = crate::test_fonts::steady_fonts(&db);
+    let second = crate::test_fonts::steady_fonts(&db);
+    drop(second);
+    assert!(crate::test_fonts::font_changes_held_back(), "the first guard is still held");
+    drop(first);
+}
+
+/// While a thread holds [`test_fonts::steady_fonts`], a font added on another thread, which may
+/// hold one too, changes the database's generation only once the guard is dropped. A thread that
+/// holds the only guard adds a font itself while another thread's change waits, which then still
+/// waits for the guard.
+#[test]
+fn steady_fonts_hold_back_other_threads_font_changes() {
+    for guarded in [false, true] {
+        let db = FontDb::with_font_dirs(vec![]);
+        let font = crate::test_fonts::variable_font().unwrap();
+        let steady = crate::test_fonts::steady_fonts(&db);
+        let before = db.generation();
+        std::thread::scope(|scope| {
+            let adding = scope.spawn(|| {
+                let _steady = guarded.then(|| crate::test_fonts::steady_fonts(&db));
+                db.add_font(font)
+            });
+            let id = adding.thread().id();
+            while !adding.is_finished() && !crate::test_fonts::font_changers().contains(&id) {
+                std::thread::yield_now();
+            }
+            assert_eq!(db.generation(), before, "guarded {guarded}: the other thread's change waits for the guard");
+            let listed = db.families().iter().any(|f| f == crate::test_fonts::VARIABLE_FAMILY);
+            assert!(!listed, "guarded {guarded}: the other thread publishes the font only once the guard is dropped");
+            drop(steady);
+            assert!(adding.join().unwrap() > 0, "guarded {guarded}: the font is new to this database");
+        });
+        assert_ne!(db.generation(), before, "guarded {guarded}: the change is made once the guard is dropped");
+    }
+    let db = FontDb::with_font_dirs(vec![]);
+    let steady = crate::test_fonts::steady_fonts(&db);
+    std::thread::scope(|scope| {
+        let adding = scope.spawn(|| db.add_font(crate::test_fonts::two_axis_font().unwrap()));
+        let id = adding.thread().id();
+        while !adding.is_finished() && !crate::test_fonts::font_changers().contains(&id) {
+            std::thread::yield_now();
+        }
+        let before = db.generation();
+        assert!(db.add_font(crate::test_fonts::variable_font().unwrap()) > 0);
+        let after = db.generation();
+        assert_ne!(after, before, "the guard's own thread changes the fonts");
+        assert!(!adding.is_finished(), "the waiting change still waits for the guard");
+        assert_eq!(db.generation(), after, "the waiting change still waits for the guard");
+        drop(steady);
+        assert!(adding.join().unwrap() > 0);
+    });
+}
+
+/// The first scan of a database's installed fonts does not wait for [`test_fonts::steady_fonts`]
+/// held for another database, so a thread holding one can catalog a database that another thread
+/// is scanning.
+#[test]
+fn a_first_scan_does_not_wait_for_steady_fonts() {
+    let (held, scanned) = (FontDb::with_font_dirs(vec![]), FontDb::with_font_dirs(vec![]));
+    let steady = crate::test_fonts::steady_fonts(&held);
+    std::thread::scope(|scope| {
+        let scanning = scope.spawn(|| scanned.load_system_fonts());
+        let id = scanning.thread().id();
+        while !scanning.is_finished() && !crate::test_fonts::font_changers().contains(&id) {
+            std::thread::yield_now();
+        }
+        let finished = scanning.is_finished();
+        drop(steady);
+        assert!(finished, "the first scan waited for the guard");
+        scanning.join().unwrap();
+    });
+}
+
+/// A font that a hook adds while another add publishes its faces, on the same thread, is added
+/// without that thread waiting for its own change.
+#[test]
+fn a_font_added_while_faces_are_published_is_added() {
+    let db = Arc::new(FontDb::with_font_dirs(vec![]));
+    let adder = db.clone();
+    // Not scoped: a thread that waits for its own change never finishes, and the test still reports.
+    let adding = std::thread::spawn(move || {
+        let (hook_db, mut extra) = (adder.clone(), crate::test_fonts::two_axis_font());
+        crate::fontdb::on_faces_published(Some(Box::new(move || {
+            if let Some(font) = extra.take() {
+                hook_db.add_font(font);
+            }
+        })));
+        let added = adder.add_font(crate::test_fonts::variable_font().unwrap());
+        crate::fontdb::on_faces_published(None);
+        added
+    });
+    let id = adding.thread().id();
+    let changes = || crate::test_fonts::font_changers().iter().filter(|t| **t == id).count();
+    while !adding.is_finished() && changes() < 2 {
+        std::thread::yield_now();
+    }
+    assert!(adding.is_finished(), "the hook's add waited for the change around it");
+    assert!(adding.join().unwrap() > 0);
+    let families = db.families();
+    for family in [crate::test_fonts::VARIABLE_FAMILY, crate::test_fonts::TWO_AXIS_FAMILY] {
+        assert!(families.iter().any(|f| f == family), "{family} is added");
+    }
+}
+
 /// A bundled Source Sans 3 file renamed [`FAMILY`] (as long as the original name).
 fn renamed(file: &str) -> Vec<u8> {
     renamed_to(file, FAMILY)
