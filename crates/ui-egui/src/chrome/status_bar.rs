@@ -134,7 +134,11 @@ fn status_readouts_and_snapping(app: &mut VectorcraftApp, ui: &mut Ui, t: &Token
     if direct {
         status_snapping_buttons(app, ui);
     }
-    ui.menu_button(tl!("Snapping"), |ui| super::control_bar::snapping_menu_contents(app, ui));
+    let height = ui.spacing().interact_size.y.min(ui.available_height());
+    ui.scope(|ui| {
+        ui.spacing_mut().interact_size.y = height;
+        ui.menu_button(tl!("Snapping"), |ui| super::control_bar::snapping_menu_contents(app, ui));
+    });
 }
 
 /// Measure the same localized label and padding the native menu button draws.
