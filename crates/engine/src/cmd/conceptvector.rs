@@ -304,9 +304,15 @@ impl ConceptRun {
         let one = Request { styles: vec![style.clone()], ..self.request.clone() };
         let next = crate::guard::catch_panic(|| self.provider.generate(&one, steps)).map_err(guard)??;
         cv::check_result(&one, &next)?;
+        // A style that takes the totals past their limits is dropped, so `run` keeps only the
+        // styles that passed.
+        let kept = run.made.len();
         run.made.extend(next);
         let so_far = Request { styles: self.request.styles.get(..run.made.len()).unwrap_or_default().to_vec(), ..one };
-        cv::check_result(&so_far, &run.made)?;
+        if let Err(e) = cv::check_result(&so_far, &run.made) {
+            run.made.truncate(kept);
+            return Err(e);
+        }
         Ok(run.made.len() == self.request.styles.len())
     }
 

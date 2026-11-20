@@ -504,6 +504,11 @@ fn styles_made_one_at_a_time_match_one_call_and_are_checked_as_they_come() {
     let mut made = PartRun::default();
     assert_eq!(run.run_part(&mut made, &|_, _| true), Ok(false));
     assert_eq!(run.run_part(&mut made, &|_, _| true), Err(ProviderError::ResourceLimit(MAX_ANCHORS)));
+    // The style that passed the limit is not kept, so the run neither finishes nor holds it.
+    assert_eq!(made.styles_done(), 1);
+    assert_eq!(run.run_part(&mut made, &|_, _| true), Err(ProviderError::ResourceLimit(MAX_ANCHORS)));
+    let kept = made.made();
+    assert_eq!(kept.iter().map(|v| v.style.as_str()).collect::<Vec<_>>(), ["s0"]);
 }
 
 #[test]
@@ -1268,7 +1273,9 @@ fn a_failed_batch_leaves_the_jobs_as_they_were() {
     // A job command after the close, in the same batch, does not drop the job either.
     let results = json!({"command": "conceptVector.results", "params": {"job": job}});
     new_doc_with(&mut s, &art());
-    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), results, bad.clone()]})).is_err());
+    // The batch stops at the unknown command, so `conceptVector.results` ran on the closed document's job first.
+    let e = s.execute("command.batch", &json!({"commands": [close.clone(), results, bad.clone()]})).unwrap_err().to_string();
+    assert!(e.contains("batch step 2 (`no.suchCommand`) failed"), "{e}");
     assert_eq!(s.documents().len(), 2, "the document is back");
     assert!(s.concept_variations(job).is_some(), "the restored document's job is kept after a job command");
     // A cancel in a batch that fails is undone with it.
