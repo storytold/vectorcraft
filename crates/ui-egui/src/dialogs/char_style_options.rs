@@ -315,7 +315,7 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
 fn typed_number(key: &str, text: &str) -> Option<f64> {
     match key {
         "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => crate::widgets::typed_points(text),
-        "h_scale" | "v_scale" | "fill_tint" | "stroke_tint" => crate::widgets::typed_number_with(text, "%"),
+        "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => crate::widgets::typed_number_with(text, "%"),
         "rotation" => crate::widgets::typed_number_with(text, "°"),
         _ => crate::widgets::typed_number(text),
     }
@@ -2017,7 +2017,7 @@ mod tests {
         assert_eq!(d.fields["tsume"], json!(""));
         let mut d = dialog_for(json!({"tsume": 50.0}));
         assert_eq!(d.fields["tsume"], json!(50.0));
-        for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
+        for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("25%", 25.0), ("50%/2", 25.0), ("150", 100.0), ("-5", 0.0)] {
             d.fields.insert("tsume".into(), json!(typed));
             assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
         }
