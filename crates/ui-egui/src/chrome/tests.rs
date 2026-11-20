@@ -5089,7 +5089,7 @@ fn review_4635935484_all_status_notes_are_reachable_by_click_and_wheel() {
 }
 
 fn review_all_skipped_message_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) -> egui::FullOutput {
-    ctx.run_ui(
+    let mut output = ctx.run_ui(
         egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(700.0, 300.0))),
             time: Some(time),
@@ -5097,7 +5097,9 @@ fn review_all_skipped_message_frame(app: &mut crate::VectorcraftApp, ctx: &egui:
             ..Default::default()
         },
         |ui| super::status_bar(app, ui),
-    )
+    );
+    output.textures_delta.clear();
+    output
 }
 
 /// Actual glyph rectangles in the full message, rather than its potentially very tall label box.
