@@ -5147,7 +5147,7 @@ art", and a loaded file draws the source path, as it does for a solid past its l
 documentation names the controls and their ranges
 ([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
 The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
-it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
+a hard shadow as a path and turns a blurred one into an image. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
