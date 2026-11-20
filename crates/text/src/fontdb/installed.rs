@@ -54,37 +54,53 @@ impl FontDb {
     }
 
     /// The faces in the font file at `path` (a suitcase font's in its resource fork), read for one
-    /// search and not added to the database: none when the file, or the fork, is longer than
-    /// `max_len` bytes or holds no font. Each face read has an id of its own, which no loaded face
-    /// has, and its path is `path`. Empty on wasm.
-    pub fn read_unloaded_file(&self, path: &Path, max_len: u64) -> Vec<Arc<FontFace>> {
+    /// search and not added to the database, with the bytes read: no faces when the file, or the
+    /// fork, is longer than `max_len` bytes ([`UnloadedFile::too_long`]) or holds no font. Each face
+    /// read has an id of its own, which no loaded face has, and its path is `path`. Empty on wasm.
+    pub fn read_unloaded_file(&self, path: &Path, max_len: u64) -> UnloadedFile {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let files = if crate::suitcase::is_suitcase(path) {
-                if crate::suitcase::fork_len(path) > max_len {
-                    return vec![];
+            let (files, bytes) = if crate::suitcase::is_suitcase(path) {
+                match crate::suitcase::read_fonts_within(path, max_len) {
+                    (_, n, true) => return UnloadedFile { bytes: n, too_long: true, ..Default::default() },
+                    (fonts, n, false) => (fonts, n),
                 }
-                crate::suitcase::read_fonts(path)
             } else {
-                read_within(path, max_len).into_iter().collect()
+                match read_within(path, max_len) {
+                    Some((data, n)) if n <= max_len => (vec![data], n),
+                    Some((_, n)) => return UnloadedFile { bytes: n, too_long: true, ..Default::default() },
+                    None => return UnloadedFile::default(),
+                }
             };
-            let mut out = vec![];
+            let mut faces = vec![];
             for data in files {
                 let data = Arc::new(data);
                 for (i, spec) in enumerate_faces(&data) {
                     if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, Some(path.to_path_buf())) {
-                        out.push(Arc::new(f));
+                        faces.push(Arc::new(f));
                     }
                 }
             }
-            out
+            UnloadedFile { faces, bytes, too_long: false }
         }
         #[cfg(target_arch = "wasm32")]
         {
             let _ = (path, max_len);
-            vec![]
+            UnloadedFile::default()
         }
     }
+}
+
+/// What [`FontDb::read_unloaded_file`] read from one font file.
+#[derive(Default)]
+pub struct UnloadedFile {
+    /// The faces read, not loaded.
+    pub faces: Vec<Arc<FontFace>>,
+    /// The bytes read from the file, those of a file longer than the limit included (at most one
+    /// past it).
+    pub bytes: u64,
+    /// The file, or the fork, is longer than the limit: no face was read.
+    pub too_long: bool,
 }
 
 impl FontDb {
@@ -116,13 +132,15 @@ fn file_len(path: &Path) -> u64 {
     }
 }
 
-/// The file at `path`, when it is at most `max_len` bytes long (read no further than one byte past).
+/// The file at `path`, read no further than one byte past `max_len`, with the bytes read: more than
+/// `max_len` when the file is longer. None when it cannot be read.
 #[cfg(not(target_arch = "wasm32"))]
-fn read_within(path: &Path, max_len: u64) -> Option<Vec<u8>> {
+fn read_within(path: &Path, max_len: u64) -> Option<(Vec<u8>, u64)> {
     use std::io::Read;
     let mut data = Vec::new();
     std::fs::File::open(path).ok()?.take(max_len.saturating_add(1)).read_to_end(&mut data).ok()?;
-    (data.len() as u64 <= max_len).then_some(data)
+    let n = data.len() as u64;
+    Some((data, n))
 }
 
 #[cfg(test)]
@@ -150,16 +168,22 @@ mod tests {
         let regular = inter.iter().find(|f| f.style == "Regular").unwrap();
         assert_eq!(regular.len, std::fs::metadata(&regular.path).unwrap().len());
         let before = db.loaded_faces().len();
-        let read = db.read_unloaded_file(&regular.path, regular.len);
+        let file = db.read_unloaded_file(&regular.path, regular.len);
+        assert_eq!((file.bytes, file.too_long), (regular.len, false));
+        let read = file.faces;
         assert!(read.iter().any(|f| f.family == "Inter" && f.style == "Regular"), "the file's face is read");
         assert!(read.iter().all(|f| f.path() == Some(regular.path.as_path())));
         // Read for the search only: the database does not hold it, and no loaded face has its id.
         assert_eq!(db.loaded_faces().len(), before);
         assert!(read.iter().all(|f| db.face_by_id(f.id()).is_none()));
         assert!(db.unloaded_installed_faces().iter().any(|f| f.family == "Inter"), "still not loaded");
-        // A file longer than the limit is not read.
-        assert!(db.read_unloaded_file(&regular.path, regular.len - 1).is_empty());
-        assert!(db.read_unloaded_file(&regular.path.with_extension("missing"), u64::MAX).is_empty());
+        // A file longer than the limit is not read past one byte over it, and says so.
+        let long = db.read_unloaded_file(&regular.path, regular.len - 1);
+        assert!(long.faces.is_empty());
+        assert_eq!((long.bytes, long.too_long), (regular.len, true));
+        let missing = db.read_unloaded_file(&regular.path.with_extension("missing"), u64::MAX);
+        assert!(missing.faces.is_empty());
+        assert_eq!((missing.bytes, missing.too_long), (0, false));
         // Once loaded, the family is no longer listed.
         assert!(db.face("Inter", "Regular").is_some_and(|f| f.family == "Inter"));
         assert!(!db.unloaded_installed_faces().iter().any(|f| f.family == "Inter" && f.style == "Regular"));

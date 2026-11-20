@@ -355,10 +355,10 @@ fn matched_glyphs(face: &FontFace) -> Vec<(u32, char)> {
     gids
 }
 
-/// How many glyphs of `face` an index draws to read their keys: at most [`MAX_GLYPHS_PER_FACE`].
-/// Reads the face's cmap only.
+/// How many glyphs of `face` an index draws to read their keys: the glyphs it matches, each once,
+/// at most [`MAX_GLYPHS_PER_FACE`]. Reads the face's cmap only.
 pub fn encoded_glyphs(face: &FontFace) -> usize {
-    face.mapped_chars().len().min(MAX_GLYPHS_PER_FACE)
+    matched_glyphs(face).len()
 }
 
 /// [`FaceKeys`] of `face`, each matched glyph drawn once, past the outline cache.
@@ -1026,17 +1026,19 @@ mod tests {
     }
 
     /// A face read from an installed file and not loaded is indexed as a loaded one is, and the
-    /// count of glyphs its index draws comes from its cmap.
+    /// count of glyphs its index draws comes from its cmap: the glyphs it matches, each once.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn an_unloaded_face_is_indexed_as_a_loaded_one() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts");
         let db = FontDb::with_font_dirs(vec![]);
         let loaded = db.face("Source Sans 3", "Regular").unwrap();
-        let read = db.read_unloaded_file(&dir.join("SourceSans3-Regular.ttf"), u64::MAX);
+        let read = db.read_unloaded_file(&dir.join("SourceSans3-Regular.ttf"), u64::MAX).faces;
         let face = read.into_iter().find(|f| f.family == "Source Sans 3").unwrap();
         assert_ne!(face.id(), loaded.id());
-        assert_eq!(encoded_glyphs(&face), face.mapped_chars().len().min(MAX_GLYPHS_PER_FACE));
+        assert_eq!(encoded_glyphs(&face), matched_glyphs(&face).len());
+        // Spaces, controls and shape symbols are not drawn, nor one glyph twice for two characters.
+        assert!(encoded_glyphs(&face) < face.mapped_chars().len().min(MAX_GLYPHS_PER_FACE));
         let shape = Affine::translate((40.0, 90.0)) * Affine::scale(0.03) * db.outline_uncached(&face, face.glyph_for('g'));
         let keys: BTreeSet<u64> = std::iter::once(shape_key(&shape).unwrap()).collect();
         let unloaded = RetypeIndex::build_unloaded(&db, face.clone(), &keys);

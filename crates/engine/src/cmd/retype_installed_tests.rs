@@ -98,7 +98,7 @@ fn a_loaded_face_of_the_same_names_counts_only_for_the_shapes_it_matches() {
     let dir = vectorcraft_testkit::temp_dir("retype-installed-twin");
     let path = dir.join("RetypeTwin-Regular.ttf");
     std::fs::write(&path, named_copy(false, names).unwrap()).unwrap();
-    let read = db.read_unloaded_file(&path, u64::MAX).into_iter().next().unwrap();
+    let read = db.read_unloaded_file(&path, u64::MAX).faces.into_iter().next().unwrap();
     let shapes = glyphs(&db, "Rx");
     let refs: Vec<&BezPath> = shapes.iter().collect();
     let keys = keys(&shapes);
@@ -141,6 +141,22 @@ fn plain_shapes_alone_read_no_installed_font() {
 }
 
 #[test]
+fn a_shape_without_a_glyph_s_key_does_not_keep_the_search_going() {
+    let (db, _) = installed("keyless", &["Retype Copy Keyless A", "Retype Copy Keyless B"]);
+    let mut shapes = glyphs(&db, "k");
+    // More contours than any glyph's key counts: no face can match it.
+    let mut dots = BezPath::new();
+    for i in 0..49 {
+        dots.extend(kurbo::Circle::new((10.0 * f64::from(i), 300.0), 3.0).path_elements(0.1));
+    }
+    assert!(shape_key(&dots).is_none() && !vectorcraft_text::retype::is_plain(&dots));
+    shapes.push(dots);
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    let found = search(&db, &refs, false).unwrap();
+    assert_eq!((found.read, found.faces.len()), (1, 1), "the second file is not read");
+}
+
+#[test]
 fn the_search_stops_once_every_shape_matches_unless_every_face_is_wanted() {
     let (db, _) = installed("every", &["Retype Copy C", "Retype Copy D"]);
     let shapes = glyphs(&db, "ab");
@@ -178,6 +194,63 @@ fn faces_past_the_limits_are_skipped_and_counted() {
     let (db, _) = installed("limits-faces", &["Retype Copy O", "Retype Copy P", "Retype Copy Q"]);
     let capped = search_within(&db, &refs, true, Limits { faces: 1, ..open }, &all).unwrap();
     assert_eq!((capped.read, capped.skipped, capped.faces.len()), (1, 2, 1));
+}
+
+#[test]
+fn a_file_that_grows_past_the_limits_after_the_listing_is_skipped_and_its_bytes_count() {
+    let (db, mut files) = installed("grown", &["Retype Copy Y", "Retype Copy Z"]);
+    let shapes = glyphs(&db, "k");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    // The order the search reads them in: smallest first.
+    let len = |p: &PathBuf| std::fs::metadata(p).unwrap().len();
+    files.sort_by(|a, b| len(a).cmp(&len(b)).then_with(|| a.cmp(b)));
+    let (first, second) = (len(&files[0]), len(&files[1]));
+    let grown = files[0].clone();
+    // The first file grows past the limit for one file as its reading starts, after the listing.
+    let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(move |done, _, _| {
+        if done == 0 {
+            let mut data = std::fs::read(&grown).unwrap();
+            data.resize(data.len() + second as usize + 1, 0);
+            std::fs::write(&grown, data).unwrap();
+        }
+    });
+    // Bytes for both files as listed: the grown file's reading takes one more than the limit for
+    // one file, which leaves too little for the second.
+    let limits = Limits { file: second, read: first + second, glyphs: usize::MAX, faces: usize::MAX };
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    let all = |_: &vectorcraft_text::FontFace| true;
+    let found = vectorcraft_doc::cancel::scope(&token, Some(sink), || search_within(&db, &refs, true, limits, &all)).unwrap();
+    assert_eq!((found.read, found.skipped, found.faces.len()), (0, 2, 0));
+}
+
+#[test]
+fn the_glyph_budget_counts_the_glyphs_drawn() {
+    let (db, files) = installed("glyph-budget", &["Retype Copy Budget"]);
+    let shapes = glyphs(&db, "k");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    let face = db.read_unloaded_file(&files[0], u64::MAX).faces.into_iter().next().unwrap();
+    let mapped = face.mapped_chars().len();
+    let drawn = vectorcraft_text::retype::encoded_glyphs(&face);
+    assert!(drawn < mapped, "{drawn} of {mapped}");
+    // A budget below the face's characters and at the glyphs drawn: the face is compared.
+    let open = Limits { file: u64::MAX, read: u64::MAX, glyphs: drawn, faces: usize::MAX };
+    let found = search_within(&db, &refs, true, open, &|_| true).unwrap();
+    assert_eq!((found.read, found.skipped, found.faces.len()), (1, 0, 1));
+}
+
+#[test]
+fn a_run_away_from_the_list_hands_in_the_loaded_faces_that_match_with_the_installed_ones() {
+    let (db, _) = installed("list-run", &["Retype Copy List"]);
+    db.add_font(
+        vectorcraft_text::test_fonts::named_copy(false, ("Retype Loaded List", "Regular", "Version 1.000", "RetypeLoadedList-Regular")).unwrap(),
+    );
+    let loaded: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Loaded List").collect();
+    let search = super::RetypeSearch { command: "type.retypeFonts", doc: 1, shapes: glyphs(&db, "Rx"), faces: loaded.clone() };
+    let found = search.run_in(&db).unwrap();
+    let families: Vec<&str> = found.installed.faces.iter().map(|f| f.family.as_str()).collect();
+    // The loaded face first, then the installed one, each once.
+    assert_eq!(families, ["Retype Loaded List", "Retype Copy List"]);
+    assert_eq!((found.installed.read, found.installed.skipped), (1, 0));
 }
 
 #[test]
@@ -244,7 +317,11 @@ fn a_run_away_from_the_command_loads_the_faces_it_finds() {
     assert!(run.current(&s));
     let found = run.run_in(&db).unwrap();
     assert_eq!(found.json(), json!({"read": 1, "skipped": 0}));
-    assert_eq!(found.installed.faces.iter().map(|f| f.family.as_str()).collect::<Vec<_>>(), ["Retype Copy X"]);
+    // The loaded faces that match are handed in with it, ahead of it.
+    let families: Vec<&str> = found.installed.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families.last(), Some(&"Retype Copy X"), "{families:?}");
+    assert_eq!(families.iter().filter(|f| **f == "Retype Copy X").count(), 1, "{families:?}");
+    assert!(families.contains(&"Source Sans 3"), "{families:?}");
     assert!(!unloaded(&db, "Retype Copy X"));
     // A change of selection or content: it no longer applies.
     s.execute("select.set", &json!({"ids": [ids[0]]})).unwrap();

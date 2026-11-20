@@ -60,7 +60,7 @@ pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
 pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
-pub use installed::InstalledFace;
+pub use installed::{InstalledFace, UnloadedFile};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]

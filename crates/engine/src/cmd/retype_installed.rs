@@ -114,7 +114,8 @@ type File = (std::path::PathBuf, u64, Vec<(String, String)>);
 /// [`search`] within `limits`, keeping in its faces only those `listed` accepts.
 fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, listed: &dyn Fn(&FontFace) -> bool) -> Result<Installed> {
     let mut out = Installed::default();
-    let shapes: Vec<&BezPath> = shapes.iter().copied().filter(|s| !is_plain(s)).collect();
+    // A shape without a glyph's key matches no face: the search does not wait for it.
+    let shapes: Vec<&BezPath> = shapes.iter().copied().filter(|s| !is_plain(s) && shape_key(s).is_some()).collect();
     let keys: BTreeSet<u64> = shapes.iter().filter_map(|s| shape_key(s)).collect();
     if keys.is_empty() {
         return Ok(out);
@@ -144,15 +145,15 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
             continue;
         }
         // A file that grew since the scan is read only within what is left.
-        let faces = db.read_unloaded_file(path, limits.file.min(bytes_left));
-        // The bytes read: the file's fonts (a collection's faces share one), or its length then.
-        let mut datas: Vec<(usize, usize)> = faces.iter().map(|f| (f.file_data().as_ptr() as usize, f.file_data().len())).collect();
-        datas.sort_unstable();
-        datas.dedup();
-        let read = datas.iter().map(|d| d.1 as u64).sum::<u64>().max(*len);
-        bytes_left = bytes_left.saturating_sub(read);
+        let file = db.read_unloaded_file(path, limits.file.min(bytes_left));
+        // The bytes read, those of a file that grew past the limits too.
+        bytes_left = bytes_left.saturating_sub(file.bytes);
+        if file.too_long {
+            out.skipped += styles.len();
+            continue;
+        }
         let wanted = |f: &FontFace| styles.iter().any(|(family, style)| f.family.eq_ignore_ascii_case(family) && f.style.eq_ignore_ascii_case(style));
-        let faces: Vec<Arc<FontFace>> = faces.into_iter().filter(|f| wanted(f)).collect();
+        let faces: Vec<Arc<FontFace>> = file.faces.into_iter().filter(|f| wanted(f)).collect();
         for (j, face) in faces.iter().enumerate() {
             if out.faces.len() >= limits.faces {
                 // The faces not compared past the cap: the rest of this file's and the later files'.
@@ -391,7 +392,17 @@ impl RetypeSearch {
     fn run_in(&self, db: &FontDb) -> Result<RetypeFound> {
         let shapes: Vec<&BezPath> = self.shapes.iter().collect();
         let installed = if self.command == "type.retypeFonts" {
-            super::fonts::rank_fonts(db, self.faces.clone(), &shapes, true, None)?.1
+            let (ranked, mut found) = super::fonts::rank_fonts(db, self.faces.clone(), &shapes, true, None)?;
+            // The loaded faces that match are handed in too, ahead of the installed ones found:
+            // loading those can move a loaded face past the 96 the command lists.
+            let mut faces: Vec<Arc<FontFace>> = ranked.iter().map(|r| r.face().clone()).collect();
+            for f in std::mem::take(&mut found.faces) {
+                if !faces.iter().any(|k| k.id() == f.id()) {
+                    faces.push(f);
+                }
+            }
+            found.faces = faces;
+            found
         } else {
             let keys: BTreeSet<u64> = shapes.iter().filter_map(|sh| shape_key(sh)).collect();
             let index = RetypeIndex::build(db, self.faces.iter().cloned(), &keys);

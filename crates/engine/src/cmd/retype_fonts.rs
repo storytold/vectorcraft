@@ -50,6 +50,11 @@ pub(super) struct Ranked {
 }
 
 impl Ranked {
+    /// The font.
+    pub(super) fn face(&self) -> &Arc<FontFace> {
+        &self.face
+    }
+
     fn mean(&self) -> f64 {
         self.residual / self.matched.max(1) as f64
     }
