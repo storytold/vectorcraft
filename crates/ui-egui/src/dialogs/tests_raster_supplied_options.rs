@@ -6,6 +6,7 @@ use super::{confirm, png_options};
 
 #[test]
 fn raster_options_preserve_supplied_values_through_the_png_command() {
+    assert_fresh_raster_defaults_without_remembered_resolution();
     let (mut app, written) = app(1);
     app.run("file.export.png", json!({"ppi": 300, "background": "#204080", "antiAlias": "type", "interlaced": true})).unwrap();
     assert_eq!(kind(&app), Some("pngOptions"));
@@ -40,7 +41,7 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     for omitted in [json!({}), json!({"ppi": null, "background": null, "antiAlias": null, "interlaced": null})] {
         app.run("file.export.png", omitted).unwrap();
         let fields = &app.ui.dialog.as_ref().unwrap().fields;
-        assert_eq!(fields["ppi"], 72);
+        assert_eq!(fields["ppi"], 144.0, "the last accepted raster export was JPEG at 144 PPI");
         assert_eq!(fields["background"], "transparent");
         assert_eq!(fields["antiAlias"], "art");
         assert_eq!(fields["interlaced"], false);
@@ -51,4 +52,18 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["ppi"], 0);
     assert!(confirm(&mut app).unwrap_err().contains("ppi must be a positive number"));
     assert_eq!(written.borrow().len(), 2);
+}
+
+fn assert_fresh_raster_defaults_without_remembered_resolution() {
+    let (mut app, written) = app(1);
+    for omitted in [json!({}), json!({"ppi": null, "background": null, "antiAlias": null, "interlaced": null})] {
+        app.run("file.export.png", omitted).unwrap();
+        let fields = &app.ui.dialog.as_ref().unwrap().fields;
+        assert_eq!(fields["ppi"], 72, "a fresh app still defaults to 72 PPI");
+        assert_eq!(fields["background"], "transparent");
+        assert_eq!(fields["antiAlias"], "art");
+        assert_eq!(fields["interlaced"], false);
+        app.ui.dialog = None;
+    }
+    assert!(written.borrow().is_empty(), "opening and dismissing options does not export");
 }

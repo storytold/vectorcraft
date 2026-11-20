@@ -633,6 +633,9 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
+    /// Last resolution accepted by raster export options, in pixels per inch.
+    #[serde(default)]
+    pub raster_export_ppi: Option<f64>,
     pub dialog: Option<Dialog>,
     #[serde(skip)]
     pub brush_key_color_pick: Option<BrushKeyColorPick>,
@@ -1357,6 +1360,7 @@ impl Default for UiState {
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),
+            raster_export_ppi: None,
             dialog: None,
             brush_key_color_pick: None,
             told: vec![],
