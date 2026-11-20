@@ -76,6 +76,7 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad("object.setProps", "pixelated can only be set on image objects"));
             }
         }
+    }
     if let Some(v) = str_param(p, "name") {
         crate::cmd::buildcmds::check_part_name(d, &ids, v)?;
     }
