@@ -109,11 +109,11 @@ impl<'a> Reader<'a> {
                     Ok(union(parts))
                 }
             }
-            NodeKind::Image(im) => {
-                let (w, h) = (f64::from(im.width), f64::from(im.height));
-                let corners = [Point::new(0.0, 0.0), Point::new(w, 0.0), Point::new(w, h), Point::new(0.0, h)].map(|p| im.xf * p);
-                self.polygon(&corners)
-            }
+            // A distorted image's frame joins its corners.
+            NodeKind::Image(_) => match n.image_corners() {
+                Some(corners) => self.polygon(&corners),
+                None => Ok(None),
+            },
             // An instance of a symbol the document doesn't have draws nothing.
             NodeKind::SymbolInstance { .. } => match vectorcraft_render::effects::outline_object(Some(self.doc), n) {
                 Some(art) => self.node(&art, depth + 1),

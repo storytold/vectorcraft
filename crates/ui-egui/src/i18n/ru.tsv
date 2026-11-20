@@ -138,6 +138,7 @@
 	Add to Selection	Добавить к выделению
 	Add to Swatches	Добавить в образцы
 	Add Used Colors	Добавить использованные цвета
+	Add Selected Colors	Добавить выбранные цвета
 	Additional Plug-ins Folder	Папка дополнительных модулей
 	Plug-in Instruction Budget	Бюджет инструкций модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
@@ -235,6 +236,10 @@ font-technology	Variable	Вариативные
 	Arc	Дуга
 	Arc Lower…	Дуга снизу…
 	Arc Tool	Инструмент «Дуга»
+	Three-Point Arc Tool	Инструмент «Дуга по трём точкам»
+	Three-Point Arc	Дуга по трём точкам
+	Arc too large	Дуга слишком велика
+	Third Point Sets Direction	Третья точка задаёт направление
 	Arc Upper…	Дуга сверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -496,7 +501,14 @@ font-technology	Variable	Вариативные
 	Choose…	Выбрать…
 	Circle	Круг
 	Circle Tool	Инструмент «Круг»
+	Curvature Circle Tool	Инструмент «Круг кривизны»
+	Cusp	Точка возврата
+	Straight segment	Прямой сегмент
 	Circle too large	Круг слишком большой
+	Show Radii	Показать радиусы
+	Show Diameter	Показать диаметр
+	Anchors at Standard Positions	Опорные точки в стандартных позициях
+	Third Point by Dragging	Третья точка перетаскиванием
 	Classic Defaults	Классические значения по умолчанию
 	Clean Up…	Очистить…
 	Clear	Очистить
@@ -600,9 +612,17 @@ font-technology	Variable	Вариативные
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вид «Круг»
 	Box View	Вид «Квадрат»
+	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
+	Show Document Colors	Показать цвета документа
+	Document Colors	Цвета документа
+	Selection Colors	Цвета выделения
+@plural	Used {n} time|Used {n} times	Используется {n} раз|Используется {n} раза|Используется {n} раз
+	Show Harmony	Показать гармонию
+	Harmony Rule	Правило гармонии
+	Harmony color	Цвет гармонии
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -643,6 +663,8 @@ font-technology	Variable	Вариативные
 	Contextual Task Bar	Контекстная панель задач
 	Pin Bar Position	Закрепить положение панели
 	Reset Bar Position	Сбросить положение панели
+	Bar Actions	Действия панели
+	Reset Bar Actions	Сбросить действия панели
 	Resize	Изменить размер
 	Contrast	Контраст
 	Control	Control
@@ -1028,10 +1050,25 @@ font-technology	Variable	Вариативные
 	Duplicate Symbol	Дублировать символ
 	Duplicate {kind} Style	Дублировать стиль {kind}
 	Dutch	Нидерландский
+	PSD Import Options	Параметры импорта PSD
+	Place PSD	Поместить PSD
+	Convert Layers to Objects	Преобразовать слои в объекты
+	Import Hidden Layers	Импортировать скрытые слои
+	Flatten Layers to a Single Image	Свести слои в одно изображение
+	Import Slices	Импортировать фрагменты
 	DXF Import Options	Параметры импорта DXF
 	DXF Info	Сведения о DXF
 	DXF Options	Параметры DXF
 	DXF Options Dialog	Диалоговое окно «Параметры DXF»
+	HP-GL Options	Параметры HP-GL
+	HP-GL Options Dialog	Диалоговое окно «Параметры HP-GL»
+	Curve Tolerance:	Допуск кривых:
+	Origin:	Начало координат:
+	Pens:	Перья:
+	One Pen per Color	Одно перо на цвет
+	Pen Table	Таблица перьев
+	Draw the Nearest Path Next	Следующим рисовать ближайший контур
+	Draw Inner Paths First	Сначала рисовать внутренние контуры
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Каждая страница печатается как одно изображение с разрешением растровых эффектов документа.
 	Earth Tones	Земляные тона
@@ -1269,6 +1306,15 @@ font-technology	Variable	Вариативные
 	Shading Color	Цвет затенения
 	Black Overprint	Чёрный с наложением
 	Draw Hidden Faces	Рисовать скрытые грани
+	Map Art…	Наложение графики…
+	Map Art	Наложение графики
+	First Surface	Первая поверхность
+	Previous Surface	Предыдущая поверхность
+	Next Surface	Следующая поверхность
+	Last Surface	Последняя поверхность
+	Scale to Fit	Масштабировать по размеру
+	Shade Artwork	Затенять графику
+	Invisible Geometry	Невидимая геометрия
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
 	This system has no screen color sampler	В этой системе нет средства выбора цвета с экрана
@@ -1350,6 +1396,20 @@ font-technology	Variable	Вариативные
 @msg	no match of `find` at bytes {_1}..{_2} of object {_3}	в байтах {_1}..{_2} объекта {_3} нет совпадения с `find`
 	Find Font	Найти шрифт
 	Find Font…	Найти шрифт…
+	Retype	Перенабор
+	Find Matching Fonts	Найти подходящие шрифты
+	Find more font matches	Найти другие подходящие шрифты
+	Type your text to preview	Введите текст для просмотра
+	Select outlined text, then Find Matching Fonts.	Выделите текст, преобразованный в кривые, затем выберите «Найти подходящие шрифты».
+	No font matches the selected shapes.	Ни один шрифт не подходит к выделенным фигурам.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Фигуры после первых 2048 или вложенные глубже 16 уровней групп не сравнивались.
+	Reset Retype Panel	Сбросить панель «Перенабор»
+	List Matching Fonts	Список подходящих шрифтов
+	Retype Preview	Просмотр в панели «Перенабор»
+@msg	`count` must be a whole number from 1 to 96	`count` должно быть целым числом от 1 до 96
+@msg	`size` must be small, medium or large	`size` должно быть small, medium или large
+@msg	`text` must be a string of at most 100 characters	`text` должно быть строкой длиной не более 100 символов
+@msg	Retype: select outlined text (paths or compound paths)	Перенабор: выделите текст, преобразованный в кривые (контуры или составные контуры)
 	Find Next	Найти далее
 	Find Objects	Найти объекты
 	Compare with Image	Сравнить с изображением
@@ -1398,6 +1458,17 @@ font-technology	Variable	Вариативные
 	Largest:	Самое большое:
 	Direction:	Направление:
 	Symbolism Tools Options	Параметры инструментов символов
+	Tool:	Инструмент:
+	Symbol Set Density	Плотность набора символов
+	Symbol Sprayer Options	Параметры распылителя символов
+	Scrunch:	Сжатие:
+	Spin:	Вращение:
+	Screen:	Прозрачность:
+	Stain:	Тонирование:
+	Symbol Sizer Options	Параметры размера символов
+	Proportional Resizing	Пропорциональное изменение размера
+	Resizing Affects Density	Изменение размера влияет на плотность
+	Show Brush Size and Intensity	Показывать размер и интенсивность кисти
 	Symbol Set Density:	Плотность набора символов:
 	Flat Image	Плоское изображение
 	Flat Logo	Плоский логотип
@@ -1663,6 +1734,10 @@ file-filter	Templates	Шаблоны
 	Add Color Tool	Инструмент «Добавить цвет»
 	Remove Color Tool	Инструмент «Удалить цвет»
 	Remove Color	Удалить цвет
+	Set As Base Color	Сделать базовым цветом
+	Select Shade	Выбрать оттенок
+	Add New Color	Добавить новый цвет
+	Set Current Color As Base Color	Сделать текущий цвет базовым
 	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
@@ -1679,6 +1754,8 @@ file-filter	Templates	Шаблоны
 	More Options	Дополнительные параметры
 	Show Properties Panel	Показать панель «Свойства»
 	Hide Corner Widget	Скрыть угловой виджет
+	Hide Shape Widgets	Скрыть виджеты фигур
+	Show Shape Widgets	Показать виджеты фигур
 	Hide Corner Widget for angles greater than	Скрывать угловой виджет для углов больше
 	Hide Edges	Скрыть края
 	Hide Gradient Annotator	Скрыть аннотатор градиента
@@ -1865,6 +1942,10 @@ file-filter	Templates	Шаблоны
 	Rename Preset	Переименовать набор
 	Save Image Trace Preset	Сохранить набор трассировки изображения
 	Delete Image Trace Preset	Удалить набор трассировки изображения
+	Tracing Presets…	Наборы трассировки…
+	Import Image Trace Presets	Импортировать наборы трассировки изображения
+	Export Image Trace Presets	Экспортировать наборы трассировки изображения
+	Replace the saved presets that have these names?	Заменить сохранённые наборы с этими именами?
 	Image Trace Presets	Наборы трассировки изображения
 	Image:	Изображение:
 	Images:	Изображения:
@@ -1999,6 +2080,11 @@ file-filter	Templates	Шаблоны
 	Knife	Нож
 	Knockout Group	Группа с вырезанием
 	Lab	Lab
+	OKLCH Sliders	Ползунки OKLCH
+	HSL Sliders	Ползунки HSL
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Наибольшая хрома, которую вмещает sRGB при этой светлоте и оттенке
+	OKLCH needs sRGB as the working RGB space	Для OKLCH рабочим пространством RGB должно быть sRGB
 	Lab Spot Colors:	Плашечные цвета Lab:
 	Lab Values	Значения Lab
 	Landscape	Альбомная
@@ -2074,6 +2160,7 @@ file-filter	Templates	Шаблоны
 	Limit to Library:	Ограничить библиотекой:
 	Limit:	Предел:
 	Line	Линия
+	Line Arrow	Линейная стрелка
 	Line Art and Text Resolution:	Разрешение штрихового рисунка и текста:
 	Line Breaks	Разрывы строк
 	Line Color	Цвет линии
@@ -2109,6 +2196,8 @@ file-filter	Templates	Шаблоны
 	List Workspaces	Перечислить рабочие среды
 	Live Paint	Быстрая заливка
 	Live Paint Bucket	Быстрая заливка (ведро)
+	Fill Area	Заливка области
+	Fill Area Tool	Инструмент «Заливка области»
 	Live Paint Bucket (Stroke)	Быстрая заливка (обводка)
 	Live Paint Info	Сведения о быстрой заливке
 	Live Paint Selection Tool	Инструмент «Выделение быстрой заливки»
@@ -2251,6 +2340,15 @@ file-filter	Templates	Шаблоны
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
+	Kinsoku Shori Settings…	Настройки kinsoku shori…
+	Kinsoku Shori Settings	Настройки kinsoku shori
+	Kinsoku Sets	Наборы kinsoku
+	Kinsoku Set Base	Основа набора kinsoku
+	Based on:	На основе:
+	Cannot Start Line	Не может начинать строку
+	Cannot End Line	Не может заканчивать строку
+	Hanging Punctuation	Висячая пунктуация
+	Inseparable Characters	Неразрывные символы
 	Push In First	Сначала втягивать
 	Push Out First	Сначала выталкивать
 	Push Out Only	Только выталкивать
@@ -2367,6 +2465,7 @@ file-filter	Templates	Шаблоны
 	Pressure	Нажим
 	Tilt	Наклон
 	Bearing	Азимут
+	Stylus Wheel	Колесико пера
 	Shape:	Форма:
 	Bristle Length:	Длина щетинок:
 	Bristle Density:	Плотность щетинок:
@@ -2397,6 +2496,9 @@ file-filter	Templates	Шаблоны
 	embedding for preview and print	внедрение для просмотра и печати
 	embedding allowed	внедрение разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестный тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} использование|{n} использования|{n} использований
 	substituted: shown in {family} {style} ({detail})	заменен: показан шрифтом {family} {style} ({detail})
 	missing: shown in {family} {style}	отсутствует: показан шрифтом {family} {style}
 	missing	отсутствует
@@ -2669,6 +2771,8 @@ file-filter	Templates	Шаблоны
 	Overprint and Transparency Flattener Options	Параметры наложения и объединения прозрачностей
 	Custom…	Пользовательские…
 	Custom Transparency Flattener Options	Пользовательские параметры объединения прозрачностей
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Набор PDF сохраняет набор объединения, но не параметры из «Пользовательские…».
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Файлы PDF 1.3 обрезают растрированные области по их контурам, а параметр «Наложение» определяет, сохраняются ли наложения.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	В EPS нет альфа-прозрачности, а параметр «Наложения» определяет, сохраняются ли наложения.
 	Overprint Black…	Наложение чёрного…
 	Overprint Fill	Наложение заливки
@@ -2740,6 +2844,15 @@ file-filter	Templates	Шаблоны
 	PDF/A files carry their own output intent.	Файлы PDF/A содержат собственное назначение вывода.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	Файлы PDF/X-1a используют CMYK: каждый цвет преобразуется в целевой (пусто: профиль CMYK назначения вывода) без пометки.
 	Pen Tool	Инструмент «Перо»
+	Quick Pen Tool	Инструмент «Быстрое перо»
+	Quick Pen	Быстрое перо
+	Quick Pen Toolbar	Панель быстрого пера
+	Continuous Arc	Непрерывная дуга
+	Sharp Corner Arc	Дуга с острым углом
+	Flip Arc	Отразить дугу
+	Hide Toolbar	Скрыть панель инструментов
+	Pin Toolbar Position	Закрепить положение панели инструментов
+	Reset Toolbar Position	Сбросить положение панели инструментов
 	Pencil	Карандаш
 	Pencil Tool	Инструмент «Карандаш»
 	per slice	на фрагмент
@@ -2820,6 +2933,11 @@ diagnostics	ui	интерфейс
 	Preserve Alpha Transparency	Сохранять альфа-прозрачность
 	Preserve Appearance and Overprints	Сохранять оформление и наложения
 	Preserve CMYK Numbers	Сохранять значения CMYK
+	Preserve RGB Numbers	Сохранять значения RGB
+	Device to Simulate:	Имитируемое устройство:
+	Simulate Paper Color	Имитировать цвет бумаги
+	Simulate Black Ink	Имитировать чёрную краску
+	Load…	Загрузить…
 	Preserve Editing Capabilities	Сохранять возможности редактирования
 	Preserve editing capabilities	Сохранять возможности редактирования
 	Preserve Lightness	Сохранять светлоту
@@ -3182,11 +3300,19 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редактировать стрелки
 	Edit Arrowheads…	Редактировать стрелки…
 	Reload Arrowheads	Перезагрузить стрелки
+	Bevels	Фаски
+	Edit Bevels	Редактировать фаски
+	Edit Bevels…	Редактировать фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Перезагрузить фаски
 	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
 	Rotate View to Selection	Повернуть вид по выделению
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
 	Color Theme Picker	Выбор цветовой темы
+	Undo Changes	Отменить изменения
+	Redo Changes	Повторить изменения
+@msg	Recolor Artwork is not open	Окно «Перекрасить рисунок» не открыто
 	Click or drag across the art to pick its colors; Shift adds more	Щёлкните или проведите по рисунку, чтобы взять его цвета; Shift добавляет ещё
 	Prominent Colors	Преобладающие цвета
 	Save All Colors	Сохранить все цвета
@@ -3241,6 +3367,7 @@ digits	Malayalam	Малаялам
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Свойства динамического прямоугольника показывают одно поле «Радиус угла» для всех четырёх углов; если выключено, у каждого угла своё поле.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Что трансформируют изменения на панели «Трансформировать»: объект, плитки его узора или и то и другое; «По умолчанию» следует «Трансформировать плитки узора».
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когда выделен один экземпляр символа, панель «Трансформировать» использует точку регистрации символа как опорную точку.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Рисование прямоугольника, эллипса, многоугольника, звезды или линии открывает панель «Трансформировать», если она закрыта.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемняет холст вне монтажных областей, пока активен инструмент «Монтажная область».
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когда включено «Затемнять область вне монтажной области», область вне монтажных областей остаётся тёмной, пока вы перетаскиваете инструментом «Монтажная область».
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Насколько близко, в пикселях, указатель должен быть к объекту, опорной точке или маркеру, чтобы щелчок выделил его.
@@ -3316,6 +3443,70 @@ digits	Malayalam	Малаялам
 	Edit type set in fonts that aren't available?	Редактировать текст, набранный недоступными шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	В абзацах с включённым параметром «Расставлять переносы» слово из списка получает знак переноса только по введённым в нём дефисам или никогда, если их нет, независимо от языка и регистра.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	В настольной версии модули .wasm из этой папки загружаются при запуске и когда ОК задаёт новую папку, кроме безопасного режима; модуль, запрашивающий разрешения, загружается только после того, как вы их дадите. Веб-версия не загружает ни одного.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	«Большой» даёт каждому запуску модуля фильтра или команды не менее 250 миллионов инструкций при том же лимите времени; «Обычный» сохраняет собственный бюджет модуля. Живые эффекты, экспортёры и импортёры сохраняют свой.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Новый текст получает этот язык, пока в «Параметрах документа» выбран язык Английский: США; текст, который уже есть в документе, сохраняет свой язык.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	В абзацах с включённым параметром «Расставлять переносы» слово из списка переносится только по введённым в нём дефисам или нигде, если их нет, независимо от языка и регистра.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	В настольной версии модули .wasm из этой папки загружаются при запуске и при нажатии ОК с новой папкой здесь, кроме безопасного режима; веб-версия их не загружает.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	«Обычный» сохраняет собственные ограничения каждого модуля; с «Большой» фильтр или команда модуля может выполнить не менее 250 миллионов инструкций сверх тех, что нужны для её входных данных. Ограничение по времени не меняется.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Сколько инструкций может использовать каждый запуск фильтра объектов из модуля; «Большой» разрешает больше, чем «Обычный», при том же ограничении в 60 секунд. Тяжёлые фильтры сохраняют свой бюджет.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Первый выбор рабочего диска: Startup, None или путь к папке; VectorCraft сохраняет его, но пока не использует рабочие диски.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Второй выбор рабочего диска: Startup, None или путь к папке; VectorCraft сохраняет его, но пока не использует рабочие диски.
+	How light or dark the interface is.	Насколько светлый или тёмный интерфейс.
+	The set of colors the interface is drawn in.	Набор цветов, которыми рисуется интерфейс.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Цвет элементов управления, которые включены, выбраны или в фокусе; меню неактивно, пока у «Цветовой схемы» есть собственный цвет акцента.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Цвет холста вокруг монтажных областей; «Согласовать с яркостью интерфейса» берёт его из «Яркости». Режим «Контур» всегда показывает его белым.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Панель, открытая из своего значка, закрывается, когда вы нажимаете Esc или щёлкаете вне её; если выключено, она остаётся открытой, пока вы не щёлкнете значок.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Показывает название каждой группы инструментов над её инструментами на панели инструментов; если выключено, группы идут друг за другом без промежутков.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Теперь документы, которые вы открываете или создаёте, открываются во вкладках; если выключено, каждый открывается в плавающем окне. Уже открытые документы остаются на месте.
+	Makes the document tabs taller and their names larger.	Делает вкладки документов выше, а их названия крупнее.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Со следующего запуска система рисует строку заголовка окна там, где иначе VectorCraft рисовал бы свою; в Linux и BSD приоритет у переменной VECTORCRAFT_TITLEBAR.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Со следующего запуска VectorCraft рисует строку заголовка окна даже там, где её нарисовала бы среда рабочего стола, если не включена «Системная строка заголовка» и её не выбирает переменная VECTORCRAFT_TITLEBAR.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Увеличивает или уменьшает интерфейс; графика на холсте сохраняет размер при том же масштабе.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Указатели инструментов, которые рисует VectorCraft, растут и уменьшаются вместе с «Масштабом интерфейса»; если выключено, сохраняют свой размер.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Язык интерфейса; «Авто» использует язык системы. Диалог переключает язык, как только вы выбираете один из них.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Анимированное масштабирование работает, только пока это включено; если выключено, Анимированное масштабирование затенено и масштабирование не анимируется.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Масштабирование колесом идёт плавно, а Инструмент «Масштаб» масштабирует, пока вы тянете вбок или удерживаете его; если выключено, он масштабирует до области, по которой вы протянули.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Со следующего запуска настольная версия выводит холст через этот тип графического процессора; сама графика всегда рисуется на ЦП. «Автоматически» в Windows и macOS предпочитает встроенный. Веб-версия его не использует.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Со следующего запуска окно показывает каждый кадр, не дожидаясь обновления дисплея, если графический драйвер это позволяет, не более 240 кадров в секунду.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Со следующего запуска настольная версия рисует этим типом графического процессора; «Автоматически» предпочитает тот, что управляет дисплеем. Веб-версия его не использует.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Со следующего запуска окно показывает кадры, не дожидаясь обновления дисплея, не более 240 в секунду; если выключено, темп задаёт дисплей. Режим вывода, заданный при запуске, имеет приоритет.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Наибольшее число шагов отмены, которое хранит каждый документ; меньшее число удаляет самые старые шаги при нажатии ОК. Шаги могут уйти и раньше, если занимают слишком много памяти.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Показывает, как меняется графика, пока вы тянете; если выключено, за перетаскиванием следуют контуры, а графика меняется, когда вы отпускаете. Направляющая с линейки всегда движется при перетаскивании.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Сколько рабочих потоков рисуют графику; -1 использует на один меньше, чем ядер, доступных VectorCraft, не более 8, а 0 ни одного. Веб-версия не использует их никогда.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Со следующего запуска на рабочем столе Wayland «X11 (XWayland)» открывает окно через XWayland; другие варианты делают это, только когда подключено перо.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Со следующего запуска настольная версия показывает кадры, не дожидаясь обновления дисплея, не более 240 в секунду; если выключено, темп задаёт дисплей.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Увеличенный бюджет в пять раз повышает базовое число инструкций для каждого запуска фильтра объектов и сохраняет ту же надбавку на байт входных данных; тяжёлые фильтры, живые эффекты, экспортёры и импортёры сохраняют свои ограничения.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Преобразует графику и монтажные области на холсте в цветовой профиль дисплея, где система ещё не делает этого; если выключено, холст рисуется в sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	В настольной версии сохранение в файл записывается в фоне, пока вы продолжаете редактировать; если выключено, вы ждёте, пока оно запишется.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	В настольной версии экспорт в файлы и упаковка выполняются в фоне, пока вы продолжаете редактировать, кроме экспорта 3D; если выключено, вы их ждёте.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Раз в несколько минут сохраняет копию для восстановления каждого документа с несохранёнными изменениями после его последней копии; если выключено, периодические копии не создаются.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Сколько минут проходит между копиями для восстановления, пока включено «Автоматически сохранять данные восстановления».
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	В настольной версии папка, где хранятся копии для восстановления; оставьте пустой для собственной папки VectorCraft. Веб-версия хранит их в браузере.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Для документов, где больше 20 000 объектов, периодические копии для восстановления не создаются.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	«Открыть последние файлы» и экран «Домой» показывают не больше стольких последних файлов; 0 не показывает ни одного, а VectorCraft всё равно помнит до 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	При открытии документа связанное изображение EPS, показывающее свой сохранённый просмотр, оставляет его вместо повторного чтения файла EPS; изменённые файлы по-прежнему следуют «Обновить связи».
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	В «Просмотре пикселей» изображения рисуются сглаженными; если выключено, их пиксели видны с резкими краями. Вне «Просмотра пикселей» изображения всегда сглаживаются.
+	PDF Text	Текст PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Текст открываемого или встраиваемого PDF поступает как редактируемый текст или как контуры, которые выглядят так же на компьютере без его шрифтов.
+	Linked pages show the file's own text.	Связанные страницы показывают собственный текст файла.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Когда связанный файл меняется, «Автоматически» перечитывает его, «Спрашивать при изменении» сначала спрашивает вас, а «Вручную» оставляет его как есть и показывает заметку в строке состояния.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	В настольной версии папка, с которой начинают «Создать из шаблона…» и «Сохранить как шаблон…»; оставьте пустой для VectorCraft Templates в вашей папке документов.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	«Редактировать оригинал» открывает связанный файл в стандартном приложении системы для его типа; если выключено, связанное растровое изображение открывается в PhotoCraft, если он установлен.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Файл, сохранённый более старой версией VectorCraft, открывается с [Converted] после имени, а «Сохранить» спрашивает, куда его сохранить; если выключено, «Сохранить» заменяет файл.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Файлы и шаблоны VectorCraft сохраняются сжатыми и поэтому меньше, если сохранение не указывает иное; сохранения для версий, которые не открывают сжатые файлы, остаются несжатыми.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Копировать и Вырезать также передают другим приложениям SVG-код графики; на компьютере код не копируется как текст, если графика встраивает больше 1 МиБ изображений.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	В Windows Копировать и Вырезать также передают другим приложениям PDF графики; другие платформы пока не копируют PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft сохраняет этот выбор, но Копировать и Вырезать пока не используют формат устаревшего векторного буфера обмена.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Сохранять контуры или Сохранять оформление и наложения для устаревшего векторного буфера обмена; VectorCraft сохраняет выбор, но пока не использует его.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Сохранять форматирование сохраняет стили текста, скопированного из текстового объекта VectorCraft, при вставке в текстовый объект; Сохранять простой текст даёт ему стиль места вставки.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Отображать все чёрные как составной чёрный показывает чистый чёрный CMYK (только чёрная краска на 100 %) на холсте как чёрный RGB; Отображать все чёрные точно преобразует его через рабочее пространство CMYK.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Выводить все чёрные как составной чёрный рисует чистый чёрный CMYK как чёрный RGB в растровых экспортах RGB и в оттенках серого и при «Печатать как растровое изображение»; векторные экспорты, JPEG, TIFF и PSD в CMYK и другую печать он не меняет.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	На сенсорном экране переключает на сенсорную рабочую среду; при выключении или пропаже сенсорного экрана возвращает рабочую среду, которая была до переключения.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Касание двумя пальцами по холсту отменяет действие, а в сенсорной рабочей среде переключает между инструментами выделения и рисования; касание тремя пальцами повторяет. В режиме презентации ни одно не работает.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Новый текст получает этот язык, пока в «Параметрах документа» выбран язык Английский: США, а [Обычный стиль символа] не задаёт язык; текст, который уже есть в документе, сохраняет свой язык.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	В абзацах с включённым параметром «Расставлять переносы» слово из списка переносится только по введённым в нём дефисам или нигде, если их нет, независимо от регистра; корейские слова не получают дефис, а слова на индийских языках не переносятся внутри группы символов.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3419,6 +3610,7 @@ digits	Malayalam	Малаялам
 	Save Document Preset	Сохранить набор документа
 	Preset {number}	Набор {number}
 	Save Preset…	Сохранить набор…
+	Save Summary…	Сохранить сводку…
 	Save Print Preset	Сохранить набор печати
 	Save Recovery Data	Сохранить данные восстановления
 	Save Save for Web Preset	Сохранить набор «Сохранить для web»
@@ -3557,6 +3749,8 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
+	Type to search commands, tools, panels and effects	Начните вводить для поиска команд, инструментов, панелей и эффектов
+	Clear Recent Commands	Очистить список недавних команд
 	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
@@ -3725,6 +3919,7 @@ digits	Malayalam	Малаялам
 	Show Modified	Показать изменённые
 	Show Note	Показать примечание
 	Show Options	Показать параметры
+	Show on Shape Creation	Показывать при создании фигуры
 	Show Recent Colors	Показать последние цвета
 	Toggle RGB Percent	Переключить RGB в процентах
 	Show Original Path	Показать исходный контур
@@ -3752,6 +3947,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показать миниатюры
 	Show Tile Edge	Показать край плитки
 	Show Tints/Shades	Показать оттенки/тени
+	Show Tool Cards	Показывать карточки инструментов
 	Show Tool Tips	Показывать подсказки
 	Show Transparency Grid	Показать сетку прозрачности
 	Show Video Rulers	Показать видео-линейки
@@ -3835,6 +4031,8 @@ digits	Malayalam	Малаялам
 	Outlines	Контуры
 	Outlines with Source Image	Контуры с исходным изображением
 	Source Image	Исходное изображение
+	Split View	Разделённый вид
+	Divider	Разделитель
 	Press and hold to view the source image	Удерживайте, чтобы увидеть исходное изображение
 	Image Trace View	Просмотр трассировки изображения
 	Snap Options	Параметры привязки
@@ -4286,6 +4484,8 @@ digits	Malayalam	Малаялам
 	Unembed…	Извлечь…
 	Ungroup	Разгруппировать
 	Ungroup Color Group	Разгруппировать цветовую группу
+	Color Group Options	Параметры цветовой группы
+	Color Group Options…	Параметры цветовой группы…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4993,6 +5193,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Saved {path}	Сохранено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Выделите текст или щёлкните внутри текста инструментом «Текст», чтобы вставить глифы
 @msg	Shape Builder: no region under the pointer	Создание фигур: под указателем нет области
+@msg	Fill Area: no enclosed area under the pointer	Заливка области: под указателем нет замкнутой области
 @msg	Shape Builder: select all paths you want to merge	Создание фигур: выделите все контуры, которые нужно объединить
 @msg	Shape Builder: select paths or compound paths	Создание фигур: выделите контуры или составные контуры
 @msg	Show All Hidden Attributes: nothing is hidden	Показать все скрытые атрибуты: ничего не скрыто
@@ -5051,6 +5252,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` должно быть grayscale, rgb, hsb, cmyk или websafe
 @msg	`view` must be wheel or box	`view` должно быть wheel или box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` должно быть hue, saturation, brightness, red, green или blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` должен быть none, oklch или hsl
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH рабочим пространством RGB должно быть sRGB
 @msg	`{k}` must be [x, y]	`{k}` должно быть [x, y]
 @msg	`{name}` has no options	`{name}` не имеет параметров
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` — встроенная рабочая среда; выберите другое имя
@@ -5096,6 +5299,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	a freeform gradient keeps at least one point	произвольный градиент сохраняет как минимум одну точку
 @msg	a gradient needs at least two stops	градиенту нужны как минимум две точки перехода
 @msg	a graphic style named `{to}` already exists	графический стиль с именем `{to}` уже существует
+@msg	a swatch or color group named `{name}` already exists	образец или цветовая группа с именем `{name}` уже существует
 @msg	a key object sits on that point	в этой точке находится ключевой объект
 @msg	a page is missing	страница отсутствует
 @msg	a page out of range	страница вне диапазона
@@ -5237,7 +5441,16 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no anchor points selected	опорные точки не выделены
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` должен содержать две или три пары чисел [x, y]
 @msg	direct-select two or three anchor points, or give `points`	выделите прямым выделением две или три опорные точки или задайте `points`
+@msg	the path is straight there, so no circle matches its curvature	контур в этом месте прямой, поэтому его кривизне не соответствует ни одна окружность
+@msg	the path has a cusp there, so it has no single curvature	у контура в этом месте точка возврата, поэтому у него нет единой кривизны
+@msg	the path has a corner there, so it has no single curvature	у контура в этом месте угол, поэтому у него нет единой кривизны
+@msg	a guide has no curvature circle	у направляющей нет круга кривизны
+@msg	the circle that matches the path there would reach past the canvas	окружность, соответствующая контуру в этом месте, вышла бы за пределы холста
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
+@msg	`at` must be "start" or "end"	`at` должно быть "start" или "end"
+@msg	give exactly one of `through` and `toward`	укажите ровно один из параметров `through` и `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ни одна дуга не подходит к этим точкам: две точки совпадают или все три лежат на одной прямой
+@msg	give `at` only with `toward`	указывайте `at` только вместе с `toward`
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
 @msg	no artboard {i} (0-based; the document has {_1})	нет монтажной области {i} (счёт с 0; в документе {_1})
@@ -5283,6 +5496,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц
 @msg	no pattern `{name}`	нет узора `{name}`
+@msg	art painted with `{name}` can't be its tile	графика, окрашенная узором `{name}`, не может быть его плиткой
 @msg	no perspective grid preset named `{name}`	нет набора сетки перспективы с именем `{name}`
 @msg	no plug-in {0} is installed	модуль {0} не установлен
 @msg	no plug-in {id} is installed	модуль {id} не установлен
@@ -5338,6 +5552,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`link` places a handle: give `handle`	`link` размещает маркер: укажите `handle`
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` должен быть списком не более чем из 10000 фрагментов
+@msg	give either `start` for a new path or `id`, not both	укажите либо `start` для нового контура, либо `id`, но не оба
+@msg	`subpath` and `keep` need `id`	для `subpath` и `keep` нужен `id`
 @msg	no such user library	такой пользовательской библиотеки нет
 @msg	no such view	такого вида нет
 @msg	no such width point	такой точки ширины нет
@@ -5449,6 +5666,10 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	объект {_1} — изображение, изменённое с помощью «Искажение перспективы» или «Свободная деформация», и эта команда с ним не работает
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	изображение {_1} нельзя так деформировать: его углы не образуют выпуклую фигуру
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	изображение {_1} нельзя так деформировать: его углы пересекут горизонт деформации
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	изображение {_1} нельзя так деформировать: его углы окажутся слишком близко друг к другу для перспективного отображения
 @msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
 @msg	`match` must be distance or channels	`match` должен быть distance или channels
 @msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100
@@ -5495,6 +5716,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	the PDF is password-protected: give its password	PDF защищён паролем: укажите его пароль
 @msg	the PDF password is wrong	неверный пароль PDF
 @msg	the Save PDF dialog didn't open	диалоговое окно «Сохранить PDF» не открылось
+@msg	the Save PDF dialog is not open	диалоговое окно «Сохранить PDF» не открыто
 @msg	the WMF header is damaged	заголовок WMF повреждён
 @msg	the art could not be sampled	не удалось взять образец рисунка
 @msg	the art has no bounds	у рисунка нет границ
@@ -5718,6 +5940,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msg	onto must name a panel floating in another group	onto должен называть панель, плавающую в другой группе
 @msg	below and above must name a panel floating in another group	below и above должны называть панель, плавающую в другой группе
 @msg	give only one of onto, below and above	укажите только один из onto, below и above
+@msg	give only one of `index`, `indices` and `t`	укажите только один из `index`, `indices` и `t`
 @msg	column must be true or a number from 1	column должен быть true или числом от 1
 @msg	x and y must both be numbers	x и y должны быть числами
 @msg	"{0}" is not a colour: write it as #rrggbb	«{0}» не является цветом: запишите его как #rrggbb
@@ -5856,6 +6079,26 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msg	the HEIC or HEIF file can't be read	не удается прочитать файл HEIC или HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
 @msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	не удается открыть рисунки CDR {version}: VectorCraft читает версии с 1 по 27
+@msg	this CDR drawing can't be read ({why})	не удается прочитать этот рисунок CDR ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текст, растровые изображения, перетекания, контуры, мазки кисти и другие объекты CDR, которые VectorCraft пока не читает, были пропущены
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	градиентные, узорные, текстурные и PostScript-заливки CDR были пропущены
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	цвета в цветовых моделях CDR, которые VectorCraft не читает, открыты как черные
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	библиотечные цвета CDR, которые рисунок хранит только по номеру, открыты как черные плашечные цвета
+@msg	CDR outline arrowheads were left out	наконечники стрелок абрисов CDR были пропущены
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	оболочки CDR не были применены, и фигуры под ними сохраняют свои контуры
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	линзы и прозрачность объектов CDR не были применены, и объекты, к которым они относятся, отображаются непрозрачными
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	части рисунка со слишком глубокой вложенностью или за пределами ограничений импорта были пропущены
+@msg	damaged parts of the drawing were left out	поврежденные части рисунка были пропущены
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	страницы CDR длиннее 163 830 pt открыты с этой длиной, и графика у их краев находится за пределами монтажной области
+@msg	this CMX file can't be read ({why})	не удается прочитать этот файл CMX ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	текст, изображения, прямоугольники, эллипсы, обтравочные контуры и другие объекты CMX, которые VectorCraft пока не читает, были пропущены
+@msg	CMX fills other than uniform colors were left out	заливки CMX, кроме однородных цветов, были пропущены
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	цвета в цветовых моделях CMX, которые VectorCraft не читает, открыты как черные
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	библиотечные цвета CMX, которые файл хранит только по номеру, открыты как черные плашечные цвета
+@msg	CMX outline arrowheads were left out	наконечники стрелок абрисов CMX были пропущены
+@msg	CMX lenses were not applied	линзы CMX не были применены
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	страницы CMX длиннее 163 830 pt открыты с этой длиной, и графика у их краев находится за пределами монтажной области
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
 @msg	zipped 1-bit PSD image data with prediction can't be read	1-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
 @msg	the PSD file's layer data uses an unknown compression ({m})	данные слоёв файла PSD используют неизвестное сжатие ({m})
@@ -5863,6 +6106,49 @@ variable-list-end	{0}, {1}	{0} и {1}
 @msg	the PSD file's layer groups are nested too deeply	группы слоёв файла PSD вложены слишком глубоко
 @msg	a layer of the PSD file is too large to read	слой файла PSD слишком велик для чтения
 @msg	the PSD file's layers take more memory to read than allowed	для чтения слоёв файла PSD нужно больше памяти, чем разрешено
+@msg	the file is no longer loaded	файл больше не загружен
+@msg	the layers can't be read ({e}): the file was placed as its merged image	не удаётся прочитать слои ({e}): файл помещён как сведённое изображение
+@msg	1 type layer came in as pixels: the text isn't editable	1 текстовый слой импортирован как пиксели: текст нельзя редактировать
+@msg	{n} type layers came in as pixels: the text isn't editable	текстовых слоёв, импортированных как пиксели: {n}; текст нельзя редактировать
+@msg	1 adjustment layer was not applied	1 корректирующий слой не применён
+@msg	{n} adjustment layers were not applied	не применено корректирующих слоёв: {n}
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 слой-заливка не отрисован (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	не отрисовано слоёв-заливок: {n} (градиентная или узорная заливка, цвет, который не удаётся прочитать, или фигура без сохранённых пикселей)
+@msg	the layer effects of 1 layer weren't drawn	эффекты слоя для 1 слоя не отрисованы
+@msg	the layer effects of {n} layers weren't drawn	эффекты слоёв не отрисованы; число слоёв: {n}
+@msg	the vector masks of 1 layer weren't applied	векторные маски 1 слоя не применены
+@msg	the vector masks of {n} layers weren't applied	векторные маски слоёв не применены; число слоёв: {n}
+@msg	the knockout of 1 layer wasn't applied	выбивка 1 слоя не применена
+@msg	the knockout of {n} layers wasn't applied	выбивка слоёв не применена; число слоёв: {n}
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 слой пропущен (скрытые слои и обрезанные по ним слои)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	пропущено слоёв: {n} (скрытые слои и обрезанные по ним слои)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 слой, обрезанный по неотрисованному слою-заливке, пропущен
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	пропущено слоёв, обрезанных по неотрисованным слоям-заливкам: {n}
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	слои в режимах наложения, которых нет в VectorCraft ({modes}), сведены со слоями под ними
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 слой в режиме наложения, которого нет в VectorCraft, импортирован как Обычный: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	слоёв в режимах наложения, которых нет в VectorCraft, импортировано как Обычный: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 слой, обрезанный по нижнему слою, импортирован без обрезки: для сведения нужно больше памяти, чем разрешено
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	слоёв, обрезанных по нижнему слою и импортированных без обрезки: {n}; для сведения нужно больше памяти, чем разрешено
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers относится к PSD-файлу, помещаемому с layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: связанный PSD-файл помещается как плоское изображение; укажите link: false, чтобы внедрить его с фрагментами
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: связанный PSD-файл помещается как плоское изображение; не указывайте link или укажите link: false
+@msg	the slices can't be read ({e}) and were left out	не удаётся прочитать фрагменты ({e}), они пропущены
+@msg	1 slice lies outside the canvas or has no size and was left out	1 фрагмент лежит вне холста или не имеет размера и пропущен
+@msg	{n} slices lie outside the canvas or have no size and were left out	пропущено фрагментов вне холста или без размера: {n}
+@msg	1 slice would lie outside the canvas and was left out	1 фрагмент оказался бы вне холста и пропущен
+@msg	{n} slices would lie outside the canvas and were left out	пропущено фрагментов, которые оказались бы вне холста: {n}
+@msg	the slices' descriptor holds too many values	дескриптор фрагментов содержит слишком много значений
+@msg	the slices' descriptor has a version other than 16	версия дескриптора фрагментов отличается от 16
+@msg	the slices are stored in version {v}, which isn't read	фрагменты сохранены в версии {v}, которая не читается
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	фрагментов в файле: {count}, больше читаемых {MAX_SLICES}
+@msg	the slices' descriptor has no list of slices	в дескрипторе фрагментов нет списка фрагментов
+@msg	the slices' descriptor lists something other than a slice	дескриптор фрагментов перечисляет что-то, кроме фрагмента
+@msg	a slice in the slices' descriptor has no bounds	у фрагмента в дескрипторе фрагментов нет границ
+@msg	a slice's bounds in the slices' descriptor aren't numbers	границы фрагмента в дескрипторе фрагментов не являются числами
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	текст во фрагментах длиннее читаемых {MAX_TEXT} символов
+@msg	the slices' descriptor nests too deep	дескриптор фрагментов вложен слишком глубоко
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	в дескрипторе фрагментов есть ссылка неизвестного вида ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	в дескрипторе фрагментов есть значение неизвестного типа ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	не удаётся прочитать слои ({e}): файл открыт как сведённое изображение
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
 @msg	the PSD file is cut short	файл PSD обрезан
@@ -5890,6 +6176,25 @@ variable-list-end	{0}, {1}	{0} и {1}
 	Preserve Embedded Profiles	Сохранять встроенные профили
 	Convert to Working Space	Преобразовывать в рабочее пространство
 	Preserve Numbers	Сохранять числа
+	Profile Mismatches:	Несоответствие профилей:
+	Ask When Opening	Спрашивать при открытии
+	Ask When Pasting	Спрашивать при вставке
+	Missing Profiles:	Отсутствующие профили:
+	Embedded Profile Mismatch	Несоответствие встроенного профиля
+	Missing Profile	Отсутствует профиль
+	Paste Profile Mismatch	Несоответствие профиля при вставке
+	“{name}” is not tagged with a {model} profile.	У «{name}» нет профиля {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	У «{name}» профиль {model} «{profile}», который не является рабочим пространством {model} «{working}».
+	Use the embedded profile	Использовать встроенный профиль
+	Convert the colors to the working space	Преобразовать цвета в рабочее пространство
+	Discard the embedded profile	Отбросить встроенный профиль
+	Leave as is	Оставить как есть
+	Assign the working space	Назначить рабочее пространство
+	Assign profile:	Назначить профиль:
+	Preserve the color numbers	Сохранить числовые значения цветов
+	Convert to keep the colors' appearance	Преобразовать, сохранив вид цветов
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` используется только с `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Вставленные цвета взяты из документа с профилем {model} «{from}»; у этого документа профиль «{to}».
 	Texture	Текстура
 	Craquelure…	Кракелюры…
 	Grain…	Зерно…
@@ -6188,7 +6493,10 @@ lighting	Light	Свет
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` должен быть объектом только с полем `mode` со значением shaded или wireframe
 @msg	its 3D effect builds no solid	его 3D-эффект не строит тела
-@msg	bevel must be none or one of {_1}	bevel должен быть none или одним из: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel должен быть none, одним из: {_1}, или custom с {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom нужен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} должно быть строкой
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} должен содержать от 2 до {most} точек [x, y], каждая доля от 0 до 1, от [0, 0] (край торца) до [1, 1] (боковая стенка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: нельзя построить тела из этой иллюстрации: её экземпляры символов, переходы и обтравочные группы содержат слишком много объектов
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: нельзя построить тело из экземпляра символа «{symbol}»: иллюстрация символа недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: обтравочный контур слишком сложен, чтобы обрезать им иллюстрацию
@@ -6214,8 +6522,10 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front, back or side	face в `{GRAPHICS}` должен быть front, back или side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графика наносится на объекты типов «Плоскость», «Выдавливание», «Вращение» и «Надувание»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	Inflate maps graphics onto its front and back, not onto a side	«Надувание» наносит графику на переднюю и заднюю стороны, а не на боковую поверхность
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	объект {_1}: задняя сторона «Надувания» принимает графику только при включённых параметрах «С обеих сторон» и «Торцы»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
@@ -6888,6 +7198,10 @@ axis	Y Axis	Ось Y
 	Create New Action	Создать новое действие
 	Play Action	Воспроизвести действие
 	Action Set:	Набор действий:
+	Choose Align To at playback	Выбирать «Выравнивать по» при воспроизведении
+	Align steps use the key object, key anchor or key guide when one is set.	Шаги выравнивания используют ключевой объект, ключевую опорную точку или ключевую направляющую, если они заданы.
+	With one whole object selected and no key, they use the artboard.	Если выделен один объект целиком и ключа нет, используется монтажная область.
+	Otherwise they use the selection.	Иначе используется выделение.
 	Function Key:	Функциональная клавиша:
 	Record	Записать
 	Create New Set	Создать новый набор
@@ -6920,6 +7234,7 @@ axis	Y Axis	Ось Y
 	Inventory Icons	Иконки инвентаря
 	Skill Icons	Иконки навыков
 	Weather Icons	Иконки погоды
+	Media Controls	Управление мультимедиа
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -7293,6 +7608,10 @@ axis	Y Axis	Ось Y
 	Rain	Дождь
 	Thunder	Гром
 	Snow	Снег
+	Play	Воспроизвести
+	Pause	Пауза
+	Skip Next	Пропустить вперед
+	Shuffle	Перемешать
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
@@ -7357,6 +7676,8 @@ axis	Y Axis	Ось Y
 	Auto Size	Авторазмер
 	Bar	Черта
 	Barbed	С зазубриной
+arrowhead	Feather	Перо
+arrowhead	Target	Мишень
 	Baseline (Standard)	Базовый (стандартный)
 	Baseline Optimized	Базовый оптимизированный
 	Bicubic	Бикубическая
@@ -8050,6 +8371,7 @@ breakText	Glyphs	Глифы
 	Remove Strokes	Убрать обводки
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
+	Replace Pattern Art	Заменить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки
@@ -8117,6 +8439,8 @@ breakText	Glyphs	Глифы
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Касательная окружность…
 	Tangent Circle	Касательная окружность
+	Tangent Circle Tool	Инструмент «Касательная окружность»
+	No tangent circle here	Здесь нет касательной окружности
 	Circle:	Окружность:
 @msg	`ids` names an object twice	`ids` указывает объект дважды
 @msg	select two or three paths or compound paths	выделите два или три контура или составных контура
@@ -8132,6 +8456,16 @@ breakText	Glyphs	Глифы
 @msg	`circle` is past the last circle found ({found})	`circle` больше числа найденных окружностей ({found})
 @msg	object {value} is not a path or compound path	объект {value} не является контуром или составным контуром
 @msg	these shapes are too small to measure	эти фигуры слишком малы для измерения
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Добавить описанный прямоугольник
+	Add Bounding Circle	Добавить описанную окружность
+	Add Bounding Rectangle…	Добавить описанный прямоугольник…
+	Add Bounding Circle…	Добавить описанную окружность…
+	One per Object	По одной на объект
+@msg	nothing to enclose	нечего окружать
+@msg	`offset` must be 0 or more	`offset` должно быть 0 или больше
+@msg	the shape would have no size	у фигуры не было бы размера
+@msg	the shape would reach past the edge of the canvas	фигура вышла бы за край холста
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменты документа
 	Save a Timestamped Copy	Сохранить копию с датой и временем
@@ -10525,6 +10859,88 @@ shape	Open	Открытый
 @msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Nature Icons	Значки природы
+	Flower	Цветок
+	Tree	Дерево
+	Mountain	Гора
+	Ornamental	Орнаментальные
+	Scrollwork	Завиток
+	Filigree Arrow	Филигранная стрела
+	Petal Sweep	Лепестковый росчерк
+	Twin Curl	Двойной завиток
+	Vector Packs	Векторные наборы
+	Compass Rose	Роза ветров
+	Botanical Sprig	Ботаническая ветвь
+	Facet Diamond	Гранёный бриллиант
+	Tide Crest	Гребень волны
+	Leaf Vine	Лиственная лоза
+	Blossom Chain	Цветочная цепочка
+	Pennant Garland	Гирлянда флажков
+	Lantern String	Цепочка фонариков
+	Orbit Lines	Орбитальные линии
+	Petal Garland	Гирлянда лепестков
+	Lattice Braid	Решётчатое плетение
+	Facet Sweep	Гранёный мазок
+	Artistic Brushes	Художественные кисти
+	Paint	Краска
+	Flat Sweep	Плоский мазок
+	Dry Drag	Сухой протяг
+	Loaded Stroke	Густой мазок
+	Fan Sweep	Веерный мазок
+	Engraving	Гравировка
+	Fine Hatching	Тонкая штриховка
+	Dense Hatching	Плотная штриховка
+	Tapered Hatching	Сужающаяся штриховка
+	Broken Hatching	Прерывистая штриховка
+	Image Brush	Кисти изображений
+	Soft Bloom	Мягкое цветение
+	Halftone Field	Полутоновое поле
+	Solar Grain	Солнечное зерно
+	Color Flecks	Цветные брызги
+	Fine Stipple	Тонкая точечная штриховка
+	Dense Stipple	Плотная точечная штриховка
+	Soft Stipple	Мягкая точечная штриховка
+	Bold Stipple	Крупная точечная штриховка
+	Paper Cutouts	Бумажные вырезки
+	Coral Layers	Коралловые слои
+	Mint Layers	Мятные слои
+	Midnight Layers	Полуночные слои
+	Sunflower Sheet	Лист подсолнуха
+	Rose Layers	Розовые слои
+	Monochrome Stack	Монохромная стопка
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Вместо подсказки показывает карточку о том, что делают инструмент панели и его клавиши; требуется Показывать подсказки.
+	Selects whole objects and groups to move, resize or rotate them.	Выделяет объекты и группы целиком, чтобы перемещать, масштабировать или поворачивать их.
+	Selects anchor points and path segments to reshape a path.	Выделяет опорные точки и сегменты контура, чтобы изменить форму контура.
+	Draws paths point by point, with straight segments and smooth curves.	Рисует контуры точка за точкой, с прямыми сегментами и плавными кривыми.
+	Draws smooth curves through the points you click.	Рисует плавные кривые через точки, по которым вы щёлкаете.
+	Adds text at a point, or in a frame you drag.	Добавляет текст в точке или в рамке, которую вы растягиваете.
+	Draws rectangles and squares.	Рисует прямоугольники и квадраты.
+	Draws rectangles with rounded corners.	Рисует прямоугольники со скруглёнными углами.
+	Draws ellipses and circles.	Рисует эллипсы и окружности.
+	Draws polygons with sides of equal length.	Рисует многоугольники с равными сторонами.
+	Draws stars.	Рисует звёзды.
+	Turns objects around a reference point.	Поворачивает объекты вокруг опорной точки.
+	Flips objects across an axis through a reference point.	Зеркально отражает объекты относительно оси, проходящей через опорную точку.
+	Resizes objects from a reference point.	Масштабирует объекты от опорной точки.
+	Slants objects from a reference point.	Наклоняет объекты от опорной точки.
+	Moves the view of the document.	Перемещает вид документа.
+	Magnifies or reduces the view.	Увеличивает или уменьшает масштаб вида.
+	Copies the color and other attributes of one object to the selection.	Копирует цвет и другие атрибуты одного объекта на выделение.
+	Sets the direction and length of a gradient.	Задаёт направление и длину градиента.
+	Creates, selects and resizes artboards.	Создаёт, выделяет и масштабирует монтажные области.
+	Changes the width of a stroke along its length.	Изменяет ширину обводки по её длине.
+	Bends art by dragging pins placed on it.	Изгибает графику перетаскиванием булавок, расставленных на ней.
+	Pushes the outlines of paths in the direction you drag.	Сдвигает очертания контуров в направлении перетаскивания.
+	Twists the outlines of paths into swirls.	Закручивает очертания контуров в вихри.
+	Pulls the outlines of paths in toward the brush.	Стягивает очертания контуров к кисти.
+	Pushes the outlines of paths out from the brush.	Раздувает очертания контуров от кисти наружу.
+	Adds curved details along the outlines of paths.	Добавляет изогнутые детали вдоль очертаний контуров.
+	Adds spiky details along the outlines of paths.	Добавляет острые детали вдоль очертаний контуров.
+	Adds wrinkles along the outlines of paths.	Добавляет складки вдоль очертаний контуров.
+	Moves, copies and resizes objects on the perspective grid.	Перемещает, копирует и масштабирует объекты на сетке перспективы.
+	Makes a series of steps between two or more objects.	Создаёт ряд переходов между двумя или более объектами.
+	Places dimension lines that show measured lengths.	Размещает размерные линии с измеренными длинами.
 	Tap	Короткое нажатие
 	Clear Hold	Очистить удержание
 	Hold Shortcuts	Клавиши удержания
@@ -10541,3 +10957,7 @@ shape	Open	Открытый
 	Pulse Stroke	Пульсирующий штрих
 	Round Flow	Круглый поток
 	Chisel Flow	Косой поток
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Редактировать оригинал в:
+file-filter	Applications	Приложения

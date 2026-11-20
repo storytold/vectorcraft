@@ -118,6 +118,68 @@ fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
     }
 }
 
+/// `arrowHead` draws any built-in stroke arrowhead at both ends of the dimension line, and the
+/// native file keeps it. The saved `arrowStyle` stays one of the four values versions without
+/// `arrowHead` read, and a dimension saved without `arrowHead` draws its arrow style. Options
+/// without a stroke head are saved without `arrowHead`. A custom arrowhead, an unknown name and an
+/// overlong name are refused.
+#[test]
+fn every_stroke_arrowhead_draws_as_a_dimension_arrowhead() {
+    use vectorcraft_doc::{Arrowhead, dimension::ArrowStyle};
+    let ends = |s: &Session, id: u64| -> Vec<_> {
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let children = n.children().unwrap();
+        let strokes = children.iter().filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())));
+        strokes.filter(|(a, b)| a.is_some() || b.is_some()).collect()
+    };
+    let mut s = session();
+    let mut made = vec![];
+    for head in Arrowhead::ALL {
+        let name = serde_json::to_value(&head).unwrap();
+        let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":name}}))["id"].as_u64().unwrap();
+        let drawn = ends(&s, id);
+        assert!(!drawn.is_empty() && drawn.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{name}: {drawn:?}");
+        let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+        assert_eq!((&saved["arrowStyle"], &saved["arrowHead"]), (&json!("filled"), &name));
+        made.push((id, head));
+    }
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&bytes).unwrap(), None);
+    for (id, head) in made {
+        assert_eq!(recipe(&reopened, id).options.arrowhead(), Some(head));
+    }
+    // A dimension saved before `arrowHead` existed.
+    let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"open"}}))["id"].as_u64().unwrap();
+    let mut file: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    fn drop_head(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                m.remove("arrowHead");
+                m.values_mut().for_each(drop_head);
+            }
+            Value::Array(a) => a.iter_mut().for_each(drop_head),
+            _ => {}
+        }
+    }
+    drop_head(&mut file);
+    let mut older = Session::new();
+    older.add_document(vectorcraft_format::load(&serde_json::to_vec(&file).unwrap()).unwrap(), None);
+    let o = recipe(&older, id).options;
+    assert_eq!((o.arrow_style, o.arrow_head.clone(), o.arrowhead()), (ArrowStyle::Open, None, Some(Arrowhead::TriangleOpen)));
+    // Without a stroke head, the saved and recorded options carry no `arrowHead`, and a null one
+    // is still taken.
+    let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+    assert!(saved.get("arrowHead").is_none(), "{saved}");
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":null}})).is_ok());
+    let custom = json!({"Custom":{"name":"Dot","path":{"subpaths":[]}}});
+    for bad in [json!("Custom"), json!("Arrowhead"), json!("barbed"), json!(3), json!("Barbed".repeat(20)), custom] {
+        let p = json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":bad}});
+        assert!(s.execute("dimension.create", &p).is_err(), "{bad}");
+    }
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"Barbed"}})).is_err());
+}
+
 #[test]
 fn dimension_angles_circles_arcs_and_curves() {
     let mut s = session();
@@ -2078,6 +2140,39 @@ fn a_dimension_of_the_same_points_lines_up_and_the_line_follows_the_pointer() {
     }
     let id = s.doc().unwrap().selection.objects[0].0;
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 186.0), pt(300.0, 186.0)));
+}
+
+/// A command that moves or hides a dimension while another is placed (Real-time Drawing on) does
+/// not leave the placed dimension on a level the committed document does not have: committed with
+/// its line near the other dimension's line as the document has it then, it is on that level, and
+/// otherwise at the pointer.
+#[test]
+fn a_dimension_placed_after_a_command_lines_up_with_the_committed_document() {
+    let plain = ViewInfo::default();
+    for (cmd, params, y) in [("dimension.update", json!({"offset": -10.0}), 192.0), ("object.hide", json!({}), 172.0)] {
+        let (mut s, first) = level_start(plain);
+        run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": true}));
+        // The bottom edge dragged out onto the level of the first line.
+        for (kind, y) in [(PointerKind::Move, 300.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 240.0), (PointerKind::Drag, 172.0)] {
+            s.pointer(&PointerEvent::new(kind, 160.0, y), plain).unwrap();
+        }
+        let mut params = params;
+        params["ids"] = json!([first]);
+        run(&mut s, cmd, params);
+        if cmd == "dimension.update" {
+            assert_eq!(recipe(&s, first).line_ends().0.y, 190.0, "moved before the release");
+        }
+        // Released without a drag in between: the release places the dimension.
+        s.pointer(&PointerEvent::new(PointerKind::Up, 160.0, y), plain).unwrap();
+        let placed = s.doc().unwrap().selection.objects[0].0;
+        assert_ne!(placed, first, "{cmd}: a new dimension");
+        let reference = s.doc().unwrap().doc.node(NodeId(first)).map(|n| (n.visible, recipe(&s, first).line_ends().0.y));
+        let expected = match reference {
+            Some((true, level)) if (level - y).abs() <= 4.0 => level,
+            _ => y,
+        };
+        assert_eq!(recipe(&s, placed).line_ends().0.y, expected, "{cmd}: the other dimension is {reference:?}");
+    }
 }
 
 /// A dimension dragged out from a segment, with its line within the Smart Guides snapping

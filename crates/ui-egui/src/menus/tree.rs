@@ -137,6 +137,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
+                c("Tracing Presets…", "ui.tracingPresetsDialog"),
                 c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
@@ -457,6 +458,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Find Font…", "type.findFont"),
                 c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
+                c("Kinsoku Shori Settings…", crate::dialogs::kinsoku_sets::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -571,9 +573,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 Sep,
-                sub(
-                    "Proof Setup",
-                    vec![
+                sub("Proof Setup", {
+                    let mut v = vec![
                         cp("Working CMYK", "view.proofSetup", json!({"target": "workingCmyk", "proof": true})),
                         cp("Legacy Macintosh RGB (Gamma 1.8)", "view.proofSetup", json!({"target": "legacyMacRgb", "proof": true})),
                         cp("Internet Standard RGB (sRGB)", "view.proofSetup", json!({"target": "srgb", "proof": true})),
@@ -581,9 +582,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
-                    ],
-                ),
+                        c("Customize…", "ui.proofSetupDialog"),
+                    ];
+                    // The setups saved in the Proof Setups folder.
+                    let saved = crate::dialogs::proof_setup::saved_items();
+                    if !saved.is_empty() {
+                        v.push(Sep);
+                        v.extend(saved);
+                    }
+                    v
+                }),
                 c("Proof Colors", "view.proofColors"),
                 Sep,
                 c("Zoom In", "view.zoomIn"),
@@ -677,6 +685,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Control", "window.control"),
                 c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
+                c("Quick Pen Toolbar", "window.quickPenToolbar"),
                 c("Tools", "window.toolbar"),
                 sub("Toolbars", crate::custom_toolbars::menu_items()),
                 Sep,
@@ -714,6 +723,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
                 panel("Production Preflight", crate::panels::preflight::ID),
+                panel("Retype", crate::panels::retype::ID),
                 panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
