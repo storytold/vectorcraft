@@ -105,6 +105,16 @@ pub(super) fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bo
     p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
 }
 
+/// A Live Corners widget at `c`: a white disc ringed in `color`, with a dot of `color` at its
+/// center when its corner is `picked`.
+fn corner_widget(p: &egui::Painter, c: Pos2, color: Color32, picked: bool) {
+    p.circle_filled(c, 3.0, Color32::WHITE);
+    p.circle_stroke(c, 3.0, Stroke::new(1.0, color));
+    if picked {
+        p.circle_filled(c, 1.0, color);
+    }
+}
+
 /// How the current tool and preferences draw the selection's marks.
 pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -> MarkOptions<'_> {
     let tool = app.session.tool_id();
@@ -173,6 +183,30 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let options = mark_options(app, curve_points_from_tool);
     let grow = options.look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
+    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon while Show
+    // Shape Widgets is on, Direct Selection on any path). A picked corner's widget has a dot in the
+    // layer color at its center. Direct Selection draws the other corners' widgets hollow, below the
+    // anchors and handles, which take a press there first.
+    let shape_widgets = app.ui.view.shape_widgets;
+    let (picked_widgets, hollow_widgets): (Vec<_>, Vec<_>) = if matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing) {
+        vectorcraft_tools::corners::CornerWidgets::showing(
+            &st.doc,
+            &st.selection,
+            xf.zoom,
+            tool == "directSelection",
+            app.ui.view.corner_widgets && (tool == "directSelection" || shape_widgets),
+            app.session.prefs.hide_corner_widget_above,
+        )
+        .map(|w| w.visible_on().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .partition(|&(_, _, picked)| picked)
+    } else {
+        (vec![], vec![])
+    };
+    for (id, q, _) in hollow_widgets {
+        corner_widget(p, xf.to_screen(q), c32(st.doc.layer_color(id)), false);
+    }
     // The temporary halftone selects its dots; their marks obscure the art (#6369).
     if show_marks {
         // Too many paths to outline: the selection's bounds stand for them.
@@ -216,25 +250,10 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon while Show
-    // Shape Widgets is on, Direct Selection on any path).
-    let shape_widgets = app.ui.view.shape_widgets;
-    if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
-        && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
-            &st.doc,
-            &st.selection,
-            xf.zoom,
-            tool == "directSelection",
-            app.ui.view.corner_widgets && (tool == "directSelection" || shape_widgets),
-            app.session.prefs.hide_corner_widget_above,
-        )
-    {
-        for (id, q) in w.visible_on() {
-            let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
-            p.circle_filled(sp, 3.0, Color32::WHITE);
-            p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
-            p.circle_filled(sp, 1.0, color);
-        }
+    // Live Corners widgets whose corners are picked, above the anchors and handles (the hollow
+    // ones are drawn below them).
+    for (id, q, _) in picked_widgets {
+        corner_widget(p, xf.to_screen(q), c32(st.doc.layer_color(id)), true);
     }
     // Bounding box with handles (Selection tool).
     // The layer color of the box's first object: with Real-time Drawing off, the shape being drawn

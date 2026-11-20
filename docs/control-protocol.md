@@ -659,7 +659,8 @@ changed points takes both changes. These rules for several points are VectorCraf
 points, one or several, are refused when those points changed since the dialog opened or another document is active.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
-corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
+corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; a
+double-click on a Direct Selection widget that is not picked opens it for that widget's corner alone; fields `id`,
 `corners`: anchor indices of the path with its corners uncut, a rectangle's 0–3 clockwise from the top-left, `kind`:
 round, invertedRound or chamfer, `radius` in points; `kind` or `radius` is absent while the corners differ). `ui.dialog.confirm` runs `object.setLiveShape` with them.
 
