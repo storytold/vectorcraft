@@ -191,15 +191,17 @@ pub(crate) fn copyable_readout(
     // This label's own accessible Click is still handled immediately below.
     let pressed = ctx.input(|i| i.pointer.any_pressed());
     let interrupted = ctx.input(|i| {
-        i.events.iter().any(|event| match event {
-            egui::Event::Key { .. }
-            | egui::Event::Text(_)
-            | egui::Event::Copy
-            | egui::Event::Cut
-            | egui::Event::Paste(_)
-            | egui::Event::Ime(_)
-            | egui::Event::AccessKitActionRequest(_) => true,
-            _ => false,
+        i.events.iter().any(|event| {
+            matches!(
+                event,
+                egui::Event::Key { .. }
+                    | egui::Event::Text(_)
+                    | egui::Event::Copy
+                    | egui::Event::Cut
+                    | egui::Event::Paste(_)
+                    | egui::Event::Ime(_)
+                    | egui::Event::AccessKitActionRequest(_)
+            )
         })
     });
     let cancelled = pressed || response.dragged() || response.double_clicked() || response.triple_clicked() || interrupted;
