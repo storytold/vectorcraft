@@ -6638,6 +6638,243 @@ fn a_default_style_with_a_stroke_aligned_outside_comes_in() {
     assert_eq!(a[0].extras().graphic_style, Some(1));
 }
 
+/// An arrowhead symbol's art: an unpainted frame, a 1 pt sample of the line from x = −9 to 4 on
+/// y = 0, and the head, a filled wedge from x = 2 back to its tip at x = 8, 3 either side.
+const WEDGE_ART: &str = "-10 5 m\n10 5 L\n10 -5 L\n-10 -5 L\n-10 5 L\nn\n0 G\n1 w\n-9 0 m\n4 0 l\nS\n0 g\n2 3 m\n8 0 l\n2 -3 l\nf\n";
+
+/// The end arrowhead entries of a stroke's dictionary: symbol `Wedge` at 50 %.
+const END_WEDGE: &str = "50 /Real (BSArrowEndScale) ,\n/GObjRef : (Wedge) /SymbolArt ; (BSArrowEndSymbol) ,\n";
+
+/// An art style named `name`: a black stroke of weight `width` whose stroke dictionary holds
+/// `entries`, as a stroke's arrowheads are written.
+fn arrow_style(name: &str, entries: &str, width: f64) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+         /Dictionary : /NotRecorded ,\n1 /Int (BSAdvStrokeDictionaryVersion) ,\n{entries}; (kAIBeautifulStrokesParamsDictKey) ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+    )
+}
+
+/// The drawn look of a 2 pt line from (0, 50) to (100, 50) with [`END_WEDGE`] (weight 1) on its end,
+/// the tip on the end: the line to 4 before it, under the head from x = 94 to 100, 3 either side.
+const END_WEDGE_LOOK: &str = "0 G\n2 w\n0 50 m\n96 50 l\nS\n0 g\n94 53 m\n100 50 l\n94 47 l\nf\n";
+
+/// A line from (0, 50) to (100, 50) drawn as `look`, read as itself with the art style `name`.
+fn arrowed_line(name: &str, look: &str) -> String {
+    format!("0 Ae\nu\n{look}U\n%_0 50 m\n%_100 50 L\n%_N\n1 ({name}) XW\n")
+}
+
+/// A file with the arrowhead symbol `Wedge` (art `symbol_art`), the art style `Arrowed`
+/// ([`arrow_style`] with `entries` and `width`), listed, and a line drawn with it as `look`.
+fn arrowed_file(symbol_art: &str, entries: &str, width: f64, look: &str) -> String {
+    named_arrowed_file("Wedge", symbol_art, entries, width, look)
+}
+
+/// [`arrowed_file`] with the symbol named `name`.
+fn named_arrowed_file(name: &str, symbol_art: &str, entries: &str, width: f64, look: &str) -> String {
+    format!(
+        "{}{}{}",
+        symbols(&symbol(name, symbol_art, 5)),
+        styles_and_list(&[arrow_style("Arrowed", entries, width)], &["Arrowed"]),
+        layer(&arrowed_line("Arrowed", look))
+    )
+}
+
+/// The object `r` reads, its path, and its stroke.
+fn arrowed(r: &Structure) -> (Arc<Node>, vectorcraft_doc::StrokeLayer) {
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {:#?} {:?}", a[0], r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let s = a[0].appearance.stroke().expect("a stroke").clone();
+    (a[0].clone(), s)
+}
+
+/// The bounds of the area stroke `s` paints along path `n` (its heads included).
+fn painted(n: &Node, s: &vectorcraft_doc::StrokeLayer) -> Rect {
+    let NodeKind::Path { path, rule, .. } = &n.kind else { panic!("a path") };
+    vectorcraft_effects::stroke::outline_region(path, *rule, s).bounds().unwrap()
+}
+
+#[test]
+fn a_strokes_arrowhead_symbols_are_its_arrowheads() {
+    // GUARDS: a stroke's arrowheads (#8188) were left out: the line came in without its heads.
+    use vectorcraft_doc::{ArrowAlign, Arrowhead};
+    let r = read_ok(&arrowed_file(WEDGE_ART, END_WEDGE, 2.0, END_WEDGE_LOOK));
+    let (object, s) = arrowed(&r);
+    assert_eq!((s.width, s.arrow_scale, s.arrow_align), (2.0, (100.0, 50.0), ArrowAlign::Tip));
+    assert!(s.start_arrow.is_none(), "{:?}", s.start_arrow);
+    let Some(Arrowhead::Custom(head)) = &s.end_arrow else { panic!("a head of the symbol's art: {:?}", s.end_arrow) };
+    assert_eq!(head.name, "Wedge");
+    // In head units, one a symbol unit: 6 long from the tip, 3 either side, the line stopping 4
+    // back from the tip, where the sample ends.
+    let b = head.path.bounds().expect("an outline");
+    for (got, want) in [(b.x0, 0.0), (b.x1, 6.0), (b.y0, -3.0), (b.y1, 3.0), (head.stop(), 4.0)] {
+        assert!((got - want).abs() < 1e-6, "{b:?}, stop {}", head.stop());
+    }
+    // Drawn with the tip on the line's end: a head of weight 1 (2 pt at 50 %), 6 pt long.
+    let end = object.path_data().unwrap().subpaths[0].anchors.last().unwrap().p;
+    let drawn = painted(&object, &s);
+    assert!((drawn.x1 - end.x).abs() < 1e-6 && (drawn.height() - 6.0).abs() < 1e-6, "{drawn:?} for an end at {end:?}");
+    // The listed graphic style has the head too.
+    let style = r.doc.graphic_styles[0].appearance.stroke().expect("the style's stroke");
+    assert!(matches!(&style.end_arrow, Some(Arrowhead::Custom(h)) if h == head), "{:?}", style.end_arrow);
+}
+
+#[test]
+fn a_strokes_start_arrowhead_points_back_and_keeps_its_side() {
+    use vectorcraft_doc::Arrowhead;
+    // A head with one barb, below the line in the symbol (its space is y down): on the right of
+    // the way it points. At the start of a 1 pt line drawn left to right it points left, the barb
+    // above the line (the file's y up), the line starting 4 in.
+    let barb = "0 G\n1 w\n-9 0 m\n4 0 l\nS\n0 g\n2 3 m\n8 0 l\n2 0 l\nf\n";
+    let entries = "/GObjRef : (Wedge) /SymbolArt ; (BSArrowBeginSymbol) ,\n";
+    let look = "0 G\n1 w\n4 50 m\n100 50 l\nS\n0 g\n6 53 m\n0 50 l\n6 50 l\nf\n";
+    let r = read_ok(&arrowed_file(barb, entries, 1.0, look));
+    let (object, s) = arrowed(&r);
+    assert_eq!(s.arrow_scale, (100.0, 100.0));
+    assert!(s.end_arrow.is_none());
+    let Some(Arrowhead::Custom(head)) = &s.start_arrow else { panic!("{:?}", s.start_arrow) };
+    let b = head.path.bounds().unwrap();
+    assert!(b.y0.abs() < 1e-6 && (b.y1 - 3.0).abs() < 1e-6, "right of the way it points: {b:?}");
+    // Drawn: the tip on the start, and 3 pt of head on the barb's side of the line (above it: the
+    // document's y down) against the line's half point on the other.
+    let start = object.path_data().unwrap().subpaths[0].anchors.first().unwrap().p;
+    let drawn = painted(&object, &s);
+    assert!((drawn.x0 - start.x).abs() < 1e-6, "{drawn:?} for a start at {start:?}");
+    assert!((start.y - drawn.y0 - 3.0).abs() < 1e-6 && (drawn.y1 - start.y - 0.5).abs() < 1e-6, "{drawn:?} for a start at {start:?}");
+}
+
+#[test]
+fn a_stroke_takes_both_heads_at_their_own_scales() {
+    use vectorcraft_doc::Arrowhead;
+    // The start at 100 % written as a whole number (weight 2: 12 long, 6 either side, the line 8
+    // in), the end at 50 %, both of a symbol named in Chinese ("wedge").
+    let entries = "100 /Int (BSArrowBeginScale) ,\n/GObjRef : (楔) /SymbolArt ; (BSArrowBeginSymbol) ,\n\
+                   50 /Real (BSArrowEndScale) ,\n/GObjRef : (楔) /SymbolArt ; (BSArrowEndSymbol) ,\n";
+    let look = "0 G\n2 w\n8 50 m\n96 50 l\nS\n0 g\n12 56 m\n0 50 l\n12 44 l\nf\n94 53 m\n100 50 l\n94 47 l\nf\n";
+    let r = read_ok(&named_arrowed_file("楔", WEDGE_ART, entries, 2.0, look));
+    let (object, s) = arrowed(&r);
+    assert_eq!(s.arrow_scale, (100.0, 50.0));
+    for head in [&s.start_arrow, &s.end_arrow] {
+        assert!(matches!(head, Some(Arrowhead::Custom(h)) if h.name == "楔"), "{head:?}");
+    }
+    let drawn = painted(&object, &s);
+    assert!((drawn.width() - 100.0).abs() < 1e-6 && (drawn.height() - 12.0).abs() < 1e-6, "{drawn:?}");
+}
+
+#[test]
+fn heads_drawn_past_the_path_extend_it() {
+    use vectorcraft_doc::ArrowAlign;
+    // The file draws the head's tip 4 past the end (the line's length under it at weight 1): the
+    // line keeps its length.
+    let look = "0 G\n2 w\n0 50 m\n100 50 l\nS\n0 g\n98 53 m\n104 50 l\n98 47 l\nf\n";
+    let r = read_ok(&arrowed_file(WEDGE_ART, END_WEDGE, 2.0, look));
+    let (object, s) = arrowed(&r);
+    assert_eq!(s.arrow_align, ArrowAlign::Extend);
+    let end = object.path_data().unwrap().subpaths[0].anchors.last().unwrap().p;
+    assert!((painted(&object, &s).x1 - end.x - 4.0).abs() < 1e-6);
+}
+
+#[test]
+fn arrowheads_this_does_not_read_keep_the_drawn_look() {
+    let two_lines = format!("{WEDGE_ART}0 G\n1 w\n-9 0 m\n4 0 l\nS\n");
+    let no_line = "0 g\n2 3 m\n8 0 l\n2 -3 l\nf\n";
+    let thin_line = WEDGE_ART.replace("1 w", "0.5 w");
+    let missing = "/GObjRef : (Elsewhere) /SymbolArt ; (BSArrowEndSymbol) ,\n";
+    let unknown = format!("{END_WEDGE}1 /Int (BSArrowSomethingElse) ,\n");
+    let too_large = "2000 /Real (BSArrowEndScale) ,\n/GObjRef : (Wedge) /SymbolArt ; (BSArrowEndSymbol) ,\n";
+    let line_only = "0 G\n2 w\n0 50 m\n100 50 l\nS\n";
+    let cases: [(&str, &str, &str, f64, &str); 8] = [
+        ("a symbol the file doesn't define", WEDGE_ART, missing, 2.0, END_WEDGE_LOOK),
+        ("an arrowhead entry this doesn't read", WEDGE_ART, &unknown, 2.0, END_WEDGE_LOOK),
+        ("a scale out of range", WEDGE_ART, too_large, 2.0, END_WEDGE_LOOK),
+        ("a head lighter than the least weight drawn", WEDGE_ART, END_WEDGE, 0.25, END_WEDGE_LOOK),
+        ("a symbol without a sample of the line", no_line, END_WEDGE, 2.0, END_WEDGE_LOOK),
+        ("a symbol with two samples of the line", &two_lines, END_WEDGE, 2.0, END_WEDGE_LOOK),
+        ("a sample of the line that isn't 1 pt", &thin_line, END_WEDGE, 2.0, END_WEDGE_LOOK),
+        ("heads drawn neither on nor past the ends", WEDGE_ART, END_WEDGE, 2.0, line_only),
+    ];
+    for (why, symbol_art, entries, width, look) in cases {
+        let r = read_ok(&arrowed_file(symbol_art, entries, width, look));
+        let a = art(&r.doc);
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?} {a:#?}", r.warnings);
+        assert!(!matches!(a[0].kind, NodeKind::Path { .. }), "{why}: the look, not the object");
+        // A graphic style with an arrowhead it doesn't read isn't read either, rather than read
+        // without its heads.
+        let headless = |i: &AppearanceItem| matches!(i, AppearanceItem::Stroke(s) if s.end_arrow.is_none());
+        let styles: Vec<_> = r.doc.graphic_styles.iter().filter(|g| g.name == "Arrowed").collect();
+        assert!(styles.iter().all(|g| !g.appearance.items.iter().any(headless)), "{why}: {styles:?}");
+    }
+}
+
+#[test]
+fn heads_whose_placement_the_drawn_bounds_leave_open_keep_the_drawn_look() {
+    // The line bends back so its end, and a head on it either on the end or 4 past it, lie inside
+    // the bounds of its earlier segments: those bounds can't tell the two placements apart.
+    let path = "%_0 50 m\n%_0 0 L\n%_200 0 L\n%_200 100 L\n%_100 100 L\n%_100 50 L\n%_N\n";
+    let look = "0 G\n2 w\n0 50 m\n0 0 l\n200 0 l\n200 100 l\n100 100 l\n100 54 l\nS\n0 g\n97 56 m\n100 50 l\n103 56 l\nf\n";
+    let line = format!("0 Ae\nu\n{look}U\n{path}1 (Arrowed) XW\n");
+    let file = format!(
+        "{}{}{}",
+        symbols(&symbol("Wedge", WEDGE_ART, 5)),
+        styles_and_list(&[arrow_style("Arrowed", END_WEDGE, 2.0)], &["Arrowed"]),
+        layer(&line)
+    );
+    let r = read_ok(&file);
+    let a = art(&r.doc);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?} {a:#?}", r.warnings);
+    assert!(!matches!(a[0].kind, NodeKind::Path { .. }), "the look, not the object");
+}
+
+#[test]
+fn a_head_that_stays_put_leaves_a_moving_heads_placement_open() {
+    // The bent line of the test above, its end head moving 4 between the placements, and a start
+    // head whose line runs to its tip (a stop of 0), which stays put: the bounds still can't tell
+    // where the end head goes.
+    let flat = WEDGE_ART.replace("-9 0 m\n4 0 l", "-9 0 m\n8 0 l");
+    let entries = format!("50 /Real (BSArrowBeginScale) ,\n/GObjRef : (Flat) /SymbolArt ; (BSArrowBeginSymbol) ,\n{END_WEDGE}");
+    let path = "%_0 50 m\n%_0 0 L\n%_200 0 L\n%_200 100 L\n%_100 100 L\n%_100 50 L\n%_N\n";
+    let look =
+        "0 G\n2 w\n0 50 m\n0 0 l\n200 0 l\n200 100 l\n100 100 l\n100 54 l\nS\n0 g\n-3 44 m\n0 50 l\n3 44 l\nf\n97 56 m\n100 50 l\n103 56 l\nf\n";
+    let line = format!("0 Ae\nu\n{look}U\n{path}1 (Arrowed) XW\n");
+    let file = format!(
+        "{}{}{}",
+        symbols(&format!("{}{}", symbol("Wedge", WEDGE_ART, 5), symbol("Flat", &flat, 5))),
+        styles_and_list(&[arrow_style("Arrowed", &entries, 2.0)], &["Arrowed"]),
+        layer(&line)
+    );
+    let r = read_ok(&file);
+    let a = art(&r.doc);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?} {a:#?}", r.warnings);
+    assert!(!matches!(a[0].kind, NodeKind::Path { .. }), "the look, not the object");
+}
+
+#[test]
+fn a_style_library_reads_the_heads_of_symbols_defined_after_its_styles() {
+    // A graphic style library has no layers, so nothing past its styles reads the heads again.
+    use vectorcraft_doc::Arrowhead;
+    let data = stream(&format!(
+        "%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}%AI9_BeginArtStyleList\n(Arrowed)\n%AI9_EndArtStyleList\n",
+        arrow_style("Arrowed", END_WEDGE, 2.0),
+        symbols(&symbol("Wedge", WEDGE_ART, 5))
+    ));
+    let (styles, _) = graphic_styles(data.as_bytes(), false, &mut obj::Names::default());
+    let stroke = styles.iter().find(|g| g.name == "Arrowed").and_then(|g| g.appearance.stroke());
+    assert!(matches!(stroke.and_then(|s| s.end_arrow.as_ref()), Some(Arrowhead::Custom(h)) if h.name == "Wedge"), "{styles:?}");
+}
+
+#[test]
+fn an_arrowhead_entry_without_heads_leaves_the_stroke_read() {
+    // Only beside heads does an arrowhead entry this doesn't read keep the drawn look.
+    let r = read_ok(&arrowed_file(WEDGE_ART, "1 /Int (BSArrowSomethingElse) ,\n", 2.0, "0 G\n2 w\n0 50 m\n100 50 l\nS\n"));
+    let (_, s) = arrowed(&r);
+    assert!(s.start_arrow.is_none() && s.end_arrow.is_none());
+}
+
 #[test]
 fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
@@ -11161,11 +11398,11 @@ fn a_gradients_br_is_not_a_brush() {
 
 /// The Brush Options codes for how a Calligraphic brush's values vary: Tilt, Bearing and Rotation
 /// are the pen's other channels (#372: a 6D Art Pen brush varies its diameter with the pressure,
-/// its roundness with the bearing and its angle with the barrel's rotation). The stylus wheel isn't
-/// read: it varies at random, as an unknown code does.
+/// its roundness with the bearing and its angle with the barrel's rotation), and code 3 is an
+/// airbrush pen's finger wheel. An unknown code varies at random.
 #[test]
 fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
-    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, Tilt};
+    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, StylusWheel, Tilt};
     let modes = |params: &str| {
         let d = brush::parse_tool_object(brush::Tool::Calligraphic, "Pen", params).unwrap();
         let brush::DraftKind::Calligraphic(c) = d.kind else { panic!("{d:?}") };
@@ -11173,8 +11410,9 @@ fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
     };
     assert_eq!(modes("1 51 69 13 57 -346 14 2 5 6 0"), [Rotation, Bearing, Pressure]);
     assert_eq!(modes("1 2 6 40 60 -30 10 4 4 4 0"), [Tilt, Tilt, Tilt]);
-    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [Random, Random, Random], "the stylus wheel");
-    assert_eq!(modes("1 4 4 50 50 10 10 3 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
+    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [StylusWheel, StylusWheel, StylusWheel], "the stylus wheel");
+    assert_eq!(modes("1 2 6 40 60 -30 10 7 9 7 0"), [Random, Random, Random], "unknown codes");
+    assert_eq!(modes("1 4 4 50 50 10 10 7 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
 }
 
 /// A 6D Art Pen brush: diameter 4 to 8 with the pressure, roundness 30 to 50 with the bearing and
@@ -11594,6 +11832,39 @@ fn an_art_brush_with_options_comes_in_brushed_with_them() {
     assert!(filled(&along, 50.0, -2.0) && filled(&along, 90.0, 2.0) && !filled(&along, 10.0, 2.0), "along: the narrow block at the end");
 }
 
+/// A path whose Art brush tints its art with a stroke color linked to a swatch (Tints, a spot
+/// color) comes in brushed: the brush draws the art in tints of that swatch, linked to it, so the
+/// spot ink stays on its plate.
+#[test]
+fn an_art_brush_tinting_with_a_spot_color_comes_in_brushed_in_tints_of_it() {
+    let def = format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", RIBBON));
+    let style = art_style("Ribbon", 1.0, &STRETCHED, "").replace("0 1 1 0 1 0 0 XA", "0 0 0 0 1 0.5 0 (Brand orange) 0 1 XK");
+    let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, not its look: {a:#?}");
+    let st = a[0].appearance.stroke().cloned().unwrap();
+    assert_eq!(st.brush.as_deref(), Some("Ribbon"));
+    let Paint::Solid { swatch: Some(swatch), .. } = &st.paint else { panic!("a swatch: {:?}", st.paint) };
+    assert_eq!(swatch, "Brand orange");
+    let lib = vectorcraft_brush::library(&r.doc);
+    let ribbon = lib.iter().find(|b| b.name == "Ribbon").unwrap();
+    let line = kurbo::BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(0.0, 0.0)), kurbo::PathEl::LineTo(Point::new(100.0, 0.0))]);
+    let mut fills = vec![];
+    for n in vectorcraft_brush::stroke_pieces(&r.doc, ribbon, &line, &st) {
+        n.walk(&mut |c| {
+            if let Some(f) = c.appearance.fill() {
+                fills.push(f.paint.clone());
+            }
+        });
+    }
+    // The art is black: each piece is the swatch at the stroke's own tint.
+    assert!(!fills.is_empty());
+    for p in &fills {
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "Brand orange" && (*tint - 1.0).abs() < 1e-6), "{p:?}");
+    }
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// An Art brushed path keeps its drawn look when the brush wouldn't draw it the way the file does:
 /// its settings differ from the brush's, the brush's are ones VectorCraft doesn't draw as the file
 /// does, its art isn't read, or the brush isn't one the panel keeps.
@@ -11621,7 +11892,6 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
     let cases = [
         ("a switch written as another kind", good.clone(), art_style("Ribbon", 1.0, &malformed, "")),
         ("art in a pattern", format!("{dots}{patterned}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON)), plain_style.clone()),
-        ("tints of a swatch's ink", good.clone(), plain_style.replace("0 1 1 0 1 0 0 XA", "0 0 0 0 1 0.5 0 (Brand orange) 0 1 XK")),
         (
             "art with no length",
             format!(

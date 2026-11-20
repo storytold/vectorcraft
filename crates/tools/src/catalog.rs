@@ -34,6 +34,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("addAnchor", "Add Anchor Point Tool", Some("+"), "tool-pen-add"),
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
+        t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[
@@ -48,6 +49,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("lineSegment", "Line Segment Tool", Some("\\"), "tool-line"),
         t("arc", "Arc Tool", None, "tool-arc"),
+        t(crate::three_point_arc::ID, "Three-Point Arc Tool", None, "tool-three-point-arc"),
         t("spiral", "Spiral Tool", None, "tool-spiral"),
         t("rectangularGrid", "Rectangular Grid Tool", None, "tool-rect-grid"),
         t("polarGrid", "Polar Grid Tool", None, "tool-polar-grid"),
@@ -57,6 +59,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("roundedRectangle", "Rounded Rectangle Tool", None, "tool-rounded-rect"),
         t("ellipse", "Ellipse Tool", Some("L"), "tool-ellipse"),
         t(crate::circle::ID, "Circle Tool", None, "tool-circle"),
+        t(crate::curvature_circle::ID, "Curvature Circle Tool", None, "tool-curvature-circle"),
         t("polygon", "Polygon Tool", None, "tool-polygon"),
         t("star", "Star Tool", None, "tool-star"),
         t("flare", "Flare Tool", None, "tool-flare"),
@@ -100,6 +103,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[
         t("shapeBuilder", "Shape Builder Tool", Some("Shift+M"), "tool-shape-builder"),
         t("livePaintBucket", "Live Paint Bucket", Some("K"), "tool-bucket"),
+        t("fillArea", "Fill Area Tool", None, "tool-fill-area"),
         t("livePaintSelection", "Live Paint Selection Tool", Some("Shift+L"), "tool-live-select"),
     ],
     &[
@@ -154,6 +158,48 @@ pub fn tool_info(id: &str) -> Option<&'static ToolInfo> {
     all_tools().find(|t| t.id == id)
 }
 
+/// One sentence on what each tool does, by tool id, for the tool card that General › Show Tool Cards
+/// shows on hover.
+const DESCRIPTIONS: &[(&str, &str)] = &[
+    ("selection", "Selects whole objects and groups to move, resize or rotate them."),
+    ("directSelection", "Selects anchor points and path segments to reshape a path."),
+    ("pen", "Draws paths point by point, with straight segments and smooth curves."),
+    ("curvature", "Draws smooth curves through the points you click."),
+    ("type", "Adds text at a point, or in a frame you drag."),
+    ("rectangle", "Draws rectangles and squares."),
+    ("roundedRectangle", "Draws rectangles with rounded corners."),
+    ("ellipse", "Draws ellipses and circles."),
+    ("polygon", "Draws polygons with sides of equal length."),
+    ("star", "Draws stars."),
+    ("rotate", "Turns objects around a reference point."),
+    ("reflect", "Flips objects across an axis through a reference point."),
+    ("scale", "Resizes objects from a reference point."),
+    ("shear", "Slants objects from a reference point."),
+    ("hand", "Moves the view of the document."),
+    ("zoom", "Magnifies or reduces the view."),
+    ("eyedropper", "Copies the color and other attributes of one object to the selection."),
+    ("gradient", "Sets the direction and length of a gradient."),
+    ("artboard", "Creates, selects and resizes artboards."),
+    ("width", "Changes the width of a stroke along its length."),
+    ("puppetWarp", "Bends art by dragging pins placed on it."),
+    ("warp", "Pushes the outlines of paths in the direction you drag."),
+    ("twirl", "Twists the outlines of paths into swirls."),
+    ("pucker", "Pulls the outlines of paths in toward the brush."),
+    ("bloat", "Pushes the outlines of paths out from the brush."),
+    ("scallop", "Adds curved details along the outlines of paths."),
+    ("crystallize", "Adds spiky details along the outlines of paths."),
+    ("wrinkle", "Adds wrinkles along the outlines of paths."),
+    ("perspectiveSelection", "Moves, copies and resizes objects on the perspective grid."),
+    ("blend", "Makes a series of steps between two or more objects."),
+    ("dimension", "Places dimension lines that show measured lengths."),
+];
+
+/// One sentence on what the tool does, for its tool card; none for a tool without one, which keeps
+/// its one-line tool tip.
+pub fn tool_description(id: &str) -> Option<&'static str> {
+    DESCRIPTIONS.iter().find(|(tool, _)| *tool == id).map(|&(_, text)| text)
+}
+
 /// Tool for a single-key shortcut such as "V" or "Shift+M".
 pub fn tool_for_shortcut(s: &str) -> Option<&'static ToolInfo> {
     all_tools().find(|t| t.shortcut == Some(s))
@@ -201,5 +247,16 @@ mod tests {
         assert_eq!(group_of("star"), group_of("rectangle"));
         assert!(is_selection_tool("groupSelection") && !is_selection_tool("pen"));
         assert!(edits_anchors("pen") && !edits_anchors("rectangle"));
+    }
+
+    #[test]
+    fn descriptions_belong_to_tools() {
+        for (i, (id, text)) in DESCRIPTIONS.iter().enumerate() {
+            assert!(tool_info(id).is_some(), "{id} is not a tool id");
+            assert!(DESCRIPTIONS[..i].iter().all(|(other, _)| other != id), "{id} is described twice");
+            assert_eq!(tool_description(id), Some(*text));
+        }
+        assert_eq!(tool_description("nonsense"), None);
+        assert_eq!(tool_description("slice"), None);
     }
 }

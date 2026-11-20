@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Type Path Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner; symmetric: mirror the other handle about the anchor without changing its kind, except at an open end of the path; independent and symmetric cannot both be true; both default false); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
             has_doc,
             set_path_handle
         ),
@@ -1449,6 +1449,10 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
     let node = s.doc()?.doc.node(id);
     let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
@@ -1461,7 +1465,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let within = |t: &TextObject| {
             t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
         };
-        if !(t.set_path_handle((si, ai), out, pos, independent) && within(t)) {
+        if !(t.set_path_handle_with_symmetry((si, ai), out, pos, independent, symmetric) && within(t)) {
             t.kind = before;
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }

@@ -747,7 +747,9 @@ fn a_font_named_by_another_of_its_names_is_copied() {
     let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
     let report = String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap();
     assert!(report.contains("SourceSans3-Semibold Regular → Fonts/"), "{report}");
-    let details = report.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
+    // The Font Details row: the Fonts rows above it start with the same label.
+    let font_details = report.split("\nFONT DETAILS\n").nth(1).unwrap_or_default();
+    let details = font_details.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
     assert!(details.contains("embedding allowed") && !details.contains("missing"), "{report}");
 }
 

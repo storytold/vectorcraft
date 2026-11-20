@@ -10,6 +10,7 @@ mod area;
 mod char_style;
 mod composite;
 mod file_fonts;
+mod kinsoku_set;
 mod object;
 mod para_style;
 mod runs;
@@ -27,6 +28,8 @@ pub use composite::{
     CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
 pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
+pub(crate) use kinsoku_set::read_sets as read_kinsoku_sets;
+pub use kinsoku_set::{KINSOKU_BUILT_IN, KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX, KinsokuSet};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
     Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
@@ -37,7 +40,7 @@ pub use tabs_lists::{
     Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, MAX_LIST_START, NumberStyle, ParaList,
     TabAlign, TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_outline, wrap_sources, wrap_work};
+pub use wrap::{resolve_wrap, wrap_copy_units, wrap_outline, wrap_sources, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///

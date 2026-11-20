@@ -142,6 +142,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("interpolateControlPoints", "General", "Options", "Interpolate Control Points When Moving Anchors", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
+    p!("showToolCards", "General", "Options", "Show Tool Cards", bool),
     p!("showExternalScriptWarning", "General", "Options", "Show External Script Warning", bool),
     p!("antiAliasedArtwork", "General", "Options", "Anti-aliased Artwork", bool),
     p!("selectSameTintPercent", "General", "Options", "Select Same Tint %", bool),
@@ -404,6 +405,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Update Links",
         choice(&[("automatically", "Automatically"), ("manually", "Manually"), ("askWhenModified", "Ask When Modified")])
     ),
+    p!("pdfTextAs", "File Handling", "Files", "PDF Text", choice(&[("text", "Editable"), ("outlines", "Outlines")])),
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
@@ -456,6 +458,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Transform panel menu: drawing a shape shows the panel.
+    p!("showOnShapeCreation", "General", "Transform Panel", "Show on Shape Creation", bool),
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
@@ -749,6 +753,13 @@ impl Session {
                 if t.id() == "roundedRectangle" {
                     t.set_option("cornerRadius", &r);
                 }
+            }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
             }
         }
         if fonts_folder_changed {

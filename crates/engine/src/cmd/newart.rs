@@ -206,9 +206,10 @@ impl Session {
     }
 
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
-    /// the first selected object (so the last selection's once nothing is selected).
+    /// the first selected object (so the last selection's once nothing is selected). Not while the
+    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
     pub(crate) fn inherit_new_art(&mut self) {
-        if self.prefs.new_art_basic {
+        if self.prefs.new_art_basic || self.bucket_paints() {
             return;
         }
         let Some(st) = self.active() else { return };
@@ -227,9 +228,11 @@ impl Session {
         if !self.prefs.new_art_basic {
             return;
         }
-        let has_paint = self
-            .proxy_source(false)
-            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
+        // A Live Paint group with edges and no faces shows only a stroke.
+        let has_paint = [false, true].into_iter().any(|stroke| {
+            self.proxy_source(stroke)
+                .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some())
+        });
         if !has_paint {
             return;
         }
