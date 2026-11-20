@@ -1023,7 +1023,7 @@ impl Tool for QuickPenTool {
     }
 
     fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        if self.press.is_none() {
+        if self.press.is_none() && self.length.is_none() {
             self.drawing = None;
         }
         vec![]

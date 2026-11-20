@@ -842,6 +842,27 @@ fn piece_keys_do_nothing_during_a_length_drag() {
     assert!(only_path(&s).anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6);
 }
 
+/// Choosing Quick Pen again during a length drag leaves the drawing alone: the drag goes on, ends
+/// where the pointer is let go, and the next click goes on drawing the same path.
+#[test]
+fn choosing_the_tool_again_during_a_length_drag_keeps_the_drawing() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 130.0), v).unwrap();
+    quick_pen(&mut s);
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 140.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 140.0), v).unwrap();
+    let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(100.0, 100.0), pt(260.0, 100.0)]);
+    click(&mut s, 260.0, 200.0);
+    assert_eq!(paths(&s).len(), 1, "the drawing went on");
+    assert_eq!(only_path(&s).anchors.len(), 3);
+}
+
 /// A length drag ends where the pointer is let go, also when no drag event came after the press.
 #[test]
 fn a_length_drag_ends_at_the_release_point() {
