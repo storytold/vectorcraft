@@ -24,10 +24,14 @@ jobs:
       # Same craft-fonts commit as release.yml.
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       timeout-minutes: 90
-      # The workspace crates build without line tables, and the test binaries without debug info or
-      # symbols. A panic still names its file and line.
-      dev-debug: "0"
+      # The gate's test binaries carry no debug info and no symbols (CARGO_PROFILE_TEST_DEBUG=0,
+      # CARGO_PROFILE_TEST_STRIP=symbols), as photocraft's do: linking ~100 test binaries with line
+      # tables ran the hosted runner out of resources, and it stopped mid-link with "received a
+      # shutdown signal" (exit 143). Panics still name file and line; local builds keep Cargo.toml's
+      # line tables.
       dev-strip: true
+      # The workspace crates also build without line tables. A panic still names its file and line.
+      dev-debug: "0"
       # Five legs instead of one: shards 1 to 4 each build and run the tests of their own crates,
       # and shard 5 runs the other `cargo xtask ci` steps (xtask/src/shards.rs). `gate (<os>)`
       # passes only when all five did. On pushes to main, a `cache warm` leg builds what every
