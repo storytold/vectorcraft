@@ -634,19 +634,6 @@ pub fn list_scroll_style() -> egui::style::ScrollStyle {
     egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
 }
 
-/// Records `button` as the widget that opens the menu `popup`, a popup with an id of its own
-/// (`Popup::id`), so that [`menu_scroll`] measures the menu's room from the button, as it does for a
-/// popup with egui's default id. Call it before the popup is shown. The record is kept for later
-/// openings of `popup` and is replaced when another button is recorded for it.
-pub fn menu_opener(button: &Response, popup: egui::Id) {
-    button.ctx.data_mut(|d| d.insert_temp(own_opener_key(popup), button.id));
-}
-
-/// Where [`menu_opener`] records the button of a popup with an id of its own.
-fn own_opener_key(popup: egui::Id) -> egui::Id {
-    popup.with("menu-scroll-own-opener")
-}
-
 /// The widget that opened a popup and whether it is a submenu's row (`None` when none was found),
 /// the frame the popup was opened in, and the frame it was last drawn in.
 type Opener = (Option<(egui::Id, bool)>, u64, u64);
@@ -714,6 +701,19 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
     // A submenu opens from its row grown by half the menu's margin, as egui's `SubMenu` places it.
     let grow = if submenu { egui::Frame::menu(ui.style()).total_margin().sum().y * 0.5 } else { 0.0 };
     Some((rect.expand2(vec2(0.0, grow)), submenu))
+}
+
+/// Records `button` as the widget that opens the menu `popup`, a popup with an id of its own
+/// (`Popup::id`), so that [`menu_scroll`] measures the menu's room from the button, as it does for a
+/// popup with egui's default id. Call it before the popup is shown. The record is kept for later
+/// openings of `popup` and is replaced when another button is recorded for it.
+pub fn menu_opener(button: &Response, popup: egui::Id) {
+    button.ctx.data_mut(|d| d.insert_temp(own_opener_key(popup), button.id));
+}
+
+/// Where [`menu_opener`] records the button of a popup with an id of its own.
+fn own_opener_key(popup: egui::Id) -> egui::Id {
+    popup.with("menu-scroll-own-opener")
 }
 
 /// The body of a menu or popup list: as tall as its items up to the bottom bars of the window it
