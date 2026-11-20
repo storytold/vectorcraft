@@ -205,11 +205,13 @@ fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     assert_eq!(*shown.borrow(), ["/art/a.vectorcraft"]);
 }
 
+/// The palette lists neither the old alias nor `file.documentColorMode`, which a pick can't run
+/// without a mode; the CMYK and RGB menu items run the one command.
 #[test]
-fn the_palette_lists_document_color_mode_once() {
+fn document_color_mode_is_one_command() {
     let items = palette::items();
     let ids: Vec<&str> = items.iter().map(|(_, id, _)| id.as_str()).filter(|id| id.to_ascii_lowercase().contains("documentcolormode")).collect();
-    assert_eq!(ids, ["file.documentColorMode"]);
+    assert!(ids.is_empty(), "{ids:?}");
     let mut app = app();
     app.run("file.new", json!({})).unwrap();
     let entries = menus::menu_entries(&app);

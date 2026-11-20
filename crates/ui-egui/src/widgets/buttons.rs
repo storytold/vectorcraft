@@ -8,6 +8,12 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32
 
 /// [`icon_button`] drawn for a response the caller made (its own id or sense).
 pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, selected: bool) -> Response {
+    paint_icon_button_named(ui, resp, icon, tl!(tip), tl!(tip), selected)
+}
+
+/// [`paint_icon_button`] that screen readers call `name` and that shows the tool tip `tip` (none
+/// when empty), both as given.
+pub(crate) fn paint_icon_button_named(ui: &mut Ui, resp: Response, icon: &str, name: &str, tip: &str, selected: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let rect = resp.rect;
     let size = rect.width();
@@ -21,8 +27,8 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
     let pad = (size * 0.2).round();
     icons::paint(ui, icon, rect.shrink(pad), if selected { t.text_strong } else { t.icon });
-    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, tl!(tip)));
-    if !tip.is_empty() { resp.on_hover_text(tl!(tip)) } else { resp }
+    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, name));
+    if !tip.is_empty() { resp.on_hover_text(tip) } else { resp }
 }
 
 /// Small flat text button (Quick Actions style).
@@ -207,9 +213,30 @@ pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool
     menu_item_name(ui, tl!(label), enabled, checked)
 }
 
+/// [`menu_item`] that returns the row's response, for a caller that needs to know how it was
+/// clicked.
+pub(crate) fn menu_item_response(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> egui::Response {
+    menu_item_name_response(ui, tl!(label), enabled, checked)
+}
+
 /// [`menu_item`] for a name that is user or file data (a library, a recent URL), never translated.
 /// Like the menu bar's items, the row lights up under the pointer.
 pub fn menu_item_name(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool {
+    menu_item_name_response(ui, label, enabled, checked).clicked()
+}
+
+/// [`menu_item_name`] that returns the row's response.
+fn menu_item_name_response(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> egui::Response {
     let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
-    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false)).clicked()
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+}
+
+/// [`menu_item`] that shows `hint` under the pointer while the row is disabled, to say why it is
+/// gray.
+pub fn menu_item_hint(ui: &mut Ui, label: &str, enabled: bool, checked: bool, hint: &str) -> bool {
+    let label = tl!(label);
+    let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+        .on_disabled_hover_text(tl!(hint))
+        .clicked()
 }

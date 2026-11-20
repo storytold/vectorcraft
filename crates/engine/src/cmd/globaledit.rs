@@ -746,8 +746,8 @@ fn give_appearance(a: &Appearance, b: &Appearance, m: &Appearance, n: &mut Share
 }
 
 /// Give the member's fill or stroke `n` the settings of the model's that changed from `a` to `b`,
-/// with the values of `m` (`b` placed on the member). A stroke's pen pressure, tilt, bearing and
-/// rotation stay its own.
+/// with the values of `m` (`b` placed on the member). A stroke's pen pressure, tilt, bearing,
+/// rotation and wheel stay its own.
 fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut AppearanceItem) {
     use AppearanceItem::{Fill, Stroke};
     match (a, b, m, n) {
@@ -769,6 +769,7 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 arrow_scale,
                 profile,
                 brush,
+                brush_options,
                 opacity,
                 blend,
                 visible,
@@ -780,8 +781,13 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 tilt: _,
                 bearing: _,
                 rotation: _,
+                wheel: _,
             } = m;
-            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, brush_options, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            // A stroke's own brush settings go with the brush they set: a new brush takes the model's.
+            if a.brush != b.brush {
+                n.brush_options = brush_options.clone();
+            }
         }
         _ => {}
     }

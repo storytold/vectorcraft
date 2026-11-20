@@ -15,7 +15,7 @@ pub(crate) const EXPORT_SELECTION: &str = "exportSelection";
 
 /// `params` without [`EXPORT_SELECTION`], and whether it asked for the selection. A selection
 /// export writes one page, the selection's crop, so the artboard choices are left out too.
-fn take_selection(params: &Value) -> Result<(bool, Value), String> {
+pub(crate) fn take_selection(params: &Value) -> Result<(bool, Value), String> {
     let mut p = params.clone();
     let Some(o) = p.as_object_mut() else { return Ok((false, p)) };
     match o.remove(EXPORT_SELECTION) {
@@ -73,7 +73,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
-    fileio::check_linked_scripts("file.exportAs", f.id, st).map_err(|e| e.to_string())?;
+    // With a saved PDF preset written out, as the encoder reads it.
+    let checked = fileio::pdf::expand_preset(&app.session, "file.exportAs", params).unwrap_or(std::borrow::Cow::Borrowed(params));
+    fileio::check_linked_scripts("file.exportAs", f.id, st, &checked).map_err(|e| e.to_string())?;
     let doc = if selection {
         std::sync::Arc::new(fileio::selection_doc(st, "document.exportSelection", f.id == "txt").map_err(|e| e.to_string())?.0)
     } else {
@@ -82,7 +84,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
         }
     };
-    fileio::check_linked_images("file.exportAs", f.id, st, &doc, params).map_err(|e| e.to_string())?;
+    fileio::check_linked_images("file.exportAs", f.id, st, &doc, &checked).map_err(|e| e.to_string())?;
     // A PDF shows its title in the viewer's title bar only when it is the document's own, not the
     // file name it was titled after, as `document.export` writes it.
     let own_title = fileio::has_own_title(&doc);
@@ -339,11 +341,14 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 }
 
 /// Edit Original: open `path` in the system's default app for it, or with Preferences › File
-/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
-/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+/// Handling › Use System Defaults for Edit Original off, in a native-picked raster editor (#5804),
+/// then PhotoCraft where installed (#5236). Other files, or no installed editor, use the system's app.
 pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
     let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
     let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults && raster && crate::original_editor::try_open(app, path)? {
+        return Ok(());
+    }
     if !app.session.prefs.edit_original_system_defaults
         && raster
         && let Some(open) = app.services.open_in_photocraft.as_mut()

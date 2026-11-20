@@ -24,8 +24,9 @@ mod tests_read_only_save;
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
     EXPORT_SELECTION, export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
-    selection_path,
+    selection_path, take_selection,
 };
+pub(crate) use open::asks_first;
 pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
@@ -35,8 +36,12 @@ pub use open::{
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
 pub(crate) use save::save_current;
-pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
+pub use save::{
+    SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,
+};
+pub(crate) use save::{
+    clear_notes_left, export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to,
+};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
 
@@ -190,20 +195,23 @@ mod tests {
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
-    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
-    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
-    /// the hover lists it first.
+    /// An export whose encoder notes what an option left out (the fill hatches that
+    /// `includeHatches: false` leaves out of a DXF drawing) and what the file loses (a see-through
+    /// rectangle that DXF 2000 writes opaque): the status bar names what the file loses, and the
+    /// hover lists the option's note last.
     #[test]
     fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
         let (mut app, _) = app();
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("object.setProps", json!({"opacity": 50})).unwrap();
+        let r = export(&mut app, Some("dxf"), Some("/out/d.dxf".into()), &json!({"version": "2000", "includeHatches": false})).unwrap();
         let notes = notes_of(&r);
-        assert_eq!(notes.len(), 2, "{r}");
-        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
-        assert!(notes[1].starts_with("lossy WebP"), "{r}");
-        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        let Some((option, losses)) = notes.split_last() else { panic!("no notes: {r}") };
+        assert!(option.starts_with("fill hatches are left out"), "{r}");
+        assert!(losses.iter().any(|n| n.starts_with("transparency needs DXF 2004")), "{r}");
+        assert!(!losses.iter().any(|n| n.starts_with("fill hatches")), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.dxf", notes.len(), &notes[0]));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 

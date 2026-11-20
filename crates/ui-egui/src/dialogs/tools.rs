@@ -18,7 +18,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             kind,
             json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "anchors": app.session.tool_options_of(kind)["anchors"]}),
         ),
-        "roundedRectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": "12 pt"})),
+        // The radius starts at General › Corner Radius, which OK sets to the radius typed.
+        "roundedRectangle" => {
+            let radius = format!("{} pt", app.session.prefs.corner_radius);
+            Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": radius}))
+        }
         "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": app.session.tool_options_of(kind)["sides"]})),
         "star" => {
             Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": app.session.tool_options_of(kind)["points"]}))
@@ -108,7 +112,7 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
                 "rotate" => json!({"angle": 0}),
                 "reflect" => json!({"axis": "vertical", "angle": 90}),
                 "scale" => json!({"sx": 100, "sy": 100, "uniform": true}),
-                "shear" => json!({"angle": 0, "axis": "horizontal"}),
+                "shear" => json!({"angle": 0, "axis": "horizontal", "axisAngle": 0}),
                 _ => json!({}),
             };
             if let (Some(b), Some(o)) = (base.as_object_mut(), p.as_object()) {
@@ -120,6 +124,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         }
         // Double-clicking a stop on the gradient annotator: its popover, next to the stop's chip.
         "gradientStop" => Dialog::new(kind, json!({"index": p.get("index").cloned().unwrap_or(json!(0)), "x": x, "y": y, "tab": "color"})),
+        // Image Trace's Ignore Color eyedropper updates the panel, not the document's paint.
+        "imageTraceIgnoreColor" => {
+            crate::panels::image_trace::apply_ignore_color_sample(app, &p);
+            return;
+        }
         // Brush Options › Key Color eyedropper: update the open dialog, do not replace it.
         "brushKeyColor" => {
             if let Some(c) = p.get("color") {
@@ -160,6 +169,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             if let Err(e) = super::slices::open_options(app) {
                 app.status(e);
             }
+            return;
+        }
+        // A click or double-click that would edit type set in fonts that aren't available.
+        vectorcraft_tools::text::MISSING_FONT_EDIT => {
+            super::confirm::ask_missing_font_edit(app, &p);
             return;
         }
         _ => return,

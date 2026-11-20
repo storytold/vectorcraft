@@ -1,6 +1,6 @@
 //! Object menu long tail: Lock/Hide All Artwork Above & Other Layers, Transform Each, Reset
-//! Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks, Convert to Shape and
-//! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
+//! Bounding Box, Rotate Bounding Box, Rasterize, Crop Image, Mask (an image), Create Trim Marks,
+//! Convert to Shape and Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
@@ -15,8 +15,8 @@ use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots, selected_roots_to_transform};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selected_member,
-    has_selection, switch_or,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, fileio, find_command, has_doc,
+    has_selected_member, has_selection, switch_or,
 };
 
 /// Session-level (not saved) state owned by the menu commands.
@@ -111,6 +111,15 @@ pub fn specs() -> Vec<CommandSpec> {
             reset_bounding_box
         ),
         cmd!(
+            "object.rotateBoundingBox",
+            "Rotate Bounding Box…",
+            ["Object", "Transform"],
+            None,
+            "{angle: degrees (counter-clockwise), absolute?: bool (true: turn the box to angle; default false: turn it by angle from the angle the selected objects share, 0 when theirs differ)} turn the bounding box of the selected objects to one angle without moving their art; the objects inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks) turn with them and keep their angle relative to them; a path of a compound path selected on its own turns only its own box; one undo step, none when every box is already at the angle; object.resetBoundingBox squares the boxes again; a missing or non-numeric angle is an error → {angle: the new angle of the boxes, in (-180, 180], changed: objects whose box turned, the objects inside the selected ones included}",
+            has_selection,
+            rotate_bounding_box
+        ),
+        cmd!(
             "object.rasterize",
             "Rasterize…",
             ["Object"],
@@ -124,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Object Mosaic…",
             ["Object"],
             None,
-            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt; default the image's), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles coloured by the selected image's average tile colours → {id, tiles}",
+            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors → {id, tiles, columns, rows}",
             has_image,
             object_mosaic
         ),
@@ -225,9 +234,10 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 // ---------- Reset Bounding Box ----------
 
 /// Squares each selected object and every object inside it: the children of groups, compound paths,
-/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks. A
+/// path of a compound path selected on its own is squared alone, as the transforms move it alone.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids = selected_roots_to_transform(s)?;
     let d = &s.doc()?.doc;
     let mut changed = 0;
     let squared: Vec<(NodeId, Node)> = ids
@@ -249,6 +259,69 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({ "changed": changed }))
+}
+
+// ---------- Rotate Bounding Box ----------
+
+/// Turns the bounding box of the selected objects to one angle without moving their art: by `angle`
+/// from the angle they share (0 when it differs), or to `angle` with `absolute`. Each object's box
+/// turns by what takes it there, and so do the boxes of the objects inside it (the children of
+/// groups and the art of linked opacity masks), which keep their angle relative to it.
+fn rotate_bounding_box(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.rotateBoundingBox";
+    // A JSON number is always finite.
+    let angle = f64_req(p, "angle", C)?;
+    let absolute = switch_or(p, "absolute", false, C)?;
+    // The same objects the transforms move: a path of a compound path selected on its own turns
+    // its own box. Layers are left out, as they have no box.
+    let owners = selected_roots_to_transform(s)?;
+    let d = &s.doc()?.doc;
+    let start = if absolute { 0.0 } else { d.bbox_angle(&owners) };
+    // An angle within the tolerance of 0 is stored as 0, as `Node::turn_boxes` stores it.
+    let target = match vectorcraft_geom::normalize_deg(start + angle) {
+        a if a.abs() <= BOX_EPS_DEG => 0.0,
+        a => a,
+    };
+    let mut changed = 0;
+    let turned: Vec<(NodeId, Node)> = owners
+        .iter()
+        .filter_map(|id| {
+            let n = d.node(*id)?;
+            let by = vectorcraft_geom::normalize_deg(target - n.bbox_angle);
+            (by.abs() > BOX_EPS_DEG).then(|| {
+                let mut c = n.clone();
+                c.turn_boxes(by);
+                // The selected object's box is set to the target itself, so repeated turns add no
+                // rounding error to it.
+                c.bbox_angle = target;
+                changed += boxes(&c);
+                (*id, c)
+            })
+        })
+        .collect();
+    if !turned.is_empty() {
+        s.edit("Rotate Bounding Box", |d, _| {
+            for (id, n) in turned {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "angle": target, "changed": changed }))
+}
+
+/// Angles closer than this (degrees) are the same, as `vectorcraft_doc::orient` compares them.
+const BOX_EPS_DEG: f64 = 1e-6;
+
+/// The number of objects in `n`'s subtree whose box [`Node::turn_boxes`] turns: `n`, its children
+/// and the art of a linked opacity mask, layers left out.
+fn boxes(n: &Node) -> usize {
+    let own = usize::from(!n.is_layer());
+    let children: usize = n.children().into_iter().flatten().map(|c| boxes(c)).sum();
+    let mask = n.extras().mask.as_ref().filter(|m| m.linked).map_or(0, |m| boxes(&m.art));
+    own + children + mask
 }
 
 /// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
@@ -719,10 +792,16 @@ fn cmyk_raster(
     if alpha.iter().all(|&a| a == 255) {
         return Ok((blob, None));
     }
-    let mask = image::GrayImage::from_raw(img.width, img.height, alpha)
-        .ok_or_else(|| EngineError::Other("the image's transparency doesn't fit it".into()))?;
-    let mut png = Vec::new();
-    mask.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mask = craft_image_codecs::Image::from_raw(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Gray,
+        craft_image_codecs::SampleType::U8,
+        alpha,
+    )
+    .map_err(|_| EngineError::Other("the image's transparency doesn't fit it".into()))?;
+    let png = craft_image_codecs::encode(&mask, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| EngineError::Other(e.to_string()))?;
     Ok((blob, Some(png)))
 }
 
@@ -891,7 +970,23 @@ pub(crate) fn has_image(s: &Session) -> std::result::Result<(), String> {
     }
 }
 
-fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+/// What `object.createObjectMosaic` makes from its params: the image, the tile counts, the tiles'
+/// placement, their size and spacing in image pixels, and the options.
+struct MosaicPlan {
+    id: NodeId,
+    im: ImageObject,
+    cols: u32,
+    rows: u32,
+    xf: Affine,
+    tile: (f64, f64),
+    gap: (f64, f64),
+    gray: bool,
+    delete: bool,
+}
+
+/// The mosaic `object.createObjectMosaic` would make from `p`, worked out without decoding the
+/// image or changing the document.
+fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
     const C: &str = "object.createObjectMosaic";
     let st = s.doc()?;
     let id = st
@@ -901,28 +996,100 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         .copied()
         .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
         .ok_or_else(|| bad(C, "select an image"))?;
-    let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
-    let blob = st.doc.images.get(&im.key).filter(|b| !b.bytes.is_empty()).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
-    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
-    let cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
-    let rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
+    if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
+        return Err(bad(C, "the image has no embedded pixels"));
+    }
+    let mut cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
+    let mut rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
     let gray = switch_or(p, "gray", false, C)?;
-    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
+    let percentages = switch_or(p, "percentages", false, C)?;
+    // A side named "width" (true) or "height" (false), as `constrain` and `useRatio` take it.
+    let side = |key: &str, v: &Value, also: &str| match v.as_str() {
+        Some("width") => Ok(true),
+        Some("height") => Ok(false),
+        _ => Err(bad(C, format!("`{key}` must be one of {}", format_args!("\"width\", \"height\"{also} or null")))),
+    };
+    let constrain = match p.get("constrain") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(side("constrain", v, "")?),
+    };
+    // Use Ratio's kept side: true keeps Constrain Ratio's side (the width when it is left out).
+    let use_ratio = match p.get("useRatio") {
+        None | Some(Value::Null | Value::Bool(false)) => None,
+        Some(Value::Bool(true)) => Some(constrain.unwrap_or(true)),
+        Some(v) => Some(side("useRatio", v, ", true, false")?),
+    };
     // Tiles in image space, placed by the image transform (scaled to a new size if asked).
     let b = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     check_numbers(p, &["width", "height", "spacingX", "spacingY"], C)?;
-    let (nw, nh) = (f64_or(p, "width", b.width()).max(0.1), f64_or(p, "height", b.height()).max(0.1));
-    let resize = Affine::translate(b.origin().to_vec2())
-        * Affine::scale_non_uniform(nw / b.width().max(1e-9), nh / b.height().max(1e-9))
-        * Affine::translate(-b.origin().to_vec2());
+    let (bw, bh) = (b.width().max(1e-9), b.height().max(1e-9));
+    // A size given (pt, or % of the image's) is from 0.1 to 1,000,000; one left out is the image's.
+    let size = |key: &str, base: f64| -> Result<f64> {
+        let Some(x) = p.get(key).and_then(Value::as_f64) else { return Ok(base) };
+        let (min, max) = (0.1, 1_000_000.0);
+        if !(min..=max).contains(&x) {
+            return Err(bad(C, format!("`{key}` must be between {min} and {max} (got {x})")));
+        }
+        Ok(if percentages { base * x / 100.0 } else { x })
+    };
+    let (mut nw, mut nh) = (size("width", bw)?, size("height", bh)?);
+    // Constrain Ratio keeps the image's proportions: the named side leads and the other follows.
+    match constrain {
+        Some(true) => nh = nw * bh / bw,
+        Some(false) => nw = nh * bw / bh,
+        None => {}
+    }
+    // A size under 0.1 pt grows to 0.1 pt, in proportion while Constrain Ratio keeps it. A side
+    // Constrain Ratio works out above 1,000,000 pt shrinks to 1,000,000 pt, the other with it.
+    let (nw, nh) = match constrain {
+        Some(_) => {
+            let k = (0.1 / nw.min(nh)).max(1.0).min(1_000_000.0 / nw.max(nh));
+            // Proportions over 10,000,000 to 1 leave no size with both sides within the range.
+            if nw.min(nh) * k < 0.1 * (1.0 - 1e-9) {
+                return Err(bad(C, "the image's proportions leave no size with both sides between 0.1 and 1000000 pt"));
+            }
+            (nw * k, nh * k)
+        }
+        None => (nw.max(0.1), nh.max(0.1)),
+    };
+    let resize = Affine::translate(b.origin().to_vec2()) * Affine::scale_non_uniform(nw / bw, nh / bh) * Affine::translate(-b.origin().to_vec2());
     let xf = resize * im.xf;
-    let (tw, th) = (im.width as f64 / cols as f64, im.height as f64 / rows as f64);
-    // Spacing is in points; convert to image pixels along each axis.
+    // Points per image pixel along each of the image's axes (the image may be turned).
     let ppx = (xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot().max(1e-9);
     let ppy = (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot().max(1e-9);
-    let (gx, gy) = ((f64_or(p, "spacingX", 0.0).max(0.0) / ppx).min(tw * 0.9), (f64_or(p, "spacingY", 0.0).max(0.0) / ppy).min(th * 0.9));
+    let (sx, sy) = (f64_or(p, "spacingX", 0.0).max(0.0), f64_or(p, "spacingY", 0.0).max(0.0));
+    let (iw, ih) = (im.width as f64, im.height as f64);
+    // Use Ratio: square tiles as drawn, spacing taken off, from the count on the kept side,
+    // measured along the image's axes.
+    match use_ratio {
+        Some(true) => rows = mosaic_square_count(cols, iw * ppx, ih * ppy, sx, sy),
+        Some(false) => cols = mosaic_square_count(rows, ih * ppy, iw * ppx, sy, sx),
+        None => {}
+    }
+    let (tw, th) = (iw / cols as f64, ih / rows as f64);
+    // Spacing is in points; convert to image pixels along each axis.
+    let gap = ((sx / ppx).min(tw * 0.9), (sy / ppy).min(th * 0.9));
     let delete = switch_or(p, "deleteRaster", false, C)?;
+    Ok(MosaicPlan { id, im: im.as_ref().clone(), cols, rows, xf, tile: (tw, th), gap, gray, delete })
+}
+
+/// The tile counts (columns, rows) `object.createObjectMosaic` would use with `p`, Use Ratio
+/// included, without making the mosaic (the dialog's Use Ratio button shows them).
+pub fn mosaic_counts(s: &Session, p: &Value) -> Result<(u32, u32)> {
+    mosaic_plan(s, p).map(|m| (m.cols, m.rows))
+}
+
+fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.createObjectMosaic";
+    let MosaicPlan { id, im, cols, rows, xf, tile: (tw, th), gap: (gx, gy), gray, delete } = mosaic_plan(s, p)?;
+    let blob = s.doc()?.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
+    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
+    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
     let (gid, n) = s.edit("Create Object Mosaic", |d, sel| {
         let mut tiles = vec![];
         for r in 0..rows {
@@ -960,7 +1127,32 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([gid]);
         Ok((gid, n))
     })?;
-    Ok(json!({ "id": gid.0, "tiles": n }))
+    Ok(json!({ "id": gid.0, "tiles": n, "columns": cols, "rows": rows }))
+}
+
+/// The tile count along one side of an Object Mosaic whose tiles, as drawn, come closest to square
+/// (Use Ratio): `kept` tiles span `kept_len` on the other side, and this side is `other_len` long.
+/// Each tile is its cell less the gap on its side (`kept_gap`, `other_gap`), and a gap takes at
+/// most 90% of a cell, as the tiles are drawn. Within 1..1000, the smaller count on a tie; all
+/// lengths in points.
+pub(crate) fn mosaic_square_count(kept: u32, kept_len: f64, other_len: f64, kept_gap: f64, other_gap: f64) -> u32 {
+    let drawn = |len: f64, n: u32, gap: f64| {
+        let cell = len / n.max(1) as f64;
+        cell - gap.max(0.0).min(cell * 0.9)
+    };
+    let side = drawn(kept_len, kept, kept_gap);
+    if !(side.is_finite() && side > 0.0 && other_len.is_finite() && other_len > 0.0) {
+        return 1;
+    }
+    // A tile on this side shrinks as the count grows: find the first count whose tile is no wider
+    // than `side`, then take it or the count before it, whichever is closer.
+    let (mut lo, mut hi) = (1u32, 1000u32);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if drawn(other_len, mid, other_gap) > side { lo = mid + 1 } else { hi = mid }
+    }
+    let off = |n: u32| (drawn(other_len, n, other_gap) - side).abs();
+    if lo > 1 && off(lo - 1) <= off(lo) { lo - 1 } else { lo }
 }
 
 fn polygon_path(pts: &[Point]) -> PathData {
@@ -1072,9 +1264,16 @@ pub(crate) fn check_resample_size(sw: u32, sh: u32, w: u32, h: u32) -> Result<()
 
 /// `img` as PNG bytes.
 fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad("object.cropImage", e.to_string()))?;
-    Ok(png)
+    let fail = |e: craft_image_codecs::CodecError| bad("object.cropImage", e.to_string());
+    let raw = craft_image_codecs::Image::from_raw(
+        img.width(),
+        img.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        img.as_raw().clone(),
+    )
+    .map_err(fail)?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(fail)
 }
 
 fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1089,6 +1288,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if switch_or(p, "trim", false, C)? {
         if p.get("ppi").is_some_and(|v| !v.is_null()) {
             return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
@@ -1221,22 +1423,24 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
 /// The image's pixels as RGBA, held to the allowance opening a raster has.
 fn decode_rgba(c: &str, blob: &vectorcraft_doc::ImageBlob) -> Result<image::RgbaImage> {
     // Print rasters run to gigabytes decoded: the same allowance opening them has.
-    let reader = || {
-        image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .map_err(|_| bad(c, "the image's pixels can't be read"))
-    };
     // The image's size as RGBA, read from its header, is held to that allowance before anything
     // is decoded (#1717).
-    let (w, h) = reader()?.into_dimensions().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?;
-    if u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4 {
+    let header = vectorcraft_doc::header_size(&blob.bytes);
+    if let Some((w, h)) = header
+        && u64::from(w) * u64::from(h) > crate::cmd::fileio::MAX_RASTER_ALLOC / 4
+    {
         return Err(bad(c, format!("an image of {w} × {h} pixels is too large to draw")));
     }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::cmd::fileio::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    Ok(reader.decode().map_err(|e| bad(c, format!("the image's pixels can't be read: {e}")))?.to_rgba8())
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = crate::cmd::fileio::MAX_RASTER_ALLOC / 4;
+    opts.limits.max_alloc = crate::cmd::fileio::MAX_RASTER_ALLOC;
+    let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
+        // Within the allowance from its header: a file that can't hold the pixels it declares.
+        craft_image_codecs::CodecError::LimitExceeded(_) if header.is_none() => bad(c, "the image is too large to draw"),
+        _ => bad(c, format!("the image's pixels can't be read: {e}")),
+    })?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).ok_or_else(|| bad(c, "the image's pixels can't be read"))
 }
 
 /// Crop Image's trim: the image cut to the box of its pixels that aren't fully transparent, the
@@ -1265,9 +1469,12 @@ fn trim_image(s: &mut Session, id: NodeId, im: ImageObject) -> Result<Value> {
         return Ok(json!({ "id": id.0, "width": w, "height": h, "trimmed": false }));
     }
     let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
-    let mut png = Vec::new();
-    cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| bad(C, e.to_string()))?;
     let (cw, ch) = (x1 - x0, y1 - y0);
+    let raw =
+        craft_image_codecs::Image::from_raw(cw, ch, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, cut.into_raw())
+            .map_err(|e| bad(C, e.to_string()))?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| bad(C, e.to_string()))?;
     put_pixels(s, id, png, cw, ch, im.xf * Affine::translate((f64::from(x0), f64::from(y0))))?;
     Ok(json!({ "id": id.0, "width": cw, "height": ch, "trimmed": true }))
 }
@@ -1294,11 +1501,16 @@ fn mask_image(s: &mut Session, _: &Value) -> Result<Value> {
         .selection
         .objects
         .iter()
-        .find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Image(im)) => {
-                Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+        .find_map(|id| {
+            let n = st.doc.node(*id)?;
+            match &n.kind {
+                // A distorted image's outline joins its corners.
+                NodeKind::Image(_) if n.is_distorted_image() => Some((*id, PathData::from_bezpath(&n.image_frame()?))),
+                NodeKind::Image(im) => {
+                    Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+                }
+                _ => None,
             }
-            _ => None,
         })
         .ok_or_else(|| bad("object.maskImage", "select an image"))?;
     let (gid, pid) = s.edit("Mask", |d, sel| {

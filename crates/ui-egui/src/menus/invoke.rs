@@ -3,11 +3,21 @@ use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
 /// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
-/// Scripts folder runs, whatever its name ends with.
+/// Scripts folder runs, whatever its name ends with, and so does a proof setup saved in the Proof
+/// Setups folder.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | crate::scripts_menu::COMMAND);
+        && !matches!(
+            id,
+            "effect.dialog"
+                | "window.panel"
+                | "window.brightness"
+                | "view.screenMode"
+                | "plugin.dialog"
+                | crate::scripts_menu::COMMAND
+                | crate::dialogs::proof_setup::LOAD
+        );
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -17,10 +27,12 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
 /// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
-/// chosen with Shift add to the selection (`add: true`).
+/// chosen with Shift add to the selection (`add: true`); Object › Expand… chosen with Alt (Option)
+/// expands at once with the choices its dialog last expanded with (`immediate: true`).
 pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        "ui.expandDialog" if held.alt => (target.0, json!({"immediate": true})),
         // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
         crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
@@ -53,7 +65,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         // Transform Each opens on the values it was last confirmed with (#1732).
         "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
+        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
         "path.average" => ("average", json!({"axis": "both"})),
         // Average & Join opens on the joined anchor chosen last (Corner the first time).
         "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
@@ -77,6 +89,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::bridge::COMMAND => (crate::addons::pathtools::bridge::KIND, crate::addons::pathtools::bridge::fields()),
         crate::addons::pathtools::tangent_circle::COMMAND => {
             (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
         }
@@ -108,10 +121,24 @@ pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Ev
 /// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
 /// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
 /// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`].
+/// commands with no field focused) goes to [`invoke`]. With text selected in a label (a Document
+/// Info value), Copy and Cut copy that text, as their keys do ([`crate::shortcuts::leave_to_labels`]).
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
+    let label_event = match id {
+        "edit.copy" => Some(("edit.copy", egui::Event::Copy)),
+        "edit.cut" => Some(("edit.cut", egui::Event::Cut)),
+        _ => None,
+    };
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
+        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(app, ctx, id)) => {
+            if let Some((_, e)) = label_event {
+                ctx.input_mut(|i| i.events.push(e));
+            }
+            // The labels' text replaces the formats of an earlier Copy or Cut not written yet, even
+            // in a frame whose keys are not this window's.
+            app.drop_unwritten_formats();
+        }
         None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
@@ -193,6 +220,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         if let Err(e) = r {
             app.status(e);
         }
+        return;
+    }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
         return;
     }
     // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
@@ -294,9 +326,28 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
+    // Kinsoku Shori Settings…: the document's custom Kinsoku sets, to edit before OK sets them.
+    if id == crate::dialogs::kinsoku_sets::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::kinsoku_sets::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Find Next with no text to find, as its menu item runs it: the next match of the last Find
+    // and Replace search, or the dialog when there has been none.
+    if id == crate::dialogs::find_replace::NEXT
+        && p.get("find").is_none_or(|f| f.as_str() == Some(""))
+        && p.as_object().is_none_or(|o| o.len() <= 1)
+        && app.session.active().is_some()
+    {
+        if let Err(e) = crate::dialogs::find_replace::find_next(app) {
             app.status(e);
         }
         return true;

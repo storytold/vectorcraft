@@ -174,11 +174,15 @@ impl FontLikeness {
     /// How unlike two faces look: 0 for faces whose numbers are all the same, more the further
     /// apart they are. A number one of the faces does not give is left out. PANOSE digits are
     /// compared only between faces of the same PANOSE family kind; faces of different kinds count
-    /// 3 apart. The weights and scales are VectorCraft's own.
+    /// 3 apart. Faces that share no number to compare (neither a PANOSE family kind, a weight, a
+    /// width, a height, an average width nor an italic angle) are `f32::INFINITY` apart, further
+    /// than any faces that share one. The weights and scales are VectorCraft's own.
     pub fn distance(&self, other: &Self) -> f32 {
         let mut d = 0.0;
+        let mut compared = false;
         let (kind, other_kind) = (self.panose[0], other.panose[0]);
         if kind > 1 && other_kind > 1 {
+            compared = true;
             if kind == other_kind {
                 for (a, b) in self.panose.iter().zip(&other.panose).skip(1) {
                     if *a > 1 && *b > 1 {
@@ -190,21 +194,25 @@ impl FontLikeness {
             }
         }
         if self.weight != 0 && other.weight != 0 {
+            compared = true;
             d += f32::from(self.weight.abs_diff(other.weight)) / 200.0;
         }
         if self.width != 0 && other.width != 0 {
+            compared = true;
             d += f32::from(self.width.abs_diff(other.width)) * 0.5;
         }
         for (a, b, scale) in [(self.x_height, other.x_height, 10.0), (self.cap_height, other.cap_height, 5.0), (self.avg_width, other.avg_width, 8.0)]
         {
             if a != 0 && b != 0 {
+                compared = true;
                 d += f32::from(a.abs_diff(b)) / 1000.0 * scale;
             }
         }
         if let (Some(a), Some(b)) = (self.italic_angle, other.italic_angle) {
+            compared = true;
             d += f32::from(a.abs_diff(b)) / 50.0;
         }
-        d
+        if compared { d } else { f32::INFINITY }
     }
 }
 
@@ -423,6 +431,31 @@ impl FontMatch {
             FontMatch::Missing => "missing",
         }
     }
+}
+
+/// The generic font family names that SVG and HTML files name in place of a font and no font file
+/// provides; compared in any ASCII case ([`is_generic_family`]). The names follow CSS Fonts Module
+/// Level 4, except `emoji`, which that module dropped and this list keeps. The list does not match
+/// the functional `generic(...)` forms, and it leaves out `fangsong`, which is also the family name
+/// of a Chinese font (FangSong).
+pub const GENERIC_FAMILIES: &[&str] = &[
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "math",
+    "emoji",
+];
+
+/// Whether `family` (surrounding spaces ignored) is one of the [`GENERIC_FAMILIES`], in any ASCII case.
+pub fn is_generic_family(family: &str) -> bool {
+    GENERIC_FAMILIES.iter().any(|g| g.eq_ignore_ascii_case(family.trim()))
 }
 
 /// A face's (family, style) names.

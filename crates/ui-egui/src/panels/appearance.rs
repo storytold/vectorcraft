@@ -16,7 +16,7 @@
 //! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
 //! Default (100%, Normal).
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -466,7 +466,7 @@ fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let node = first_subject(app);
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -476,9 +476,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             select_row(app, ui.ctx(), Sel::None);
         }
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-        let mix = mixed(app);
+        let summary = summary(app, ui.ctx());
+        let mix = summary.as_ref().and_then(|s| s.mixed(app));
         let mixed = mix.is_some();
-        let label = tl!(object_label(app));
+        let label = tl!(summary.as_ref().map_or("No Selection", |s| s.label));
         // A linked object names its graphic style ("Rectangle: Sunshine"), and so does new art
         // with nothing selected.
         let style = match app.session.selection_graphic_style() {
@@ -487,7 +488,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => None,
         };
         let label = match style {
-            Some(name) => std::borrow::Cow::Owned(format!("{label}: {name}")),
+            Some(name) => std::borrow::Cow::Owned(format!("{} {name}", crate::i18n::colon(label))),
             None => std::borrow::Cow::Borrowed(label),
         };
         if !hide_thumb {
@@ -497,7 +498,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Some(n) => n.appearance.fill_paint(),
                 None => app.session.paint.fill.clone(),
             };
-            chip(ui, th, &fill, mix.as_ref().is_some_and(|m| m.fills_differ));
+            chip(ui, th, &fill, mix.is_some_and(|m| m.fills_differ));
             if let Some(n) = node.as_ref().filter(|_| !mixed) {
                 thumbnail_drag(ui, th, n.id);
             }
@@ -505,7 +506,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
         match &node {
             // Objects that differ list what they share, under a note that they differ.
-            Some(n) if let Some(m) = &mix => {
+            Some(n) if let Some(m) = mix => {
                 let (mr, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::hover());
                 let mut job = egui::text::LayoutJob::default();
                 let format = egui::TextFormat { font_id: egui::FontId::proportional(12.0), color: t.text_dim, italics: true, ..Default::default() };
@@ -519,10 +520,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(n) => stack(app, ui, n, sel, r, None),
             None => default_stack(app, ui),
         }
-        // Spacer row like Illustrator's empty tail.
+        // An empty spacer row at the end of the list.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
-    bottom(app, ui, node.as_ref(), sel);
+    bottom(app, ui, node.as_deref(), sel);
     delete_key(app, ui);
     // A row's popup, beside the panel (in the same window when the panel floats).
     let panel = ui.max_rect();
@@ -543,13 +544,13 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let keys = super::has_row_keys(&ctx, ROW_KEYS) && !pressed_outside;
     super::set_row_keys(&ctx, ROW_KEYS, keys);
     let node = first_subject(app);
-    let sel = current_sel(app, &ctx, node.as_ref());
+    let sel = current_sel(app, &ctx, node.as_deref());
     if keys
         && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
 }
 
@@ -564,10 +565,10 @@ fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
 }
 
 /// The object the panel lists: the targeted layer, group or object (`layer.target`), else the
-/// first selected one.
-fn first_subject(app: &VectorcraftApp) -> Option<Node> {
+/// first selected one, as the `Arc` the document holds.
+fn first_subject(app: &VectorcraftApp) -> Option<std::sync::Arc<Node>> {
     let st = app.session.active()?;
-    st.selection.subjects().first().and_then(|id| st.doc.node(*id)).cloned()
+    st.selection.subjects().first().and_then(|id| super::layers::node_arc(&st.doc, *id))
 }
 
 /// The selection as the Control bar and the object row name it: "No Selection", the kind ("Path",
@@ -604,6 +605,44 @@ struct Mixed {
     transparency: bool,
     /// Their topmost fills differ: the object row shows no fill chip.
     fills_differ: bool,
+}
+
+/// The selection's [`object_label`] and [`mixed`] summary for the active document as of one
+/// revision and one list of appearance subjects ([`vectorcraft_doc::Selection::subjects`]), shared by
+/// the Control bar and the Appearance panel ([`summary`]).
+pub(crate) struct Summary {
+    uid: u64,
+    revision: u64,
+    subjects: Vec<NodeId>,
+    /// [`object_label`] of these subjects.
+    pub(crate) label: &'static str,
+    /// [`mixed`] of these subjects, worked out the first time the Appearance panel asks for it.
+    mixed: OnceLock<Option<Mixed>>,
+}
+
+impl Summary {
+    /// [`mixed`] of the subjects this summary was made for.
+    fn mixed<'a>(&'a self, app: &VectorcraftApp) -> Option<&'a Mixed> {
+        self.mixed.get_or_init(|| mixed(app)).as_ref()
+    }
+}
+
+/// The active document's [`Summary`], made again only when the document changes (its id or its
+/// revision) or the appearance subjects do, compared id by id. `None` with no document open.
+pub(crate) fn summary(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Summary>> {
+    let st = app.session.active()?;
+    let subjects = st.selection.subjects();
+    let id = egui::Id::unique("ap-summary");
+    if let Some(s) = ctx.data(|d| d.get_temp::<Arc<Summary>>(id))
+        && s.uid == st.uid
+        && s.revision == st.revision
+        && s.subjects == subjects
+    {
+        return Some(s);
+    }
+    let s = Arc::new(Summary { uid: st.uid, revision: st.revision, subjects: subjects.to_vec(), label: object_label(app), mixed: OnceLock::new() });
+    ctx.data_mut(|d| d.insert_temp(id, s.clone()));
+    Some(s)
 }
 
 /// `params` of an item or effect command the panel runs, with `aligned` when the selected objects'
@@ -1200,9 +1239,10 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     (row_rect, resp)
 }
 
-/// Does the effect have a dialog (any parameters)?
+/// Does the effect have a dialog (any parameters, or a Pathfinder effect's Pathfinder Options)?
 fn has_options(id: &str) -> bool {
-    vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
+    vectorcraft_effects::takes_pathfinder_options(id)
+        || vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
 /// Inline editor for an applied effect's parameters, labeled as the effect dialogs' generic fields
@@ -1680,7 +1720,7 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     if menu_item(ui, tl!("Add New Fill"), has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
@@ -1689,10 +1729,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
-        duplicate_selected(app, ui, node.as_ref(), sel);
+        duplicate_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();

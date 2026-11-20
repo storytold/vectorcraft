@@ -103,20 +103,23 @@ impl Writer<'_> {
             || t.stacks_warichu()
             || (inline && matches!(t.kind, TextKind::OnPath { .. }))
             || unwritable;
-        let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
+        // Every writer below draws this one layout of the type.
+        let db = vectorcraft_text::FontDb::global();
+        let lay = vectorcraft_text::layout(db, t);
+        let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t, &lay) } else { w.text(n, t, &lay) };
         let painted = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
         // Live type with an inside or outside character stroke writes that stroke apart from the
         // text, in the group.
         let apart = !outlined && t.runs.iter().any(|r| aligned(&r.style));
         if !painted && !inline && !apart {
+            #[cfg(test)]
+            DRAW_HANDED.with(|d| d.set(true));
             return chars(self, n);
         }
         let id = self.id_attr(n);
         let a = self.attrs(&css::transparency(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
-        let db = vectorcraft_text::FontDb::global();
-        let lay = vectorcraft_text::layout(db, t);
         let mut all = lay.to_bezpath();
         for (_, bar) in vectorcraft_text::decorations(&lay, db, t) {
             all.extend(bar.iter());
@@ -154,14 +157,22 @@ impl Writer<'_> {
     }
 
     /// Text as glyph outlines: one compound path per run, painted like the run (gradients span
-    /// the whole text), over its colour glyphs, as on the canvas.
-    fn text_outlines(&mut self, n: &Node, t: &TextObject) {
+    /// the whole text), over its colour glyphs, as on the canvas. `lay` is the layout of `t`.
+    fn text_outlines(&mut self, n: &Node, t: &TextObject, lay: &vectorcraft_text::TextLayout) {
+        let mut again = None;
+        let lay = handed(t, lay, &mut again);
         let db = vectorcraft_text::FontDb::global();
-        let lay = vectorcraft_text::layout(db, t);
         let mut runs = vec![kurbo::BezPath::new(); t.runs.len()];
+        // Each run's glyphs, in layout order.
+        let mut run_glyphs = vec![Vec::new(); t.runs.len()];
+        for g in &lay.glyphs {
+            if let Some(gs) = run_glyphs.get_mut(g.run) {
+                gs.push(g);
+            }
+        }
         // Underline and strikethrough bars join their run's outlines; ruby glyphs are painted
         // with the run of the text they annotate.
-        let bars = vectorcraft_text::decorations(&lay, db, t);
+        let bars = vectorcraft_text::decorations(lay, db, t);
         for (run, outline) in lay
             .glyphs
             .iter()
@@ -197,10 +208,10 @@ impl Writer<'_> {
         // The glyphs stay in text space; the text's transform joins the document's meanwhile.
         let saved = self.xf;
         self.xf = saved * t.xf;
-        for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
+        for ((bp, run), glyphs) in runs.iter().zip(&t.runs).zip(&run_glyphs) {
             // Colour glyphs paint themselves, under their run's paint: bitmap glyphs (emoji) as
             // their images, COLR and SVG glyphs as their art.
-            for g in lay.glyphs.iter().filter(|g| g.run == i) {
+            for g in glyphs {
                 if let Some((image, to_text)) = g.placed_image() {
                     let m = self.matrix(self.xf * to_text);
                     let href = self.blob_href(&image.blob);
@@ -233,40 +244,42 @@ impl Writer<'_> {
     /// spacing come out as on the canvas. Centred and right-aligned lines are anchored
     /// (`text-anchor`) at their centre or right end, so they stay aligned in a viewer whose font
     /// differs; other lines are placed where each style run (and, justified, each word) starts.
-    fn text(&mut self, n: &Node, t: &TextObject) {
+    /// `lay` is the layout of `t`.
+    fn text(&mut self, n: &Node, t: &TextObject, lay: &vectorcraft_text::TextLayout) {
         // Live SVG text is written in logical order from left-aligned pieces: bidirectional text
         // (and right-to-left paragraphs) keep their look as outlines until it is written with
         // `direction`/`unicode-bidi`. So do runs set Right to Left (Character Direction), whose
         // `direction="rtl"` would anchor their pieces at the right end.
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let mut again = None;
+        let lay = handed(t, lay, &mut again);
         let rtl_runs = t.runs.iter().any(|r| r.style.char_direction == Some(vectorcraft_doc::ParaDirection::RightToLeft));
         if lay.glyphs.iter().any(|g| g.rtl) || lay.lines.iter().any(|l| l.rtl) || rtl_runs {
             self.warn("bidirectional text is outlined to preserve shaping and visual order");
-            return self.text_outlines(n, t);
+            return self.text_outlines(n, t, lay);
         }
         if let TextKind::OnPath { path, start, end } = &t.kind {
             // A reader lays a `<textPath>`'s glyphs straight: joined glyphs bent along the path
             // keep their look as outlines.
             if lay.glyphs.iter().any(|g| g.bend.is_some()) {
                 self.warn("joined type bent along a path is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // `<textPath>` has a start offset only: an end bracket, Align to Path and Spacing
             // keep their look as outlines.
             if end.is_some() || t.path_align != vectorcraft_doc::PathAlign::Baseline || t.path_spacing != 0.0 {
                 self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // A reader turns each `<textPath>` glyph with the path, as Rainbow does: Skew, 3D
             // Ribbon, Stair Step and Gravity keep their look as outlines.
             if t.path_effect != vectorcraft_doc::PathEffect::Rainbow {
                 self.warn("type on a path with an effect other than Rainbow is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // It cannot hang glyphs outside the start bracket either.
-            if hangs_on_path(t, &lay) {
+            if hangs_on_path(t, lay) {
                 self.warn("type on a path with glyphs hanging outside its brackets is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // The space before the first character is written as its `dx`; one before a character
             // after a line break, which the `<textPath>` writes as a space, keeps its look as outlines.
@@ -279,34 +292,39 @@ impl Writer<'_> {
             });
             if spaced_break {
                 self.warn("type on a path with space before a character after a line break is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // A `<textPath>` places its characters one after the other: Insert Aki keeps its look as
             // outlines.
             if t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0) {
                 self.warn("type on a path with Insert Aki is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // Tsume does as well.
             if t.runs.iter().any(|r| r.style.tsume != 0.0) {
                 self.warn("type on a path with Tsume is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
+            }
+            // Justification…'s Desired word and letter spacing and glyph scaling do too.
+            if (0..t.paragraph_count()).any(|i| !t.layout_justification(t.para_at(i)).desired_is_default()) {
+                self.warn("type on a path with Justification spacing or glyph scaling is outlined to keep its look");
+                return self.text_outlines(n, t, lay);
             }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {
                 self.warn("type on a path with bullets or numbers is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
             // Nor the character a repeat mark is drawn as in the mark's width (Kurikaeshi Moji Shori).
             if !lay.repeat_marks.is_empty() {
                 self.warn("type on a path that starts with a repeat mark drawn as the character it repeats is outlined to keep its look");
-                return self.text_outlines(n, t);
+                return self.text_outlines(n, t, lay);
             }
-            return self.text_on_path(n, t, path, *start);
+            return self.text_on_path(n, t, lay, path, *start);
         }
-        self.note_fonts(t, &lay);
-        let lines = text_lines(t, &lay, self.opts.fewer_tspans);
+        self.note_fonts(t, lay);
+        let lines = text_lines(t, lay, self.opts.fewer_tspans);
         // `drawn` holds the styles the layout draws the text in: Shrink Text to Fit scales its sizes, explicit leading and baseline shifts.
         let fitted = (lay.fit_scale != 1.0).then(|| vectorcraft_text::scaled(t, lay.fit_scale));
         let drawn = fitted.as_ref().unwrap_or(t);
@@ -369,35 +387,36 @@ impl Writer<'_> {
         }
         s.push_str("</text>");
         self.line(&s);
-        self.aligned_char_strokes(t);
+        self.aligned_char_strokes(t, lay);
     }
 
-    /// The inside and outside character strokes of live type `t`, over its text (which goes
-    /// without them, see [`Self::char_props`]): each such run's stroke on its glyph outlines, drawn
-    /// twice as wide and clipped or masked to its side as aligned path strokes are
+    /// The inside and outside character strokes of live type `t`, laid out as `lay`, over its text
+    /// (which goes without them, see [`Self::char_props`]): each such run's stroke on its glyph
+    /// outlines, drawn twice as wide and clipped or masked to its side as aligned path strokes are
     /// ([`Self::side_attr`]). The text stays live; only the stroke follows the outlines.
-    fn aligned_char_strokes(&mut self, t: &TextObject) {
+    fn aligned_char_strokes(&mut self, t: &TextObject, lay: &vectorcraft_text::TextLayout) {
         if !t.runs.iter().any(|r| aligned(&r.style)) {
             return;
         }
+        let mut again = None;
+        let lay = handed(t, lay, &mut again);
         let db = vectorcraft_text::FontDb::global();
-        let lay = vectorcraft_text::layout(db, t);
-        let bars = vectorcraft_text::decorations(&lay, db, t);
+        let bars = vectorcraft_text::decorations(lay, db, t);
+        // Each such run's glyph outlines and then its bars, in layout order.
+        let mut outlines = vec![BezPath::new(); t.runs.len()];
+        for (run, outline) in lay.glyphs.iter().map(|g| (g.run, &g.outline)).chain(bars.iter().map(|(r, b)| (*r, b))) {
+            if let Some(bp) = outlines.get_mut(run).filter(|_| t.runs.get(run).is_some_and(|r| aligned(&r.style))) {
+                bp.extend(outline.iter());
+            }
+        }
         // The glyphs stay in text space; the text's transform joins the document's meanwhile.
         let saved = self.xf;
         self.xf = saved * t.xf;
-        for (i, run) in t.runs.iter().enumerate().filter(|(_, r)| aligned(&r.style)) {
-            let mut bp = BezPath::new();
-            for g in lay.glyphs.iter().filter(|g| g.run == i) {
-                bp.extend(g.outline.iter());
-            }
-            for (_, bar) in bars.iter().filter(|(r, _)| *r == i) {
-                bp.extend(bar.iter());
-            }
+        for (run, bp) in t.runs.iter().zip(&outlines).filter(|(r, _)| aligned(&r.style)) {
             if bp.elements().is_empty() {
                 continue;
             }
-            let pd = PathData::from_bezpath(&bp);
+            let pd = PathData::from_bezpath(bp);
             let ap = vectorcraft_doc::Appearance { items: vec![AppearanceItem::Stroke(run.style.stroke_layer())], ..Default::default() };
             let d = self.path_d(&pd, self.xf);
             self.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, None, &[&pd], FillRule::NonZero, Some(lay.bounds));
@@ -569,15 +588,16 @@ impl Writer<'_> {
         rules
     }
 
-    /// Type on a path: a `<textPath>` along the path (a def).
-    fn text_on_path(&mut self, n: &Node, t: &TextObject, path: &PathData, start: f64) {
+    /// Type on a path, laid out as `lay`: a `<textPath>` along the path (a def).
+    fn text_on_path(&mut self, n: &Node, t: &TextObject, lay: &vectorcraft_text::TextLayout, path: &PathData, start: f64) {
         let id = self.id_attr(n);
         let pid = self.fresh_id("text-path");
         let d = self.path_d(path, self.xf * t.xf);
         self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
         // The <text> element's user space is the document's; gradients span the laid-out text.
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-        self.note_fonts(t, &lay);
+        let mut again = None;
+        let lay = handed(t, lay, &mut again);
+        self.note_fonts(t, lay);
         // The styles the layout draws the text in: Dynamic Text scales its sizes, leading and baseline shifts.
         let fitted = (lay.fit_scale != 1.0).then(|| vectorcraft_text::scaled(t, lay.fit_scale));
         let drawn = fitted.as_ref().unwrap_or(t);
@@ -621,13 +641,41 @@ impl Writer<'_> {
         }
         s.push_str("</textPath></text>");
         self.line(&s);
-        self.aligned_char_strokes(t);
+        self.aligned_char_strokes(t, lay);
     }
 }
 
 /// Does a character style stroke inside or outside its glyphs (not centred)?
 fn aligned(st: &CharStyle) -> bool {
     st.has_stroke() && st.stroke_align != StrokeAlign::Center
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: each type writer lays `t` out again ([`handed`]) instead of drawing the layout it is
+    /// handed, so a test can compare the two. The first writer of type written without a group
+    /// still draws the layout it is handed ([`DRAW_HANDED`]), so each object is laid out where it
+    /// is drawn.
+    static LAY_OUT_AGAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: the next type writer draws the layout it is handed, with [`LAY_OUT_AGAIN`] too.
+    static DRAW_HANDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The layout a type writer draws: `lay`, the layout of `t` it is handed. In tests that ask for it,
+/// `t` laid out again, kept in `again`.
+fn handed<'a>(
+    t: &TextObject,
+    lay: &'a vectorcraft_text::TextLayout,
+    again: &'a mut Option<vectorcraft_text::TextLayout>,
+) -> &'a vectorcraft_text::TextLayout {
+    #[cfg(test)]
+    let lay = {
+        let draw_handed = DRAW_HANDED.with(|d| d.replace(false));
+        if LAY_OUT_AGAIN.with(std::cell::Cell::get) && !draw_handed { &*again.insert(vectorcraft_text::layout(FontDb::global(), t)) } else { lay }
+    };
+    #[cfg(not(test))]
+    let _ = (t, again);
+    lay
 }
 
 /// Does type on a path `t`, laid out as `lay`, hang glyphs outside its brackets? It does when

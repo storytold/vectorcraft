@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::geometry::region_pixels;
 use super::{Arc, NodeId, Rect, encode, proof};
 
@@ -39,8 +41,8 @@ pub struct RenderOptions {
     pub background: Option<[u8; 4]>,
     /// Draw artboards as white rectangles (screen view). Export sets this to false.
     pub artboards: bool,
-    /// Objects not to draw (e.g. the object being edited by a live drag preview).
-    pub hidden: Vec<NodeId>,
+    /// Objects not to draw (e.g. the layers and fold lines the Fold Preview's print leaves out).
+    pub hidden: HashSet<NodeId>,
     /// Draw the layers as their Layer Options show them on screen: Preview off in outline, Dim
     /// Images fading their images (a template layer's too), a template in Preview in Outline view.
     pub dim_templates: bool,
@@ -194,7 +196,7 @@ impl Default for RenderOptions {
             outline: false,
             background: None,
             artboards: false,
-            hidden: vec![],
+            hidden: HashSet::new(),
             dim_templates: true,
             proof: None,
             overprint_preview: false,
@@ -350,11 +352,16 @@ impl Rendered {
     /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
     /// [`encode`]).
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
-        let mut buf = Vec::new();
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight())
-            .ok_or("PNG encoding failed: pixel buffer doesn't match the image size")?;
-        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
-        Ok(buf)
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            self.to_straight(),
+        )
+        .map_err(|e| format!("PNG encoding failed: {e}"))?;
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map_err(|e| format!("PNG encoding failed: {e}"))
     }
     /// Each pixel's grey level and alpha: the Rec. 709 luma of its straight colour, with `bilevel`
     /// black below 128 and white from there up. A clear pixel is white: no ink where a fill
@@ -414,7 +421,7 @@ impl Rendered {
     }
     /// Encode as lossless WebP.
     pub fn to_webp(&self) -> Result<Vec<u8>, String> {
-        encode::webp(self)
+        encode::webp(self, None)
     }
     /// Straight-alpha RGBA at (x, y).
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
