@@ -8,13 +8,13 @@ use crate::libraries::{oklab_to_linear_srgb, oklab_to_srgb, srgb_to_oklab};
 /// The chroma CSS reads as 100%.
 pub const CHROMA_FULL: f64 = 0.4;
 
-/// Chroma at or below which the hue is powerless (CSS Color 4's ε); [`to_oklch`] gives hue 0 there.
+/// Chroma at or below which the hue is powerless (CSS Color 4's Îµ); [`to_oklch`] gives hue 0 there.
 pub const POWERLESS_CHROMA: f64 = 0.000_004;
 
 /// How far outside 0..=1 an sRGB component may be and still count as inside the gamut.
 const GAMUT_SLACK: f64 = 1e-4;
 
-/// OKLCH `[l, c, h°]` of sRGB `rgb` (gamma encoded). Values outside 0..=1 are converted as they
+/// OKLCH `[l, c, hÂ°]` of sRGB `rgb` (gamma encoded). Values outside 0..=1 are converted as they
 /// are. The hue is in 0..360, and 0 while the chroma is powerless.
 pub fn to_oklch(rgb: [f32; 3]) -> [f64; 3] {
     let [l, a, b] = srgb_to_oklab(rgb);
@@ -25,7 +25,7 @@ pub fn to_oklch(rgb: [f32; 3]) -> [f64; 3] {
     [l, c, b.atan2(a).to_degrees().rem_euclid(360.0)]
 }
 
-/// sRGB (gamma encoded) of OKLCH `(l, c, h°)`, unclamped.
+/// sRGB (gamma encoded) of OKLCH `(l, c, hÂ°)`, unclamped.
 pub fn oklch_to_srgb(l: f64, c: f64, h: f64) -> [f64; 3] {
     let (sin, cos) = h.to_radians().sin_cos();
     oklab_to_srgb(l, c * cos, c * sin)
@@ -36,12 +36,12 @@ pub fn in_srgb(rgb: [f64; 3]) -> bool {
     rgb.iter().all(|v| (-GAMUT_SLACK..=1.0 + GAMUT_SLACK).contains(v))
 }
 
-/// The largest chroma sRGB holds at lightness `l` and hue `h°`: 0 at or outside black and white.
+/// The largest chroma sRGB holds at lightness `l` and hue `hÂ°`: 0 at or outside black and white.
 pub fn max_chroma(l: f64, h: f64) -> f64 {
     largest_fitting_chroma(l, h, f64::INFINITY)
 }
 
-/// The largest chroma no more than `limit` that sRGB holds at lightness `l` and hue `h°`: 0 at or
+/// The largest chroma no more than `limit` that sRGB holds at lightness `l` and hue `hÂ°`: 0 at or
 /// outside black and white.
 ///
 /// The chromas sRGB holds along the ray can come in several stretches: at the lightness and hue of
@@ -69,8 +69,8 @@ fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
     let y = [lin(0.0), lin(s), lin(2.0 * s), lin(3.0 * s)];
     let bounds = [-GAMUT_SLACK / 12.92, ((1.0 + GAMUT_SLACK + 0.055) / 1.055).powf(2.4)];
     let mut ends = vec![0.0];
-    for ch in 0..3 {
-        let [y0, y1, y2, y3] = [y[0][ch], y[1][ch], y[2][ch], y[3][ch]];
+    for (ch, &y0) in y[0].iter().enumerate() {
+        let [y1, y2, y3] = [y[1][ch], y[2][ch], y[3][ch]];
         let (d1, d2, d3) = (y1 - y0, y2 - 2.0 * y1 + y0, y3 - 3.0 * y2 + 3.0 * y1 - y0);
         let k = [y0, d1 - d2 / 2.0 + d3 / 3.0, d2 / 2.0 - d3 / 2.0, d3 / 6.0];
         let p = |t: f64| ((k[3] * t + k[2]) * t + k[1]) * t + k[0];
@@ -98,7 +98,7 @@ fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
     ends.into_iter().flat_map(|c| [c, c - 1e-9]).find(|c| (0.0..=top).contains(c) && fits(*c)).unwrap_or(0.0)
 }
 
-/// The real roots of `a t² + b t + c`.
+/// The real roots of `a tÂ² + b t + c`.
 fn turning_points(a: f64, b: f64, c: f64) -> Vec<f64> {
     if a.abs() < 1e-15 {
         return if b.abs() < 1e-15 { Vec::new() } else { vec![-c / b] };
@@ -111,7 +111,7 @@ fn turning_points(a: f64, b: f64, c: f64) -> Vec<f64> {
     vec![(-b - r) / (2.0 * a), (-b + r) / (2.0 * a)]
 }
 
-/// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, h°)`, and whether its chroma was lowered:
+/// The sRGB color (gamma encoded, 0..=1) of OKLCH `(l, c, hÂ°)`, and whether its chroma was lowered:
 /// a color outside sRGB keeps its lightness and hue and takes the largest chroma below it that
 /// fits. Lightness is clamped to 0..=1 and chroma to 0 or more.
 pub fn from_oklch(l: f64, c: f64, h: f64) -> ([f32; 3], bool) {
@@ -241,7 +241,7 @@ mod tests {
 
     /// The largest chroma fits and is at least the largest one a scan in steps of 0.0005 finds, at
     /// every hue and at lightnesses near black too, where the ray can come back into sRGB away from
-    /// any primary color's hue (L 0.02 and H 242° fit up to about 0.022 after leaving near 0.012).
+    /// any primary color's hue (L 0.02 and H 242Â° fit up to about 0.022 after leaving near 0.012).
     #[test]
     fn the_largest_chroma_is_never_below_a_scan_of_the_ray() {
         let scan = |l: f64, h: f64| (0..=1000).map(|i| f64::from(i) * 0.0005).filter(|c| in_srgb(oklch_to_srgb(l, *c, h))).fold(0.0, f64::max);

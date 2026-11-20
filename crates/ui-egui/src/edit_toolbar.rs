@@ -18,8 +18,10 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
+use caseless::Caseless;
 use egui::{DragAndDrop, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
+use unicode_normalization::UnicodeNormalization;
 use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};
 
 use crate::state::{ToolbarCategory, ToolbarEdits};
@@ -35,6 +37,22 @@ const WIDTH: f32 = 268.0;
 const GAP: f32 = 4.0;
 /// Size of the tool following the pointer while it is dragged.
 const GHOST: f32 = 30.0;
+
+/// A localized substring-search key. Full folding keeps expansions such as ß/ss and
+/// both Greek sigmas equal. NFC composes dotted I before Turkish tailoring and keeps
+/// canonically equivalent keys equal after folding, without removing accents.
+fn fold_tool_search(text: &str, lang: crate::i18n::Lang) -> String {
+    let turkic = lang.code() == "tr";
+    text.nfc()
+        .map(|c| match (turkic, c) {
+            (true, 'I') => 'ı',
+            (true, 'İ') => 'i',
+            _ => c,
+        })
+        .default_case_fold()
+        .nfc()
+        .collect()
+}
 
 /// A tool dragged between the drawer and the toolbar (egui's drag-and-drop payload).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -263,6 +281,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.tools_drawer = open;
             app.ui.drawer_toolbar = target.filter(|_| open);
             if open {
+                app.ui.tools_drawer_query.clear();
                 app.ui.flyout = None;
                 // The toolbar the drawer opens beside shows.
                 match app.ui.drawer_toolbar.clone() {
@@ -466,6 +485,16 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let id = drawer_id();
+    let search_id = id.with("search");
+    // Escape still closes the drawer while its new search field owns the keyboard.
+    if ctx.memory(|memory| memory.has_focus(search_id))
+        && !egui::Popup::is_any_open(ctx)
+        && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+    {
+        ctx.memory_mut(|memory| memory.surrender_focus(search_id));
+        app.ui.tools_drawer = false;
+        return;
+    }
     let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(WIDTH, 200.0), |r| r.size());
     let x = crate::toolbar::beside(bar, size.x, GAP, crate::toolbar::room(app, ctx).shrink(GAP));
     // Never above the toolbar's top: higher up are the window's title bar (and on macOS its
@@ -524,21 +553,50 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 });
             });
             ui.add_space(4.0);
-            // As tall as its tools, up to the window's height (it scrolls then); the Area's size
-            // from the last frame mustn't cap it.
-            let room = (screen.bottom() - top - GAP - 104.0).max(120.0);
-            egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]).show(ui, |ui| {
+            let mut reset_scroll = false;
+            let search = ui.horizontal(|ui| {
+                let width = (ui.available_width() - 30.0).max(40.0);
+                reset_scroll = ui
+                    .name_inputs(tl!("Search"), |ui| {
+                        ui.add(egui::TextEdit::singleline(&mut app.ui.tools_drawer_query).id(search_id).hint_text(tl!("Search")).desired_width(width))
+                    })
+                    .changed();
+                if widgets::icon_button(ui, "x", tl!("Clear"), false, 22.0).clicked() {
+                    app.ui.tools_drawer_query.clear();
+                    ui.memory_mut(|memory| memory.request_focus(search_id));
+                    reset_scroll = true;
+                }
+            });
+            ui.add_space(4.0);
+            let lang = crate::i18n::current();
+            let query = fold_tool_search(app.ui.tools_drawer_query.trim(), lang);
+            let matches = |tool: &ToolInfo| query.is_empty() || fold_tool_search(tl!(tool.label), lang).contains(&query);
+            // Keep the same bounded drawer after adding the search row.
+            let room = (screen.bottom() - top - GAP - 104.0 - search.response.rect.height() - 4.0).max(120.0);
+            let mut area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]);
+            if reset_scroll {
+                area = area.vertical_scroll_offset(0.0);
+            }
+            area.show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 let inner = ui.available_width() - 10.0;
+                let mut any = false;
                 for (cat, gs) in groups() {
+                    if !gs.iter().any(|group| group.iter().any(matches)) {
+                        continue;
+                    }
+                    any = true;
                     ui.add_space(6.0);
                     ui.label(egui::RichText::new(crate::i18n::colon(tl!(cat))).size(12.0).color(t.text_strong));
                     ui.add_space(4.0);
                     for g in gs {
+                        if !g.iter().any(matches) {
+                            continue;
+                        }
                         // A flyout group: its tools framed together, as one toolbar button holds them.
                         egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(2.0).show(ui, |ui| {
                             ui.set_width(inner);
-                            for tool in g.iter() {
+                            for tool in g.iter().filter(|tool| matches(tool)) {
                                 let (r, clicked) = row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id));
                                 if clicked {
                                     picked = Some(tool.id);
@@ -554,6 +612,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         });
                         ui.add_space(5.0);
                     }
+                }
+                if !any {
+                    widgets::dim_label(ui, tl!("No matches."));
                 }
             });
             // Show: the controls under the Tools panel's tools (a toolbar made with New Toolbar has
@@ -618,6 +679,8 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if app.ui.tools_drawer {
         crate::toolbar::mark_flyout_open(ctx);
+    } else {
+        ctx.memory_mut(|memory| memory.surrender_focus(search_id));
     }
     ghost(ctx, &t);
 }

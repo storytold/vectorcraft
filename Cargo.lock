@@ -725,6 +725,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "caseless"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b6fd507454086c8edfd769ca6ada439193cdb209c7681712ef6275cccbfe5d8"
+dependencies = [
+ "unicode-normalization",
+]
+
+[[package]]
 name = "cc"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7223,6 +7232,7 @@ name = "vectorcraft-ui-egui"
 version = "0.24.1"
 dependencies = [
  "bytemuck",
+ "caseless",
  "chrono",
  "craft-image-codecs",
  "craft-keymap",
@@ -7237,6 +7247,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "unicode-normalization",
  "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",

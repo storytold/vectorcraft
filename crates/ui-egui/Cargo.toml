@@ -49,6 +49,8 @@ image = { workspace = true }
 craft-image-codecs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+caseless = { workspace = true }
+unicode-normalization = { workspace = true }
 log = { workspace = true }
 
 # Floating panels open in OS windows of their own on the desktop; on the web they stay in the page.
