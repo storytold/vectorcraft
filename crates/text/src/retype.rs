@@ -1120,14 +1120,14 @@ const MAX_FILL_PROBES: usize = 512;
 /// `glyph` (filled by the nonzero rule), whose outlines lie within `tol` of each other, paint the
 /// same area? Each probe lies `1.5 tol` or `3 tol` to a side of the middle of a segment of the shape's
 /// outline; one within `tol` of either outline is skipped, so a region narrower than that is not
-/// probed. `false` when a contour of the shape is narrower than `3 tol` on its shorter side, since
-/// the probes cannot then tell whether the area inside it is painted; `true` when an outline is too
-/// large to probe.
+/// probed. `false` when a counter of the shape (a contour inside another) is narrower than `3 tol`
+/// across in some direction, however it is turned, since the probes cannot then tell whether the
+/// area inside it is painted, and `false` when an outline is too large to probe.
 fn paints_alike(shape: &BezPath, nonzero: bool, glyph: &BezPath, tol: f64) -> bool {
     if narrow_contour(shape, 3.0 * tol) {
         return false;
     }
-    let (Some(fs), Some(fg)) = (Flat::new(shape, tol), Flat::new(glyph, tol)) else { return true };
+    let (Some(fs), Some(fg)) = (Flat::new(shape, tol), Flat::new(glyph, tol)) else { return false };
     let step = fs.segs.len().div_ceil(MAX_FILL_PROBES).max(1);
     for (s, e) in fs.segs.iter().step_by(step) {
         let d = *e - *s;
@@ -1154,9 +1154,74 @@ fn paints_alike(shape: &BezPath, nonzero: bool, glyph: &BezPath, tol: f64) -> bo
     true
 }
 
-/// Does `path` have a contour no wider than `width` on its shorter side that lies inside another
-/// contour (a counter)?
+/// The least width of the convex hull of `path` over every direction it could be measured in, its
+/// points flattened to within `tol`; 0 when the hull has fewer than three corners and when the
+/// path flattens to more than [`MAX_OUTLINE_POINTS`] points.
+fn hull_width(path: &BezPath, tol: f64) -> f64 {
+    let mut pts: Vec<Point> = vec![];
+    let mut too_many = false;
+    kurbo::flatten(path.iter(), tol, |el| {
+        if let PathEl::MoveTo(q) | PathEl::LineTo(q) = el {
+            if pts.len() >= MAX_OUTLINE_POINTS {
+                too_many = true;
+            } else {
+                pts.push(q);
+            }
+        }
+    });
+    if too_many {
+        return 0.0;
+    }
+    pts.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    // Points a thousandth of `tol` apart are one point: their chord has no direction to speak of.
+    let eps = tol * 1e-3;
+    pts.dedup_by(|b, a| a.distance(*b) <= eps);
+    let cross = |o: Point, a: Point, b: Point| (a - o).cross(b - o);
+    let mut hull: Vec<Point> = vec![];
+    for pass in 0..2 {
+        let from = hull.len();
+        let ordered: Vec<Point> = if pass == 0 { pts.clone() } else { pts.iter().rev().copied().collect() };
+        for p in ordered {
+            while hull.len() >= from + 2 && hull.get(hull.len() - 2).zip(hull.last()).is_some_and(|(a, b)| cross(*a, *b, p) <= 0.0) {
+                hull.pop();
+            }
+            hull.push(p);
+        }
+        hull.pop();
+    }
+    if hull.len() < 3 {
+        return 0.0;
+    }
+    // Rotating calipers: the point farthest from each edge only moves forward from one edge to the
+    // next, so the whole walk visits each hull point a bounded number of times.
+    let n = hull.len();
+    let mut least = f64::INFINITY;
+    let mut j = 1;
+    for (i, a) in hull.iter().enumerate() {
+        let Some(b) = hull.get((i + 1) % n) else { continue };
+        let edge = *b - *a;
+        let len = edge.hypot();
+        if len <= 0.0 || !len.is_finite() {
+            continue;
+        }
+        let away = |k: usize| hull.get(k % n).map_or(0.0, |p| (edge.cross(*p - *a) / len).abs());
+        let mut steps = 0;
+        while steps < n && away(j + 1) >= away(j) {
+            j += 1;
+            steps += 1;
+        }
+        least = least.min(away(j));
+        j %= n;
+    }
+    if least.is_finite() { least } else { 0.0 }
+}
+
+/// Does `path` have a contour inside another contour (a counter) whose convex hull is no wider
+/// than `width` in some direction?
 fn narrow_contour(path: &BezPath, width: f64) -> bool {
+    if !width.is_finite() || width <= 0.0 {
+        return false;
+    }
     let mut all: Vec<BezPath> = vec![];
     for el in path.elements() {
         if matches!(el, PathEl::MoveTo(_)) {
@@ -1168,8 +1233,7 @@ fn narrow_contour(path: &BezPath, width: f64) -> bool {
     }
     all.iter().enumerate().any(|(i, c)| {
         let Some(PathEl::MoveTo(at)) = c.elements().first().copied() else { return false };
-        let bb = c.bounding_box();
-        bb.width().min(bb.height()) <= width && all.iter().enumerate().any(|(j, o)| j != i && o.winding(at) != 0)
+        all.iter().enumerate().any(|(j, o)| j != i && o.winding(at) != 0) && hull_width(c, width / 30.0) <= width
     })
 }
 
@@ -1968,6 +2032,73 @@ mod tests {
         wide_hole.extend(square(10.0, 10.0, 90.0, 90.0, true).iter());
         assert!(!paints_alike(&wide, true, &wide_hole, 1.0));
         assert!(paints_alike(&wide_hole, true, &wide_hole, 1.0));
+    }
+
+    #[test]
+    fn a_counter_turned_too_narrow_to_probe_does_not_count_as_agreeing() {
+        let square = |x0: f64, y0: f64, x1: f64, y1: f64, back: bool| {
+            let p = kurbo::Rect::new(x0, y0, x1, y1).to_path(0.1);
+            if back { p.reverse_subpaths() } else { p }
+        };
+        // A 60 by 10 counter turned 45 degrees: its box is about 49.5 square, wider than the
+        // threshold of about 31.8, but it is 10 across.
+        let strip = |back: bool| {
+            let turn = Affine::translate((50.0, 50.0)) * Affine::rotate(std::f64::consts::FRAC_PI_4);
+            let mut p = kurbo::Rect::new(-30.0, -5.0, 30.0, 5.0).to_path(0.1);
+            if back {
+                p = p.reverse_subpaths();
+            }
+            turn * p
+        };
+        let mut filled = square(0.0, 0.0, 100.0, 100.0, false);
+        filled.extend(strip(false).iter());
+        let mut holed = square(0.0, 0.0, 100.0, 100.0, false);
+        holed.extend(strip(true).iter());
+        let tol = 100.0_f64.hypot(100.0) * 0.5 * 3.0 * MAX_TOLERANCE;
+        assert!(narrow_contour(&filled, 3.0 * tol));
+        assert!(!paints_alike(&filled, true, &holed, tol));
+        // The same strip with its sides along the axes is told apart as before.
+        let mut level = square(0.0, 0.0, 100.0, 100.0, false);
+        level.extend(square(20.0, 45.0, 80.0, 55.0, false).iter());
+        assert!(narrow_contour(&level, 3.0 * tol));
+        // A counter wider than the threshold in every direction is not narrow.
+        let mut wide = square(0.0, 0.0, 100.0, 100.0, false);
+        wide.extend(square(10.0, 10.0, 90.0, 90.0, false).iter());
+        assert!(!narrow_contour(&wide, 3.0 * tol));
+    }
+
+    #[test]
+    fn the_hull_width_is_the_least_width_in_any_direction() {
+        let strip = kurbo::Rect::new(-30.0, -5.0, 30.0, 5.0).to_path(0.1);
+        for deg in [0.0_f64, 17.0, 45.0, 90.0, 133.0] {
+            let w = hull_width(&(Affine::rotate(deg.to_radians()) * strip.clone()), 0.01);
+            assert!((w - 10.0).abs() < 0.05, "{deg} degrees: {w}");
+        }
+        let circle = kurbo::Circle::new((5.0, 7.0), 50.0).to_path(0.1);
+        assert!((hull_width(&circle, 0.01) - 100.0).abs() < 0.5, "{}", hull_width(&circle, 0.01));
+        // A triangle's least width is its shortest height.
+        let mut tri = BezPath::new();
+        tri.move_to((0.0, 0.0));
+        tri.line_to((40.0, 0.0));
+        tri.line_to((0.0, 30.0));
+        tri.close_path();
+        assert!((hull_width(&tri, 0.01) - 24.0).abs() < 1e-9);
+        assert_eq!(hull_width(&BezPath::new(), 0.01), 0.0);
+    }
+
+    #[test]
+    fn an_outline_too_large_to_probe_does_not_count_as_agreeing() {
+        let n = MAX_OUTLINE_POINTS + 64;
+        let mut many = BezPath::new();
+        for i in 0..n {
+            let a = std::f64::consts::TAU * i as f64 / n as f64;
+            let p = Point::new(50.0 + 50.0 * a.cos(), 50.0 + 50.0 * a.sin());
+            if i == 0 { many.move_to(p) } else { many.line_to(p) }
+        }
+        many.close_path();
+        assert!(Flat::new(&many, 0.5).is_none(), "too many segments to flatten");
+        assert!(!paints_alike(&many, true, &many, 0.5));
+        assert!(paints_alike(&kurbo::Circle::new((50.0, 50.0), 50.0).to_path(0.1), true, &kurbo::Circle::new((50.0, 50.0), 50.0).to_path(0.1), 0.5));
     }
 
     #[test]

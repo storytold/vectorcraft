@@ -11332,9 +11332,9 @@ first, then exact matches of its groups, then near matches of the whole shape, t
 compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
 `unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
 glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
-whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it. A shape with a contour narrower than three times the
-outline tolerance on its shorter side cannot be checked this way and stays an outline: at `tolerance` 0.05, a
-counter 10 units wide in a 100 by 100 shape. The glyphs of a compound path that splits into several are set one beside
+whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it. A shape with a counter narrower than three times the
+outline tolerance across in some direction, turned or not, cannot be checked this way and stays an outline: at `tolerance` 0.05, a
+counter 10 units wide in a 100 by 100 shape, or a 60 by 10 one turned 45 degrees. So does a shape whose outline is too large to check. The glyphs of a compound path that splits into several are set one beside
 another, so a split whose parts overlap where the shape's fill rule leaves the overlap unpainted (two o's on each
 other under the even-odd rule) stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups or 512 contours
 is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are

@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Retype",
         ["Type"],
         None,
-        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a contour narrower than three times the outline tolerance, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
+        "{fonts?: [family…], tolerance?: 0..0.05 (default 0: exact matches only)} turn the selected outlined text (glyph paths and compound paths, inside groups too) back into live type: each shape is matched against the glyphs of the fonts the app has loaded, the document's fonts and the families in fonts, the same up to uniform scale, rotation and translation; with a tolerance above 0, a shape that is no glyph exactly may nearly be one (an outline simplified, a curve split in two, contours in another order, start or direction) when its leftover distance from the glyph, relative to the shape's outline spread (the root mean square distance of its sampled outline points from their center), is at most the tolerance (VectorCraft's own measure; shapes of at most 8 contours); a compound path holding several glyphs (a word outlined as one path, at most 256 contour groups and 512 contours, and 16,384 contours per command) is split into them, and becomes type only when every one of them matches; matched glyphs become point text in that font and size at the same baseline, one object per line unless lines stack into one (below), with the first glyph's fill, stroke, opacity and blend mode, in one undo step; a line of three or more exactly matched glyphs takes the spacing most of its gaps share as its tracking (pair kerning left out) when tracked type draws all of it in place, or more of it than untracked type (when untracked type also draws it, untracked type is kept if the tracking is under one unit or the tracked type would drop a gap one space wide (a b c keeps its spaces), and the tracked type otherwise), and negative tracking only when the line is opaque, Normal, with a solid fill or none and no stroke (its glyphs may overlap); lines that follow each other in paint order with the same group, paint, font, size, turn and tracking (an untracked line of one or two glyphs takes the others' tracking), each one the same leading (0.25 to 3 times the size) below the one before, and lined up at their starts, ends or centers become one area type object with that leading (Auto when Auto gives it) and left, right or center alignment, or one multi-line point type object when area type (after Text Wrap) would not draw the outlines' glyphs in their places or when checking the Text Wrap objects on the changed layers would copy more than 2,000,000 anchors, subpaths and shapes; where even that type would move a glyph, the lines before that glyph's line stay one object and the rest are joined again from that line; lines with an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke stay one object each; a line splits where its type would not draw the outlines' glyphs in their places (uneven spacing, manual kerning, font substitutions; with a tolerance, within it); a glyph must also paint the area the shape paints under its fill rule (a nonzero compound whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it; a counter narrower than three times the outline tolerance across in some direction, an outline too large to check, or parts of a split compound that overlap where its fill rule leaves the overlap unpainted, also keep the shape an outline); shapes that match no font, glyphs type cannot draw as they are, and shapes with their own opacity mask stay as they are → {ids (the new type), texts (lines joined by \\n), fonts: [{family, style, size, tracking (1/1000 em), leading (pt, null for Auto or one line), area (bool), score (how closely the line's least close glyph fits, 1 for exact, 0 at a leftover distance of 0.05)}], unmatched: [id…] (shapes that stayed as they are when another shape became type), truncated (shapes past the limits of 2048 shapes or 16 nested groups were left out)}; an error, with no unmatched list, when no shape becomes type, or when tolerance is not a number from 0 to 0.05",
         has_selected_path,
         retype
     )]
@@ -1178,14 +1178,20 @@ fn split_groups(path: &BezPath, budget: &mut usize) -> Vec<BezPath> {
 /// a path's candidates: its `part` flag is set for a part of a split shape, whose contours Make
 /// Compound Path may have turned the other way round, and its `near` flag allows near matches.
 /// Exact matches come first: the whole shape, then its groups, then the whole shape nearly, then
-/// its groups nearly. A split of several parts is kept only when `together` accepts the paths of
-/// its runs (the parts, set one beside another, paint what the shape paints).
-fn parts<M>(path: &BezPath, groups: &[BezPath], find: &dyn Fn(&BezPath, bool, bool) -> Vec<M>, together: &dyn Fn(&[BezPath]) -> bool) -> Vec<Vec<M>> {
+/// its groups nearly. A split of several parts is kept only when `together(runs, near)` accepts the
+/// paths of its runs (the parts, set one beside another, paint what the shape paints); `near` is
+/// set when the parts were found by near matching.
+fn parts<M>(
+    path: &BezPath,
+    groups: &[BezPath],
+    find: &dyn Fn(&BezPath, bool, bool) -> Vec<M>,
+    together: &dyn Fn(&[BezPath], bool) -> bool,
+) -> Vec<Vec<M>> {
     let whole = find(path, false, false);
     if !whole.is_empty() {
         return vec![whole];
     }
-    let exact = split_parts(groups, &|run| find(run, true, false), together);
+    let exact = split_parts(groups, &|run| find(run, true, false), &|runs| together(runs, false));
     if !exact.is_empty() {
         return exact;
     }
@@ -1193,7 +1199,7 @@ fn parts<M>(path: &BezPath, groups: &[BezPath], find: &dyn Fn(&BezPath, bool, bo
     if !whole.is_empty() {
         return vec![whole];
     }
-    split_parts(groups, &|run| find(run, true, true), together)
+    split_parts(groups, &|run| find(run, true, true), &|runs| together(runs, true))
 }
 
 /// [`parts`] of a shape split into contour `groups`, each run's candidates from `find`; empty for
@@ -1374,7 +1380,14 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                     return vec![];
                 }
                 let fill = pc.filled.then_some(pc.nonzero);
-                let together = |runs: &[BezPath]| fill.is_none_or(|nz| vectorcraft_text::retype::parts_paint_alike(&pc.path, runs, nz, tolerance));
+                // Parts that all match exactly are checked at tolerance 0, in the near phase as in
+                // the exact one; only a part that matches nearly brings the tolerance in.
+                let together = |runs: &[BezPath], near: bool| {
+                    fill.is_none_or(|nz| {
+                        let nearly = near && runs.iter().any(|r| find(r, true, false, fill).is_empty());
+                        vectorcraft_text::retype::parts_paint_alike(&pc.path, runs, nz, if nearly { tolerance } else { 0.0 })
+                    })
+                };
                 parts(&pc.path, g, &|p, part, near| find(p, part, near, fill), &together)
             })
             .collect();

@@ -1203,6 +1203,50 @@ fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
 }
 
 #[test]
+fn overlapping_exact_glyphs_stay_an_outline_when_near_matches_are_allowed() {
+    // Exact parts the even-odd rule rejects stay rejected when the near phase finds them again.
+    for dx in [-9.0, -11.0, -12.0, -13.0, -14.0] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "oo", "size": 40}));
+        let kids = children_of(&s, g);
+        s.execute("object.move", &json!({"ids": [kids[1]], "dx": dx, "dy": 0})).unwrap();
+        s.execute("select.set", &json!({"ids": kids})).unwrap();
+        let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        for tolerance in [0.0, 0.05] {
+            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance})) {
+                panic!("the overlapping o's became type at dx {dx}, tolerance {tolerance}: {r}");
+            }
+        }
+    }
+}
+
+#[test]
+fn exact_parts_of_a_compound_are_checked_at_tolerance_zero() {
+    let mut s = session();
+    // A T and an o whose boxes overlap by 4 units, one painted area apart (the o sits under the
+    // bar's arm): a strip that the probes of tolerance 0.05 cannot see into but those of an exact
+    // match can. Both parts match exactly, so asking for near matches does not change the result.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "To", "size": 40}));
+    let kids = children_of(&s, g);
+    let (t, o) = (kids[0], kids[1]);
+    let bounds = |s: &Session, id: u64| s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let dx = bounds(&s, t).x1 - 4.0 - bounds(&s, o).x0;
+    s.execute("object.move", &json!({"ids": [o], "dx": dx, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": kids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    for params in [json!({}), json!({"tolerance": 0.05})] {
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let r = s.execute("type.retype", &params).unwrap();
+        assert_eq!(r["unmatched"], json!([]), "{params}: {r}");
+        assert!(s.doc().unwrap().doc.node(NodeId(c)).is_none(), "{params}: the compound becomes type");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc == before, "{params}: undo restores it");
+    }
+}
+
+#[test]
 fn glyphs_side_by_side_in_an_even_odd_compound_still_become_type() {
     let mut s = session();
     let c = one_compound(&mut s, "oo");
@@ -1257,15 +1301,15 @@ fn a_split_takes_a_shorter_run_when_the_longest_leaves_a_group_unmatched() {
         }
     };
     let groups = all_groups(&p);
-    assert_eq!(super::parts(&p, &groups, &find, &|_| true), vec![vec!["A"], vec!["BC"]]);
+    assert_eq!(super::parts(&p, &groups, &find, &|_, _| true), vec![vec!["A"], vec!["BC"]]);
     // A split the parts' paint does not allow is dropped.
-    assert!(super::parts(&p, &groups, &find, &|_| false).is_empty());
+    assert!(super::parts(&p, &groups, &find, &|_, _| false).is_empty());
     // With no way to match every group, nothing.
     let none = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
         let b = path.bounding_box();
         if part && b.x0.round() as i64 == 0 && b.x1.round() as i64 == 140 { vec!["AB"] } else { vec![] }
     };
-    assert!(super::parts(&p, &groups, &none, &|_| true).is_empty());
+    assert!(super::parts(&p, &groups, &none, &|_, _| true).is_empty());
 }
 
 /// `path`'s contour groups, with no limit on the contours grouped.
@@ -1292,7 +1336,7 @@ fn exact_matches_of_the_parts_come_before_a_near_match_of_the_whole() {
         }
     };
     let groups = all_groups(&p);
-    assert_eq!(super::parts(&p, &groups, &find, &|_| true), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(super::parts(&p, &groups, &find, &|_, _| true), vec![vec!["period"], vec!["period"]]);
     // When the parts match only nearly too, the whole near match comes first.
     let near_only = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
         let b = path.bounding_box();
@@ -1302,7 +1346,26 @@ fn exact_matches_of_the_parts_come_before_a_near_match_of_the_whole() {
             _ => vec![],
         }
     };
-    assert_eq!(super::parts(&p, &groups, &near_only, &|_| true), vec![vec!["dieresis"]]);
+    assert_eq!(super::parts(&p, &groups, &near_only, &|_, _| true), vec![vec!["dieresis"]]);
+    // The split's paint check is told whether the parts were found nearly: exact parts are
+    // checked at tolerance 0 whatever tolerance the command was given.
+    let seen = std::cell::RefCell::new(vec![]);
+    let record = |_: &[kurbo::BezPath], near: bool| {
+        seen.borrow_mut().push(near);
+        true
+    };
+    assert_eq!(super::parts(&p, &groups, &find, &record), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(*seen.borrow(), vec![false]);
+    seen.borrow_mut().clear();
+    let split_near_only = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, near, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, true, 0, 40) | (true, true, 100, 140) => vec!["period"],
+            _ => vec![],
+        }
+    };
+    assert_eq!(super::parts(&p, &groups, &split_near_only, &record), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(*seen.borrow(), vec![true]);
 }
 
 #[test]
