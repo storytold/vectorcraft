@@ -385,9 +385,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-    if menu_item(ui, tl!("Show Opacity"), true, set.opacity) {
-        command(app, &json!({ "opacity": !set.opacity })).ok();
-    }
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
         command(app, &json!({ "vision": !set.vision })).ok();
     }
