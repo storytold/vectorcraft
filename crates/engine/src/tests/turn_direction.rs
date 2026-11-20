@@ -6,6 +6,7 @@ use crate::command_specs;
 
 /// Params that are angles but not a turn, with why.
 const NOT_A_TURN: &[(&str, &str, &str)] = &[
+    ("addon.packaging.setFoldAngle", "angle", "a fold out of the page: the description says which side the panel folds to"),
     ("addon.pathtools.cornerSet", "maxAngle", "the angle a corner's sides meet at"),
     ("addon.pathtools.cornerSet", "minAngle", "the angle a corner's sides meet at"),
     ("addon.shapes.box3d", "angleX", "a tilt out of the page: the description says which side turns away"),
