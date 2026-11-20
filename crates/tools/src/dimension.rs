@@ -238,9 +238,17 @@ struct PreviewBoxes {
     revision: Option<(u64, u64)>,
     geometric: HashMap<NodeId, Option<Rect>>,
     preview: HashMap<NodeId, Option<Rect>>,
+    /// The editable path holding each corner of a measured object's preview bounds, found when
+    /// the object is measured, so that a pointer move reads no member.
+    holders: HashMap<NodeId, [Option<NodeId>; 4]>,
     /// Whether a point at each corner (by object and corner number) can be held against its path.
     holdable: HashMap<(NodeId, usize), bool>,
 }
+
+/// How many member paths one pointer move may read to measure objects not yet measured, apart
+/// from the objects it visits: an object with more members than are left gives no corner on
+/// that move.
+const PREVIEW_MEMBER_WORK: usize = 20_000;
 
 /// A corner of an object's preview bounds that a Linear pick can land on.
 #[derive(Clone, Copy, Debug)]
@@ -257,7 +265,9 @@ struct PreviewCorner {
 /// strokes and effects included) nearest `p` within reach, on any editable one whose preview
 /// bounds differ from its geometric bounds. In a compound path, the member whose own box reaches
 /// nearest to the corner holds it. The work is bounded, and dimension artwork is skipped, as in
-/// [`pick`]. `cache` keeps the bounds measured for the document's revision.
+/// [`pick`]: the objects visited count against one budget, and the member paths read to measure
+/// them against [`PREVIEW_MEMBER_WORK`]. `cache` keeps the bounds and holders measured for the
+/// document's revision.
 fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Option<PreviewCorner> {
     struct Walk<'a, 'c> {
         symbols: Option<vectorcraft_doc::SymbolBoxes<'a>>,
@@ -266,7 +276,37 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         p: Point,
         reach: f64,
         budget: usize,
+        /// Member paths left to read for objects not yet measured.
+        work: usize,
         best: Option<(f64, PreviewCorner)>,
+    }
+    /// Takes `count` from the member work left, or nothing when less is left.
+    fn charge(work: &mut usize, count: usize) -> bool {
+        let fits = count <= *work;
+        if fits {
+            *work -= count;
+        }
+        fits
+    }
+    fn corners(r: Rect) -> [Point; 4] {
+        [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)]
+    }
+    /// For each corner of `preview`, the path whose own box reaches nearest to it: in a compound
+    /// path, the member that puts that corner where it is. A hidden or locked member gives no
+    /// corner. One pass reads each member once for all four corners.
+    fn holders<'n>(members: impl Iterator<Item = &'n Node>, preview: Rect) -> [Option<NodeId>; 4] {
+        let mut best: [Option<(f64, NodeId, bool)>; 4] = [None; 4];
+        for m in members {
+            let Some(b) = m.geometric_bounds() else { continue };
+            let editable = m.visible && !m.locked;
+            for ((holder, c), q) in best.iter_mut().zip(corners(b)).zip(corners(preview)) {
+                let gap = c.distance(q);
+                if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
+                    *holder = Some((gap, m.id, editable));
+                }
+            }
+        }
+        best.map(|h| h.filter(|(.., editable)| *editable).map(|(_, id, _)| id))
     }
     fn visit(n: &Node, w: &mut Walk) {
         if w.budget == 0 || !n.visible || n.locked || n.extras().dimension.is_some() {
@@ -277,7 +317,6 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         // its strokes reach.
         let effects = !n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty());
         let reach = n.appearance.outset() + w.reach;
-        let corners = |r: Rect| [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
         // A path is its own member; a compound path's members are its paths.
         let compound = match &n.kind {
             NodeKind::Compound { children, .. } => Some(children.as_slice()),
@@ -285,25 +324,45 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         };
         let members =
             || compound.into_iter().flatten().map(|c| c.as_ref()).chain(compound.is_none().then_some(n)).filter(|m| m.path_data().is_some());
+        // Measuring the object, its bounds or its holders, reads every member once.
+        let count = compound.map_or(1, <[_]>::len);
         // A path made into a guide draws as a guide, without its strokes or effects. The pointer
         // test includes the right and bottom edges, as the distance test below does.
         let within = |r: Rect| (r.x0..=r.x1).contains(&w.p.x) && (r.y0..=r.y1).contains(&w.p.y);
-        if !n.is_guide()
-            && members().next().is_some()
-            && let Some(geometric) = *w.cache.geometric.entry(n.id).or_insert_with(|| n.geometric_bounds())
+        // Set once this move has paid for reading the members: measuring the preview bounds and
+        // holders on the same move reads them again without a second charge.
+        let mut paid = false;
+        let geometric = match w.cache.geometric.get(&n.id) {
+            _ if n.is_guide() || members().next().is_none() => None,
+            Some(g) => *g,
+            None if charge(&mut w.work, count) => {
+                paid = true;
+                let g = n.geometric_bounds();
+                w.cache.geometric.insert(n.id, g);
+                g
+            }
+            None => None,
+        };
+        if let Some(geometric) = geometric
             && (effects || within(geometric.inflate(reach, reach)))
         {
             let doc = w.doc;
             let measured = match w.cache.preview.get(&n.id) {
-                Some(r) => *r,
-                None => {
+                Some(r) => Some(*r),
+                None if paid || charge(&mut w.work, count) => {
                     let symbols = w.symbols.get_or_insert_with(|| doc.symbol_boxes());
                     let r = vectorcraft_effects::preview::visual_bounds(symbols, n);
                     w.cache.preview.insert(n.id, r);
-                    r
+                    if let Some(r) = r
+                        && r != geometric
+                    {
+                        w.cache.holders.insert(n.id, holders(members(), r));
+                    }
+                    Some(r)
                 }
+                None => None,
             };
-            if let Some(r) = measured
+            if let Some(Some(r)) = measured
                 && r != geometric
             {
                 for (k, q) in corners(r).into_iter().enumerate() {
@@ -311,26 +370,13 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
                     if d > w.reach || w.best.is_some_and(|(nearest, ..)| d >= nearest) {
                         continue;
                     }
-                    // The path whose own box reaches furthest towards the corner holds it: in a
-                    // compound path, the member that puts that corner where it is. A hidden or
-                    // locked member gives no corner.
-                    let mut holder: Option<(f64, NodeId, bool)> = None;
-                    for m in members() {
-                        let Some(b) = *w.cache.geometric.entry(m.id).or_insert_with(|| m.geometric_bounds()) else { continue };
-                        let gap = corners(b).get(k).map_or(f64::INFINITY, |c| c.distance(q));
-                        let editable = m.visible && !m.locked;
-                        if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
-                            holder = Some((gap, m.id, editable));
-                        }
-                    }
-                    let holder = holder.filter(|(.., editable)| *editable).map(|(gap, id, _)| (gap, id));
+                    let holder = w.cache.holders.get(&n.id).and_then(|h| h.get(k).copied().flatten());
                     // A path that cannot hold a point at the corner (a stroked dot, whose anchors
                     // all coincide) gives no corner.
                     let holdable = |id: NodeId, cache: &mut PreviewBoxes| {
                         *cache.holdable.entry((n.id, k)).or_insert_with(|| FreePoint::on(doc, id, q).is_some())
                     };
-                    let holder = holder.filter(|(_, id)| holdable(*id, w.cache));
-                    if let Some(((_, holder), stands_for)) = holder.zip(corners(geometric).get(k).copied()) {
+                    if let Some((holder, stands_for)) = holder.filter(|id| holdable(*id, w.cache)).zip(corners(geometric).get(k).copied()) {
                         w.best = Some((d, PreviewCorner { at: q, holder, stands_for }));
                     }
                 }
@@ -353,7 +399,7 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
     if cache.revision != Some(cx.revision) {
         *cache = PreviewBoxes { revision: Some(cx.revision), ..Default::default() };
     }
-    let mut w = Walk { symbols: None, doc: cx.doc, cache, p, reach: cx.tol(ANCHOR_REACH), budget: 20_000, best: None };
+    let mut w = Walk { symbols: None, doc: cx.doc, cache, p, reach: cx.tol(ANCHOR_REACH), budget: 20_000, work: PREVIEW_MEMBER_WORK, best: None };
     for n in cx.doc.layers.iter().rev() {
         visit(n, &mut w);
     }
@@ -1613,6 +1659,60 @@ mod tests {
         assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 85.0, 81.0)).is_empty(), "no segment dimension is dragged out");
         assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 85.0, 81.0)).is_empty());
         assert!(t.points.first().is_some_and(|(q, _)| near(*q, Point::new(80.0, 80.0))), "{:?}", t.points);
+    }
+
+    /// A stroked compound path of a small hole and `extra` more tiny squares inside a square from
+    /// 100 to 200, with the ids of the compound, the hole and the square.
+    fn stroked_compound(extra: usize) -> (vectorcraft_doc::Document, [NodeId; 3]) {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, hole, part, whole) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let square =
+            |id, a: f64, b: f64| std::sync::Arc::new(Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(a, a, b, b)), Default::default()));
+        let mut children = vec![square(hole, 140.0, 160.0), square(part, 100.0, 200.0)];
+        for _ in 0..extra {
+            children.push(square(d.alloc_id(), 150.0, 151.0));
+        }
+        let mut n = Node::new(whole, NodeKind::Compound { children, rule: Default::default() });
+        n.appearance = vectorcraft_doc::Appearance::default_art().into();
+        d.insert(Some(l), 0, n).expect("the compound path");
+        (d, [whole, hole, part])
+    }
+
+    /// The member holding each corner of a compound path is found when the compound is measured,
+    /// and later pointer moves over the same revision take it from the cache without reading the
+    /// members.
+    #[test]
+    fn a_compound_paths_corner_holders_are_found_once_per_revision() {
+        let (d, [whole, hole, part]) = stroked_compound(0);
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut cache = PreviewBoxes::default();
+        let corner = preview_corner(&c, Point::new(99.5, 99.5), &mut cache).expect("the corner of the stroke");
+        assert_eq!(corner.holder, part, "the member that reaches the corner holds it");
+        assert_eq!(cache.holders.get(&whole), Some(&[Some(part); 4]));
+        // A move over the same revision reads the holder from the cache: one changed there is the
+        // one it gives.
+        cache.holders.insert(whole, [Some(hole); 4]);
+        let corner = preview_corner(&c, Point::new(200.5, 200.5), &mut cache).expect("the corner of the stroke");
+        assert_eq!(corner.holder, hole, "the cached holder is used");
+    }
+
+    /// A compound path with more members than one pointer move may read gives no corner, and is
+    /// neither measured nor cached, so its member work stays bounded. A compound within the limit
+    /// still gives its corner.
+    #[test]
+    fn a_compound_path_past_the_member_work_gives_no_corner() {
+        let (s, p) = (Selection::default(), paint());
+        // Two members plus `extra`: exactly the limit, then one more.
+        for (extra, within) in [(PREVIEW_MEMBER_WORK - 2, true), (PREVIEW_MEMBER_WORK - 1, false)] {
+            let (d, [whole, ..]) = stroked_compound(extra);
+            let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+            let mut cache = PreviewBoxes::default();
+            let corner = preview_corner(&c, Point::new(99.5, 99.5), &mut cache);
+            assert_eq!(corner.is_some(), within, "{} members", extra + 2);
+            assert_eq!(cache.preview.contains_key(&whole), within, "{} members", extra + 2);
+            assert_eq!(cache.geometric.contains_key(&whole), within, "{} members", extra + 2);
+        }
     }
 
     /// With Use Preview Bounds on, hovering by a corner of a stroked path's preview bounds, or
