@@ -258,6 +258,24 @@ fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     assert_eq!(seed(&app), on_board);
 }
 
+/// OK after another document has become the active one closes HP-GL Options and writes nothing, so
+/// the other document is not written to the path chosen for the first.
+#[test]
+fn hpgl_options_write_nothing_after_another_document_became_active() {
+    let (mut app, written) = app(1);
+    app.run("ui.hpglOptionsDialog", json!({"path": "/out/first.plt"})).unwrap();
+    app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+    assert_eq!(kind(&app), Some("hpglOptions"));
+    assert_eq!(confirm(&mut app).unwrap(), json!({}));
+    assert!(app.ui.dialog.is_none());
+    assert!(written.borrow().is_empty(), "nothing is written over the first document's path");
+    // Opened for the document that is active, OK writes it.
+    app.run("window.nextDocument", json!({})).unwrap();
+    app.run("ui.hpglOptionsDialog", json!({"path": "/out/first.plt"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(names(&written), ["/out/first.plt"]);
+}
+
 #[test]
 fn the_hpgl_options_dialog_needs_a_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

@@ -455,6 +455,8 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool, names: &mut obj::Names) -
     r.large_canvas = large_canvas.then_some(1.0);
     // The styles come before the art, so an error in the art leaves them read.
     let _ = r.run();
+    // No layer checks the symbols here: the heads of those defined after the styles.
+    r.read_arrowheads();
     let styles = r.graphic_styles().0;
     let used: Vec<&str> = styles.iter().map(|s| s.name.as_str()).collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
@@ -780,6 +782,19 @@ impl<'a> Reader<'a> {
             && let Some(r) = o.nums("AI13PatternRegistrationType").first()
         {
             head.registration = Some(*r);
+        }
+        if self.frames.len() == 1
+            && let Some(head) = self.symbol.as_mut()
+            && o.nums(crate::ai_editing::DYNAMIC_KEY).first().is_some_and(|v| *v != 0.0)
+        {
+            head.dynamic = true;
+        }
+        if let Some(text) = o.text(crate::ai_editing::OVERRIDES_KEY)
+            && let Some(bytes) = crate::ai_editing::hex_decode(&text)
+            && let Ok(list) = serde_json::from_slice::<Vec<vectorcraft_doc::SymbolOverride>>(&bytes)
+            && let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+        {
+            n.extras_mut().symbol_overrides = list.into_iter().filter(|s| !s.is_empty()).collect();
         }
         self.constraint_art(o);
         self.placed_page(o);
@@ -1183,7 +1198,7 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let Some(st) = self.styles.get(&name) else { continue };
-            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients, &self.arrowheads) else { continue };
             // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
             if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
                 appearance.scale_strokes(s);

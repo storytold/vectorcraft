@@ -95,10 +95,10 @@ fn map_graphic_puts_a_graphic_on_the_side_of_a_revolve() {
 
 #[test]
 fn map_graphic_refuses_what_cannot_take_it_and_changes_nothing() {
-    let (mut s, id) = setup("threeD.inflate");
+    let (mut s, id) = setup("threeD.classicExtrude");
     let history = undo_len(&s);
     let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "ids": [id.0]})).unwrap_err().to_string();
-    assert!(e.contains("Plane, Extrude and Revolve"), "{e}");
+    assert!(e.contains("Plane, Extrude, Revolve and Inflate"), "{e}");
     let (mut s, id) = setup("threeD.rotate");
     for (p, says) in [
         (json!({"symbol": "Gone"}), "no symbol named"),
@@ -188,11 +188,36 @@ fn set_params_edits_graphics_and_checks_them() {
     let null = json!({"ids": [id.0], "index": 0, "item": null, "params": {"graphics": null}});
     assert!(s.execute("effect.setParams", &null).is_err());
     assert_eq!(graphics(&s, id), moved);
-    // Extrude to Plane keeps the graphics; to Inflate drops them.
+    // Extrude to Plane keeps the graphics, and so does Inflate.
     s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "threeDType": "plane"})).unwrap();
     assert_eq!(graphics(&s, id), moved);
     s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "threeDType": "inflate"})).unwrap();
-    assert_eq!(graphics(&s, id), Value::Null);
+    assert_eq!(graphics(&s, id), moved);
+}
+
+#[test]
+fn map_graphic_puts_a_graphic_on_an_inflate_and_its_back_only_with_both_sides() {
+    let (mut s, id) = setup("threeD.inflate");
+    let plain = {
+        let d = &s.doc().unwrap().doc;
+        vectorcraft_render::effects::solid_art_in(Some(d), d.node(id).unwrap())
+    };
+    let history = undo_len(&s);
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "ids": [id.0]})).unwrap();
+    assert_eq!(graphics(&s, id), json!([{"symbol": "Mark", "face": "front", "x": 0.0, "y": 0.0, "scale": 100.0, "rotation": 0.0}]));
+    assert_eq!(undo_len(&s), history + 1);
+    let d = &s.doc().unwrap().doc;
+    assert_ne!(vectorcraft_render::effects::solid_art_in(Some(d), d.node(id).unwrap()), plain, "the graphic is drawn");
+    // The back is flat until Both sides puffs it.
+    let history = undo_len(&s);
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id.0]})).unwrap_err().to_string();
+    assert!(e.contains("Both sides and Cap"), "{e}");
+    assert_eq!(undo_len(&s), history);
+    s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": {"bothSides": true, "cap": false}})).unwrap();
+    assert!(s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id.0]})).is_err());
+    s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": {"cap": true}})).unwrap();
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id.0]})).unwrap();
+    assert_eq!(graphics(&s, id)[1]["face"], "back");
 }
 
 #[test]

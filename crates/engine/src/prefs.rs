@@ -283,6 +283,11 @@ pub struct Prefs {
     pub low_res_proxy_eps: bool,
     pub anti_aliased_bitmaps: bool,
     pub update_links: String,
+    /// PDF Text: what the text of a PDF, `.ai` or `.ait` file opened or placed from the app
+    /// becomes when the open or place does not say (`text`: editable type in the file's fonts;
+    /// `outlines`: the glyph outlines the file draws). The Import PDF dialog starts from it and
+    /// keeps the choice it confirms.
+    pub pdf_text_as: String,
     // Clipboard Handling
     pub copy_as_svg: bool,
     pub copy_as_pdf: bool,
@@ -589,6 +594,7 @@ impl Default for Prefs {
             low_res_proxy_eps: false,
             anti_aliased_bitmaps: false,
             update_links: s("askWhenModified"),
+            pdf_text_as: s("text"),
             copy_as_svg: true,
             copy_as_pdf: false,
             copy_aicb: false,

@@ -153,6 +153,7 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
             json!("inventory-icons"),
             json!("skill-icons"),
             json!("weather-icons"),
+            json!("nature-icons"),
             json!("media-controls"),
         ]
     );
