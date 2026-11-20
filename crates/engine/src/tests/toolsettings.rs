@@ -35,17 +35,19 @@ fn blob_tip_options_report_and_persist() {
 fn circle_from_center_persists() {
     let mut s = session();
     select(&mut s, "circle");
-    assert_eq!(s.tool_options(), json!({"fromCenter": false}));
+    let mut want = s.tool_options();
+    assert_eq!(want["fromCenter"], json!(false));
+    want["fromCenter"] = json!(true);
     s.set_tool_option("fromCenter", &json!(true));
     select(&mut s, "selection");
     select(&mut s, "circle");
-    assert_eq!(s.tool_options(), json!({"fromCenter": true}));
+    assert_eq!(s.tool_options(), want);
     select(&mut s, "selection");
     let saved = serde_json::to_string(&s.prefs).unwrap();
     let mut next = session();
     next.apply_prefs(serde_json::from_str(&saved).unwrap());
     select(&mut next, "circle");
-    assert_eq!(next.tool_options(), json!({"fromCenter": true}));
+    assert_eq!(next.tool_options(), want);
 }
 
 /// An option set during a press (`tool.setOption`, or a Control bar change) is kept when the press
@@ -55,16 +57,19 @@ fn the_circle_from_center_set_during_a_dropped_press_is_kept() {
     let v = ViewInfo::default();
     let mut s = session();
     select(&mut s, "circle");
+    let mut want = s.tool_options();
     s.set_tool_option("fromCenter", &json!(true));
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
     s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": false})).unwrap();
     s.drop_tool_press(v).unwrap();
-    assert_eq!(s.tool_options(), json!({"fromCenter": false}));
+    want["fromCenter"] = json!(false);
+    assert_eq!(s.tool_options(), want);
     assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(false));
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
     s.set_tool_option("fromCenter", &json!(true));
     s.drop_tool_press(v).unwrap();
-    assert_eq!(s.tool_options(), json!({"fromCenter": true}));
+    want["fromCenter"] = json!(true);
+    assert_eq!(s.tool_options(), want);
     assert_eq!(s.prefs.tool_settings["circle"]["fromCenter"], json!(true));
     // Setting a Parametric Shape's kind also puts its numbers back to that kind's: those are kept too.
     select(&mut s, "parametricShape");
