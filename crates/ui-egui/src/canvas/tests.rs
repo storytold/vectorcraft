@@ -9843,6 +9843,50 @@ fn a_brush_with_art_dropped_off_the_art_places_a_copy_of_its_art_there() {
 }
 
 #[test]
+fn a_pattern_swatch_dropped_off_the_art_places_a_copy_of_its_tile_art_there() {
+    use vectorcraft_color::{Color, Paint};
+    use widgets::{PanelDrag, SwatchRows};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let tile = app.session.execute("shape.rectangle", &json!({"x": 300, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("object.pattern.make", &json!({"ids": [tile], "name": "Checks", "edit": false})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
+        let at = xf.to_screen(at);
+        egui::DragAndDrop::set_payload(&ctx, d);
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    };
+    let swatch = |name: &str, paint: Paint| {
+        let rows = SwatchRows { grabbed: name.into(), names: vec![name.into()], groups: false };
+        PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: Some(rows), library: None }
+    };
+    let pattern = swatch("Checks", vectorcraft_doc::pattern::pattern_paint("Checks"));
+    let undo_len = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let undo = undo_len(&app);
+    // A color swatch, and a pattern from elsewhere than the Swatches panel, place nothing.
+    drop(&mut app, swatch("Red", Paint::solid(Color::from_hex("#ed1c24").unwrap())), Point::new(250.0, 220.0));
+    drop(&mut app, PanelDrag::paint(vectorcraft_doc::pattern::pattern_paint("Checks")), Point::new(250.0, 220.0));
+    assert_eq!(undo_len(&app), undo);
+    // The pattern swatch: a copy of its tile art and tile, centered where it lands, selected.
+    drop(&mut app, pattern.clone(), Point::new(250.0, 220.0));
+    let st = app.session.active().unwrap();
+    assert_eq!(undo_len(&app), undo + 1, "{}", app.ui.status);
+    assert_eq!(st.history.undo.last().unwrap().label, "Place Pattern Art");
+    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
+    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
+    assert!((b.center() - Point::new(250.0, 220.0)).hypot() < 0.1, "{b:?}");
+    // On art, the swatch fills it as before.
+    drop(&mut app, pattern, Point::new(100.0, 100.0));
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+    assert!(matches!(&n, Paint::Pattern { pattern, .. } if pattern == "Checks"), "{n:?}");
+}
+
+#[test]
 fn a_library_brush_dropped_on_a_path_is_added_and_applied_in_one_step() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();

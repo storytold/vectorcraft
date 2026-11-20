@@ -766,10 +766,11 @@ pub(super) fn brush_place_art(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0 }))
 }
 
-/// The repeat frame an unpainted rectangle at the back of a tile group marks ([`placed_art`]): the
+/// The repeat frame an unpainted rectangle at the back of a tile group marks ([`placed_art`]), and
+/// the tile such a rectangle at the back of a pattern's art marks (`object.pattern.replaceArt`): the
 /// rectangle's bounds, when `n` is a path of one closed subpath through the four corners of its
 /// bounds, without curves, whose fills and strokes paint nothing and that has no other appearance.
-fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
+pub(crate) fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
     let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind else { return None };
     let unpainted = n.appearance.effects.is_empty()
         && n.appearance.items.iter().all(|i| match i {

@@ -57,8 +57,9 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
 /// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
 /// top of its appearance), and a brush is applied to it (`brush.apply`, `brush.addFromLibrary`
 /// for a brush library's). A Brushes panel scatter, art or pattern
-/// brush dropped where there is no art places a copy of its art there (`brush.placeArt`). A chip
-/// follows the pointer meanwhile.
+/// brush dropped where there is no art places a copy of its art there (`brush.placeArt`), and so
+/// does a Swatches panel pattern swatch, with its tile (`pattern.placeArt`). A chip follows the
+/// pointer meanwhile.
 pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -115,6 +116,15 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     {
         let at = xf.to_doc(pos);
         if let Err(e) = app.run("brush.placeArt", json!({"name": name, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
+    // A pattern swatch from the Swatches panel dropped where there is no art: a copy of its tile
+    // art with its tile, centered where it is dropped, to edit and Alt-drag back onto the swatch.
+    if let (None, widgets::PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. }) = (&hit, &*d) {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("pattern.placeArt", json!({"name": pattern, "x": at.x, "y": at.y})) {
             app.status(e);
         }
         return;
