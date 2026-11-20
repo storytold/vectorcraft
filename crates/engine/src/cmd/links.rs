@@ -2809,7 +2809,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("image {} is linked already", id.0)));
     }
     let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
-    // As stored (PNG, JPEG, GIF, WebP), unless the path names another format.
+    // As stored (PNG, JPEG, GIF, WebP, or TIFF for an image that keeps CMYK inks), unless the path names another format.
     let stored = stored_extension(blob);
     let path = str_param(p, "path");
     let ext = match path.map(fileio::extension) {
