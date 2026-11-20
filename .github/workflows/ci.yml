@@ -24,6 +24,12 @@ jobs:
       # Same craft-fonts commit as release.yml.
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       timeout-minutes: 90
+      # The gate's test binaries carry no debug info and no symbols (CARGO_PROFILE_TEST_DEBUG=0,
+      # CARGO_PROFILE_TEST_STRIP=symbols), as photocraft's do: linking ~100 test binaries with line
+      # tables ran the hosted runner out of resources, and it stopped mid-link with "received a
+      # shutdown signal" (exit 143). Panics still name file and line; local builds keep Cargo.toml's
+      # line tables.
+      dev-strip: true
       packages: >-
         pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcursor-dev
         libxrandr-dev libxi-dev libfontconfig1-dev libfreetype-dev mesa-vulkan-drivers
