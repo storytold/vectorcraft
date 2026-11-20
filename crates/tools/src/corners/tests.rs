@@ -522,6 +522,47 @@ fn widgets_are_picked_across_paths() {
     assert_eq!(out, vec![Action::Exec("select.anchors".into(), json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"}))]);
 }
 
+/// #1232: a selected path whose widgets are all hidden (its sides too short on screen) still counts
+/// when deciding whether every corner is picked. With one corner of a small rectangle picked and a
+/// larger one selected whole, a click on the larger one's widget keeps the picks and a Shift-click
+/// deselects that corner, so the small rectangle's pick stays.
+#[test]
+fn a_path_with_hidden_widgets_keeps_its_picks() {
+    let (mut d, big) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+    let live = LiveShape::Rectangle {
+        w: 20.0,
+        h: 20.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::translate((300.0, 100.0)),
+    };
+    let small = d.alloc_id();
+    let mut n = Node::path(small, live.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(live));
+    }
+    let l = d.layers[0].id;
+    d.insert(Some(l), 1, n).unwrap();
+    let mut s = selected(big);
+    s.add(small);
+    s.anchors.insert(small, [(0, 0)].into());
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let w = CornerWidgets::for_tool(&cx, true).unwrap();
+    assert_eq!(w.paths.len(), 1, "the small rectangle shows no widget");
+    let press = |mods: Mods| {
+        let mut t = crate::create("directSelection");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 110.0).with_mods(mods));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 110.0).with_mods(mods))
+    };
+    assert!(press(Mods::default()).is_empty());
+    assert_eq!(
+        press(Mods { shift: true, ..Mods::default() }),
+        vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": big.0, "anchors": [[0, 1]]}], "mode": "toggle"}))]
+    );
+}
+
 /// #1232: a path whose picked corners are all hidden (wider than the angle preference) is left
 /// out of a drag that starts on another path; the drag edits only corners that are picked or
 /// pressed.

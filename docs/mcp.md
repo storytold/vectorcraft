@@ -7695,7 +7695,7 @@ picked corner's widget has a dot at its center and the others are hollow. A clic
 picks its corner alone (`select.anchors` with mode `set`), and a click on a picked widget leaves the picks as they
 are. A Shift-click adds or removes that corner, on any selected path, and keeps the other picks (`select.anchors`
 with mode `toggle`, or `select.anchorsMany` with mode `toggle` on a path selected whole). While every corner of every
-path with widgets is picked, a click or Shift-click picks that corner alone. A drag or Alt-click on a widget whose
+selected path is picked, paths whose widgets are hidden included, a click or Shift-click picks that corner alone. A drag or Alt-click on a widget whose
 corner is not picked edits that corner with the picked ones and does not pick it. A double-click on a
 picked widget opens Corners for the picked corners of its path, and on a widget that is not picked, for its corner
 alone; while every corner is picked, the double-click's first click has already picked the widget's corner alone. A
