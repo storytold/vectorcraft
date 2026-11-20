@@ -1578,21 +1578,40 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
-        // the glyphs around it.
-        let mut votes: Vec<(u32, usize)> = vec![];
+        // the glyphs around it. Among faces that as many shapes match, the one whose glyphs fit
+        // them closest in all (the least leftover distance summed over those shapes), so every
+        // part that fits it takes the same face, exact matches as near ones. Simplified outlines
+        // of one font can nearly fit another font's look-alike glyphs, some of them more closely.
+        // A part's matches are all exact or all near, so the distances a face sums compare alike.
+        let mut votes: Vec<(u32, usize, f64)> = vec![];
         for ms in found.iter().flatten() {
-            // Each shape votes once for each face it fits.
-            let mut faces: Vec<u32> = ms.iter().map(|m| m.face.id()).collect();
-            faces.sort_unstable();
-            faces.dedup();
-            for f in faces {
-                match votes.iter_mut().find(|(v, _)| *v == f) {
-                    Some(v) => v.1 += 1,
-                    None => votes.push((f, 1)),
+            // Each shape votes once for each face it fits, with the leftover distance of its
+            // closest glyph in that face.
+            let mut faces: Vec<(u32, f64)> = vec![];
+            for m in ms {
+                let residual = if m.residual.is_finite() { m.residual } else { f64::INFINITY };
+                match faces.iter_mut().find(|(f, _)| *f == m.face.id()) {
+                    Some(f) => f.1 = f.1.min(residual),
+                    None => faces.push((m.face.id(), residual)),
+                }
+            }
+            for (f, residual) in faces {
+                match votes.iter_mut().find(|(v, ..)| *v == f) {
+                    Some(v) => {
+                        v.1 += 1;
+                        v.2 += residual;
+                    }
+                    None => votes.push((f, 1, residual)),
                 }
             }
         }
-        let rank = |face: u32| votes.iter().find(|(f, _)| *f == face).map_or(0, |v| v.1);
+        let rank = |face: u32| votes.iter().find(|(f, ..)| *f == face).map_or((0, f64::INFINITY), |v| (v.1, v.2));
+        // Most votes, then the least summed distance, then the first (the matches come upright and
+        // closest first).
+        let ranked = |(i, a): &(usize, &GlyphMatch), (j, b): &(usize, &GlyphMatch)| {
+            let ((va, da), (vb, db)) = (rank(a.face.id()), rank(b.face.id()));
+            va.cmp(&vb).then(db.total_cmp(&da)).then(j.cmp(i))
+        };
         let mut lines: Vec<Line> = vec![];
         let mut unmatched = vec![];
         // An unmatched shape between glyphs ends the line: the type after it is painted after it.
@@ -1610,9 +1629,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             }
             glyphs_of.insert(pc.id, parts.len());
             for ms in parts {
-                // The part's candidates in the face most shapes fit (the first such face, as the
-                // matches come upright and closest first).
-                let face = ms.iter().enumerate().max_by_key(|(i, m)| (rank(m.face.id()), std::cmp::Reverse(*i))).map(|(_, m)| m.face.id());
+                // The part's candidates in the face most shapes fit (see `ranked`).
+                let face = ms.iter().enumerate().max_by(ranked).map(|(_, m)| m.face.id());
                 let cands: Vec<GlyphMatch> = ms.iter().filter(|m| Some(m.face.id()) == face).cloned().collect();
                 let joined = match lines.last_mut() {
                     Some(l) if open => join(l, pc, &cands),
