@@ -312,10 +312,10 @@ fn deviation(profile: &WidthProfile, t0: f64, t1: f64) -> f64 {
 fn sampled_enough(profile: &WidthProfile, at: &[f64], a: f64, b: f64, bend: f64) -> bool {
     let first = at.partition_point(|p| *p < a);
     let last = at.partition_point(|p| *p <= b);
-    // A segment with no flattened point of its own is a straight run, and one probe in its middle
-    // cannot see a bend that matches the chord there but leaves it nearer the ends. Let
+    // A segment whose flattened points only sit on its boundaries is a straight run: one probe in
+    // the middle cannot see a bend that matches the chord there but leaves it nearer the ends. Let
     // `adaptive_samples` measure it.
-    if first == last {
+    if !at[first..last].iter().any(|&p| p > a + 1e-9 && p < b - 1e-9) {
         return false;
     }
     // A dash crossing a closed seam has a window past 1 (`[1.0, 1.5]`), where the widths wrap;
@@ -1169,15 +1169,18 @@ mod tests {
         }
     }
 
-    /// A profile segment with no flattened point of its own is a straight run: the sampler measures
-    /// it, rather than accepting it on a midpoint that happens to match the chord.
+    /// A profile segment whose flattened points only sit on its boundaries is a straight run: the
+    /// sampler measures it, rather than accepting it on a midpoint that happens to match the chord.
     #[test]
     fn a_bend_that_matches_the_chords_midpoint_still_gets_samples() {
-        // Flat at 1, then a smooth rise to 2: through the rising segment the curve matches its
-        // chord at the middle and sits below it at a quarter of the way, so one midpoint probe
-        // would leave the edge 0.47 pt out at the quarter.
+        // Flat at 1, then a smooth rise to 2, with collinear vertices exactly on the rise's
+        // boundaries: through the rising segment the curve matches its chord at the middle and
+        // sits below it at a quarter of the way, so one midpoint probe would leave the edge
+        // 0.47 pt out at the quarter.
         let mut b = BezPath::new();
         b.move_to((0.0, 0.0));
+        b.line_to((25.0, 0.0));
+        b.line_to((75.0, 0.0));
         b.line_to((100.0, 0.0));
         let p = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.75, 2.0, 2.0), (1.0, 2.0, 2.0)] };
         let o = width_outline(&b, 10.0, &p, &capped(LineCap::Butt), 0.01);
