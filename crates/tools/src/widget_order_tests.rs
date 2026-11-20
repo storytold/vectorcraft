@@ -287,9 +287,11 @@ fn cpu_time(f: impl FnOnce()) -> std::time::Duration {
 }
 
 /// Timings of each widget for a group of 5,000 rectangles and for 128 rectangles, selected on a
-/// locked artboard and with no artboard locked, 100 calls a run: with the editability check the
-/// widgets made before their kind check (the same calls, on the same ids), and without it. 7 runs
-/// each, in turn. Ignored by default; it prints the median per call and sets no bound on it:
+/// locked artboard and with no artboard locked, 100 calls a run: with the editability check first
+/// (the selection's editable objects are kept, then the widget is asked about them in the document
+/// with everything editable, as in [`the_widgets_are_the_same_as_when_editability_came_first`]),
+/// and as the widgets are now. 7 runs each, in turn. Ignored by default; it prints the median per
+/// call and sets no bound on it:
 /// `cargo test --release -p vectorcraft-tools --lib widget_order_perf -- --ignored --nocapture`.
 #[test]
 #[ignore = "a benchmark: run with --ignored --nocapture"]
@@ -317,6 +319,9 @@ fn widget_order_perf() {
     }
 
     fn timings(doc: &Document, sel: &Selection, case: &str) {
+        // The widgets' own editability checks find nothing locked here, so each object's
+        // editability is measured once, as when it came first.
+        let free = all_editable(doc);
         for (name, single, _, f) in SITES {
             if single && sel.objects.len() != 1 {
                 continue;
@@ -325,8 +330,8 @@ fn widget_order_perf() {
             let before = || {
                 for _ in 0..CALLS {
                     let editable = doc.editable();
-                    std::hint::black_box(sel.objects.iter().filter(|id| editable(**id)).count());
-                    std::hint::black_box(f(std::hint::black_box(doc), sel, p));
+                    let kept = selection(&sel.objects.iter().copied().filter(|id| editable(*id)).collect::<Vec<_>>());
+                    std::hint::black_box(f(std::hint::black_box(&free), &kept, p));
                 }
             };
             let after = || {
