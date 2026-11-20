@@ -433,6 +433,140 @@ fn stray_letters_with_a_length_past_the_file_are_passed_over() {
     let mut children = vec![cont(b'4', 1e-7), [stray, p].concat()];
     children.extend(tables());
     let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+/// Stray bytes, then letters whose length covers exactly the page chunk after them, then the page.
+fn page_inside_stray_letters(stray: &[u8]) -> Vec<u8> {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = stray.to_vec();
+    b.extend(b"abcd");
+    b.extend((p.len() as u32).to_le_bytes());
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    riff(&children)
+}
+
+#[test]
+fn after_stray_letters_the_page_is_preferred_to_letters_that_hold_it() {
+    let mut stray = b"wxyz".to_vec();
+    stray.extend(0xFFFF_FF00u32.to_le_bytes());
+    let d = read_cmx(&page_inside_stray_letters(&stray), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn after_stray_bytes_the_page_is_preferred_to_letters_that_hold_it() {
+    let d = read_cmx(&page_inside_stray_letters(&[1, 1]), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn letters_64_bytes_past_stray_bytes_do_not_hide_the_page_they_hold() {
+    let d = read_cmx(&page_inside_stray_letters(&[1; 64]), Limits::default()).unwrap();
+    assert!(d.warnings.contains(&Warning::Damaged), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn after_stray_bytes_a_page_inside_a_chunk_with_more_after_it_is_not_read() {
+    // Stray bytes, a chunk the reader passes over that holds a page followed by another chunk,
+    // then the page: only the last page is read.
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 2];
+    b.extend(chunk(b"inf1", &[p.clone(), chunk(b"junk", &[0; 4])].concat()));
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 1);
+}
+
+#[test]
+fn a_list_between_stray_bytes_is_read_as_a_list() {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let b = [vec![1u8; 2], list(b"pgls", &[p.clone(), p]), vec![1u8; 2]].concat();
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    assert_eq!(d.pages.len(), 2);
+}
+
+#[test]
+fn after_stray_bytes_an_empty_page_header_inside_another_chunk_is_not_a_page() {
+    // Stray bytes, a chunk the reader passes over that holds only an empty page header, then the
+    // page: only the page is read.
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 2];
+    b.extend(chunk(b"inf1", &chunk(b"page", &[])));
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn after_stray_bytes_an_empty_page_is_kept_before_the_next_page() {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 2];
+    b.extend(chunk(b"page", &[]));
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert_eq!(d.pages.len(), 2);
+    assert!(d.pages[0].layers.is_empty(), "{:?}", d.pages[0].layers);
+    assert_eq!(d.pages[1].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn a_page_between_stray_bytes_is_preferred_to_letters_that_end_inside_it() {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 2];
+    b.extend(b"abcd");
+    b.extend(8u32.to_le_bytes());
+    b.extend(p);
+    b.extend([1u8; 2]);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn after_stray_bytes_a_page_is_preferred_to_page_letters_that_end_inside_it() {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let mut b = vec![1u8; 2];
+    b.extend(b"page");
+    b.extend(8u32.to_le_bytes());
+    b.extend(p);
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
+    assert_eq!(d.pages.len(), 1);
+    assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+}
+
+#[test]
+fn a_page_between_stray_bytes_is_kept() {
+    let p = page(&[begin_page(None), begin_layer("L", None), square(&attrs(Some(1), None, false), 0, 0, 1000), end_layer()]);
+    let b = [vec![1u8; 2], p, vec![1u8; 2]].concat();
+    let mut children = vec![cont(b'4', 1e-7), b];
+    children.extend(tables());
+    let d = read_cmx(&riff(&children), Limits::default()).unwrap();
     assert_eq!(d.pages.len(), 1);
     assert_eq!(d.pages[0].layers[0].objects.len(), 1);
 }
