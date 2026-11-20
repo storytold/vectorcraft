@@ -700,45 +700,51 @@ fn oversized_tiff_metadata(bytes: &[u8]) -> bool {
     let Some(mut ifd) = word(if big { 8 } else { 4 }).and_then(|o| usize::try_from(o).ok()) else {
         return false;
     };
+    const MAX_IFD_SCAN: usize = 4096;
     let mut seen = Vec::new();
     let mut total = 0u64;
-    for _ in 0..4096 {
+    for _ in 0..MAX_IFD_SCAN {
         if ifd == 0 || seen.contains(&ifd) {
-            break;
+            return false;
         }
         seen.push(ifd);
         let Some(entries) = (if big { u64_at(ifd) } else { u16_at(ifd).map(u64::from) }) else {
-            break;
+            return false;
         };
+        let Ok(count) = usize::try_from(entries) else {
+            return true;
+        };
+        if count > MAX_IFD_SCAN {
+            return true;
+        }
         let Some(first) = ifd.checked_add(if big { 8 } else { 2 }) else {
-            break;
+            return false;
         };
         let entry_len = 4 + 2 * word_len;
-        let count_cap = usize::try_from(entries).unwrap_or(usize::MAX).min(4096);
-        for i in 0..count_cap {
+        for i in 0..count {
             let Some(e) = i.checked_mul(entry_len).and_then(|d| first.checked_add(d)) else {
-                break;
+                return false;
             };
-            let (Some(tag), Some(ty), Some(count)) = (u16_at(e), e.checked_add(2).and_then(u16_at), e.checked_add(4).and_then(word)) else {
-                break;
+            let (Some(tag), Some(ty), Some(tag_count)) = (u16_at(e), e.checked_add(2).and_then(u16_at), e.checked_add(4).and_then(word)) else {
+                return false;
             };
             if matches!(tag, 270 | 271 | 272 | 305 | 306 | 315 | 700 | 33432 | 34377 | 34675 | 37724) {
-                let payload = count.saturating_mul(width_of(ty));
+                let payload = tag_count.saturating_mul(width_of(ty));
                 total = total.saturating_add(payload);
                 if payload > MAX_TIFF_ICC || total > MAX_TIFF_ICC {
                     return true;
                 }
             }
         }
-        let Some(next_at) = count_cap.checked_mul(entry_len).and_then(|d| first.checked_add(d)) else {
-            break;
+        let Some(next_at) = count.checked_mul(entry_len).and_then(|d| first.checked_add(d)) else {
+            return false;
         };
         let Some(next) = word(next_at).and_then(|o| usize::try_from(o).ok()) else {
-            break;
+            return false;
         };
         ifd = next;
     }
-    false
+    ifd != 0 && !seen.contains(&ifd)
 }
 
 /// The samples of CMYK TIFF `bytes` (8 or 16 bits), their inks together or one plane per ink, with
@@ -2040,6 +2046,28 @@ mod tests {
             assert!(tiff_source(&file).is_none(), "tag {tag}");
             assert!(stored_cmyk_tiff(&file, None).is_none(), "tag {tag}");
         }
+
+        // A directory declaring more entries than the scan bound (e.g. an oversized ICC tag past
+        // index 4095) must also be rejected rather than returning `false` after a partial scan.
+        let mut many_entries = base_entries.to_vec();
+        let mut next_tag = 40000u16;
+        while many_entries.len() < 4097 {
+            if !many_entries.iter().any(|e| e.0 == next_tag) {
+                many_entries.push((next_tag, 4, vec![0]));
+            }
+            next_tag += 1;
+        }
+        many_entries.push((34675, 7, vec![0, 0, 0, 0, 0]));
+        many_entries.sort_by_key(|e| e.0);
+        let mut many_file = tiff_file(false, &many_entries, &data);
+        let many_ifd = 8 + data.len();
+        let icc_idx = many_entries.iter().position(|e| e.0 == 34675).unwrap();
+        let icc_entry = many_ifd + 2 + icc_idx * 12;
+        many_file[icc_entry + 4..icc_entry + 8].copy_from_slice(&u32::try_from(over).unwrap().to_le_bytes());
+        many_file[icc_entry + 8..icc_entry + 12].copy_from_slice(&12u32.to_le_bytes());
+        assert!(oversized_tiff_metadata(&many_file));
+        assert!(tiff_source(&many_file).is_none());
+        assert!(stored_cmyk_tiff(&many_file, None).is_none());
     }
 
     fn inks() -> Inks {
