@@ -301,6 +301,7 @@ impl Session {
             selection: Arc::new(st.selection.clone()),
             preview: None,
             paint,
+            used_defaults_only: false,
             preview_paint: None,
             color_mode_paints: None,
             deferred_color_mode: None,
@@ -338,9 +339,10 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
+            it.used_defaults_only |= cmd::asks_defaults_only(params);
             let restore_paint = bucket
                 || cmd == "command.batch"
-                || cmd::asks_defaults_only(params)
+                || it.used_defaults_only
                 || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                 || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
@@ -493,6 +495,7 @@ impl Session {
             .and_then(|st| st.interaction.as_ref())
             .filter(|it| {
                 bucket
+                    || it.used_defaults_only
                     || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                     || it.color_mode_paints.is_some()
             })

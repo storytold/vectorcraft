@@ -3461,9 +3461,21 @@ fn live_paint_bucket_commands_replay_from_the_journal_with_another_tool() {
     s.cancel_interaction().unwrap();
     assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (fill.clone(), 2.0));
     assert_eq!((node(&s, g), node(&s, art)), (group, painted), "the selection keeps its paint");
+    // A later preview without `defaultsOnly` leaves the interaction one that changed the defaults:
+    // canceling puts them back.
+    s.begin_interaction("Stroke Weight").unwrap();
+    s.preview("stroke.weightUp", &json!({"defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0, "the canceled interaction's weight is not kept");
     // `defaultsOnly` is a bool, and names no objects or brush.
     let (g, ..) = setup(&mut s, true);
     for (cmd, params) in [
+        ("paint.none", json!({"defaultsOnly": true, "ids": [g.0]})),
+        ("paint.none", json!({"defaultsOnly": true, "id": g.0})),
+        ("paint.none", json!({"defaultsOnly": true, "item": null})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "id": g.0})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "item": null})),
         ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": "yes"})),
         ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": true, "ids": [g.0]})),
         ("stroke.set", json!({"weight": 3, "defaultsOnly": true, "item": 0})),
