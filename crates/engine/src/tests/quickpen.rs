@@ -762,6 +762,125 @@ fn a_length_drag_stays_on_the_canvas() {
     assert_eq!(only_path(&s).anchors.len(), 3, "the drawing went on");
 }
 
+/// The paths of a selected compound path show length handles, also after a drag selected the
+/// compound again.
+#[test]
+fn a_compound_path_shows_the_length_handles_of_its_paths() {
+    let mut s = session();
+    let a = s.execute("path.quickPen", &json!({"start": [100, 100], "pieces": [{"x": 200, "y": 100}]})).unwrap();
+    let b = s.execute("path.quickPen", &json!({"start": [100, 300], "pieces": [{"x": 200, "y": 300}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a["id"], b["id"]]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    quick_pen(&mut s);
+    press(&mut s, &[(220.0, 100.0), (250.0, 100.0), (280.0, 100.0)]);
+    press(&mut s, &[(220.0, 300.0), (250.0, 300.0), (270.0, 300.0)]);
+    let mut ends: Vec<Point> = paths(&s).iter().filter_map(|(_, pd)| pd.subpaths[0].anchors.last().map(|a| a.p)).collect();
+    ends.sort_by(|p, q| p.y.total_cmp(&q.y));
+    assert_eq!(ends, [pt(260.0, 100.0), pt(250.0, 300.0)]);
+}
+
+/// An edit made outside the tool during a length press ends the press: a later drag does not
+/// preview from the path as the press found it, and so does not undo the edit.
+#[test]
+fn an_outside_edit_during_a_length_press_is_kept() {
+    // The edit comes before the first drag event, or after the drag began.
+    for began in [false, true] {
+        let mut s = session();
+        quick_pen(&mut s);
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        let v = view();
+        let id = paths(&s)[0].0.0;
+        s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+        if began {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+        }
+        s.execute("path.quickPenLength", &json!({"id": id, "length": 40})).unwrap();
+        let edited = only_path(&s);
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 100.0), v).unwrap();
+        assert_eq!(only_path(&s), edited, "began: {began}");
+    }
+    // Escape after the edit takes the drag back without taking the edit back.
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let v = view();
+    let id = paths(&s)[0].0.0;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+    s.execute("path.quickPenLength", &json!({"id": id, "length": 40})).unwrap();
+    let edited = only_path(&s);
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s), edited, "escape");
+}
+
+/// C and `[` `]` wait for a length drag to end: they neither add an undo step of their own nor
+/// change the arc the drag is changing.
+#[test]
+fn piece_keys_do_nothing_during_a_length_drag() {
+    let mut s = session();
+    quick_pen(&mut s);
+    s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "sharpArc"})).unwrap();
+    click(&mut s, 100.0, 300.0);
+    click(&mut s, 300.0, 300.0);
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 320.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 260.0, 400.0), v).unwrap();
+    let during = only_path(&s);
+    for k in [ToolKey::Letter('c'), ToolKey::BracketRight, ToolKey::BracketLeft] {
+        assert!(s.tool_claims_key(k, view()), "{k:?} stays with the tool");
+        key(&mut s, k);
+        assert_eq!(only_path(&s), during, "{k:?}");
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 400.0), v).unwrap();
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(only_path(&s).anchors.last().unwrap().p.distance(pt(200.0, 400.0)) < 1e-6);
+}
+
+/// A length drag ends where the pointer is let go, also when no drag event came after the press.
+#[test]
+fn a_length_drag_ends_at_the_release_point() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(260.0, 100.0));
+    assert_eq!(undo_steps(&s), undo + 1);
+    // A press let go away from the handle without a drag event drags too.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 320.0, 100.0), v).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(300.0, 100.0));
+    assert_eq!(only_path(&s).anchors.len(), 2);
+    assert_eq!(undo_steps(&s), undo + 2);
+}
+
+/// `path.quickPenLength` refuses a result past the canvas, not only one past the input limit.
+#[test]
+fn path_quick_pen_length_stays_on_the_canvas() {
+    let mut s = session();
+    let x = vectorcraft_doc::MAX_COORD - 500_000.0;
+    let r = s.execute("path.quickPen", &json!({"start": [x, 0], "pieces": [{"x": x + 10.0, "y": 0}]})).unwrap();
+    let id = r["id"].as_u64().unwrap();
+    let before = only_path(&s);
+    let undo = undo_steps(&s);
+    let e = s.execute("path.quickPenLength", &json!({"id": id, "length": 1_000_000})).unwrap_err().to_string();
+    assert!(e.contains("would exceed the canvas"), "{e}");
+    assert_eq!(only_path(&s), before);
+    assert_eq!(undo_steps(&s), undo);
+    s.execute("path.quickPenLength", &json!({"id": id, "length": 400_000})).unwrap();
+    assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(x + 400_000.0, 0.0));
+}
+
 /// Dragged by the start handle while the path is being drawn, the first line changes and the last
 /// sharp-corner arc stays the last piece, so C still flips it.
 #[test]

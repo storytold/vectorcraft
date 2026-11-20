@@ -7358,7 +7358,8 @@ dragged end stays on its line or circle and does not snap to Smart Guides, and a
 reach past the canvas. Each drag is one undo step, Escape during
 the drag takes it back, and the path being drawn goes on from the new end. The pieces of the path being drawn that the
 drag does not change stay pieces: C and `[` `]` still change the last one. The last piece, dragged by its end, stays
-that piece, and as an arc it keeps an arc size of at least 1°. A click on a handle that does not drag is an ordinary
+that piece, and as an arc it keeps an arc size of at least 1°. C and `[` `]` do nothing until the drag ends, and the
+end goes where the pointer is let go. A click on a handle that does not drag is an ordinary
 click: it adds a point, closes the path or starts a new one. The handle's place, the 359° limit, the 1° minimum,
 Escape during a drag, the handles on a selected path and the dragged end not snapping are VectorCraft's own rules.
 

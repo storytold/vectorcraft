@@ -133,7 +133,7 @@ pub(super) fn quick_pen_length(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(L, format!("`{key}` must be from {lo} to {hi}")));
     }
     let out = qpl::with_length(sp, at_start, length).ok_or_else(|| bad(L, "the end is not a straight line or a circular arc"))?;
-    if !out.anchors.iter().all(|a| within_input_bound(a.p) && within_input_bound(a.h_in) && within_input_bound(a.h_out)) {
+    if !qp::on_canvas(&out) {
         return Err(bad(L, "result would exceed the canvas (coordinates out of range)"));
     }
     let kind = match piece.shape {
