@@ -1785,3 +1785,80 @@ fn trim_view_greys_out_show_guides_and_show_grid() {
     app.run("view.guides", json!({})).unwrap();
     assert!(!app.ui.view.guides);
 }
+
+/// On Windows and Linux an Alt tap with the Quick Pen switches the tool's action and leaves the
+/// menu bar inactive; with a tool that does not take the tap it still activates the menu bar. On
+/// macOS the native menu bar has no access keys, and the tap only switches the action.
+#[test]
+fn an_alt_tap_the_active_tool_takes_does_not_activate_the_menu_bar() {
+    // One host frame on `ctx` with `modifiers` held at its end.
+    fn held(app: &mut VectorcraftApp, ctx: &egui::Context, modifiers: egui::Modifiers) {
+        let raw = egui::RawInput { events: vec![egui::Event::ModifiersChanged(modifiers)], ..Default::default() };
+        ctx.run_ui(raw, |ui| app.logic(ui.ctx())).textures_delta.clear();
+    }
+    fn tap(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        held(app, ctx, egui::Modifiers::ALT);
+        held(app, ctx, egui::Modifiers::NONE);
+    }
+    for os in [egui::os::OperatingSystem::Windows, egui::os::OperatingSystem::Nix, egui::os::OperatingSystem::Mac] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        crate::shortcut_editor::sync(&app.ui);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.set_os(os);
+        // Fonts install on the first logic pass and are ready on the second.
+        for _ in 0..2 {
+            ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+        }
+        app.select_tool(vectorcraft_tools::quickpen::ID);
+        assert_eq!(app.session.tool_options()["action"], "line", "{os:?}");
+        tap(&mut app, &ctx);
+        assert_eq!(app.session.tool_options()["action"], "continuousArc", "{os:?}: the tap switches the action");
+        assert!(!keyboard::active(&ctx), "{os:?}: the menu bar stays inactive");
+        tap(&mut app, &ctx);
+        assert_eq!(app.session.tool_options()["action"], "sharpArc", "{os:?}: each tap switches once");
+        assert!(!keyboard::active(&ctx), "{os:?}");
+
+        app.select_tool("selection");
+        tap(&mut app, &ctx);
+        let menu_bar = os != egui::os::OperatingSystem::Mac;
+        assert_eq!(keyboard::active(&ctx), menu_bar, "{os:?}: other tools keep the Alt tap's menu bar");
+    }
+}
+
+/// On Windows and Linux, Alt+F with the Quick Pen opens the File menu, and Alt let go after it
+/// (while the menu is open, or after Escape closed it) is no tap: the tool keeps its action.
+#[test]
+fn alt_let_go_after_an_access_key_does_not_switch_the_quick_pen() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    crate::shortcut_editor::sync(&app.ui);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.set_os(egui::os::OperatingSystem::Windows);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            app.logic(ui.ctx());
+            menu_bar(app, ui);
+        })
+        .textures_delta
+        .clear();
+    };
+    for _ in 0..2 {
+        frame(&mut app, vec![]);
+    }
+    app.select_tool(vectorcraft_tools::quickpen::ID);
+    let alt = egui::Modifiers::ALT;
+    let key = |key, pressed, modifiers| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+    frame(&mut app, vec![egui::Event::ModifiersChanged(alt)]);
+    frame(&mut app, vec![key(egui::Key::F, true, alt), egui::Event::Text("f".into()), key(egui::Key::F, false, alt)]);
+    assert!(keyboard::active(&ctx), "Alt+F opens the File menu");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    frame(&mut app, vec![key(egui::Key::Escape, true, egui::Modifiers::NONE)]);
+    assert!(!keyboard::active(&ctx), "Escape closes it");
+    // The next tap, with no idle frame in between, switches the action once.
+    frame(&mut app, vec![egui::Event::ModifiersChanged(alt)]);
+    assert_eq!(app.session.tool_options()["action"], "line", "Alt let go after Alt+F is no tap");
+    frame(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    assert_eq!(app.session.tool_options()["action"], "continuousArc", "the next tap counts");
+    assert!(!keyboard::active(&ctx));
+}

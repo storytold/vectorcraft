@@ -37,6 +37,13 @@ impl AltTap {
     }
 }
 
+/// A frame whose keys the menu bar took: Alt held at its end is no tap, and Alt let go during it
+/// ends the press, so the next press starts afresh.
+pub(crate) fn taken_by_menu_bar(tap: &mut AltTap, ctx: &egui::Context) {
+    let alt = ctx.input(|i| i.modifiers.alt);
+    *tap = AltTap { down: alt, spoiled: alt };
+}
+
 fn alt_alone(m: egui::Modifiers) -> (bool, bool) {
     (m.alt, !(m.shift || m.ctrl || m.command || m.mac_cmd))
 }

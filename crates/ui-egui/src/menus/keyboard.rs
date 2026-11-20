@@ -570,7 +570,7 @@ fn refresh_targets(app: &VectorcraftApp, ctx: &Context, state: &mut State) {
     }
 }
 
-fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: &Modifiers, pointer_activity: bool, owned: &mut bool) {
+fn modifiers_changed(app: &mut VectorcraftApp, ctx: &Context, state: &mut State, m: &Modifiers, pointer_activity: bool, owned: &mut bool) {
     let plain_alt = m.alt && !m.ctrl && !m.command && !m.mac_cmd;
     if plain_alt && !state.alt_down {
         state.alt_armed = !pointer_activity;
@@ -578,10 +578,11 @@ fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: 
     }
     if !m.alt && state.alt_down {
         if state.alt_armed && !state.alt_used {
-            *owned = true;
             if state.active {
+                *owned = true;
                 cancel(ctx, state, true);
-            } else {
+            } else if !tool_takes_alt_tap(app) {
+                *owned = true;
                 choose_root(app, ctx, state, "File".into(), false);
             }
         }
@@ -596,6 +597,13 @@ fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: 
         *owned = false;
     }
     state.alt_down = m.alt;
+}
+
+/// The active tool takes a plain Alt tap (the Quick Pen switches its action), so the tap does not
+/// activate the menu bar.
+fn tool_takes_alt_tap(app: &mut VectorcraftApp) -> bool {
+    let view = app.view_info();
+    app.session.tool_claims_key(vectorcraft_tools::ToolKey::AltTap, view)
 }
 
 fn consume_event(consumed: &mut [bool], at: usize) {

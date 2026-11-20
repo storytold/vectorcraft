@@ -19,7 +19,7 @@ mod paste;
 mod presentation;
 mod typing;
 
-pub(crate) use alt_tap::AltTap;
+pub(crate) use alt_tap::{AltTap, taken_by_menu_bar as alt_tap_taken_by_menu_bar};
 pub(crate) use held_tool::{HeldTool, note_tool_use};
 pub(crate) use hold_keys::HoldKeys;
 #[cfg(test)]
