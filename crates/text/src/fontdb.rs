@@ -56,7 +56,7 @@ use face::Instances;
 #[cfg(test)]
 pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
-pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
+pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
 pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
@@ -74,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};

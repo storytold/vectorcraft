@@ -3767,6 +3767,35 @@ fn live_paint_selection_options_set_the_highlight() {
     assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.0));
 }
 
+/// A press while a Fill Area hover search runs on another thread waits for that search only: no
+/// search starts for where the pointer moved meanwhile, and the press finds its own area.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fill_area_press_does_not_search_a_hover_position_it_passed() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let pts: Vec<Point> = (0..200)
+        .map(|k| {
+            let a = k as f64 * std::f64::consts::TAU / 200.0;
+            Point::new(300.0 + 100.0 * a.cos(), 300.0 + 100.0 * a.sin())
+        })
+        .collect();
+    let poly = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(poly, PathData::single(SubPath::polyline(&pts, true)), Appearance::default_art())).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = FillAreaTool::new();
+    let started = super::fill_area::hover_searches_started();
+    t.pointer(&cx, &ev(PointerKind::Move, 500.0, 500.0));
+    assert!(t.waiting());
+    t.pointer(&cx, &ev(PointerKind::Move, 510.0, 500.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "shapeBuilder.copyRegion"), "{acts:?}");
+    assert!(!t.waiting());
+    assert_eq!(super::fill_area::hover_searches_started() - started, 1, "only the search that was running");
+}
+
 #[test]
 fn create_builds_the_three_tools() {
     for id in ["shapeBuilder", "livePaintBucket", "livePaintSelection"] {

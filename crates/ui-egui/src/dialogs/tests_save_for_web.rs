@@ -385,6 +385,8 @@ fn the_web_downloads_and_has_no_browser_preview() {
     let log = log.borrow().clone();
     assert!(log[0].starts_with("download Untitled-1.html ") && log[1].starts_with("download Untitled-1.png "), "{log:?}");
     assert!(app.run("file.saveForWeb.browser", json!({})).is_err());
+    assert!(crate::menus::enabled(&app, "file.saveForWeb"));
+    assert!(!crate::menus::enabled(&app, "file.saveForWeb.browser"), "the command palette and menus show it disabled on the web");
 }
 
 #[test]
@@ -412,6 +414,19 @@ fn preview_in_browser_opens_the_page() {
     assert!(std::fs::read_to_string(&page).unwrap().contains("images/Untitled-1.jpg"));
     let log = log.borrow();
     assert!(log.last().unwrap().starts_with("open file://") && log.last().unwrap().ends_with("Untitled-1.html"), "{log:?}");
+}
+
+/// A preview whose export fails opens nothing and removes the folder made for it.
+#[test]
+fn a_failed_browser_preview_removes_its_folder() {
+    let tmp = vectorcraft_testkit::temp_dir("sfw-browser-failed");
+    save_for_web::TEST_TMP.set(Some(tmp.clone()));
+    let (mut app, log) = app(&tmp, false);
+    assert!(app.run("file.saveForWeb.browser", json!({"format": "bogus"})).is_err());
+    assert!(!log.borrow().iter().any(|l| l.starts_with("open ")), "{:?}", log.borrow());
+    let left: Vec<_> =
+        std::fs::read_dir(tmp.join("VectorCraft Save for Web")).map(|d| d.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
+    assert!(left.is_empty(), "{left:?}");
 }
 
 /// Each preview has its own folder: a second one, from another app or the same one, leaves the

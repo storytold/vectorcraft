@@ -279,6 +279,11 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, always: bool, s: &SliderValue
     (v != from || (end && v != s.value) || (always && asked)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
+/// The colored bar inside the rail `rect` of [`color_slider_stepped`] and its siblings.
+pub(crate) fn color_rail_bar(rect: Rect) -> Rect {
+    Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(rect.width() - 8.0, 7.0))
+}
+
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
 /// that a click or drag gives and the phase.
 fn color_rail(
@@ -292,7 +297,7 @@ fn color_rail(
 ) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
-    let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
+    let bar = color_rail_bar(rect);
     let resp = ui.interact(rect, id, Sense::click_and_drag());
     gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
@@ -397,11 +402,26 @@ fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
-    (name, axes): (&str, [FieldAxis<'_>; 2]),
+    labels: (&str, [FieldAxis<'_>; 2]),
     size: Vec2,
     pos: (f32, f32),
     marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
+) -> (Option<(f32, f32)>, Live) {
+    color_field_shaded(ui, id, labels, size, pos, marked, (color_at, &[]))
+}
+
+/// A [`color_field`] with the cells `shade` marks grayed out under its marker, each run of them
+/// edged with a dark and a light line. `shade` holds a row of an n × n grid over the field for each
+/// of its n rows (16 at most) from the top, and bit `i` of a row marks its cell `i` from the left.
+pub fn color_field_shaded(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    (name, axes): (&str, [FieldAxis<'_>; 2]),
+    size: Vec2,
+    pos: (f32, f32),
+    marked: bool,
+    (color_at, shade): (&dyn Fn(f32, f32) -> Color32, &[u16]),
 ) -> (Option<(f32, f32)>, Live) {
     use egui::accesskit::{Action, ActionData};
     let t = Tokens::get(ui.ctx());
@@ -410,6 +430,7 @@ pub fn color_field(
     focus_on_press(&resp);
     let painter = ui.painter_at(rect.expand(6.0));
     painter.add(color_mesh(rect, (32, 32), color_at));
+    shade_cells(&painter, rect, shade);
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     focus_outline(ui, &resp, rect);
     let (x, y) = pos;
@@ -458,6 +479,55 @@ pub fn color_field(
         return (Some(moved), Live::Released);
     }
     (None, Live::Idle)
+}
+
+/// The gray over a shaded cell of a [`color_field_shaded`].
+pub(crate) const SHADE: Color32 = Color32::from_rgba_premultiplied(96, 96, 96, 192);
+
+/// Whether cell `col` of row `row` of `shade` is marked; a cell outside the grid is not.
+fn shaded(shade: &[u16], col: usize, row: usize) -> bool {
+    col < shade.len().min(16) && shade.get(row).is_some_and(|bits| (bits >> col) & 1 == 1)
+}
+
+/// The lines between the marked and the unmarked cells of `shade` (see [`color_field_shaded`]),
+/// each from one grid point to the next, as (column, row) from the top-left corner.
+pub(crate) fn shade_edges(shade: &[u16]) -> Vec<[(usize, usize); 2]> {
+    let n = shade.len().min(16);
+    let mut edges = Vec::new();
+    for row in 0..n {
+        for col in 0..n {
+            let here = shaded(shade, col, row);
+            if col + 1 < n && here != shaded(shade, col + 1, row) {
+                edges.push([(col + 1, row), (col + 1, row + 1)]);
+            }
+            if row + 1 < n && here != shaded(shade, col, row + 1) {
+                edges.push([(col, row + 1), (col + 1, row + 1)]);
+            }
+        }
+    }
+    edges
+}
+
+/// Gray out the cells `shade` marks over `rect`, and draw the lines between them and the others
+/// dark under light.
+pub(crate) fn shade_cells(painter: &egui::Painter, rect: Rect, shade: &[u16]) {
+    let n = shade.len().min(16);
+    if n == 0 {
+        return;
+    }
+    let cell = rect.size() / n as f32;
+    let at = |(col, row): (usize, usize)| rect.min + vec2(col as f32 * cell.x, row as f32 * cell.y);
+    for row in 0..n {
+        for col in (0..n).filter(|&col| shaded(shade, col, row)) {
+            painter.rect_filled(Rect::from_min_size(at((col, row)), cell), 0.0, SHADE);
+        }
+    }
+    let edges = shade_edges(shade);
+    for stroke in [Stroke::new(2.0, Color32::BLACK), Stroke::new(1.0, Color32::WHITE)] {
+        for [a, b] in &edges {
+            painter.line_segment([at(*a), at(*b)], stroke);
+        }
+    }
 }
 
 /// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
@@ -972,6 +1042,68 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
     out
 }
 
+/// What [`ring_markers`] did this frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MarkerResponse {
+    /// The index of the marker that was picked.
+    pub picked: Option<usize>,
+    /// A press on a marker is held with the pointer still on the marker. The caller then ignores
+    /// the drag that the ring under it reports.
+    pub held: bool,
+}
+
+/// Markers on a [`hue_ring`] drawn in `rect`, one for each HSB of `colors` at its hue, filled with
+/// its color and smaller than the ring's own marker. Each marker is a button that screen readers
+/// read as `name` with the color's hex value. A click gives it the keyboard focus. A click, a
+/// press released on the marker however long it was held, Enter or Space on the focused marker,
+/// or a screen reader's click picks it. A drag that leaves the marker moves the ring's hue as a
+/// drag on the band does.
+pub fn ring_markers(ui: &mut Ui, id: &str, rect: Rect, colors: &[[f32; 3]], name: &str) -> MarkerResponse {
+    let t = Tokens::get(ui.ctx());
+    let c = rect.center();
+    let mid = rect.width().min(rect.height()) / 2.0 - RING_MARGIN - RING_WIDTH / 2.0;
+    let radius = RING_WIDTH / 2.0 - 2.0;
+    let painter = ui.painter_at(rect);
+    let press_id = id_with(ui.scope_id(), (id, "press"));
+    let (pos, down, pressed, released) =
+        ui.input(|i| (i.pointer.latest_pos(), i.pointer.primary_down(), i.pointer.primary_pressed(), i.pointer.primary_released()));
+    let mut held_on: Option<usize> = ui.data(|d| d.get_temp(press_id)).flatten();
+    let mut picked = None;
+    for (i, hsb) in colors.iter().enumerate() {
+        let p = wheel_pos(c, mid, hsb[0], 1.0);
+        let area = Rect::from_center_size(p, Vec2::splat(RING_WIDTH));
+        let resp = ui.interact(area, id_with(ui.scope_id(), (id, i)), Sense::click());
+        focus_on_press(&resp);
+        if pressed && resp.is_pointer_button_down_on() {
+            held_on = Some(i);
+        }
+        let on = pos.is_some_and(|p| area.contains(p));
+        if held_on == Some(i) && !on {
+            held_on = None;
+        }
+        let fill = hsb32(*hsb);
+        painter.circle(p, radius, fill, Stroke::new(1.0, Color32::WHITE));
+        painter.circle_stroke(p, radius + 1.0, Stroke::new(1.0, Color32::BLACK));
+        if ui.memory(|m| m.has_focus(resp.id)) {
+            painter.circle_stroke(p, radius + 3.0, Stroke::new(1.0, t.accent));
+        }
+        let hex = format!("#{:02x}{:02x}{:02x}", fill.r(), fill.g(), fill.b());
+        resp.widget_info(|| egui::WidgetInfo {
+            current_text_value: Some(hex.clone()),
+            ..egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), name)
+        });
+        if resp.clicked() || (held_on == Some(i) && released && on) {
+            picked = Some(i);
+        }
+    }
+    if held_on.is_some_and(|i| i >= colors.len()) {
+        held_on = None;
+    }
+    let held = down && held_on.is_some();
+    ui.data_mut(|d| d.insert_temp(press_id, if down { held_on } else { None }));
+    MarkerResponse { picked, held }
+}
+
 /// Hue sectors and rings of the [`segmented_wheel`]: patches 15° of hue by 20% saturation (or
 /// brightness) wide, the sectors centered on red at 0°.
 const WHEEL_SECTORS: u32 = 24;
@@ -1035,6 +1167,12 @@ pub struct WheelResponse {
     /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
     /// (degrees) and the saturation (or brightness) under the pointer (1 past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
+    /// A right-click on the wheel, or on a marker past its edge: the color whose marker is within
+    /// reach of it (if any), the color on whose line from the center it is (when it is on no
+    /// marker), and the hue (degrees) and saturation under the pointer.
+    pub secondary: Option<(Option<usize>, Option<usize>, [f32; 2])>,
+    /// The wheel's own response, for a right-click menu.
+    pub response: Option<egui::Response>,
 }
 
 /// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
@@ -1042,25 +1180,60 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel_of(ui, id, size, colors, base, false, WheelAxes::HueSaturation)
+    wheel_of(ui, id, size, colors, base, base, false, WheelAxes::HueSaturation)
 }
 
-/// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
-/// [`segment_color`]). The markers sit at their colors' own hue and
+/// Recolor Artwork's wheel: [`harmony_wheel`] with the base color's marker (`base`) larger and the
+/// selected color's (`selected`, when another) ringed, at the selected color's brightness, with the
+/// Brightness slider for it. With `segmented` it is drawn as solid patches (24 hues by 5
+/// saturations, each in its [`segment_color`]); the markers sit at their colors' own hue and
 /// saturation, and a drag moves them as freely as on the smooth wheel.
-pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel_of(ui, id, size, colors, base, true, WheelAxes::HueSaturation)
+#[allow(clippy::too_many_arguments)]
+pub fn recolor_wheel(
+    ui: &mut Ui,
+    id: &str,
+    size: f32,
+    colors: &[Color],
+    base: Option<usize>,
+    selected: Option<usize>,
+    segmented: bool,
+    axes: WheelAxes,
+) -> WheelResponse {
+    wheel_of(ui, id, size, colors, base, selected.or(base), segmented, axes)
 }
 
-/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. With
+/// The distance from `p` to the segment from `a` to `b`.
+fn segment_distance(p: egui::Pos2, a: egui::Pos2, b: egui::Pos2) -> f32 {
+    let ab = b - a;
+    let len2 = ab.length_sq();
+    let t = if len2 > 0.0 { ((p - a).dot(ab) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    p.distance(a + ab * t)
+}
+
+pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
+    wheel_of(ui, id, size, colors, base, base, true, WheelAxes::HueSaturation)
+}
+
+/// [`harmony_wheel`], [`recolor_wheel`], or with `segmented` [`segmented_wheel`], showing `axes`. The
+/// big marker is `base`'s, and the wheel's background and the slider under it are `selected`'s. With
 /// [`WheelAxes::HueBrightness`] the distance from the center is brightness (black at the center,
 /// full brightness at the edge, a ring of patches per 20% on the segmented wheel), the wheel is drawn
 /// at the selected colour's saturation (full without one), a marker drag sets hue and brightness,
 /// and the slider under the wheel is a Saturation slider.
-pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool, axes: WheelAxes) -> WheelResponse {
+#[allow(clippy::too_many_arguments)]
+pub fn wheel_of(
+    ui: &mut Ui,
+    id: &str,
+    size: f32,
+    colors: &[Color],
+    base: Option<usize>,
+    selected: Option<usize>,
+    segmented: bool,
+    axes: WheelAxes,
+) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
-    let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
+    let base_hsb = selected.and_then(|b| colors.get(b)).map(Color::to_hsb);
     let (radial, other) = (axes.radial(), axes.other());
     // The component the wheel does not show: the slider's value, and the wheel's background at it.
     let o = base_hsb.map_or(1.0, |c| c[other]);
@@ -1082,6 +1255,24 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
             painter.line_segment([c, p], Stroke::new(1.0, Color32::from_white_alpha(160)));
             painter.circle(p, if big { 8.0 } else { 5.5 }, crate::panels::c32(col), Stroke::new(1.5, Color32::WHITE));
             painter.circle_stroke(p, if big { 9.0 } else { 6.5 }, Stroke::new(1.0, Color32::BLACK));
+            if Some(i) == selected && selected != base {
+                painter.circle_stroke(p, 8.5, Stroke::new(1.5, t.accent));
+            }
+        }
+        // A right-click: the marker under it, or else the line from the center to a marker.
+        if resp.secondary_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
+            let dv = p - c;
+            if dv.length() <= r || near.is_some() {
+                let line = near.is_none().then(|| {
+                    let on = colors.iter().map(at).enumerate().map(|(i, m)| (i, segment_distance(p, c, m))).filter(|x| x.1 <= 4.0);
+                    on.min_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0)
+                });
+                let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+                out.secondary = Some((near.map(|x| x.0), line.flatten(), [h, (dv.length() / r).clamp(0.0, 1.0)]));
+            }
         }
         // Drag a marker: the nearest one within reach of the press.
         let drag = ui.scope_id().with((id, "drag"));
@@ -1111,6 +1302,7 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
         }
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
+        out.response = Some(resp);
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -1119,7 +1311,7 @@ pub fn wheel_of(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option
         ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(name).color(t.text_dim)));
         // Screen readers get the value in percent, as the Color panel's HSB fields show it.
         let shown = SliderValue::field((f64::from(o) * 100.0).round(), 0.0..=100.0, "%", 0);
-        if let (Some(b), Some(hsb)) = (base, base_hsb)
+        if let (Some(b), Some(hsb)) = (selected, base_hsb)
             && let (Some(nv), _) = color_slider_valued(ui, (id, key), name, Some(shown), o, size, &|x| {
                 let [h, s, v] = axes.hsb(hsb[0], hsb[radial], x);
                 crate::panels::c32(&Color::from_hsb(h, s, v))

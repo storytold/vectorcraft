@@ -673,8 +673,13 @@ fn frame_out(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, 
 
 /// The Delete Swatch button in `out`: its rectangle and whether it is enabled.
 fn trash_button(out: &egui::FullOutput) -> (Rect, bool) {
+    footer_button(out, "Delete Swatch")
+}
+
+/// The button labeled `label` in `out`: its rectangle and whether it is enabled.
+fn footer_button(out: &egui::FullOutput, label: &str) -> (Rect, bool) {
     let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == "Delete Swatch")).expect("a Delete Swatch button");
+    let node = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.trim() == label)).unwrap_or_else(|| panic!("a {label} button"));
     let b = node.bounds().expect("the button's bounds");
     (Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)), !node.is_disabled())
 }
@@ -691,16 +696,23 @@ fn outlined(out: &egui::FullOutput, rect: Rect) -> bool {
 /// there, a frame per step from `time`. Returns whether the button was outlined and enabled while
 /// the drag was held over it.
 fn drag_to_trash(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
+    drag_to_button(app, ctx, name, "Delete Swatch", modifiers, time)
+}
+
+/// Drag the tile of `name` with `modifiers` held onto the button labeled `label` and release the
+/// primary button there, a frame per step from `time`. Returns whether the button was outlined and
+/// enabled while the drag was held over it.
+fn drag_to_button(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, label: &str, modifiers: Modifiers, time: f64) -> (bool, bool) {
     frame_out(app, ctx, vec![], modifiers, time);
-    let (trash, _) = trash_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05));
+    let (target, _) = footer_button(&frame_out(app, ctx, vec![], modifiers, time + 0.05), label);
     let from = tile_center(ctx, name);
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
     frame_out(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time + 0.1);
     frame_out(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.2);
-    frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.3);
-    let held = frame_out(app, ctx, vec![Event::PointerMoved(trash.center())], modifiers, time + 0.4);
-    let seen = (outlined(&held, trash), trash_button(&held).1);
-    frame_out(app, ctx, vec![Event::PointerMoved(trash.center()), button(trash.center(), false)], modifiers, time + 0.5);
+    frame_out(app, ctx, vec![Event::PointerMoved(target.center())], modifiers, time + 0.3);
+    let held = frame_out(app, ctx, vec![Event::PointerMoved(target.center())], modifiers, time + 0.4);
+    let seen = (outlined(&held, target), footer_button(&held, label).1);
+    frame_out(app, ctx, vec![Event::PointerMoved(target.center()), button(target.center(), false)], modifiers, time + 0.5);
     seen
 }
 
@@ -763,6 +775,14 @@ fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
         assert_eq!(doc(&app), kept, "{name}");
     }
     assert_eq!(undo_steps(&app), undo + 2);
+    // A swatch of the user's whose name starts with a bracket is an ordinary swatch.
+    app.run("swatch.new", json!({"name": "[Blue]", "color": "#0000ff"})).unwrap();
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_trash(&mut app, &ctx, "[Blue]", Modifiers::NONE, 7.0), (true, true));
+    assert_eq!(dialog_message(&app).as_deref(), Some("Delete “[Blue]”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(doc(&app).swatch("[Blue]").is_none(), "OK deletes it");
+    assert_eq!(undo_steps(&app), undo + 1);
 }
 
 /// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
@@ -830,6 +850,157 @@ fn delete_swatch_ignores_other_drags() {
     unchanged(&app, "the first document");
 }
 
+/// Swatches dragged from the list onto New Swatch are duplicated without a dialog, in thumbnail
+/// and list views: each copy goes just after its swatch, in its color group, and is selected, and
+/// the copies of one drop are one undo step. A selected swatch carries the other selected swatches
+/// with it, but not the selected groups, None or Registration. Modifiers do not change the drop, a
+/// repeated name is numbered, and a group, None and Registration dragged alone duplicate nothing.
+#[test]
+fn swatches_dropped_on_new_swatch_are_duplicated() {
+    let mut app = app();
+    let ctx = context();
+    let after = |app: &VectorcraftApp, group: Option<&str>, name: &str| {
+        let n = names_of(app, group);
+        n.iter().position(|x| x == name).and_then(|i| n.get(i + 1).cloned())
+    };
+    let undo = undo_steps(&app);
+    // An unselected swatch, nothing selected.
+    assert_eq!(drag_to_button(&mut app, &ctx, "Orange", "New Swatch", Modifiers::NONE, 1.0), (true, true), "outlined while held");
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy"));
+    assert_eq!(selected(&ctx), ["Orange copy"], "the copy is selected");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    let copy = app.session.doc().unwrap().doc.swatch("Orange copy").cloned().unwrap();
+    assert_eq!(copy.paint, app.session.doc().unwrap().doc.swatch("Orange").unwrap().paint, "the copy keeps the paint");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(app.session.doc().unwrap().doc.swatch("Orange copy").is_none(), "Undo removes the copy");
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy"), "Redo brings it back");
+    // Again: the copy's name is numbered.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    drag_to_button(&mut app, &ctx, "Orange", "New Swatch", Modifiers::NONE, 2.0);
+    assert_eq!(after(&app, None, "Orange").as_deref(), Some("Orange copy 2"));
+    assert_eq!(selected(&ctx), ["Orange copy 2"]);
+    // A selected swatch carries the selected swatches, in panel order and into their groups, with
+    // Alt held; the copies are one undo step.
+    let sel = ["[None]", "Bright Red", "Grays", "Sunset", "Lime"].map(String::from).to_vec();
+    set_pstate(&ctx, "swatch-selected", sel);
+    let undo = undo_steps(&app);
+    assert_eq!(drag_to_button(&mut app, &ctx, "Lime", "New Swatch", Modifiers::ALT, 3.0), (true, true));
+    assert!(app.ui.dialog.is_none(), "no dialog with Alt");
+    assert_eq!(after(&app, None, "Lime").as_deref(), Some("Lime copy"));
+    assert_eq!(after(&app, None, "Sunset").as_deref(), Some("Sunset copy"));
+    assert_eq!(after(&app, Some("Brights"), "Bright Red").as_deref(), Some("Bright Red copy"));
+    assert_eq!(selected(&ctx), ["Lime copy", "Sunset copy", "Bright Red copy"]);
+    assert_eq!(names_of(&app, Some("Grays")).len(), 9, "the group is not duplicated");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for all");
+    app.run("edit.undo", json!({})).unwrap();
+    let d = app.session.doc().unwrap().doc.clone();
+    assert!(["Lime copy", "Sunset copy", "Bright Red copy"].iter().all(|n| d.swatch(n).is_none()), "Undo removes every copy");
+    // A group, None and Registration dragged alone: nothing.
+    set_pstate(&ctx, "swatch-selected", Vec::<String>::new());
+    let (kept, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    for (i, name) in ["Grays", "[None]", REGISTRATION].into_iter().enumerate() {
+        assert_eq!(drag_to_button(&mut app, &ctx, name, "New Swatch", Modifiers::NONE, 4.0 + i as f64), (false, true), "{name}");
+        assert!(app.ui.dialog.is_none(), "{name}");
+        assert_eq!(app.session.doc().unwrap().doc, kept, "{name}");
+    }
+    assert_eq!(undo_steps(&app), undo);
+    // A swatch of the user's whose name starts with a bracket is an ordinary swatch.
+    app.run("swatch.new", json!({"name": "[Blue]", "color": "#0000ff"})).unwrap();
+    assert_eq!(drag_to_button(&mut app, &ctx, "[Blue]", "New Swatch", Modifiers::NONE, 8.0), (true, true));
+    assert_eq!(after(&app, None, "[Blue]").as_deref(), Some("[Blue] copy"));
+    // In a list view.
+    let undo = undo_steps(&app);
+    app.ui.swatches_view = View::SmallList;
+    assert_eq!(drag_to_button(&mut app, &ctx, "Red", "New Swatch", Modifiers::NONE, 9.0), (true, true));
+    assert_eq!(after(&app, None, "Red").as_deref(), Some("Red copy"));
+    assert_eq!(undo_steps(&app), undo + 1);
+}
+
+/// New Swatch duplicates only swatches dragged from the active document's list that are still in
+/// it: a paint dragged from elsewhere, art, a swatch dragged from another document, and a swatch
+/// deleted while it is dragged duplicate nothing. A secondary button released while a swatch is
+/// held over the button ends the drag without duplicating, and a click still opens New Swatch.
+#[test]
+fn new_swatch_ignores_other_drags() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let ctx = context();
+    let (new, _) = footer_button(&frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 0.0), "New Swatch");
+    let (before, undo) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    let unchanged = |app: &VectorcraftApp, case: &str| {
+        assert!(app.ui.dialog.is_none(), "{case}: no dialog");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{case}: duplicates nothing");
+        assert_eq!(undo_steps(app), undo, "{case}: no undo step");
+    };
+    // The payloads are set directly, as if dragged from this document's list.
+    set_pstate(&ctx, super::actions::DRAG_DOC, app.session.active().map(|st| st.uid));
+    let release = |at| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+    let cases = [
+        ("a paint", PanelDrag::paint(Paint::solid(Color::from_hex("#ed1c24").unwrap()))),
+        ("art", PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])),
+    ];
+    for (i, (case, drag)) in cases.into_iter().enumerate() {
+        egui::DragAndDrop::set_payload(&ctx, drag);
+        let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 1.0 + i as f64);
+        assert!(!outlined(&held, new), "{case}: not outlined");
+        frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 1.5 + i as f64);
+        unchanged(&app, case);
+        egui::DragAndDrop::clear_payload(&ctx);
+    }
+    let press = |at, button, pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Modifiers::NONE };
+    let hold_orange = |app: &mut VectorcraftApp, time: f64| {
+        frame_out(app, &ctx, vec![], Modifiers::NONE, time);
+        let from = tile_center(&ctx, "Orange");
+        frame_out(app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, time + 0.1);
+        frame_out(app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, time + 0.2);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_some(), "Orange is dragged");
+    };
+    // A secondary release over the button, then the primary release.
+    hold_orange(&mut app, 3.0);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 3.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 3.4);
+    assert!(outlined(&held, new), "Orange is held over the button");
+    frame_out(&mut app, &ctx, vec![press(new.center(), PointerButton::Secondary, true)], Modifiers::NONE, 3.5);
+    frame_out(&mut app, &ctx, vec![press(new.center(), PointerButton::Secondary, false)], Modifiers::NONE, 3.6);
+    unchanged(&app, "a secondary release");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 3.7);
+    unchanged(&app, "the primary release after it");
+    // A swatch deleted while it is dragged.
+    hold_orange(&mut app, 4.0);
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    let (gone, undo_gone) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.4);
+    assert!(!outlined(&held, new), "a deleted swatch is not outlined");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 4.5);
+    assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (gone, undo_gone), "a deleted swatch is not duplicated");
+    app.run("edit.undo", json!({})).unwrap();
+    // A swatch dragged from this document while another document with the same swatches becomes
+    // active.
+    hold_orange(&mut app, 5.0);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let (other, undo_new) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.4);
+    let (new_other, _) = footer_button(&held, "New Swatch");
+    assert!(!outlined(&held, new_other), "not outlined in the other document");
+    frame_out(&mut app, &ctx, vec![release(new_other.center())], Modifiers::NONE, 5.5);
+    assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (other, undo_new), "the other document duplicates nothing");
+    assert!(app.session.set_active(0));
+    unchanged(&app, "the first document");
+    // A click still opens New Swatch.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 6.0);
+    let click = vec![
+        Event::PointerMoved(new.center()),
+        press(new.center(), PointerButton::Primary, true),
+        press(new.center(), PointerButton::Primary, false),
+    ];
+    frame_out(&mut app, &ctx, click, Modifiers::NONE, 6.1);
+    assert!(app.ui.dialog.is_some(), "a click opens the New Swatch dialog");
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
@@ -848,6 +1019,92 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let st = app.session.doc().unwrap();
     assert_eq!(st.doc.node(vectorcraft_doc::NodeId(id)), before.node(vectorcraft_doc::NodeId(id)), "the art stays as it was");
     assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+}
+
+/// Art released with Alt held over a pattern swatch becomes that pattern's tile art in one undo
+/// step: no pattern or swatch is added and the art stays. With Alt over a color swatch, or without
+/// Alt over the pattern swatch, the art becomes a new pattern swatch as before.
+#[test]
+fn art_alt_dropped_on_a_pattern_swatch_replaces_its_tile_art() {
+    let mut app = app();
+    let square = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [square], "name": "Dots", "edit": false})).unwrap();
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let tile_art = |app: &VectorcraftApp| app.session.doc().unwrap().doc.pattern("Dots").map(|p| p.art.clone());
+    let ctx = context();
+    let drop = |app: &mut VectorcraftApp, on: &str, modifiers: Modifiers, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let at = tile_center(&ctx, on);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![star]));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers };
+        frame_with(app, &ctx, vec![Event::PointerMoved(at), release], modifiers, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let (before, undo, star_before) = (tile_art(&app), undo_steps(&app), app.session.doc().unwrap().doc.node(star).cloned());
+    drop(&mut app, "Dots", Modifiers::ALT, 0.0);
+    let art = tile_art(&app).expect("Dots stays");
+    assert_ne!(Some(&art), before.as_ref(), "{}", app.ui.status);
+    assert_eq!(art.len(), 1);
+    assert_eq!(Some(&art[0].kind), star_before.as_ref().map(|n| &n.kind), "the star is the tile art");
+    assert_eq!(count(&mut app), Some(1), "no new pattern");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+    assert_eq!(app.session.doc().unwrap().doc.node(star).cloned(), star_before, "the star stays as it was");
+    // Alt over a color swatch: a new pattern.
+    drop(&mut app, "Bright Red", Modifiers::ALT, 1.0);
+    assert_eq!(count(&mut app), Some(2), "Alt over a color swatch makes a pattern");
+    // No Alt over the pattern swatch: a new pattern, and Dots keeps its art.
+    drop(&mut app, "Dots", Modifiers::NONE, 2.0);
+    assert_eq!(count(&mut app), Some(3), "a plain drop on a pattern swatch makes a pattern");
+    assert_eq!(tile_art(&app), Some(art), "Dots keeps its tile art");
+}
+
+/// A drop lands where the button came up, with the keys held then. Art released with Alt held
+/// over pattern swatch Dots replaces the tile art of Dots when Alt is let go, or the pointer moves
+/// on to pattern swatch Stripes, later in the same frame. Art released over Dots without Alt makes
+/// a new pattern when Alt is pressed later in that frame. A color released with Alt held over Red
+/// gives Red that color when Alt is let go later in the frame.
+#[test]
+fn a_drop_lands_where_the_button_came_up_with_the_keys_held_then() {
+    let mut app = app();
+    for (x, name) in [(0, "Dots"), (20, "Stripes")] {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.pattern.make", json!({"ids": [id], "name": name, "edit": false})).unwrap();
+    }
+    let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let star = vectorcraft_doc::NodeId(id);
+    let star_kind = app.session.doc().unwrap().doc.node(star).map(|n| n.kind.clone());
+    let tile_kind =
+        |app: &VectorcraftApp, name: &str| app.session.doc().unwrap().doc.pattern(name).and_then(|p| p.art.first().map(|n| n.kind.clone()));
+    let count = |app: &mut VectorcraftApp| app.run("pattern.list", json!({})).unwrap()["patterns"].as_array().map(Vec::len);
+    let ctx = context();
+    // In one frame: release over `on` with `up` held, then hold `then` and move over `to`.
+    let drop = |app: &mut VectorcraftApp, payload: PanelDrag, on: &str, up: Modifiers, then: Modifiers, to: &str, time: f64| {
+        frame(app, &ctx, vec![], time, show);
+        let (at, next) = (tile_center(&ctx, on), tile_center(&ctx, to));
+        egui::DragAndDrop::set_payload(&ctx, payload);
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: up };
+        let events = vec![Event::PointerMoved(at), release, Event::ModifiersChanged(then), Event::PointerMoved(next)];
+        frame_with(app, &ctx, events, up, time + 0.5, show);
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none(), "{on}: the drop is taken");
+    };
+    let stripes = tile_kind(&app, "Stripes");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::NONE, "Dots", 0.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "Alt let go after the release: {}", app.ui.status);
+    assert_eq!(count(&mut app), Some(2), "no new pattern");
+    app.run("edit.undo", json!({})).unwrap();
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::ALT, Modifiers::ALT, "Stripes", 1.0);
+    assert_eq!(tile_kind(&app, "Dots"), star_kind, "the pointer moved on to Stripes after the release");
+    assert_eq!(tile_kind(&app, "Stripes"), stripes, "Stripes keeps its tile art");
+    app.run("edit.undo", json!({})).unwrap();
+    let dots = tile_kind(&app, "Dots");
+    drop(&mut app, PanelDrag::Art(vec![star]), "Dots", Modifiers::NONE, Modifiers::ALT, "Dots", 2.0);
+    assert_eq!(count(&mut app), Some(3), "Alt pressed after a plain release makes a pattern");
+    assert_eq!(tile_kind(&app, "Dots"), dots, "Dots keeps its tile art");
+    let rgb = Color::from_hex("#2a6fb0").unwrap();
+    drop(&mut app, PanelDrag::paint(Paint::solid(rgb)), "Red", Modifiers::ALT, Modifiers::NONE, "Red", 3.0);
+    assert_eq!(app.session.doc().unwrap().doc.swatch("Red").map(|w| w.paint.color()), Some(Some(rgb)), "Alt let go after the release on Red");
 }
 
 #[test]
@@ -946,6 +1203,237 @@ fn a_color_alt_dropped_on_registration_becomes_a_new_swatch() {
     assert_eq!(d.swatches_iter().count(), count + 1, "{}", app.ui.status);
     assert_eq!(d.swatches.last().map(|w| w.paint.clone()), Some(Paint::solid(cmyk)));
     assert_eq!(d.swatch(REGISTRATION).map(|w| w.paint.clone()), registration, "Registration is unchanged");
+}
+
+/// Release a drag of `paint` from elsewhere at `at` with `m` held (a layout frame at `time`, the
+/// release at `time + 0.5`).
+fn drop_paint_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, paint: Paint, m: Modifiers, time: f64) {
+    egui::DragAndDrop::set_payload(ctx, PanelDrag::paint(paint));
+    let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: m };
+    frame_with(app, ctx, vec![Event::PointerMoved(at), release], m, time + 0.5, show);
+}
+
+/// [`drop_paint_at`] on the tile of swatch `name`.
+fn drop_paint_on(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, paint: Paint, m: Modifiers, time: f64) {
+    frame(app, ctx, vec![], time, show);
+    let at = tile_center(ctx, name);
+    drop_paint_at(app, ctx, at, paint, m, time);
+}
+
+/// The newest ungrouped swatch.
+fn newest_swatch(app: &VectorcraftApp) -> Swatch {
+    app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch")
+}
+
+/// How many swatches are spot colors.
+fn spot_count(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().doc.swatches_iter().filter(|w| w.spot).count()
+}
+
+/// A color Cmd/Ctrl-dropped on the panel becomes a global spot color swatch in the color's own
+/// model, in the group it is dropped into, as one undo step that paints no art; without the
+/// modifier it stays a process color.
+#[test]
+fn a_color_cmd_dropped_on_the_panel_becomes_a_spot_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let art = fill_of(&app, id);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    // A proxy's RGB color onto a grouped swatch: a spot color in that group.
+    let rgb = Color::from_hex("#123456").unwrap();
+    drop_paint_on(&mut app, &ctx, "Bright Red", Paint::solid(rgb), Modifiers::COMMAND, 1.0);
+    let d = &app.session.doc().unwrap().doc;
+    let made = names_of(&app, Some("Brights")).last().and_then(|n| d.swatch(n).cloned()).expect("a swatch");
+    assert_eq!((made.paint, made.spot, made.global), (Paint::solid(rgb), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(fill_of(&app, id), art, "the drop paints no art");
+    // A CMYK Recent Colors chip dragged with Cmd/Ctrl in an RGB document: a CMYK spot color.
+    frame(&mut app, &ctx, vec![], 2.0, show);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, show, false);
+    drag_with(&mut app, &ctx, chip, tile_center(&ctx, "Red"), Modifiers::COMMAND, 3.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(cmyk), true), "{}", app.ui.status);
+    // Without the modifier: a process color.
+    let spots = spot_count(&app);
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(Color::from_hex("#654321").unwrap()), Modifiers::NONE, 4.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.spot, newest.global, spot_count(&app)), (false, false, spots));
+    // An RGB color in a CMYK document stays RGB; the document stays CMYK.
+    app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(rgb), Modifiers::COMMAND, 5.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(rgb), true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.color_mode, vectorcraft_doc::ColorMode::Cmyk);
+    // Undo takes the spot color off.
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count - 1);
+}
+
+/// A color Cmd/Ctrl-dropped in the list's empty space becomes an ungrouped spot color swatch.
+#[test]
+fn a_color_cmd_dropped_on_empty_list_space_becomes_a_spot_swatch() {
+    let mut app = app();
+    let ctx = context();
+    // Leave Red the only ungrouped swatch besides None and Registration, so the row it ends has
+    // empty space after it (each colour group starts a new row).
+    let d = &app.session.doc().unwrap().doc;
+    let others: Vec<String> = names_of(&app, None).into_iter().filter(|n| n != "Red" && d.swatch(n).is_some_and(|w| !w.is_reserved())).collect();
+    app.run("swatch.delete", json!({"names": others})).unwrap();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    frame(&mut app, &ctx, vec![], 0.5, show);
+    let red = ctx.read_response(egui::Id::unique(("swatch-tile", "Red"))).expect("Red's tile").rect;
+    let at = pos2(red.right() + 60.0, red.center().y);
+    let d = &app.session.doc().unwrap().doc;
+    let names = d.swatches_iter().map(|w| w.name.clone()).chain(d.swatch_groups.iter().map(|g| g.name.clone())).chain([REGISTRATION.to_string()]);
+    for n in names {
+        let hit = ctx.read_response(egui::Id::unique(("swatch-tile", n.as_str()))).is_some_and(|r| r.rect.expand(8.0).contains(at));
+        assert!(!hit, "{at:?} is clear of the tile of {n}");
+    }
+    let count = d.swatches_iter().count();
+    let rgb = Color::from_hex("#123456").unwrap();
+    drop_paint_at(&mut app, &ctx, at, Paint::solid(rgb), Modifiers::COMMAND, 1.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot, newest.global), (Paint::solid(rgb), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+}
+
+/// Cmd/Ctrl makes a spot color only of a solid color dragged from elsewhere: a gradient and
+/// Registration make no spot color, and swatches dragged within the panel move.
+#[test]
+fn a_cmd_drop_of_other_paints_or_rows_makes_no_spot_color() {
+    let mut app = app();
+    let ctx = context();
+    let spots = spot_count(&app);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let stops =
+        vec![vectorcraft_color::GradientStop::new(0.0, Color::from_hex("#ff0000").unwrap()), vectorcraft_color::GradientStop::new(1.0, Color::WHITE)];
+    let grad = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::new(GradientKind::Radial, stops))));
+    drop_paint_on(&mut app, &ctx, "Red", grad, Modifiers::COMMAND, 1.0);
+    assert!(matches!(newest_swatch(&app).paint, Paint::Gradient(_)), "a gradient swatch: {}", app.ui.status);
+    assert_eq!((app.session.doc().unwrap().doc.swatches_iter().count(), spot_count(&app)), (count + 1, spots));
+    drop_paint_on(&mut app, &ctx, "Red", Paint::registration(), Modifiers::COMMAND, 2.0);
+    assert_eq!(spot_count(&app), spots, "Registration makes no spot color");
+    // A swatch dragged with Cmd/Ctrl within the panel moves.
+    frame(&mut app, &ctx, vec![], 3.0, show);
+    frame(&mut app, &ctx, vec![], 3.5, show);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    drag_with(&mut app, &ctx, tile_center(&ctx, "Lime"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), Modifiers::COMMAND, 4.0);
+    let n = names_of(&app, None);
+    assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Lime", "{}", app.ui.status);
+    assert_eq!((app.session.doc().unwrap().doc.swatches_iter().count(), spot_count(&app)), (count, spots));
+}
+
+/// A tint of a global color Cmd/Ctrl-dropped becomes a new spot color of the tinted color, and its
+/// base stays as it is. With Alt also held, a color dropped on a solid swatch replaces it; dropped on
+/// a tint swatch, which only takes a new name, it becomes a spot color.
+#[test]
+fn cmd_drops_of_tints_and_with_alt_follow_the_replacement_rule() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let orange = app.session.doc().unwrap().doc.swatch("Orange").cloned();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::COMMAND, 1.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot, newest.global), (Paint::solid(shown), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatch("Orange").cloned(), orange, "Orange is unchanged");
+    // Cmd/Ctrl and Alt on a solid swatch: it takes the color, and no swatch is added.
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let blue = Color::from_hex("#2040c0").unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(blue), Modifiers::COMMAND | Modifiers::ALT, 2.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!((red.paint.color(), red.spot), (Some(blue), false), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count);
+    // Cmd/Ctrl and Alt on a tint swatch: a new spot color, the tint swatch unchanged.
+    let green = Color::from_hex("#20a040").unwrap();
+    drop_paint_on(&mut app, &ctx, "Orange 40%", Paint::solid(green), Modifiers::COMMAND | Modifiers::ALT, 3.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(green), true), "{}", app.ui.status);
+    assert!(app.session.doc().unwrap().doc.swatch("Orange 40%").is_some_and(|w| w.tint_of().is_some()));
+}
+
+/// A tint Cmd/Ctrl-dropped becomes a spot color of the color the drag showed, even when its base
+/// swatch changes between the drag start and the drop.
+#[test]
+fn a_cmd_dropped_tint_makes_its_spot_from_the_captured_color() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    app.run("swatch.edit", json!({"name": "Orange", "paint": {"color": "#2040c0"}})).unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::COMMAND, 1.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(shown), true), "{}", app.ui.status);
+}
+
+/// A tint Cmd/Ctrl+Alt-dropped on a solid swatch gives it the color the drag showed, even when the
+/// tint's base swatch changes between the drag start and the drop.
+#[test]
+fn a_tint_alt_dropped_on_a_swatch_replaces_it_with_the_captured_color() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    app.run("swatch.edit", json!({"name": "Orange", "paint": {"color": "#2040c0"}})).unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::COMMAND | Modifiers::ALT, 1.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!(red.paint.color(), Some(shown), "{}", app.ui.status);
+}
+
+/// A tint Alt-dropped on a solid swatch without Cmd/Ctrl sends the tint as it is, so the swatch takes
+/// the tint of its base swatch as the base is at the drop.
+#[test]
+fn a_tint_alt_dropped_without_cmd_keeps_the_tint_paint() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    app.run("swatch.edit", json!({"name": "Orange", "paint": {"color": "#2040c0"}})).unwrap();
+    let now = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).and_then(|p| p.color()).expect("a tint of Orange");
+    assert_ne!(now, shown);
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::ALT, 1.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!(red.paint.color(), Some(now), "{}", app.ui.status);
+}
+
+/// A drop on the list follows the modifiers the release carries, not the ones held at the end of the
+/// frame: Cmd/Ctrl let go after the release still makes a spot color, Cmd/Ctrl pressed after it does
+/// not, and Alt let go after the release still replaces the swatch.
+#[test]
+fn a_drop_follows_the_modifiers_of_its_release() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let at = tile_center(&ctx, "Red");
+    let drop = |app: &mut VectorcraftApp, color: &str, held: Modifiers, after: Modifiers, time: f64| {
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::paint(Paint::solid(Color::from_hex(color).unwrap())));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: held };
+        frame_with(app, &ctx, vec![Event::PointerMoved(at), release, Event::ModifiersChanged(after)], held, time, show);
+    };
+    let spots = spot_count(&app);
+    drop(&mut app, "#30a050", Modifiers::COMMAND, Modifiers::NONE, 1.0);
+    assert_eq!(spot_count(&app), spots + 1, "Cmd/Ctrl held at the release: {}", app.ui.status);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    drop(&mut app, "#50a030", Modifiers::NONE, Modifiers::COMMAND, 2.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!((d.swatches_iter().count(), spot_count(&app)), (count + 1, spots + 1), "{}", app.ui.status);
+    drop(&mut app, "#2040c0", Modifiers::ALT, Modifiers::NONE, 3.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "Alt held at the release adds no swatch: {}", app.ui.status);
+    assert_eq!(d.swatch("Red").and_then(|w| w.paint.color()), Color::from_hex("#2040c0"));
 }
 
 /// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
@@ -1250,6 +1738,149 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     menu_frame(app, ctx, vec![button(false)]);
 }
 
+/// Whether the panel menu's item `label` is enabled, as the accessibility tree reports it.
+fn menu_item_enabled(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> bool {
+    ctx.enable_accesskit();
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    footer_button(&out, label).1
+}
+
+/// The panel menu's Color Group Options… opens on the selected color group when that group is the
+/// whole selection; with nothing selected, a swatch alone, or a swatch or a second group beside the
+/// group, it opens nothing. After OK, and after `swatch.renameGroup` run on its own or in a batch,
+/// the group stays selected under its new name.
+#[test]
+fn color_group_options_opens_on_a_sole_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        click_menu_item(&mut app, &ctx, "Color Group Options…");
+        assert!(app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    let d = app.ui.dialog.as_ref().expect("Color Group Options opens");
+    assert_eq!((d.kind.as_str(), d.str("__group").as_str()), (crate::dialogs::color_group_options::KIND, "Grays"));
+    // OK keeps the renamed group selected, so the item opens on it again.
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-anchor", "Grays".to_string());
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Neutrals"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(selected(&ctx), ["Neutrals"]);
+    assert_eq!(pstate::<String>(&ctx, "swatch-anchor"), "Neutrals", "Shift-click extends from the renamed group");
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Neutrals"));
+    crate::dialogs::cancel(&mut app);
+    // The command run on its own, and as batch steps, keeps the selection the same way.
+    app.run("swatch.renameGroup", json!({"group": "Neutrals", "name": "Stone"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Stone".to_string()], "Stone".to_string()));
+    let steps = json!([
+        {"command": "swatch.renameGroup", "params": {"group": "Stone", "name": "Slate"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Slate", "name": "Ash"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Ash".to_string()], "Ash".to_string()));
+}
+
+/// Color Group Options from the command palette (no `group`) opens on the color group selected
+/// alone in the panel; without one it opens nothing and reports the missing group.
+#[test]
+fn color_group_options_without_a_group_opens_on_the_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Grays"));
+    crate::dialogs::cancel(&mut app);
+    // The panel showed the selection in this document; another document made active since then
+    // does not take it.
+    let uid = app.session.active().unwrap().uid;
+    set_pstate(&ctx, "swatch-focus", (Some(Some((uid, Vec::<u64>::new()))), None::<String>));
+    app.run("ui.colorGroupOptions", json!({})).unwrap();
+    crate::dialogs::cancel(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && app.ui.dialog.is_none(), "another document");
+}
+
+/// Renames in a batch move the selection to another group neither after an Ungroup of the
+/// selected group nor in another document; a batch step that keeps the groups (Sort by Kind) does
+/// not stop the selection from following a rename, and Delete Swatch on the group ends it.
+#[test]
+fn a_batch_moves_the_selection_only_with_its_group() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    let select = |sel: &str| {
+        set_pstate(&ctx, "swatch-selected", vec![sel.to_string()]);
+        set_pstate(&ctx, "swatch-anchor", sel.to_string());
+    };
+    select("Brights");
+    let steps = json!([
+        {"command": "swatch.ungroup", "params": {"name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Grays", "name": "Brights"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Ungroup ends the selection");
+    // A step that keeps the groups, then a rename of the selected group.
+    select("Vivid");
+    let steps = json!([
+        {"command": "swatch.sortByKind", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Vivid", "name": "Bold"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Bold".to_string()], "Bold".to_string()));
+    app.run("swatch.delete", json!({"name": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (Vec::<String>::new(), String::new()), "Delete Swatch ends the selection");
+    // Brights selected in one new document, renamed in another.
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    }
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    select("Brights");
+    let steps = json!([
+        {"command": "document.activate", "params": {"index": 2}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+        {"command": "document.activate", "params": {"index": 1}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Brights".to_string()], "Brights".to_string()));
+}
+
+/// Sort by Name keeps the groups, so a rename after it in a batch still moves the selection, and
+/// Edit Color Group's `rename` moves it as Color Group Options does, alone or in a batch.
+#[test]
+fn the_selection_follows_sorting_and_group_edits() {
+    let mut app = app();
+    let ctx = context();
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-selected", vec!["Brights".to_string()]);
+    set_pstate(&ctx, "swatch-anchor", "Brights".to_string());
+    let follows = |name: &str| (vec![name.to_string()], name.to_string());
+    let steps = json!([
+        {"command": "swatch.sortByName", "params": {}},
+        {"command": "swatch.renameGroup", "params": {"group": "Brights", "name": "Vivid"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Vivid"), "Sort by Name");
+    app.run("swatch.editGroup", json!({"group": "Vivid", "colors": ["#ff0000"], "rename": "Bold"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Bold"), "Edit Color Group");
+    let steps = json!([
+        {"command": "swatch.editGroup", "params": {"group": "Bold", "colors": ["#00ff00"], "rename": "Loud"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Loud", "name": "Calm"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), follows("Calm"), "Edit Color Group in a batch");
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.
@@ -1393,4 +2024,45 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
     assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
     let loose = list(None);
     assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
+}
+
+/// The panel menu's Add Selected Colors adds only the selected art's new colors, as global swatches
+/// the art links to, in one undo step; with nothing selected it is off.
+#[test]
+fn add_selected_colors_adds_the_selection_colors_as_global_swatches() {
+    let mut app = app();
+    let rect = |app: &mut VectorcraftApp, color: &str| {
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        id
+    };
+    let picked = rect(&mut app, "#abcdef");
+    rect(&mut app, "#fedcba");
+    let ctx = context();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    assert!(!menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "off with nothing selected");
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, before, "off with nothing selected");
+    assert_eq!(undo(&app), steps);
+    app.run("select.set", json!({"ids": [picked]})).unwrap();
+    assert!(menu_item_enabled(&mut app, &ctx, "Add Selected Colors"), "on with art selected");
+    let (before, steps) = (app.session.active().unwrap().doc.clone(), undo(&app));
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    let doc = &app.session.active().unwrap().doc;
+    let swatch = doc.swatch("R=171 G=205 B=239").expect("the selected art's color is a swatch");
+    assert!(swatch.global);
+    assert!(doc.swatch("R=254 G=220 B=186").is_none(), "unselected art adds nothing");
+    let fill = doc.node(vectorcraft_doc::NodeId(picked.as_u64().unwrap())).unwrap().appearance.fill_paint();
+    assert!(matches!(fill, Paint::Solid { swatch: Some(ref n), .. } if n == "R=171 G=205 B=239"), "{fill:?}");
+    assert_eq!(undo(&app), steps + 1);
+    // Run again, the color is in the panel already: nothing is added and no undo step is recorded.
+    let after = app.session.active().unwrap().doc.clone();
+    click_menu_item(&mut app, &ctx, "Add Selected Colors");
+    assert_eq!(app.session.active().unwrap().doc, after);
+    assert_eq!(undo(&app), steps + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, before);
 }

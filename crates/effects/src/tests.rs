@@ -504,6 +504,38 @@ fn warped_images_keep_document_keys_and_hidden_images_apart() {
     }
 }
 
+/// A distorted image that a later effect leaves with no area after its warp is not cut, and its
+/// corners stay finite.
+#[test]
+fn a_distorted_image_left_with_no_area_after_its_warp_keeps_finite_corners() {
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let lift: crate::reshape::WarpMap = Rc::new(|p: Point| Point::new(p.x, p.y - p.x * 0.1));
+    let mut image = (*warp_test_image(2)).clone();
+    image.set_image_corners([(10.0, 0.0), (30.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y))).unwrap();
+    let mut art = Node::group(NodeId(1), vec![Arc::new(image)]);
+    let mut warped = crate::reshape::WarpedImages::new();
+    warped.reserve(&art);
+    crate::reshape::mark_warped_images(&mut art, &lift, &std::collections::HashSet::new(), false, &mut 0, &mut warped);
+    // A later effect squeezes the placement flat.
+    if let Some(c) = art.children_mut()
+        && let NodeKind::Image(im) = &mut Arc::make_mut(&mut c[0]).kind
+    {
+        im.xf = Affine::scale_non_uniform(1.0, 0.0);
+    }
+    crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+    let mut finite = true;
+    art.walk(&mut |c| {
+        if let Some(q) = c.extras().image_quad.as_deref() {
+            finite &= q.iter().all(|p| p.x.is_finite() && p.y.is_finite());
+        }
+    });
+    assert!(finite);
+    assert_eq!(warp_test_images(&art).0, 1, "not cut");
+}
+
 /// An image whose frame keeps its shape because the warp would pass the anchor budget keeps its
 /// pixels as they are; within the budget, both bend.
 #[test]
@@ -2120,4 +2152,28 @@ fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
     let mut e = crate::new_effect("pixelate.colorHalftone", &json!({"maxRadius": 10})).unwrap();
     crate::scale_effect(&mut e, 2.0);
     assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
+}
+
+#[test]
+fn a_pathfinder_effects_precision_is_a_distance_that_scales_with_the_object() {
+    for (id, _, _) in PATHFINDER_EFFECTS {
+        assert!(is_length(id, "precision", false), "{id}");
+        assert_eq!(length_range(id, "precision"), Some(PATHFINDER_EFFECT_PRECISION), "{id}");
+        assert!(!is_length(id, "removeRedundantPoints", false) && !is_length(id, "removeUnpainted", false), "{id}");
+        // Scale Strokes & Effects scales the tolerance with the geometry it is refit to.
+        let mut e = crate::new_effect(id, &json!({"precision": 0.5, "removeUnpainted": true})).unwrap();
+        crate::scale_effect(&mut e, 4.0);
+        assert_eq!(e.params["precision"].as_f64(), Some(2.0), "{id}");
+        assert_eq!(e.params["removeUnpainted"], json!(true), "{id}");
+        // An effect saved without the options scales the precision it evaluates with.
+        let mut e = crate::new_effect(id, &json!({})).unwrap();
+        crate::scale_effect(&mut e, 3.0);
+        let scaled = e.params["precision"].as_f64().unwrap_or(f64::NAN);
+        assert!((scaled - PathfinderEffectOptions::default().precision * 3.0).abs() < 1e-12, "{id}: {scaled}");
+        // A scale past the range and its inverse restore the precision, as with other distances.
+        let mut e = crate::new_effect(id, &json!({"precision": 8.0})).unwrap();
+        crate::scale_effect(&mut e, 2.0);
+        crate::scale_effect(&mut e, 0.5);
+        assert_eq!(e.params["precision"].as_f64(), Some(8.0), "{id}");
+    }
 }

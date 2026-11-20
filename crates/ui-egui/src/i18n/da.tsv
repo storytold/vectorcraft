@@ -295,6 +295,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	no such spine point	intet sådant rygradpunkt
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` skal være en liste med højst 10000 rygradpunktindekser
 @msg	`with` moves points, not a handle	`with` flytter punkter, ikke et håndtag
+@msg	`link` and `independent` cannot both be true	`link` og `independent` kan ikke begge være true
+@msg	`link` places a handle: give `handle`	`link` placerer et håndtag: angiv `handle`
 @msg	no such spine segment	intet sådant rygradsegment
 @msg	node {_1} is on a locked artboard	node {_1} ligger på en låst tegneflade
 @msg	not a blend	ikke en blanding
@@ -365,6 +367,26 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	the HEIC or HEIF file can't be read	HEIC- eller HEIF-filen kan ikke læses
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen indeholder en billedtype, der ikke kan læses
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- og HEIF-billeder kan ikke åbnes i denne version
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	tegninger fra CDR {version} kan ikke åbnes: VectorCraft læser version 1 til 27
+@msg	this CDR drawing can't be read ({why})	denne CDR-tegning kan ikke læses ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	tekst, bitmaps, blandinger, konturer, penselstrøg og andre CDR-objekter, som VectorCraft endnu ikke læser, blev udeladt
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-udfyldninger med forløb, mønster, tekstur og PostScript blev udeladt
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	farver i CDR-farvemodeller, som VectorCraft ikke læser, blev åbnet som sorte
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-biblioteksfarver, som tegningen kun gemmer som et nummer, blev åbnet som sorte spotfarver
+@msg	CDR outline arrowheads were left out	pilespidser på CDR-konturer blev udeladt
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-kuverter blev ikke anvendt, og figurerne under dem beholder deres omrids
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-linser og objektgennemsigtighed blev ikke anvendt, og objekterne, de ligger på, vises uigennemsigtige
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	dele af tegningen, der er indlejret for dybt eller ligger ud over importgrænserne, blev udeladt
+@msg	damaged parts of the drawing were left out	beskadigede dele af tegningen blev udeladt
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-sider, der er længere end 163.830 pt, blev åbnet i den længde, og grafik nær deres kanter ligger uden for tegnefladen
+@msg	this CMX file can't be read ({why})	denne CMX-fil kan ikke læses ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	tekst, billeder, rektangler, ellipser, beskæringsstier og andre CMX-objekter, som VectorCraft endnu ikke læser, blev udeladt
+@msg	CMX fills other than uniform colors were left out	CMX-udfyldninger, der ikke er ensfarvede, blev udeladt
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	farver i CMX-farvemodeller, som VectorCraft ikke læser, blev åbnet som sorte
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-biblioteksfarver, som filen kun gemmer som et nummer, blev åbnet som sorte spotfarver
+@msg	CMX outline arrowheads were left out	pilespidser på CMX-konturer blev udeladt
+@msg	CMX lenses were not applied	CMX-linser blev ikke anvendt
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-sider, der er længere end 163.830 pt, blev åbnet i den længde, og grafik nær deres kanter ligger uden for tegnefladen
 @msg	the JPEG XL file is cut short	JPEG XL-filen er afkortet
 @msg	the JPEG XL container is too large to read	JPEG XL-containeren er for stor til at blive læst
 @msg	CMYK JPEG XL images can't be read	CMYK-billeder i JPEG XL kan ikke læses
@@ -410,7 +432,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
-@msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel skal være none, en af {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kræver {BEVEL_PROFILE}, facettens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} skal være en streng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} skal være 2 til {most} punkter [x, y], hver andel mellem 0 og 1, fra [0, 0] (dækfladens kant) til [1, 1] (sidevæggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan ikke danne et legeme af forekomsten af symbolet "{symbol}": symbolets grafik er ikke tilgængelig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: beskæringskurven er for kompleks til at skære grafikken med
@@ -436,8 +461,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`: face skal være front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér, Omdrej og Pust op
 @msg	Revolve maps graphics onto its side: map them onto the front	Omdrej kortlægger grafik på siden: kortlæg den på forsiden
+@msg	Inflate maps graphics onto its front and back, not onto a side	Pust op kortlægger grafik på forsiden og bagsiden, ikke på en side
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objektet {_1}: bagsiden af Pust op tager kun imod grafik, når Begge sider og Kappe er slået til
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikken er for kompleks til denne overflade: forenkl symbolernes grafik, eller reducér Segmenter
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tager højst {MAX_GRAPHICS} grafikelementer
 @msg	A plane has one face: map its graphics onto the front	Et plan har én flade: kortlæg dets grafik på forsiden
@@ -816,6 +843,19 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Paste without Formatting	Indsæt uden formatering
 	Clear	Fjern
 	Find and Replace…	Find og erstat…
+	Find and Replace	Find og erstat
+	Find:	Find:
+	Replace With:	Erstat med:
+	Replace & Find	Erstat og find
+	Replace All	Erstat alle
+	Match Case	Forskel på store og små bogstaver
+	Find Whole Word	Find hele ord
+	Search Backwards	Søg baglæns
+	Check Hidden Layers	Kontrollér skjulte lag
+	Check Locked Layers	Kontrollér låste lag
+@msg	No matches found	Ingen forekomster fundet
+@msg	Matches replaced: {n}	Erstattede forekomster: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen forekomst af `find` ved byte {_1}..{_2} i objekt {_3}
 	Find Next	Find næste
 	Spelling	Stavekontrol
 	Auto Spell Check	Automatisk stavekontrol
@@ -2950,6 +2990,16 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	To Center	Mod midten
 	To Edge	Mod kanten
 	Create Object Mosaic…	Opret objektmosaik…
+	Create Object Mosaic	Opret objektmosaik
+	Current Size:	Aktuel størrelse:
+	New Size:	Ny størrelse:
+	Tile Spacing:	Mellemrum mellem fliser:
+	Number of Tiles:	Antal fliser:
+	Constrain Ratio:	Begræns forhold:
+	Result:	Resultat:
+	Resize Using Percentages	Tilpas størrelse med procenter
+	Delete Raster	Slet rasterbillede
+	Use Ratio	Brug forhold
 	Vector Halftone…	Vektorhalvtone…
 	Create Trim Marks	Opret beskæringsmærker
 	Flatten Transparency…	Udjævn gennemsigtighed…
@@ -3121,6 +3171,20 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Break Thread	Bryd sammenkædning
 	Fit Headline	Tilpas overskrift
 	Find Font…	Find skrifttype…
+	Retype	Genindtast
+	Find Matching Fonts	Find matchende skrifttyper
+	Find more font matches	Find flere matchende skrifttyper
+	Type your text to preview	Skriv teksten til forhåndsvisningen
+	Select outlined text, then Find Matching Fonts.	Markér tekst konverteret til konturer, og vælg derefter Find matchende skrifttyper.
+	No font matches the selected shapes.	Ingen skrifttype matcher de markerede former.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Former ud over de første 2.048 eller mere end 16 grupper dybt blev ikke sammenlignet.
+	Reset Retype Panel	Nulstil panelet Genindtast
+	List Matching Fonts	Vis matchende skrifttyper
+	Retype Preview	Forhåndsvisning i panelet Genindtast
+@msg	`count` must be a whole number from 1 to 96	`count` skal være et heltal fra 1 til 96
+@msg	`size` must be small, medium or large	`size` skal være small, medium eller large
+@msg	`text` must be a string of at most 100 characters	`text` skal være en streng på højst 100 tegn
+@msg	Retype: select outlined text (paths or compound paths)	Genindtast: markér tekst konverteret til konturer (stier eller sammensatte stier)
 	Change Case	Ændr store/små bogstaver
 	UPPERCASE	STORE BOGSTAVER
 	lowercase	små bogstaver
@@ -3227,6 +3291,17 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Shading Color	Skyggefarve
 	Black Overprint	Sort overprint
 	Draw Hidden Faces	Tegn skjulte flader
+	Map Art…	Kortlæg grafik…
+	Map Art	Kortlæg grafik
+	First Surface	Første overflade
+	Previous Surface	Forrige overflade
+	Next Surface	Næste overflade
+	Last Surface	Sidste overflade
+	Horizontal Scale	Vandret skalering
+	Vertical Scale	Lodret skalering
+	Scale to Fit	Skalér til at passe
+	Shade Artwork	Skyg grafik
+	Invisible Geometry	Usynlig geometri
 	Revolve…	Omdrej…
 	Inflate…	Pust op…
 	Materials…	Materialer…
@@ -3338,6 +3413,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Hide Gradient Annotator	Skjul gradientanmærkning
 	Show Gradient Annotator	Vis gradientanmærkning
 	Hide Corner Widget	Skjul hjørnehåndtag
+	Hide Shape Widgets	Skjul formhåndtag
+	Show Shape Widgets	Vis formhåndtag
 	Show Corner Widget	Vis hjørnehåndtag
 	Guides	Hjælpelinjer
 	Hide Guides	Skjul hjælpelinjer
@@ -3435,6 +3512,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Contextual Task Bar	Kontekstuel opgavelinje
 	Pin Bar Position	Fastgør linjens placering
 	Reset Bar Position	Nulstil linjens placering
+	Bar Actions	Linjens handlinger
+	Reset Bar Actions	Nulstil linjens handlinger
 	Tools	Værktøjer
 	Toolbars	Værktøjslinjer
 	Advanced	Avanceret
@@ -3454,9 +3533,17 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvisning
 	Box View	Kvadratvisning
+	Show Out-of-Gamut Colors	Vis farver uden for gamut
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
+	Show Harmony	Vis harmoni
+	Harmony Rule	Harmoniregel
+	Harmony color	Harmonifarve
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
@@ -3474,6 +3561,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
 	Navigator Panel Options	Indstillinger for navigatorpanelet
+	Attributes Panel Options	Indstillinger for attributpanelet
+	Number of Recent URLs:	Antal seneste URL'er:
+@msg	`count` must be a whole number from 1 to 30	`count` skal være et heltal fra 1 til 30
 	Draw Dashed Lines as Solid Lines	Tegn stiplede linjer som hele linjer
 	Pattern Options	Mønsterindstillinger
 	Properties	Egenskaber
@@ -3685,6 +3775,25 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Preserve Embedded Profiles	Bevar indlejrede profiler
 	Convert to Working Space	Konverter til arbejdsfarverum
 	Preserve Numbers	Bevar tal
+	Profile Mismatches:	Profiluoverensstemmelser:
+	Ask When Opening	Spørg ved åbning
+	Ask When Pasting	Spørg ved indsætning
+	Missing Profiles:	Manglende profiler:
+	Embedded Profile Mismatch	Uoverensstemmelse med indlejret profil
+	Missing Profile	Manglende profil
+	Paste Profile Mismatch	Profiluoverensstemmelse ved indsætning
+	“{name}” is not tagged with a {model} profile.	»{name}« har ingen {model}-profil.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	»{name}« har {model}-profilen »{profile}«, som ikke er {model}-arbejdsfarverummet »{working}«.
+	Use the embedded profile	Brug den indlejrede profil
+	Convert the colors to the working space	Konverter farverne til arbejdsfarverummet
+	Discard the embedded profile	Kassér den indlejrede profil
+	Leave as is	Lad være som den er
+	Assign the working space	Tildel arbejdsfarverummet
+	Assign profile:	Tildel profil:
+	Preserve the color numbers	Bevar farveværdierne
+	Convert to keep the colors' appearance	Konverter for at bevare farvernes udseende
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hører kun til `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De indsatte farver kommer fra et dokument med {model}-profilen »{from}«; dette dokuments er »{to}«.
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…
@@ -3766,6 +3875,15 @@ lighting	Light	Lys
 	Document Raster Effects Settings Dialog	Dialogboks til indstillinger for rasteriseringseffekter i dokumentet
 	Drop Shadow	Slagskygge
 	DXF Options Dialog	Dialogboks til DXF-indstillinger
+	HP-GL Options	HP-GL-indstillinger
+	HP-GL Options Dialog	Dialogboks til HP-GL-indstillinger
+	Curve Tolerance:	Kurvetolerance:
+	Origin:	Origo:
+	Pens:	Penne:
+	One Pen per Color	Én pen pr. farve
+	Pen Table	Pennetabel
+	Draw the Nearest Path Next	Tegn den nærmeste sti som den næste
+	Draw Inner Paths First	Tegn indre stier først
 	Edit Toolbar	Redigér værktøjslinjen
 	Edit Views	Redigér visninger
 	Effect…	Effekt…
@@ -4078,6 +4196,10 @@ lighting	Light	Lys
 	Add Anchor Point Tool	Tilføj ankerpunkt-værktøj
 	Anchor Point Tool	Ankerpunktværktøj
 	Arc Tool	Bueværktøj
+	Three-Point Arc Tool	Værktøj til bue gennem tre punkter
+	Three-Point Arc	Bue gennem tre punkter
+	Arc too large	Buen er for stor
+	Third Point Sets Direction	Tredje punkt angiver retningen
 	Area Graph Tool	Områdediagramværktøj
 	Area Type Tool	Områdetekstværktøj
 	Artboard Tool	Tegnebrætværktøj
@@ -4194,6 +4316,7 @@ lighting	Light	Lys
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
 	Replace Actions…	Erstat handlinger…
+	Clear Actions	Ryd handlinger
 	Reset Actions	Nulstil handlinger
 	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
 	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
@@ -4327,6 +4450,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romersk grundlinje
 	Select a text object to edit its character attributes.	Markér et tekstobjekt for at redigere dets tegnattributter.
 	Show Options	Vis indstillinger
+	Show on Shape Creation	Vis ved oprettelse af form
 	Show Recent Colors	Vis seneste farver
 	Toggle RGB Percent	Skift RGB i procent
 	Small Caps	Kapitæler
@@ -4538,6 +4662,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikér handling eller handlingssæt
 	Delete the action set “{name}” and its actions?	Slet handlingssættet »{name}« og dets handlinger?
 	Delete the selected action sets and their actions?	Slet de markerede handlingssæt og deres handlinger?
+	Delete all action sets and their actions?	Slet alle handlingssæt og deres handlinger?
 	Delete these {n} graphic styles?	Slet disse {n} grafiske typografier?
 	Delete this {n} graphic style?	Slet denne {n} grafiske typografi?
 	Graphic Style Libraries Menu	Menu med biblioteker af grafiske typografier
@@ -4577,6 +4702,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Omdøb forudindstilling
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
+	Tracing Presets…	Vektoriseringsforudindstillinger…
+	Import Image Trace Presets	Importér forudindstillinger til billedsporing
+	Export Image Trace Presets	Eksportér forudindstillinger til billedsporing
+	Replace the saved presets that have these names?	Vil du erstatte de gemte forudindstillinger med disse navne?
 	Method:	Metode:
 	Pad	Forlæng
 	Repeats	Gentagelser
@@ -4592,6 +4721,8 @@ digits	Malayalam	Malayalam
 	Snap Curves To Lines	Fastgør kurver til linjer
 	Tracing Result with Outlines	Vektoriseringsresultat med konturer
 	Source Image	Kildebillede
+	Split View	Delt visning
+	Divider	Skillelinje
 	Threshold	Tærskel
 	Trace	Vektorisér
 	Trace the image with the Default preset	Vektorisér billedet med standardforudindstillingen
@@ -4716,6 +4847,15 @@ digits	Malayalam	Malayalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-sæt
 	Kinsoku Shori Type	Kinsoku Shori-type
+	Kinsoku Shori Settings…	Kinsoku Shori-indstillinger…
+	Kinsoku Shori Settings	Kinsoku Shori-indstillinger
+	Kinsoku Sets	Kinsoku-sættene
+	Kinsoku Set Base	Grundlag for Kinsoku-sæt
+	Based on:	Baseret på:
+	Cannot Start Line	Kan ikke starte linje
+	Cannot End Line	Kan ikke afslutte linje
+	Hanging Punctuation	Hængende tegnsætning
+	Inseparable Characters	Uadskillelige tegn
 	Push In First	Skub ind først
 	Push Out First	Skub ud først
 	Push Out Only	Kun skub ud
@@ -5115,6 +5255,12 @@ digits	Malayalam	Malayalam
 	Units:	Enheder:
 	Use Typographer's Quotes	Brug typografiske anførselstegn
 	Center Artwork	Centrér grafik
+	PSD Import Options	PSD-importindstillinger
+	Place PSD	Placér PSD
+	Convert Layers to Objects	Konvertér lag til objekter
+	Import Hidden Layers	Importér skjulte lag
+	Flatten Layers to a Single Image	Fladgør lag til ét billede
+	Import Slices	Importér udsnit
 	DXF Import Options	DXF-importindstillinger
 	Layout:	Layout:
 	Merge Layers	Flet lag
@@ -5266,6 +5412,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Gem som forudindstilling…
 	Save Changes	Gem ændringer
 	Save Preset…	Gem forudindstilling…
+	Save Summary…	Gem oversigt…
 	Vectors	Vektorer
 	A saved copy of the selected preset	En gemt kopi af den valgte forudindstilling
 	Built-in presets don't change: New makes a copy you can edit.	Indbyggede forudindstillinger ændres ikke: Ny opretter en kopi, du kan redigere.
@@ -5499,10 +5646,17 @@ digits	Malayalam	Malayalam
 	Overprint and Transparency Flattener Options	Indstillinger for overtryk og udfladning af gennemsigtighed
 	Custom…	Brugerdefineret…
 	Custom Transparency Flattener Options	Brugerdefinerede indstillinger for udfladning af gennemsigtighed
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF-forudindstillingen gemmer fladgøringsforudindstillingen, men ikke indstillingerne fra Brugerdefineret….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3-filer klipper rasteriserede områder til deres regioner, og Overprint bestemmer, om overtryk bevares.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS har ingen alfa-gennemsigtighed, og Overtryk bestemmer, om overtryk bevares.
 	Place the pages with the placement again	Placér siderne igen med placeringen
 	Placement:	Placering:
 	Preserve CMYK Numbers	Bevar CMYK-tal
+	Preserve RGB Numbers	Bevar RGB-tal
+	Device to Simulate:	Enhed, der simuleres:
+	Simulate Paper Color	Simulér papirfarve
+	Simulate Black Ink	Simulér sort blæk
+	Load…	Indlæs…
 	Previous page	Forrige side
 	Print Layers:	Udskriv lag:
 	Print Preset:	Udskriftsforudindstilling:
@@ -5580,6 +5734,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve
+	Set As Base Color	Angiv som grundfarve
+	Select Shade	Vælg nuance
+	Add New Color	Tilføj ny farve
+	Set Current Color As Base Color	Angiv aktuel farve som grundfarve
 	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
@@ -5594,6 +5752,9 @@ digits	Malayalam	Malayalam
 	Recolor this row	Omfarv denne række
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
 	Color Theme Picker	Farvetemavælger
+	Undo Changes	Fortryd ændringer
+	Redo Changes	Gentag ændringer
+@msg	Recolor Artwork is not open	Omfarv grafik er ikke åben
 	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
 	Prominent Colors	Fremtrædende farver
 	Save All Colors	Gem alle farver
@@ -5863,6 +6024,7 @@ antiAlias	Sharp	Skarp
 	Preserve Editing Capabilities	Bevar redigeringsfunktioner
 	Responsive	Responsiv
 	Show Code	Vis kode
+	Show in Browser	Vis i browser
 	Style Attributes	Stilattributter
 	Style Attributes (Entity References)	Stilattributter (enhedsreferencer)
 	Styling:	Styling:
@@ -5880,6 +6042,17 @@ antiAlias	Sharp	Skarp
 	Swatch Name:	Farveprøvenavn:
 	Diameter:	Diameter:
 	Symbolism Tools Options	Indstillinger for symbolværktøjer
+	Tool:	Værktøj:
+	Symbol Set Density	Tæthed for symbolsæt
+	Symbol Sprayer Options	Indstillinger for symbolsprøjter
+	Scrunch:	Samling:
+	Spin:	Rotering:
+	Screen:	Gennemsigtighed:
+	Stain:	Farvning:
+	Symbol Sizer Options	Indstillinger for symbolstørrelse
+	Proportional Resizing	Proportional størrelsesændring
+	Resizing Affects Density	Størrelsesændring påvirker tætheden
+	Show Brush Size and Intensity	Vis penselstørrelse og intensitet
 	Symbol Set Density:	Tæthed for symbolsæt:
 	Intensity:	Intensitet:
 	Place PDF	Placér PDF
@@ -5940,6 +6113,7 @@ antiAlias	Sharp	Skarp
 	Width Point Edit	Redigér breddepunkt
 	Art	Kunst
 	Bearing	Retning
+	Stylus Wheel	Pennehjul
 	Bristle	Borst
 	Calligraphic	Kalligrafisk
 	Dots	Prikker
@@ -6074,6 +6248,9 @@ theme	Appearance	Udseende
 	embedding for preview and print	indlejring til visning og udskrivning
 	embedding allowed	indlejring tilladt
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	ukendt type
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} anvendelse|{n} anvendelser
 	substituted: shown in {family} {style} ({detail})	erstattet: vist med {family} {style} ({detail})
 	missing: shown in {family} {style}	mangler: vist med {family} {style}
 	missing	mangler
@@ -6105,6 +6282,8 @@ theme	Appearance	Udseende
 	Symbolism Tool	Symbolværktøj
 	Image Trace Presets	Forudindstillinger til billedsporing
 	Live Paint Bucket	Live Paint-spand
+	Fill Area	Udfyld område
+	Fill Area Tool	Værktøjet Udfyld område
 	Live Paint Bucket (Stroke)	Live Paint-spand (kontur)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Formbygger
@@ -6606,6 +6785,15 @@ theme	Appearance	Udseende
 	Paste Offset	Indsætningsforskydning
 	Pattern Editing	Mønsterredigering
 	Pen Tool	Pen-værktøj
+	Quick Pen Tool	Hurtigpen-værktøj
+	Quick Pen	Hurtigpen
+	Quick Pen Toolbar	Hurtigpennens værktøjslinje
+	Continuous Arc	Fortløbende bue
+	Sharp Corner Arc	Bue med skarpt hjørne
+	Flip Arc	Vend bue
+	Hide Toolbar	Skjul værktøjslinjen
+	Pin Toolbar Position	Fastgør værktøjslinjens placering
+	Reset Toolbar Position	Nulstil værktøjslinjens placering
 	Picas	Pica
 	Portuguese	Portugisisk
 	Preserve Appearance and Overprints	Bevar udseende og overprint
@@ -6646,6 +6834,7 @@ theme	Appearance	Udseende
 	Show Pixel Grid (Above 600% Zoom)	Vis pixelgitter (over 600 % zoom)
 	Show Slice Numbers	Vis udsnitsnumre
 	Show The Home Screen When No Documents Are Open	Vis startskærmen, når ingen dokumenter er åbne
+	Show Tool Cards	Vis værktøjskort
 	Show Tool Tips	Vis værktøjstips
 	Size/Leading	Størrelse/linjeafstand
 	Snapping Tolerance	Snap-tolerance
@@ -6720,6 +6909,11 @@ theme	Appearance	Udseende
 	Edit Arrowheads	Redigér pilespidser
 	Edit Arrowheads…	Redigér pilespidser…
 	Reload Arrowheads	Genindlæs pilespidser
+	Bevels	Facetter
+	Edit Bevels	Redigér facetter
+	Edit Bevels…	Redigér facetter…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Genindlæs facetter
 	Stroke Options	Konturindstillinger
 	Width Profiles	Breddeprofiler
 	Apply Graphic Style	Anvend grafikstil
@@ -6741,6 +6935,7 @@ theme	Appearance	Udseende
 	Add to Graphic Styles	Føj til grafikstile
 	Graphic Style Library	Grafikstilbibliotek
 	Add Used Colors	Tilføj anvendte farver
+	Add Selected Colors	Tilføj valgte farver
 	Delete Swatch	Slet farveprøve
 	Duplicate Swatch	Duplikér farveprøve
 	Merge Swatches	Flet farveprøver
@@ -6771,12 +6966,15 @@ theme	Appearance	Udseende
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
 	Ungroup Color Group	Afgruppér farvegruppe
+	Color Group Options	Indstillinger for farvegruppe
+	Color Group Options…	Indstillinger for farvegruppe…
 	Copy to User Defined	Kopiér til brugerdefinerede
 	Swatch Library	Farveprøvebibliotek
 	Clear All Tabs	Ryd alle tabulatorer
 	Set Tab Stops	Angiv tabulatorstop
 	Tab Stops	Tabulatorstop
 	Flare	Flare
+	Edit Flare	Redigér flare
 	Rays	Stråler
 	Rectangle	Rektangel
 	Paintbrush	Malerpensel
@@ -6879,6 +7077,8 @@ axis	Both	Begge
 	Show	Vis
 	Copy Width Point	Kopiér breddepunkt
 	Duplicate Artboard	Duplikér tegneflade
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik for at tilføje en kunstplade på denne side, Alt-klik for at duplikere kunstpladen med dens grafik
+	Click to add an artboard on this side	Klik for at tilføje en kunstplade på denne side
 	Area / Path Type	Arealtekst / kurvetekst
 	Decrease Font Size	Formindsk skriftstørrelse
 	Increase Font Size	Forøg skriftstørrelse
@@ -6933,6 +7133,11 @@ axis	Both	Begge
 	Image	Billede
 	Ink	Blæk
 	Lab	Lab
+	OKLCH Sliders	OKLCH-skydere
+	HSL Sliders	HSL-skydere
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Den største kroma, sRGB kan rumme ved denne lyshed og farvetone
+	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 	Medium	Medium
 	Name	Navn
 	None	Ingen
@@ -7023,6 +7228,8 @@ font-technology	Variable	Variable
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
+	Type to search commands, tools, panels and effects	Skriv for at søge i kommandoer, værktøjer, paneler og effekter
+	Clear Recent Commands	Ryd seneste kommandoer
 	Dashed Line	Stiplet linje
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…
@@ -7055,6 +7262,8 @@ font-technology	Variable	Variable
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Musehjulet med Cmd/Ctrl holdt nede ruller lærredet sidelæns.
 	Dragging sideways on a numeric field's label changes the field's value.	Når du trækker sidelæns på et talfelts etiket, ændres feltets værdi.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Når du holder en tast nede, køres værktøjet eller kommandoen i dens Hold-kolonne i Tastaturgenveje; et kort tryk kører dens sædvanlige genvej.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hvor mange sekunder en tast skal holdes nede, før dens holdegenvej køres i stedet for dens sædvanlige genvej.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.
@@ -7064,6 +7273,7 @@ font-technology	Variable	Variable
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Egenskaberne for et live-rektangel viser ét felt Hjørneradius for alle fire hjørner; når den er slået fra, har hvert hjørne sit eget felt.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Hvad ændringer i panelet Transformér transformerer: objektet, dets mønsterfliser eller begge; Standard følger Transformer mønsterfliser.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Når én symbolforekomst er markeret, bruger panelet Transformér symbolets registreringspunkt som referencepunkt.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Når du tegner et rektangel, en ellipse, en polygon, en stjerne eller en linje, åbnes panelet Transformér, hvis det er lukket.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Gør lærredet uden for kunstpladerne mørkere, mens værktøjet Kunstplade er aktivt.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Når Ton området uden for kunstpladen ned er slået til, forbliver området uden for kunstpladerne mørkt, mens du trækker med værktøjet Kunstplade.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hvor tæt markøren i pixels skal være på et objekt, ankerpunkt eller håndtag, for at et klik markerer det.
@@ -7136,8 +7346,73 @@ font-technology	Variable	Variable
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hvor tæt på skærmen markøren eller et trukket punkt skal komme på grafik, for at de smarte hjælpelinjer fastgør til den; afstanden er den samme ved alle zoomniveauer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fastgør enden af et linjesegment eller en cirkel tegnet fra midten, så den rører en nærliggende kurve.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fastgør enden af et linjesegment, så det møder et nærliggende lige segment i en ret vinkel.
+	Edit type set in fonts that aren't available?	Rediger tekst i skrifttyper, der ikke er tilgængelige?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Viser hvert udsnits nummer i en boks i dets øverste venstre hjørne på lærredet; når den er slået fra, vises udsnittenes konturer stadig.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Farven på konturerne af bruger- og objektudsnit og på boksene med deres numre; automatiske udsnit bruger en svagere nuance af den.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	I afsnit med Orddeling slået til får et ord på listen kun orddelingsbindestreg ved de bindestreger, der er skrevet i det, eller aldrig uden nogen, uanset sprog og store eller små bogstaver.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	I desktopversionen indlæses denne mappes .wasm-plug-ins ved start, og når OK angiver en ny mappe, undtagen i sikker tilstand; et plug-in, der beder om tilladelser, indlæses først, når du har givet dem. Webversionen indlæser ingen.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Stor giver hver kørsel af et filter- eller kommando-plug-in mindst 250 millioner instruktioner med samme tidsgrænse; Normal beholder plug-in'ets eget budget. Live-effekter, eksportører og importører beholder deres.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Ny tekst får dette sprog, så længe sproget i Dokumentopsætning er Engelsk: USA; tekst, der allerede er i et dokument, beholder sit eget sprog.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	I afsnit med Orddeling slået til deles et ord på listen kun ved de bindestreger, der er skrevet i det, eller slet ikke uden nogen, uanset sprog og store eller små bogstaver.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	I desktopversionen indlæses .wasm-plug-ins i denne mappe ved start, og når du klikker på OK med en ny mappe her, undtagen i sikker tilstand; webversionen indlæser dem ikke.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal beholder hvert plug-ins egne grænser; med Stor kan et plug-in-filter eller en plug-in-kommando køre mindst 250 millioner instruktioner ud over dem til sit input. Tidsgrænsen forbliver den samme.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hvor mange instruktioner hver kørsel af et plug-ins objektfilter må bruge; Stor tillader flere end Normal med den samme grænse på 60 sekunder. Tunge filtre beholder deres eget budget.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det første valg af midlertidig disk: Startup, None eller en mappesti; VectorCraft gemmer det, men bruger endnu ikke midlertidige diske.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Det andet valg af midlertidig disk: Startup, None eller en mappesti; VectorCraft gemmer det, men bruger endnu ikke midlertidige diske.
+	How light or dark the interface is.	Hvor lys eller mørk brugergrænsefladen er.
+	The set of colors the interface is drawn in.	Det sæt farver, brugergrænsefladen tegnes i.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Farven på kontroller, der er slået til, valgt eller har fokus; menuen er nedtonet, så længe Farveskema har sin egen accentfarve.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Farven på lærredet omkring tegnefladerne; Match lysstyrken i brugergrænsefladen henter den fra Lysstyrke. Visningen Kontur viser den altid hvid.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Et panel, der er åbnet fra sit ikon, lukker, når du trykker på Esc eller klikker uden for det; slået fra forbliver det åbent, indtil du klikker på et ikon.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Viser hver værktøjsgruppes navn over dens værktøjer i værktøjslinjen; slået fra følger grupperne efter hinanden uden noget imellem.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Fremover åbner dokumenter, du åbner eller opretter, som faner; slået fra åbner hvert i et flydende vindue. Dokumenter, der allerede er åbne, bliver, hvor de er.
+	Makes the document tabs taller and their names larger.	Gør dokumentfanerne højere og deres navne større.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Fra næste start tegner systemet vinduets titellinje, hvor VectorCraft ellers ville tegne sin egen; på Linux og BSD-systemerne har variablen VECTORCRAFT_TITLEBAR forrang.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Fra næste start tegner VectorCraft vinduets titellinje, også hvor skrivebordsmiljøet ville tegne den, medmindre Systemtitellinje er slået til eller variablen VECTORCRAFT_TITLEBAR vælger den.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Gør brugergrænsefladen større eller mindre; grafik på lærredet beholder sin størrelse ved samme zoom.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	De værktøjsmarkører, VectorCraft tegner, vokser og krymper med UI-skalering; slået fra beholder de deres størrelse.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Brugergrænsefladens sprog; Auto bruger systemets sprog. Dialogen skifter sprog, så snart du vælger et.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Animeret zoom virker kun, mens dette er slået til; slået fra er Animeret zoom nedtonet, og zoom animeres ikke.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom med hjulet glider blødt ind, og Zoomværktøjet zoomer, mens du trækker til siden eller holder det nede; slået fra zoomer Zoomværktøjet til det område, du trækker hen over.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Fra næste start viser desktopversionen lærredet gennem denne type grafikprocessor; illustrationen tegnes altid på CPU'en. Automatisk foretrækker den integrerede på Windows og macOS. Webversionen bruger den ikke.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Fra næste start viser vinduet hvert billede uden at vente på skærmens opdatering, hvor grafikdriveren tillader det, højst 240 billeder i sekundet.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Fra næste start tegner desktopversionen med denne type grafikprocessor; Automatisk foretrækker den, der styrer skærmen. Webversionen bruger den ikke.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Fra næste start viser vinduet billeder uden at vente på, at skærmen opdateres, højst 240 i sekundet; slået fra bestemmer skærmen tempoet. En visningstilstand angivet ved start har forrang.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Det største antal fortryd-trin, hvert dokument beholder; et lavere tal fjerner de ældste trin, når du klikker på OK. Trin kan også forsvinde tidligere, når de bruger for meget hukommelse.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Viser grafikken ændre sig, mens du trækker; slået fra følger konturer trækket, og grafikken ændres, når du slipper. En hjælpelinje fra linealen flytter sig altid, mens du trækker.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hvor mange arbejdstråde der tegner grafikken; -1 bruger én færre end de kerner, VectorCraft må bruge, højst 8, og 0 ingen. Webversionen bruger aldrig nogen.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Fra næste start på et Wayland-skrivebord åbner X11 (XWayland) vinduet gennem XWayland; de andre valg gør det kun, når en pen er tilsluttet.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Fra næste start viser desktopversionen billeder uden at vente på skærmens opdatering, højst 240 i sekundet; slået fra bestemmer skærmen tempoet.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Det større budget femdobler de grundlæggende instruktioner for hver kørsel af et objektfilter og beholder samme tillæg pr. inputbyte; tunge filtre, live-effekter, eksportører og importører beholder deres egne grænser.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Konverterer grafikken og tegnefladerne på lærredet til skærmens farveprofil, hvor systemet ikke allerede gør det; slået fra tegnes lærredet i sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	I desktopversionen skrives en gemning til en fil i baggrunden, mens du redigerer videre; slået fra venter du, til den er skrevet.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	I desktopversionen skrives eksport til filer og pakker i baggrunden, mens du redigerer videre, undtagen 3D-eksport; slået fra venter du på dem.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Gemmer med få minutters mellemrum en gendannelseskopi af hvert dokument med ikke-gemte ændringer siden dets seneste kopi; slået fra laves ingen tidsbestemte kopier.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Hvor mange minutter der går mellem gendannelseskopier, mens Gem automatisk gendannelsesdata er slået til.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	I desktopversionen den mappe, gendannelseskopierne gemmes i; lad den stå tom for VectorCrafts egen mappe. Webversionen gemmer dem i browseren.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Der laves ingen tidsbestemte gendannelseskopier af dokumenter med mere end 20.000 objekter.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Åbn seneste filer og Home-skærmen viser højst så mange seneste filer; 0 viser ingen, og VectorCraft husker stadig op til 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Når et dokument åbnes, beholder et linket EPS-billede, der viser sin gemte forhåndsvisning, den i stedet for at læse EPS-filen igen; ændrede filer følger stadig Opdatér links.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	I Pixel-forhåndsvisning tegnes billeder udglattet; slået fra viser deres pixels skarpe kanter. Uden for Pixel-forhåndsvisning udglattes billeder altid.
+	PDF Text	PDF-tekst
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Teksten i en PDF, du åbner eller indlejrer, kommer ind som redigerbar tekst eller som omrids, der ser ens ud på en computer uden dens skrifttyper.
+	Linked pages show the file's own text.	Linkede sider viser filens egen tekst.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Når en linket fil ændres, læser Automatisk den igen, Spørg ved ændringer spørger dig først, og Manuelt lader den være og viser en besked i statuslinjen.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	I desktopversionen den mappe, Ny fra skabelon… og Gem som skabelon… starter i; lad den stå tom for VectorCraft Templates i din dokumentmappe.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigér original åbner en linket fil i systemets standardapp for dens type; slået fra åbnes et linket rasterbillede i PhotoCraft, hvis det er installeret.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	En fil gemt af en ældre VectorCraft-version åbnes med [Converted] efter navnet, og Gem spørger, hvor den skal gemmes; slået fra erstatter Gem filen.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-filer og -skabeloner gemmes komprimeret og fylder derfor mindre, medmindre en gemning angiver andet; gemninger til versioner, der ikke kan åbne komprimerede filer, forbliver ukomprimerede.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiér og Klip giver også andre apps tegningens SVG-kode; på skrivebordet kopieres koden ikke som tekst, når tegningen indlejrer mere end 1 MiB billeder.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	På Windows giver Kopiér og Klip også andre apps en PDF af tegningen; de andre platforme kopierer endnu ikke en PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft gemmer dette valg, men Kopiér og Klip bruger endnu ikke et format til den ældre vektorudklipsholder.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Bevar stier eller Bevar udseende og overprint for den ældre vektorudklipsholder; VectorCraft gemmer valget, men bruger det endnu ikke.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Bevar formatering beholder typografierne for tekst kopieret fra et tekstobjekt i VectorCraft, når den indsættes i et tekstobjekt; Bevar almindelig tekst giver den typografien, hvor den lander.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Vis alle sorte som rich black viser ren CMYK-sort (kun sort blæk ved 100 %) som RGB-sort på lærredet; Vis alle sorte nøjagtigt konverterer den gennem arbejds-CMYK-farverummet.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Udskriv alle sorte som rich black tegner ren CMYK-sort som RGB-sort i RGB- og gråtone-rastereksporter og med Udskriv som bitmap; den ændrer ikke vektoreksporter, CMYK-JPEG, -TIFF og -PSD eller anden udskrivning.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	På en touchskærm skiftes til touch-arbejdsområdet; slås indstillingen fra, eller forsvinder touchskærmen, skiftes tilbage til det arbejdsområde, der var før.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Et tryk med to fingre på lærredet fortryder eller skifter i touch-arbejdsområdet mellem markerings- og tegneværktøjer, og et tryk med tre fingre gør om; ingen af dem virker i præsentationstilstand.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Ny tekst får dette sprog, så længe sproget i Dokumentopsætning er Engelsk: USA og [Normal tegnstil] ikke angiver et sprog; tekst, der allerede er i et dokument, beholder sit eget sprog.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	I afsnit med Orddeling slået til deles et ord på listen kun ved de bindestreger, der er skrevet i det, eller slet ikke uden nogen, uanset store eller små bogstaver; koreanske ord får ingen bindestreg, og ord på indiske sprog deles ikke inde i en tegngruppe.
 	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardværdierne anvendes, når du klikker på OK i Præferencer. Annullér der beholder dine nuværende præferencer.
 	Smaller ↔ Larger	Mindre ↔ Større
@@ -7155,7 +7430,14 @@ font-technology	Variable	Variable
 	Channel	Kanal
 	Circle	Cirkel
 	Circle Tool	Cirkelværktøj
+	Curvature Circle Tool	Krumningscirkelværktøj
+	Cusp	Spids
+	Straight segment	Lige segment
 	Circle too large	Cirklen er for stor
+	Show Radii	Vis radier
+	Show Diameter	Vis diameter
+	Anchors at Standard Positions	Ankerpunkter i standardpositioner
+	Third Point by Dragging	Tredje punkt ved træk
 	Clip to Art	Beskær til grafik
 	Colorize	Farvelæg
 	Gamma	Gamma
@@ -7421,6 +7703,7 @@ imageTrace	Outline	Kontur
 @msg	Installed plug-in {_1}	Installerede plug-in'en {_1}
 @msg	Internal error: {msg} (please report this bug)	Intern fejl: {msg} (meld venligst denne fejl)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint-fletning: markér en Live Paint-gruppe og de kurver, der skal tilføjes
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` og `Edge` er navnene på fladerne og kanterne i en Live Paint-gruppe: giv kurven et andet navn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint tager kurver og sammensatte kurver: konvertér først tekst, billeder og andre objekter til kurver
 @msg	Live Paint: select paths or compound paths	Live Paint: markér kurver eller sammensatte kurver
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: disse kurver er for degenererede til at blive malet
@@ -7454,6 +7737,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Gemte {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markér tekst, eller klik i tekst med tekstværktøjet, for at indsætte glyffer
 @msg	Shape Builder: no region under the pointer	Figurbygger: intet område under markøren
+@msg	Fill Area: no enclosed area under the pointer	Udfyld område: intet lukket område under markøren
 @msg	Shape Builder: select all paths you want to merge	Figurbygger: markér alle kurver, du vil flette
 @msg	Shape Builder: select paths or compound paths	Figurbygger: markér kurver eller sammensatte kurver
 @msg	Show All Hidden Attributes: nothing is hidden	Vis alle skjulte attributter: intet er skjult
@@ -7536,6 +7820,7 @@ imageTrace	Outline	Kontur
 @msg	a freeform gradient keeps at least one point	en freeform-gradient bevarer mindst ét punkt
 @msg	a gradient needs at least two stops	en gradient skal have mindst to stop
 @msg	a graphic style named `{to}` already exists	der findes allerede en grafikstil med navnet `{to}`
+@msg	a swatch or color group named `{name}` already exists	der findes allerede en farveprøve eller farvegruppe med navnet `{name}`
 @msg	a page is missing	en side mangler
 @msg	a page out of range	en side uden for området
 @msg	a page tree kid isn't a reference	et barn i sidetræet er ikke en reference
@@ -7644,7 +7929,16 @@ imageTrace	Outline	Kontur
 @msg	no anchor points selected	ingen ankerpunkter er markeret
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` skal være to eller tre talpar [x, y]
 @msg	direct-select two or three anchor points, or give `points`	direkte markér to eller tre ankerpunkter, eller angiv `points`
+@msg	the path is straight there, so no circle matches its curvature	kurven er lige der, så ingen cirkel passer til dens krumning
+@msg	the path has a cusp there, so it has no single curvature	kurven har en spids der, så den har ingen entydig krumning
+@msg	the path has a corner there, so it has no single curvature	kurven har et hjørne der, så den har ingen entydig krumning
+@msg	a guide has no curvature circle	en hjælpelinje har ingen krumningscirkel
+@msg	the circle that matches the path there would reach past the canvas	cirklen, der passer til kurven der, ville gå ud over lærredet
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
+@msg	`at` must be "start" or "end"	`at` skal være "start" eller "end"
+@msg	give exactly one of `through` and `toward`	angiv præcis én af `through` og `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ingen bue passer til disse punkter: to er ens, eller alle tre ligger på én linje
+@msg	give `at` only with `toward`	angiv kun `at` sammen med `toward`
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
 @msg	no artboard {i} (0-based; the document has {_1})	ingen tegneflade {i} (0-baseret; dokumentet har {_1})
@@ -7683,10 +7977,12 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion i gang
 @msg	no key object	intet nøgleobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Juster til nøgleobjekt er ikke tilgængelig med tegnebrætværktøjet
 @msg	no library `{key}` (see {list})	intet bibliotek `{key}` (se {list})
 @msg	no native format	intet indbygget format
 @msg	no pages	ingen sider
 @msg	no pattern `{name}`	intet mønster `{name}`
+@msg	art painted with `{name}` can't be its tile	grafik malet med `{name}` kan ikke være dens flise
 @msg	no perspective grid preset named `{name}`	ingen perspektivgitterforudindstilling med navnet `{name}`
 @msg	no plug-in {0} is installed	plug-in'et {0} er ikke installeret
 @msg	no plug-in {id} is installed	plug-in'et {id} er ikke installeret
@@ -7731,6 +8027,9 @@ imageTrace	Outline	Kontur
 @msg	no such saved selection	ingen sådan gemt markering
 @msg	no such segment	intet sådant segment
 @msg	no such subpath	ingen sådan delsti
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` skal være en liste med højst 10000 stykker
+@msg	give either `start` for a new path or `id`, not both	angiv enten `start` til en ny sti eller `id`, ikke begge
+@msg	`subpath` and `keep` need `id`	`subpath` og `keep` kræver `id`
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt
@@ -7813,6 +8112,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	markér en Live Paint-gruppe
 @msg	select a blend	markér en blanding
 @msg	select a clip group	markér en klipgruppe
+@msg	select a flare	markér en flare
 @msg	select a gradient mesh	markér et gradientnet
 @msg	select a linked image: an embedded one has no file	markér et linket billede: et indlejret har ingen fil
 @msg	select a repeat	markér en gentagelse
@@ -7827,6 +8127,10 @@ imageTrace	Outline	Kontur
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	denne sporing ville skabe flere end {max} ankerpunkter, hvilket er flere, end dokumentet kan vise flydende: hæv Støj, sænk Stier eller Farver, eller vælg en forudindstilling med lavere kvalitet
 @msg	select an envelope	markér en konvolut
 @msg	select an image	markér et billede
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objektet {_1} er et billede, der er ændret med Perspektivforvrængning eller Fri forvrængning, og denne kommando virker ikke på det
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville ikke danne en konveks form
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville krydse forvrængningens horisont
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville ligge for tæt på hinanden til en perspektivisk afbildning
 @msg	select an object in perspective	markér et objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markér grafik (eller en farvegruppe) for at skifte farver
 @msg	select at least two objects	markér mindst to objekter
@@ -7853,6 +8157,7 @@ imageTrace	Outline	Kontur
 @msg	the PDF is password-protected: give its password	PDF'en er beskyttet med adgangskode: angiv dens adgangskode
 @msg	the PDF password is wrong	PDF-adgangskoden er forkert
 @msg	the Save PDF dialog didn't open	dialogen Gem PDF blev ikke åbnet
+@msg	the Save PDF dialog is not open	dialogen Gem PDF er ikke åben
 @msg	the WMF header is damaged	WMF-headeren er beskadiget
 @msg	the art could not be sampled	der kunne ikke tages prøve af grafikken
 @msg	the art has no bounds	grafikken har ingen grænser
@@ -8020,6 +8325,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linket billede er ændret på disken: Opdatér links viser den nye version|{n} linkede billeder er ændret på disken: Opdatér links viser de nye versioner
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Opdaterede {n} linket fil ændret på disken|Opdaterede {n} linkede filer ændret på disken
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet angiver et udløb, som denne PDF/X-fil udelader: slå „Brug dokumentets udløbsindstillinger“ til
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt når til beskæringskanten, men stopper før udløbet|{n} objekter når til beskæringskanten, men stopper før udløbet
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksporterede {what} med {n} note: {first}|Eksporterede {what} med {n} noter: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} skrifttypefil er nu i {folder}|{n} skrifttypefiler er nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil er nu i {folder}; {failed} kunne ikke tilføjes: {reason}|{n} skrifttypefiler er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
@@ -8050,6 +8356,7 @@ imageTrace	Outline	Kontur
 @msg	onto must name a panel floating in another group	onto skal angive et panel, der flyder i en anden gruppe
 @msg	below and above must name a panel floating in another group	below og above skal angive et panel, der flyder i en anden gruppe
 @msg	give only one of onto, below and above	angiv kun én af onto, below og above
+@msg	give only one of `index`, `indices` and `t`	angiv kun én af `index`, `indices` og `t`
 @msg	column must be true or a number from 1	column skal være true eller et tal fra 1
 @msg	x and y must both be numbers	x og y skal begge være tal
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" er ikke en farve: skriv den som #rrggbb
@@ -8145,6 +8452,49 @@ imageTrace	Outline	Kontur
 @msg	the PSD file's layer groups are nested too deeply	PSD-filens laggrupper er indlejret for dybt
 @msg	a layer of the PSD file is too large to read	et lag i PSD-filen er for stort til at læse
 @msg	the PSD file's layers take more memory to read than allowed	PSD-filens lag kræver mere hukommelse at læse end tilladt
+@msg	the file is no longer loaded	filen er ikke længere indlæst
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lagene kan ikke læses ({e}): filen blev placeret som sit samlede billede
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstlag kom ind som pixels: teksten kan ikke redigeres
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstlag kom ind som pixels: teksten kan ikke redigeres
+@msg	1 adjustment layer was not applied	1 justeringslag blev ikke anvendt
+@msg	{n} adjustment layers were not applied	{n} justeringslag blev ikke anvendt
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 fyldlag blev ikke tegnet (et forløbs- eller mønsterfyld, en farve, der ikke kan læses, eller en figur, der ikke gemmer pixels)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} fyldlag blev ikke tegnet (et forløbs- eller mønsterfyld, en farve, der ikke kan læses, eller en figur, der ikke gemmer pixels)
+@msg	the layer effects of 1 layer weren't drawn	lageffekterne for 1 lag blev ikke tegnet
+@msg	the layer effects of {n} layers weren't drawn	lageffekterne for {n} lag blev ikke tegnet
+@msg	the vector masks of 1 layer weren't applied	vektormaskerne for 1 lag blev ikke anvendt
+@msg	the vector masks of {n} layers weren't applied	vektormaskerne for {n} lag blev ikke anvendt
+@msg	the knockout of 1 layer wasn't applied	udsparingen for 1 lag blev ikke anvendt
+@msg	the knockout of {n} layers wasn't applied	udsparingen for {n} lag blev ikke anvendt
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lag blev udeladt (skjulte lag og de lag, der er beskåret til dem)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lag blev udeladt (skjulte lag og de lag, der er beskåret til dem)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lag beskåret til et fyldlag, der ikke blev tegnet, blev udeladt
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lag beskåret til fyldlag, der ikke blev tegnet, blev udeladt
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lag i blandingstilstande, som VectorCraft ikke har ({modes}), blev flettet med lagene under dem
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lag i en blandingstilstand, som VectorCraft ikke har, kom ind som Normal: fletningen kræver mere hukommelse end tilladt
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lag i blandingstilstande, som VectorCraft ikke har, kom ind som Normal: fletningen kræver mere hukommelse end tilladt
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lag beskåret til laget nedenunder kom ind ubeskåret: fletningen kræver mere hukommelse end tilladt
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lag beskåret til laget nedenunder kom ind ubeskåret: fletningen kræver mere hukommelse end tilladt
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers gælder for en PSD-fil, der placeres med layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: en sammenkædet PSD-fil placeres som sit flade billede; angiv link: false for at integrere den med dens udsnit
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: en sammenkædet PSD-fil placeres som sit flade billede; udelad link eller angiv link: false
+@msg	the slices can't be read ({e}) and were left out	udsnittene kan ikke læses ({e}) og blev udeladt
+@msg	1 slice lies outside the canvas or has no size and was left out	1 udsnit ligger uden for lærredet eller har ingen størrelse og blev udeladt
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} udsnit ligger uden for lærredet eller har ingen størrelse og blev udeladt
+@msg	1 slice would lie outside the canvas and was left out	1 udsnit ville ligge uden for lærredet og blev udeladt
+@msg	{n} slices would lie outside the canvas and were left out	{n} udsnit ville ligge uden for lærredet og blev udeladt
+@msg	the slices' descriptor holds too many values	udsnittenes deskriptor indeholder for mange værdier
+@msg	the slices' descriptor has a version other than 16	udsnittenes deskriptor har en anden version end 16
+@msg	the slices are stored in version {v}, which isn't read	udsnittene er gemt i version {v}, som ikke læses
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	filen har {count} udsnit, flere end de {MAX_SLICES}, der læses
+@msg	the slices' descriptor has no list of slices	udsnittenes deskriptor har ingen liste over udsnit
+@msg	the slices' descriptor lists something other than a slice	udsnittenes deskriptor angiver noget andet end et udsnit
+@msg	a slice in the slices' descriptor has no bounds	et udsnit i udsnittenes deskriptor har ingen grænser
+@msg	a slice's bounds in the slices' descriptor aren't numbers	et udsnits grænser i udsnittenes deskriptor er ikke tal
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	en tekst i udsnittene har flere end de {MAX_TEXT} tegn, der læses
+@msg	the slices' descriptor nests too deep	udsnittenes deskriptor er indlejret for dybt
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	udsnittenes deskriptor har en reference af en ukendt art ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	udsnittenes deskriptor har en værdi af en ukendt type ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	lagene kan ikke læses ({e}): filen blev åbnet som sit samlede billede
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bit PSD-filer i denne farvetilstand kan ikke læses
 @msg	the PSD file is cut short	PSD-filen er afkortet
@@ -8306,6 +8656,7 @@ imageTrace	Outline	Kontur
 	Arrow	Pil
 	Arrow (open)	Pil (åben)
 	Barbed	Modhager
+arrowhead	Feather	Fjer
 	Half Arrow (left)	Halvpil (venstre)
 	Half Arrow (right)	Halvpil (højre)
 	Concave	Konkav
@@ -8333,6 +8684,7 @@ imageTrace	Outline	Kontur
 	Kite	Drage
 	Triangle to Bar	Trekant til bjælke
 	Oval	Oval
+	Line Arrow	Stregpil
 	Complementary	Komplementær
 	Complementary 2	Komplementær 2
 	Split Complementary	Delt komplementær
@@ -8712,6 +9064,11 @@ mark-style	Japanese	Japansk
 	The active document changed while the screen color sampler was open	Det aktive dokument ændrede sig, mens skærmfarvesampleren var åben
 	This system has no screen color sampler	Dette system har ingen skærmfarvesampler
 	Color blindness – Tritanopia-type	Farveblindhed – tritanopitype
+	Show Color Vision Preview	Vis eksempel på farvesyn
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Panels Except Tools and Control	Paneler undtagen værktøjer og kontrol
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
@@ -8804,6 +9161,8 @@ variable-list-end	{0}, {1}	{0} og {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
 @msg	`view` must be wheel or box	`view` skal være wheel eller box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` skal være none, oklch eller hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
@@ -9116,6 +9475,9 @@ swatch	Bright Violet	Kraftig violet
 	Continue in Background	Fortsæt i baggrunden
 	Cancel Export	Annullér eksport
 @msg	Export cancelled	Eksport annulleret
+	Cancel Save	Annullér gemning
+@plural	{n} more save waiting|{n} more saves waiting	{n} gemning mere venter|{n} gemninger mere venter
+@msg	Save canceled	Gemning annulleret
 # Paragraph panel menu › Justification…
 	Desired	Ønsket
 	Word Spacing:	Ordafstand:
@@ -9311,6 +9673,10 @@ axis	Y Axis	Y-akse
 	Create New Action	Opret ny handling
 	Play Action	Afspil handling
 	Action Set:	Handlingssæt:
+	Choose Align To at playback	Vælg Juster til ved afspilning
+	Align steps use the key object, key anchor or key guide when one is set.	Justeringstrin bruger nøgleobjektet, nøgleankerpunktet eller nøglehjælpelinjen, når en er angivet.
+	With one whole object selected and no key, they use the artboard.	Med ét helt markeret objekt og ingen nøgle bruger de tegnebrættet.
+	Otherwise they use the selection.	Ellers bruger de markeringen.
 	Function Key:	Funktionstast:
 	Record	Optag
 	Create New Set	Opret nyt sæt
@@ -9337,6 +9703,8 @@ axis	Y Axis	Y-akse
 	Checkpoint	Kontrolpunkt
 	Inventory Icons	Inventarikoner
 	Skill Icons	Færdighedsikoner
+	Weather Icons	Vejrikoner
+	Media Controls	Mediekontroller
 	Attack	Angreb
 	Defend	Forsvar
 	Heal	Helbredelse
@@ -9436,6 +9804,12 @@ axis	Y Axis	Y-akse
 	Bus Lines	Buslinjer
 	Terminal Nodes	Terminalpunkter
 
+# Original arrow art brushes.
+	Arrows	Pile
+	Solid Arrow	Massiv pil
+	Open Arrow	Åben pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge
@@ -9452,6 +9826,256 @@ axis	Y Axis	Y-akse
 	Stars	Stjerner
 	Triangles	Trekanter
 	Sparkles	Gnister
+	Warm Gray	Varm grå
+	Cool Gray	Kølig grå
+	Neutrals	Neutrale toner
+	Ivory	Elfenben
+	Linen	Hør
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skifer
+	Clay	Ler
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliven
+	Moss	Mos
+	Rosy	Rosa
+	Neutral	Neutral
+	Golden	Gylden
+	Pastel	Pastel
+	Pastel Red	Pastelrød
+	Pastel Orange	Pastelorange
+	Pastel Amber	Pastelrav
+	Pastel Yellow	Pastelgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastelgrøn
+	Pastel Teal	Pastelblågrøn
+	Pastel Cyan	Pastelcyan
+	Pastel Azure	Pastelazur
+	Pastel Blue	Pastelblå
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Blød rød
+	Soft Orange	Blød orange
+	Soft Amber	Blød rav
+	Soft Yellow	Blød gul
+	Soft Lime	Blød lime
+	Soft Green	Blød grøn
+	Soft Teal	Blød blågrøn
+	Soft Cyan	Blød cyan
+	Soft Azure	Blød azur
+	Soft Blue	Blød blå
+	Soft Violet	Blød violet
+	Soft Magenta	Blød magenta
+	Vivid Red	Intens rød
+	Vivid Orange	Intens orange
+	Vivid Amber	Intens rav
+	Vivid Yellow	Intens gul
+	Vivid Lime	Intens lime
+	Vivid Green	Intens grøn
+	Vivid Teal	Intens blågrøn
+	Vivid Cyan	Intens cyan
+	Vivid Azure	Intens azur
+	Vivid Blue	Intens blå
+	Vivid Violet	Intens violet
+	Vivid Magenta	Intens magenta
+	Deep	Dybe
+	Deep Red	Dyb rød
+	Deep Orange	Dyb orange
+	Deep Amber	Dyb rav
+	Deep Yellow	Dyb gul
+	Deep Lime	Dyb lime
+	Deep Green	Dyb grøn
+	Deep Teal	Dyb blågrøn
+	Deep Cyan	Dyb cyan
+	Deep Azure	Dyb azur
+	Deep Blue	Dyb blå
+	Deep Violet	Dyb violet
+	Deep Magenta	Dyb magenta
+	Gold	Guld
+	Silver	Sølv
+	Bronze	Bronze
+	Copper	Kobber
+	Brass	Messing
+	Rose Gold	Rosaguld
+	Gunmetal	Gunmetal
+	Platinum	Platin
+	Pewter	Tin
+	Ember	Glød
+	Lagoon	Lagune
+	Dusk	Skumring
+	Clay to Teal	Ler til blågrøn
+	Plum to Olive	Blomme til oliven
+	Complementary Coral	Koral komplementær
+	Split Complementary Coral	Koral delt komplementær
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triade
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Blågrøn komplementær
+	Split Complementary Teal	Blågrøn delt komplementær
+	Analogous Teal	Blågrøn analog
+	Triad Teal	Blågrøn triade
+	Tetrad Teal	Blågrøn tetrad
+	Pentagram Teal	Blågrøn pentagram
+	Soft Spectrum	Blødt spektrum
+	Red to Amber	Rød til rav
+	Orange to Yellow	Orange til gul
+	Amber to Lime	Rav til lime
+	Yellow to Green	Gul til grøn
+	Lime to Teal	Lime til blågrøn
+	Green to Cyan	Grøn til cyan
+	Teal to Azure	Blågrøn til azur
+	Cyan to Blue	Cyan til blå
+	Azure to Violet	Azur til violet
+	Blue to Magenta	Blå til magenta
+	Violet to Red	Violet til rød
+	Magenta to Orange	Magenta til orange
+	Dawn	Daggry
+	Noon	Middag
+	Sunset	Solnedgang
+	Night	Nat
+	Overcast	Overskyet
+	White to Black	Hvid til sort
+	Light Grays	Lyse gråtoner
+	Dark Grays	Mørke gråtoner
+	Warm Grays	Varme gråtoner
+	Cool Grays	Kølige gråtoner
+	Fade to Transparent	Udtoning til gennemsigtig
+	White Fade	Hvid udtoning
+	Vignette	Vignet
+	Mist	Dis
+	Petal	Kronblad
+	Fern	Bregne
+	Smoke	Røg
+	Honey	Honning
+	Seafoam	Havskum
+	Lavender	Lavendel
+	Driftwood	Drivtømmer
+	Ink Wash	Tuschlavering
+	Tide	Tidevand
+	Bloom	Blomstring
+	Dew	Dug
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismeslør
+	Opal Ribbon	Opalbånd
+	Pearl Flash	Perleglimt
+	Aurora Foil	Nordlysfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Sølvtidevand
+	Rose Quartz Gleam	Rosakvartsglans
+	Moonstone Shift	Månestensskær
+	Violet Edge	Violet kant
+	Mint Halo	Mynteglorie
+	Amber Corona	Ravkorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastelbane
+	Coral and Navy	Koral og marineblå
+	Plum and Lime	Blomme og lime
+	Teal and Gold	Blågrøn og guld
+	Indigo and Peach	Indigo og fersken
+	Forest and Rose	Skov og rosa
+	Red Glow	Rød glød
+	Orange Glow	Orange glød
+	Amber Glow	Ravglød
+	Yellow Glow	Gul glød
+	Lime Glow	Limeglød
+	Green Glow	Grøn glød
+	Teal Glow	Blågrøn glød
+	Cyan Glow	Cyanglød
+	Azure Glow	Azurglød
+	Blue Glow	Blå glød
+	Violet Glow	Violet glød
+	Magenta Glow	Magentaglød
+	Polka Dots	Prikker
+	Vertical Stripes	Lodrette striber
+	Horizontal Stripes	Vandrette striber
+	Diagonal Stripes	Diagonale striber
+	Checkerboard	Skakbræt
+	Diamonds	Ruder
+	Crosses	Kryds
+	Coarse Grit	Groft korn
+	Stipple	Punktering
+	Scratches	Ridser
+	Sparse Flecks	Spredte pletter
+	Dense Flecks	Tætte pletter
+	Sine Bands	Sinusbånd
+	Ripple Lines	Bølgelinjer
+	Interference Rings	Interferensringe
+	Offset Rings	Forskudte ringe
+	Warped Checks	Forvredne tern
+	Pinched Stripes	Klemte striber
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålende linser
+	Soft Shadow	Blød skygge
+	Hard Shadow	Hård skygge
+	Lifted Card	Løftet kort
+	Neon Tube	Neonrør
+	Inner Light	Indre lys
+	Feathered	Blød kant
+	Haze	Dunst
+	Double Rule	Dobbelt streg
+	Triple Rule	Tredobbelt streg
+	Dashed Border	Stiplet kant
+	Dotted Border	Prikket kant
+	Offset Keyline	Forskudt konturlinje
+	Inset Keyline	Indre konturlinje
+	Outside Stroke	Ydre streg
+	Pointer	Viser
+	Highlighter	Overstregningstusch
+	Sketchy Line	Skitseagtig linje
+	Scribble Fill	Kruseduldefyld
+	Wobble	Slinger
+	Zig Zag Edge	Zigzagkant
+	Wavy Edge	Bølget kant
+	Puffy	Oppustet
+	Starburst	Stjerneudbrud
+	Glossy	Blank
+	Brushed Metal	Børstet metal
+	Spotlight	Spotlys
+	Sunset Band	Solnedgangsbånd
+	Sea Glass	Havglas
+	Pearl	Perle
+	Chrome Rim	Kromkant
+	Glow Orb	Lyskugle
+	Pill Badge	Pillemærke
+	Round Badge	Rundt mærke
+	Flag Wave	Vajende flag
+	Bulge	Bule
+	Twisted	Snoet
+	Echo	Ekko
+	Spiral Copies	Spiralkopier
+	Multiply Tint	Multiplikationstone
+	Darken Veil	Mørkere slør
+	Ghosted	Spøgelsesagtig
+	Two Tone	Tofarvet
+	Overlay Glaze	Overlejringsglasur
+	Screen Light	Skærmlys
+	Soft Light Wash	Blødt lys-lavering
+	Cyan Neon	Cyan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Ravfarvet rør
+	Electric Lime	Elektrisk lime
+	Pulse Violet	Pulserende violet
+	Cobalt Phosphor	Koboltfosfor
+	Burst	Udbrud
+	Rounded Square	Afrundet kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Sky
+	Rain	Regn
+	Thunder	Torden
+	Snow	Sne
+	Play	Afspil
+	Pause	Pause
+	Skip Next	Spring til næste
+	Shuffle	Bland
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -9811,6 +10435,7 @@ breakText	Glyphs	Glyffer
 	Remove Strokes	Fjern streger
 	Place Brush Art	Placér penselgrafik
 	Replace Brush Art	Erstat penselgrafik
+	Replace Pattern Art	Erstat mønstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Streger bruger denne pensel. Anvend den nye grafik på stregerne, eller lad dem være, som de er, og tilføj en kopi af penslen med den nye grafik?
 	Apply to Strokes	Anvend på streger
 	Leave Strokes	Bevar streger
@@ -9843,10 +10468,18 @@ breakText	Glyphs	Glyffer
 	Smooth Bridge…	Blød bro…
 	Smooth Bridge	Blød bro
 	Keep Originals	Behold originaler
-@msg	select two circles to bridge	vælg to cirkler, der skal forbindes
+@msg	select two or more circles to bridge	vælg to eller flere cirkler, der skal forbindes
 @msg	one circle is inside the other	den ene cirkel er inden i den anden
 @msg	the circles are too far apart for this radius: raise the radius	cirklerne er for langt fra hinanden til denne radius: gør radius større
 @msg	the circles are too far apart for this radius	cirklerne er for langt fra hinanden til denne radius
+	Constant Gap	Konstant afstand
+	Reach:	Rækkevidde:
+@msg	the circles are too far apart for this gap: raise the gap	cirklerne er for langt fra hinanden til denne afstand: gør afstanden større
+@msg	the circles are too far apart for this gap	cirklerne er for langt fra hinanden til denne afstand
+@msg	no two circles are within reach: raise the reach	ingen to cirkler er inden for rækkevidde: gør rækkevidden større
+@msg	select at most 2000 circles to bridge	vælg højst 2000 cirkler, der skal forbindes
+@msg	that makes too many bridges (at most 8000): lower the reach	det giver for mange broer (højst 8000): gør rækkevidden mindre
+@msg	the bridged circles are too complex to unite	de forbundne cirkler er for komplekse til at blive samlet
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Fælles tangenter…
 	Common Tangents	Fælles tangenter
@@ -9870,6 +10503,8 @@ breakText	Glyphs	Glyffer
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Tangentcirkel…
 	Tangent Circle	Tangentcirkel
+	Tangent Circle Tool	Tangentcirkel-værktøj
+	No tangent circle here	Ingen tangentcirkel her
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` nævner et objekt to gange
 @msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier
@@ -9885,6 +10520,16 @@ breakText	Glyphs	Glyffer
 @msg	`circle` is past the last circle found ({found})	`circle` ligger efter den sidste fundne cirkel ({found})
 @msg	object {value} is not a path or compound path	objekt {value} er ikke en sti eller sammensat sti
 @msg	these shapes are too small to measure	disse figurer er for små til at blive målt
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Tilføj afgrænsende rektangel
+	Add Bounding Circle	Tilføj afgrænsende cirkel
+	Add Bounding Rectangle…	Tilføj afgrænsende rektangel…
+	Add Bounding Circle…	Tilføj afgrænsende cirkel…
+	One per Object	Én pr. objekt
+@msg	nothing to enclose	intet at omslutte
+@msg	`offset` must be 0 or more	`offset` skal være 0 eller mere
+@msg	the shape would have no size	formen ville ikke have nogen størrelse
+@msg	the shape would reach past the edge of the canvas	formen ville gå ud over lærredets kant
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentværktøjer
 	Save a Timestamped Copy	Gem en kopi med dato og klokkeslæt
@@ -10219,8 +10864,106 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Nature Icons	Naturikoner
+	Flower	Blomst
+	Tree	Træ
+	Mountain	Bjerg
+	Ornamental	Ornamentik
+	Scrollwork	Slyngværk
+	Filigree Arrow	Filigranpil
+	Petal Sweep	Kronbladssvirp
+	Twin Curl	Dobbelt slyng
+	Vector Packs	Vektorpakker
+	Compass Rose	Kompasrose
+	Botanical Sprig	Botanisk kvist
+	Facet Diamond	Facetteret diamant
+	Tide Crest	Bølgetop
+	Leaf Vine	Bladranke
+	Blossom Chain	Blomsterkæde
+	Pennant Garland	Vimpelguirlande
+	Lantern String	Lygtekæde
+	Orbit Lines	Banekurver
+	Petal Garland	Kronbladsguirlande
+	Lattice Braid	Gitterfletning
+	Facet Sweep	Facetteret strøg
+	Artistic Brushes	Kunstneriske pensler
+	Paint	Maling
+	Flat Sweep	Fladt strøg
+	Dry Drag	Tørt træk
+	Loaded Stroke	Fyldigt strøg
+	Fan Sweep	Viftestrøg
+	Engraving	Gravering
+	Fine Hatching	Fin skravering
+	Dense Hatching	Tæt skravering
+	Tapered Hatching	Tilspidset skravering
+	Broken Hatching	Afbrudt skravering
+	Image Brush	Billedpensler
+	Soft Bloom	Blød blomstring
+	Halftone Field	Halvtonefelt
+	Solar Grain	Solkorn
+	Color Flecks	Farvestænk
+	Fine Stipple	Fint prikmønster
+	Dense Stipple	Tæt prikmønster
+	Soft Stipple	Blødt prikmønster
+	Bold Stipple	Kraftigt prikmønster
+	Paper Cutouts	Papirudklip
+	Coral Layers	Korallag
+	Mint Layers	Myntelag
+	Midnight Layers	Midnatslag
+	Sunflower Sheet	Solsikkeark
+	Rose Layers	Rosenlag
+	Monochrome Stack	Monokrom stak
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Viser et kort med, hvad et værktøj på værktøjslinjen og dets taster gør, i stedet for dets tip; kræver Vis værktøjstips.
+	Selects whole objects and groups to move, resize or rotate them.	Markerer hele objekter og grupper for at flytte, skalere eller rotere dem.
+	Selects anchor points and path segments to reshape a path.	Markerer ankerpunkter og kurvesegmenter for at ændre formen på en kurve.
+	Draws paths point by point, with straight segments and smooth curves.	Tegner kurver punkt for punkt, med lige segmenter og bløde buer.
+	Draws smooth curves through the points you click.	Tegner bløde buer gennem de punkter, du klikker på.
+	Adds text at a point, or in a frame you drag.	Tilføjer tekst ved et punkt eller i en ramme, du trækker.
+	Draws rectangles and squares.	Tegner rektangler og kvadrater.
+	Draws rectangles with rounded corners.	Tegner rektangler med afrundede hjørner.
+	Draws ellipses and circles.	Tegner ellipser og cirkler.
+	Draws polygons with sides of equal length.	Tegner polygoner med lige lange sider.
+	Draws stars.	Tegner stjerner.
+	Turns objects around a reference point.	Roterer objekter om et referencepunkt.
+	Flips objects across an axis through a reference point.	Spejler objekter over en akse gennem et referencepunkt.
+	Resizes objects from a reference point.	Skalerer objekter fra et referencepunkt.
+	Slants objects from a reference point.	Skråtstiller objekter fra et referencepunkt.
+	Moves the view of the document.	Flytter visningen af dokumentet.
+	Magnifies or reduces the view.	Forstørrer eller formindsker visningen.
+	Copies the color and other attributes of one object to the selection.	Kopierer farven og andre egenskaber fra ét objekt til markeringen.
+	Sets the direction and length of a gradient.	Angiver retning og længde for en gradient.
+	Creates, selects and resizes artboards.	Opretter, markerer og skalerer tegneflader.
+	Changes the width of a stroke along its length.	Ændrer bredden på en streg langs dens længde.
+	Bends art by dragging pins placed on it.	Bøjer grafik ved at trække i nåle, der er placeret på den.
+	Pushes the outlines of paths in the direction you drag.	Skubber kurvers omrids i den retning, du trækker.
+	Twists the outlines of paths into swirls.	Snor kurvers omrids til hvirvler.
+	Pulls the outlines of paths in toward the brush.	Trækker kurvers omrids ind mod penslen.
+	Pushes the outlines of paths out from the brush.	Skubber kurvers omrids ud fra penslen.
+	Adds curved details along the outlines of paths.	Tilføjer buede detaljer langs kurvers omrids.
+	Adds spiky details along the outlines of paths.	Tilføjer spidse detaljer langs kurvers omrids.
+	Adds wrinkles along the outlines of paths.	Tilføjer rynker langs kurvers omrids.
+	Moves, copies and resizes objects on the perspective grid.	Flytter, kopierer og skalerer objekter på perspektivgitteret.
+	Makes a series of steps between two or more objects.	Laver en række trin mellem to eller flere objekter.
+	Places dimension lines that show measured lengths.	Placerer målelinjer, der viser målte længder.
+	Tap	Kort tryk
+	Clear Hold	Ryd hold
+	Hold Shortcuts	Holdegenveje
+	Hold Shortcut Delay	Forsinkelse for holdegenveje
+	How hold shortcuts work	Sådan virker holdegenveje
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, og tryk derefter på en tast, der skal holdes nede for dette (Esc annullerer). Når tasten holdes nede, køres dette; et kort tryk kører tastens egen genvej.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Et kort tryk på en tast kører dens genvej. Når tasten holdes nede i forsinkelsens varighed, køres i stedet værktøjet eller kommandoen i dens Hold-kolonne. En holdegenvej er en bogstav-, ciffer- eller tegnsætningstast, alene eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Hold {_1} bruges allerede af {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	en holdegenvej er en tast, der skriver et tegn, alene eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan ikke være en holdegenvej: brug et bogstav, et ciffer eller en tegnsætningstast
+	Dashed Arrow	Stiplet pil
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, tilføjer intet område til den sammensatte figur; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 	Pressure Sensitive	Trykfølsom
 	Flex Ribbon	Fleksibelt bånd
 	Pulse Stroke	Pulserende strøg
 	Round Flow	Rundt strøg
 	Chisel Flow	Skråt strøg
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Redigér original med:
+file-filter	Applications	Programmer

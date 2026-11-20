@@ -1189,6 +1189,12 @@ impl Story {
         self.text.len()
     }
 
+    /// Is frame `frame` of the story point type with nothing but spaces and line ends (its last
+    /// `\r` left out), which [`Self::node`] doesn't make: it draws nothing.
+    pub(super) fn blank_point(&self, frame: usize) -> bool {
+        frame == 0 && matches!(self.frames.first(), Some(FrameKind::Point(_))) && self.is_blank()
+    }
+
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
     fn matrix(&self) -> [f64; 6] {
         match self.frames.first() {
@@ -1260,6 +1266,24 @@ impl Story {
     /// document), or `None` for type that is mirrored, has no size, or a frame past the first of
     /// threaded type (the first frame holds the whole story).
     pub(super) fn node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.made_node(id, frame, template, to_doc, false)
+    }
+
+    /// For a blank story (nothing but spaces and line ends) in an area frame or on a path, an empty
+    /// text object with that frame or path, as [`Self::node`] would make it, as VectorCraft's Type
+    /// tool keeps such an empty frame (#85, #154). Its text is the story's, spaces kept. `None` for
+    /// any other story or frame.
+    pub(super) fn blank_frame_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine) -> Option<Node> {
+        self.is_blank().then(|| self.made_node(id, frame, template, to_doc, true)).flatten()
+    }
+
+    /// Is the story's text nothing but spaces and line ends (`\r`, and `\x03`, a line break)?
+    pub(super) fn is_blank(&self) -> bool {
+        self.text.chars().all(|c| c.is_whitespace() || c == '\x03')
+    }
+
+    /// [`Self::node`]; with `blank_frame`, a blank story in an area frame or on a path is made too.
+    fn made_node(&self, id: NodeId, frame: usize, template: (f64, f64), to_doc: Affine, blank_frame: bool) -> Option<Node> {
         let kind = self.frames.get(frame)?;
         let threaded = frame > 0;
         let (scale, xf, kind) = match kind {
@@ -1301,7 +1325,9 @@ impl Story {
                 })
                 .collect()
         };
-        if text.trim().is_empty() && !threaded {
+        // A blank story isn't made here: the page may still have type for its object. What is left
+        // of one, an area frame or a path, is made by [`Self::blank_frame_node`].
+        if text.trim().is_empty() && !threaded && !(blank_frame && !matches!(kind, TextKind::Point)) {
             return None;
         }
         // The text document measures in the art's units too: the document's scale carries its
