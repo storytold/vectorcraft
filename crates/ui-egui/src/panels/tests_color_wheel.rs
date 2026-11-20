@@ -1102,15 +1102,17 @@ fn the_remembered_hsl_follows_a_change_of_working_space() {
 fn saved_color_wheel_settings_are_read_leniently() {
     let mut saved = serde_json::to_value(crate::UiState::default()).unwrap();
     saved["color_rgb_percent"] = json!(true);
-    for (value, sliders) in [
-        (json!({"sliders": "oklch"}), Sliders::Oklch),
-        (json!({"sliders": "hsl"}), Sliders::Hsl),
-        (json!({"sliders": "hwb", "view": "box"}), Sliders::None),
-        (json!(5), Sliders::None),
+    let wheel = crate::panels::color_wheel::View::Wheel;
+    let box_view = crate::panels::color_wheel::View::Box;
+    for (value, sliders, view) in [
+        (json!({"sliders": "oklch"}), Sliders::Oklch, wheel),
+        (json!({"sliders": "hsl"}), Sliders::Hsl, wheel),
+        (json!({"sliders": "hwb", "view": "box"}), Sliders::None, box_view),
+        (json!(5), Sliders::None, wheel),
     ] {
         saved["color_wheel"] = value.clone();
         let ui: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
-        assert_eq!((ui.color_wheel.sliders, ui.color_rgb_percent), (sliders, true), "{value}");
+        assert_eq!((ui.color_wheel.sliders, ui.color_wheel.view, ui.color_rgb_percent), (sliders, view, true), "{value}");
     }
 }
 
@@ -1155,6 +1157,27 @@ fn ui_color_wheel_keeps_a_key_given_as_null() {
             "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
         })
     );
+}
+
+/// The `sliders` errors are translated in every catalog, and each translation keeps the accepted
+/// values.
+#[test]
+fn ui_color_wheel_sliders_errors_are_translated() {
+    let errors = [
+        ("`sliders` must be none, oklch or hsl", &["none", "oklch", "hsl"][..]),
+        ("OKLCH needs sRGB as the working RGB space", &["OKLCH", "sRGB"][..]),
+    ];
+    for code in [
+        "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "gu", "hi", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv",
+        "tr", "uk", "vi", "zh-hans", "zh-hant",
+    ] {
+        let lang = crate::i18n::Lang::from_code(code).expect("registered");
+        for (error, values) in errors {
+            let shown = crate::i18n::message(lang, error);
+            assert_ne!(shown, error, "{code}");
+            assert!(values.iter().all(|v| shown.contains(v)), "{code}: {shown}");
+        }
+    }
 }
 
 /// A hue given to a Gray color does not change how it displays, so its paint stays a Gray color
@@ -1204,6 +1227,28 @@ fn a_remembered_hue_is_dropped_after_the_paint_changes() {
         h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         h.run_steps(2);
         h.state_mut().run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        h.run_steps(2);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(0.0), "{rows}: the gray's own hue");
+    }
+}
+
+/// The hue given to a gray is also dropped when the paint changes and comes back while the rows are
+/// hidden, so showing the rows again shows the gray's own hue, 0°.
+#[test]
+fn a_remembered_hue_is_dropped_after_the_paint_changes_while_the_rows_are_hidden() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut app = app(json!("#808080"));
+        app.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut h = oklch_harness_shown(app);
+        set_slider_value(&mut h, hue, 240.0);
+        assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(240.0), "{rows}");
+        h.state_mut().run("ui.colorWheel", json!({"sliders": "none"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        h.run_steps(2);
+        h.state_mut().run("ui.colorWheel", json!({"sliders": rows})).unwrap();
         h.run_steps(2);
         assert_eq!(oklch_slider(&h, hue).accesskit_node().numeric_value(), Some(0.0), "{rows}: the gray's own hue");
     }

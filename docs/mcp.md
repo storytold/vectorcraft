@@ -698,7 +698,7 @@ box with a slider and a percent field sets the opacity of the fill row (`paint.s
 when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
 a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
 `{"documentColors": true}` shows the row the panel
-menu's Show Document Colors adds under the wheel or the box. Keys left out or null keep their values.
+menu's Show Document Colors adds under the wheel or the box. Keys left out or `null` keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
 returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors}`, and the
 settings are kept with the preferences.
@@ -708,7 +708,8 @@ the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while 
 not sRGB: the profile assigned to the document when it has one, else the working RGB space of Edit › Color Settings.
 `ui.colorWheel {"sliders": "hsl"}` shows HSL Sliders in their place: H, S and L rows with the hue (0 to 360°),
 saturation and lightness (0 to 100 %) of the color's display sRGB, as CSS Color 4's `hsl()` defines them.
-`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB.
+`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH of its display sRGB in an object with
+`model: "oklch"` and `values: [L %, C, H°]`, next to the `hex`, `lab`, `outOfGamut` and `deltaE` of every conversion.
 A color outside sRGB (a Lab or CMYK color, an RGB color in a wider RGB space, or RGB numbers past 0 to 1) is clipped
 to sRGB first.
 

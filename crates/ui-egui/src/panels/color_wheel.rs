@@ -336,73 +336,78 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
 
 /// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Out-of-Gamut
 /// Colors; HSL Sliders and OKLCH Sliders; Show Harmony and Harmony Rule while the wheel shows; Show
-/// Color Vision Preview; Show Document Colors; Show Opacity, Show Hex Field and Copy Color As.
+/// Color Vision Preview; Show Document Colors; Show Opacity, Show Hex Field and Copy Color As. Each
+/// item but Copy Color As runs `ui.colorWheel` through the app's command entry point; a checked view
+/// or channel runs nothing.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
-        if menu_item(ui, label, true, set.view == view) {
-            command(app, &json!({ "view": view.id() })).ok();
+        if menu_item(ui, label, true, set.view == view) && set.view != view {
+            run(app, json!({ "view": view.id() }));
         }
     }
     ui.add_enabled_ui(set.view == View::Box, |ui| {
         ui.menu_button(format!("   {}", tl!("Box Channel")), |ui| {
             for ch in Channel::ALL {
-                if menu_item(ui, ch.name(), true, ch == set.channel) {
-                    command(app, &json!({ "channel": ch.id() })).ok();
+                if menu_item(ui, ch.name(), true, ch == set.channel) && ch != set.channel {
+                    run(app, json!({ "channel": ch.id() }));
                 }
             }
         });
     });
     ui.separator();
     if menu_item(ui, tl!("Show Out-of-Gamut Colors"), true, set.gamut) {
-        command(app, &json!({ "gamut": !set.gamut })).ok();
+        run(app, json!({ "gamut": !set.gamut }));
     }
     let on = set.sliders == Sliders::Hsl;
     if menu_item(ui, tl!("HSL Sliders"), true, on) {
         let sliders = if on { Sliders::None } else { Sliders::Hsl };
-        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
-            app.status(e);
-        }
+        run(app, json!({ "sliders": sliders.id() }));
     }
     let on = set.sliders == Sliders::Oklch;
     // While the rows show, the item stays enabled so that they can be hidden.
     let enabled = on || cms::active().rgb_is_srgb();
     if widgets::menu_item_hint(ui, tl!("OKLCH Sliders"), enabled, on, tl!("OKLCH needs sRGB as the working RGB space")) {
         let sliders = if on { Sliders::None } else { Sliders::Oklch };
-        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
-            app.status(e);
-        }
+        run(app, json!({ "sliders": sliders.id() }));
     }
     if menu_item(ui, tl!("Show Harmony"), set.view == View::Wheel, set.harmony) {
-        command(app, &json!({ "harmony": !set.harmony })).ok();
+        run(app, json!({ "harmony": !set.harmony }));
     }
     ui.add_enabled_ui(set.view == View::Wheel, |ui| {
         ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
             for rule in harmony_rules() {
-                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
-                    command(app, &json!({ "harmonyRule": rule.id() })).ok();
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) && rule != set.harmony_rule {
+                    run(app, json!({ "harmonyRule": rule.id() }));
                 }
             }
         });
     });
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
-        command(app, &json!({ "vision": !set.vision })).ok();
+        run(app, json!({ "vision": !set.vision }));
     }
     if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
-        command(app, &json!({ "documentColors": !set.document_colors })).ok();
+        run(app, json!({ "documentColors": !set.document_colors }));
     }
     ui.separator();
     if menu_item(ui, tl!("Show Opacity"), true, set.opacity) {
-        command(app, &json!({ "opacity": !set.opacity })).ok();
+        run(app, json!({ "opacity": !set.opacity }));
     }
     if menu_item(ui, tl!("Show Hex Field"), true, set.hex_field) {
-        command(app, &json!({ "hexField": !set.hex_field })).ok();
+        run(app, json!({ "hexField": !set.hex_field }));
     }
     ui.separator();
     let has_color = wheel_target(app, ui).color().is_some();
     ui.add_enabled_ui(has_color, |ui| {
         ui.menu_button(format!("   {}", tl!("Copy Color As")), |ui| copy_menu(app, ui));
     });
+}
+
+/// Run `ui.colorWheel` with `p` from the panel menu, and show an error in the status bar.
+fn run(app: &mut VectorcraftApp, p: Value) {
+    if let Err(e) = app.run("ui.colorWheel", p) {
+        app.status(e);
+    }
 }
 
 /// The items of Copy Color As.
@@ -1029,11 +1034,15 @@ fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
 }
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
-/// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
-/// the pick stored. The wheel shows that HSB only while all of them are unchanged.
+/// the appearance item, the proxy, the gradient stop or freeform point, its paint, the color the
+/// pick stored, and the document's undo step. The wheel shows that HSB only while all of them are
+/// unchanged.
 #[derive(Clone, Debug, PartialEq)]
 struct Owner {
     doc: Option<u64>,
+    /// The document's [`History::step`](vectorcraft_engine::History::step): another edit, an Undo
+    /// or a Redo changes it, also when the same color comes back.
+    step: Option<(u64, u64)>,
     selection: Vec<NodeId>,
     /// The Type tool's selected characters, when it edits the paint.
     text_selection: Option<(NodeId, usize, usize)>,
@@ -1057,6 +1066,7 @@ impl Owner {
         };
         Self {
             doc: st.map(|d| d.uid),
+            step: st.map(|d| d.history.step()),
             selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
             text_selection: super::character::text_editing(app),
             appearance_item: app.session.appearance_item(),
