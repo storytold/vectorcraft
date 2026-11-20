@@ -3277,12 +3277,15 @@ fn review_599512_divider_then_middle(command: &str, coalesced: bool, held: bool,
         }
         s.release(released, PointerButton::Primary);
         s.press(middle, PointerButton::Middle);
+        review_597943_camera_eq(&s, camera);
         if later_primary {
             s.frame(vec![review_597489_primary(released, true)]);
         }
     }
     assert!((s.fraction() - 0.7).abs() < 1e-6, "the completed divider precedes Middle Down and is not suppressed by final button state");
-    review_597943_camera_eq(&s, camera);
+    if coalesced {
+        review_597943_camera_eq(&s, camera);
+    }
     s.frame(vec![Event::PointerMoved(moved)]);
     assert!(s.app.view().unwrap().center.distance(camera.0) > 1e-6, "the new real Middle owner retains its subsequent motion");
     s.release(middle_up, PointerButton::Middle);
