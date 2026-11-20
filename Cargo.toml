@@ -41,7 +41,7 @@ craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
-craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "7258e42d8", default-features = false, features = ["read", "write"] }
+craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "cdae054d04fdd793007a7868143a9b1a27e57ae2", default-features = false, features = ["read", "write"] }
 craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
