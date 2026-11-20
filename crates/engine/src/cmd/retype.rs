@@ -531,7 +531,7 @@ impl Line {
                 continue;
             }
             if t < 0.0 && !paints_as_one(&self) {
-                return self;
+                continue;
             }
             let mut tracked = self.clone();
             tracked.tracking = t;
