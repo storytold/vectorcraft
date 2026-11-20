@@ -1,7 +1,7 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
 use serde_json::{Map, Value};
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
@@ -1321,6 +1321,16 @@ impl Session {
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
         };
         if self.precise_cursors() { c.precise() } else { c }
+    }
+
+    /// The object a click of the active tool at `p` with `mods` would act on
+    /// ([`vectorcraft_tools::Tool::hover_object`]), for Smart Guides › Object Highlighting. None
+    /// while Cmd lends a selection tool to the press.
+    pub fn hover_object(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Option<NodeId> {
+        if mods.cmd && self.lender.is_none() && !self.tool_editing() && self.lent_tool(self.tool.id(), &mods).is_some() {
+            return None;
+        }
+        self.with_tool_cx(view, |t, cx| t.hover_object(cx, p, mods))
     }
 
     /// General › Use Precise Cursors is on, or Caps Lock is.
