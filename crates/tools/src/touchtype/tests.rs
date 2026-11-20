@@ -470,6 +470,7 @@ fn the_tool_is_made_by_its_id() {
 
 #[test]
 fn touch_type_rtl_middle_character_can_drag_and_nudge_along_its_line() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
 
     // The process-wide database deduplicates the same synthetic face across tests.

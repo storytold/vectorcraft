@@ -34,6 +34,18 @@ pub enum LineKind {
     Perforation,
 }
 
+impl LineKind {
+    /// The angle (degrees) a line of this kind folds at: 90 for a Crease or a Perforation, -90 for
+    /// a Partial Cut. A positive angle folds away from the printed side; none for a Cut.
+    pub fn fold_angle(self) -> Option<f64> {
+        match self {
+            LineKind::Cut => None,
+            LineKind::Crease | LineKind::Perforation => Some(90.0),
+            LineKind::PartialCut => Some(-90.0),
+        }
+    }
+}
+
 /// A fold line: the path (document coordinates), its kind, and a key the issues name it by.
 #[derive(Clone, Debug)]
 pub struct FoldLine {
@@ -57,10 +69,18 @@ pub struct Panel {
     pub area: f64,
 }
 
+impl Panel {
+    /// A point inside the panel, or the middle of its bounds for one too thin to find one in.
+    pub fn point_inside(&self) -> Option<Point> {
+        point_in(&self.outline)
+    }
+}
+
 /// The hinge between panels `a` and `b` (indices into the blank's panels, `a` < `b`): the straight
 /// line from `from` to `to`, made of the lines `keys`. `straight` is false when its pieces are not on
 /// one straight line within the tolerance; `from` and `to` are then on the line through its longest
-/// piece.
+/// piece. `angle` (degrees) is the fold angle of the kind of line its longest piece is
+/// ([`LineKind::fold_angle`]).
 #[derive(Clone, Debug)]
 pub struct Hinge {
     pub a: usize,
@@ -69,6 +89,7 @@ pub struct Hinge {
     pub to: Point,
     pub keys: Vec<u64>,
     pub straight: bool,
+    pub angle: f64,
 }
 
 /// What can be wrong with fold lines, in the order [`blanks`] lists them.
@@ -1276,7 +1297,9 @@ impl Context<'_> {
             let sp = p.path.subpaths.first()?;
             Some((sp.anchors.first()?.p, sp.anchors.last()?.p))
         };
-        let (p0, p1) = group.iter().filter_map(|p| chord(p)).max_by(|x, y| x.0.distance(x.1).total_cmp(&y.0.distance(y.1)))?;
+        let ((p0, p1), longest) =
+            group.iter().filter_map(|p| Some((chord(p)?, p))).max_by(|(x, _), (y, _)| x.0.distance(x.1).total_cmp(&y.0.distance(y.1)))?;
+        let angle = longest.lines.iter().filter_map(|&l| self.lines.get(l)?.kind.fold_angle()).next().unwrap_or(90.0);
         let len = p0.distance(p1);
         // The longest piece only sets the direction; the length check is on the whole hinge below.
         if len.is_nan() || len <= 1e-9 {
@@ -1308,7 +1331,7 @@ impl Context<'_> {
         let mut keys = self.keys(lines);
         keys.sort_unstable();
         keys.dedup();
-        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, keys, straight })
+        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, keys, straight, angle })
     }
 
     /// Creases with no hinge: outside every blank, or dividing no two panels; and creases beside a
@@ -1426,7 +1449,7 @@ impl Context<'_> {
 /// The base panel of `panels`: the largest by area; panels whose areas differ by less than 1e-9 of
 /// the larger tie, and the tie goes to the one whose inside point is highest on the page, then
 /// leftmost.
-fn base_panel(panels: &[Panel]) -> Option<usize> {
+pub fn base_panel(panels: &[Panel]) -> Option<usize> {
     let top = panels.iter().map(|p| p.area).fold(f64::NEG_INFINITY, f64::max);
     if !top.is_finite() {
         return None;
@@ -1439,6 +1462,10 @@ fn base_panel(panels: &[Panel]) -> Option<usize> {
         .min_by(|a, b| a.1.y.total_cmp(&b.1.y).then(a.1.x.total_cmp(&b.1.x)))
         .map(|(i, _)| i)
 }
+
+mod pose;
+pub mod raster;
+pub use pose::{Folded, FoldedHinge, FoldedPanel, MAX_POLYGON_POINTS, Pose, fold, panel_at, pick, polygon};
 
 #[cfg(test)]
 mod tests;

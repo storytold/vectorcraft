@@ -52,7 +52,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers), aligned?: bool (item is a row of the first target's stack: each other target gets the effect on its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, a row of the art's stack: docs/mcp.md)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step); the art of a graph design in a graph series is left out, and objects that are all such art are an error (docs/mcp.md) → {ids, index, item, grouped?}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers), aligned?: bool (item is a row of the first target's stack: each other target gets the effect on its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, a row of the art's stack: docs/mcp.md), savedBevel?: [[x, y]…] (with params bevel {custom: name}: the custom bevel's points, used in place of the bevels file's; the journal records them so a replay draws the same bevel after the file changes)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step); the art of a graph design in a graph series is left out, and objects that are all such art are an error (docs/mcp.md) → {ids, index, item, grouped?}",
             has_doc,
             apply
         ),
@@ -79,7 +79,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), savedBevel?: [[x, y]…] (as effect.apply)} → {ids}",
             has_doc,
             set_params
         ),
@@ -442,6 +442,17 @@ fn check_revolve_count(n: &Node, cmd: &str) -> Result<()> {
 
 pub(crate) const ONE_3D: &str = "An object takes one 3D effect. Edit the existing effect's options, or remove it first.";
 
+/// The Pathfinder Options that `effect.apply` gives a Pathfinder effect for the keys its `params`
+/// leave out: the preferences' Pathfinder Options in force.
+pub fn pathfinder_effect_options(s: &Session) -> effects::PathfinderEffectOptions {
+    let current = super::pathops::current_pf_options(s);
+    effects::PathfinderEffectOptions {
+        precision: current.precision,
+        remove_redundant_points: current.remove_redundant_points,
+        remove_unpainted: current.remove_unpainted,
+    }
+}
+
 /// `effect.apply`: adds effect `effect` (or `id`) with `params`, its defaults filled in, to the
 /// targets' active item as one undo step. A 3D effect must fit each target, which takes only one;
 /// a Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
@@ -465,12 +476,29 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     super::params::check_effect_color(C, id, &params)?;
     super::params::check_effect_channel(C, id, &params)?;
     super::params::check_effect_center(C, id, &params)?;
+    super::params::check_effect_pathfinder(C, id, &params)?;
     // Crop Marks take their style from the preferences when applied.
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
     }
+    // A Pathfinder effect keeps the Pathfinder Options in force when it is applied, those `params`
+    // give aside. They join the journal entry, so replaying it gives the same effect.
+    if effects::takes_pathfinder_options(id) {
+        if let Value::Object(filled) = pathfinder_effect_options(s).to_params() {
+            for (key, v) in filled {
+                if params.get(&key).is_none() {
+                    params[key.as_str()] = v;
+                }
+            }
+        }
+        s.note_journal("params", params.clone());
+    }
     if texture_load_effect(id) {
         load_texture(&mut params, C)?;
+    }
+    // A custom bevel by name takes a copy of its points from the bevels file.
+    if bevel_effect(id) {
+        super::bevels::resolve_custom(s, p, &mut params, C)?;
     }
     // An SVG filter needs its <filter> element, and is named by its id.
     if id == effects::SVG_FILTER {
@@ -789,9 +817,13 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         super::params::check_effect_color(C, effect, &params)?;
         super::params::check_effect_channel(C, effect, &params)?;
         super::params::check_effect_center(C, effect, &params)?;
+        super::params::check_effect_pathfinder(C, effect, &params)?;
     }
     if edited.iter().any(|e| texture_load_effect(e)) {
         load_texture(&mut params, C)?;
+    }
+    if edited.iter().any(|e| bevel_effect(e)) || kind == Some(effects::EXTRUDE) {
+        super::bevels::resolve_custom(s, p, &mut params, C)?;
     }
     let targets = effect_targets(s, p, item, index, C)?;
     // The type each 3D effect already has, with nothing else to change, is no edit (and is not
@@ -805,6 +837,15 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         let ids: Vec<&str> =
             targets.iter().filter_map(|&(id, at, index)| d.node(id)?.appearance.effects_at(at)?.get(index).map(|e| e.id.as_str())).collect();
         if !ids.is_empty() && ids.iter().all(|id| *id == to) {
+            return Ok(json!({ "ids": [] }));
+        }
+    }
+    // Pathfinder effects given the values they already evaluate with, and nothing else to change,
+    // are no edit and record no undo step.
+    if kind.is_none() && warp_id.is_none() && visible.is_none() {
+        let d = &s.doc()?.doc;
+        let fx: Vec<&Effect> = targets.iter().filter_map(|&(id, at, index)| d.node(id)?.appearance.effects_at(at)?.get(index)).collect();
+        if !fx.is_empty() && fx.iter().all(|e| pathfinder_edit_changes_nothing(e, &params)) {
             return Ok(json!({ "ids": [] }));
         }
     }
@@ -874,6 +915,36 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+/// Does effect `id` take a `bevel` (Extrude & Bevel, Extrude & Bevel (Classic)), which may be a
+/// custom bevel given by name?
+fn bevel_effect(id: &str) -> bool {
+    id == effects::EXTRUDE || id == effects::CLASSIC_EXTRUDE
+}
+
+/// Does merging `params` into Pathfinder effect `e` leave it drawing as it does: the same Pathfinder
+/// Options ([`effects::PathfinderEffectOptions`], so an effect saved without them and given their
+/// defaults is unchanged), each option given equal to the one it stores (a precision that Scale
+/// Strokes & Effects took past its range evaluates at the bound but is still edited), and every
+/// other value given equal to the one it has?
+fn pathfinder_edit_changes_nothing(e: &Effect, params: &Value) -> bool {
+    if !effects::takes_pathfinder_options(&e.id) {
+        return false;
+    }
+    let Some(given) = params.as_object().filter(|m| !m.is_empty()) else { return true };
+    let current = effects::merged_params(&e.id, &e.params);
+    let mut after = current.clone();
+    if let Value::Object(m) = &mut after {
+        m.extend(given.clone());
+    }
+    let others_same = given.iter().filter(|(k, _)| !effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str())).all(|(k, v)| current.get(k) == Some(v));
+    let same_value = |a: &Value, b: &Value| a == b || a.as_f64().is_some_and(|x| b.as_f64() == Some(x));
+    let stored_same = given
+        .iter()
+        .filter(|(k, _)| effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str()))
+        .all(|(k, v)| e.params.get(k).is_none_or(|stored| same_value(stored, v)));
+    others_same && stored_same && effects::PathfinderEffectOptions::from_params(&current) == effects::PathfinderEffectOptions::from_params(&after)
 }
 
 // ---------- Load Texture ----------

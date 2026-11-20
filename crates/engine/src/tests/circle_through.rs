@@ -1,5 +1,6 @@
-//! `shape.circleThroughPoints`: a circle through three given points, or through the three anchor
-//! points selected with Direct Selection, and the Ellipse tool's three Shift-clicks that run it.
+//! `shape.circleThroughPoints`: a circle through two or three given points, or through the two or
+//! three anchor points selected with Direct Selection, the Ellipse tool's three Shift-clicks that
+//! run it, and the Circle tool.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
@@ -95,13 +96,42 @@ fn coincident_or_collinear_points_are_refused() {
     assert!((r - want).abs() / want < 1e-9 && (cx - 200.0).abs() < 1e-6 && (cy - (199.99 + want)).abs() / want < 1e-9, "{out}");
 }
 
-/// Points that are not three pairs of finite numbers are an error, not a fallback.
+/// Two points are the ends of a diameter: (20, 40) and (100, 100) give the circle centered at
+/// (60, 70) with radius 50, through both points, in one undo step. Two points that are the same
+/// are refused, and so is a circle that would reach past the canvas, from two points or from three
+/// nearly on one line; nothing is drawn and no undo step is recorded.
+#[test]
+fn two_points_are_the_ends_of_a_diameter() {
+    let mut s = session();
+    let undo = undo_len(&s);
+    let out = s.execute(C, &json!({"points": [[20, 40], [100, 100]]})).unwrap();
+    assert_eq!((out["cx"].as_f64(), out["cy"].as_f64(), out["radius"].as_f64()), (Some(60.0), Some(70.0), Some(50.0)), "{out}");
+    let id = id_of(&out);
+    assert!(bounds_are(&s, id, vectorcraft_geom::Rect::new(10.0, 20.0, 110.0, 120.0)));
+    assert!(farthest_from_path(&s, id, &[Point::new(20.0, 40.0), Point::new(100.0, 100.0)]) < 50.0 * 3e-4);
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    assert_eq!(undo_len(&s), undo + 1);
+    let (undo, count) = (undo_len(&s), object_count(&s));
+    let e = s.execute(C, &json!({"points": [[30, 30], [30, 30]]})).unwrap_err().to_string();
+    assert!(e.contains("no circle passes through these points"), "{e}");
+    // 4,100,000 pt across, past the canvas's 4,000,000 pt from the origin; and three points 0.001 pt
+    // off a chord 200 pt long, whose circle has a radius of about 5,000,000 pt.
+    for points in [json!([[0, 0], [4_100_000, 0]]), json!([[0, 0], [200, 0], [100, 0.001]])] {
+        let e = s.execute(C, &json!({ "points": points })).unwrap_err().to_string();
+        assert!(e.contains("result would exceed the canvas"), "{points}: {e}");
+    }
+    assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
+}
+
+/// Points that are not two or three pairs of finite numbers are an error, not a fallback.
 #[test]
 fn malformed_points_are_refused() {
     let mut s = session();
     let undo = undo_len(&s);
     for points in [
-        json!([[0, 0], [10, 0]]),
+        json!([[0, 0]]),
+        json!([]),
+        json!([[0, 0], [10]]),
         json!([[0, 0], [10, 0], [0, 10], [5, 5]]),
         json!([[0, 0], [10, 0], [0]]),
         json!([[0, 0], [10, 0], ["0", 10]]),
@@ -109,12 +139,12 @@ fn malformed_points_are_refused() {
         json!([[0, 0], [10, 0], [0, 10, 3]]),
     ] {
         let e = s.execute(C, &json!({ "points": points })).unwrap_err().to_string();
-        assert!(e.contains("`points` must be three [x, y] pairs of numbers"), "{points}: {e}");
+        assert!(e.contains("`points` must be two or three [x, y] pairs of numbers"), "{points}: {e}");
     }
     assert_eq!(undo_len(&s), undo);
 }
 
-/// With `points` left out, the three anchor points selected with Direct Selection give the
+/// With `points` left out, the two or three anchor points selected with Direct Selection give the
 /// circle, from one path or several; any other number of them is an error.
 #[test]
 fn three_direct_selected_anchor_points_give_the_circle() {
@@ -130,11 +160,15 @@ fn three_direct_selected_anchor_points_give_the_circle() {
     s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
     let out = s.execute(C, &json!({"points": null})).unwrap();
     assert_eq!((out["cx"].as_f64(), out["cy"].as_f64()), (Some(40.0), Some(30.0)), "{out}");
-    // Two or four anchors, or a path of four anchors selected whole.
-    for picked in [json!([[0, 0], [0, 1]]), json!([[0, 0], [0, 1], [0, 2], [0, 3]])] {
+    // Two anchors are the ends of a diameter: (0, 0) and (80, 0).
+    s.execute("select.anchors", &json!({"id": path.0, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    let out = s.execute(C, &json!({})).unwrap();
+    assert_eq!((out["cx"].as_f64(), out["cy"].as_f64(), out["radius"].as_f64()), (Some(40.0), Some(0.0), Some(40.0)), "{out}");
+    // One or four anchors, or a path of four anchors selected whole.
+    for picked in [json!([[0, 0]]), json!([[0, 0], [0, 1], [0, 2], [0, 3]])] {
         s.execute("select.anchors", &json!({"id": path.0, "anchors": picked, "mode": "set"})).unwrap();
         let e = s.execute(C, &json!({})).unwrap_err().to_string();
-        assert!(e.contains("direct-select three anchor points, or give `points`"), "{picked}: {e}");
+        assert!(e.contains("direct-select two or three anchor points, or give `points`"), "{picked}: {e}");
     }
     s.execute("select.set", &json!({"ids": [path.0]})).unwrap();
     assert!(s.execute(C, &json!({})).is_err());
@@ -153,7 +187,7 @@ fn three_direct_selected_anchor_points_give_the_circle() {
     s.execute("select.segments", &json!({"id": path.0, "segments": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
     assert_eq!(s.doc().unwrap().selection.anchors.get(&path).map(|a| a.len()), Some(3));
     let e = s.execute(C, &json!({})).unwrap_err().to_string();
-    assert!(e.contains("direct-select three anchor points, or give `points`"), "{e}");
+    assert!(e.contains("direct-select two or three anchor points, or give `points`"), "{e}");
     assert_eq!(undo_len(&s), undo);
 }
 
@@ -168,6 +202,35 @@ fn the_circle_is_not_moved_onto_the_pixel_grid() {
     let id = id_of(&s.execute(C, &json!({ "points": pairs })).unwrap());
     assert!(farthest_from_path(&s, id, &points) < 51.0 * 3e-4, "{}", farthest_from_path(&s, id, &points));
     assert!(!node(&s, id).extras().pixel_aligned);
+}
+
+/// `anchors: "points"` puts an anchor exactly at each point, with one more on each half of a
+/// diameter's circle; the circle is a plain path, not pixel-aligned, and one undo step. Any other
+/// `anchors` value is an error and draws nothing.
+#[test]
+fn anchors_at_the_points_puts_an_anchor_at_each_point() {
+    let mut s = session();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let undo = undo_len(&s);
+    let points = [Point::new(0.3, 0.2), Point::new(80.6, 0.1), Point::new(0.4, 60.7)];
+    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
+    let id = id_of(&s.execute(C, &json!({ "points": pairs, "anchors": "points" })).unwrap());
+    let n = node(&s, id);
+    let anchors: Vec<Point> = n.path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert!(points.iter().all(|p| anchors.contains(p)), "{anchors:?}");
+    assert!(matches!(n.kind, NodeKind::Path { live: None, .. }), "{:?}", n.kind);
+    assert!(!n.extras().pixel_aligned);
+    assert_eq!(undo_len(&s), undo + 1);
+    let id = id_of(&s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": "points" })).unwrap());
+    let anchors: Vec<Point> = node(&s, id).path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(anchors.len(), 4, "{anchors:?}");
+    assert_eq!((anchors[0], anchors[2]), (Point::new(0.0, 0.0), Point::new(100.0, 0.0)));
+    let (count, undo) = (object_count(&s), undo_len(&s));
+    for bad in [json!("corners"), json!(true), json!(4), Value::Null] {
+        let e = s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": bad })).unwrap_err().to_string();
+        assert!(e.contains("`anchors` must be one of standard, points"), "{e}");
+    }
+    assert_eq!((object_count(&s), undo_len(&s)), (count, undo));
 }
 
 fn view() -> ViewInfo {

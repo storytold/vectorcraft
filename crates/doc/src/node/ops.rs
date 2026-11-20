@@ -90,6 +90,42 @@ impl Node {
         matches!(self.kind, NodeKind::RulerGuide { .. } | NodeKind::Path { guide: true, .. })
     }
 
+    /// This object without the paths made into guides among the members of its groups, layers,
+    /// Intertwine groups and compound paths, at any depth, for measuring the art around them while
+    /// Lock Guides or Hide Guides leaves them out (#8538). The clipping path of a clip group or
+    /// layer and the original shapes of a Shaper group stay, guides or not, so the object keeps
+    /// its structure. `None` when it holds no such guide.
+    pub fn without_guides(&self) -> Option<Node> {
+        let (NodeKind::Layer { children, .. }
+        | NodeKind::Group { children, .. }
+        | NodeKind::Intertwine { children }
+        | NodeKind::Compound { children, .. }) = &self.kind
+        else {
+            return None;
+        };
+        let keep = usize::from(self.clips() || self.extras().shaper.is_some());
+        let mut changed = false;
+        let mut out = Vec::with_capacity(children.len());
+        for (i, c) in children.iter().enumerate() {
+            if i >= keep && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                changed = true;
+            } else if let Some(stripped) = c.without_guides() {
+                changed = true;
+                out.push(Arc::new(stripped));
+            } else {
+                out.push(c.clone());
+            }
+        }
+        if !changed {
+            return None;
+        }
+        let mut n = self.clone();
+        if let Some(c) = n.children_mut() {
+            *c = out;
+        }
+        Some(n)
+    }
+
     /// A template layer (Layer Options → Template).
     pub fn is_template(&self) -> bool {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
@@ -216,8 +252,10 @@ impl Node {
     /// path give it ([`crate::hit::set_clip_region`]). An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
-    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
-    /// takes in where its spine can put its keys and steps.
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`], taking in the
+    /// shapes their art paints with the geometry effects of their own fill or stroke
+    /// ([`crate::hit::set_image_paint`]). A blend's box takes in where its spine can put its keys
+    /// and steps.
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -254,14 +292,8 @@ impl Node {
                     .map(|b| b.inflate(o, o))
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
-            // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
-            // the farthest it can reach from its shape.
-            NodeKind::Image(_) => {
-                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
-                    let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                    vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
-                })
-            }
+            // The frame and each shape the image's own fills and strokes paint.
+            NodeKind::Image(_) => self.with_own_paint(self.geometric(symbols), symbols),
             // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
@@ -272,13 +304,15 @@ impl Node {
             NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
             }
-            // The live geometry effects of the clipping paths in the art can draw it past its box.
+            // The live geometry effects of the clipping paths in the art can draw it past its box,
+            // and the box takes in each shape the art paints with the geometry effects of the
+            // instance's own fill or stroke.
             NodeKind::SymbolInstance { symbol, xf } => {
                 let Some((s, art, region)) = symbols.and_then(|s| {
                     let a = s.art(symbol)?;
                     Some((s, a, a.reshaped?))
                 }) else {
-                    return self.visual(symbols);
+                    return self.with_own_paint(self.visual(symbols), symbols);
                 };
                 let map = s.document().symbol_slice_map_of(symbol, art.geometric, *xf);
                 let placed = if moves_only(*xf) && map.is_none() {
@@ -294,10 +328,20 @@ impl Node {
                     map.map_or_else(|| xf.transform_rect_bbox(all), |m| m.placement_bounds(all)).inflate(grow, grow)
                 };
                 let o = self.appearance.outset();
-                vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o)))
+                self.with_own_paint(vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o))), symbols)
             }
             _ => self.visual(symbols),
         }
+    }
+
+    /// `start` grown by each shape the node's own fills and strokes paint
+    /// ([`crate::hit::set_image_paint`]), a stroke's grown by the farthest it can reach from its
+    /// shape.
+    fn with_own_paint(&self, start: Option<Rect>, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(start, |acc, (bp, _, item)| {
+            let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+            vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+        })
     }
 
     /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path. A
@@ -342,6 +386,10 @@ impl Node {
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
+            // A distorted image is bounded by its corners.
+            NodeKind::Image(_) if self.is_distorted_image() => {
+                self.image_corners().map(|q| q[1..].iter().fold(Rect::from_points(q[0], q[0]), |r, p| r.union_pt(*p)))
+            }
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let art = symbols.and_then(|s| s.art(symbol)).map_or(SYMBOL_SQUARE, |a| a.geometric);
@@ -476,8 +524,17 @@ impl Node {
         {
             dimension.transform(a);
         }
+        // So does a flare's center and end point.
+        if let Some(e) = self.extras_if_any()
+            && let Some(flare) = &mut e.flare
+        {
+            flare.transform(a);
+        }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
+        // A distorted image's placement nearest its corners, before they are transformed (`None`
+        // within when its stored corners are refused, and `None` for anything else).
+        let image_before = self.extras().image_quad.is_some().then(|| crate::image_quad::nearest_affine(self));
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -587,7 +644,8 @@ impl Node {
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
-        // The area where an Intertwine member is drawn over the others moves with it.
+        // The area where an Intertwine member is drawn over the others moves with it, and so do a
+        // distorted image's corners.
         if let Some(e) = self.extras_if_any() {
             if let Some(area) = e.intertwine.as_mut() {
                 area.transform(a);
@@ -595,6 +653,23 @@ impl Node {
             for area in &mut e.intertwine_tiers {
                 area.transform(a);
             }
+            if let Some(q) = e.image_quad.as_mut() {
+                for p in q.iter_mut() {
+                    *p = a * *p;
+                }
+            }
+        }
+        // Corners that a scale squeezes past what a perspective map can place (or that were
+        // refused already) leave the image placed by its transform: for valid corners, the
+        // placement that was nearest them, transformed, rather than the rectangle it had before
+        // it was distorted.
+        if let Some(before) = image_before
+            && self.image_quad().is_none()
+        {
+            if let (Some(near), NodeKind::Image(im)) = (before, &mut self.kind) {
+                im.xf = a * near;
+            }
+            self.extras_mut().image_quad = None;
         }
     }
 

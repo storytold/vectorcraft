@@ -259,7 +259,7 @@ fn tile_brings_floating_documents_back_into_the_grid() {
     frame(&mut app, &ctx, vec![]);
     let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1], "a floating document leaves the grid; the tabbed ones share it");
-    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3}));
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3, "layout": "grid"}));
     frame(&mut app, &ctx, vec![]);
     let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1, 2]);
@@ -514,9 +514,10 @@ fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
     let shapes = frame(&mut app, &ctx, vec![]);
     let title = app.session.documents()[0].title();
     let tab = tab_at(&shapes, &title);
-    // A short drag, and a drag along the strip, leave the tabs as they are.
+    // A short drag, and a drag along the strip short of the next tab's middle, leave the tabs as
+    // they are.
     drag(&mut app, &ctx, tab, tab + vec2(0.0, 35.0 + TEAR_OFF - 10.0 - tab.y));
-    drag(&mut app, &ctx, tab, tab + vec2(300.0, 0.0));
+    drag(&mut app, &ctx, tab, tab + vec2(40.0, 0.0));
     assert!(app.ui.floating.is_empty(), "the document stays under its tab");
     assert_eq!(app.session.active_index(), Some(2), "a drag is not a click");
     // Dragged well below the strip, it floats in a window under the pointer and becomes current.
@@ -844,7 +845,7 @@ fn arrange_treats_each_view_as_a_window() {
     assert!(!enabled(&app, "window.arrange.tile") && !enabled(&app, "window.arrange.cascade"), "one window");
     app.run("window.newWindow", json!({})).unwrap();
     assert!(enabled(&app, "window.arrange.tile") && enabled(&app, "window.arrange.cascade"), "two views of one document");
-    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 2}));
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 2, "layout": "grid"}));
     app.run("window.arrange.cascade", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let uid = app.session.documents()[0].uid;

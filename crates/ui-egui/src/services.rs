@@ -31,9 +31,17 @@ impl FilePick {
     }
 }
 
+pub type CheckApplicationFn = Box<dyn Fn(&str) -> Result<(), String>>;
+pub type OpenApplicationFn = Box<dyn FnMut(&str, &str) -> Result<bool, String>>;
+
 pub type PickOpen = Box<dyn FnMut(&FilePick) -> Option<String>>;
 
 pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
+
+pub type PickOpenFiles = Box<dyn FnMut(&FilePick) -> Vec<String>>;
+
+/// Shows a folder picker that starts in the given folder; returns the folder picked.
+pub type PickFolderAt = Box<dyn FnMut(&str) -> Option<String>>;
 
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 
@@ -120,6 +128,9 @@ pub struct Services {
     pub open_url: Option<OpenUrlFn>,
     /// Show an open dialog for several files (File → Place…); returns their paths (none: cancelled).
     pub pick_open_multi: Option<Box<dyn FnMut() -> Vec<String>>>,
+    /// Show an open dialog for several files of the pick's types (a script's `File.openDialog` with
+    /// `multiSelect`); returns their paths (none: cancelled). Without it, an open dialog for one.
+    pub pick_open_files: Option<PickOpenFiles>,
     /// Web: start an async pick of files to place (they arrive via `place_inbox`).
     pub place_async: Option<Box<dyn FnMut()>>,
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
@@ -158,8 +169,15 @@ pub struct Services {
     /// with Preferences › File Handling › Use System Defaults for Edit Original off); `Ok(false)`
     /// when it isn't. Without it Edit Original uses `open_file`.
     pub open_in_photocraft: Option<OpenInFn>,
+    /// Validate a native-picked application before keeping it as the raster editor.
+    pub check_application: Option<CheckApplicationFn>,
+    /// Launch a native-picked application with one file argument; false only when absent.
+    pub open_in_application: Option<OpenApplicationFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
+    /// Show a folder picker that starts in a folder (a script's `selectDlg`); returns its path.
+    /// Without it, `pick_folder`, which starts where the host starts it.
+    pub pick_folder_at: Option<PickFolderAt>,
     /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, Linux
     /// through the desktop portal, and browsers with an EyeDropper): Sample Color from Screen
     /// ([`screen_color`]). Without it that command answers with an error and the Color Picker's

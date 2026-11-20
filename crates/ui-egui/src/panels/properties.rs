@@ -1,4 +1,4 @@
-//! The Properties panel: context-sensitive sections like Illustrator's.
+//! The Properties panel: sections that change with the selection.
 
 use egui::Ui;
 use serde_json::json;
@@ -26,7 +26,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing_artboards = app.session.tool_id() == "artboard";
     // Ruler guides selected on their own (a click on one): their position.
     let guides = super::transform::selected_guides(app);
-    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
+    let label = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
     ui.add_space(4.0);
     if editing_artboards {
@@ -377,6 +377,7 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    crate::panels::image_trace::split_row(app, ui);
     if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
         crate::panels::image_trace::open_settings(app);
     }
@@ -766,7 +767,9 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "ruler", tl!("Show Rulers (⌘R)"), v.rulers, 26.0).clicked() {
             app.run("view.rulers", json!({})).ok();
         }
-        if widgets::icon_button(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, 26.0).clicked() {
+        // Trim View holds the grid and the guides off while it is on (#8363).
+        let shows = crate::menus::enabled(app, "view.grid");
+        if widgets::icon_button_enabled(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, shows, 26.0).clicked() {
             app.run("view.grid", json!({})).ok();
         }
         let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
@@ -778,7 +781,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Guides"));
     ui.horizontal(|ui| {
         let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "layout-grid", tl!("Show Guides"), v.guides, 26.0).clicked() {
+        let shows = crate::menus::enabled(app, "view.guides");
+        if widgets::icon_button_enabled(ui, "layout-grid", tl!("Show Guides"), v.guides, shows, 26.0).clicked() {
             app.run("view.guides", json!({})).ok();
         }
         if widgets::icon_button(ui, "sparkles", tl!("Smart Guides (⌘U)"), v.smart_guides, 26.0).clicked() {
@@ -985,7 +989,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
+        if let Some(id) = super::stroke::profile_dropdown(app, ui, stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     });

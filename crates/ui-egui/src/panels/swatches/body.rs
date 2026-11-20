@@ -1,4 +1,4 @@
-use super::actions::{bottom, edit_group};
+use super::actions::{DRAG_DOC, bottom, edit_group};
 use super::dnd::{TileEvents, apply_drop, click_selection, highlighted, selection, tile_input, zone_input};
 use super::tiles::{
     draw_folder, draw_registration, folder_tile, global_mark, list_icons, list_row, list_row_name, pattern_thumb, tile_grid, tile_id,
@@ -116,7 +116,9 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                 }
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.scope_id().with("swatch-drop"), Sense::hover());
+        // The drop zone ends where the list does, so it does not reach over the buttons below a list
+        // shrunk to its rows.
+        let zone = ui.interact(out.inner_rect.intersect(ui.min_rect()), ui.scope_id().with("swatch-drop"), Sense::hover());
         zone_input(ui, &zone, &mut ev);
         let r = ui.min_rect();
         ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
@@ -129,6 +131,9 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
             app.run("ui.swatchOptions", json!({"name": e.name()})).ok();
         }
         None => {}
+    }
+    if ev.started {
+        set_pstate(ui.ctx(), DRAG_DOC, app.session.active().map(|st| st.uid));
     }
     if let Some(drop) = ev.drop {
         apply_drop(app, drop);
@@ -190,6 +195,14 @@ pub(super) fn focus_swatch(app: &VectorcraftApp, ui: &Ui, active: Option<&str>) 
     let changed = reselected || last_art.is_none() || last_swatch.as_deref() != active;
     set_pstate(ui.ctx(), "swatch-focus", (Some(art), active.map(str::to_string)));
     active.filter(|_| changed).map(str::to_string)
+}
+
+/// Whether the panel's selection is still the one it showed last: neither another document nor
+/// other art has been selected since, which [`focus_swatch`] clears it for on the next frame.
+pub(super) fn selection_is_current(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    let art: Option<SelectedArt> = app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect()));
+    let (last_art, _): (Option<Option<SelectedArt>>, Option<String>) = pstate(ctx, "swatch-focus");
+    last_art.is_none_or(|l| l == art)
 }
 
 /// The swatch the active paint comes from: a linked colour's global swatch (a tint's tint swatch

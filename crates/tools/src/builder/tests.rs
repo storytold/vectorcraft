@@ -471,6 +471,106 @@ fn shape_builder_hover_builds_a_small_map_at_once() {
     assert_eq!((t.cache.builds, t.cache.background), (1, 0));
 }
 
+fn status(msg: &str) -> Vec<Action> {
+    vec![Action::Status(msg.into())]
+}
+
+/// A click or drag with nothing selected shows what to select when it is released, and Escape
+/// during the press keeps the release quiet.
+#[test]
+fn shape_builder_with_nothing_selected_says_what_to_select() {
+    let (d, _, _) = two_rects();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS), "a click");
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 25.0, 50.0)).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Drag, 125.0, 50.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_PATHS), "a drag");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)).is_empty(), "a release without a press");
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)).is_empty(), "a canceled press");
+    assert!(!t.claims_key(&cx, ToolKey::Escape));
+}
+
+/// With A of the overlapping squares A and B selected, a click on the part of B outside A builds
+/// nothing and says to select every path to merge; a click on empty canvas says there is no
+/// region; a click inside A still merges A alone and clears that status, and the click after it
+/// gives the merge alone.
+#[test]
+fn shape_builder_names_the_unselected_path_under_a_release_that_built_nothing() {
+    let (d, a, _) = two_rects();
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(SELECT_ALL_PATHS));
+    t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION));
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(
+        matches!(acts.as_slice(), [Action::Status(m), Action::Exec(id, v)] if m.is_empty() && id == "shapeBuilder.merge" && v["ids"] == json!([a.0])),
+        "{acts:?}"
+    );
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0));
+    assert!(matches!(acts.as_slice(), [Action::Exec(id, _)] if id == "shapeBuilder.merge"), "{acts:?}");
+    // A locked or hidden B cannot be picked, so the release says there is no region.
+    for hide in [false, true] {
+        let (mut d, a, b) = two_rects();
+        let n = d.node_mut(b).unwrap();
+        if hide {
+            n.visible = false;
+        } else {
+            n.locked = true;
+        }
+        let mut s = Selection::default();
+        s.set([a]);
+        let cx = crate::testutil::cx(&d, &s, &p);
+        let mut t = ShapeBuilderTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 125.0, 50.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 125.0, 50.0)), status(NO_REGION), "hidden: {hide}");
+    }
+}
+
+/// A selection that holds no path or compound path says to select one.
+#[test]
+fn shape_builder_with_no_path_selected_says_to_select_paths() {
+    let (mut d, a, _) = two_rects();
+    d.node_mut(a).unwrap().locked = true;
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 75.0, 50.0)), status(SELECT_PATHS));
+}
+
+/// A gesture made while the map of a large selection is being built and released over nothing
+/// gives its status once, when it is replayed.
+#[test]
+fn shape_builder_replayed_gesture_over_nothing_gives_its_status_once() {
+    let (d, s) = square_row(200);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 450.0, 450.0)).is_empty());
+    assert_eq!(t.cache.builds, 0, "the gesture did not wait for the map");
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 450.0, 450.0)).is_empty(), "the gesture waits for the map");
+    assert!(t.editing());
+    assert_eq!(t.finish_edit(&cx), status(NO_REGION));
+    assert!(t.finish_edit(&cx).is_empty() && !t.editing());
+}
+
 #[test]
 fn shape_builder_alt_drag_erases_and_empty_drag_does_nothing() {
     let (d, a, b) = two_rects();
@@ -485,7 +585,7 @@ fn shape_builder_alt_drag_erases_and_empty_drag_does_nothing() {
     let Action::Exec(_, v) = &acts[0] else { panic!() };
     assert_eq!(v["erase"], true);
     t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), status(NO_REGION), "the release edits nothing and says why");
 }
 
 /// Squares A (0..100) and B (50..150 both ways), overlapping at a corner, selected.
@@ -998,9 +1098,9 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 0.5, 27.0));
     let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!((&v["splitStroke"], &v["points"]), (&json!(true), &json!([[-1.0, 25.0]])));
-    // A release farther away is a drag, which splits nothing.
+    // A release farther away is a drag, which splits nothing and says it touched no region.
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
-    assert!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, -1.0, 30.0)), status(NO_REGION));
     // So is a Straight Line drag that goes away and ends back near the press.
     t.set_option("selection", &json!("straightLine"));
     t.pointer(&cx, &ev(PointerKind::Down, -1.0, 25.0));
@@ -1008,11 +1108,12 @@ fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer()
     let acts = t.pointer(&cx, &ev(PointerKind::Up, -0.5, 25.5));
     assert!(!acts.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("splitStroke").is_some())), "{acts:?}");
     t.set_option("selection", &json!("freeform"));
-    // A drag merges as before and sends no switch.
+    // A drag merges as before and sends no switch; it clears the status the drag before it gave.
     t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
     t.pointer(&cx, &ev(PointerKind::Drag, 75.0, 75.0));
     let acts = t.pointer(&cx, &ev(PointerKind::Up, 75.0, 75.0));
-    let [Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    let [Action::Status(m), Action::Exec(_, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert!(m.is_empty(), "{m}");
     assert!(v.get("splitStroke").is_none(), "{v}");
 }
 
@@ -1030,6 +1131,275 @@ fn hatch_far_from_the_origin_ends() {
     // At 1e17 a 4-point gap is below the coordinates' precision: adding it doesn't move the line.
     let bp = shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath();
     assert!(hatch(&bp, 4.0).elements().len() <= 2 * 402);
+}
+
+/// [`hatch`] as it tested every edge on every scanline, the reference the sweep must match.
+fn hatch_every_edge(path: &BezPath, gap: f64) -> BezPath {
+    let mut out = BezPath::new();
+    let b = path.bounding_box();
+    if b.width() <= 0.0 || b.height() <= 0.0 {
+        return out;
+    }
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    let rot = |p: Point| Point::new((p.x + p.y) * s, (p.y - p.x) * s);
+    let unrot = |p: Point| Point::new((p.x - p.y) * s, (p.x + p.y) * s);
+    let mut edges: Vec<(Point, Point)> = vec![];
+    let mut first = Point::ZERO;
+    let mut last = Point::ZERO;
+    kurbo::flatten(path.iter(), gap.max(1e-3) * 0.1, |el| match el {
+        kurbo::PathEl::MoveTo(p) => {
+            if last != first {
+                edges.push((rot(last), rot(first)));
+            }
+            first = p;
+            last = p;
+        }
+        kurbo::PathEl::LineTo(p) => {
+            edges.push((rot(last), rot(p)));
+            last = p;
+        }
+        kurbo::PathEl::ClosePath => {
+            if last != first {
+                edges.push((rot(last), rot(first)));
+            }
+            last = first;
+        }
+        _ => {}
+    });
+    if last != first {
+        edges.push((rot(last), rot(first)));
+    }
+    let (mut y0, mut y1) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (a, c) in &edges {
+        y0 = y0.min(a.y.min(c.y));
+        y1 = y1.max(a.y.max(c.y));
+    }
+    let gap = gap.max((y1 - y0) / 400.0).max(1e-6);
+    let start = (y0 / gap).floor() * gap + gap * 0.5;
+    let mut xs: Vec<f64> = vec![];
+    for i in 0..402u32 {
+        let y = start + f64::from(i) * gap;
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
+            break;
+        }
+        xs.clear();
+        for (a, c) in &edges {
+            if (a.y <= y) != (c.y <= y) {
+                xs.push(a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x));
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        for pair in xs.as_chunks::<2>().0 {
+            out.move_to(unrot(Point::new(pair[0], y)));
+            out.line_to(unrot(Point::new(pair[1], y)));
+        }
+    }
+    out
+}
+
+/// A path's elements with every coordinate as its bits, so NaN and -0.0 compare exactly.
+fn path_bits(p: &BezPath) -> Vec<(u8, Vec<u64>)> {
+    let bits = |pts: &[Point]| pts.iter().flat_map(|p| [p.x.to_bits(), p.y.to_bits()]).collect();
+    p.elements()
+        .iter()
+        .map(|el| match *el {
+            kurbo::PathEl::MoveTo(a) => (0, bits(&[a])),
+            kurbo::PathEl::LineTo(a) => (1, bits(&[a])),
+            kurbo::PathEl::QuadTo(a, b) => (2, bits(&[a, b])),
+            kurbo::PathEl::CurveTo(a, b, c) => (3, bits(&[a, b, c])),
+            kurbo::PathEl::ClosePath => (4, vec![]),
+        })
+        .collect()
+}
+
+/// A closed polygon through `pts`.
+fn polygon(pts: impl IntoIterator<Item = Point>) -> BezPath {
+    let mut bp = BezPath::new();
+    for (i, p) in pts.into_iter().enumerate() {
+        if i == 0 {
+            bp.move_to(p);
+        } else {
+            bp.line_to(p);
+        }
+    }
+    bp.close_path();
+    bp
+}
+
+/// A polygon of `n` sides inscribed in the circle of radius `r` about the origin.
+fn circle_polygon(n: u32, r: f64) -> BezPath {
+    polygon((0..n).map(|i| {
+        let t = std::f64::consts::TAU * f64::from(i) / f64::from(n);
+        Point::new(r * t.cos(), r * t.sin())
+    }))
+}
+
+/// The paths the hatch is checked on: many edges, a random star, holes, several subpaths, a
+/// sliver, curves, edges along the hatch, repeated outlines, an open path, far coordinates, an
+/// empty path and NaN and infinite coordinates.
+fn hatch_cases() -> Vec<(&'static str, BezPath)> {
+    let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+    let mut rand = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let star = polygon((0..300).map(|i| {
+        let t = std::f64::consts::TAU * f64::from(i) / 300.0;
+        let r = 100.0 + 300.0 * rand();
+        Point::new(r * t.cos(), r * t.sin())
+    }));
+    let mut holes = shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 200.0)).to_bezpath();
+    holes.extend(polygon([(50.0, 50.0), (50.0, 150.0), (120.0, 150.0), (120.0, 50.0)].map(Point::from)));
+    holes.extend(polygon([(180.0, 40.0), (260.0, 100.0), (180.0, 160.0)].map(Point::from)));
+    holes.extend(circle_polygon(40, 30.0).iter().map(|el| match el {
+        kurbo::PathEl::MoveTo(p) => kurbo::PathEl::MoveTo(p + kurbo::Vec2::new(400.0, 100.0)),
+        kurbo::PathEl::LineTo(p) => kurbo::PathEl::LineTo(p + kurbo::Vec2::new(400.0, 100.0)),
+        other => other,
+    }));
+    let mut repeated = BezPath::new();
+    for _ in 0..7 {
+        repeated.extend(shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)).to_bezpath());
+    }
+    let mut open = BezPath::new();
+    open.move_to((0.0, 0.0));
+    open.line_to((120.0, 10.0));
+    open.line_to((60.0, 90.0));
+    vec![
+        ("2,000-sided circle", circle_polygon(2000, 500.0)),
+        ("300-point star", star),
+        ("holes and subpaths", holes),
+        ("sliver", polygon([(0.0, 0.0), (900.0, 1.0), (900.0, 1.002)].map(Point::from))),
+        ("curves", kurbo::Circle::new((10.0, -20.0), 300.0).to_path(0.01)),
+        ("edges along the hatch", polygon([(0.0, 0.0), (10.0, 10.0), (0.0, 20.0), (-10.0, 10.0)].map(Point::from))),
+        ("repeated outlines", repeated),
+        ("open path", open),
+        ("far from the origin", shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath()),
+        ("empty", BezPath::new()),
+        ("NaN", polygon([(0.0, 0.0), (100.0, f64::NAN), (100.0, 100.0), (0.0, 80.0)].map(Point::from))),
+        ("infinite", polygon([(0.0, 0.0), (f64::INFINITY, 50.0), (100.0, 100.0)].map(Point::from))),
+    ]
+}
+
+#[test]
+fn hatch_matches_testing_every_edge() {
+    for (name, bp) in hatch_cases() {
+        for gap in [0.5, 4.0, 40.0] {
+            assert_eq!(path_bits(&hatch(&bp, gap)), path_bits(&hatch_every_edge(&bp, gap)), "{name} at gap {gap}");
+        }
+    }
+}
+
+#[test]
+fn hatch_tests_only_the_edges_spanning_each_line() {
+    let bp = circle_polygon(2000, 500.0);
+    let before = map::HATCH_EDGE_TESTS.with(std::cell::Cell::get);
+    let h = hatch(&bp, 4.0);
+    let tests = map::HATCH_EDGE_TESTS.with(std::cell::Cell::get) - before;
+    // Each line crosses the circle once, so it has one segment.
+    let lines = h.elements().len() / 2;
+    assert!(lines > 200, "{lines}");
+    assert!(tests * 20 < lines * 2000, "{tests} edge tests on {lines} lines of 2,000 edges");
+}
+
+#[test]
+fn hatch_sweep_finds_the_crossings_of_every_edge() {
+    let p = Point::new;
+    let edges = vec![
+        (p(0.0, 0.0), p(1.0, 1.0)),
+        (p(1.0, 1.0), p(0.0, 2.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+        (p(5.0, 1.0), p(9.0, 1.0)),
+        (p(2.0, -0.0), p(2.0, 0.0)),
+        (p(4.0, -0.0), p(4.0, 3.0)),
+        (p(6.0, 0.5), p(6.0, 0.5)),
+        (p(7.0, f64::NAN), p(7.0, 2.0)),
+        (p(8.0, 0.0), p(8.0, f64::INFINITY)),
+        (p(f64::NAN, 0.0), p(1.0, 2.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+        (p(3.0, 2.0), p(3.0, -1.0)),
+    ];
+    let mut sweep = map::EdgeSweep::new(edges.clone());
+    let mut xs = vec![];
+    for y in [-2.0, -1.0, -0.0, 0.0, 0.5, 1.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0] {
+        let mut old: Vec<f64> =
+            edges.iter().filter(|(a, c)| (a.y <= y) != (c.y <= y)).map(|(a, c)| a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x)).collect();
+        xs.clear();
+        sweep.crossings(y, &mut xs);
+        old.sort_by(f64::total_cmp);
+        xs.sort_by(f64::total_cmp);
+        let bits = |v: &[f64]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        assert_eq!(bits(&xs), bits(&old), "at y = {y}");
+    }
+}
+
+fn thread_cpu() -> Option<std::time::Duration> {
+    let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    stat.split_whitespace().next()?.parse().ok().map(std::time::Duration::from_nanos)
+}
+
+/// The time `f` takes: this thread's CPU time where Linux reports it, otherwise the wall clock.
+fn cpu_time(f: impl FnOnce()) -> std::time::Duration {
+    match thread_cpu() {
+        Some(before) => {
+            f();
+            thread_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before))
+        }
+        None => {
+            let start = std::time::Instant::now();
+            f();
+            start.elapsed()
+        }
+    }
+}
+
+/// Timings of 1,000 hatches by the sweep and by testing every edge, on a 2,000-sided circle of
+/// radius 500 and on a 40-sided one, run in turn, 7 runs each. Ignored by default; it prints the
+/// median, fastest and slowest run and sets no bound on them:
+/// `cargo test --release -p vectorcraft-tools --lib hatch_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn hatch_perf() {
+    const RUNS: usize = 7;
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    eprintln!("hatch_perf: {}", if thread_cpu().is_some() { "thread CPU time" } else { "wall clock" });
+    for (sides, r) in [(2000, 500.0), (2000, 100.0), (40, 100.0)] {
+        let bp = circle_polygon(sides, r);
+        assert_eq!(path_bits(&hatch(&bp, 4.0)), path_bits(&hatch_every_edge(&bp, 4.0)));
+        let (mut old, mut new) = (vec![], vec![]);
+        let every = || {
+            for _ in 0..1000 {
+                std::hint::black_box(hatch_every_edge(std::hint::black_box(&bp), 4.0));
+            }
+        };
+        let sweep = || {
+            for _ in 0..1000 {
+                std::hint::black_box(hatch(std::hint::black_box(&bp), 4.0));
+            }
+        };
+        for run in 0..RUNS {
+            // The two take turns going first.
+            if run % 2 == 0 {
+                old.push(cpu_time(every));
+                new.push(cpu_time(sweep));
+            } else {
+                new.push(cpu_time(sweep));
+                old.push(cpu_time(every));
+            }
+        }
+        old.sort();
+        new.sort();
+        eprintln!(
+            "hatch_perf: {sides:>5} sides r {r:>5}: every edge {:>9.3} ms ({:.3}-{:.3}), sweep {:>9.3} ms ({:.3}-{:.3})",
+            ms(old[RUNS / 2]),
+            ms(old[0]),
+            ms(old[RUNS - 1]),
+            ms(new[RUNS / 2]),
+            ms(new[0]),
+            ms(new[RUNS - 1]),
+        );
+    }
 }
 
 /// An empty hidden sources group for a Live Paint group made in a test.
@@ -3395,6 +3765,35 @@ fn live_paint_selection_options_set_the_highlight() {
     assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.1));
     t.set_option("width", &json!(0));
     assert_eq!(t.options()["width"], json!(LP_SELECT_WIDTH_RANGE.0));
+}
+
+/// A press while a Fill Area hover search runs on another thread waits for that search only: no
+/// search starts for where the pointer moved meanwhile, and the press finds its own area.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fill_area_press_does_not_search_a_hover_position_it_passed() {
+    let mut d = Document::new(800.0, 600.0);
+    let l = d.layers[0].id;
+    let pts: Vec<Point> = (0..200)
+        .map(|k| {
+            let a = k as f64 * std::f64::consts::TAU / 200.0;
+            Point::new(300.0 + 100.0 * a.cos(), 300.0 + 100.0 * a.sin())
+        })
+        .collect();
+    let poly = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(poly, PathData::single(SubPath::polyline(&pts, true)), Appearance::default_art())).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = FillAreaTool::new();
+    let started = super::fill_area::hover_searches_started();
+    t.pointer(&cx, &ev(PointerKind::Move, 500.0, 500.0));
+    assert!(t.waiting());
+    t.pointer(&cx, &ev(PointerKind::Move, 510.0, 500.0));
+    let acts = t.pointer(&cx, &ev(PointerKind::Down, 300.0, 300.0));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, _)] if id == "shapeBuilder.copyRegion"), "{acts:?}");
+    assert!(!t.waiting());
+    assert_eq!(super::fill_area::hover_searches_started() - started, 1, "only the search that was running");
 }
 
 #[test]

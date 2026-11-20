@@ -122,12 +122,15 @@ const DIAMOND: &str = "diamond gradients are written as four linear gradients cl
 const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (legacy .ai gradients only pad)";
 const SPREAD_CAPPED: &str = "gradients that repeat or reflect are written with at most 256 stops; they pad past those";
 const HUE_STOPS: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256; legacy .ai gradients mix their stops' colors directly)";
+const PERCEPTUAL_STOPS: &str = "Perceptual gradients are written in process colors, with the colors between their stops as stops of their own (at most 256; legacy .ai gradients mix their stops' colors directly)";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGES: usize = 360;
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
-const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
+const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents, intertwines and distorted images are written as their art";
+const DEEP_DISTORTED: &str =
+    "images changed by Perspective Distort or Free Distort more than 8 deep in symbols and live objects are written as the nearest parallelogram";
 const GRAPHS: &str = "graphs are written as their art, without their data or settings";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).

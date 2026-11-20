@@ -126,7 +126,7 @@ defaults):
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
 | Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions; the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
@@ -135,6 +135,22 @@ defaults):
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
 plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
+
+### Instruction budget preference
+
+Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget (`pluginInstructionBudget`, VectorCraft's own
+setting) sets the instructions each object filter run gets, from the app, `plugin.run`, a plug-in's commands, scripts
+and MCP alike:
+
+- **Normal** (`normal`, the default): the limits in the table above, 50 M + 4,000 per input byte.
+- **Large** (`large`): 250 M + 4,000 per input byte (`vectorcraft_plugins::LARGE_FUEL`, 5 times Normal). The 60 s time
+  budget, the memory, output and call depth limits stay as they are.
+
+A [heavy filter](#heavy-filters) keeps its 1 G and 300 s with either choice. Live effects, exporters and importers keep
+their own budgets. A change applies to the next run of every installed filter, without installing it again. Cancel and
+the time budget stop a run between two 20 M-instruction slices with either choice. `prefs.set {key:
+"pluginInstructionBudget", value}` takes `normal` or `large` (or the labels Normal and Large) and refuses any other
+value; a saved preferences file with another value reads as Normal.
 
 ### Live effects while a document opens
 
@@ -662,7 +678,10 @@ every attribute:
   of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
   `truncated: true` too.
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
-  `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
+  `"unknown"`, read from the image itself. An image whose corners Perspective Distort or Free Distort moved to a shape
+  that is not a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right,
+  bottom right, bottom left), and its `transform` is then the affine placement nearest them, the one that matches the
+  perspective at the middle of its pixels. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
   `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile, as sRGB. The pixels of
   all the images in one input take at most 16 MiB in base64, and an image the host starts to decode takes its size

@@ -2,15 +2,21 @@
 //! (Small and Large List View), shown on a square or on type; a style with no fill and no stroke
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
-//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list, applies it
+//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one. The
+//! style last clicked into the selection is the one the Symbol Styler and the Symbol Sprayer's User
+//! Defined Style apply. Double-click opens
+//! Graphic Style Options. Dragging a style moves it in the list (dropped on
+//! another style with Alt held, replaces that style with its look), applies it
 //! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
 //! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
-//! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
+//! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style, and
+//! dropped on a style with Alt held replaces that style with its look (`graphicStyle.redefine`).
+//! Holding the right button on a style
 //! shows it large, on the selected object when there is one. The Control bar's Style picker lists
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,7 +26,10 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer, StyleLibrary};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    StyleLibrary,
+};
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_geom::{Affine, Point, shapes};
@@ -364,6 +373,10 @@ struct Events {
     moved: Option<(String, usize)>,
     /// Art or an appearance dropped on the panel: a new style from this object.
     new_from: Option<NodeId>,
+    /// Art or an appearance dropped on a style with Alt held: the style takes this object's look.
+    replaced: Option<(String, NodeId)>,
+    /// A style dropped on another with Alt held: the second (`.0`) takes the first's (`.1`) look.
+    restyled: Option<(String, String)>,
     /// The style the right button is held on.
     large: Option<usize>,
     /// A style is dragged over a tile or row.
@@ -383,10 +396,27 @@ fn clicked(ui: &Ui, resp: &Response, name: &str) -> Option<Click> {
 
 /// Clicks, drags and the right button on the tile or row `resp` of style `i` of `d` (`list`: rows
 /// stack downwards). A drag from it carries the style ([`PanelDrag::GraphicStyle`]); a style
-/// dragged over it lands before or after it by the pointer's half.
+/// dragged over it lands before or after it by the pointer's half, or with Alt held outlines it
+/// and, released there, replaces it with the dragged style's look. Art (its first object) or the
+/// Appearance panel's thumbnail held over it with Alt outlines it, and released there replaces the
+/// style with that object's look; without Alt it is left to the list ([`zone_input`]).
 fn cell_input(ui: &Ui, resp: &Response, d: &Document, i: usize, list: bool, ev: &mut Events) {
     let name = &d.graphic_styles[i].name;
     widgets::drag_source(ui, resp, || PanelDrag::GraphicStyle(name.clone()));
+    let source = resp.dnd_hover_payload::<PanelDrag>().and_then(|drag| match &*drag {
+        PanelDrag::Art(ids) => ids.first().copied(),
+        PanelDrag::Appearance(id) => Some(*id),
+        _ => None,
+    });
+    if let Some(id) = source
+        && alt_held(ui)
+    {
+        ev.over = true;
+        widgets::drop_target_outline(ui, resp.rect);
+        if resp.dnd_release_payload::<PanelDrag>().is_some() {
+            ev.replaced = Some((name.clone(), id));
+        }
+    }
     if let Some(drag) = resp.dnd_hover_payload::<PanelDrag>()
         && let PanelDrag::GraphicStyle(moving) = &*drag
     {
@@ -394,6 +424,11 @@ fn cell_input(ui: &Ui, resp: &Response, d: &Document, i: usize, list: bool, ev: 
         if moving == name {
             // Dropped on itself: it stays where it is.
             resp.dnd_release_payload::<PanelDrag>();
+        } else if alt_held(ui) {
+            widgets::drop_target_outline(ui, resp.rect);
+            if resp.dnd_release_payload::<PanelDrag>().is_some() {
+                ev.restyled = Some((name.clone(), moving.clone()));
+            }
         } else {
             let r = resp.rect;
             let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
@@ -432,7 +467,7 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
         PanelDrag::Art(ids) => (None, ids.first().copied()),
         PanelDrag::Appearance(id) => (None, Some(*id)),
         PanelDrag::Paint { .. }
-        | PanelDrag::Symbol(_)
+        | PanelDrag::Symbol { .. }
         | PanelDrag::LibrarySymbol { .. }
         | PanelDrag::Brush { .. }
         | PanelDrag::LibraryBrush { .. }
@@ -454,21 +489,84 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
     }
 }
 
+/// An item's right-click context menu in the Graphic Styles panel.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str, sel: &[String]) {
+    let is_default = name == DEFAULT_GRAPHIC_STYLE;
+    let is_multi = sel.len() > 1 && sel.contains(&name.to_string());
+    let targets: Vec<String> = if is_multi {
+        let doc = app.session.active().map(|st| st.doc.clone());
+        if let Some(d) = &doc { d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect() } else { sel.to_vec() }
+    } else {
+        vec![name.to_string()]
+    };
+    let doomed: Vec<String> = targets.iter().filter(|s| *s != DEFAULT_GRAPHIC_STYLE).cloned().collect();
+
+    let can_options = !is_default && !is_multi;
+    if menu_item(ui, tl!("Graphic Style Options…"), can_options, false) {
+        if let Err(e) = app.run("ui.graphicStyleOptions", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    let duplicate_label = if is_multi { tl!("Duplicate Graphic Styles") } else { tl!("Duplicate Graphic Style") };
+    if menu_item(ui, duplicate_label, true, false) {
+        duplicate(app, ui.ctx(), &targets);
+        ui.close();
+    }
+    let delete_label = if is_multi { tl!("Delete Graphic Styles") } else { tl!("Delete Graphic Style") };
+    let can_delete = !is_default && !doomed.is_empty();
+    if menu_item(ui, delete_label, can_delete, false) {
+        let res = if doomed.len() == 1 {
+            app.run("graphicStyle.delete", json!({ "name": doomed[0] }))
+        } else {
+            app.run("graphicStyle.delete", json!({ "names": doomed }))
+        };
+        if res.is_ok() {
+            set_pstate(ui.ctx(), "gs-sel", Vec::<String>::new());
+        }
+        ui.close();
+    }
+    ui.separator();
+    let has_art_sel = selection_len(app) > 0;
+    if menu_item(ui, tl!("Redefine Graphic Style"), has_art_sel, false) {
+        if let Err(e) = app.run("graphicStyle.redefine", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    let is_linked = app.session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == name);
+    if menu_item(ui, tl!("Break Link to Graphic Style"), is_linked, false) {
+        if let Err(e) = app.run("graphicStyle.breakLink", json!({})) {
+            app.status(e);
+        }
+        ui.close();
+    }
+}
+
 /// The thumbnail grid (Thumbnail View and the Control bar's picker), `sel` outlined.
-fn tiles(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], ev: &mut Events) {
+fn tiles(app: &mut VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &mut Vec<String>, ev: &mut Events, in_panel: bool) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
         for (i, g) in s.d.graphic_styles.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(vec2(TILE, TILE), Sense::click_and_drag());
             s.paint(app, ui, r, i);
             outline(ui, r, sel.contains(&g.name), resp.hovered());
-            cell_input(ui, &resp.on_hover_text(&g.name), s.d, i, false, ev);
+            let resp = resp.on_hover_text(&g.name);
+            cell_input(ui, &resp, s.d, i, false, ev);
+            if in_panel {
+                if resp.secondary_clicked() && !sel.contains(&g.name) {
+                    *sel = vec![g.name.clone()];
+                    set_pstate(ui.ctx(), "gs-anchor", g.name.clone());
+                    set_pstate(ui.ctx(), "gs-sel", sel.clone());
+                }
+                resp.context_menu(|ui| item_context_menu(app, ui, &g.name, sel));
+            }
         }
     });
 }
 
 /// The list views' rows (`row`: height and thumbnail side), `sel` highlighted.
-fn rows(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], row: (f32, f32), ev: &mut Events) {
+fn rows(app: &mut VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &mut Vec<String>, row: (f32, f32), ev: &mut Events) {
     let t = Tokens::get(ui.ctx());
     let (h, side) = row;
     for (i, g) in s.d.graphic_styles.iter().enumerate() {
@@ -482,7 +580,14 @@ fn rows(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], row: (f32,
         s.paint(app, ui, th, i);
         ui.painter().rect_stroke(th, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
         ui.painter().text(pos2(th.right() + 8.0, r.center().y), egui::Align2::LEFT_CENTER, &g.name, egui::FontId::proportional(12.0), t.text);
+        let resp = resp.on_hover_text(&g.name);
         cell_input(ui, &resp, s.d, i, true, ev);
+        if resp.secondary_clicked() && !sel.contains(&g.name) {
+            *sel = vec![g.name.clone()];
+            set_pstate(ui.ctx(), "gs-anchor", g.name.clone());
+            set_pstate(ui.ctx(), "gs-sel", sel.clone());
+        }
+        resp.context_menu(|ui| item_context_menu(app, ui, &g.name, sel));
     }
 }
 
@@ -505,6 +610,15 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
     if let Some(id) = ev.new_from {
         run(app, "graphicStyle.new", json!({ "id": id.0 }));
     }
+    // An object that is linked to the style and still has its look leaves the style as it is.
+    if let Some((name, id)) = ev.replaced
+        && !app.session.graphic_style_of(id).is_some_and(|(g, linked)| linked && g.name == name)
+    {
+        run(app, "graphicStyle.redefine", json!({ "name": name, "id": id.0 }));
+    }
+    if let Some((name, from)) = ev.restyled {
+        run(app, "graphicStyle.redefine", json!({ "name": name, "from": from }));
+    }
     match ev.click {
         Some(Click::Pick(name, _)) if picker => {
             app.run("graphicStyle.apply", json!({"name": name, "add": alt_held(ui)})).ok();
@@ -513,6 +627,11 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
         Some(Click::Pick(name, m)) => {
             let order: Vec<&str> = s.d.graphic_styles.iter().map(|g| g.name.as_str()).collect();
             let sel = super::swatches::click_selection(ui, "gs-anchor", selected(ui.ctx(), s.d), &order, &name, m);
+            // The style clicked into the selection is the one the Symbol Styler and the Symbol
+            // Sprayer's User Defined Style apply (the two share it).
+            if sel.contains(&name) {
+                app.run("tool.setOption", json!({"tool": "symbolStyler", "values": {"style": name}})).ok();
+            }
             set_pstate(ui.ctx(), "gs-sel", sel);
             // A plain click also applies the style (with nothing selected the next object drawn
             // takes it); Shift and Cmd/Ctrl clicks only select.
@@ -542,7 +661,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
-    let sel = selected(ui.ctx(), &doc);
+    let mut sel = selected(ui.ctx(), &doc);
     let view = app.ui.graphic_styles_view;
     let mut ev = Events::default();
     // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
@@ -563,8 +682,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 return;
             }
             match view.row() {
-                Some(row) => rows(app, ui, &shown, &sel, row, &mut ev),
-                None => tiles(app, ui, &shown, &sel, &mut ev),
+                Some(row) => rows(app, ui, &shown, &mut sel, row, &mut ev),
+                None => tiles(app, ui, &shown, &mut sel, &mut ev, true),
             }
         });
         // The drop zone is the part of the list on screen: when the list shrinks to its rows,
@@ -628,8 +747,9 @@ pub(crate) fn picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
     let mut ev = Events::default();
+    let mut sel = Vec::new();
     ui.set_max_width(6.0 * (TILE + 3.0));
-    tiles(app, ui, &shown, &[], &mut ev);
+    tiles(app, ui, &shown, &mut sel, &mut ev, false);
     act(app, ui, &shown, ev, true);
 }
 
@@ -882,9 +1002,15 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a style's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
+    }
+    /// A built-in library's style in the UI language; a User Defined or loaded library's style as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
     /// The style on the Graphic Styles panel's preview shape.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, s: &LibStyle, selected: bool, hovered: bool) {
@@ -1432,6 +1558,190 @@ mod tests {
         }
     }
 
+    /// Art or the Appearance panel's thumbnail dropped on a style with Alt held replaces that style
+    /// with the object's look, in one undo step: the style keeps its name, its place and its id, the
+    /// objects still linked to it take the new look, and the object becomes linked. The style is
+    /// outlined while one is held over it with Alt. Without Alt the drop makes a new style; a style
+    /// dragged with Alt still only moves; an object linked to the style with its look, an empty art
+    /// drag and an object that is gone change nothing and record no undo step.
+    #[test]
+    fn art_or_an_appearance_dropped_on_a_style_with_alt_replaces_that_style() {
+        let mut app = app();
+        let rect = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id;
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [rect.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Red", "id": rect.0})).unwrap();
+        app.run("graphicStyle.move", json!({"name": "Red", "to": 0})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+        let oval = app.session.active().unwrap().selection.objects[0];
+        app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        // One frame of the panel with `events` and `modifiers` held: whether a drop-target outline
+        // the size of one style's tile or row is drawn around `at`.
+        let frame_at = |app: &mut VectorcraftApp, at: egui::Pos2, events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let accent = Tokens::get(&ctx).accent;
+            out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Rect(r) => r.stroke.width == 1.5 && r.stroke.color == accent && r.rect.contains(at) && r.rect.height() < 45.0,
+                _ => false,
+            })
+        };
+        let release = |at: egui::Pos2, modifiers: egui::Modifiers| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let (none, alt) = (egui::Modifiers::default(), egui::Modifiers::ALT);
+        let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let red = doc(&app).graphic_style("Red").unwrap().clone();
+        let green = doc(&app).node(oval).unwrap().appearance.fill_paint();
+        assert_ne!(red.appearance.fill_paint(), green);
+        // The first style: the top of the list's first row, or its first tile.
+        for (view, at) in [(View::SmallList, pos2(60.0, 9.0)), (View::Thumbnail, pos2(20.0, 20.0))] {
+            app.ui.graphic_styles_view = view;
+            frame_at(&mut app, at, vec![], none);
+            for payload in [PanelDrag::Art(vec![oval]), PanelDrag::Appearance(oval)] {
+                let n = names(&app);
+                let before = steps(&app);
+                // Held over the style with Alt it is outlined; without Alt it is not.
+                egui::DragAndDrop::set_payload(&ctx, payload.clone());
+                assert!(!frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], none), "{view:?} {payload:?}: no outline without Alt");
+                assert!(frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], alt), "{view:?} {payload:?}: outlined with Alt");
+                assert_eq!(names(&app), n, "{view:?} {payload:?}: holding it there changes nothing");
+                // Released there with Alt: Red takes the oval's look and keeps its name, place and id.
+                frame_at(&mut app, at, release(at, alt), alt);
+                let d = doc(&app);
+                assert_eq!(names(&app), n, "{view:?} {payload:?}");
+                let g = d.graphic_style("Red").unwrap();
+                assert_eq!((g.id, g.appearance.fill_paint()), (red.id, green.clone()), "{view:?} {payload:?}");
+                assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), green, "{view:?} {payload:?}: the linked rectangle follows");
+                assert_eq!(d.node(rect).unwrap().extras().graphic_style, Some(red.id));
+                assert_eq!(d.node(oval).unwrap().extras().graphic_style, Some(red.id), "{view:?} {payload:?}: the oval is linked");
+                assert_eq!(steps(&app), before + 1, "{view:?} {payload:?}: one undo step");
+                app.run("edit.undo", json!({})).unwrap();
+                let d = doc(&app);
+                assert_eq!(d.graphic_style("Red").unwrap().appearance, red.appearance, "{view:?} {payload:?}: undo restores the style");
+                assert_eq!(d.node(oval).unwrap().extras().graphic_style, None);
+                assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), red.appearance.fill_paint());
+            }
+
+            // Without Alt the oval becomes a new style at the end, and Red stays as it was.
+            let n = names(&app);
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![oval]));
+            frame_at(&mut app, at, release(at, none), none);
+            assert_eq!(names(&app).len(), n.len() + 1, "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?}");
+            app.run("edit.undo", json!({})).unwrap();
+
+            // A style dragged onto Red without Alt moves and replaces nothing.
+            let last = n.last().unwrap().clone();
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(last.clone()));
+            frame_at(&mut app, at, release(at, none), none);
+            assert_eq!(names(&app)[0], last, "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}");
+
+            // The rectangle that is linked to Red with its look, an empty drag of art and an object
+            // that is gone change nothing and record nothing.
+            let before = steps(&app);
+            for payload in [PanelDrag::Art(vec![rect]), PanelDrag::Appearance(rect), PanelDrag::Art(vec![]), PanelDrag::Art(vec![NodeId(9999)])] {
+                egui::DragAndDrop::set_payload(&ctx, payload.clone());
+                frame_at(&mut app, at, release(at, alt), alt);
+                assert_eq!(names(&app), n, "{view:?} {payload:?}");
+                assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?} {payload:?}");
+                assert_eq!(steps(&app), before, "{view:?} {payload:?}");
+            }
+        }
+    }
+
+    /// A style dropped on another with Alt held replaces that style's look with its own: the
+    /// replaced style keeps its name, place and id, and its art follows, in one undo step; the
+    /// dragged style and its art stay as they are. Without Alt the style moves; dropped on itself
+    /// it does nothing.
+    #[test]
+    fn a_style_dropped_on_another_with_alt_replaces_that_style() {
+        let mut app = app();
+        let rect = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id;
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [rect.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Red", "id": rect.0})).unwrap();
+        app.run("graphicStyle.move", json!({"name": "Red", "to": 0})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+        let oval = app.session.active().unwrap().selection.objects[0];
+        app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Green", "id": oval.0})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        // One frame of the panel with `events` and `modifiers` held: whether a drop-target outline
+        // the size of one style's tile or row is drawn around `at`.
+        let frame_at = |app: &mut VectorcraftApp, at: egui::Pos2, events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let accent = Tokens::get(&ctx).accent;
+            out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Rect(r) => r.stroke.width == 1.5 && r.stroke.color == accent && r.rect.contains(at) && r.rect.height() < 45.0,
+                _ => false,
+            })
+        };
+        let release = |at: egui::Pos2, modifiers: egui::Modifiers| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let (none, alt) = (egui::Modifiers::default(), egui::Modifiers::ALT);
+        let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let (red, green) = (doc(&app).graphic_style("Red").unwrap().clone(), doc(&app).graphic_style("Green").unwrap().clone());
+        let (red_fill, green_fill) = (red.appearance.fill_paint(), green.appearance.fill_paint());
+        assert_ne!(red_fill, green_fill);
+        // The first style: the top of the list's first row, or its first tile.
+        for (view, at) in [(View::SmallList, pos2(60.0, 9.0)), (View::Thumbnail, pos2(20.0, 20.0))] {
+            app.ui.graphic_styles_view = view;
+            frame_at(&mut app, at, vec![], none);
+            let n = names(&app);
+            assert_eq!(n[0], "Red", "{view:?}");
+            let before = steps(&app);
+            // Held over Red with Alt it is outlined; without Alt it is not (the insertion marker shows instead).
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Green".into()));
+            assert!(!frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], none), "{view:?}: no outline without Alt");
+            assert!(frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], alt), "{view:?}: outlined with Alt");
+            assert_eq!((names(&app), steps(&app)), (n.clone(), before), "{view:?}: holding it there changes nothing");
+
+            // Released there with Alt: Red takes Green's look and keeps its name, place and id.
+            frame_at(&mut app, at, release(at, alt), alt);
+            let d = doc(&app);
+            assert_eq!(names(&app), n, "{view:?}: no style moves");
+            let g = d.graphic_style("Red").unwrap();
+            assert_eq!((g.id, &g.appearance), (red.id, &green.appearance), "{view:?}");
+            assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), green_fill, "{view:?}: the linked rectangle follows");
+            assert_eq!(d.node(rect).unwrap().extras().graphic_style, Some(red.id), "{view:?}");
+            assert_eq!(d.graphic_style("Green").unwrap(), &green, "{view:?}: Green stays as it was");
+            assert_eq!(d.node(oval).unwrap().extras().graphic_style, Some(green.id), "{view:?}: the oval stays linked to Green");
+            assert_eq!(steps(&app), before + 1, "{view:?}: one undo step");
+            app.run("edit.undo", json!({})).unwrap();
+            let d = doc(&app);
+            assert_eq!(d.graphic_style("Red").unwrap(), &red, "{view:?}: undo restores the style");
+            assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), red_fill, "{view:?}");
+            assert_eq!(d.node(rect).unwrap().extras().graphic_style, Some(red.id), "{view:?}");
+
+            // Red dropped on itself with Alt changes nothing and records nothing.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Red".into()));
+            frame_at(&mut app, at, release(at, alt), alt);
+            assert_eq!((names(&app), steps(&app)), (n.clone(), before), "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap(), &red, "{view:?}");
+
+            // Without Alt, Green moves before Red and Red keeps its look.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Green".into()));
+            frame_at(&mut app, at, release(at, none), none);
+            assert_eq!(names(&app)[0], "Green", "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap(), &red, "{view:?}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}");
+        }
+    }
+
     #[test]
     fn shift_click_selects_a_range_and_cmd_click_adds_or_removes_one_style() {
         let mut app = app();
@@ -1460,15 +1770,23 @@ mod tests {
             selected(&ctx, &app.session.active().unwrap().doc.clone())
         };
         let linked = |app: &VectorcraftApp| app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
-        // A plain click applies the style and selects it alone.
+        let styler = |app: &VectorcraftApp| app.session.tool_options_of("symbolStyler")["style"].as_str().map(str::to_string);
+        // A plain click applies the style and selects it alone; the Symbol Styler takes it.
         assert_eq!(click(&mut app, 0, egui::Modifiers::NONE), [n[0].clone()]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
+        assert_eq!(styler(&app).as_ref(), Some(&n[0]));
         // Shift-click selects from that style to the clicked one, and applies nothing.
         assert_eq!(click(&mut app, 3, egui::Modifiers::SHIFT), n[..4]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
-        // Cmd/Ctrl-click removes a selected style and adds it back.
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
+        // Cmd/Ctrl-click removes a selected style and adds it back; the Styler keeps its style
+        // while one is removed.
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone(), n[2].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[2]));
+        // The Symbol Sprayer's User Defined Style applies the same style.
+        assert_eq!(app.session.tool_options_of("symbolSprayer")["style"].as_str(), Some(n[2].as_str()));
         // Shift-click extends from the style Cmd/Ctrl-clicked last.
         click(&mut app, 0, egui::Modifiers::NONE);
         click(&mut app, 2, egui::Modifiers::COMMAND);
@@ -1510,5 +1828,185 @@ mod tests {
         frame_with(&ctx, click(true), |ui| picker(&mut app, ui));
         frame_with(&ctx, click(false), |ui| picker(&mut app, ui));
         assert_eq!(app.session.selection_graphic_style().map(|(g, linked)| (g.name.clone(), linked)), Some((name, true)));
+    }
+
+    #[test]
+    fn right_click_context_menu_in_graphic_styles_panel() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Style A"})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Style B"})).unwrap();
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        // Initially "Style B" was added last; "Style A" is unselected.
+        let pos_a = h.get_by_label("Style A").rect().center();
+
+        // 1. Right-click unselected "Style A"
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Right-clicking unselected "Style A" selects it.
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style A"]);
+
+        // Context menu items are displayed
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Style");
+        let delete = h.get_by_label("   Delete Graphic Style");
+        let redefine = h.get_by_label("   Redefine Graphic Style");
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+
+        assert!(!options.accesskit_node().is_disabled());
+        assert!(!duplicate.accesskit_node().is_disabled());
+        assert!(!delete.accesskit_node().is_disabled());
+        assert!(!redefine.accesskit_node().is_disabled()); // Art is selected
+        assert!(break_link.accesskit_node().is_disabled()); // Art not linked to Style A
+
+        // 2. Click "Duplicate Graphic Style"
+        duplicate.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A copy").is_some());
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style A copy"]);
+
+        // 3. Apply Style A to the active art and verify Break Link
+        h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        // Modify appearance so style is out of sync (not linked)
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+        assert!(break_link.accesskit_node().is_disabled(), "Break link is disabled when style is out of sync");
+
+        // Close menu
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Reapply Style A so it is in sync
+        h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        h.run_steps(2);
+
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+        assert!(!break_link.accesskit_node().is_disabled(), "Break link is enabled when style is in sync");
+        break_link.click();
+        h.run_steps(3);
+
+        assert!(h.state().session.selection_graphic_style().is_none());
+
+        // 4. Right-click Style A and click "Delete Graphic Style"
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let delete = h.get_by_label("   Delete Graphic Style");
+        assert!(!delete.accesskit_node().is_disabled());
+        delete.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A").is_none());
+
+        // Verify one undo step restores it
+        h.state_mut().run("edit.undo", json!({})).unwrap();
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A").is_some());
+    }
+
+    #[test]
+    fn right_click_context_menu_default_style_disables_options_and_delete() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let app = app();
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        let pos_def = h.get_by_label(DEFAULT_GRAPHIC_STYLE).rect().center();
+        h.event(egui::Event::PointerMoved(pos_def));
+        h.event(egui::Event::PointerButton { pos: pos_def, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_def, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Style");
+        let delete = h.get_by_label("   Delete Graphic Style");
+
+        assert!(options.accesskit_node().is_disabled(), "Options disabled on Default Graphic Style");
+        assert!(!duplicate.accesskit_node().is_disabled(), "Duplicate enabled on Default Graphic Style");
+        assert!(delete.accesskit_node().is_disabled(), "Delete disabled on Default Graphic Style");
+    }
+
+    #[test]
+    fn right_click_context_menu_preserves_multiselection_and_works_in_list_view() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let mut app = app();
+        app.ui.graphic_styles_view = View::SmallList;
+        app.run("graphicStyle.new", json!({"name": "Style 1"})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Style 2"})).unwrap();
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        set_pstate(&h.ctx, "gs-sel", vec!["Style 1".to_string(), "Style 2".to_string()]);
+        h.run_steps(1);
+
+        let pos_2 = h.get_by_label("Style 2").rect().center();
+        h.event(egui::Event::PointerMoved(pos_2));
+        h.event(egui::Event::PointerButton { pos: pos_2, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_2, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style 1", "Style 2"]);
+
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Styles");
+        let delete = h.get_by_label("   Delete Graphic Styles");
+
+        assert!(options.accesskit_node().is_disabled(), "Options disabled on multi-selection");
+        assert!(!duplicate.accesskit_node().is_disabled());
+        assert!(!delete.accesskit_node().is_disabled());
+
+        duplicate.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style 1 copy").is_some());
+        assert!(doc.graphic_style("Style 2 copy").is_some());
     }
 }
