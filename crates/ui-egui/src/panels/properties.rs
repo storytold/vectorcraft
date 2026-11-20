@@ -202,38 +202,50 @@ fn can_merge_live_paint(app: &VectorcraftApp) -> bool {
     })
 }
 
-/// The Corners of the one path whose corners Direct Selection has selected: their kind and radius,
-/// which `object.setLiveShape` sets on those corners. The Properties panel overview shows the
-/// control while the Direct Selection tool is chosen and a corner of an object is selected
-/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-/// A live rectangle's and a live polygon's own rows already set the selected corners.
+/// The Corners of the paths whose corners Direct Selection has selected: their kind, and the
+/// Corners link with their radius, which `object.setLiveShape` sets on those corners
+/// ([`super::picked_corners`]); the link opens the Corners pop-up for them. The Properties panel
+/// overview shows the control while the Direct Selection tool is chosen and a corner of an object
+/// is selected
+/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>),
+/// and the Corners link opens the corner settings
+/// (<https://web.archive.org/web/20200308215011/https://helpx.adobe.com/illustrator/using/reshape-with-live-corners.html>). One live
+/// rectangle or live polygon selected alone has its own kind and radius rows, which already set
+/// the selected corners: it shows the Corners link alone.
 fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() != "directSelection" {
         return;
     }
     let Some(st) = app.session.active() else { return };
-    let [id] = st.selection.objects[..] else { return };
-    let Some(n) = st.doc.node(id) else { return };
-    if matches!(n.live_shape(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
+    let own_rows = matches!(st.selection.objects[..], [id]
+        if st.doc.node(id).is_some_and(|n| matches!(n.live_shape(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. }))));
+    // A corner of a path is Direct-Selected.
+    let corner_selected = st.selection.objects.iter().any(|id| {
+        st.doc.node(*id).and_then(LiveCorners::of).is_some_and(|lc| st.selection.partial(*id).is_some_and(|a| !lc.corners_of(a).is_empty()))
+    });
+    if !corner_selected {
         return;
     }
-    let Some(lc) = LiveCorners::of(n) else { return };
-    if st.selection.partial(id).is_none_or(|a| lc.corners_of(a).is_empty()) {
+    let Some(picked) = super::picked_corners(app) else { return };
+    if own_rows {
+        ui.horizontal(|ui| super::corners_link(app, ui, "props-corners"));
         return;
     }
-    let n = n.clone();
-    let kind = super::corner_style(app, &n).1;
     let kinds: Vec<&str> = vectorcraft_geom::shapes::CornerKind::ALL.iter().map(|k| crate::dialogs::corners::kind_label(*k)).collect();
     let fw = super::field_width(ui);
+    let unit = app.session.general_unit();
     egui::Grid::new("props-corners").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Corner:"));
-        let picked = widgets::dropdown_names(ui, ("props-corners", "kind"), kind.map_or("", crate::dialogs::corners::kind_label), &kinds, fw);
-        if let Some(k) = picked.and_then(|i| vectorcraft_geom::shapes::CornerKind::ALL.get(i)) {
-            app.run("object.setLiveShape", json!({"kind": k})).ok();
+        let kind = widgets::dropdown_names(ui, ("props-corners", "kind"), picked.kind.map_or("", crate::dialogs::corners::kind_label), &kinds, fw);
+        if let Some(k) = kind.and_then(|i| vectorcraft_geom::shapes::CornerKind::ALL.get(i)) {
+            super::set_picked_corners(app, &picked, json!({"kind": k}));
         }
         ui.end_row();
-        dim_label(ui, tl!("Corner Radius:"));
-        super::corner_radius_field(app, ui, &n, ("props-corners", "radius"), fw);
+        super::corners_link(app, ui, "props-corners");
+        let name = Some(tl!("Corner Radius:"));
+        if let Some(r) = widgets::num_field_named(ui, ("props-corners", "radius"), name, picked.radius, unit, fw) {
+            super::set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
+        }
         ui.end_row();
     });
 }

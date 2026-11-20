@@ -7682,8 +7682,8 @@ polygon's from its first vertex clockwise; a star's from its first tip; an index
 Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't round,
 `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as that
 changes. A path that isn't a live shape keeps its uncut outline (`live` `{"shape": "path", "base", "radii"}`) so its
-corners stay editable, and is a plain path again once no corner is cut; a polygon stays a live polygon, its corners
-keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
+corners stay editable, and is a plain path again once no corner is cut, unless its rounding is Relative; a polygon
+stays a live polygon, its corners keeping the radius they shared when `sides` changes. Every corner is a circular arc tangent to both sides: a radius
 draws no larger than takes the cut halfway along the corner's shorter side (half the shorter side of a rectangle, the
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
@@ -7702,6 +7702,17 @@ and those shape tools: hidden widgets are not drawn, and those tools do not answ
 on them. `on`, when given and not `null`, must be `true` or `false` and sets the state; without it, or with `null`, the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
+In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
+Direct Selection, while a corner is selected) opens the Corners pop-up for the picked corners of every selected path:
+the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
+hold no corner is left out. The pop-up has the corner kind, the radius (blank while the picked corners differ) and the
+rounding, Relative or Absolute (`relativeRadii`, which applies to each path as a whole; neither is chosen while the
+paths differ). A path without Live Corners is Absolute, and Relative on a path with a corner keeps its outline as the
+base of its Live Corners, as a radius does; ellipses and lines are left as they are. Editing a path's anchors (for
+example `path.moveAnchors`) ends its Live Corners, so it is Absolute again. With Relative rounding, a radius is
+compared as the fraction it stores (its share of the corner's maximum, at most all of it), so typing the radius
+shown again adds no undo step. The Corner Radius field beside the link sets the same corners. Each change runs one
+`object.setLiveShape` with `items`, one undo step, and the corners that were not picked keep their radius and kind.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}

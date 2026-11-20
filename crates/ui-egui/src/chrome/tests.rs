@@ -4383,6 +4383,47 @@ fn the_anchor_points_group_holds_convert_and_anchors() {
     assert!(has(&bar, "Anchor Point") && has(&bar, "Stroke:"), "{bar:?}");
 }
 
+/// With three corners of a path Direct-Selected, the Control bar's Corners link opens the Corners
+/// pop-up; a kind picked there sets those three corners and leaves the fourth, in one undo step.
+#[test]
+fn the_control_bar_corners_link_opens_the_pop_up_for_the_picked_corners() {
+    use vectorcraft_geom::shapes::CornerKind;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.expandShape", json!({})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let mut frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame(app, &ctx, events);
+    let click = |frame: &mut dyn FnMut(&mut crate::VectorcraftApp, Vec<egui::Event>) -> Vec<egui::accesskit::Node>,
+                 app: &mut crate::VectorcraftApp,
+                 name: &str| {
+        let at = node_center(&frame(app, vec![]), name).unwrap_or_else(|| panic!("{name} shows"));
+        frame(app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(app, vec![press_at(at, false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    assert!(node_center(&nodes, "Chamfer").is_none(), "the pop-up starts closed");
+    let nodes = click(&mut frame, &mut app, "Corners");
+    for name in ["Round", "Inverted Round", "Chamfer", "Radius:", "Relative", "Absolute"] {
+        assert!(node_center(&nodes, name).is_some(), "the pop-up has {name}");
+    }
+    let depth = app.session.doc().unwrap().history.undo.len();
+    click(&mut frame, &mut app, "Chamfer");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1, "one undo step");
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().clone();
+    let lc = vectorcraft_doc::LiveCorners::of(&n).unwrap();
+    assert_eq!((0..4).map(|k| lc.kind(k)).collect::<Vec<_>>(), [CornerKind::Chamfer, CornerKind::Chamfer, CornerKind::Chamfer, CornerKind::Round]);
+}
+
 /// Menus stop above a Control bar docked at the bottom when the status bar is hidden, above the
 /// status and hint bars when they show, and at the bottom of the window when the bar is docked at
 /// the top or a screen mode hides it.

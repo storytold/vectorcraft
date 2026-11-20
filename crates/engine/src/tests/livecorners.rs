@@ -910,6 +910,69 @@ fn relative_corner_rounding_keeps_fraction_on_resize() {
     assert!((c.drawn_radius(0) / drawn - 2.0).abs() < 0.05, "drawn radius doubled with the shape");
 }
 
+/// Relative rounding on a path with corners and no Live Corners yet takes effect in one undo step,
+/// a radius set afterwards is stored as a fraction, and the rounding stays when no corner is cut
+/// any more. Absolute, which such a path already has, and Relative on an ellipse, which has no
+/// corners, add no undo step.
+#[test]
+fn relative_rounding_takes_on_a_plain_path() {
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.expandShape", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "a plain path");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
+    assert_eq!(steps(&s), n, "Absolute: no change");
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": true}));
+    assert_eq!(steps(&s), n + 1, "Relative: one undo step");
+    let node = s.doc().unwrap().doc.node(id).unwrap();
+    assert!(LiveCorners::of(node).unwrap().radii_relative());
+    let max = LiveCorners::of(node).unwrap().corner(0).unwrap().max_radius();
+    run(&mut s, json!({"ids": [id.0], "corners": [0], "radius": max / 2.0}));
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!(c.radii_relative() && (c.radius(0) - 0.5).abs() < 1e-9, "stored fraction: {}", c.radius(0));
+    // With no corner cut again, the path keeps its Relative rounding.
+    run(&mut s, json!({"ids": [id.0], "corners": [0], "radius": 0}));
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!(c.radii_relative() && c.radius(0) == 0.0, "still Relative");
+    // Absolute again with no corner cut: a plain path again.
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "a plain path again");
+    let e = s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 50, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [e], "relativeRadii": true}));
+    assert_eq!(steps(&s), n, "an ellipse: no change");
+}
+
+/// With Relative rounding, a radius is compared as the fraction it would store: a radius past the
+/// corner's maximum, typed again, and the maximum the field then shows add no undo step, while a
+/// smaller one adds one.
+#[test]
+fn a_relative_radius_that_stores_the_same_fraction_adds_no_undo_step() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"relativeRadii": true}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let max = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap().corner(0).unwrap().max_radius();
+    let n = steps(&s);
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "past the maximum: one undo step");
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!((c.radius(0) - 1.0).abs() < 1e-9, "stored as the whole maximum: {}", c.radius(0));
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "the same radius again: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max}));
+    assert_eq!(steps(&s), n + 1, "the maximum, as shown: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max / 2.0}));
+    assert_eq!(steps(&s), n + 2, "a smaller radius: one undo step");
+    // On a large shape a small radius is a fraction below 1e-9, and still a change.
+    let big = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 3_000_000, "height": 3_000_000})).unwrap()["id"].as_u64().unwrap();
+    run(&mut s, json!({"ids": [big], "relativeRadii": true}));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [big], "corners": [0], "radius": 0.001}));
+    assert_eq!(steps(&s), n + 1, "a small radius on a large shape: one undo step");
+}
+
 /// #2898: while a corner widget is pressed or dragged, Up and Down step the corners' kind (round,
 /// inverted round, chamfer, in turn) along with the radius, as one undo step with the drag.
 #[test]

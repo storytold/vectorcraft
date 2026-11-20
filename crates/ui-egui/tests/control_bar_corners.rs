@@ -127,7 +127,7 @@ fn corner_radius_existing_anchor_controls_and_properties_remain_available() {
     assert!(bar.has_text("Convert:") && bar.has_text("Anchors:"), "{:?}", bar.texts);
     assert!(bar.nodes.iter().any(|node| node.label() == Some("Remove Anchor Points")));
     let properties = Frames::new(360.0, true).settled(&mut app);
-    assert!(properties.has_text("Corner Radius:"), "{:?}", properties.texts);
+    assert!(properties.has_text("Corners"), "{:?}", properties.texts);
     assert!(properties.texts.iter().any(|(text, _)| text == "0 pt"));
 }
 
