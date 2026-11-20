@@ -129,7 +129,10 @@ impl App {
             .min_by(|a, b| a.center().distance(title.center()).total_cmp(&b.center().distance(title.center())))
             .expect("the Document Info title's own Panel menu")
             .center();
-        let menu = self.tap(at);
+        self.tap(at);
+        // A newly opened egui popup first measures an invisible sizing pass. Read its painted
+        // category only after normal subsequent layout frames, as the user sees it.
+        let menu = self.settle();
         let item = painted(&menu, category).0.center();
         self.tap(item);
         self.settle()
