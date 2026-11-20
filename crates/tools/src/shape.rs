@@ -747,7 +747,8 @@ impl Tool for ShapeTool {
             PointerKind::Drag => {
                 let Some(mut s) = self.start else { return vec![] };
                 let raw = ev.pos;
-                let pos = self.snap.drag(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref());
+                let minimum = (!self.began).then(|| cx.tol(2.0));
+                let pos = self.snap.drag_with_stroke_minimum(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref(), minimum);
                 let ev = &PointerEvent { pos, ..*ev };
                 // The inner radius of the star the last drag showed, with the ratio it drew with:
                 // the canvas sends a drag only once the pointer moves, so a key pressed in between

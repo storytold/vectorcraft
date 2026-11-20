@@ -5225,6 +5225,7 @@ digits	Malayalam	Malaiàlam
 	Snap to Perpendicular	Ajusta a la perpendicular
 	Snap to Pixel	Ajusta al píxel
 	Snap to Point	Ajusta al punt
+	Snap to Stroke Edges	Ajusta a les vores del traç
 	Snap to Tangent	Ajusta a la tangent
 	Snap to Unit	Ajusta a la unitat
 	Snapping	Ajustament
@@ -9082,3 +9083,4 @@ breakText	Glyphs	Glifs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Edita l’original amb:
 file-filter	Applications	Aplicacions
+	Include visible stroke edges when snapping with Smart Guides.	Inclou les vores visibles del traç en ajustar amb les guies intel·ligents.

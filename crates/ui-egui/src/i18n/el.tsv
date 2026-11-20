@@ -2377,6 +2377,7 @@ font-technology	Variable	Μεταβλητές
 	Snap to Grid	Προσκόλληση στο πλέγμα
 	Snap to Pixel	Προσκόλληση σε εικονοστοιχείο
 	Snap to Point	Προσκόλληση σε σημείο
+	Snap to Stroke Edges	Προσκόλληση στα όρια του περιγράμματος
 	Snap to Unit	Προσκόλληση σε μονάδα
 	Soft Light	Απαλό φως
 	Soft Mix	Απαλή ανάμειξη
@@ -9055,3 +9056,4 @@ breakText	Glyphs	Γλύφοι
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Επεξεργασία πρωτοτύπου με:
 file-filter	Applications	Εφαρμογές
+	Include visible stroke edges when snapping with Smart Guides.	Συμπεριλάβετε τα ορατά όρια του περιγράμματος στην προσκόλληση με έξυπνους οδηγούς.

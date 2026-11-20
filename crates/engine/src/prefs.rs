@@ -183,6 +183,8 @@ pub struct Prefs {
     // Smart Guides
     pub smart_guide_color: String,
     pub alignment_guides: bool,
+    /// Smart Guides target visible vector stroke edges as well as path geometry.
+    pub snap_to_stroke_edges: bool,
     pub object_highlighting: bool,
     pub transform_tools_guides: bool,
     pub construction_guides: bool,
@@ -541,6 +543,7 @@ impl Default for Prefs {
             show_pixel_grid: true,
             smart_guide_color: s("#ff3dfc"),
             alignment_guides: true,
+            snap_to_stroke_edges: false,
             object_highlighting: true,
             transform_tools_guides: true,
             construction_guides: true,

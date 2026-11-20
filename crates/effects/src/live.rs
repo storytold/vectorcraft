@@ -38,6 +38,7 @@ pub fn outline_object(doc: Option<&Document>, n: &Node) -> Option<Node> {
             }
             let mut out = Node::group(n.id, vec![Arc::new(art)]);
             out.bbox_angle = n.bbox_angle;
+            crate::bake::carry_query_origin(n, &mut out);
             Some(out)
         }
         _ => outline_text(n),
@@ -58,16 +59,24 @@ fn with_hooks<R>(doc: Option<&Document>, f: impl FnOnce(Hooks) -> R) -> R {
 
 /// One level of evaluation of live object `n` ([`live::expand_live_hooks`]).
 pub fn expand_live(doc: Option<&Document>, n: &Node) -> Vec<Node> {
-    with_hooks(doc, |h| live::expand_live_hooks(n, h))
+    let mut art = with_hooks(doc, |h| live::expand_live_hooks(n, h));
+    for piece in &mut art {
+        crate::bake::carry_query_origin(n, piece);
+    }
+    art
 }
 
 /// Live object `n` evaluated into a plain group ([`live::expanded_group_hooks`]): Expand.
 pub fn expanded_live_group(doc: Option<&Document>, n: &Node) -> Node {
-    with_hooks(doc, |h| live::expanded_group_hooks(n, h))
+    let mut art = with_hooks(doc, |h| live::expanded_group_hooks(n, h));
+    crate::bake::carry_query_origin(n, &mut art);
+    art
 }
 
 /// `n` with every live object in it replaced by its evaluated art ([`live::expand_deep_hooks`]):
 /// what the exporters write for live objects.
 pub fn expand_live_deep(doc: Option<&Document>, n: &Node) -> Node {
-    with_hooks(doc, |h| live::expand_deep_hooks(n, h))
+    let mut art = with_hooks(doc, |h| live::expand_deep_hooks(n, h));
+    crate::bake::carry_query_origin(n, &mut art);
+    art
 }

@@ -2859,6 +2859,7 @@
 	Save Grid as Preset…	ბადის პრესეტად შენახვა…
 	Snap to Pixel	პიქსელზე მიბმა
 	Snap to Point	წერტილზე მიბმა
+	Snap to Stroke Edges	კონტურის კიდეებზე მიბმა
 	Snap to Glyph	გლიფზე მიბმა
 	New View…	ახალი ხედი…
 	Edit Views…	ხედების რედაქტირება…
@@ -11190,3 +11191,4 @@ font-script	Japanese	იაპონური
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	ორიგინალის რედაქტირება პროგრამით:
 file-filter	Applications	აპლიკაციები
+	Include visible stroke edges when snapping with Smart Guides.	ჭკვიანი დამხმარე ხაზებით მიბმისას გაითვალისწინეთ კონტურის ხილული კიდეები.

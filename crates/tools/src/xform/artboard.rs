@@ -38,7 +38,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag, slide_along};
-use crate::guides::{DrawSnap, Leave, Targets};
+use crate::guides::{ContactDomain, DomainRect, DrawSnap, Leave, Targets};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
@@ -197,20 +197,31 @@ impl ArtboardTool {
 
     /// Gather the Smart Guide targets for dragging artboard `index` (call before the first preview,
     /// while the document still shows where everything started).
-    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool) {
+    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool, moving: &[usize], op: PixelOp) {
         self.guides.clear();
         self.targets = cx.smart_guides.then(|| {
             let art = if art_moves { cx.doc.art_moving_with(index, cx.move_locked_with_artboard) } else { vec![] };
-            Targets::for_artboard(cx.doc, index, &art).styled(cx)
+            let t = Targets::for_artboard(cx.doc, index, &art).styled(cx);
+            if cx.snaps_to_pixel(op) || cx.snap_to_grid || !cx.snap_to_stroke_edges {
+                t
+            } else {
+                // Only the contour channel uses the complete preview move set; legacy targets stay as before.
+                let stroke_art: Vec<_> =
+                    if art_moves { moving.iter().flat_map(|&i| cx.doc.art_moving_with(i, cx.move_locked_with_artboard)).collect() } else { vec![] };
+                t.with_stroke_edges(cx, &stroke_art, None)
+            }
         });
         // Nothing to skip: no artboard has this index.
-        self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx));
+        self.copy_targets = cx.smart_guides.then(|| {
+            let t = Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx);
+            if cx.snaps_to_pixel(op) { t } else { t.with_stroke_edges(cx, &[], None) }
+        });
     }
 
     /// Snap a dragged handle: to whole pixels (Snap to Pixel's While Scaling option), the grid, or
     /// Smart Guides (in that order, as when drawing). With Smart Guides the bleed edge `bleed`
     /// beyond the handle may snap instead.
-    fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2) -> Point {
+    fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2, rect: Rect, handle: Handle, mods: Mods) -> Point {
         self.guides.clear();
         if cx.snaps_to_pixel(PixelOp::Scaling) {
             return Point::new(p.x.round(), p.y.round());
@@ -220,6 +231,37 @@ impl ArtboardTool {
         }
         let Some(t) = &self.targets else { return p };
         let offsets: &[Vec2] = if bleed == Vec2::ZERO { &[] } else { &[bleed] };
+        if cx.snap_to_stroke_edges {
+            let proportional = mods.shift || self.scale_art;
+            let current = scale_for_drag(rect, handle, p, proportional, mods.alt);
+            let at = current * handle.pos(rect);
+            let origin = if mods.alt { rect.center() } else { handle.opposite().pos(rect) };
+            let along = (!handle.is_corner() || proportional).then_some(handle.pos(rect) - origin);
+            let placed_bleed = placed_bleed_offset(cx, rect, handle, current);
+            let stroke_offsets: &[Vec2] = if placed_bleed == Vec2::ZERO { &[] } else { &[placed_bleed] };
+            let valid = |q: Point, contact: Point| {
+                let snapped = scale_for_drag(rect, handle, q, proportional, mods.alt);
+                let [sx, _, _, sy, _, _] = snapped.as_coeffs();
+                let [before_x, _, _, before_y, _, _] = current.as_coeffs();
+                let bounds = snapped.transform_rect_bbox(rect);
+                let valid_scale = [(sx, before_x), (sy, before_y)].iter().all(|(s, before)| s.abs() >= 1e-4 && s * before > 0.0);
+                let placed = snapped * handle.pos(rect);
+                let bleed = placed_bleed_offset(cx, rect, handle, snapped);
+                let reaches = placed.distance(contact) <= 1e-6 || (placed + bleed).distance(contact) <= 1e-6;
+                snapped.as_coeffs().iter().all(|v| v.is_finite())
+                    && bounds.is_finite()
+                    && bounds.width() >= MIN_SIDE
+                    && bounds.height() >= MIN_SIDE
+                    && valid_scale
+                    && reaches
+            };
+            let domain = || resize_contact_domain(rect, handle, current, proportional, mods.alt);
+            if let Some((q, ov)) = t.snap_stroke_point_with_domain((p, at), stroke_offsets, along, cx.snap_tol(), domain, valid) {
+                let (q, ov) = t.snap_feasible_point(p, cx.snap_tol(), |q| valid(q, q)).unwrap_or((q, ov));
+                self.guides = ov;
+                return q;
+            }
+        }
         let (q, ov) = t.snap_point_with(p, offsets, cx.snap_tol());
         self.guides = ov;
         q
@@ -252,7 +294,7 @@ impl ArtboardTool {
     /// every snap slides the move along that line. Whole pixels and the grid slide it by the
     /// shorter of the ways that put its top-left on a whole pixel or a gridline on either axis
     /// ([`slide_along`]); Smart Guides slide it until an edge or the centre lines up
-    /// ([`Targets::snap_rects_along`]). A move of zero length does not snap.
+    /// ([`Targets::snap_rects_along_contact`]). A move of zero length does not snap.
     fn snap_move_along(&mut self, cx: &ToolContext, rect: Rect, d: Vec2, copy: bool) -> Vec2 {
         self.guides.clear();
         let len = d.hypot();
@@ -269,10 +311,10 @@ impl ArtboardTool {
         }
         let Some(t) = (if copy { &self.copy_targets } else { &self.targets }) else { return d };
         let moved = rect + d;
-        let (adj, ov) = if cx.doc.setup.has_bleed() {
-            t.snap_rects_along(&[moved, cx.doc.setup.bleed_rect(moved)], u, cx.snap_tol())
+        let (adj, ov, _) = if cx.doc.setup.has_bleed() {
+            t.snap_rects_along_contact(&[moved, cx.doc.setup.bleed_rect(moved)], u, cx.snap_tol())
         } else {
-            t.snap_rects_along(&[moved], u, cx.snap_tol())
+            t.snap_rects_along_contact(&[moved], u, cx.snap_tol())
         };
         self.guides = ov;
         d + adj
@@ -323,6 +365,62 @@ fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
     let d = handle.pos(cx.doc.setup.bleed_rect(rect)) - handle.pos(rect);
     let (ax, ay) = handle.axes();
     Vec2::new(if ax { d.x } else { 0.0 }, if ay { d.y } else { 0.0 })
+}
+
+/// The dragged side after mirroring uses that side's actual document bleed, which can be asymmetric.
+fn placed_bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle, transform: Affine) -> Vec2 {
+    let [sx, _, _, sy, _, _] = transform.as_coeffs();
+    if sx >= 0.0 && sy >= 0.0 {
+        return bleed_offset(cx, rect, handle);
+    }
+    let unit = Rect::new(0.0, 0.0, 1.0, 1.0);
+    let p = handle.pos(unit);
+    let at = Point::new(if sx < 0.0 { 1.0 - p.x } else { p.x }, if sy < 0.0 { 1.0 - p.y } else { p.y });
+    let placed = Handle::ALL.into_iter().find(|h| h.pos(unit) == at).unwrap_or(handle);
+    bleed_offset(cx, rect, placed)
+}
+
+/// Reachable resize-handle positions in the current scale-sign region.
+/// The contour query translates each contact back by its own handle/bleed offset.
+fn resize_contact_domain(rect: Rect, handle: Handle, current: Affine, proportional: bool, from_center: bool) -> Option<ContactDomain> {
+    let origin = if from_center { rect.center() } else { handle.opposite().pos(rect) };
+    let d0 = handle.pos(rect) - origin;
+    let (ax, ay) = handle.axes();
+    let (width, height) = (rect.width(), rect.height());
+    if !rect.is_finite()
+        || !width.is_finite()
+        || width <= 0.0
+        || !height.is_finite()
+        || height <= 0.0
+        || (ax && d0.x.abs() <= 1e-9)
+        || (ay && d0.y.abs() <= 1e-9)
+        || !current.as_coeffs().iter().all(|value| value.is_finite())
+    {
+        return None;
+    }
+    let [sx, _, _, sy, _, _] = current.as_coeffs();
+    // A proportional side also changes the other dimension, even though that
+    // grabbed coordinate is fixed. Its minimum side constrains the active factor.
+    let coupled = (MIN_SIDE / width).max(MIN_SIDE / height).max(1e-4);
+    let minimum = Vec2::new(
+        d0.x.abs() * if proportional { coupled } else { (MIN_SIDE / width).max(1e-4) },
+        d0.y.abs() * if proportional { coupled } else { (MIN_SIDE / height).max(1e-4) },
+    );
+    let limits = |active: bool, direction: f64, minimum: f64| {
+        if !active {
+            (f64::NEG_INFINITY, f64::INFINITY)
+        } else if direction > 0.0 {
+            (minimum, f64::INFINITY)
+        } else {
+            (f64::NEG_INFINITY, -minimum)
+        }
+    };
+    let (x0, x1) = limits(ax, sx * d0.x, minimum.x);
+    let (y0, y1) = limits(ay, sy * d0.y, minimum.y);
+    Some(ContactDomain {
+        to_local: Affine::translate(-origin.to_vec2()),
+        regions: vec![DomainRect { bounds: Rect::new(x0, y0, x1, y1), open: [false; 4] }],
+    })
 }
 
 /// How far outside the middle of an edge its add button sits, in screen pixels: past the handle
@@ -457,7 +555,7 @@ impl Tool for ArtboardTool {
                         return out;
                     }
                     out.push(Action::Begin(label(m.alt).into()));
-                    self.begin_snapping(cx, index, self.move_art);
+                    self.begin_snapping(cx, index, self.move_art, &moving, PixelOp::Moving);
                 } else if m.alt != copy {
                     // Alt pressed or released mid-drag: start over as a copy or a move.
                     out.push(Action::Cancel);
@@ -481,10 +579,10 @@ impl Tool for ArtboardTool {
                 let mut out = vec![];
                 if !began {
                     out.push(Action::Begin("Resize Artboard".into()));
-                    self.begin_snapping(cx, index, self.scale_art);
+                    self.begin_snapping(cx, index, self.scale_art, &[index], PixelOp::Scaling);
                 }
                 self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
-                let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle));
+                let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle), rect, handle, m);
                 let proportional = m.shift || self.scale_art;
                 let mut nr = scale_for_drag(rect, handle, h, proportional, m.alt).transform_rect_bbox(rect);
                 if proportional {

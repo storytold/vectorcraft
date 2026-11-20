@@ -450,6 +450,7 @@ pub fn compound_shape_art(doc: Option<&Document>, n: &Node, hook: Option<Outline
 fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
     let area = compound_shape_area_in(doc, n, hook, nodes)?;
     let mut art = Node::path(n.id, area, Appearance { items: n.appearance.items.clone(), ..Default::default() });
+    crate::bake::carry_query_origin(n, &mut art);
     (art.opacity, art.blend) = (n.opacity, n.blend);
     Some(art)
 }
@@ -468,6 +469,7 @@ fn styled(src: &Node, path: PathData, outline: bool) -> Node {
         appearance = Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
+    crate::bake::carry_query_origin(src, &mut n);
     n.opacity = src.opacity;
     n.blend = src.blend;
     n
@@ -562,6 +564,17 @@ fn within_budget<'a>(leaves: impl IntoIterator<Item = &'a Node>) -> bool {
 /// each effect) it returns the children as they are. The swatches and patterns that live-effect
 /// plug-ins painting their pieces name are looked up in `doc` ([`shape_art`]).
 pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<OutlineHook>) -> Option<Vec<Arc<Node>>> {
+    pathfinder_children_result(doc, group, hook).map(|result| result.art)
+}
+
+/// A budget fallback returns the original members, not container-dependent geometry.
+#[derive(Default)]
+struct PathfinderChildren {
+    art: Vec<Arc<Node>>,
+    fell_back: bool,
+}
+
+fn pathfinder_children_result(doc: Option<&Document>, group: &Node, hook: Option<OutlineHook>) -> Option<PathfinderChildren> {
     if !has_pathfinder(group) {
         return None;
     }
@@ -573,8 +586,8 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         if let Some(ch) = without.children_mut() {
             ch.truncate(art);
         }
-        let mut out = pathfinder_children(doc, &without, hook)?;
-        out.extend(source.iter().skip(art).cloned());
+        let mut out = pathfinder_children_result(doc, &without, hook)?;
+        out.art.extend(source.iter().skip(art).cloned());
         return Some(out);
     }
     // When the group has a visible fill of its own, that fill paints its members' geometry, a
@@ -586,7 +599,9 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
     // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
     let area_style = group.is_compound_shape().then(|| {
         let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
-        Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
+        let mut art = Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() });
+        crate::bake::carry_query_origin(group, &mut art);
+        art
     });
     let style_of = |s: &Node| -> Option<Node> {
         let a = area_style.as_ref().filter(|_| s.id == group.id && s.appearance.items.is_empty())?;
@@ -599,7 +614,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         match compound_shape_area(doc, group, hook) {
             Some(area) if area.is_empty() => vec![],
             Some(area) => vec![Arc::new(Node::path(group.id, area, Appearance::default()))],
-            None => return Some(source.to_vec()),
+            None => return Some(PathfinderChildren { art: source.to_vec(), fell_back: true }),
         }
     } else {
         source.to_vec()
@@ -611,7 +626,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 leaves(doc, c, hook, &nodes, &mut lv);
             }
             if nodes.spent() || !within_budget(&lv) {
-                return Some(source.to_vec());
+                return Some(PathfinderChildren { art: source.to_vec(), fell_back: true });
             }
             let (ids, srcs): (Vec<NodeId>, Vec<crate::trap::TrapSource>) = lv
                 .iter()
@@ -639,7 +654,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
             })
             .collect();
         if nodes.spent() || !within_budget(all.iter().flatten()) {
-            return Some(source.to_vec());
+            return Some(PathfinderChildren { art: source.to_vec(), fell_back: true });
         }
         // (style source, shape) per stack entry; keys index `sources`.
         let mut sources: Vec<Node> = vec![];
@@ -664,22 +679,28 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         }
         shapes.retain(|s| !s.path.is_empty() && s.path.subpaths.iter().all(|sp| sp.anchors.iter().all(|a| a.p.x.is_finite() && a.p.y.is_finite())));
         if shapes.is_empty() {
-            return Some(vec![]);
+            return Some(PathfinderChildren { art: vec![], fell_back: false });
         }
         // Remove Redundant Points: each result loses the anchors that don't change its shape.
         let tidy = |path: PathData| if options.remove_redundant_points { po::remove_redundant_points(&path, options.precision) } else { path };
+        let mixed = |mut art: Node| {
+            // Mix faces are new geometry owned by this container. They remain fill-only until
+            // a later Outline gives them a stroke; ordinary rendering has no origin to carry.
+            crate::bake::carry_query_origin(group, &mut art);
+            Arc::new(art)
+        };
         stack = if op == PathfinderOp::SoftMix {
             let rate = mixing_rate(&e.params);
             po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(soft_mix_face(tidy(r.path), &r.sources, rate, &shapes, &sources)))
+                .map(|r| mixed(soft_mix_face(tidy(r.path), &r.sources, rate, &shapes, &sources)))
                 .collect()
         } else if op == PathfinderOp::HardMix {
             po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(hard_mix_face(tidy(r.path), &r.sources, &shapes, &sources)))
+                .map(|r| mixed(hard_mix_face(tidy(r.path), &r.sources, &shapes, &sources)))
                 .collect()
         } else {
             // Divide and Outline Will Remove Unpainted Artwork: the pieces of members with no
@@ -703,7 +724,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 .collect()
         };
     }
-    Some(stack)
+    Some(PathfinderChildren { art: stack, fell_back: false })
 }
 
 fn mixing_rate(params: &Value) -> f64 {
@@ -962,6 +983,7 @@ fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl 
 struct PreparedContainer {
     m: Node,
     guides: Vec<Arc<Node>>,
+    geometry: bool,
     paint: bool,
     carry: crate::Carry,
 }
@@ -985,6 +1007,7 @@ fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContain
     // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
     // locked as their containers were.
     let mut guides = vec![];
+    let mut geometry = pathfinder;
     if pathfinder || !fx.is_empty() {
         take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
     } else if let Some(ch) = m.children_mut() {
@@ -992,9 +1015,10 @@ fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContain
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
-        let result = pathfinder_children(doc, &m, Some(&hook)).unwrap_or_default();
+        let result = pathfinder_children_result(doc, &m, Some(&hook)).unwrap_or_default();
+        geometry &= !result.fell_back;
         if let Some(ch) = m.children_mut() {
-            *ch = result;
+            *ch = result.art;
         }
         // The area is art now: drawn again, it is no compound shape of its own.
         m.extras_mut().compound_shape = false;
@@ -1015,7 +1039,7 @@ fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContain
     }
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
-    Some(PreparedContainer { m, guides, paint, carry })
+    Some(PreparedContainer { m, guides, geometry: geometry || !fx.is_empty(), paint, carry })
 }
 
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
@@ -1035,15 +1059,27 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if let Some(t) = crate::reshape::copied_container_raster_at(n) {
         return Some(copied_container(doc, n, t));
     }
-    let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
+    let PreparedContainer { mut m, guides, geometry, paint, .. } = prepare_container(doc, n)?;
     if paint {
         // A clip group whose clipping type paints strokes is now a group of a clip group and those
         // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
         // that clip group. Such groups among the members are measured as their clip groups.
         let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
         let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
-        let art =
-            |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
+        let art = |items: &[AppearanceItem]| -> Vec<Arc<Node>> {
+            if n.extras().query_origin.0.is_none() {
+                return items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect();
+            }
+            let start = items.first().and_then(|first| m.appearance.items.iter().position(|i| std::ptr::eq(i, first))).unwrap_or(0);
+            items
+                .iter()
+                .enumerate()
+                .filter_map(|(index, item)| {
+                    item_art(n.id, item, &shapes, bounds)
+                        .map(|made| Arc::new(crate::bake::query_paint(n, start + index, matches!(item, AppearanceItem::Stroke(_)), made)))
+                })
+                .collect()
+        };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
         let at = usize::from(wrapped || m.clips());
@@ -1058,6 +1094,9 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     m.appearance.contents_index = None;
     if let Some(ch) = m.children_mut() {
         ch.extend(guides);
+    }
+    if geometry {
+        crate::bake::query_geometry(n, &mut m);
     }
     Some(m)
 }

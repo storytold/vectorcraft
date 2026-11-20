@@ -3443,6 +3443,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Precise Cursors	Præcise markører
 	Image Trace Preview	Forhåndsvisning af billedsporing
 	Snap to Point	Fastgør til punkt
+	Snap to Stroke Edges	Fastgør til stregens kanter
 	Snap to Glyph	Fastgør til tegn
 	New View…	Ny visning…
 	Edit Views…	Redigér visninger…
@@ -10967,3 +10968,4 @@ breakText	Glyphs	Glyffer
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigér original med:
 file-filter	Applications	Programmer
+	Include visible stroke edges when snapping with Smart Guides.	Medtag stregens synlige kanter ved fastgørelse med smarte hjælpelinjer.

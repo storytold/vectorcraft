@@ -309,6 +309,7 @@ impl From<NodeWire> for Node {
             _ => None,
         };
         let extras = NodeExtras {
+            query_origin: Default::default(),
             mask: w.mask,
             trace: w.trace,
             wrap: w.wrap,

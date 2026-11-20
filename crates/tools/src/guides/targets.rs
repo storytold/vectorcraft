@@ -1,7 +1,7 @@
 use super::snap::{Leave, meeting, seg_direction, touch_params};
 use super::{
-    Affine, Arc, BezPath, Document, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind, OrientedBox, Overlay, ParamCurve,
-    ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
+    Affine, Arc, BezPath, ContactDomain, Document, DomainRect, FontDb, GlyphSnap, GuideStyle, Handle, HashSet, Line, Node, NodeId, NodeKind,
+    OrientedBox, Overlay, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Ruler, Selection, Shape, SubPath, ToolContext, Vec2, layout_text,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -13,6 +13,7 @@ pub(super) enum Kind {
     Bleed,
     Guide,
     Glyph,
+    StrokeEdge,
 }
 
 impl Kind {
@@ -25,13 +26,19 @@ impl Kind {
             Kind::Bleed => "bleed",
             Kind::Guide => "guide",
             Kind::Glyph => "glyph",
+            Kind::StrokeEdge => "stroke edge",
         }
     }
 }
 
+/// A direct scale contact: its factor, point, target kind and priority.
+type ScaleContact = (f64, Point, Kind, u8);
+
 /// Snap targets gathered from the document (excluding the objects being edited).
 #[derive(Default)]
 pub struct Targets {
+    pub(super) stroke_contours: Arc<super::stroke::Contours>,
+    pub(super) stroke_points: bool,
     pub(super) points: Vec<(Point, Kind)>,
     pub(super) xs: Vec<(f64, Point, Kind)>,
     pub(super) ys: Vec<(f64, Point, Kind)>,
@@ -265,6 +272,22 @@ fn glyph_box(g: &vectorcraft_text::PositionedGlyph, bb: &Rect) -> [Point; 4] {
 }
 
 impl Targets {
+    /// Append the separate contour channel only after the caller has fixed its
+    /// actual exclusions/view. Pixel/grid precedence never evaluates it.
+    pub fn with_stroke_edges(mut self, cx: &ToolContext, exclude: &[NodeId], visible: Option<Rect>) -> Self {
+        if cx.smart_guides
+            && cx.snap_to_stroke_edges
+            && !cx.snap_to_grid
+            && !(cx.snaps_to_pixel(crate::PixelOp::Drawing)
+                && cx.snaps_to_pixel(crate::PixelOp::Moving)
+                && cx.snaps_to_pixel(crate::PixelOp::Scaling))
+        {
+            self.stroke_contours = Arc::new(super::stroke::gather(cx, exclude, visible, None));
+            self.stroke_points = true;
+        }
+        self
+    }
+
     pub fn collect(doc: &Document, exclude: &[NodeId], visible: Option<Rect>) -> Self {
         Self::collect_inner(doc, exclude, None, visible, Gather::Bounds)
     }
@@ -275,7 +298,7 @@ impl Targets {
     /// Guides › Snap to Last Location, a move (not a copy, which has nothing in `exclude`) goes back
     /// to where it began when it comes near ([`Self::snap_back`]), unless Snap to Pixel snaps moves.
     pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
-        Self::moving(cx, exclude, Gather::Bounds)
+        Self::moving(cx, exclude, Gather::Bounds, crate::PixelOp::Moving)
     }
 
     /// [`Self::for_move`]'s targets for a selection moved by one of its anchors (#7411) or by a
@@ -283,14 +306,18 @@ impl Targets {
     /// which that point lands on ([`Self::snap_onto_path`]), as a dragged anchor does with Direct
     /// Selection.
     pub fn for_move_by_anchor(cx: &ToolContext, exclude: &[NodeId]) -> Self {
-        Self::moving(cx, exclude, Gather::Segments)
+        Self::moving(cx, exclude, Gather::Segments, crate::PixelOp::Moving)
     }
 
-    fn moving(cx: &ToolContext, exclude: &[NodeId], gather: Gather) -> Self {
+    fn moving(cx: &ToolContext, exclude: &[NodeId], gather: Gather, op: crate::PixelOp) -> Self {
         let mut t = Self::collect_inner(cx.doc, exclude, None, None, gather).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
+        if !cx.snaps_to_pixel(op) {
+            t = t.with_stroke_edges(cx, exclude, None);
+        }
+        t.stroke_points = gather != Gather::Bounds;
         t.last_location = cx.snap_to_last_location && !cx.snaps_to_pixel(crate::PixelOp::Moving) && !exclude.is_empty();
         t
     }
@@ -314,7 +341,7 @@ impl Targets {
     /// Targets for scaling the selection: the other art, styled as `cx` asks, and with Smart Guides ›
     /// Spacing Guides the neighbours whose gaps the moving edge should match ([`Self::snap_scale`]).
     pub fn for_scale(cx: &ToolContext) -> Self {
-        Self { last_location: false, ..Self::for_move(cx, &cx.selection.objects) }
+        Self { last_location: false, ..Self::moving(cx, &cx.selection.objects, Gather::Bounds, crate::PixelOp::Scaling) }
     }
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its
@@ -662,6 +689,7 @@ impl Targets {
 
     /// Only these targets' anchors pull (View → Snap to Point).
     pub(crate) fn anchors_only(mut self) -> Self {
+        self.stroke_contours = Default::default();
         self.points.retain(|(_, k)| *k == Kind::Anchor);
         self.xs.clear();
         self.ys.clear();
@@ -778,10 +806,54 @@ impl Targets {
     /// that way into line with the nearest target; else, before lining up, it lands on a
     /// construction guide through it, where a target's line crosses the guide if one does nearby.
     pub fn snap_from(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>) {
+        self.snap_from_with_stroke_minimum(p, from, tol, None)
+    }
+
+    pub(super) fn snap_from_with_stroke_minimum(&self, p: Point, from: Option<&Leave>, tol: f64, minimum: Option<f64>) -> (Point, Vec<Overlay>) {
+        self.snap_from_inner(p, from, tol, true, minimum)
+    }
+
+    /// Preserve legacy point/segment priority, then contact only a solver-placed Scale grab.
+    pub(crate) fn snap_scaled_point(
+        &self,
+        raw: Point,
+        actual: Point,
+        along: Option<Vec2>,
+        tol: f64,
+        domain: impl FnOnce() -> Option<ContactDomain>,
+        valid_contact: impl Fn(Point) -> bool,
+    ) -> (Point, Vec<Overlay>) {
+        if self.nearest_point(raw, tol).is_some_and(|(q, _)| valid_contact(q)) {
+            return self.snap_from_inner(raw, None, tol, false, None);
+        }
+        let Some(stroke) = self.snap_stroke_point_with_domain((raw, actual), &[], along, tol, domain, |handle, _| valid_contact(handle)) else {
+            // Without an eligible painted contact, preserve the ordinary legacy route exactly.
+            return self.snap_from_inner(raw, None, tol, false, None);
+        };
+        if let Some((q, kind)) = self.nearest_point_with(raw, tol, &valid_contact) {
+            return (q, self.label(q, kind.label()).into_iter().collect());
+        }
+        if let Some(q) = self.crossing_with_filter(raw, tol, &self.rulers, &valid_contact) {
+            return (q, self.label(q, "intersect").into_iter().collect());
+        }
+        if let Some((_, q)) = self.nearest_segment_with(raw, tol, valid_contact) {
+            return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
+        }
+        stroke
+    }
+
+    fn snap_from_inner(&self, p: Point, from: Option<&Leave>, tol: f64, stroke_edges: bool, minimum: Option<f64>) -> (Point, Vec<Overlay>) {
         if let Some(f) = from
             && let Some(q) = f.constrained(p)
         {
-            return match self.slide(f.at, q - f.at, q, tol, true) {
+            // Only an initial shape needs the ordinary result before choosing paint. Keep it
+            // for fallback, while other consumers retain their paint-first query order.
+            let legacy = minimum.map(|_| self.slide(f.at, q - f.at, q, tol, true));
+            let minimum = minimum.filter(|m| legacy.flatten().map_or(q, |(p, _)| p).distance(f.at) >= *m);
+            if stroke_edges && let Some((q, kind)) = self.stroke_line_with_minimum(f.at, q - f.at, q, tol, true, minimum) {
+                return (q, self.label(q, kind.label()).into_iter().collect());
+            }
+            return match legacy.unwrap_or_else(|| self.slide(f.at, q - f.at, q, tol, true)) {
                 Some((q, target)) => (q, self.lined_up(q, target)),
                 None => (q, vec![]),
             };
@@ -800,6 +872,12 @@ impl Targets {
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
         }
+        if stroke_edges
+            && self.stroke_points
+            && let Some(q) = self.stroke_contours.nearest(p, tol)
+        {
+            return (q, self.label(q, "stroke edge").into_iter().collect());
+        }
         // A construction guide through the point it leaves, else a dragged segment's extension:
         // it lands on the guide, sliding into line with a target crossing it nearby.
         if let Some((at, dir, q)) = from
@@ -808,6 +886,9 @@ impl Targets {
             .or_else(|| self.on_angled(p, tol))
         {
             let construction = |q: Point| Overlay::Line { a: at, b: q, color: self.style.color, dashed: false };
+            if stroke_edges && let Some((q, kind)) = self.stroke_line(at, dir, q, tol, false) {
+                return (q, std::iter::once(construction(q)).chain(self.label(q, kind.label())).collect());
+            }
             return match self.slide(at, dir, q, tol, false) {
                 Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect()),
                 None => (q, vec![construction(q)]),
@@ -991,10 +1072,19 @@ impl Targets {
     }
 
     pub(super) fn nearest_point(&self, p: Point, tol: f64) -> Option<(Point, Kind)> {
+        self.nearest_point_with(p, tol, |_| true)
+    }
+
+    /// The nearest feasible anchor or centre, with its own label.
+    pub(crate) fn snap_feasible_point(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(Point, Vec<Overlay>)> {
+        self.nearest_point_with(p, tol, valid).map(|(q, kind)| (q, self.label(q, kind.label()).into_iter().collect()))
+    }
+
+    fn nearest_point_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(Point, Kind)> {
         within(&self.points, |q| q.0.x, p.x, tol)
             .iter()
             .copied()
-            .filter(|(q, _)| q.distance(p) <= tol)
+            .filter(|(q, _)| q.distance(p) <= tol && valid(*q))
             .min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)))
     }
 
@@ -1002,6 +1092,10 @@ impl Targets {
     /// the nearest target line or angled glyph guide crosses it, at most twice `tol` away: where it lands and the
     /// target's own point (where its line starts).
     fn slide(&self, at: Point, dir: Vec2, q: Point, tol: f64, ray: bool) -> Option<(Point, Point)> {
+        self.slide_with(at, dir, q, tol, ray, |_| true)
+    }
+
+    fn slide_with(&self, at: Point, dir: Vec2, q: Point, tol: f64, ray: bool, accept_origin: impl Fn(Point) -> bool) -> Option<(Point, Point)> {
         if !dir.hypot2().is_finite() || dir.hypot2() <= 1e-18 {
             return None;
         }
@@ -1014,7 +1108,7 @@ impl Targets {
             // The ruler guides that way count as lines too (#812).
             let rulers: Vec<(f64, Point, Kind)> = self.rulers.iter().filter(|r| r.vertical == vertical).filter_map(|r| r.line_at(q, reach)).collect();
             // A line that far across the way crosses it at least that far along.
-            for (t, from, _) in lines_near(lines, v, reach).iter().chain(&rulers) {
+            for (t, from, _) in lines_near(lines, v, reach).iter().chain(&rulers).filter(|candidate| accept_origin(candidate.1)) {
                 let s = (t - a) / d;
                 // Exactly on the line, whatever the rounding along the way.
                 let hit = if vertical { Point::new(*t, at.y + dir.y * s) } else { Point::new(at.x + dir.x * s, *t) };
@@ -1026,6 +1120,9 @@ impl Targets {
         }
         // The angled glyph guides it crosses.
         for &(on, e) in &self.angled {
+            if !accept_origin(on) {
+                continue;
+            }
             let across = dir.cross(e);
             if across.abs() <= 1e-9 * dir.hypot() {
                 continue;
@@ -1049,26 +1146,73 @@ impl Targets {
         self.line(from, q).into_iter().chain(self.label(q, "align")).collect()
     }
 
-    /// A point `p` near no target anchor or center landed where two target paths cross
-    /// ("intersect"), else on the nearest target path ("path"), within `tol`: the point and its
-    /// label, as [`Self::snap_point`] lands it. The ruler guides of `rulers` count as paths that
-    /// cross ([`Self::rulers`]). None when no path is in reach, or the targets hold no segments.
+    /// A point `p` near no target anchor or center lands on a legacy path crossing or
+    /// nearest path when actual segments exist, then on a painted stroke contour independently.
+    /// The ruler guides of `rulers` participate only in the legacy segment route.
     pub(crate) fn snap_onto_path(&self, p: Point, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
-        if self.segments.is_empty() {
+        if !self.segments.is_empty() {
+            if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
+                return Some((q, self.label(q, "intersect").into_iter().collect()));
+            }
+            if let Some(q) = self.on_segment(p, tol) {
+                return Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()));
+            }
+        }
+        let q = self.stroke_points.then(|| self.stroke_contours.nearest(p, tol)).flatten()?;
+        Some((q, self.label(q, "stroke edge").into_iter().collect()))
+    }
+
+    fn stroke_line(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool) -> Option<(Point, Kind)> {
+        self.stroke_line_with_minimum(at, dir, near, tol, ray, None)
+    }
+
+    fn stroke_line_with_minimum(&self, at: Point, dir: Vec2, near: Point, tol: f64, ray: bool, minimum: Option<f64>) -> Option<(Point, Kind)> {
+        if !self.stroke_points || self.stroke_contours.is_empty() {
             return None;
         }
-        if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
-            return Some((q, self.label(q, "intersect").into_iter().collect()));
+        let l2 = dir.hypot2();
+        if !l2.is_finite() || l2 == 0.0 {
+            return None;
         }
-        let q = self.on_segment(p, tol)?;
-        Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()))
+        // Point equality treats both signs of zero alike; origin keys must do so too.
+        let origin_key = |p: Point| (if p.x == 0.0 { 0 } else { p.x.to_bits() }, if p.y == 0.0 { 0 } else { p.y.to_bits() });
+        let has_anchor = if ray {
+            let origins: std::collections::HashSet<_> = within(&self.points, |q| q.0.x, near.x, tol)
+                .iter()
+                .filter(|(point, _)| point.distance(near) <= tol)
+                .map(|(point, _)| origin_key(*point))
+                .collect();
+            // Query the real guide candidates once, rather than rescanning them per nearby point.
+            // Unrelated origins still cannot grant an unusable point priority over paint.
+            !origins.is_empty() && self.slide_with(at, dir, near, tol, true, |from| origins.contains(&origin_key(from))).is_some()
+        } else {
+            self.nearest_point(near, tol).is_some()
+        };
+        if has_anchor {
+            return None;
+        }
+        self.stroke_contours
+            .on_line_with_minimum(at, dir, near, tol, (ray, minimum), |q| minimum.is_none_or(|m| q.distance(at) >= m))
+            .map(|q| (q, Kind::StrokeEdge))
+    }
+
+    pub(crate) fn snap_stroke_along(&self, p: Point, dir: Vec2, tol: f64) -> Option<(Point, Vec<Overlay>)> {
+        if !self.stroke_points || self.stroke_contours.is_empty() || self.nearest_point(p, tol).is_some() {
+            return None;
+        }
+        let l2 = dir.hypot2();
+        if !l2.is_finite() || l2 == 0.0 {
+            return None;
+        }
+        // Only a painted contour may take Selection's stroke-contact ruler guard.
+        self.stroke_contours.on_line(p, dir, p, tol, false).map(|q| (q, self.label(q, "stroke edge").into_iter().collect()))
     }
 
     /// [`Self::snap_onto_path`] for a selection held by a point `p` of a path's edge, its bounds
     /// now `r` (#8568). Where paths cross, or on a curved segment, the point lands as
     /// `snap_onto_path` lands it. On a straight segment, the selection then slides along that
     /// segment, so the point stays on it, until its bounds line up with the other art or are spaced
-    /// evenly with it ([`Self::snap_rects_along`]), else until they line up with a ruler guide of
+    /// evenly with it ([`Self::snap_rects_along_legacy_contact`]), else until they line up with a ruler guide of
     /// `rulers` ([`Self::snap_moved_along_to_rulers`]). A slide goes at most twice `tol` and not
     /// past the segment's ends. Returns where the point goes and the guides.
     pub(crate) fn snap_held_onto_path(&self, p: Point, r: Rect, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
@@ -1108,11 +1252,15 @@ impl Targets {
 
     /// [`Self::on_segment`], with the segment the point is on.
     fn nearest_segment(&self, p: Point, tol: f64) -> Option<(PathSeg, Point)> {
+        self.nearest_segment_with(p, tol, |_| true)
+    }
+
+    fn nearest_segment_with(&self, p: Point, tol: f64, valid: impl Fn(Point) -> bool) -> Option<(PathSeg, Point)> {
         self.segments
             .iter()
             .filter(|(b, _)| b.inflate(tol, tol).contains(p))
             .map(|(_, c)| (c, c.nearest(p, 1e-6)))
-            .filter(|(_, n)| n.distance_sq <= tol * tol)
+            .filter(|(c, n)| n.distance_sq <= tol * tol && valid(c.eval(n.t)))
             .min_by(|a, b| a.1.distance_sq.total_cmp(&b.1.distance_sq))
             .map(|(c, n)| (*c, c.eval(n.t)))
     }
@@ -1125,6 +1273,10 @@ impl Targets {
 
     /// [`Self::crossing`] with the ruler guides `rulers`.
     fn crossing_with(&self, p: Point, tol: f64, rulers: &[Ruler]) -> Option<Point> {
+        self.crossing_with_filter(p, tol, rulers, |_| true)
+    }
+
+    fn crossing_with_filter(&self, p: Point, tol: f64, rulers: &[Ruler], valid: impl Fn(Point) -> bool) -> Option<Point> {
         // A ruler guide running past, as a short line through the reach of `p`.
         let ruler = |r: &Ruler| {
             let (pos, ..) = r.line_at(p, tol)?;
@@ -1150,7 +1302,7 @@ impl Targets {
                     _ => meeting(a, b, p).into_iter().collect(),
                 };
                 for q in hits {
-                    if q.distance(p) <= tol && best.is_none_or(|b| q.distance(p) < b.distance(p)) {
+                    if q.distance(p) <= tol && valid(q) && best.is_none_or(|b| q.distance(p) < b.distance(p)) {
                         best = Some(q);
                     }
                 }
@@ -1192,6 +1344,70 @@ impl Targets {
         (out, ov)
     }
 
+    /// Contact a stroke contour with a resize handle or one of its carried points.
+    /// `legacy_at` keeps existing anchor/centre priority; `at` is the actual
+    /// handle after its resize constraint. Only this continuous channel is queried.
+    #[cfg(test)]
+    pub(crate) fn snap_stroke_point_with(
+        &self,
+        legacy_at: Point,
+        at: Point,
+        offsets: &[Vec2],
+        along: Option<Vec2>,
+        tol: f64,
+    ) -> Option<(Point, Vec<Overlay>)> {
+        self.snap_stroke_point_with_filter(legacy_at, at, offsets, along, tol, |_, _| true)
+    }
+
+    /// Test compatibility route without an analytic free-contact domain.
+    #[cfg(test)]
+    pub(crate) fn snap_stroke_point_with_filter(
+        &self,
+        legacy_at: Point,
+        at: Point,
+        offsets: &[Vec2],
+        along: Option<Vec2>,
+        tol: f64,
+        valid: impl Fn(Point, Point) -> bool,
+    ) -> Option<(Point, Vec<Overlay>)> {
+        self.snap_stroke_point_with_domain((legacy_at, at), offsets, along, tol, || None, valid)
+    }
+
+    /// Keep feasible handle/contact pairs before choosing the nearest painted contact.
+    pub(crate) fn snap_stroke_point_with_domain(
+        &self,
+        at: (Point, Point),
+        offsets: &[Vec2],
+        along: Option<Vec2>,
+        tol: f64,
+        domain: impl FnOnce() -> Option<ContactDomain>,
+        valid: impl Fn(Point, Point) -> bool,
+    ) -> Option<(Point, Vec<Overlay>)> {
+        let (legacy_at, at) = at;
+        if !self.stroke_points || self.stroke_contours.is_empty() || self.nearest_point(legacy_at, tol).is_some_and(|(q, _)| valid(q, q)) {
+            return None;
+        }
+        let domain = domain();
+        let mut best: Option<(f64, Point, Point)> = None;
+        for offset in std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()) {
+            let probe = at + offset;
+            let accept = |contact: Point| valid(contact - offset, contact);
+            let contact = match along {
+                Some(dir) => match domain.as_ref() {
+                    Some(domain) => self.stroke_contours.on_line_in_domain(probe, dir, probe, tol, (domain, offset), accept),
+                    None => self.stroke_contours.on_line_with(probe, dir, probe, tol, false, accept),
+                },
+                None => self.stroke_contours.nearest_with_domain(probe, tol, domain.as_ref(), offset, accept),
+            };
+            let Some(q) = contact else { continue };
+            let distance = q.distance_squared(probe);
+            if distance <= tol * tol && best.is_none_or(|(d, ..)| distance < d) {
+                best = Some((distance, q - offset, q));
+            }
+        }
+        best.map(|(_, handle, contact)| (handle, self.label(contact, "stroke edge").into_iter().collect()))
+    }
+
     /// Snap a moving rectangle (selection bounds after a move by `d`): tries its corners/edges/centre.
     pub fn snap_rect(&self, r: Rect, tol: f64) -> (Vec2, Vec<Overlay>) {
         self.snap_rects(&[r], tol)
@@ -1201,17 +1417,27 @@ impl Targets {
     /// line): onto the point of that line nearest an anchor or center within `tol` of `p`, labeled
     /// at the anchor or center, else to where the nearest target line or ruler guide crosses the
     /// line, at most twice `tol` away ([`Self::slide`]). Returns where it goes and the guides.
+    #[cfg(test)]
     pub(crate) fn snap_point_along(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>) {
+        let (q, overlays, _) = self.snap_point_along_contact(p, dir, tol);
+        (q, overlays)
+    }
+
+    /// Snap along the constraint with actual contact evidence independent of drawn guides.
+    pub(crate) fn snap_point_along_contact(&self, p: Point, dir: Vec2, tol: f64) -> (Point, Vec<Overlay>, bool) {
         let l2 = dir.hypot2();
         if !l2.is_finite() || l2 <= 1e-18 {
-            return (p, vec![]);
+            return (p, vec![], false);
         }
         if let Some((q, k)) = self.nearest_point(p, tol) {
-            return (p + dir * ((q - p).dot(dir) / l2), self.label(q, k.label()).into_iter().collect());
+            return (p + dir * ((q - p).dot(dir) / l2), self.label(q, k.label()).into_iter().collect(), true);
+        }
+        if let Some((q, kind)) = self.stroke_line(p, dir, p, tol, false) {
+            return (q, self.label(q, kind.label()).into_iter().collect(), true);
         }
         match self.slide(p, dir, p, tol, false) {
-            Some((q, from)) => (q, self.lined_up(q, from)),
-            None => (p, vec![]),
+            Some((q, from)) => (q, self.lined_up(q, from), true),
+            None => (p, vec![], false),
         }
     }
 
@@ -1219,14 +1445,29 @@ impl Targets {
     /// its line): they slide along it until the edge or center of one of them is in line with a
     /// target, within `tol` of it on that axis, the target that needs the shortest way along the
     /// line winning. Lining up with nothing, a single rectangle with Spacing Guides slides to where
-    /// it is spaced evenly along an axis the line runs along. Returns the shift (along `dir`) and
-    /// the guides.
-    pub(crate) fn snap_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
-        let (s, ov, _) = self.slide_rects_along(rects, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
-        (s, ov)
+    /// it is spaced evenly along an axis the line runs along. Returns the shift (along `dir`),
+    /// the guides and whether a stroke contour holds the contact.
+    pub(crate) fn snap_rects_along_contact(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        let (d, ov, paint_hit, _) = self.snap_rects_along_contacts(rects, dir, tol);
+        (d, ov, paint_hit)
     }
 
-    /// [`Self::snap_rects_along`] for a slide of `within` (the least and the most way along
+    /// Returns `(delta, overlays, paint_hit, legacy_hit)`: paint and legacy geometry
+    /// contacts are distinct from displayed guides. A paint hit defers the legacy query.
+    pub(crate) fn snap_rects_along_contacts(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool, bool) {
+        if let Some((d, q)) = self.stroke_contours.rect_delta(rects, tol, Some(dir)) {
+            return (d, self.label(q, "stroke edge").into_iter().collect(), true, false);
+        }
+        let (d, ov, legacy_hit) = self.snap_rects_along_legacy_contact(rects, dir, tol);
+        (d, ov, false, legacy_hit)
+    }
+
+    /// Legacy alignment/spacing contact, independent of displacement or drawn guides.
+    pub(crate) fn snap_rects_along_legacy_contact(&self, rects: &[Rect], dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        self.slide_rects_along(rects, dir, tol, (f64::NEG_INFINITY, f64::INFINITY))
+    }
+
+    /// [`Self::snap_rects_along_legacy_contact`] for a slide of `within` (the least and the most way along
     /// `dir`), also saying whether anything lined up or was spaced evenly.
     fn slide_rects_along(&self, rects: &[Rect], dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
@@ -1310,6 +1551,19 @@ impl Targets {
 
     /// [`Self::snap_rects`], also saying which axes (x, y) lined up or were spaced evenly.
     pub(crate) fn snap_rects_axes(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
+        let (d, ov, axes, _) = self.snap_rects_axes_contact(rects, tol);
+        (d, ov, axes)
+    }
+
+    pub(crate) fn snap_rects_axes_contact(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2], bool) {
+        if let Some((d, q)) = self.stroke_contours.rect_delta(rects, tol, None) {
+            return (d, self.label(q, "stroke edge").into_iter().collect(), [true; 2], true);
+        }
+        let (d, ov, axes) = self.snap_rects_axes_legacy(rects, tol);
+        (d, ov, axes, false)
+    }
+
+    pub(crate) fn snap_rects_axes_legacy(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
         let mut taken = aligned;
         if let [r] = rects
@@ -1519,12 +1773,18 @@ impl Targets {
     /// guide runs past within `tol` goes onto it by sliding along the line, the way needing the
     /// shortest slide winning and at most twice `tol` (a line nearly parallel to a guide would
     /// carry the selection far to meet it). Returns the shift along the line and the guides.
+    #[cfg(test)]
     pub(crate) fn snap_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>) {
-        let (s, ov, _) = self.slide_moved_along_to_rulers(p, r, dir, tol, (f64::NEG_INFINITY, f64::INFINITY));
+        let (s, ov, _) = self.snap_moved_along_to_rulers_contact(p, r, dir, tol);
         (s, ov)
     }
 
-    /// [`Self::snap_moved_along_to_rulers`] for a slide of `within` (the least and the most way
+    /// As `snap_moved_along_to_rulers`, retaining the solver's contact bit even at zero travel.
+    pub(crate) fn snap_moved_along_to_rulers_contact(&self, p: Point, r: Rect, dir: Vec2, tol: f64) -> (Vec2, Vec<Overlay>, bool) {
+        self.slide_moved_along_to_rulers(p, r, dir, tol, (f64::NEG_INFINITY, f64::INFINITY))
+    }
+
+    /// [`Self::snap_moved_along_to_rulers_contact`] for a slide of `within` (the least and the most way
     /// along `dir`), also saying whether the bounds lined up with a guide.
     fn slide_moved_along_to_rulers(&self, p: Point, r: Rect, dir: Vec2, tol: f64, (lo, hi): (f64, f64)) -> (Vec2, Vec<Overlay>, bool) {
         let len = dir.hypot();
@@ -1568,6 +1828,93 @@ impl Targets {
         (u * s, ov, true)
     }
 
+    fn free_corner_stroke_contact(
+        &self,
+        anchor: Option<(Point, Kind)>,
+        near: Point,
+        tol: f64,
+        valid: impl Fn(Point) -> bool,
+        find: impl FnOnce() -> Option<Point>,
+    ) -> Option<(Point, Kind)> {
+        if anchor.is_some_and(|(q, _)| valid(q)) || self.stroke_contours.is_empty() {
+            return None;
+        }
+        let stroke = find()?;
+        // Only an eligible painted contact opens this route: otherwise keep the
+        // original legacy fallback, including its unrestricted nearest anchor.
+        self.nearest_point_with(near, tol, valid).or(Some((stroke, Kind::StrokeEdge)))
+    }
+
+    /// The existing open sign region for a free box corner, in local handle space.
+    fn free_corner_contact_domain(to_local: Affine, p: Point, origin: Point, d0: Vec2, (sx, sy): (f64, f64), tol: f64) -> ContactDomain {
+        let to_local = Affine::translate(-origin.to_vec2()) * to_local;
+        let local = to_local * p;
+        let mut bounds = Rect::new(local.x - tol, local.y - tol, local.x + tol, local.y + tol);
+        let mut open = [false; 4];
+        if d0.x * sx > 0.0 && bounds.x0 <= 0.0 {
+            bounds.x0 = 0.0;
+            open[0] = true;
+        } else if d0.x * sx < 0.0 && bounds.x1 >= 0.0 {
+            bounds.x1 = 0.0;
+            open[2] = true;
+        }
+        if d0.y * sy > 0.0 && bounds.y0 <= 0.0 {
+            bounds.y0 = 0.0;
+            open[1] = true;
+        } else if d0.y * sy < 0.0 && bounds.y1 >= 0.0 {
+            bounds.y1 = 0.0;
+            open[3] = true;
+        }
+        let regions =
+            if d0.x != 0.0 && d0.y != 0.0 && bounds.x0 < bounds.x1 && bounds.y0 < bounds.y1 { vec![DomainRect { bounds, open }] } else { vec![] };
+        ContactDomain { to_local, regions }
+    }
+
+    /// Direct scale contacts in priority order: anchors/centres, then stroke contours.
+    fn scale_contact_candidates(&self, probes: &[(Point, Vec2, Point)], tol: f64, valid: impl Fn(f64) -> bool) -> Vec<[Option<ScaleContact>; 2]> {
+        // The handle and both endpoints compete in one ranking. Paint on any of them
+        // opens feasible-anchor search on all of them, not just the painted probe.
+        let strokes: Vec<_> = probes
+            .iter()
+            .map(|&(base, dir, near)| {
+                let l2 = dir.hypot2();
+                if l2.is_finite() && l2 > 0.0 {
+                    self.stroke_contours
+                        .on_line_with(base, dir, near, tol, false, |q| valid((q - base).dot(dir) / l2))
+                        .map(|q| ((q - base).dot(dir) / l2, q, Kind::StrokeEdge, 1))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let painted = strokes.iter().any(Option::is_some);
+        probes
+            .iter()
+            .zip(strokes)
+            .map(|(&(base, dir, near), stroke)| {
+                let l2 = dir.hypot2();
+                let anchor = if l2 > 1e-18 {
+                    let nearest = self.nearest_point(near, tol);
+                    // Preserve the original nearest anchor's projected-scale admission. Only
+                    // the extra paint-enabled search requires this probe to reach the anchor.
+                    let point = if painted && nearest.is_none_or(|(q, _)| !valid((q - base).dot(dir) / l2)) {
+                        self.nearest_point_with(near, tol, |q| {
+                            let scale = (q - base).dot(dir) / l2;
+                            let projected = base + dir * scale;
+                            valid(scale) && projected.distance(q) <= 1e-9 * (1.0 + q.x.abs().max(q.y.abs()))
+                        })
+                    } else {
+                        nearest
+                    };
+                    point.map(|(q, kind)| ((q - base).dot(dir) / l2, q, kind, 0))
+                } else {
+                    None
+                };
+                [anchor, stroke]
+            })
+            .collect()
+    }
+
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
     /// dragging `handle` of the box `bx` (about the centre when `from_center`), in the box's own
     /// frame, and so is the result. The handle lands on an anchor or centre within `tol` on the page
@@ -1604,8 +1951,19 @@ impl Targets {
             // y, or both.
             let p = to_doc * (a * handle.pos(r));
             let (hx, hy) = (nearest(p, true), nearest(p, false));
-            let on = self.nearest_point(p, tol).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
-            for (tx, ty, at) in on.into_iter().chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
+            let valid_contact = |q: Point| {
+                let local = to_local * q;
+                valid((local.x - origin.x) / d0.x, sx) && valid((local.y - origin.y) / d0.y, sy)
+            };
+            let anchor = self.nearest_point(p, tol);
+            let stroke = self.free_corner_stroke_contact(anchor, p, tol, valid_contact, || {
+                // The existing corner solver accepts the current OPEN sign region, with no
+                // post-snap minimum scale. Bound it by the rotated query square, not a new floor.
+                let domain = Self::free_corner_contact_domain(to_local, p, origin, d0, (sx, sy), tol);
+                self.stroke_contours.nearest_with_domain(p, tol, Some(&domain), Vec2::ZERO, valid_contact)
+            });
+            let direct = anchor.into_iter().chain(stroke).map(|(q, k)| (Some((q.x, q)), Some((q.y, q)), Some((q, k))));
+            for (tx, ty, at) in direct.chain([(hx, hy, None), (hx, None, None), (None, hy, None)]) {
                 if tx.is_none() && ty.is_none() {
                     continue;
                 }
@@ -1638,31 +1996,35 @@ impl Targets {
             let travel = (e.0 * d0.x).hypot(e.1 * d0.y);
             // The snap so far: its `s`, whether it only lines up (an anchor or centre comes first),
             // how far it moves the handle, and where it lands.
-            let mut best: Option<(f64, bool, f64, Snap)> = None;
-            let mut consider = |s: f64, in_line: bool, found: Snap| {
+            let eligible = |s: f64| valid(s, s0) && (s - s0).abs() * travel <= 2.0 * tol;
+            let mut best: Option<(f64, u8, f64, Snap)> = None;
+            let mut consider = |s: f64, priority: u8, found: Snap| {
                 let moved = (s - s0).abs() * travel;
-                if valid(s, s0) && moved <= 2.0 * tol && best.as_ref().is_none_or(|k| (in_line, moved) < (k.1, k.2)) {
-                    best = Some((s, in_line, moved, found));
+                if eligible(s) && best.as_ref().is_none_or(|k| (priority, moved) < (k.1, k.2)) {
+                    best = Some((s, priority, moved, found));
                 }
             };
-            for h in std::iter::once(handle).chain(ends.into_iter().flatten().copied()) {
-                let v = h.pos(r) - origin;
-                let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
-                let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
-                let p = base + dir * s0;
-                // An anchor or centre beside its way: it stops at the nearest point of the way.
-                let l2 = dir.hypot2();
-                if l2 > 1e-18
-                    && let Some((q, k)) = self.nearest_point(p, tol)
-                {
-                    consider((q - base).dot(dir) / l2, false, (None, None, Some((q, k))));
+            let probes: Vec<_> = std::iter::once(handle)
+                .chain(ends.into_iter().flatten().copied())
+                .map(|h| {
+                    let v = h.pos(r) - origin;
+                    let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
+                    let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
+                    (base, dir, base + dir * s0)
+                })
+                .collect();
+            let direct = self.scale_contact_candidates(&probes, tol, eligible);
+            for ((base, dir, p), contacts) in probes.into_iter().zip(direct) {
+                // Direct contacts precede lining up with a target's x or y.
+                for (s, q, kind, priority) in contacts.into_iter().flatten() {
+                    consider(s, priority, (None, None, Some((q, kind))));
                 }
                 for (is_x, b, d) in [(true, base.x, dir.x), (false, base.y, dir.y)] {
                     if d.abs() <= 1e-9 {
                         continue;
                     }
                     let Some(hit) = nearest(p, is_x) else { continue };
-                    consider((hit.0 - b) / d, true, if is_x { (Some(hit), None, None) } else { (None, Some(hit), None) });
+                    consider((hit.0 - b) / d, 2, if is_x { (Some(hit), None, None) } else { (None, Some(hit), None) });
                 }
             }
             if let Some((s, _, _, found)) = best {

@@ -1307,6 +1307,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Precise Cursors	Nauwkeurige cursors
 	Image Trace Preview	Voorbeeld van Afbeelding traceren
 	Snap to Point	Uitlijnen op punt
+	Snap to Stroke Edges	Uitlijnen op contourranden
 	Snap to Glyph	Uitlijnen op glyph
 	New View…	Nieuwe weergave…
 	Edit Views…	Weergaven bewerken…
@@ -10910,3 +10911,4 @@ breakText	Glyphs	Glyphs
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Origineel bewerken met:
 file-filter	Applications	Programma’s
+	Include visible stroke edges when snapping with Smart Guides.	Neem zichtbare contourranden mee bij het uitlijnen met slimme hulplijnen.

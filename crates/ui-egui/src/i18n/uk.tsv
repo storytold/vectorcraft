@@ -4056,6 +4056,7 @@ effect	Points	Точки
 	Precise Cursors	Точні курсори
 	Image Trace Preview	Перегляд трасування зображення
 	Snap to Point	Прив’язати до точки
+	Snap to Stroke Edges	Прив’язати до країв обведення
 	Snap to Unit	Прив’язати до одиниць
 	Snapping Tolerance	Допуск прив’язки
 	Social Square Post 1080×1080	Квадратний пост для соцмереж 1080×1080
@@ -10523,3 +10524,4 @@ breakText	Glyphs	Гліфи
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редагувати оригінал у:
 file-filter	Applications	Програми
+	Include visible stroke edges when snapping with Smart Guides.	Враховувати видимі краї обведення під час прив’язування з розумними напрямними.

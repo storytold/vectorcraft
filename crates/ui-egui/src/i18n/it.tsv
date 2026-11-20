@@ -4063,6 +4063,7 @@ digits	Malayalam	Malayalam
 	Precise Cursors	Cursori di precisione
 	Image Trace Preview	Anteprima di Ricalco immagine
 	Snap to Point	Aggancia al punto
+	Snap to Stroke Edges	Aggancia ai bordi della traccia
 	Snap to Unit	Aggancia all'unità
 	Snapping Tolerance	Tolleranza di aggancio
 	Social Square Post 1080×1080	Post quadrato per social 1080×1080
@@ -10547,3 +10548,4 @@ breakText	Glyphs	Glifi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Modifica originale con:
 file-filter	Applications	Applicazioni
+	Include visible stroke edges when snapping with Smart Guides.	Includi i bordi visibili della traccia nell’aggancio con le guide sensibili.

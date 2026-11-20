@@ -740,6 +740,7 @@
 	Precise Cursors	Přesné kurzory
 	Image Trace Preview	Náhled vektorizace obrazu
 	Snap to Point	Přichytávat k bodům
+	Snap to Stroke Edges	Přichytávat k okrajům tahu
 	Snap to Glyph	Přichytávat ke glyfům
 	New View…	Nové zobrazení…
 	Edit Views…	Upravit zobrazení…
@@ -10871,3 +10872,4 @@ breakText	Glyphs	Glyfy
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Upravit originál v:
 file-filter	Applications	Aplikace
+	Include visible stroke edges when snapping with Smart Guides.	Při přichytávání pomocí chytrých vodítek zahrnout viditelné okraje tahu.

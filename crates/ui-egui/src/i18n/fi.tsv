@@ -726,6 +726,7 @@
 	Precise Cursors	Tarkat osoittimet
 	Image Trace Preview	Kuvan jäljityksen esikatselu
 	Snap to Point	Kohdista pisteeseen
+	Snap to Stroke Edges	Kohdista viivan reunoihin
 	Snap to Glyph	Kohdista merkkiin
 	New View…	Uusi näkymä…
 	Edit Views…	Muokkaa näkymiä…
@@ -9138,3 +9139,4 @@ breakText	Glyphs	Merkit
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Muokkaa alkuperäistä sovelluksella:
 file-filter	Applications	Sovellukset
+	Include visible stroke edges when snapping with Smart Guides.	Ota viivan näkyvät reunat mukaan kohdistettaessa älykkäillä apuviivoilla.

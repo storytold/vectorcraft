@@ -446,7 +446,7 @@ fn open_end(sp: &SubPath, ai: usize) -> bool {
 /// pulls).
 fn hold_targets(snap: &mut DrawSnap, cx: &ToolContext, id: NodeId, si: usize, anchors: &[usize]) {
     let sel = Selection { objects: vec![id], anchors: [(id, anchors.iter().map(|&ai| (si, ai)).collect())].into(), ..Selection::default() };
-    snap.hold(cx, || Targets::for_anchor_drag(cx.doc, &sel));
+    snap.hold(cx, || Targets::for_anchor_drag(cx.doc, &sel).with_stroke_edges(cx, &sel.objects, None));
 }
 
 /// How near a press picks a point.

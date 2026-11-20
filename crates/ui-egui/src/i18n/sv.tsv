@@ -3916,6 +3916,7 @@ digits	Malayalam	Malayalam
 	Precise Cursors	Exakta markörer
 	Image Trace Preview	Förhandsgranskning av bildkalkering
 	Snap to Point	Fäst mot punkt
+	Snap to Stroke Edges	Fäst mot konturens kanter
 	Snap to Unit	Fäst mot enhet
 	Snapping Tolerance	Fästtolerans
 	Social Square Post 1080×1080	Kvadratiskt inlägg för sociala medier 1080×1080
@@ -10997,3 +10998,4 @@ digits	Hindi	Hindi
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Redigera original med:
 file-filter	Applications	Program
+	Include visible stroke edges when snapping with Smart Guides.	Ta med konturens synliga kanter när du fäster med smarta stödlinjer.

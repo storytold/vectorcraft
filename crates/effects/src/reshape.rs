@@ -284,12 +284,18 @@ pub(crate) fn copied_container_art(doc: Option<&Document>, n: &Node, t: usize, p
                     copy.appearance.effects = own.clone();
                     crate::raster::follow_contents(&mut copy.appearance.effects, a, Affine::IDENTITY);
                     follow_carried(copy, &original, n.id, a);
+                    // These copies depend on the container bounds; their paint owners do not change.
+                    crate::bake::query_geometry(n, copy);
                 }
             }
         }
     }
     let later: Vec<&Effect> = rest.iter().skip(1).filter(|e| e.visible && is_geometry(&e.id)).collect();
     let carry = reshape_leaves_apart(&mut art, &later, &n.appearance.effects, Budget::EFFECTS, (false, false), doc);
+    if !later.is_empty() {
+        // Later geometry can also move the original. Untagged rendering is unchanged.
+        crate::bake::query_geometry(n, &mut art);
+    }
     let mut ran = n.appearance.effects.clone();
     if carry.skipped() {
         carry.hide_skipped(&mut ran);
@@ -822,7 +828,7 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         let mut piece = Node::path(n.id, PathData::from_bezpath(bp), Appearance::default());
         let stroke = paint_type_piece(&mut piece, &run.style, bounds, t.xf);
         children.push(Arc::new(piece));
-        children.extend(stroke.map(Arc::new));
+        children.extend(stroke.map(|art| Arc::new(crate::bake::query_paint(n, i, true, art))));
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();
@@ -841,6 +847,7 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     }
     let mut g = Node::group(n.id, children);
     g.extras_mut().type_outlines = true;
+    crate::bake::carry_query_origin(n, &mut g);
     Some(g)
 }
 
@@ -1333,6 +1340,7 @@ fn as_art_opts(
 /// `art`, the art made of `n`, with `n`'s name, visibility, transparency, opacity mask and
 /// remaining (raster) effects.
 pub(crate) fn dressed(mut art: Node, n: &Node) -> Node {
+    crate::bake::carry_query_origin(n, &mut art);
     art.name = n.name.clone();
     art.visible = n.visible;
     art.opacity = n.opacity;
@@ -2450,6 +2458,7 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
     if let Some(children) = art.children_mut() {
         *children = placements;
     }
+    crate::bake::query_copy_group(art);
     made
 }
 
@@ -2491,6 +2500,8 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
     placements.reverse();
     let mut g = Node::group(leaf.id, placements);
     g.name = leaf.name.clone();
+    g.extras_mut().query_origin = leaf.extras().query_origin;
+    crate::bake::query_copy_group(&mut g);
     *leaf = g;
     made
 }
@@ -2531,6 +2542,7 @@ fn paint_leaf(
         .collect();
     let mut g = Node::group(leaf.id, children);
     g.name = leaf.name.clone();
+    g.extras_mut().query_origin = leaf.extras().query_origin;
     *leaf = g;
     Some(made)
 }
@@ -2597,7 +2609,9 @@ fn paint_piece(
         set_geometry(&mut one, p.path.clone(), p.rule);
         children.push(Arc::new(one));
     }
+    let origin = leaf.extras().query_origin;
     *leaf = Node::group(leaf.id, children);
+    leaf.extras_mut().query_origin = origin;
     Some(made)
 }
 
@@ -2760,7 +2774,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 set_geometry(&mut p, path, rule);
                 group.push(Arc::new(p));
             }
-            let mut p = Node::group(leaf.id, group);
+            let mut p = crate::bake::query_paint(&original, i, matches!(item, AppearanceItem::Stroke(_)), Node::group(leaf.id, group));
             transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), true, limit, used, doc);
             pieces.push(Arc::new(p));
             continue;
@@ -2771,7 +2785,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let mut it = item.clone();
         let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
         *it.effects_mut() = rest.clone();
-        let mut p = piece(vec![it]);
+        let mut p = crate::bake::query_paint(&original, i, matches!(item, AppearanceItem::Stroke(_)), piece(vec![it]));
         if carry.moves(&p.appearance) {
             carry.apply(&mut p.appearance);
         }
@@ -3038,10 +3052,12 @@ fn transform_piece(
             };
             let (mut out, counts, spent) = split(false).or_else(|| split(true))?;
             *used = spent;
+            let origin = leaf.extras().query_origin;
             *leaf = match out.len() {
                 1 => out.pop().unwrap_or_else(|| leaf.clone()),
                 _ => Node::group(leaf.id, out.into_iter().map(Arc::new).collect()),
             };
+            leaf.extras_mut().query_origin = origin;
             Some(counts)
         };
         let mut next: Vec<bool> = vec![];

@@ -4136,6 +4136,7 @@ arrowhead	Feather	પીંછું
 	Snap to Perpendicular	લંબ પર સ્નેપ
 	Snap to Pixel	પિક્સેલ પર સ્નેપ
 	Snap to Point	પોઇન્ટ પર સ્નેપ
+	Snap to Stroke Edges	સ્ટ્રોકની કિનારીઓ પર સ્નેપ
 	Snap to Tangent	સ્પર્શક પર સ્નેપ
 	Snapping	સ્નેપિંગ
 	Snapping Tolerance	સ્નેપિંગ સહનશીલતા
@@ -5773,3 +5774,4 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Pulse Stroke	ધબકતો ઘસારો
 	Round Flow	ગોળ પ્રવાહ
 	Chisel Flow	ત્રાંસો પ્રવાહ
+	Include visible stroke edges when snapping with Smart Guides.	સ્માર્ટ ગાઇડ સાથે સ્નેપ કરતી વખતે સ્ટ્રોકની દેખાતી કિનારીઓ સામેલ કરો.

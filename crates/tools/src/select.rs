@@ -347,6 +347,7 @@ impl MoveSnap {
         // The grabbed anchor landed on a path or a crossing, which a ruler guide does not pull
         // it off.
         let mut on_path = false;
+        let mut bounds_contour = None;
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
@@ -368,7 +369,13 @@ impl MoveSnap {
                 taken = [true; 2];
                 on_path = true;
             } else {
-                let (adj, ov, axes) = t.snap_rects_axes(&[b + d], cx.snap_tol());
+                let (adj, ov, axes, contact) = t.snap_rects_axes_contact(&[b + d], cx.snap_tol());
+                let (adj, ov, axes) = if contact {
+                    bounds_contour = Some((d + adj, ov));
+                    t.snap_rects_axes_legacy(&[b + d], cx.snap_tol())
+                } else {
+                    (adj, ov, axes)
+                };
                 d += adj;
                 guides = ov;
                 taken = axes;
@@ -377,8 +384,10 @@ impl MoveSnap {
         // A ruler guide within reach of the grabbed point wins over lining the bounds up; on an
         // axis without one that Smart Guides left free, the bounds line up with the ruler guides
         // (#5746), alongside the Smart Guides.
+        let mut held_by_ruler = false;
         if let Some(t) = self.rulers.as_ref().filter(|_| !on_path) {
             let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.snap_tol(), taken);
+            held_by_ruler = held;
             if adj != Vec2::ZERO {
                 d += adj;
                 if held {
@@ -387,6 +396,10 @@ impl MoveSnap {
                     guides.extend(ov);
                 }
             }
+        }
+        if !held_by_ruler && let Some((painted, overlays)) = bounds_contour {
+            d = painted;
+            guides = overlays;
         }
         if cx.snaps_to_pixel(PixelOp::Moving)
             && let Some(b) = self.bounds
@@ -401,8 +414,8 @@ impl MoveSnap {
     /// every snap slides the move along that line. With Snap to Grid or Snap to Pixel, the move
     /// slides along the line by the shorter of the two distances that put it on a gridline or a
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
-    /// with the other art ([`Targets::snap_rects_along`]) and the grabbed point lands where the line
-    /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
+    /// with the other art ([`Targets::snap_rects_along_contact`]) and the grabbed point lands where the line
+    /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along_contact`]). A move of zero
     /// length does not snap, and Snap to Last Location goes back to where the move began first, as
     /// in [`Self::snap`].
     pub(crate) fn snap_along(&mut self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
@@ -418,40 +431,68 @@ impl MoveSnap {
             return (Vec2::ZERO, ov);
         }
         let mut guides = vec![];
+        let mut legacy_geometry_hit = false;
+        let mut painted_contact = None;
         if cx.snap_to_grid
             && let Some(b) = self.bounds
         {
             d += u * along(grid_pull(b + d, cx.grid_step()));
         }
         if let Some(t) = points {
-            let (q, ov) = t.snap_point_along(start + d, u, cx.tol(cx.snap_tolerance));
+            let (q, ov, contact) = t.snap_point_along_contact(start + d, u, cx.tol(cx.snap_tolerance));
             d = q - start;
             guides = ov;
+            legacy_geometry_hit |= contact;
         }
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             if t.has_point_near(start + d, cx.snap_tol()) {
-                let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
+                let (q, ov, contact) = t.snap_point_along_contact(start + d, u, cx.snap_tol());
                 d = q - start;
                 guides = ov;
+                legacy_geometry_hit |= contact;
+            } else if let Some((q, ov)) = t.snap_stroke_along(start + d, u, cx.snap_tol()) {
+                // Compare with the ruler result the ordinary OFF route would choose,
+                // not with a new ruler query after paint has already moved the point.
+                painted_contact = Some((q - start, ov, d));
+                let (adj, ov, contact) = t.snap_rects_along_legacy_contact(&[b + d], u, cx.snap_tol());
+                d += adj;
+                guides = ov;
+                legacy_geometry_hit |= contact;
             } else {
-                let (adj, ov) = t.snap_rects_along(&[b + d], u, cx.snap_tol());
+                let (adj, ov, paint_hit, legacy_hit) = t.snap_rects_along_contacts(&[b + d], u, cx.snap_tol());
+                let (adj, ov, legacy_hit) = if paint_hit {
+                    painted_contact = Some((d + adj, ov, d));
+                    t.snap_rects_along_legacy_contact(&[b + d], u, cx.snap_tol())
+                } else {
+                    (adj, ov, legacy_hit)
+                };
+                d += adj;
+                guides = ov;
+                legacy_geometry_hit |= legacy_hit;
+            }
+        }
+        let mut on_ruler = false;
+        if let Some(t) = self.rulers.as_ref() {
+            let (q, ov, contact) = t.snap_point_along_contact(start + d, u, cx.snap_tol());
+            // Contact belongs to geometry, even at zero travel with lines and labels hidden.
+            on_ruler = contact;
+            if contact {
+                d = q - start;
+                guides = ov;
+            } else if !legacy_geometry_hit && let Some(b) = self.bounds {
+                // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
+                // they do without Shift (#4312).
+                let (adj, ov, contact) = t.snap_moved_along_to_rulers_contact(start + d, b + d, u, cx.snap_tol());
+                on_ruler |= contact;
                 d += adj;
                 guides = ov;
             }
         }
-        if let Some(t) = &self.rulers {
-            let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
-            if q != start + d {
-                d = q - start;
-                guides = ov;
-            } else if guides.is_empty()
-                && let Some(b) = self.bounds
-            {
-                // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
-                // they do without Shift (#4312).
-                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.snap_tol());
-                d += adj;
-                guides = ov;
+        if let Some((painted, overlays, raw)) = painted_contact {
+            let closer_ruler = on_ruler && (d - raw).hypot2() < (painted - raw).hypot2();
+            if !closer_ruler {
+                d = painted;
+                guides = overlays;
             }
         }
         if cx.snaps_to_pixel(PixelOp::Moving)

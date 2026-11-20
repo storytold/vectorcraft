@@ -1320,6 +1320,7 @@
 	Precise Cursors	Kursor presisi
 	Image Trace Preview	Pratinjau Image Trace
 	Snap to Point	Snap ke titik
+	Snap to Stroke Edges	Snap ke tepi stroke
 	Snap to Glyph	Snap ke glif
 	New View…	Tampilan baru…
 	Edit Views…	Edit tampilan…
@@ -9091,3 +9092,4 @@ file-filter	Applications	Aplikasi
 @msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya tidak akan membentuk bangun cembung
 @msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya akan melewati cakrawala distorsi
 @msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya terlalu berdekatan untuk pemetaan perspektif
+	Include visible stroke edges when snapping with Smart Guides.	Sertakan tepi stroke yang terlihat saat melakukan snap dengan panduan cerdas.

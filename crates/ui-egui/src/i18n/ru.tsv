@@ -4041,6 +4041,7 @@ digits	Malayalam	Малаялам
 	Precise Cursors	Точные курсоры
 	Image Trace Preview	Просмотр трассировки изображения
 	Snap to Point	Привязать к точке
+	Snap to Stroke Edges	Привязать к краям обводки
 	Snap to Unit	Привязать к единицам
 	Snapping Tolerance	Допуск привязки
 	Social Square Post 1080×1080	Квадратный пост для соцсетей 1080×1080
@@ -10960,3 +10961,4 @@ shape	Open	Открытый
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактировать оригинал в:
 file-filter	Applications	Приложения
+	Include visible stroke edges when snapping with Smart Guides.	Учитывать видимые края обводки при привязке с умными направляющими.

@@ -3387,6 +3387,7 @@ digits	Malayalam	Malaiala
 	Precise Cursors	Cursores Precisos
 	Image Trace Preview	Visualização do Rastreamento de Imagem
 	Snap to Point	Ajustar ao Ponto
+	Snap to Stroke Edges	Ajustar às Bordas do Traçado
 	Snap to Unit	Ajustar à Unidade
 	Snapping Tolerance	Tolerância de Ajuste
 	Soft Light	Luz Suave
@@ -10943,3 +10944,4 @@ swatch	Yellow Green	Verde-amarelado
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Editar original com:
 file-filter	Applications	Aplicativos
+	Include visible stroke edges when snapping with Smart Guides.	Incluir as bordas visíveis do traçado ao ajustar com as Guias Inteligentes.
