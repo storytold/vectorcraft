@@ -82,12 +82,17 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 live_paint_gaps: None,
+                find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
                 selection_marks: Default::default(),
+                shared_paths: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                three_d_exportable: None,
+                pixel_aligned: None,
+                symbol_instances: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -147,6 +152,7 @@ impl VectorcraftApp {
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
             picks: picks::Picks::default(),
+            original_editor: Default::default(),
             screen_sampler: None,
             font_check: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -159,12 +165,15 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            toasts: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
             forwarded_modifiers: None,
             forwarded_modifiers_held: false,
             forwarded_frame: false,
+            forwarded_clipboard: false,
+            forwarded_presses: vec![],
             synthetic_modifiers: false,
             ime_marked: None,
             ime_context: Default::default(),
@@ -180,14 +189,22 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            pending_profile_open: None,
+            queued_profile_opens: Default::default(),
+            script_picked: Vec::new(),
+            script_picked_left_out: false,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
             now_override: None,
+            #[cfg(test)]
+            fail_next_tool_choice: None,
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            alt_tap: Default::default(),
+            hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -350,8 +367,14 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
-        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
-            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+        crate::dialogs::proof_setup::poll(self, ctx);
+        if self.session.script_running()
+            && !self.session.script_waiting()
+            && self.session.script_dialog().is_none()
+            && self.session.script_picker().is_none()
+        {
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle. A
+            // script at a file dialog goes on when the dialog answers, and `picks::poll` looks for that.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
                 None => ctx.request_repaint(),
@@ -492,12 +515,14 @@ impl VectorcraftApp {
 
     /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
     /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
-    /// in a floating window, the tab strip's document draws as a pane.
+    /// in a floating window, the tab strip's document draws as a pane, which a Selection drag's
+    /// artwork can be released in ([`canvas::note_drop`]).
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         // Tools may already occupy the left side of this panel.
         ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.pasteboard);
         self.canvas.windows.strip = None;
+        self.canvas.windows.drops.clear();
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
@@ -506,10 +531,15 @@ impl VectorcraftApp {
         if !canvas::tiled_area(self, ui) {
             if floats {
                 let rect = ui.available_rect_before_wrap();
-                if let Some(w) = crate::doc_windows::tab_window(self)
-                    && canvas::pane(self, ui, w, rect)
-                {
-                    crate::doc_windows::show_window(self, w);
+                if let Some(w) = crate::doc_windows::tab_window(self) {
+                    let pressed = canvas::pane(self, ui, w, rect);
+                    // A drag from a current window that is an OS window ends in that window.
+                    if !crate::doc_windows::native(self, ui.ctx()) {
+                        canvas::note_drop(self, ui, w, rect);
+                    }
+                    if pressed {
+                        crate::doc_windows::show_window(self, w);
+                    }
                 }
             } else {
                 canvas::show(self, ui);
@@ -565,6 +595,7 @@ impl VectorcraftApp {
         self.ime_caret_rect = None;
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        font_menu::apply_preview_size(self, &ctx);
         tools_float::track(self, &ctx);
         // A selection move released over a panel ends before any panel sees the release (#2826).
         canvas::release_over_panel(self, &ctx);
@@ -591,10 +622,6 @@ impl VectorcraftApp {
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
         }
-        if !self.ui.tools_beside_canvas {
-            // A canvas-edge target left from before the setting was turned off docks nothing.
-            tools_float::clear_canvas_dock_zone(&ctx);
-        }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
         // So does Tools docked on the right, left of the panels.
         if self.ui.toolbar && self.ui.screen_mode < 3 && ((!self.ui.tools_beside_canvas && !self.ui.toolbar_right) || self.ui.toolbar_pos.is_some()) {
@@ -617,7 +644,14 @@ impl VectorcraftApp {
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
+        placing::show(self, &ctx);
+        // After every window this pass may open, and before the palette's field takes the keyboard.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
+        // A shape drawn on the canvas, in a dialog or by a command in this pass shows the Transform
+        // panel (Show on Shape Creation).
+        panels::transform::show_on_shape_creation(self, &ctx);
+        crate::toasts::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {

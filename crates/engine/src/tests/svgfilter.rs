@@ -551,6 +551,26 @@ fn svg_export_keeps_a_measured_region_only_on_the_object_alone() {
     assert!(after.contains("<image") && !after.contains("<feOffset dx=\"3\""), "{after}");
 }
 
+/// SVG export keeps a filter live only in a user space SVG import stores again: `scale` 1000 with
+/// `axes` that double it scales the user space 2000 times, past what import holds, so the object is
+/// written as an image instead of a filter that would be left out when the file is opened.
+#[test]
+fn svg_export_writes_an_image_for_a_user_space_import_cannot_store() {
+    let hue = r#"<filter id="Hue"><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    for (scale, axes, live) in [(2.0, json!([2, 0, 0, 2]), true), (1000.0, json!([2, 0, 0, 2]), false)] {
+        let mut s = session();
+        let a = rect(&mut s, 10.0);
+        run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": hue, "scale": scale, "axes": axes}}));
+        let out = svg(&mut s);
+        assert_eq!((out.contains("<feColorMatrix"), out.contains("<image")), (live, !live), "scale {scale}: {out}");
+        let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+        assert!(warnings.is_empty(), "scale {scale}: {warnings:?}");
+        let mut kept = 0;
+        back.walk(|n| kept += n.appearance.effects.iter().filter(|e| e.id == "svg.filter").count());
+        assert_eq!(kept, usize::from(live), "scale {scale}: {out}");
+    }
+}
+
 /// SVG export writes a filter rebuilt from its filter elements and filter attributes, not the XML
 /// the effect holds.
 #[test]
@@ -573,6 +593,23 @@ fn moving_the_object_moves_the_filters_origin() {
     run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
     let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
     assert_eq!(p["origin"], json!([8.0, 2.0]));
+}
+
+/// `axes` turns or skews the filter's user space; a move moves only its origin. Axes the effect
+/// can't measure are refused.
+#[test]
+fn axes_turn_the_filters_user_space_and_bad_axes_are_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": [0, 1, -1, 0]}}));
+    run(&mut s, "object.move", json!({"ids": [a.0], "dx": 5, "dy": -2}));
+    let p = &s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params;
+    assert_eq!((&p["axes"], &p["origin"]), (&json!([0, 1, -1, 0]), &json!([5.0, -2.0])));
+    for axes in [json!([0, 0, 0, 0]), json!([1, 0, 0]), json!([1, 0, 0, "1"]), json!([1001, 0, 0, 1]), json!(null), json!("x")] {
+        let e = err(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [a.0], "params": {"xml": SHIFT, "axes": axes}}));
+        assert!(e.contains("`axes` must be [a, b, c, d]"), "{axes}: {e}");
+    }
+    assert!(err(&mut s, "effect.setParams", json!({"ids": [a.0], "index": 0, "params": {"axes": [0.01, 0, 0, 0.01]}})).contains("`axes` must be"));
 }
 
 #[test]
@@ -714,4 +751,180 @@ fn svg_export_draws_a_filter_svg_1_1_lacks_as_an_image() {
         let out = svg(&mut s);
         assert_eq!((out.contains("<image"), out.contains("<feBlend")), (image, !image), "{mode}: {out}");
     }
+}
+
+/// The `defaults` of `svgFilter.list`: each one's name and whether the document holds it.
+fn defaults(s: &mut Session) -> Vec<(String, bool)> {
+    let listed = run(s, "svgFilter.list", json!({}))["defaults"].as_array().cloned().unwrap_or_default();
+    listed.iter().map(|f| (f["name"].as_str().unwrap().to_string(), f["inDocument"].as_bool().unwrap())).collect()
+}
+
+/// Every document lists the default filters without holding them; applying one adds the effect and
+/// the document's copy in one undo step.
+#[test]
+fn a_default_filter_is_listed_and_copied_into_the_document_when_applied() {
+    use vectorcraft_render::effects::svg_filter::defaults::DEFAULT_FILTERS;
+    let mut s = session();
+    let listed = defaults(&mut s);
+    assert_eq!(listed.len(), DEFAULT_FILTERS.len());
+    assert!(listed.iter().all(|(_, held)| !held), "a new document holds none of them");
+    assert!(names(&mut s).is_empty());
+    let soft = DEFAULT_FILTERS.iter().find(|f| f.name == "Soft Shadow").unwrap();
+    assert_eq!(run(&mut s, "svgFilter.list", json!({}))["defaults"][2], json!({"name": "Soft Shadow", "xml": soft.xml, "inDocument": false}));
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 50.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let before = steps(&s);
+    let r = run(&mut s, "svgFilter.apply", json!({"name": "Soft Shadow"}));
+    assert_eq!((r["ids"].as_array().unwrap().len(), &r["index"]), (2, &json!(0)));
+    assert_eq!(steps(&s), before + 1, "the effect and the copy are one step");
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "SVG Filter");
+    assert_eq!(names(&mut s), ["Soft Shadow"]);
+    assert_eq!(drawn(&s, a), json!(soft.xml));
+    assert!(defaults(&mut s).contains(&("Soft Shadow".to_string(), true)));
+    // Applied again, the document's copy is the filter: nothing more is added.
+    run(&mut s, "svgFilter.apply", json!({"name": "Soft Shadow", "ids": [a.0]}));
+    assert_eq!(names(&mut s), ["Soft Shadow"]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(names(&mut s).is_empty(), "undo takes the copy back with the effect");
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!((names(&mut s), drawn(&s, b)), (vec!["Soft Shadow".to_string()], json!(soft.xml)));
+    // Nothing to apply it to: no copy and no step.
+    let mut s = session();
+    assert!(s.execute("svgFilter.apply", &json!({"name": "Glow"})).is_err(), "nothing selected");
+    assert!(names(&mut s).is_empty());
+    assert_eq!(steps(&s), 0);
+    assert!(err(&mut s, "svgFilter.apply", json!({"name": "glow", "ids": []})).contains("no SVG filter named \"glow\""), "names match exactly");
+}
+
+/// With a full history, applying a default lets one old step go, as any edit does: the copy joins
+/// the step that applied it, and one Undo takes both back.
+#[test]
+fn a_default_applied_with_a_full_history_is_still_one_step() {
+    let mut s = session();
+    s.active_mut().unwrap().history.limit = 3;
+    let a = rect(&mut s, 10.0);
+    rect(&mut s, 30.0);
+    rect(&mut s, 50.0);
+    assert_eq!(steps(&s), 3);
+    run(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0]}));
+    // The application takes one place in the history: only the oldest step went.
+    assert_eq!(steps(&s), 3);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "SVG Filter");
+    run(&mut s, "edit.undo", json!({}));
+    assert!(names(&mut s).is_empty(), "the copy is undone with the effect");
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+}
+
+/// Edit SVG Filter on a default saves the edited copy in the document under the default's name;
+/// the document's filter then stands in the default's place, and deleting it lists the default again.
+#[test]
+fn an_edited_default_is_saved_in_the_document_and_delete_restores_the_default() {
+    use vectorcraft_render::effects::svg_filter::defaults::default_filter;
+    let mut s = session();
+    let glow = default_filter("Glow").unwrap();
+    // Saved with its own code: nothing to keep, and no undo step.
+    run(&mut s, "svgFilter.define", json!({"xml": glow.xml, "replace": "Glow"}));
+    assert_eq!((names(&mut s).len(), steps(&s)), (0, 0));
+    let edited = r#"<filter id="Renamed"><feGaussianBlur stdDeviation="9"/></filter>"#;
+    assert_eq!(run(&mut s, "svgFilter.define", json!({"xml": edited, "replace": "Glow"}))["name"], "Glow");
+    assert_eq!((names(&mut s), steps(&s)), (vec!["Glow".to_string()], 1));
+    assert_eq!(s.doc().unwrap().history.undo[0].label, "Edit SVG Filter");
+    let kept = r#"<filter id="Glow"><feGaussianBlur stdDeviation="9"/></filter>"#;
+    assert_eq!(run(&mut s, "svgFilter.list", json!({}))["filters"][0]["xml"], kept, "it keeps the default's name");
+    // Applying the name now applies the document's filter.
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [a.0]}));
+    assert_eq!(drawn(&s, a), json!(kept));
+    // Deleting the copy leaves the effect drawing nothing, as for any filter, and lists the default.
+    run(&mut s, "svgFilter.delete", json!({"name": "Glow"}));
+    assert_eq!(drawn(&s, a), json!(""));
+    assert!(defaults(&mut s).contains(&("Glow".to_string(), false)));
+    // The default itself is not deleted.
+    let before = steps(&s);
+    assert!(err(&mut s, "svgFilter.delete", json!({"name": "Glow"})).contains("is a default SVG filter"));
+    assert!(err(&mut s, "svgFilter.delete", json!({"name": "Nope"})).contains("no SVG filter named"));
+    assert_eq!(steps(&s), before);
+    // Applied again, the default is copied back, and the object that named it draws with it.
+    let b = rect(&mut s, 50.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [b.0]}));
+    assert_eq!((drawn(&s, a), drawn(&s, b)), (json!(glow.xml), json!(glow.xml)));
+    assert_eq!(steps(&s), before + 2, "the rectangle and one step for the application");
+    // A new filter may take a default's name the document does not hold.
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": r#"<filter id="Invert"><feOffset dx="1"/></filter>"#}));
+    assert!(defaults(&mut s).contains(&("Invert".to_string(), true)));
+    // An unknown name is still refused.
+    assert!(err(&mut s, "svgFilter.define", json!({"xml": SHIFT, "replace": "Nope"})).contains("no SVG filter named \"Nope\""));
+}
+
+/// With `index`, the filter takes the place of an applied SVG filter, a default with its copy in
+/// the same undo step; any other effect keeps its place.
+#[test]
+fn apply_with_an_index_replaces_an_applied_filter() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    run(&mut s, "svgFilter.apply", json!({"name": "Shift", "ids": [a.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "stylize.feather", "ids": [a.0]}));
+    let before = steps(&s);
+    let r = run(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0], "index": 0, "item": null}));
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(steps(&s), before + 1, "one step");
+    let fx = s.doc().unwrap().doc.node(a).unwrap().appearance.effects.clone();
+    assert_eq!((fx.len(), fx[0].params["name"].as_str(), fx[1].id.as_str()), (2, Some("Invert"), "stylize.feather"));
+    assert_eq!(names(&mut s), ["Shift", "Invert"]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(names(&mut s), ["Shift"]);
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects[0].params["name"], "Shift");
+    // Not an SVG filter, no effect there, or not an index: refused, and the default is not copied.
+    let before = steps(&s);
+    for (index, why) in [
+        (json!(1), "applied SVG filter"),
+        (json!(7), "applied SVG filter"),
+        (json!("x"), "`index`"),
+        (json!(-1), "`index`"),
+        (json!(null), "`index`"),
+    ] {
+        let e = err(&mut s, "svgFilter.apply", json!({"name": "Invert", "ids": [a.0], "index": index, "item": null}));
+        assert!(e.contains(why), "{index}: {e}");
+    }
+    assert_eq!((names(&mut s), steps(&s)), (vec!["Shift".to_string()], before));
+}
+
+/// A default needs room in the document: at 64 filters applying one is refused, and a filter the
+/// document holds still applies.
+#[test]
+fn a_full_document_refuses_a_default_it_does_not_hold() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    for i in 0..64 {
+        run(&mut s, "svgFilter.define", json!({"xml": format!("<filter id=\"f{i}\"><feOffset/></filter>")}));
+    }
+    let before = steps(&s);
+    assert!(err(&mut s, "svgFilter.apply", json!({"name": "Glow", "ids": [a.0]})).contains("at most 64 SVG filters"));
+    let edited = r#"<filter id="Glow"><feOffset dx="2"/></filter>"#;
+    assert!(err(&mut s, "svgFilter.define", json!({"xml": edited, "replace": "Glow"})).contains("at most 64 SVG filters"));
+    assert_eq!(steps(&s), before);
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    run(&mut s, "svgFilter.apply", json!({"name": "f3", "ids": [a.0]}));
+}
+
+/// A default applied in one document is written to SVG as a filter and read back from the native
+/// format with the document's copy.
+#[test]
+fn an_applied_default_survives_svg_export_and_a_native_round_trip() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgFilter.apply", json!({"name": "Grayscale", "ids": [a.0]}));
+    let out = svg(&mut s);
+    assert!(out.contains("<feColorMatrix") && out.contains("saturate"), "{out}");
+    let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(back.any_node(|n| n.appearance.effects.iter().any(|e| e.id == "svg.filter")), "SVG import reads the filter back");
+    let doc = s.doc().unwrap().doc.clone();
+    let again = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(again.svg_filters, doc.svg_filters);
+    assert_eq!(again.svg_filters[0].name, "Grayscale");
 }

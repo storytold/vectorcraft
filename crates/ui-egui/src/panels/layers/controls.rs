@@ -55,13 +55,14 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     let m = ui.input(|i| i.modifiers);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     let trash = widgets::icon_button(&mut child, "trash-2", tl!("Delete Selection"), false, 24.0);
-    // A target circle dropped on the trash clears that appearance (dragged rows: below). Peek at
-    // the payload's type before taking it: egui's take drops a payload of another type.
+    // A target circle dropped on the trash reduces that appearance to one fill and one stroke
+    // (dragged rows: below). Peek at the payload's type before taking it: egui's take drops a
+    // payload of another type.
     if trash.dnd_hover_payload::<PanelDrag>().is_some()
         && let Some(d) = trash.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(id) = *d
     {
-        actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
+        actions.push(("appearance.reduceToBasic".into(), json!({"ids": [id.0]})));
     } else if trash.clicked() {
         // With no row highlighted, the selected art and ruler guides go.
         if view.rows.is_empty() && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
@@ -70,9 +71,14 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
             actions.push(("ui.layerDelete".into(), json!({})));
         }
     }
+    // In isolation mode New Layer and New Sublayer are off while the layer they make would be
+    // outside the isolated art, where the panel does not list it.
+    let unlisted = |sublayer: bool, top: bool| app.session.active().is_some_and(|st| new_layer_unlisted(st, sublayer, top));
+    let new_layer_ok = !unlisted(false, m.command && !m.alt);
+    let new_sublayer_ok = !unlisted(true, false);
     // Create New Layer: Alt asks for its options first, Ctrl/Cmd puts it on top of every layer,
     // and Ctrl/Cmd+Alt puts it directly below the current layer.
-    let new_layer = widgets::icon_button(&mut child, "file-plus", tl!("Create New Layer"), false, 24.0);
+    let new_layer = widgets::icon_button_enabled(&mut child, "file-plus", tl!("Create New Layer"), false, new_layer_ok, 24.0);
     if new_layer.clicked() {
         if m.alt && m.command {
             actions.push(("layer.new".into(), json!({"below": true})));
@@ -82,20 +88,22 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
             actions.push(("layer.new".into(), json!({"top": m.command})));
         }
     }
-    // Rows dropped on the trash are deleted, on New Layer duplicated, as in Illustrator. Both are
+    // Rows dropped on the trash are deleted, on New Layer duplicated. Both are
     // outlined while rows (or, on the trash, a target circle) hang over them. Guide rows dropped on
     // the trash delete their guides (`guide.remove`); New Layer does not take them.
     for (button, cmd) in [(&trash, "ui.layerDelete"), (&new_layer, "layer.duplicate")] {
         let deletes = cmd == "ui.layerDelete";
         if let Some(d) = button.dnd_release_payload::<LayersDrag>() {
             match &*d {
+                // A copy of the isolated node would go beside it, outside the isolated art.
+                LayersDrag::Rows(ids) if !deletes && view.root.is_some_and(|r| ids.contains(&r)) => {}
                 LayersDrag::Rows(ids) => actions.push((cmd.into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))),
                 LayersDrag::Guides(guides) if deletes => actions.push(("guide.remove".into(), json!({"indexes": guides}))),
                 _ => {}
             }
         }
-        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| match *d {
-            LayersDrag::Rows(_) => true,
+        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| match &*d {
+            LayersDrag::Rows(ids) => deletes || !view.root.is_some_and(|r| ids.contains(&r)),
             LayersDrag::Guides(_) => deletes,
             LayersDrag::Art => false,
         }) || (deletes && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
@@ -105,7 +113,7 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     }
     // Create New Sublayer: Alt asks for its options first, and Ctrl/Cmd+Alt puts it under the
     // layer's contents.
-    if widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0).clicked() {
+    if widgets::icon_button_enabled(&mut child, "plus", tl!("Create New Sublayer"), false, new_sublayer_ok, 24.0).clicked() {
         actions.push(match (m.alt, m.command) {
             (true, true) => ("layer.newSublayer".into(), json!({"bottom": true})),
             (true, false) => ("ui.newLayer".into(), json!({"sublayer": true})),
@@ -115,8 +123,12 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     if widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0).clicked() {
         actions.push(("layer.clippingMask.toggle".into(), json!({})));
     }
-    if widgets::icon_button(&mut child, "search", tl!("Locate Object"), false, 24.0).clicked() {
-        actions.push(("layer.locate".into(), json!({})));
+    // With Show Layers Only on, Locate Object becomes Locate Layer: it highlights the layer row.
+    let layers_only = view.opts.layers_only;
+    let locate = if layers_only { tl!("Locate Layer") } else { tl!("Locate Object") };
+    let locate_ok = !layers_only || super::rows::locate_layer_listed(doc, view.root);
+    if widgets::icon_button_enabled(&mut child, "search", locate, false, locate_ok, 24.0).clicked() {
+        actions.push(("layer.locate".into(), json!({ "layersOnly": layers_only })));
     }
 }
 
@@ -127,11 +139,15 @@ type MenuItem<'a> = (&'a str, &'a str, Value, bool, bool);
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
-    let rows = st.highlighted_rows();
+    let rows = listed_highlighted_rows(st);
     let current = st.current_layer();
     let has_sel = !st.selection.is_empty();
     let isolated = st.isolation.is_some();
-    let targets: Vec<NodeId> = if rows.is_empty() { current.into_iter().collect() } else { rows.clone() };
+    let layers_only = app.ui.layers_panel.layers_only;
+    let targets: Vec<NodeId> = if rows.is_empty() { listed_current_layer(st).into_iter().collect() } else { rows.clone() };
+    let (new_layer_ok, new_sublayer_ok) = (!new_layer_unlisted(st, false, false), !new_layer_unlisted(st, true, false));
+    // A copy of the isolated node goes beside it, outside the isolated art.
+    let duplicate_ok = !targets.is_empty() && !st.isolation.is_some_and(|r| targets.contains(&r));
     let one_container = match targets.as_slice() {
         [id] => doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })),
         _ => false,
@@ -148,9 +164,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     let mut items: Vec<Option<MenuItem>> = vec![
-        Some(("New Layer…", "ui.newLayer", json!({}), true, false)),
-        Some(("New Sublayer…", "ui.newLayer", json!({"sublayer": true}), current.is_some(), false)),
-        Some(("Duplicate Selection", "layer.duplicate", json!({}), !targets.is_empty(), false)),
+        Some(("New Layer…", "ui.newLayer", json!({}), new_layer_ok, false)),
+        Some(("New Sublayer…", "ui.newLayer", json!({"sublayer": true}), current.is_some() && new_sublayer_ok, false)),
+        // The rows listed, so no highlighted row outside the isolated art is copied.
+        Some(("Duplicate Selection", "layer.duplicate", json!({"ids": targets.iter().map(|i| i.0).collect::<Vec<_>>()}), duplicate_ok, false)),
         Some(("Delete Selection", "ui.layerDelete", json!({}), !targets.is_empty(), false)),
         Some(("Options for Selection…", "ui.layerOptions", json!({}), !targets.is_empty(), false)),
         None,
@@ -165,7 +182,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     items.extend([
         None,
-        Some(("Locate Object", "layer.locate", json!({}), has_sel, false)),
+        Some(if layers_only {
+            ("Locate Layer", "layer.locate", json!({"layersOnly": true}), has_sel && super::rows::locate_layer_listed(&doc, st.isolation), false)
+        } else {
+            ("Locate Object", "layer.locate", json!({}), has_sel, false)
+        }),
         // Sentinel: rendered as the Save Selection submenu (the Select menu's saved-selection items).
         Some(("Save Selection", "", json!({}), true, false)),
         None,
@@ -180,28 +201,29 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         None,
         Some(("Template", "layer.template", json!({}), !layers_in.is_empty(), template)),
     ]);
-    // Each pair reads by state: Hide Others while another layer shows, else Show All Layers.
+    // Each pair reads by state: Hide Others while another layer shows, else Show All Layers. In
+    // isolation mode the other layers are outside the isolated art, so the pairs are off.
     let any_other = |f: &dyn Fn(&Node) -> bool| others.iter().any(|l| f(l));
     items.push(Some(if any_other(&|l| l.visible) {
-        ("Hide Others", "layer.hideOthers", json!({}), true, false)
+        ("Hide Others", "layer.hideOthers", json!({}), !isolated, false)
     } else {
-        ("Show All Layers", "layer.showAll", json!({}), all_layers.iter().any(|l| !l.visible), false)
+        ("Show All Layers", "layer.showAll", json!({}), !isolated && all_layers.iter().any(|l| !l.visible), false)
     }));
     items.push(Some(if any_other(&|l| !matches!(l.kind, NodeKind::Layer { preview: false, .. })) {
-        ("Outline Others", "layer.outlineOthers", json!({}), true, false)
+        ("Outline Others", "layer.outlineOthers", json!({}), !isolated, false)
     } else {
         (
             "Preview All Layers",
             "layer.previewAll",
             json!({}),
-            all_layers.iter().any(|l| matches!(l.kind, NodeKind::Layer { preview: false, .. })),
+            !isolated && all_layers.iter().any(|l| matches!(l.kind, NodeKind::Layer { preview: false, .. })),
             false,
         )
     }));
     items.push(Some(if any_other(&|l| !l.locked) {
-        ("Lock Others", "layer.lockOthers", json!({}), true, false)
+        ("Lock Others", "layer.lockOthers", json!({}), !isolated, false)
     } else {
-        ("Unlock All Layers", "layer.unlockAll", json!({}), all_layers.iter().any(|l| l.locked), false)
+        ("Unlock All Layers", "layer.unlockAll", json!({}), !isolated && all_layers.iter().any(|l| l.locked), false)
     }));
     items.push(None);
     let remembers = doc.paste_remembers_layers;
@@ -282,10 +304,11 @@ fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// `ui.layerDelete {ids?|id?, doc?, confirmed?}`: Delete Selection as the Layers panel runs it (the
 /// trash button, rows dropped on it, the panel menu, Delete and Backspace), on the rows
-/// `layer.delete` takes. When a layer or sublayer among them holds art (an object other than a
+/// `layer.delete` takes (default: the highlighted rows, else the current layer; in isolation mode a
+/// current layer outside the isolated art is an error). When a layer or sublayer among them holds art (an object other than a
 /// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
 /// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
-/// is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// is deleted. In isolation mode a row outside the isolated art is an error, and nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
@@ -305,11 +328,24 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (Some(v), _) => v.as_array().and_then(|a| a.iter().map(row).collect()),
         (None, Some(v)) => row(v).map(|id| vec![id]),
         (None, None) => {
-            let rows = st.highlighted_rows();
+            let rows = listed_highlighted_rows(st);
+            if rows.is_empty() && st.current_layer().is_some() && listed_current_layer(st).is_none() {
+                return Err("the object is outside the isolated group".into());
+            }
             Some(if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows })
         }
     };
-    let Some(ids) = ids.filter(|_| !confirmed) else { return app.run("layer.delete", Value::Object(rows)) };
+    // Isolation mode can start while rows are dragged to the trash or while the question is open:
+    // nothing is deleted when a row is outside the isolated art.
+    if ids.as_ref().is_some_and(|ids| ids.iter().any(|id| !in_isolated_art(st, *id))) {
+        return Err("the object is outside the isolated group".into());
+    }
+    let ids = match ids {
+        // Confirmed without rows given: the rows the panel lists, not every highlighted row.
+        Some(ids) if confirmed && rows.is_empty() => return app.run("layer.delete", json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })),
+        Some(ids) if !confirmed => ids,
+        _ => return app.run("layer.delete", Value::Object(rows)),
+    };
     let listed: HashSet<NodeId> = ids.iter().copied().collect();
     let mut roots = vec![];
     row_roots(&st.doc.layers, &listed, &mut roots);
@@ -324,6 +360,38 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "confirmed": true});
     crate::dialogs::confirm::ask(app, message, "", "ui.layerDelete", params);
     Ok(Value::Null)
+}
+
+/// Whether `id` is the isolated node or inside it: a row the panel can list. Always true outside
+/// isolation mode.
+fn in_isolated_art(st: &vectorcraft_engine::DocState, id: NodeId) -> bool {
+    let root = st.isolation.filter(|i| st.doc.node(*i).is_some());
+    root.is_none_or(|r| st.doc.ancestry(id).is_some_and(|a| a.contains(&r)))
+}
+
+/// The highlighted rows the panel lists: in isolation mode only those in the isolated art.
+fn listed_highlighted_rows(st: &vectorcraft_engine::DocState) -> Vec<NodeId> {
+    st.highlighted_rows().into_iter().filter(|id| in_isolated_art(st, *id)).collect()
+}
+
+/// The current layer, which the panel's commands act on when no row is highlighted. In isolation
+/// mode it is None unless the layer is inside the isolated art, the only art the panel lists.
+fn listed_current_layer(st: &vectorcraft_engine::DocState) -> Option<NodeId> {
+    st.current_layer().filter(|l| in_isolated_art(st, *l))
+}
+
+/// In isolation mode, whether the layer that New Layer (`sublayer` false; `top`: on top of every
+/// layer) or New Sublayer makes would be outside the isolated art, where the panel does not list
+/// it. New Layer goes beside the current layer, New Sublayer into the layer of the last highlighted
+/// row, else into the current layer, as `layer.new` and `layer.newSublayer` place them.
+pub(crate) fn new_layer_unlisted(st: &vectorcraft_engine::DocState, sublayer: bool, top: bool) -> bool {
+    let Some(root) = st.isolation.filter(|i| st.doc.node(*i).is_some()) else { return false };
+    if sublayer {
+        let row = st.highlighted_rows().last().and_then(|r| st.doc.layer_containing(*r));
+        !row.or(st.current_layer()).is_some_and(|p| in_isolated_art(st, p))
+    } else {
+        top || !st.current_layer().is_some_and(|c| c != root && in_isolated_art(st, c))
+    }
 }
 
 /// The rows among `nodes` (and the rows inside them) that are in `listed` and not inside another

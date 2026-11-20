@@ -4,15 +4,20 @@
 //! dialogs' own Object, Rotation and Lighting controls and the panel's Materials tab
 //! ([`materials`]); each change runs `effect.setParams` as one undo step, and a drag previews and
 //! commits once, when the pointer is released. While the Materials tab is open, the artboard shows
-//! a handle on each mapped graphic, which drags it over its face.
+//! a handle on each mapped graphic, which drags it over its face. At the bottom, Export 3D Object
+//! adds the selected objects that have a 3D effect to Asset Export as 3D assets (`assets.add3D`)
+//! and shows that panel with their assets selected.
+
+use std::sync::Arc;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node};
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
+use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::dialogs::revolve::OWN_BEVEL;
 use crate::dialogs::three_d_materials as materials;
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -153,9 +158,11 @@ pub(crate) fn send(app: &mut VectorcraftApp, ctx: &egui::Context, changed: Map<S
         .iter()
         .filter_map(|(id, t, same_lights)| {
             let takes = vectorcraft_effects::default_params(&t.effect).unwrap_or(Value::Null);
+            // A custom bevel's name and points go with `bevel` to the effects that take one.
+            let custom_bevel = |k: &str| (k == BEVEL_NAME || k == BEVEL_PROFILE) && takes.get("bevel").is_some();
             let params: Map<String, Value> = pending
                 .iter()
-                .filter(|(k, _)| takes.get(k.as_str()).is_some() && (k.as_str() != "lights" || *same_lights))
+                .filter(|(k, _)| (takes.get(k.as_str()).is_some() || custom_bevel(k)) && (k.as_str() != "lights" || *same_lights))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             (!params.is_empty())
@@ -229,17 +236,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(action) = materials::library(app, ui, false) {
             run_action(app, &ctx, action);
         }
+        export_button(app, ui, &ctx);
         return;
     };
+    if takes_render(&t.effect) {
+        render_settings(app, ui, &ctx, &t);
+        ui.add_space(6.0);
+    }
     // The applied effect's settings in the dialog's form, with the controls' own state.
     let mut fields = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
+    let own_bevel = own_bevel(&fields);
     mark_mixed(app, &mut fields);
     fields.extend(pstate::<Map<String, Value>>(&ctx, UI_STATE));
     fields.insert("__effect".into(), json!(t.effect));
     fields.insert("__panel".into(), json!(true));
+    if let Some(own) = own_bevel {
+        fields.insert(OWN_BEVEL.into(), own);
+    }
     let mut d = Dialog { kind: ID.into(), fields };
     let before = crate::dialogs::form::params(&d);
     crate::dialogs::revolve::controls(app, ui, &mut d);
+    d.fields.remove(OWN_BEVEL);
+    let edit_bevels = d.fields.remove("__editBevels").is_some();
     let action = d.fields.remove(materials::ACTION).and_then(|v| materials::Action::from_value(&v));
     let state: Map<String, Value> = d
         .fields
@@ -252,6 +270,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let changed = changed_settings(&before, &after);
     let dragging = ctx.input(|i| i.pointer.any_down());
     send(app, &ctx, changed, dragging);
+    // Bevel Shape's Edit Bevels…: the bevels file opens as a document of its own.
+    if edit_bevels {
+        finish(app, &ctx);
+        if let Err(e) = app.run("threeD.bevels.edit", json!({})) {
+            app.ui.status = e;
+        }
+        return;
+    }
     if quick_actions_shown(&d) {
         ui.add_space(10.0);
         let t = Tokens::get(ui.ctx());
@@ -267,6 +293,97 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(action) = action {
         run_action(app, &ctx, action);
     }
+    export_button(app, ui, &ctx);
+}
+
+/// The Export 3D Object button, available while a selected object has a 3D effect that
+/// `assets.add3D` exports ([`can_export_3d_shown`]). An error goes to the status bar.
+fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
+    let any = can_export_3d_shown(app);
+    ui.add_space(10.0);
+    if ui.add_enabled(any, egui::Button::new(tl!("Export 3D Object"))).clicked() {
+        finish(app, ctx);
+        if let Err(e) = export_3d_object(app, ctx) {
+            app.ui.status = e;
+        }
+    }
+}
+
+/// Does a selected object have a 3D effect that `assets.add3D` exports
+/// ([`vectorcraft_effects::exports_three_d`])? A path of a compound path counts as the compound
+/// path, which holds the effects.
+pub(crate) fn can_export_3d(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let compound = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+    st.selection.objects.iter().any(|id| st.doc.node(compound(*id).unwrap_or(*id)).is_some_and(vectorcraft_effects::exports_three_d))
+}
+
+/// [`can_export_3d`], worked out once per (document uid, revision)
+/// ([`crate::caches::CanvasCache::three_d_exportable`]): the panel reads it every frame, and Select
+/// All can select hundreds of thousands of objects.
+pub(crate) fn can_export_3d_shown(app: &mut VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let key = (st.uid, st.revision);
+    if let Some((k, any)) = app.canvas.three_d_exportable
+        && k == key
+    {
+        return any;
+    }
+    let any = can_export_3d(app);
+    app.canvas.three_d_exportable = Some((key, any));
+    any
+}
+
+/// Export 3D Object: adds the selected objects that have a 3D effect to Asset Export as 3D assets
+/// (`assets.add3D` on the selection, one undo step, none when each is an asset already), selects
+/// their assets there and shows the Asset Export panel. The command leaves out the selected
+/// objects without a 3D effect and those inside another selected 3D object.
+pub(crate) fn export_3d_object(app: &mut VectorcraftApp, ctx: &egui::Context) -> Result<(), String> {
+    use super::asset_export;
+    asset_export::add_3d(app, ctx, None)?;
+    if !crate::panel_docking::visible(&app.ui, asset_export::ID) {
+        app.run("window.panel", json!({"panel": asset_export::ID}))?;
+    }
+    Ok(())
+}
+
+/// Does 3D effect `id` take render settings (`render`)? Extrude & Bevel, Revolve, Inflate and Rotate
+/// do; the 3D (Classic) effects have a Wireframe surface of their own.
+fn takes_render(id: &str) -> bool {
+    vectorcraft_effects::default_params(id).is_some_and(|d| d.get(vectorcraft_effects::RENDER).is_some())
+}
+
+/// Is target `t`'s 3D effect drawn as a wireframe (`render.mode` is `wireframe`)?
+pub(crate) fn wireframe_on(t: &Target) -> bool {
+    let p = vectorcraft_effects::merged_params(&t.effect, &t.params);
+    p.get(vectorcraft_effects::RENDER).and_then(|r| r.get("mode")).and_then(Value::as_str) == Some("wireframe")
+}
+
+/// The Render Settings menu at the top of the panel: Wireframe, checked while the first selected
+/// object's 3D effect draws the edges of its faces. Choosing it turns wireframe on or off for every
+/// selected object's 3D effect ([`set_wireframe`]).
+fn render_settings(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context, t: &Target) {
+    let on = wireframe_on(t);
+    let mut picked = false;
+    ui.menu_button(tl!("Render Settings"), |ui| {
+        if widgets::menu_item(ui, tl!("Wireframe"), true, on) {
+            picked = true;
+            ui.close();
+        }
+    });
+    if picked {
+        set_wireframe(app, ctx, !on);
+    }
+}
+
+/// Render Settings › Wireframe: sets `render.mode` of each selected object's 3D effect to
+/// `wireframe` (`on`) or `shaded`, as one undo step (`effect.setParams`). Objects whose effect does
+/// not take render settings are left as they are.
+pub(crate) fn set_wireframe(app: &mut VectorcraftApp, ctx: &egui::Context, on: bool) {
+    finish(app, ctx);
+    let mut changed = Map::new();
+    changed.insert(vectorcraft_effects::RENDER.into(), json!({"mode": if on { "wireframe" } else { "shaded" }}));
+    send(app, ctx, changed, false);
 }
 
 /// Runs what a click in the Materials tab's Graphics asked for: maps the graphic onto the selected
@@ -310,7 +427,7 @@ fn materials_open(ctx: &egui::Context) -> bool {
 
 /// What [`graphic_handles`] gives: the object's frame, its graphics, and each seen graphic's index
 /// and page point.
-type Handles = (vectorcraft_effects::GraphicFrame, Vec<vectorcraft_effects::MappedGraphic>, Vec<(usize, vectorcraft_geom::Point)>);
+type Handles = (Arc<vectorcraft_effects::GraphicFrame>, Vec<vectorcraft_effects::MappedGraphic>, Vec<(usize, vectorcraft_geom::Point)>);
 
 /// The handles of the graphics mapped onto the first selected object, while the Materials tab is
 /// open: each graphic's index, its face and where its center lands on the page, for the graphics
@@ -328,8 +445,6 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
     if t.item.is_some_and(|k| n.appearance.items.get(k).is_none_or(|it| !it.visible())) {
         return None;
     }
-    // The frame of the effect whose graphics are listed: none while that effect is hidden.
-    let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index)?;
     // A geometry effect after the 3D effect of any selected object moves or bends its drawn
     // graphics away from their places in the frame: no handles, so a drag does not put a graphic
     // away from the pointer.
@@ -338,13 +453,38 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
         return None;
     }
     let list = vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
+    // Without graphics there are no handles, and no frame is built.
+    if list.is_empty() {
+        return None;
+    }
     // Selected objects with different graphics show no handles: a drag sends the whole list.
     let graphics_of = |t: Target| vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
     if st.selection.objects.iter().skip(1).filter_map(|id| find(st.doc.node(*id)?)).any(|o| graphics_of(o) != list) {
         return None;
     }
+    // The frame of the effect whose graphics are listed: none while that effect is hidden. It is
+    // built once for each revision of the document, not on every frame the panel draws.
+    let key: FrameKey = (st.uid, st.revision, n.id.0, t.item, t.index);
+    let cached = ctx.data(|m| m.get_temp::<(FrameKey, Option<Arc<vectorcraft_effects::GraphicFrame>>)>(frame_cache_id()));
+    let frame = match cached {
+        Some((k, frame)) if k == key => frame,
+        _ => {
+            let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index).map(Arc::new);
+            ctx.data_mut(|m| m.insert_temp(frame_cache_id(), (key, frame.clone())));
+            frame
+        }
+    }?;
     let handles = list.iter().enumerate().filter_map(|(i, g)| frame.handle(g).filter(|(_, seen)| *seen).map(|(p, _)| (i, p))).collect();
     Some((frame, list, handles))
+}
+
+/// What the cached frame of [`graphic_handles`] was built for: the document's uid and revision, the
+/// object's id, and the fill or stroke and index of its 3D effect.
+type FrameKey = (u64, u64, u64, Option<usize>, usize);
+
+/// Temp-memory key of the frame [`graphic_handles`] last built.
+fn frame_cache_id() -> egui::Id {
+    egui::Id::unique("three-d-graphic-frame")
 }
 
 /// Temp-memory key of a drag of a graphic's handle on the artboard.
@@ -483,10 +623,30 @@ pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) 
     }
 }
 
+/// The custom bevel of an effect's settings `fields`, `[name, points]`, when its `bevel` is
+/// `"custom"` with points (the Bevel Shape menu lists it while a mixed selection unsets them).
+pub(crate) fn own_bevel(fields: &Map<String, Value>) -> Option<Value> {
+    let points = fields.get(BEVEL_PROFILE).filter(|v| !v.is_null())?;
+    let name = fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default();
+    (fields.get("bevel").and_then(Value::as_str) == Some("custom")).then(|| json!([name, points]))
+}
+
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
+/// A change to a custom bevel (`bevel` `"custom"`, its name or its points) sends all three, so an
+/// effect of a mixed selection that had none takes the whole bevel.
 pub(crate) fn changed_settings(before: &Value, after: &Value) -> Map<String, Value> {
     let Some(after) = after.as_object() else { return Map::new() };
-    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect()
+    let mut changed: Map<String, Value> =
+        after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let custom = ["bevel", BEVEL_NAME, BEVEL_PROFILE];
+    if after.get("bevel").and_then(Value::as_str) == Some("custom") && custom.iter().any(|k| changed.contains_key(*k)) {
+        for k in custom {
+            if let Some(v) = after.get(k) {
+                changed.insert(k.into(), v.clone());
+            }
+        }
+    }
+    changed
 }
 
 #[cfg(test)]

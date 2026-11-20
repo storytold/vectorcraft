@@ -733,6 +733,38 @@ fn a_library_character_style_linked_to_a_missing_swatch_is_added_unlinked() {
     assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Accent"), Some(true)));
 }
 
+/// A gradient stop linked to a spot swatch with process plates, as a library file can hold one.
+fn plated_stops() -> Value {
+    let ink = vectorcraft_color::Color::cmyk(0.0, 0.5, 0.0, 0.0);
+    json!([
+        {"offset": 0, "color": vectorcraft_color::Color::WHITE},
+        {"offset": 1, "color": ink, "swatch": "Brand", "tint": 0.5, "plates": [0.3, 0, 0, 0]}
+    ])
+}
+
+/// Library gradients and the gradient stops of library character styles lose their links to
+/// swatches the document does not have together with the process plates those links print with.
+#[test]
+fn library_stops_unlinked_from_their_swatch_keep_no_process_plates() {
+    let data = json!({
+        "name": "Plated",
+        "gradients": [{"name": "Glow", "gradient": {"gradient": {"kind": "Linear", "stops": plated_stops()}, "angle": 0}}],
+        "charStyles": [{"name": "Accent", "attrs": {"fill": {"type": "gradient", "gradient": {"kind": "Linear", "stops": plated_stops()}}}}]
+    });
+    let mut s = session();
+    let lib = run(&mut s, "library.import", json!({"data": data.to_string()}))["id"].as_str().unwrap().to_string();
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 20}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    run(&mut s, "library.use", json!({"library": lib, "kind": "fillGradient", "item": "Glow"}));
+    let st = gradient(&paint_of(&s, &a, false)).gradient.stops[1].clone();
+    assert_eq!((st.swatch.as_deref(), st.tint, st.plates), (None, 1.0, None), "{st:?}");
+    run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Accent"}));
+    let style = s.doc().unwrap().doc.char_styles.iter().find(|c| c.name == "Accent").map(|c| c.attrs["fill"].clone()).unwrap();
+    let fill = serde_json::from_value::<vectorcraft_color::Paint>(style).unwrap();
+    let st = gradient(&fill).gradient.stops[1].clone();
+    assert_eq!((st.swatch.as_deref(), st.tint, st.plates), (None, 1.0, None), "{st:?}");
+}
+
 /// A library style is compared with the document's in the form the document stores it in, so a
 /// style whose file writes a size as a whole number is reused, by Add to Character Styles and by a
 /// click alike.

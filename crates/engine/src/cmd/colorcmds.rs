@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke, and on a graph label the new paint of its characters and rows for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "edit.colors.invert", "Invert Colors", &invert)
         ),
@@ -221,6 +221,8 @@ pub(crate) struct Recolor<'a> {
     patterns: HashMap<String, Option<String>>,
     new_images: Vec<(String, ImageBlob)>,
     new_patterns: Vec<PatternDef>,
+    /// Objects inside the recolored ones that keep their colors, with everything inside them.
+    skip: HashSet<NodeId>,
     changed: usize,
 }
 
@@ -236,6 +238,7 @@ impl<'a> Recolor<'a> {
             patterns: HashMap::new(),
             new_images: vec![],
             new_patterns: vec![],
+            skip: HashSet::new(),
             changed: 0,
         }
     }
@@ -254,7 +257,7 @@ impl<'a> Recolor<'a> {
 
     /// A pass that maps colors as this one does, with nothing recolored yet.
     fn again(&self) -> Self {
-        Self { links: self.links, gray_images: self.gray_images, remake: self.remake, ..Self::new(self.scope, self.f) }
+        Self { links: self.links, gray_images: self.gray_images, remake: self.remake, skip: self.skip.clone(), ..Self::new(self.scope, self.f) }
     }
 
     /// The entries of `objects` (ids, each with a flag) whose object this pass would change, other
@@ -440,10 +443,18 @@ impl ColorVisitor for Visit<'_, '_> {
     fn image(&mut self, key: &str) -> Option<String> {
         self.pass.image(self.d, key)
     }
+    fn enters(&mut self, n: &Node) -> bool {
+        !self.pass.skip.contains(&n.id)
+    }
 }
 
 pub(crate) fn recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     run_pass(s, p, cmd, label, Recolor::new(Scope::of(p, cmd)?, f))
+}
+
+/// [`recolor`] that leaves the objects `skip` inside the recolored ones, and everything inside them, as they are.
+pub(crate) fn recolor_except(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color, skip: HashSet<NodeId>) -> Result<Value> {
+    run_pass(s, p, cmd, label, Recolor { skip, ..Recolor::new(Scope::of(p, cmd)?, f) })
 }
 
 /// [`recolor`] where `f` gives gray colors, so embedded images are stored with one gray channel.
@@ -513,14 +524,16 @@ pub(crate) fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&D
 }
 
 /// Run `recolor` on `d` (it returns how many objects it changed) over `roots`, then store on their graphs what it changed
-/// on the graph series marks among `roots` and inside them, so the marks keep their new paint when the graph is drawn
-/// again.
+/// on the graph series marks and graph labels among `roots` and inside them, so the marks and every label of a kind keep
+/// their new paint when the graph is drawn again.
 pub(crate) fn keeping_series_paint(d: &mut Document, roots: &[NodeId], recolor: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
     let marks = super::graph::series_marks_in(d, roots);
-    let before = (!marks.is_empty()).then(|| d.clone());
+    let labels = super::graph::labels_in(d, roots);
+    let before = (!marks.is_empty() || !labels.is_empty()).then(|| d.clone());
     let n = recolor(d)?;
     if let Some(before) = before.filter(|_| n > 0) {
         super::appearance::capture_series_changes(&before, d, &marks);
+        super::graph::capture_label_changes(&before, d, &labels, true, Some(roots));
     }
     Ok(n)
 }

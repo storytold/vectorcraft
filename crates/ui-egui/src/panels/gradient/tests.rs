@@ -433,6 +433,37 @@ fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
     assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
 }
 
+/// With nothing selected, and while the Live Paint Bucket is active, the Aspect Ratio field is
+/// dimmed: the default gradient fits each object and has no aspect, so typing in it changes
+/// nothing and reports no error.
+#[test]
+fn the_aspect_field_is_dimmed_for_the_default_gradient() {
+    for bucket in [false, true] {
+        let mut app = app(json!({"gradient": {"kind": "radial"}}));
+        if bucket {
+            app.select_tool("livePaintBucket");
+        } else {
+            app.run("select.set", json!({"ids": []})).unwrap();
+        }
+        let default = app.session.paint.fill.clone();
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        // The aspect field is the first 100% (above Opacity's).
+        let field = texts
+            .iter()
+            .filter(|(t, _)| t == "100%")
+            .map(|(_, at)| *at)
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
+        p.click(&mut app, field);
+        let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+        p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+        p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+        assert_eq!(app.session.paint.fill, default, "bucket {bucket}: the default gradient");
+        assert!(app.ui.status.is_empty(), "bucket {bucket}: {}", app.ui.status);
+    }
+}
+
 /// The Type row's Diamond button (the fourth of five) makes the gradient a diamond, and the
 /// Aspect Ratio field then edits its aspect.
 #[test]
@@ -709,6 +740,30 @@ fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     assert!(texts.iter().any(|(t, _)| t == "#FFFFFF"), "the stop's colour row: {texts:?}");
     stop_eyedropper(&mut app);
     assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
+    // A second click on the eyedropper while the pick is armed still hands back to the Gradient tool.
+    stop_eyedropper(&mut app);
+    assert_eq!(app.session.tool_options()["stop"], "gradient");
+}
+
+/// #8024: Escape ends the stop eyedropper's pick and returns to the Gradient tool. The stop keeps
+/// its color, the selection stays, and a held Escape's repeats end nothing else.
+#[test]
+fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
+    let mut app = app(json!({"gradient": {}}));
+    crate::shortcut_editor::sync(&app.ui);
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    let (paint, selected) = (current(&app), app.session.active().unwrap().selection.objects.clone());
+    stop_eyedropper(&mut app);
+    let key = |pressed, repeat| Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Modifiers::NONE };
+    let ctx = egui::Context::default();
+    for events in [vec![key(true, false)], vec![key(true, true)], vec![key(false, false)]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    assert_eq!(app.session.tool_id(), "gradient");
+    assert_eq!(current(&app), paint, "the stop keeps its color");
+    assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
 }
 
 /// The gradient panel names its Angle and Aspect Ratio inputs.
@@ -893,4 +948,44 @@ fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
     p.frame(&mut app, vec![], Modifiers::NONE);
     p.click(&mut app, del.center());
     assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+}
+
+/// #8241: over the strip under the ramp, where a click adds a stop, the panel shows the white arrow
+/// with a plus. Where the window shows glyphs as OS cursors (Windows, X11), it hands the glyph to
+/// the OS, since winit shows the plain arrow for the system copy cursor there; elsewhere the
+/// system copy cursor. Over the ramp itself, which adds nothing, neither.
+#[test]
+fn the_strip_under_the_ramp_shows_the_add_cursor() {
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    let mut p = Panel::new();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let bar = p.widget("grad-bar");
+    let output = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
+        p.time += 0.1;
+        let events = vec![Event::PointerMoved(at)];
+        let input = egui::RawInput {
+            time: Some(p.time),
+            events,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
+            ..Default::default()
+        };
+        let mut out = p.ctx.run_ui(input, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output
+    };
+    // Between the two stops, just under the ramp.
+    let under = output(&mut p, &mut app, pos2(bar.center().x, bar.bottom() + 10.0));
+    assert_eq!(under.cursor_icon, egui::CursorIcon::Copy);
+    // The same condition the panel uses (the build, Wayland, VECTORCRAFT_SYSTEM_CURSORS).
+    if crate::cursors::add_cursor_is_a_glyph(&app) {
+        let glyph = app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0);
+        assert!(glyph.is_some());
+        assert_eq!(under.cursor_image, glyph, "the white arrow with a plus, as an OS cursor");
+    } else {
+        assert!(under.cursor_image.is_none(), "the system copy cursor alone");
+    }
+    let over = output(&mut p, &mut app, bar.center());
+    assert_ne!(over.cursor_icon, egui::CursorIcon::Copy);
+    assert!(over.cursor_image.is_none(), "over the ramp, no add cursor");
 }

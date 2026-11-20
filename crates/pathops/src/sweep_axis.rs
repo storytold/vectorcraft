@@ -259,8 +259,9 @@ mod tests {
     #[test]
     fn offset_path_sweeps_a_long_low_path_turned_with_the_result_of_the_path_on_end() {
         let mut rng = Rng(17);
-        // Grown past the zigzag's bends, where the stroker leaves loops whose faces are dropped by
-        // the distance test; grown a little; and inset.
+        // An open zigzag grown by 1.5, a closed one grown by 0.5 and a closed one inset by 0.3. Each
+        // is swept turned when low and as it is when stood on end, and the two results cover the
+        // same region. None of the three leaves a face for the distance test to drop.
         for (closed, delta) in [(false, 1.5), (true, 0.5), (true, -0.3)] {
             let what = format!("closed {closed}, offset {delta}");
             let low = zigzag(3, 300, 0.4, &mut rng, closed);
@@ -274,7 +275,8 @@ mod tests {
             assert_same_region(&turned, &upright(&on_end), &what);
         }
         // A long plate with a row of round holes: growing it by 1 closes the narrow holes, which
-        // the distance test drops, and keeps the wide ones.
+        // the distance test drops when it measures each hole's point turned back into the plate's
+        // own frame, and keeps the wide ones.
         use kurbo::Shape;
         let mut plate = kurbo::Rect::new(0.0, 0.0, 4000.0, 20.0).to_path(0.1);
         for i in 0..200u32 {

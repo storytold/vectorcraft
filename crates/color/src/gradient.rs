@@ -547,6 +547,49 @@ impl Gradient {
             None => (Color::BLACK, 1.0),
         }
     }
+    /// Which of its stops color some part of it that draws, by the stretches [`Self::sample`]
+    /// mixes in, for stops in any order: the pair of stop `k` and stop `k + 1` covers the offsets
+    /// above every offset of stops `0..=k` up to stop `k + 1`'s, and both its stops count when that
+    /// stretch has positive width and either stop is above opacity 0. The first stop also counts
+    /// when it is above opacity 0, since it colors the offsets up to its own, and so does the last
+    /// stop, since it colors the offsets above every stop's. Any other stop, opaque or not, counts
+    /// only through a pair: a stop out of order whose pairs have no width (another stop before it
+    /// reaches past both ends) colors nothing. A freeform gradient draws from its points, so each of
+    /// its stops counts while any stop is above opacity 0.
+    pub fn drawn_stops(&self) -> Vec<bool> {
+        self.stops_with_color(|s| s.opacity > 0.0)
+    }
+    /// [`Self::drawn_stops`] with every stop taken as opaque, for output that leaves stop opacity
+    /// out: the stops that color a stretch of positive width, and the first and last stops.
+    pub fn reached_stops(&self) -> Vec<bool> {
+        self.stops_with_color(|_| true)
+    }
+    /// [`Self::drawn_stops`] with `shows` telling whether a stop's opacity shows its color.
+    fn stops_with_color(&self, shows: impl Fn(&GradientStop) -> bool) -> Vec<bool> {
+        let stops = &self.stops;
+        if self.kind == GradientKind::Freeform {
+            let any = stops.iter().any(&shows);
+            return vec![any; stops.len()];
+        }
+        let mut drawn = vec![false; stops.len()];
+        if let (Some(first), Some(d)) = (stops.first(), drawn.first_mut()) {
+            *d = shows(first);
+        }
+        if let (Some(last), Some(d)) = (stops.last(), drawn.last_mut()) {
+            *d |= shows(last);
+        }
+        // `f32::max` skips a NaN offset, which the sampler never picks either.
+        let mut reach = f32::NEG_INFINITY;
+        for k in 0..stops.len().saturating_sub(1) {
+            reach = reach.max(stops[k].offset);
+            let (a, b) = (&stops[k], &stops[k + 1]);
+            if b.offset > reach && (shows(a) || shows(b)) {
+                drawn[k] = true;
+                drawn[k + 1] = true;
+            }
+        }
+        drawn
+    }
     /// [`Self::sample_with`] at each of `ts`, which must not decrease. Each search starts where
     /// the one before it stopped, so the work is the samples plus the stops, not their product.
     pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {
@@ -578,7 +621,8 @@ impl Gradient {
     }
     /// Stops expanded so that midpoints are represented as explicit stops (for renderers without
     /// midpoints), and a Perceptual gradient's segments as stops on its curve (for renderers that
-    /// mix linearly; within [`PERCEPTUAL_TOLERANCE`] of it).
+    /// mix linearly; within [`PERCEPTUAL_TOLERANCE`] of it). A stop between two stops of the same
+    /// color is that color, as it is, so paper white or a tint stays exact.
     pub fn expanded_stops(&self) -> Vec<(f32, Color, f32)> {
         self.expanded().map(|(t, c, o, _)| (t, c, o)).collect()
     }
@@ -595,6 +639,9 @@ impl Gradient {
         // Otherwise (repeated or unsorted offsets) each midpoint is looked up as `sample` would
         // find it, but by binary search: a scan of all the stops per midpoint cost their square.
         let reach = if increasing || !self.method.is_classic() { None } else { Some(StopReach::new(&self.stops)) };
+        // Two stops of the same color mix to that color, as it is: a mix through display RGB or
+        // OKLab would change its model or round its numbers.
+        let mix = move |a: &Color, b: &Color, v| if a == b { *a } else { self.method.mix(a, b, v) };
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
             let next = self.stops.get(i + 1);
             let off_centre = (s.midpoint - 0.5).abs() > 1e-3;
@@ -603,7 +650,6 @@ impl Gradient {
                 let t = s.offset + (n.offset - s.offset) * s.midpoint;
                 // Mixed from the two stops it lies between, as `sample` would: searching all the
                 // stops again for each midpoint made many stops cost their square.
-                let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
                 let (c, o) = match &reach {
                     Some(reach) => reach.sample_with(&self.stops, t, &mix),
                     None => between(s, n, t, &mix),
@@ -618,7 +664,7 @@ impl Gradient {
                     let mid = v == 0.5;
                     let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
-                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint), None)
+                    (t, mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint), None)
                 })
             });
             std::iter::once((s.offset, s.color, s.opacity, None, Some(i))).chain(classic).chain(perceptual.into_iter().flatten())

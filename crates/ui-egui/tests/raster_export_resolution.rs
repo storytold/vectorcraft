@@ -163,3 +163,54 @@ fn remembered_resolution_keeps_live_size_png_metadata_and_transparency() {
     assert_eq!(&png[phys + 8..phys + 12], pixels_per_meter.to_be_bytes());
     assert_eq!(png[phys + 12], 1, "pHYs stores pixels per meter");
 }
+
+#[test]
+fn supplied_raster_options_keep_values_without_changing_remembered_resolution() {
+    let mut app = accepted_600_ppi();
+    assert_eq!(app.ui.raster_export_ppi, Some(600.0));
+    let png = json!({"ppi": 300, "background": "#204080", "antiAlias": "type", "interlaced": true});
+    app.run("file.export.png", png.clone()).unwrap();
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, "pngOptions");
+    for key in ["ppi", "background", "antiAlias", "interlaced"] {
+        assert_eq!(dialog.fields[key], png[key], "the supplied PNG {key} is retained");
+    }
+    dialogs::cancel(&mut app);
+    assert_eq!(app.ui.raster_export_ppi, Some(600.0), "Cancel does not accept the explicit PNG resolution");
+
+    let jpeg = json!({
+        "format": "jpg", "path": "/out/supplied.jpg", "ppi": 144, "quality": 40,
+        "colorModel": "gray", "method": "progressive", "scans": 5, "embedIcc": false, "imageMap": "client"
+    });
+    dialogs::open_raster_options(&mut app, vectorcraft_engine::cmd::fileio::format("jpg").unwrap(), jpeg.clone());
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, "jpgOptions");
+    for key in ["ppi", "quality", "colorModel", "method", "scans", "embedIcc", "imageMap"] {
+        assert_eq!(dialog.fields[key], jpeg[key], "the supplied JPEG {key} is retained");
+    }
+    dialogs::cancel(&mut app);
+    assert_eq!(app.ui.raster_export_ppi, Some(600.0), "Cancel does not accept the explicit JPEG resolution");
+    open_png_options(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["ppi"].as_f64(), Some(600.0));
+}
+
+#[test]
+fn invalid_explicit_resolution_is_rejected_without_writing_or_changing_memory() {
+    let (mut app, written) = app();
+    open_png_options(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("ppi".into(), json!(600));
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(written.borrow().len(), 1, "the legitimate accepted export reaches the writer first");
+    assert_eq!(app.ui.raster_export_ppi, Some(600.0));
+
+    app.run("file.export.png", json!({"ppi": 0})).unwrap();
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, "pngOptions");
+    assert_eq!(dialog.fields["ppi"], 0, "an explicit invalid resolution is not replaced by memory");
+    let error = dialogs::confirm(&mut app).unwrap_err();
+    assert!(error.contains("ppi must be a positive number"), "{error}");
+    assert_eq!(written.borrow().len(), 1, "the invalid resolution writes no file");
+    assert_eq!(app.ui.raster_export_ppi, Some(600.0), "an error does not accept the invalid resolution");
+    open_png_options(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["ppi"].as_f64(), Some(600.0));
+}

@@ -3,10 +3,8 @@ use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{
-    ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition,
-};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::dimension::{Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition};
+use vectorcraft_doc::{Appearance, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -16,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowHead: null|a built-in stroke.set arrowhead name (Barbed, LineArrow…; drawn at both ends in place of arrowStyle's head; versions that have the stroke arrowhead but do not read arrowHead draw arrowStyle when they draw the dimension again; custom arrowheads are refused), arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -495,7 +493,8 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
 
 /// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved
 /// before dimensions followed the colour mode have RGB dimensions in CMYK documents. A dimension
-/// that can't be redrawn keeps the art it has.
+/// that can't be redrawn keeps the art it has. The labels are measured in the document's own
+/// composite fonts, also when another document's definitions of the same names are registered.
 pub(crate) fn conform(doc: &mut Document) {
     if !doc.dimensions {
         return;
@@ -521,6 +520,10 @@ pub(crate) fn conform(doc: &mut Document) {
             }
         }
     });
+    if stale.is_empty() {
+        return;
+    }
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     for (id, d) in stale {
         // An error leaves this dimension as it was; the others are still redrawn.
         let _ = replace(doc, id, d);
@@ -562,12 +565,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
             LineType::Solid => None,
         };
         if arrows {
-            let head = match o.arrow_style {
-                ArrowStyle::Filled => Some(Arrowhead::Triangle),
-                ArrowStyle::Open => Some(Arrowhead::TriangleOpen),
-                ArrowStyle::Tick => Some(Arrowhead::Slash),
-                ArrowStyle::None => None,
-            };
+            let head = o.arrowhead();
             st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);

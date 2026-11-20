@@ -164,6 +164,11 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
+/// How many times the app wrote the clipboard.
+pub(super) fn writes(board: &Rc<RefCell<Board>>) -> usize {
+    board.borrow().writes
+}
+
 pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }
@@ -231,7 +236,41 @@ fn text_and_image_paste_events_paste_once_as_text() {
 pub(crate) fn blue_png() -> Vec<u8> {
     let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     png
 }
 
@@ -378,28 +417,151 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
     assert_eq!(board.borrow().writes, 1);
 }
 
+/// A PNG whose header reads but whose pixel data is cut short, which the renderer can't decode.
+pub(super) fn cut_short_png() -> Vec<u8> {
+    let mut png = Vec::new();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    png
+}
+
+/// The PNG's note on an image the renderer can't decode.
+pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+
 /// Copy of an image the renderer can't decode: the PNG leaves it out, and once the formats are
-/// written the status bar shows the PNG's note, made at once or on the worker.
+/// written the status bar says the Copy (or Cut) has 1 note and shows it, made at once or on the
+/// worker. The note is kept for the message's hover, and a Copy without notes leaves the message.
 #[test]
 fn copy_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
-    const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads but whose pixel data is cut short.
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let png = cut_short_png();
     for worker in [false, true] {
         let (mut app, board) = if worker { app_with_worker() } else { app() };
         app.status("Ready");
         copy_rect(&mut app);
         background::wait_all(&mut app);
-        assert_eq!(app.ui.status, "Ready", "worker {worker}: no note");
-        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
-        app.status("Ready");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None), "worker {worker}: no note");
+        for (id, said) in [("edit.copy", "Copied"), ("artboard.copy", "Copied"), ("edit.cut", "Cut")] {
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+            app.status("Ready");
+            let p = if id == "artboard.copy" { json!({"index": 0}) } else { json!({}) };
+            run(&mut app, id, p);
+            background::wait_all(&mut app);
+            assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}: {id}");
+            let status = format!("{said} with 1 note: {UNDECODED}");
+            assert_eq!(app.ui.status, status, "worker {worker}: {id}");
+            assert_eq!(app.ui.status_notes, Some((status, vec![UNDECODED.to_string()])), "worker {worker}: {id}");
+        }
+    }
+}
+
+/// The status bar names how many notes a Copy's or Cut's formats have and the first of them, and
+/// keeps them all, in order, for the message's hover. Without notes it keeps its message.
+#[test]
+fn copy_notes_are_counted_and_kept_in_order() {
+    let (mut app, _) = app();
+    let notes: Vec<String> = ["first", "second", "third"].map(String::from).to_vec();
+    for (cut, said) in [(false, "Copied"), (true, "Cut")] {
+        crate::sysclip::show_copy_notes(&mut app, cut, notes.clone());
+        let status = format!("{said} with 3 notes: first");
+        assert_eq!(app.ui.status, status);
+        assert_eq!(app.ui.status_notes, Some((status, notes.clone())));
+    }
+    app.status("Ready");
+    app.ui.status_notes = None;
+    crate::sysclip::show_copy_notes(&mut app, false, vec![]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None));
+}
+
+/// A message shown while a Copy's formats are made on the worker stays: the formats are written
+/// once they are ready, and their note does not replace the newer message.
+#[test]
+fn a_copy_note_does_not_replace_a_newer_message() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+    app.status("Ready");
+    run(&mut app, "edit.copy", json!({}));
+    app.status("Saved /out/a.vectorcraft");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(written(&board), [TEXT, SVG, PNG]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/a.vectorcraft", &None));
+}
+
+/// A message set while a Copy's formats are made on the worker stays even when its text is the
+/// Copy's: an empty status bar set again, or File › New clearing it.
+#[test]
+fn a_copy_note_does_not_replace_a_message_with_the_same_text() {
+    for then in ["status", "file.new"] {
+        let (mut app, board, hold) = app_with_busy_worker("");
+        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+        app.status("");
         run(&mut app, "edit.copy", json!({}));
+        if then == "status" {
+            app.status("");
+        } else {
+            run(&mut app, "file.new", json!({}));
+        }
+        drop(hold);
         background::wait_all(&mut app);
-        assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}");
-        assert_eq!(app.ui.status, WARNING, "worker {worker}");
+        assert_eq!(written(&board), [TEXT, SVG, PNG], "{then}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{then}");
+    }
+}
+
+/// A Copy without notes clears the message an earlier Copy's notes left, with its hover notes,
+/// made at once or on the worker. It leaves any other message, one with the same text set since
+/// included.
+#[test]
+fn a_copy_without_notes_clears_an_earlier_copys_notes() {
+    let earlier = format!("Copied with 1 note: {UNDECODED}");
+    for worker in [false, true] {
+        for (then, kept) in [(None, ""), (Some("Ready"), "Ready"), (Some(earlier.as_str()), earlier.as_str())] {
+            let (mut app, _) = if worker { app_with_worker() } else { app() };
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+            run(&mut app, "edit.copy", json!({}));
+            background::wait_all(&mut app);
+            assert_eq!(app.ui.status, earlier, "worker {worker}, {then:?}");
+            if let Some(then) = then {
+                app.status(then);
+                app.ui.status_notes = None;
+            }
+            copy_rect(&mut app);
+            background::wait_all(&mut app);
+            assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (kept, &None), "worker {worker}, {then:?}");
+        }
     }
 }
 
@@ -420,6 +582,21 @@ fn text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     run(&mut app, "edit.paste", json!({}));
     let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("not type: {:?}", pasted(&app)[0].kind) };
     assert_eq!(t.plain_text(), "Words copied in a field");
+}
+
+/// Text a floating panel's label copies after Copy, before the formats are written: its window
+/// keeps the Copy, the formats are not written, and the system clipboard keeps the text.
+#[test]
+fn label_text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    copy_rect(&mut app);
+    let ctx = egui::Context::default();
+    crate::shortcuts::note_copied_in_window(&ctx);
+    crate::panel_docking::forward_keys(&mut app, &ctx, vec![egui::Event::Copy], Some(egui::Modifiers::COMMAND));
+    assert!(app.forwarded.is_empty(), "the window's Copy stays there");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(board.borrow().writes, 0);
 }
 
 /// The Edit menu's Paste into a text field after Copy of type, before the formats are written: it

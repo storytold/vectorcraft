@@ -24,6 +24,7 @@ fn extras_are_written_flat_in_order() {
         e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
         e.pixel_aligned = true;
         e.warp_piece = true;
+        e.clip_pieces = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -71,11 +72,13 @@ fn extras_are_written_flat_in_order() {
         "envelope_edit_margin",
         "pixel_aligned",
         "warp_piece",
+        "clip_pieces",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
     assert_eq!(v["pixel_aligned"], true);
     assert_eq!(v["warp_piece"], true);
+    assert_eq!(v["clip_pieces"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -179,6 +182,20 @@ fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
     // Other shapes have none of it.
     let e = LiveShape::Ellipse { w: 1.0, h: 1.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
     assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
+}
+
+/// A very large angle turns a rectangle to that angle modulo 360, whatever angle it had before.
+#[test]
+fn a_shape_takes_a_very_large_angle() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let want = 1e20f64.rem_euclid(360.0);
+    for turned in [0.0, 90.0] {
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(-f64::to_radians(turned));
+        let mut r = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        assert!(close(r.shape_angle().unwrap(), turned), "{:?}", r.shape_angle());
+        r.set_shape_angle(1e20);
+        assert!(close(r.shape_angle().unwrap(), want), "from {turned}°: {:?}, not {want}", r.shape_angle());
+    }
 }
 
 /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
@@ -801,4 +818,32 @@ fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
     group.map_ruler_guide_positions(&mut |_, _| calls += 1);
     assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
     assert_eq!(calls, 0);
+}
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
 }

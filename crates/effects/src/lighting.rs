@@ -136,8 +136,165 @@ pub(crate) fn facet_art(
     composed_art(id, path, paint, Ramp::Rgb(light), seam)
 }
 
-/// Composite smooth solid-fill facets with one clip and three channel groups per surface.
-/// Black channel backdrops keep shared edges opaque before the final coverage is applied.
+/// The width of the seam stroke of a facet's underlay: a round stroke that reaches 1 pt past each
+/// edge, over the pixels that the antialiased edges of two neighboring facets each cover only in
+/// part at 1:1. A clip to the surface's outline removes what it paints past the surface.
+pub(crate) const UNDERLAY_SEAM: f64 = 2.0;
+
+/// The area facet `path` and its round seam stroke `seam` wide paint together: the stroke's outer
+/// contours and the facet, all wound one way with a positive area. The stroke's inner contours,
+/// wound the other way, are left out: the facet covers them, and contours that cancel each other
+/// leave partial coverage where a union of footprints meets at a pixel.
+pub(crate) fn footprint(path: &vectorcraft_geom::BezPath, seam: f64) -> vectorcraft_geom::BezPath {
+    use kurbo::{PathEl, Shape};
+    let stroke = kurbo::stroke(path.iter(), &kurbo::Stroke::new(seam).with_join(kurbo::Join::Round), &kurbo::StrokeOpts::default(), 0.05);
+    let sign = if stroke.area() < 0.0 { -1.0 } else { 1.0 };
+    let mut footprint = vectorcraft_geom::BezPath::new();
+    let mut contour = vectorcraft_geom::BezPath::new();
+    for el in stroke.elements().iter().chain(std::iter::once(&PathEl::MoveTo(kurbo::Point::ZERO))) {
+        if matches!(el, PathEl::MoveTo(_)) && !contour.elements().is_empty() {
+            if contour.area() * sign >= 0.0 {
+                footprint.extend(contour.iter());
+            }
+            contour = vectorcraft_geom::BezPath::new();
+        }
+        contour.push(*el);
+    }
+    let mut boundary = path.clone();
+    if boundary.area() * sign < 0.0 {
+        boundary = boundary.reverse_subpaths();
+    }
+    footprint.extend(boundary.iter());
+    if sign < 0.0 { footprint.reverse_subpaths() } else { footprint }
+}
+
+/// The most edges a facet may have for [`seamed_fill`] to test it for crossing edges.
+const SEAMED_FILL_EDGES: usize = 256;
+
+/// Facet `path` and its round seam `seam` wide as one path to fill ([`footprint`]), so that at an
+/// edge pixel the facet and its seam cover it once between them, not a fill's coverage and then a
+/// stroke's over it. `None` unless `path` is one closed polygon of up to [`SEAMED_FILL_EDGES`]
+/// finite edges, with an area, and with no two edges that are not neighbors touching: only there
+/// does the footprint's nonzero fill cover the facet and its seam and nothing more. `None` too for
+/// a seam that is not a positive finite width, or a footprint with no finite bounds or less area
+/// than the facet.
+pub(crate) fn seamed_fill(path: &vectorcraft_geom::PathData, seam: f64) -> Option<vectorcraft_geom::PathData> {
+    use kurbo::{PathEl, Point, Shape};
+    if !(seam.is_finite() && seam > 0.0) {
+        return None;
+    }
+    let bez = path.to_bezpath();
+    let mut elements = bez.elements().iter();
+    let Some(PathEl::MoveTo(first)) = elements.next() else { return None };
+    let mut points = vec![*first];
+    let mut closed = false;
+    for el in elements {
+        match el {
+            PathEl::LineTo(p) if !closed => points.push(*p),
+            PathEl::ClosePath if !closed => closed = true,
+            _ => return None,
+        }
+    }
+    if points.len() > 1 && points.first() == points.last() {
+        points.pop();
+    }
+    let area = bez.area().abs();
+    if !closed || !(3..=SEAMED_FILL_EDGES).contains(&points.len()) || points.iter().any(|p| !p.is_finite()) || !area.is_finite() || area <= 1e-9 {
+        return None;
+    }
+    let side = |a: Point, b: Point, c: Point| (b - a).cross(c - a);
+    let touch = |a: Point, b: Point, c: Point, d: Point| {
+        let boxes = a.x.min(b.x) <= c.x.max(d.x) && c.x.min(d.x) <= a.x.max(b.x) && a.y.min(b.y) <= c.y.max(d.y) && c.y.min(d.y) <= a.y.max(b.y);
+        boxes && side(a, b, c) * side(a, b, d) <= 0.0 && side(c, d, a) * side(c, d, b) <= 0.0
+    };
+    let n = points.len();
+    let edge = |i: usize| (points[i], points[(i + 1) % n]);
+    for i in 0..n {
+        for j in i + 2..n {
+            if i == 0 && j == n - 1 {
+                continue;
+            }
+            let ((a, b), (c, d)) = (edge(i), edge(j));
+            if touch(a, b, c, d) {
+                return None;
+            }
+        }
+    }
+    let fill = footprint(&bez, seam);
+    (fill.bounding_box().is_finite() && fill.area().abs() >= area).then(|| vectorcraft_geom::PathData::from_bezpath(&fill))
+}
+
+/// Colored-light facets `faces` (in drawing order) drawn over an underlay of themselves, the same
+/// facets grown to seams [`UNDERLAY_SEAM`] wide, all clipped once to the union of the facets'
+/// footprints. Where two facets' antialiased edges meet, the underlay fills what they leave
+/// uncovered with the neighbors' own colors, so the background does not show through. `None` unless
+/// every face is a facet a surface draws: a path filled and stroked by its seam, or a facet composed
+/// in a clip of its footprint, neither with an opacity mask. A face drawn with the parts of Inflate's
+/// graphics on it, a group of the facet and those parts, takes its facet's underlay and stays in the
+/// order with its parts, which are cut to the facet's outline, so the clip keeps them.
+pub(crate) fn sealed(id: vectorcraft_doc::NodeId, faces: &[std::sync::Arc<vectorcraft_doc::Node>]) -> Option<vectorcraft_doc::Node> {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, NodeKind};
+    let facets: Vec<Arc<Node>> = faces
+        .iter()
+        .map(|face| match &face.kind {
+            NodeKind::Group { children, clip: false } if face.extras().mask.is_none() => children.first().cloned(),
+            _ => Some(face.clone()),
+        })
+        .collect::<Option<_>>()?;
+    let (clip, mut underlay) = underlay(id, &facets)?;
+    underlay.extend(faces.iter().cloned());
+    Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, underlay))], clip: true }))
+}
+
+/// The parts of [`sealed`] for `faces`: a path of the union of the facets' footprints, to clip to,
+/// and the facets grown to seams [`UNDERLAY_SEAM`] wide, in the same order. `None` under the same
+/// conditions as [`sealed`].
+pub(crate) fn underlay(
+    id: vectorcraft_doc::NodeId,
+    faces: &[std::sync::Arc<vectorcraft_doc::Node>],
+) -> Option<(vectorcraft_doc::Node, Vec<std::sync::Arc<vectorcraft_doc::Node>>)> {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    let mut outline = vectorcraft_geom::BezPath::new();
+    let mut underlay = Vec::with_capacity(faces.len());
+    for face in faces {
+        if face.extras().mask.is_some() {
+            return None;
+        }
+        match &face.kind {
+            NodeKind::Path { clipping: false, .. } => {
+                let path = face.path_data()?.to_bezpath();
+                let mut seam = None;
+                let mut grown = (**face).clone();
+                for item in &mut grown.appearance.items {
+                    if let AppearanceItem::Stroke(s) = item {
+                        seam = Some(seam.map_or(s.width, |w: f64| w.max(s.width)));
+                        s.width = UNDERLAY_SEAM;
+                    }
+                }
+                outline.extend(footprint(&path, seam?).iter());
+                underlay.push(Arc::new(grown));
+            }
+            NodeKind::Group { children, clip: true } if children.len() == 2 => {
+                let clip = children.first()?.path_data()?.to_bezpath();
+                let wider = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&footprint(&clip, UNDERLAY_SEAM)), Appearance::default());
+                let colors = children.get(1)?.clone();
+                outline.extend(clip.iter());
+                underlay.push(Arc::new(Node::new(id, NodeKind::Group { children: vec![Arc::new(wider), colors], clip: true })));
+            }
+            _ => return None,
+        }
+    }
+    Some((Node::path(id, vectorcraft_geom::PathData::from_bezpath(&outline), Appearance::default()), underlay))
+}
+
+/// Composite smooth solid-fill facets with one clip and three channel groups per surface. In each
+/// channel, an underlay of the facets with wide seams lies under the facets themselves, so a
+/// shared edge is opaque in that channel's own light before the channels are screened together;
+/// the black backdrop shows only outside the surface, which the clip removes. Each facet over the
+/// underlay is one fill of the facet and its seam together ([`seamed_fill`]), or a fill and a seam
+/// stroke where that is `None`.
 pub(crate) fn solid_surface(id: vectorcraft_doc::NodeId, facets: &[vectorcraft_three_d::Facet], paint: &Paint) -> vectorcraft_doc::Node {
     use kurbo::Shape;
     use std::sync::Arc;
@@ -161,25 +318,53 @@ pub(crate) fn solid_surface(id: vectorcraft_doc::NodeId, facets: &[vectorcraft_t
     let clip = Node::path(id, PathData::from_bezpath(&boundary), Appearance::default());
     let bounds = bounds.unwrap_or(Rect::ZERO).inflate(1.0, 1.0);
     let cover = |paint| Node::path(id, shapes::rectangle(bounds), Appearance::basic(paint, Paint::None, 0.0));
+    let seam = |face: &vectorcraft_three_d::Facet| (face.thickness() / 2.0).clamp(0.05, 0.75);
+    let exact: Vec<Option<PathData>> = facets.iter().map(|face| seamed_fill(&face.path(), seam(face))).collect();
     let channels = (0..3)
         .map(|channel| {
             let mut color = [0.0; 3];
             if let Some(value) = color.get_mut(channel) {
                 *value = 1.0;
             }
+            let paints: Vec<Paint> = facets
+                .iter()
+                .map(|face| {
+                    if let Some(ramp) = face.rgb_gradient {
+                        smooth_paint(vectorcraft_three_d::LightGradient { diffuse: ramp.channels[channel], ambient: 0.0, color }, Color::WHITE)
+                    } else {
+                        Paint::solid(shade(Color::WHITE, color.map(|c| c * face.illumination[channel])))
+                    }
+                })
+                .collect();
+            let draw = |seam: fn(&vectorcraft_three_d::Facet) -> f64| -> Vec<Arc<Node>> {
+                facets
+                    .iter()
+                    .zip(&paints)
+                    .map(|(face, paint)| {
+                        let edge = seam_stroke(paint.clone(), seam(face));
+                        Arc::new(Node::path(
+                            id,
+                            face.path(),
+                            Appearance {
+                                items: vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(edge)],
+                                ..Default::default()
+                            },
+                        ))
+                    })
+                    .collect()
+            };
             let mut children = vec![Arc::new(cover(Paint::solid(Color::BLACK)))];
-            children.extend(facets.iter().map(|face| {
-                let paint = if let Some(ramp) = face.rgb_gradient {
-                    smooth_paint(vectorcraft_three_d::LightGradient { diffuse: ramp.channels[channel], ambient: 0.0, color }, Color::WHITE)
-                } else {
-                    Paint::solid(shade(Color::WHITE, color.map(|c| c * face.illumination[channel])))
+            children.extend(draw(|_| UNDERLAY_SEAM));
+            children.extend(facets.iter().zip(&exact).zip(&paints).map(|((face, fill), paint)| {
+                let mut items = vec![AppearanceItem::Fill(FillLayer::new(paint.clone()))];
+                let path = match fill {
+                    Some(fill) => fill.clone(),
+                    None => {
+                        items.push(AppearanceItem::Stroke(seam_stroke(paint.clone(), seam(face))));
+                        face.path()
+                    }
                 };
-                let edge = seam_stroke(paint.clone(), (face.thickness() / 2.0).clamp(0.05, 0.75));
-                Arc::new(Node::path(
-                    id,
-                    face.path(),
-                    Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(paint)), AppearanceItem::Stroke(edge)], ..Default::default() },
-                ))
+                Arc::new(Node::path(id, path, Appearance { items, ..Default::default() }))
             }));
             let mut group = Node::group(id, children);
             group.isolate = true;
@@ -227,25 +412,42 @@ pub(crate) fn opaque_paint(paint: &Paint) -> (Paint, Option<Paint>) {
     (base, transparent.then_some(mask))
 }
 
+/// [`opaque_paint`] for a surface of several faces under one opacity mask. A transparent gradient
+/// without a placement (or a freeform gradient without points) is first pinned to `bounds`, the
+/// faces' bounds together grown by 1 pt, so every face's color and the mask share one placement.
+/// An opaque gradient is returned as [`opaque_paint`] returns it.
+pub(crate) fn opaque_surface_paint(paint: &Paint, bounds: impl FnOnce() -> vectorcraft_geom::Rect) -> (Paint, Option<Paint>) {
+    let (base, mask) = opaque_paint(paint);
+    if mask.is_none() || !matches!(paint, Paint::Gradient(_)) {
+        return (base, mask);
+    }
+    let mut pinned = paint.clone();
+    if let Paint::Gradient(g) = &mut pinned {
+        g.pin(bounds().inflate(1.0, 1.0));
+    }
+    opaque_paint(&pinned)
+}
+
 fn composed_art(id: vectorcraft_doc::NodeId, path: &vectorcraft_geom::PathData, paint: &Paint, light: Ramp, seam: f64) -> vectorcraft_doc::Node {
-    use kurbo::Shape;
     use std::sync::Arc;
     use vectorcraft_doc::color::BlendMode;
     use vectorcraft_doc::{Appearance, Node, NodeKind, OpacityMask};
     use vectorcraft_geom::{Rect, shapes};
-    let (base, mask) = opaque_paint(paint);
-    // Clip once to the union of this single-contour face and its round seam stroke.
-    // Align their winding so the nonzero fill adds coverage instead of cancelling it.
-    let mut boundary = path.to_bezpath();
-    let mut footprint = kurbo::stroke(boundary.iter(), &kurbo::Stroke::new(seam).with_join(kurbo::Join::Round), &kurbo::StrokeOpts::default(), 0.05);
-    if boundary.area() * footprint.area() < 0.0 {
-        boundary = boundary.reverse_subpaths();
+    // An unplaced gradient (and a freeform gradient without points) stays fitted to the face's
+    // bounds grown by 1 pt, not to the larger cover below.
+    let mut paint = paint.clone();
+    if let Paint::Gradient(g) = &mut paint {
+        g.pin(path.bounds().unwrap_or(Rect::ZERO).inflate(1.0, 1.0));
     }
-    footprint.extend(boundary.iter());
-    let clip = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&footprint), Appearance::default());
+    let (base, mask) = opaque_paint(&paint);
+    // Clip once to the union of this single-contour face and its round seam stroke.
+    let clip = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&footprint(&path.to_bezpath(), seam)), Appearance::default());
     // Opaque rectangles cover the complete seam stroke, without separately antialiasing
-    // either ramp. Opaque sources need only vector clipping, not full-frame opacity masks.
-    let bounds = path.bounds().unwrap_or(Rect::ZERO).inflate(1.0, 1.0);
+    // either ramp. Opaque sources need only vector clipping, not full-frame opacity masks. They
+    // reach at least half a point past the seam stroke grown for an underlay ([`sealed`]), so
+    // their own edges stay outside either clip.
+    let margin = seam.max(1.0) + UNDERLAY_SEAM / 2.0;
+    let bounds = path.bounds().unwrap_or(Rect::ZERO).inflate(margin, margin);
     let cover = |paint| Node::path(id, shapes::rectangle(bounds), Appearance::basic(paint, Paint::None, 0.0));
     let mut illumination = match light {
         Ramp::Single(light) => cover(smooth_paint(light, Color::WHITE)),
@@ -379,5 +581,92 @@ mod tests {
         assert_eq!(point.at, Point::new(12.0, 18.0));
         assert_eq!(point.color.to_rgb(), [1.0, 0.25, 0.25]);
         assert_eq!(shaded.swatch, None, "a changed freeform point detaches the gradient swatch");
+    }
+
+    /// Under colored light, a face's unplaced source gradient is fitted to the face's bounds grown by
+    /// 1 pt, whatever the size of the cover rectangle that draws it; a placed one keeps its placement.
+    #[test]
+    fn composed_faces_fit_unplaced_gradients_to_the_face_not_the_cover() {
+        use vectorcraft_doc::NodeKind;
+        use vectorcraft_geom::{Rect, shapes};
+        use vectorcraft_three_d::{RgbGradient, ShadeGradient};
+        let face = shapes::rectangle(Rect::new(10.0, 20.0, 50.0, 40.0));
+        let ramp = |b| ShadeGradient { start: Point::new(10.0, 20.0), end: Point::new(50.0, 20.0), brightness: [b, 1.0] };
+        let light = RgbGradient { channels: [ramp(0.2), ramp(0.5), ramp(0.8)] };
+        let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+        let unplaced = GradientPaint { gradient: Gradient::new(GradientKind::Linear, stops), geom: None, angle: 0.0, swatch: None, freeform: None };
+        let placed = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(80.0, 0.0), aspect: 1.0, focal: None };
+        let fitted = unplaced.resolve(Rect::new(9.0, 19.0, 51.0, 41.0));
+        for (geom, expected) in [(None, fitted), (Some(placed), placed)] {
+            let paint = Paint::Gradient(Box::new(GradientPaint { geom, ..unplaced.clone() }));
+            for seam in [0.05, 0.75] {
+                let art = facet_art(vectorcraft_doc::NodeId(1), &face, &paint, light, seam);
+                let NodeKind::Group { children, clip: true } = &art.kind else { panic!("a clipped composite") };
+                let base = &children[1].children().unwrap()[0];
+                let Paint::Gradient(g) = base.appearance.items[0].paint() else { panic!("the source gradient") };
+                assert_eq!(g.geom, Some(expected), "seam {seam}");
+            }
+        }
+    }
+
+    /// A simple polygon facet and its 0.75 pt round seam are one nonzero-filled path: it covers the
+    /// facet and the 0.375 pt the seam reaches past each edge and corner, and nothing more, wound
+    /// either way and in a concave notch. A facet whose footprint would gain or lose area under a
+    /// nonzero fill (no area, crossing edges, a hole, curves) or a seam with no width has none.
+    #[test]
+    fn seamed_fill_covers_a_polygon_and_its_seam_once() {
+        use kurbo::Shape;
+        use vectorcraft_geom::BezPath;
+        let polygon = |points: &[(f64, f64)]| {
+            let mut bp = BezPath::new();
+            bp.move_to(points[0]);
+            for p in &points[1..] {
+                bp.line_to(*p);
+            }
+            bp.close_path();
+            bp
+        };
+        let covers = |fill: &vectorcraft_geom::PathData, x: f64, y: f64| fill.to_bezpath().winding(Point::new(x, y)) != 0;
+        let notched = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (6.0, 10.0), (6.0, 4.0), (4.0, 4.0), (4.0, 10.0), (0.0, 10.0)];
+        let mut reversed = notched;
+        reversed.reverse();
+        for points in [&notched[..], &reversed[..], &[(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)][..]] {
+            let fill = seamed_fill(&vectorcraft_geom::PathData::from_bezpath(&polygon(points)), 0.75).expect("a simple polygon");
+            let contours = fill.to_bezpath().elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count();
+            assert!(contours >= 2, "{points:?}: the seam's outline and the facet, {contours} contours");
+            for (x, y) in [(1.0, 1.0), (2.0, 0.5), (5.0, -0.3), (-0.3, 5.0), (-0.2, -0.2)] {
+                assert!(covers(&fill, x, y), "{points:?} covers ({x},{y})");
+            }
+            for (x, y) in [(5.0, -0.5), (-0.5, 5.0), (-0.3, -0.3), (12.0, 12.0)] {
+                assert!(!covers(&fill, x, y), "{points:?} leaves ({x},{y})");
+            }
+        }
+        let fill = seamed_fill(&vectorcraft_geom::PathData::from_bezpath(&polygon(&notched)), 0.75).unwrap();
+        assert!(covers(&fill, 4.3, 8.0) && covers(&fill, 5.0, 4.3), "the notch's edges carry the seam");
+        assert!(!covers(&fill, 5.0, 8.0), "the notch stays open");
+        let square = polygon(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let mut holed = square.clone();
+        holed.extend(polygon(&[(3.0, 3.0), (3.0, 7.0), (7.0, 7.0), (7.0, 3.0)]).iter());
+        let mut curved = BezPath::new();
+        curved.move_to((0.0, 0.0));
+        curved.quad_to((5.0, -5.0), (10.0, 0.0));
+        curved.line_to((5.0, 10.0));
+        curved.close_path();
+        let mut open = BezPath::new();
+        open.move_to((0.0, 0.0));
+        open.line_to((10.0, 0.0));
+        open.line_to((10.0, 10.0));
+        for (name, path, seam) in [
+            ("sliver", polygon(&[(0.0, 0.0), (10.0, 0.0), (5.0, 0.0)]), 0.75),
+            ("bow tie", polygon(&[(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)]), 0.75),
+            ("a vertex visited twice", polygon(&[(0.0, 0.0), (10.0, 0.0), (5.0, 5.0), (10.0, 10.0), (0.0, 10.0), (5.0, 5.0)]), 0.75),
+            ("hole", holed, 0.75),
+            ("curve", curved, 0.75),
+            ("open", open, 0.75),
+            ("no seam", square.clone(), 0.0),
+            ("endless seam", square, f64::INFINITY),
+        ] {
+            assert!(seamed_fill(&vectorcraft_geom::PathData::from_bezpath(&path), seam).is_none(), "{name}");
+        }
     }
 }

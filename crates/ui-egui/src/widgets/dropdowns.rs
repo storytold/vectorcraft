@@ -27,7 +27,7 @@ pub fn dropdown_names_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<
     combo_named(ui, id, name, current, width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add(egui::Button::selectable(*o == current, *o)).clicked() {
+            if option_row(ui, true, *o == current, *o).clicked() {
                 chosen = Some(i);
             }
         }
@@ -51,10 +51,22 @@ pub fn dropdown_icon_names(
     icon_size: f32,
     icon: impl Fn(&Ui, Rect, usize, egui::Color32, bool),
 ) -> Option<usize> {
+    dropdown_icon_names_sized(ui, id, current, options, width, Vec2::splat(icon_size), icon)
+}
+
+/// [`dropdown_icon_names`] with icons of any size, for a picture wider than it is tall, such as a
+/// line with an arrowhead.
+pub fn dropdown_icon_names_sized(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: Option<usize>,
+    options: &[&str],
+    width: f32,
+    icon_size: Vec2,
+    icon: impl Fn(&Ui, Rect, usize, egui::Color32, bool),
+) -> Option<usize> {
     let icon = &icon;
-    let atom = move |i: usize, highlighted: bool| {
-        egui::Atom::paint(Vec2::splat(icon_size), move |ui, a| icon(ui, a.rect, i, a.fallback_text_color, highlighted))
-    };
+    let atom = move |i: usize, highlighted: bool| egui::Atom::paint(icon_size, move |ui, a| icon(ui, a.rect, i, a.fallback_text_color, highlighted));
     let shown = match current.and_then(|i| options.get(i).map(|name| (i, *name))) {
         Some((i, name)) => (atom(i, false), egui::RichText::new(name).size(12.0)).into_atoms(),
         None => egui::RichText::new("").size(12.0).into_atoms(),
@@ -63,7 +75,7 @@ pub fn dropdown_icon_names(
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
             let on = current == Some(i);
-            if ui.add(egui::Button::selectable(on, (atom(i, on), *o))).clicked() {
+            if option_row(ui, true, on, (atom(i, on), *o)).clicked() {
                 chosen = Some(i);
             }
         }
@@ -97,7 +109,7 @@ pub fn dropdown_with_named(
     combo_named(ui, id, name, tl!(current), width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add_enabled(enabled(i), egui::Button::selectable(*o == current, tl!(o))).clicked() {
+            if option_row(ui, enabled(i), *o == current, tl!(o)).clicked() {
                 chosen = Some(i);
             }
         }
@@ -105,9 +117,42 @@ pub fn dropdown_with_named(
     })
 }
 
-/// The id [`craft_ui::ComboBox::from_id_salt`] gives its button in this `Ui`: `from_id_salt`
-/// stores `IdSalt::new(salt)` and hashes it once more with the scope, so the app must hash `id`
-/// the same way to read the button's focus and open state before it is drawn.
+/// What [`option_row`] found in a list that [`combo_atoms_named`] draws on the pass the list opens
+/// and the pass after it.
+#[derive(Clone, Copy, Default)]
+struct Opening {
+    /// The list draws its options with [`option_row`].
+    rows: bool,
+    /// A current option was scrolled into view.
+    scrolled: bool,
+}
+
+thread_local! {
+    /// The [`Opening`] that [`combo_atoms_named`] keeps while it draws a list on the pass the list
+    /// opens and the pass after it; `None` otherwise. A row reads it without a lookup in the
+    /// context's data.
+    static OPENING: std::cell::Cell<Option<Opening>> = const { std::cell::Cell::new(None) };
+}
+
+/// One option of a dropdown list, `selected` for the current one. On the pass the list opens and
+/// the next one, the first current option scrolls to the middle of the list, or as near to it as
+/// the list's ends allow, so that it shows whole (#5941).
+fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
+    let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
+    if let Some(opening) = OPENING.get() {
+        let scroll = selected && !opening.scrolled;
+        if scroll {
+            ui.scroll_to_rect_animation(response.rect, Some(egui::Align::Center), egui::style::ScrollAnimation::none());
+        }
+        OPENING.set(Some(Opening { rows: true, scrolled: opening.scrolled || scroll }));
+    }
+    response
+}
+
+/// The id of the button of [`combo_atoms_named`] in this `Ui`, the one
+/// [`craft_ui::ComboBox::from_id_salt`] gives its button: `from_id_salt` stores
+/// `IdSalt::new(salt)` and hashes it once more with the scope. The app reads the button's focus and
+/// open state with it before the button is drawn.
 pub(super) fn combo_button_id(ui: &Ui, id: &impl std::hash::Hash) -> egui::Id {
     ui.make_persistent_id(egui::IdSalt::new(HashOnly(id)))
 }
@@ -147,18 +192,60 @@ fn combo_atoms_named<'a, R>(
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
+            // A list whose options are `option_row`s opens with its current option in view, or at
+            // its first option, not where it was scrolled when it last closed (#5941). A list that
+            // draws its own rows has no current option to show, and opens where it was scrolled
+            // when it last closed.
+            let shown_key = button_id.with("list-shown-pass");
+            let opened_key = button_id.with("list-opened-pass");
+            let offset_key = button_id.with("list-offset");
+            let list = move |ui: &mut Ui| {
+                let pass = ui.ctx().cumulative_pass_nr();
+                let last = ui.data_mut(|d| d.get_temp::<u64>(shown_key));
+                ui.data_mut(|d| d.insert_temp(shown_key, pass));
+                let opening = last.is_none_or(|p| p + 1 < pass);
+                if opening {
+                    ui.data_mut(|d| d.insert_temp(opened_key, pass));
+                }
+                // The list is laid out unseen to measure it on the pass it opens and placed on the
+                // next one, so the current option is scrolled into view on both.
+                let settling = ui.data(|d| d.get_temp::<u64>(opened_key)).is_some_and(|p| pass <= p + 1);
+                // A list drawn inside this one's rows finds its own record, and this one's comes back after it.
+                let outer = if settling { OPENING.replace(Some(Opening::default())) } else { OPENING.take() };
+                let (content_left, content_top) = (ui.max_rect().left(), ui.max_rect().top());
+                let at = move |y: f32| Rect::from_min_size(egui::pos2(content_left, content_top + y), Vec2::ZERO);
+                let chosen = list(ui);
+                let found = OPENING.replace(outer).unwrap_or_default();
+                let none = egui::style::ScrollAnimation::none();
+                if settling {
+                    if found.rows {
+                        if opening && !found.scrolled {
+                            ui.scroll_to_rect_animation(at(0.0), Some(egui::Align::TOP), none);
+                        }
+                    } else {
+                        // The list is taller on the pass it opens than beside its field, and egui
+                        // clamps the scroll to the taller list, so the scroll it had when it closed
+                        // is put back on both passes. A scroll area leaves an item spacing above a
+                        // target aligned to its top, so the target is that much below the scroll.
+                        let saved = ui.data(|d| d.get_temp::<f32>(offset_key)).unwrap_or(0.0);
+                        ui.scroll_to_rect_animation(at(saved + ui.spacing().item_spacing.y), Some(egui::Align::TOP), none);
+                    }
+                }
+                if !settling || chosen.is_some() {
+                    // The scroll while the list is open: the content's top is above the clip's by it.
+                    ui.data_mut(|d| d.insert_temp(offset_key, (ui.clip_rect().top() - content_top).max(0.0)));
+                }
+                chosen
+            };
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
-            let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
-                .selected_text(current)
-                .width(width - 4.0)
-                .height(ui.spacing().combo_height)
-                .show_ui(ui, list);
+            let response = combo_button(ui, button_id, current, width - 4.0);
+            let shown = combo_list(ui, &response, list);
             // The button or open list handles Enter before the modal can accept it.
             if enter_for_combo {
                 ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
             }
-            let _ = name_field(label_field(response.response.clone(), label), name);
-            let chosen = response.inner.flatten();
+            let _ = name_field(label_field(response, label), name);
+            let chosen = shown.flatten();
             // egui closes the list on a click of the pointer only: an option picked with Space or
             // Enter closes it here, and the combo gives the keyboard back, so that Enter reaches the
             // dialog's OK (#2789).
@@ -169,6 +256,178 @@ fn combo_atoms_named<'a, R>(
             chosen
         })
         .inner
+}
+
+/// The button of [`combo_atoms_named`] with the id `button_id`, at least `width` wide, showing
+/// `current`: [`craft_ui::ComboBox`]'s button, with its look, its tooltip for a value cut short and
+/// its role for screen readers. It is drawn here so that its list opens in [`combo_list`].
+fn combo_button<'a>(ui: &mut Ui, button_id: egui::Id, current: impl egui::IntoAtoms<'a>, width: f32) -> Response {
+    use egui::class::HasClasses as _;
+    use egui::{AtomExt as _, NumExt as _};
+    let open = egui::Popup::is_id_open(ui.ctx(), button_id.with("popup"));
+    let mut classes = egui::class::Classes::default();
+    classes.add_class(craft_ui::ComboBox::CLASS);
+    classes.set_class(craft_ui::ComboBox::CLASS_OPEN, open);
+    let egui::widget_style::ButtonStyle { atom_layout } = ui.widget_style(button_id, &classes);
+    let visuals = if open {
+        ui.visuals().widgets.open
+    } else if let Some(response) = ui.ctx().read_response(button_id) {
+        *ui.style().interact(&response)
+    } else {
+        ui.visuals().widgets.inactive
+    };
+    let min_size = vec2(width, 0.0).at_least(atom_layout.min_size);
+    let current = current.into_atoms();
+    let text = current.text().map(String::from).unwrap_or_default();
+    let rtl = ui.style().right_to_left;
+    // The combo box's arrow: a downward triangle.
+    let arrow = egui::Atom::paint(Vec2::splat(ui.spacing().icon_width), move |ui, args| {
+        let rect = args.rect.expand(visuals.expansion);
+        let rect = Rect::from_center_size(rect.center(), vec2(rect.width() * 0.7, rect.height() * 0.45));
+        ui.painter().add(egui::Shape::rotated_triangle(rect, 0.0, visuals.fg_stroke.color));
+    })
+    .atom_grow(true)
+    .atom_align(if rtl { egui::Align2::LEFT_CENTER } else { egui::Align2::RIGHT_CENTER });
+    let button = atom_layout
+        .apply(
+            egui::WidgetAtom::new((current, arrow))
+                .id(button_id)
+                .sense(Sense::click())
+                .fallback_font(egui::TextStyle::Button)
+                .wrap_mode(ui.wrap_mode())
+                .direction(if rtl { egui::Direction::RightToLeft } else { egui::Direction::LeftToRight }),
+        )
+        .min_size(min_size)
+        .measure(ui, ui.available_size());
+    let elided = button.container.iter_texts().any(|galley| galley.elided);
+    let response = button.allocate(ui).paint(ui).response;
+    // A value cut short shows in full on hover, as a truncated `Label`'s does.
+    let response = if elided {
+        response.on_hover_ui(|ui| {
+            ui.set_max_width(ui.spacing().tooltip_width);
+            ui.add(egui::Label::new(text.as_str()).wrap());
+        })
+    } else {
+        response
+    };
+    response.widget_info(|| egui::WidgetInfo {
+        enabled: ui.is_enabled(),
+        current_text_value: Some(text.clone()),
+        ..egui::WidgetInfo::new(egui::Role::ComboBox)
+    });
+    response
+}
+
+/// The list of [`combo_atoms_named`] while it is open, drawn by `list` in a popup of its own that
+/// opens from `button` and takes the whole list whenever the window has room for it (#5941): below
+/// the button when it fits there, above it when it fits there instead, and otherwise moved up from
+/// below, over the button, until it ends at the bottom bars. It stays above the bottom bars
+/// ([`menu_floor`]), and a list taller than the room above them scrolls. A click closes
+/// the list, except a click on its scroll bar, which scrolls it. Returns what `list` returned, or
+/// `None` while the list is closed.
+fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) -> Option<R> {
+    let ctx = ui.ctx();
+    let id = button.id.with("popup");
+    let style = egui::style::StyleModifier::new(|style| {
+        egui::containers::menu::menu_style(style);
+        style.spacing.scroll = list_scroll_style();
+    });
+    // The id of the list's scroll area. egui senses its vertical bar under the area's id with the
+    // axis, 1, and names the widget a click went to at the start of the pass.
+    let area_key = id.with("scroll-area-id");
+    let on_bar =
+        ctx.data(|d| d.get_temp::<egui::Id>(area_key)).is_some_and(|area| ctx.interaction_snapshot(|s| s.clicked == Some(area.with(1_usize))));
+    let close = if on_bar { egui::PopupCloseBehavior::IgnoreClicks } else { egui::PopupCloseBehavior::CloseOnClick };
+    let popup = egui::Popup::menu(button).id(id).width(button.rect.width()).style(style.clone()).close_behavior(close);
+    let screen = ctx.content_rect();
+    // The list stops above the bottom bars, as other menus do (#2086).
+    let floor = menu_floor(ctx).min(screen.bottom());
+    // The room on each side of the rect the popup opens from: the part of the button in view.
+    let anchor = popup.get_anchor_rect().unwrap_or(button.rect);
+    let below = floor - anchor.bottom();
+    let above = anchor.top() - screen.top();
+    // The list's size from its last pass: egui lays a popup out unseen on the pass it opens, so the
+    // list is measured before it is placed. A right-to-left layout lines the list up with the
+    // button's right edge, as egui's menus do.
+    let rtl = ui.style().right_to_left;
+    let expected = popup.get_expected_size();
+    let (align, popup) = match expected {
+        Some(size) if size.y > below && size.y <= above => (if rtl { egui::RectAlign::TOP_END } else { egui::RectAlign::TOP_START }, popup),
+        // A list too tall for either side moves up from below until it ends at the floor.
+        Some(size) if size.y > below => {
+            let top = (floor - size.y).max(screen.top());
+            let from = Rect::from_min_max(egui::pos2(anchor.left(), top), egui::pos2(anchor.right(), top));
+            (if rtl { egui::RectAlign::BOTTOM_END } else { egui::RectAlign::BOTTOM_START }, popup.anchor(from))
+        }
+        _ => (if rtl { egui::RectAlign::BOTTOM_END } else { egui::RectAlign::BOTTOM_START }, popup),
+    };
+    let mut popup_style = (*ctx.global_style()).clone();
+    style.apply(&mut popup_style);
+    let margins = egui::Frame::popup(&popup_style).total_margin().sum();
+    let height = (floor - screen.top() - margins.y).max(ui.spacing().interact_size.y);
+    // A list that was wider than the window keeps its scroll bar in view: until it closes, it is no
+    // wider than it measured or than the window, its names cut short and shown in full on hover.
+    // Only a size measured while the list is open counts: egui keeps the last one after it closes.
+    // The width it needs is its rows' width on the last pass before it was narrowed, with its
+    // margins, and the bar's column while the rows scroll.
+    let too_wide_key = id.with("too-wide");
+    let natural_key = id.with("natural-width");
+    let scrolls_key = id.with("scrolls");
+    let open_last_pass = ctx.read_response(id).is_some();
+    if popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
+        // The first measurement is kept: later ones are of the list already narrowed.
+        ctx.data_mut(|d| {
+            if d.get_temp::<f32>(too_wide_key).is_none() {
+                let rows = d.get_temp::<f32>(natural_key).unwrap_or(screen.width());
+                d.insert_temp(too_wide_key, rows);
+            }
+        });
+    }
+    let (measured, scrolls) = ctx.data(|d| (d.get_temp::<f32>(too_wide_key), d.get_temp::<bool>(scrolls_key).unwrap_or(false)));
+    let too_wide = measured.is_some();
+    let shown = popup.align(align).align_alternatives(&[]).show(|ui| {
+        if let Some(rows) = measured {
+            let bar = if scrolls { list_scroll_style().allocated_width() } else { 0.0 };
+            ui.set_max_width((rows + bar).min(screen.width() - margins.x).max(0.0));
+        }
+        ui.set_min_width(ui.available_width());
+        // A popup offers its contents the height it had on its last pass; the list is offered the
+        // window's instead.
+        ui.set_max_height(height);
+        // Labels widen a narrow list rather than wrap, as in egui's combo box.
+        ui.style_mut().wrap_mode = Some(if too_wide { egui::TextWrapMode::Truncate } else { egui::TextWrapMode::Extend });
+        let painted = ui.ctx().graphics(|g| g.get(ui.layer_id()).map_or(0, |shapes| shapes.all_entries().len()));
+        let shown = egui::ScrollArea::vertical().max_height(height).show(ui, list);
+        if too_wide {
+            show_shortened_rows(ui, painted);
+        }
+        ui.data_mut(|d| {
+            if !too_wide {
+                d.insert_temp(natural_key, shown.content_size.x);
+            }
+            d.insert_temp(scrolls_key, shown.content_size.y > shown.inner_rect.height());
+            d.insert_temp(area_key, shown.id);
+        });
+        shown.inner
+    });
+    if shown.is_some() {
+        ctx.accesskit_node_builder(id, |node| node.set_role(egui::Role::ListBox));
+    } else {
+        ctx.data_mut(|d| {
+            d.remove::<f32>(too_wide_key);
+            d.remove::<f32>(natural_key);
+            d.remove::<bool>(scrolls_key);
+        });
+    }
+    shown.map(|r| r.inner)
+}
+
+/// The shapes painted so far in this pass on the topmost popup that was shown in the last one, such
+/// as an open dropdown list, without what lies under it. Read at the end of a test's UI.
+#[cfg(test)]
+pub(crate) fn top_popup_shapes(ctx: &egui::Context) -> Vec<egui::epaint::ClippedShape> {
+    let top = ctx.memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last());
+    top.map_or_else(Vec::new, |layer| ctx.graphics(|g| g.get(layer).map(|p| p.all_entries().cloned().collect()).unwrap_or_default()))
 }
 
 /// The recessed combo box of [`dropdown`] showing `current`, whose menu keeps a search field and
@@ -369,6 +628,8 @@ pub(crate) fn menu_room_either(below: f32, above: f32, tallest: f32) -> f32 {
 
 /// The scroll bar of a menu's list: slim, in a column of its own beside the items, so it never
 /// covers what sits at their right end (shortcuts, submenu arrows, a font's favourite star).
+/// `theme::apply` makes it the style of every scroll area that does not set its own, so the bar
+/// shows whenever there is more to scroll to (#5941).
 pub fn list_scroll_style() -> egui::style::ScrollStyle {
     egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
 }
@@ -443,7 +704,9 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
 /// reachable on small windows and in a floating panel's short OS window. Its scroll bar has a column
 /// of its own, so it never covers the shortcuts or the submenu arrows (#2086, #5347). When the list
 /// scrolls, that column widens the popup instead of narrowing the items, so their labels stay on one
-/// line.
+/// line. In a window too narrow for the items, the list is as wide as the window allows, and a row
+/// that does not fit ends in an ellipsis and shows its full text in a tooltip. Screen readers and
+/// keyboard selection still use the full text.
 ///
 /// The list's height comes from the room below and above the button, row or point the popup opens
 /// from. A popup with an id of its own measures from its own top instead.
@@ -463,14 +726,13 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
         menu_room(floor, top, tallest)
     };
     // The items' width on the first frame of this showing, when the scroll area does not yet show
-    // its bar. Later frames lay the items out at least that wide, and the bar's column is added to
-    // the popup's width. The width is kept until the popup closes.
+    // its bar. Later frames lay the items out that wide, up to the widest the window allows, and
+    // the bar's column is added to the popup's width. The width is kept until the popup closes.
     let key = ui.next_auto_id().with("menu-scroll-width");
     let frame = ctx.cumulative_frame_nr();
     let first = ctx.data(|d| d.get_temp::<(u64, f32)>(key)).filter(|(shown, _)| shown + 1 >= frame).map(|(_, width)| width);
     let scroll = list_scroll_style();
-    // The widest the items can be with the popup's margins and the bar's column inside the window.
-    let widest = (ctx.content_rect().width() - margins.x - scroll.allocated_width()).max(0.0);
+    let widest = menu_list_widest(ui);
     ui.scope(|ui| {
         ui.spacing_mut().scroll = scroll;
         // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
@@ -479,9 +741,20 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
         let out = area.show(ui, |ui| {
             // Always the same child, so the items' ids stay the same on the frame the width changes.
             let max = ui.max_rect();
-            let width = first.map_or(max.width(), |first| first.min(widest).max(max.width()));
+            let width = first.map_or(max.width(), |first| first.max(max.width()).min(widest));
             let rect = egui::Rect::from_min_size(max.min, egui::vec2(width, max.height()));
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()), add_contents).inner
+            let painted = ctx.graphics(|g| g.get(ui.layer_id()).map_or(0, |list| list.all_entries().len()));
+            let inner = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()), |ui| {
+                    // The first frame measures the items at their full width.
+                    if first.is_some() {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    }
+                    add_contents(ui)
+                })
+                .inner;
+            show_shortened_rows(ui, painted);
+            inner
         });
         let width = first.unwrap_or(out.content_size.x);
         ctx.data_mut(|d| d.insert_temp(key, (frame, width)));
@@ -490,19 +763,78 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     .inner
 }
 
+/// The widest the items of a [`menu_scroll`] list can be with the popup's margins and the scroll
+/// bar's column inside the window.
+fn menu_list_widest(ui: &Ui) -> f32 {
+    let margins = egui::Frame::popup(ui.style()).total_margin().sum();
+    (ui.ctx().content_rect().width() - margins.x - list_scroll_style().allocated_width()).max(0.0)
+}
+
+/// Makes a menu at least `width` wide, or as wide as the window allows the items of a
+/// [`menu_scroll`] list when that is less, so the menu stays inside a narrow window.
+pub(crate) fn menu_min_width(ui: &mut Ui, width: f32) {
+    ui.set_min_width(width.min(menu_list_widest(ui)));
+}
+
+/// For each text that `ui`'s layer drew after its first `painted` shapes and that ends in an
+/// ellipsis, the clickable row it is drawn in shows the full text in a tooltip that wraps to fit
+/// inside the window.
+fn show_shortened_rows(ui: &Ui, painted: usize) {
+    let ctx = ui.ctx();
+    let layer = ui.layer_id();
+    let shortened: Vec<(egui::Pos2, egui::text::LayoutJob)> = ctx.graphics(|g| {
+        let Some(list) = g.get(layer) else { return vec![] };
+        list.all_entries()
+            .skip(painted)
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.elided => {
+                    let job = egui::text::LayoutJob {
+                        sections: text.galley.job.sections.clone(),
+                        text: text.galley.job.text.clone(),
+                        language: text.galley.job.language.clone(),
+                        ..Default::default()
+                    };
+                    Some((Rect::from_min_size(text.pos, text.galley.size()).center(), job))
+                }
+                _ => None,
+            })
+            .collect()
+    });
+    if shortened.is_empty() {
+        return;
+    }
+    let rows: Vec<(egui::Id, Rect)> =
+        ctx.viewport(|vp| vp.this_pass.widgets.get_layer(layer).filter(|w| w.sense.senses_click()).map(|w| (w.id, w.rect)).collect());
+    for (at, job) in shortened {
+        let Some(response) = rows.iter().rfind(|(_, rect)| rect.contains(at)).and_then(|(id, _)| ctx.read_response(*id)) else { continue };
+        let tip = |ui: &mut Ui| {
+            let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
+            ui.set_max_width(ui.spacing().tooltip_width.min(ui.ctx().content_rect().width() - margins).max(0.0));
+            ui.add(egui::Label::new(job).wrap());
+        };
+        // A dimmed row shows its full text too.
+        if response.enabled() {
+            response.on_hover_ui(tip);
+        } else {
+            response.on_disabled_hover_ui(tip);
+        }
+    }
+}
+
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
-/// window is too short for it: with the mouse wheel, or the scroll bar shown while the pointer is
-/// over it.
+/// window is too short for it: with the mouse wheel, or with its scroll bar.
 /// Its scroll bar stays a slim line at the edge, even while scrolled or dragged, so it never covers
-/// the buttons (#808).
+/// the buttons (#808). The line shows while the pointer is elsewhere too (#5941).
 pub fn strip_scroll<R>(ui: &mut Ui, id: &str, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
+        let floating = egui::style::ScrollStyle::floating();
         ui.spacing_mut().scroll = egui::style::ScrollStyle {
             bar_width: 4.0,
             floating_width: 2.0,
             bar_inner_margin: 0.0,
             bar_outer_margin: 1.0,
-            ..egui::style::ScrollStyle::floating()
+            dormant_handle_opacity: floating.active_handle_opacity,
+            ..floating
         };
         egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
     })

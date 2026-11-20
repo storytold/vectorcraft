@@ -94,7 +94,7 @@ pub(super) const HOLD_DELAY: f32 = 0.3;
 /// …and how fast it zooms then (as `exp(seconds × HOLD_ZOOM)`: twice as close each second).
 pub(super) const HOLD_ZOOM: f64 = std::f64::consts::LN_2;
 
-/// Performance › Animated Zoom, which needs GPU Performance as in Illustrator: the Zoom tool zooms
+/// Performance › Animated Zoom, which needs GPU Performance: the Zoom tool zooms
 /// as it is dragged sideways or held, instead of zooming to the area dragged across, and a wheel
 /// notch's zoom glides in ([`wheel`]).
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
@@ -125,6 +125,67 @@ pub(super) fn rotate_about(vm: &mut View, rect: egui::Rect, p: Pos2, degrees: f6
     vm.center += before - Xf::at(rect, vm, ui_zoom).to_doc(p);
 }
 
+/// How far in from each edge of the canvas a held tool drag scrolls the view ([`edge_scroll`]), in
+/// screen points.
+pub(super) const EDGE_SCROLL_ZONE: f32 = 24.0;
+
+/// How fast the view scrolls with the pointer at the canvas's very edge ([`edge_scroll`]), in
+/// screen points a second. Nearer the inner side of the zone it scrolls slower.
+pub(super) const EDGE_SCROLL_SPEED: f32 = 900.0;
+
+/// How far a tool drag held at `p` near an edge of the canvas `rect` scrolls the view in `dt`
+/// seconds (#8551), as the screen points the content moves: away from that edge, so what lies
+/// past it comes into view, faster the nearer the pointer is to the edge. `None` with the pointer
+/// outside the canvas or away from its edges, or with no time passed. A stalled frame counts a
+/// tenth of a second at most, and in a corner the content moves no faster than near one edge.
+pub(super) fn edge_scroll(rect: egui::Rect, p: Pos2, dt: f32) -> Option<egui::Vec2> {
+    if !rect.contains(p) || !p.x.is_finite() || !p.y.is_finite() || !dt.is_finite() || dt <= 0.0 {
+        return None;
+    }
+    // On a canvas narrower than two zones, each zone reaches the middle at most.
+    let zone_x = EDGE_SCROLL_ZONE.min(rect.width() / 2.0);
+    let zone_y = EDGE_SCROLL_ZONE.min(rect.height() / 2.0);
+    // How deep into a zone the pointer is (0 at its inner side, 1 at the edge), signed by the way
+    // the content moves: near the left or top edge it moves right or down.
+    let depth = |near: f32, far: f32, zone: f32| {
+        if zone <= 0.0 {
+            0.0
+        } else if near < zone {
+            1.0 - near / zone
+        } else if far < zone {
+            far / zone - 1.0
+        } else {
+            0.0
+        }
+    };
+    let dx = depth(p.x - rect.left(), rect.right() - p.x, zone_x);
+    let dy = depth(p.y - rect.top(), rect.bottom() - p.y, zone_y);
+    if dx == 0.0 && dy == 0.0 {
+        return None;
+    }
+    // In a corner the scroll goes both ways, no faster than along one edge.
+    let v = egui::vec2(dx, dy);
+    let v = if v.length() > 1.0 { v / v.length() } else { v };
+    Some(v * (EDGE_SCROLL_SPEED * dt.min(0.1)))
+}
+
+/// An edge scroll of `by` screen points ([`edge_scroll`]) at `ppp` device pixels a point, after the
+/// scrolls of the same press left `rest` device pixels along each axis: the whole device pixels to
+/// move the content by, and what is left. An axis this scroll does not move keeps its remainder as
+/// it is: rounding a half pixel there would move the view one pixel back and forth each frame.
+pub(super) fn edge_scroll_pixels(rest: (f64, f64), by: egui::Vec2, ppp: f32) -> ((f64, f64), (f64, f64)) {
+    let step = |rest: f64, by: f32| {
+        if by == 0.0 {
+            return (0.0, rest);
+        }
+        let total = rest + f64::from(by) * f64::from(ppp);
+        let whole = total.round();
+        (whole, total - whole)
+    };
+    let ((dx, rx), (dy, ry)) = (step(rest.0, by.x), step(rest.1, by.y));
+    ((dx, dy), (rx, ry))
+}
+
 /// Move view `vm`'s content by `(dx, dy)` device pixels along the screen's axes, at `ppp` device
 /// pixels a point of an interface zoomed by `ui_zoom`: the canvas's frame moves by exactly those
 /// pixels.
@@ -139,10 +200,18 @@ pub(super) fn whole_pixels(d: egui::Vec2, ppp: f32) -> (f64, f64) {
     ((f64::from(d.x) * f64::from(ppp)).round(), (f64::from(d.y) * f64::from(ppp)).round())
 }
 
+/// The pixels a point that the canvas's art frame renders at ([`super::frame_ppp`]): the display's,
+/// or fewer on a canvas wider than the largest texture side. Pans and scrolls move the view by
+/// whole pixels of that frame.
+pub(super) fn pan_ppp(app: &VectorcraftApp, ui: &Ui) -> f32 {
+    let ppp = ui.ctx().pixels_per_point();
+    app.canvas_rect.map_or(ppp, |r| super::frame_ppp(r.size(), ppp, ui.ctx().input(|i| i.max_texture_side)))
+}
+
 /// What the scrolls of the view have left to move ([`scroll_view`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct ScrollRest {
-    /// Device pixels along the screen's axes, at most half a pixel each.
+    /// Pixels of the canvas's frame along the screen's axes, at most half a pixel each.
     pub(super) x: f64,
     pub(super) y: f64,
     /// The document, the view's center, zoom and rotation, and the device pixels a point that the
@@ -151,11 +220,11 @@ pub(super) struct ScrollRest {
 }
 
 /// Scroll the active view so that its content moves `by` screen points (the wheel, a trackpad, a
-/// touch screen, a scroll bar), in whole device pixels: the part of a pixel left over is added to
-/// the next scroll. It is dropped when the view changed in between (a zoom, a turn, Fit, a pan
-/// of another kind, another document) or the device pixels a point did.
+/// touch screen, a scroll bar), in whole pixels of the canvas's frame ([`pan_ppp`]): the part of a
+/// pixel left over is added to the next scroll. It is dropped when the view changed in between (a
+/// zoom, a turn, Fit, a pan of another kind, another document) or the pixels a point did.
 pub(super) fn scroll_view(app: &mut VectorcraftApp, ui: &Ui, by: egui::Vec2) {
-    let ppp = ui.ctx().pixels_per_point();
+    let ppp = pan_ppp(app, ui);
     let ui_zoom = app.canvas_ui_zoom;
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
     let Some(vm) = app.view_mut() else { return };
@@ -344,7 +413,7 @@ pub(super) fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, o
         let hot = drag.is_some() || hover.is_some_and(|p| thumb.contains(p));
         painter.rect_filled(thumb, CornerRadius::same(3), if hot { t.text_dim } else { t.text_disabled });
     }
-    let ppp = ui.ctx().pixels_per_point();
+    let ppp = pan_ppp(app, ui);
     if let Some((c, by)) = center
         && let Some(vm) = app.view_mut()
     {

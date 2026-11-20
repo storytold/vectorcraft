@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::shapes::EllipseMode;
 use vectorcraft_tools::addons::box3d::{self, CustomShape};
 
+use crate::chrome::Fit;
 use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -17,8 +18,10 @@ pub fn menu() -> Vec<Item> {
 }
 
 /// Draw context-sensitive shape customization controls in the top Control bar when a shape tool is
-/// active. Returns `true` when controls were drawn.
-pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+/// active. Returns `true` when a shape tool is active. Each button, and each label with its field,
+/// shows only while the row has room for it and `reserve` after it, and the controls after one left
+/// out are left out too.
+pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
     let tool = app.session.tool_id().to_string();
     if !matches!(tool.as_str(), "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "spiral" | "box3d") {
         return false;
@@ -29,6 +32,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         st.selection.objects.iter().find_map(|&id| st.doc.node(id).and_then(|n| CustomShape::read_for_update(n, active_shape == "spiral")))
     });
 
+    let fit = &mut Fit::new(reserve);
     if tool == "box3d" {
         for (s_id, lbl, icon) in [
             ("box3d", "3D Box", "box"),
@@ -38,22 +42,48 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             ("star", "Star", "star"),
             ("spiral", "Spiral", "tornado"),
         ] {
-            if widgets::icon_button(ui, icon, tl!(lbl), active_shape == s_id, 22.0).clicked() {
+            if fit.room(ui, &[22.0]) && widgets::icon_button(ui, icon, tl!(lbl), active_shape == s_id, 22.0).clicked() {
                 app.run("tool.setOption", json!({ "key": "shape", "value": s_id })).ok();
             }
         }
-        crate::chrome::group_separator(ui);
+        fit.separator(ui);
+    }
+    // The tools with live shape widgets: Hide/Show Shape Widgets first, so a narrow bar leaves out
+    // the shape's fields before it.
+    if vectorcraft_tools::shape::shows_shape_widgets(&tool) {
+        shape_widgets_button(app, ui, fit);
+        fit.separator(ui);
     }
 
     match active_shape.as_str() {
-        "ellipse" => draw_ellipse_controls(app, ui, &opts, selected_custom),
-        "rectangle" | "roundedRectangle" => draw_rectangle_controls(app, ui, &opts, selected_custom),
-        "polygon" | "star" => draw_polygon_controls(app, ui, &opts, &active_shape, selected_custom),
-        "spiral" => draw_spiral_controls(app, ui, &opts, selected_custom),
-        "box3d" => draw_box3d_controls(app, ui, &opts, selected_custom),
+        "ellipse" => draw_ellipse_controls(app, ui, fit, &opts, selected_custom),
+        "rectangle" | "roundedRectangle" => draw_rectangle_controls(app, ui, fit, &opts, selected_custom),
+        "polygon" | "star" => draw_polygon_controls(app, ui, fit, &opts, &active_shape, selected_custom),
+        "spiral" => draw_spiral_controls(app, ui, fit, &opts, selected_custom),
+        "box3d" => draw_box3d_controls(app, ui, fit, &opts, selected_custom),
         _ => return false,
     }
     true
+}
+
+/// Hide Shape Widgets, or Show Shape Widgets while they are hidden (`view.shapeWidgets`), at least 52
+/// points wide and wider for a longer translated label, while `fit` has room for it.
+fn shape_widgets_button(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit) {
+    let label = if app.ui.view.shape_widgets { tl!("Hide Shape Widgets") } else { tl!("Show Shape Widgets") };
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, 52.0)]) && widgets::flat_button_fit(ui, label, 52.0).clicked() {
+        app.run("view.shapeWidgets", json!({})).ok();
+    }
+}
+
+/// Whether `fit` has room in the row `ui` for the label `text` with a field `field` wide after it.
+fn field_room(ui: &Ui, fit: &mut Fit, text: &egui::RichText, field: f32) -> bool {
+    fit.room(ui, &[widgets::text_width(ui, text.clone()), field])
+}
+
+/// The shape options' Reset button, at least 52 points wide and wider for a longer translated label,
+/// while `fit` has room for it. Whether it was clicked.
+fn reset_button(ui: &mut Ui, fit: &mut Fit) -> bool {
+    fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Reset"), 52.0)]) && widgets::flat_button_fit(ui, tl!("Reset"), 52.0).clicked()
 }
 
 fn apply_shape(app: &mut VectorcraftApp, tool_kvs: &[(&str, Value)], live_patch: Value) {
@@ -65,22 +95,28 @@ fn apply_shape(app: &mut VectorcraftApp, tool_kvs: &[(&str, Value)], live_patch:
     }
 }
 
-fn draw_arc_controls(app: &mut VectorcraftApp, ui: &mut Ui, start_deg: f64, end_deg: f64, mode: &str) {
+fn draw_arc_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, start_deg: f64, end_deg: f64, mode: &str) {
     let t = Tokens::get(ui.ctx());
-    widgets::field_label(ui, egui::RichText::new(tl!("Start:")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "arc-start"), start_deg, "°", 1, 52.0) {
-        let next_mode = if mode == "whole" { "pie" } else { mode };
-        apply_shape(app, &[("arcStart", json!(v)), ("arcMode", json!(next_mode))], json!({ "startAngle": v, "arcMode": next_mode }));
+    let start = egui::RichText::new(tl!("Start:")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &start, 52.0) {
+        widgets::field_label(ui, start);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "arc-start"), start_deg, "°", 1, 52.0) {
+            let next_mode = if mode == "whole" { "pie" } else { mode };
+            apply_shape(app, &[("arcStart", json!(v)), ("arcMode", json!(next_mode))], json!({ "startAngle": v, "arcMode": next_mode }));
+        }
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("End:")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "arc-end"), end_deg, "°", 1, 52.0) {
-        let next_mode = if mode == "whole" { "pie" } else { mode };
-        apply_shape(app, &[("arcEnd", json!(v)), ("arcMode", json!(next_mode))], json!({ "endAngle": v, "arcMode": next_mode }));
+    let end = egui::RichText::new(tl!("End:")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &end, 52.0) {
+        widgets::field_label(ui, end);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "arc-end"), end_deg, "°", 1, 52.0) {
+            let next_mode = if mode == "whole" { "pie" } else { mode };
+            apply_shape(app, &[("arcEnd", json!(v)), ("arcMode", json!(next_mode))], json!({ "endAngle": v, "arcMode": next_mode }));
+        }
     }
     for (m_id, tip_label, icon) in
         [("pie", "Slice", "circle-dot"), ("chord", "Closed", "circle-off"), ("arc", "Arc", "dc-arc"), ("whole", "Open", "dc-ellipse")]
     {
-        if widgets::icon_button(ui, icon, tl!(tip_label), mode == m_id, 22.0).clicked() {
+        if fit.room(ui, &[22.0]) && widgets::icon_button(ui, icon, tl!(tip_label), mode == m_id, 22.0).clicked() {
             let (s0, e0) = if m_id == "whole" {
                 (0.0, 0.0)
             } else if (end_deg - start_deg).abs() < 1e-4 || ((end_deg - start_deg).abs() - 360.0).abs() < 1e-4 {
@@ -97,19 +133,19 @@ fn draw_arc_controls(app: &mut VectorcraftApp, ui: &mut Ui, start_deg: f64, end_
     }
 }
 
-fn draw_ellipse_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
+fn draw_ellipse_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, opts: &Value, selected_custom: Option<CustomShape>) {
     let (start_deg, end_deg, mode) = match selected_custom {
         Some(CustomShape::Ellipse { pie: (a0, a1), arc_mode, .. }) => (a0, a1, mode_str(arc_mode)),
         _ => (opts["arcStart"].as_f64().unwrap_or(0.0), opts["arcEnd"].as_f64().unwrap_or(0.0), opts["arcMode"].as_str().unwrap_or("whole")),
     };
-    draw_arc_controls(app, ui, start_deg, end_deg, mode);
-    if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
+    draw_arc_controls(app, ui, fit, start_deg, end_deg, mode);
+    if reset_button(ui, fit) {
         apply_shape(app, &[("arcMode", json!("whole")), ("arcStart", json!(0.0)), ("arcEnd", json!(0.0))], json!({ "reset": true }));
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
-fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
+fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, opts: &Value, selected_custom: Option<CustomShape>) {
     let t = Tokens::get(ui.ctx());
     let unit = app.session.general_unit();
     let sym = opts["cornerSymmetry"].as_bool().unwrap_or(true);
@@ -129,19 +165,26 @@ fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, 
         end_deg = a1;
         mode = mode_str(arc_mode);
     }
-    if widgets::icon_button(ui, if sym { "link" } else { "unlink" }, tl!("Link"), sym, 22.0).clicked() {
+    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, if sym { "link" } else { "unlink" }, tl!("Link"), sym, 22.0).clicked() {
         let next_sym = !sym;
         apply_shape(app, &[("cornerSymmetry", json!(next_sym))], if next_sym { json!({ "radius": radii[0] }) } else { json!({ "radii": radii }) });
     }
     if sym {
-        widgets::field_label(ui, egui::RichText::new(tl!("Radius:")).size(12.0).color(t.text_dim));
-        if let Some(v) = widgets::num_field(ui, ("cb-shape", "rect-r"), Some(radii[0]), unit, 54.0) {
-            let r = v.max(0.0);
-            apply_shape(app, &[("cornerRadius", json!(r)), ("cornerRadii", json!([r, r, r, r]))], json!({ "radius": r }));
+        let text = egui::RichText::new(tl!("Radius:")).size(12.0).color(t.text_dim);
+        if field_room(ui, fit, &text, 54.0) {
+            widgets::field_label(ui, text);
+            if let Some(v) = widgets::num_field(ui, ("cb-shape", "rect-r"), Some(radii[0]), unit, 54.0) {
+                let r = v.max(0.0);
+                apply_shape(app, &[("cornerRadius", json!(r)), ("cornerRadii", json!([r, r, r, r]))], json!({ "radius": r }));
+            }
         }
     } else {
         for (i, lbl) in [(0, "TL"), (1, "TR"), (2, "BR"), (3, "BL")] {
-            widgets::field_label(ui, egui::RichText::new(lbl).size(11.0).color(t.text_dim));
+            let text = egui::RichText::new(lbl).size(11.0).color(t.text_dim);
+            if !field_room(ui, fit, &text, 44.0) {
+                break;
+            }
+            widgets::field_label(ui, text);
             if let Some(v) = widgets::num_field(ui, ("cb-shape-r", i), Some(radii[i]), unit, 44.0) {
                 let mut next = radii;
                 next[i] = v.max(0.0);
@@ -149,9 +192,9 @@ fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, 
             }
         }
     }
-    ui.separator();
-    draw_arc_controls(app, ui, start_deg, end_deg, mode);
-    if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
+    fit.separator(ui);
+    draw_arc_controls(app, ui, fit, start_deg, end_deg, mode);
+    if reset_button(ui, fit) {
         apply_shape(
             app,
             &[
@@ -164,10 +207,17 @@ fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, 
             json!({ "reset": true }),
         );
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
-fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, active_shape: &str, selected_custom: Option<CustomShape>) {
+fn draw_polygon_controls(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    fit: &mut Fit,
+    opts: &Value,
+    active_shape: &str,
+    selected_custom: Option<CustomShape>,
+) {
     let t = Tokens::get(ui.ctx());
     let mut is_star = if active_shape == "star" { true } else { opts["polyIsStar"].as_bool().unwrap_or(false) };
     let mut count = if is_star { opts["points"].as_u64().unwrap_or(5) } else { opts["sides"].as_u64().unwrap_or(6) } as u32;
@@ -188,47 +238,57 @@ fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, ac
         end_deg = a1;
         mode = mode_str(arc_mode);
     }
-    if widgets::icon_button(ui, "dc-polygon", tl!("Polygon"), !is_star, 22.0).clicked() {
+    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, "dc-polygon", tl!("Polygon"), !is_star, 22.0).clicked() {
         apply_shape(app, &[("polyIsStar", json!(false))], json!({ "isStar": false }));
     }
-    if widgets::icon_button(ui, "star", tl!("Star"), is_star, 22.0).clicked() {
+    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, "star", tl!("Star"), is_star, 22.0).clicked() {
         apply_shape(app, &[("polyIsStar", json!(true))], json!({ "isStar": true, "spokeRatio": spoke }));
     }
-    widgets::field_label(ui, egui::RichText::new(if is_star { tl!("Points:") } else { tl!("Sides:") }).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-corners"), f64::from(count), "", 0, 44.0) {
-        let c = (v.round() as i64).clamp(3, 1000) as u32;
-        apply_shape(app, &[("sides", json!(c)), ("points", json!(c))], json!({ "sides": c }));
+    let text = egui::RichText::new(if is_star { tl!("Points:") } else { tl!("Sides:") }).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 44.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-corners"), f64::from(count), "", 0, 44.0) {
+            let c = (v.round() as i64).clamp(3, 1000) as u32;
+            apply_shape(app, &[("sides", json!(c)), ("points", json!(c))], json!({ "sides": c }));
+        }
     }
-    if is_star {
-        widgets::field_label(ui, egui::RichText::new(tl!("Ratio")).size(12.0).color(t.text_dim));
+    let text = egui::RichText::new(tl!("Ratio")).size(12.0).color(t.text_dim);
+    if is_star && field_room(ui, fit, &text, 46.0) {
+        widgets::field_label(ui, text);
         if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-spoke"), spoke, "", 2, 46.0) {
             let sr = v.clamp(0.01, 1.0);
             apply_shape(app, &[("starRatio", json!(sr))], json!({ "spokeRatio": sr }));
         }
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("Round")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-round"), rounded, "", 2, 46.0) {
-        let rnd = v.clamp(-10.0, 10.0);
-        apply_shape(app, &[("rounded", json!(rnd))], json!({ "rounded": rnd }));
+    let text = egui::RichText::new(tl!("Round")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 46.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-round"), rounded, "", 2, 46.0) {
+            let rnd = v.clamp(-10.0, 10.0);
+            apply_shape(app, &[("rounded", json!(rnd))], json!({ "rounded": rnd }));
+        }
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("Random")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-rand"), randomized, "", 2, 46.0) {
-        let rand = v.clamp(-10.0, 10.0);
-        apply_shape(app, &[("randomized", json!(rand))], json!({ "randomized": rand }));
+    let text = egui::RichText::new(tl!("Random")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 46.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "poly-rand"), randomized, "", 2, 46.0) {
+            let rand = v.clamp(-10.0, 10.0);
+            apply_shape(app, &[("randomized", json!(rand))], json!({ "randomized": rand }));
+        }
     }
-    ui.separator();
-    draw_arc_controls(app, ui, start_deg, end_deg, mode);
-    if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
+    fit.separator(ui);
+    draw_arc_controls(app, ui, fit, start_deg, end_deg, mode);
+    if reset_button(ui, fit) {
         apply_shape(
             app,
             &[("rounded", json!(0.0)), ("randomized", json!(0.0)), ("arcMode", json!("whole")), ("arcStart", json!(0.0)), ("arcEnd", json!(0.0))],
             json!({ "reset": true }),
         );
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
-fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
+fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, opts: &Value, selected_custom: Option<CustomShape>) {
     let t = Tokens::get(ui.ctx());
     let (mut turns, mut divergence, mut inner_r) =
         (opts["turns"].as_f64().unwrap_or(3.0), opts["divergence"].as_f64().unwrap_or(1.0), opts["innerRadius"].as_f64().unwrap_or(0.0));
@@ -237,28 +297,37 @@ fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sel
         divergence = div_v;
         inner_r = ir_v;
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("Segments")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-turns"), turns, "", 2, 50.0) {
-        let tv = v.clamp(0.01, 1024.0);
-        apply_shape(app, &[("turns", json!(tv))], json!({ "turns": tv }));
+    let text = egui::RichText::new(tl!("Segments")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 50.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-turns"), turns, "", 2, 50.0) {
+            let tv = v.clamp(0.01, 1024.0);
+            apply_shape(app, &[("turns", json!(tv))], json!({ "turns": tv }));
+        }
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("Ratio")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-div"), divergence, "", 2, 50.0) {
-        let dv = v.clamp(0.0, 1000.0);
-        apply_shape(app, &[("divergence", json!(dv))], json!({ "divergence": dv }));
+    let text = egui::RichText::new(tl!("Ratio")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 50.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-div"), divergence, "", 2, 50.0) {
+            let dv = v.clamp(0.0, 1000.0);
+            apply_shape(app, &[("divergence", json!(dv))], json!({ "divergence": dv }));
+        }
     }
-    widgets::field_label(ui, egui::RichText::new(tl!("Inner Radius:")).size(12.0).color(t.text_dim));
-    if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-inner"), inner_r, "", 2, 50.0) {
-        let iv = v.clamp(0.0, 0.999);
-        apply_shape(app, &[("innerRadius", json!(iv))], json!({ "innerRadius": iv }));
+    let text = egui::RichText::new(tl!("Inner Radius:")).size(12.0).color(t.text_dim);
+    if field_room(ui, fit, &text, 50.0) {
+        widgets::field_label(ui, text);
+        if let Some(v) = widgets::plain_field(ui, ("cb-shape", "spiral-inner"), inner_r, "", 2, 50.0) {
+            let iv = v.clamp(0.0, 0.999);
+            apply_shape(app, &[("innerRadius", json!(iv))], json!({ "innerRadius": iv }));
+        }
     }
-    if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
+    if reset_button(ui, fit) {
         apply_shape(app, &[("turns", json!(3.0)), ("divergence", json!(1.0)), ("innerRadius", json!(0.0))], json!({ "reset": true }));
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
-fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
+fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, opts: &Value, selected_custom: Option<CustomShape>) {
     let t = Tokens::get(ui.ctx());
     let (mut ax, mut ay, mut az) =
         (opts["angleX"].as_f64().unwrap_or(30.0), opts["angleY"].as_f64().unwrap_or(30.0), opts["angleZ"].as_f64().unwrap_or(0.0));
@@ -275,16 +344,20 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sele
     for (lbl, a_key, p_key, a_val, p_val) in
         [("X:", "angleX", "parallelX", ax, px), ("Y:", "angleY", "parallelY", ay, py), ("Angle:", "angleZ", "parallelZ", az, pz)]
     {
-        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+        let text = egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim);
+        if !field_room(ui, fit, &text, 52.0) {
+            break;
+        }
+        widgets::field_label(ui, text);
         if let Some(v) = widgets::plain_field(ui, ("cb-box3d", a_key), a_val, "°", 1, 52.0) {
             apply_shape(app, &[(a_key, json!(v))], json!({ a_key: v }));
         }
-        if widgets::icon_button(ui, "dc-line", tl!("Link"), p_val, 20.0).clicked() {
+        if fit.room(ui, &[20.0]) && widgets::icon_button(ui, "dc-line", tl!("Link"), p_val, 20.0).clicked() {
             let next = !p_val;
             apply_shape(app, &[(p_key, json!(next))], json!({ p_key: next }));
         }
     }
-    if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
+    if reset_button(ui, fit) {
         apply_shape(
             app,
             &[
@@ -298,7 +371,7 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sele
             json!({ "reset": true }),
         );
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
 fn mode_str(m: EllipseMode) -> &'static str {

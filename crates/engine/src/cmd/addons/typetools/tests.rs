@@ -482,6 +482,44 @@ mod release {
         }
     }
 
+    /// Type that starts before its open path: the first drawn character stays where it was drawn,
+    /// and the characters that were not drawn come before it on the line.
+    #[test]
+    fn type_starting_before_its_open_path_keeps_its_drawn_characters_in_place() {
+        let mut s = session();
+        let id = path_type(&mut s, "M100 300 L500 300", [100.0, 300.0], "Hidden start");
+        s.execute("type.pathOptions", &json!({"start": -0.05})).unwrap();
+        let before = text(&s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &before);
+        let first = lay.glyphs.iter().filter(|g| !g.off_path).min_by_key(|g| g.byte).unwrap();
+        let (byte, drawn) = (first.byte, before.xf * first.origin);
+        assert!(byte > 0, "some characters are before the path");
+        s.execute(C, &json!({"mode": "text"})).unwrap();
+        let after = text(&s, id);
+        assert_eq!(after.kind, TextKind::Point);
+        assert_eq!(after.plain_text(), before.plain_text());
+        let back = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &after);
+        let same = back.glyphs.iter().find(|g| g.byte == byte).unwrap();
+        assert!(close(after.xf * same.origin, drawn), "{:?} vs {drawn:?}", after.xf * same.origin);
+        let lead = back.glyphs.iter().find(|g| g.byte == 0).unwrap();
+        assert!((after.xf * lead.origin).x < drawn.x, "the hidden characters come before it");
+        // An All Caps ß is two glyphs: with the first before the path's start, the second stays
+        // where it was drawn.
+        let id = path_type(&mut s, "M100 400 L500 400", [100.0, 400.0], "ße");
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+        let adv = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, id)).glyphs[0].advance;
+        s.execute("type.pathOptions", &json!({"start": -1.2 * adv / 400.0})).unwrap();
+        let before = text(&s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &before);
+        assert!(lay.glyphs[0].byte == 0 && lay.glyphs[1].byte == 0 && lay.glyphs[0].off_path && !lay.glyphs[1].off_path);
+        let drawn = before.xf * lay.glyphs[1].origin;
+        s.execute(C, &json!({"mode": "text"})).unwrap();
+        let after = text(&s, id);
+        let back = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &after);
+        let second = back.glyphs.iter().filter(|g| g.byte == 0).nth(1).unwrap();
+        assert!(close(after.xf * second.origin, drawn), "{:?} vs {drawn:?}", after.xf * second.origin);
+    }
+
     #[test]
     fn flipped_type_releases_its_path_as_it_runs() {
         let mut s = session();

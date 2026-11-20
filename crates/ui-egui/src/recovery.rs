@@ -125,24 +125,37 @@ fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn
     for job in jobs {
         let (uid, label, title) = (job.uid, format!("Saving recovery data for {}", job.title), job.title.clone());
         let (done, at, saving) = (job.clone(), place.clone(), label.clone());
+        // The status line before the job starts: on the worker, the job sets one line ("<label>…")
+        // right after this; written right away, it sets none before `then` runs.
+        let (sets, started_line) = (app.ui.status_sets, format!("{label}…"));
         let work = move |_: Writer| job.write();
         // A failure is reported here, so the job's result is not an error: that would show as
         // "<label> failed: <error>" over this line, or as the round's message when it ran here.
-        let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| match (r, at) {
-            (Ok(r), _) => {
-                done.finish(&mut app.session);
-                app.status(format!("Saved recovery data for {title}"));
-                Ok(r)
-            }
-            (Err(e), Some(at)) => {
-                copy_failed(app, &title, &at, &e);
-                Ok(Value::Null)
-            }
-            // A store the host installed has no folder to name: the job's own line.
-            (Err(e), None) => {
-                app.status(format!("{saving} failed: {e}"));
-                log::warn!("vectorcraft: {}", app.ui.status);
-                Ok(Value::Null)
+        let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+            // The result goes to the status bar only while it still shows this job's own line: a
+            // message set since then (another job's, a restore's with its notes) stays.
+            let show = app.ui.status_sets == sets || (app.ui.status_sets == sets.wrapping_add(1) && app.ui.status == started_line);
+            match (r, at) {
+                (Ok(r), _) => {
+                    done.finish(&mut app.session);
+                    if show {
+                        app.status(format!("Saved recovery data for {title}"));
+                    }
+                    Ok(r)
+                }
+                (Err(e), Some(at)) => {
+                    copy_failed(app, &title, &at, &e, show);
+                    Ok(Value::Null)
+                }
+                // A store the host installed has no folder to name: the job's own line.
+                (Err(e), None) => {
+                    let line = format!("{saving} failed: {e}");
+                    log::warn!("vectorcraft: {line}");
+                    if show {
+                        app.status(line);
+                    }
+                    Ok(Value::Null)
+                }
             }
         };
         // Its own store, not the file writer: this only decides whether it runs on the worker.
@@ -173,18 +186,23 @@ fn failed(app: &mut VectorcraftApp, place: Option<&(String, bool)>, e: &str) {
     log::warn!("vectorcraft: {}", app.ui.status);
 }
 
-/// [`failed`] for the copy of document `title` that couldn't be written to folder `place`.
-fn copy_failed(app: &mut VectorcraftApp, title: &str, place: &(String, bool), e: &str) {
-    match place {
-        (folder, true) => app.status(format!(
+/// [`failed`] for the copy of document `title` that couldn't be written to folder `place`, shown
+/// in the status bar only when `show` holds. The log always has it, and the folder is recorded
+/// in [`Timer::named`] either way.
+fn copy_failed(app: &mut VectorcraftApp, title: &str, place: &(String, bool), e: &str, show: bool) {
+    let line = match place {
+        (folder, true) => format!(
             "Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)"
-        )),
-        (folder, false) => app.status(format!(
+        ),
+        (folder, false) => format!(
             "Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)"
-        )),
-    }
+        ),
+    };
     named(app, &place.0);
-    log::warn!("vectorcraft: {}", app.ui.status);
+    log::warn!("vectorcraft: {line}");
+    if show {
+        app.status(line);
+    }
 }
 
 /// Record that the status text named recovery folder `folder` ([`Timer::named`]).

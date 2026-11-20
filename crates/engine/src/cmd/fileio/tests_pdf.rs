@@ -103,6 +103,48 @@ fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
     }
 }
 
+/// A page of the art's bounds is measured on the layers the PDF draws: a non-printing layer that
+/// the PDF leaves out doesn't make it larger, unless `includeNonPrinting` or `createLayers` keeps
+/// the layer. A `.ai` file of the art's bounds, which keeps layers by default, measures it unless
+/// `createLayers` is off. A document whose only visible art doesn't print is refused.
+#[test]
+fn a_page_of_the_arts_bounds_leaves_out_non_printing_layers() {
+    let mut s = session(1);
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    let notes = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    s.execute("layer.setProps", &json!({"id": notes, "printable": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
+    let size = |bytes: &[u8]| vectorcraft_pdf::import(bytes).unwrap().artboards[0].rect.size();
+    let printed = size(&b64(&export(&mut s, json!({"useArtboards": false}))));
+    assert!(printed.width < 50.0 && printed.height < 40.0, "{printed:?}");
+    let through_export = s.execute("document.export", &as_export(&json!({"useArtboards": false}))).unwrap();
+    assert_eq!(size(&b64(&through_export)), printed);
+    let ai = |s: &mut Session, extra: Value| {
+        let mut p = json!({"format": "ai", "useArtboards": false});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        size(&b64(&s.execute("document.export", &p).unwrap_or_else(|e| panic!("{p}: {e}"))))
+    };
+    assert_eq!(ai(&mut s, json!({"createLayers": false})), printed);
+    let kept = [
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))),
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "createLayers": true})))),
+        ai(&mut s, json!({})),
+    ];
+    for all in kept {
+        assert!(all.width > 200.0 && all.height > 200.0, "{all:?}");
+    }
+
+    // Only the non-printing layer shows: the PDF would draw nothing.
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    for p in [json!({"useArtboards": false}), json!({"useArtboards": false, "includeNonPrinting": false})] {
+        let e = s.execute("document.exportPdf", &p).unwrap_err().to_string();
+        assert!(e.contains("no visible art"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "createLayers": false})).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+    assert!(size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))).width < 25.0);
+}
+
 /// In a PDF without a standard, the warning for a page longer than 14,400 pt written with a
 /// `UserUnit` above 1 names "Write pages longer than 200 in at full size in points": at PDF 1.5
 /// (written as 1.6) and later, through `document.exportPdf`, `document.export`, a page of the
@@ -304,11 +346,22 @@ fn options_not_applied_yet_and_document_features_warn() {
     let frame = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("paint.setStroke", &json!({"ids": [frame], "swatch": "Dots"})).unwrap();
     assert_eq!(warnings(&export(&mut s, json!({}))).len(), 0);
-    // A knockout group is approximated: its warning comes back from every PDF path.
+    // A knockout group is written as a PDF knockout group: nothing to report.
     s.execute("select.set", &json!({"ids": [frame]})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     let knockout = |w: Vec<String>| w.iter().any(|w| w.contains("knockout groups"));
+    assert!(!knockout(warnings(&export(&mut s, json!({})))));
+    // One whose soft masks would draw a brushed stroke is approximated: its warning comes back
+    // from every PDF path.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert!(knockout(warnings(&export(&mut s, json!({})))));
     assert!(knockout(warnings(&s.execute("document.export", &as_export(&json!({}))).unwrap())));
     // Other formats have none.
@@ -322,7 +375,41 @@ fn a_16_bit_png_is_written_at_8_bits_before_pdf_1_5() {
     let mut s = session(1);
     let deep = image::ImageBuffer::from_fn(8, 8, |x, y| image::Rgb([x as u16 * 8000, y as u16 * 8000, 40000]));
     let mut png = vec![];
-    image::DynamicImage::ImageRgb16(deep).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = image::DynamicImage::ImageRgb16(deep);
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.execute("file.place", &json!({"name": "deep.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [50, 40]})).unwrap();
     let readable = json!({"compressText": false});
     for (cmd, p, depth) in [
@@ -431,6 +518,17 @@ fn pdf_settings_summarise_changes_and_warnings() {
     // Raster effects are written as images: nothing to report.
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [g]})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
+    // A knockout group is written as a PDF knockout group: nothing to report.
+    assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    // One whose soft masks would draw a brushed stroke is approximated.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["warnings"], json!([]));
     let full = s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap();

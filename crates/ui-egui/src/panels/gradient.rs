@@ -347,7 +347,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind.is_centered() && placed;
+            // The default gradient (with nothing selected, or the Live Paint Bucket's) fits each object and has no aspect.
+            let radial = kind.is_centered() && placed && app.session.gradient_edit_has_objects(!app.session.fill_active);
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text(tl!("Aspect Ratio"));
                 // A mirrored conic's negative aspect shows as its size; an edit keeps the mirror.
@@ -601,7 +602,7 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     let dresp = dresp.on_hover_text(tl!("Gradient swatches"));
     egui::Popup::menu(&dresp).show(|ui| {
         widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(200.0);
+            widgets::menu_min_width(ui, 200.0);
             let mut chosen = None;
             let swatches = gradient_swatches(app);
             if swatches.is_empty() {
@@ -707,9 +708,11 @@ fn ramp_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) 
 }
 
 /// The stop's eyedropper: the Eyedropper tool samples the next colour clicked on the art into the
-/// selected stop, then hands back to the current tool.
+/// selected stop, then hands back to the current tool (or, while a pick is already armed, to the
+/// tool that armed it).
 pub(crate) fn stop_eyedropper(app: &mut VectorcraftApp) {
-    let back = app.session.tool_id();
+    let tool = app.session.tool_id();
+    let back = (tool == "eyedropper").then(|| app.session.tool_returns_to()).flatten().unwrap_or_else(|| tool.to_string());
     app.select_tool("eyedropper");
     app.session.set_tool_option("stop", &json!(back));
 }
@@ -815,7 +818,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool, w: f
     let add_resp = ui.interact(below, ui.scope_id().with("grad-add"), Sense::click());
     let bar_resp = ui.interact(bar, ui.scope_id().with("grad-bar"), Sense::click());
     if add_resp.hovered() && is_grad {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
+        crate::cursors::set_add_cursor(app, ui.ctx());
     }
     if !is_grad && (bar_resp.clicked() || add_resp.clicked()) {
         edit(app, json!({}), Live::Released);

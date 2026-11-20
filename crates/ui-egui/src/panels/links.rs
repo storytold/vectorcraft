@@ -5,8 +5,8 @@
 //! Go To, Update and Edit Original act on the selected rows (Relink through its dialog, with the
 //! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
 //! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
-//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size,
-//! Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
+//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, Copy Info (the selected
+//! rows' file names to the clipboard: `links.copyInfo`), thumbnail size, Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
 //! from DCS files that are transparent or overlap transparent objects).
 //!
 //! Images and placed documents in opacity-mask art and in the art of symbols, graph designs and
@@ -29,7 +29,7 @@ pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
 const RECHECK: f64 = 2.0;
 const SHOW: [(&str, &str); 4] = [("all", "Show All"), ("missing", "Show Missing"), ("modified", "Show Modified"), ("embedded", "Show Embedded")];
-const SORT: [(&str, &str); 3] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status")];
+const SORT: [(&str, &str); 4] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status"), ("size", "Sort by Size")];
 const THUMBS: [(f32, &str); 4] = [(0.0, "No Thumbnails"), (18.0, "Small Thumbnails"), (28.0, "Medium Thumbnails"), (44.0, "Large Thumbnails")];
 
 /// The panel's options (flyout).
@@ -54,7 +54,7 @@ impl Default for Options {
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
 #[derive(Clone, Default)]
-struct Cache {
+pub(super) struct Cache {
     /// (document uid, revision, show, sort, Show DCS Transparency Interactions).
     key: Option<(u64, u64, &'static str, Option<&'static str>, bool)>,
     at: f64,
@@ -82,48 +82,111 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
     set_pstate(ctx, "links-options", o);
 }
 
+/// Show the Links panel on the selected image (the Control bar's Linked File or Embedded label),
+/// wherever the panel is docked or floats; a panel that is already shown stays where it is. The
+/// Link Info section opens, and when the panel next draws the list, a Show filter that leaves out
+/// the image's row goes back to Show All and the list scrolls to the row ([`show`]). The sort,
+/// thumbnail size and DCS option keep their settings.
+pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let first = selected_images(app).first().copied();
+    let request = app.session.active().map(|st| st.uid).zip(first);
+    set_pstate(ctx, "links-scroll-to", request);
+    // The list drawn next is read after this request, so a row a file change has just brought
+    // into the Show filter is there to scroll to.
+    let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
+    std::sync::Arc::make_mut(&mut c).at = f64::NEG_INFINITY;
+    set_pstate(ctx, "links-cache", c);
+    set_options(ctx, |o| o.info = true);
+    if let Err(e) = crate::panel_docking::reveal_panel(app, ID) {
+        app.status(e);
+    }
+}
+
 /// The rows to show (cached per document revision, the files looked at again every [`RECHECK`]
-/// seconds) and the Link Info of the first selected image when the section is open.
-fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
+/// seconds) and the Link Info of the first selected image when the section is open. A frame that
+/// fetches nothing returns the stored cache without copying it and stores nothing.
+fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<std::sync::Arc<Cache>> {
     let st = app.session.active()?;
     let key = Some((st.uid, st.revision, o.show, o.sort, o.dcs));
     let first = selected_links(app, ctx).first().copied();
     let now = ctx.input(|i| i.time);
-    let mut c: Cache = pstate(ctx, "links-cache");
+    let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
-        c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
-        (c.key, c.at) = (key, now);
+        let same_doc = c.key == key;
+        let list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         // One pass over the stored art for the rows outside the layer tree and the objects whose
-        // opacity masks hold them, not one per frame.
-        let mut want: std::collections::HashSet<u64> = c.list["links"]
+        // opacity masks hold them, not one per frame. An object in the layer tree is looked up by
+        // its index when drawn.
+        let doc = app.session.active().map(|st| &st.doc);
+        let want: std::collections::HashSet<u64> = list["links"]
             .as_array()
             .into_iter()
             .flatten()
             .filter(|r| nested_row(r))
             .flat_map(|r| [r["id"].as_u64(), r["owner"]["maskOf"].as_u64()])
             .flatten()
+            .filter(|id| doc.is_some_and(|d| d.node(NodeId(*id)).is_none()))
             .collect();
-        c.nested.clear();
-        if !want.is_empty()
-            && let Some(st) = app.session.active()
-        {
-            st.doc.visit_stored_arcs(|n, place| {
-                if !place.in_layers() && want.remove(&n.id.0) {
-                    c.nested.push((n.id.0, std::sync::Arc::clone(n)));
-                }
-            });
-            c.nested.sort_by_key(|(id, _)| *id);
-        }
+        // The same revision keeps the objects collected for it, so their thumbnails are not drawn
+        // again each time the files are looked at.
+        let nested = if same_doc && want.iter().all(|id| c.nested_node(*id).is_some()) {
+            c.nested.clone()
+        } else {
+            match doc {
+                Some(d) if !want.is_empty() => stored_objects(d, want),
+                _ => vec![],
+            }
+        };
+        c = std::sync::Arc::new(Cache { key, at: now, list, info: None, nested });
     }
     let want = first.filter(|_| o.info);
     if stale || c.info.as_ref().map(|(id, _)| *id) != want {
-        c.info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        let info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        std::sync::Arc::make_mut(&mut c).info = info;
+        set_pstate(ctx, "links-cache", c.clone());
     }
-    set_pstate(ctx, "links-cache", c.clone());
     // Files change on disk without a frame of ours: look again later.
     ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
     Some(c)
+}
+
+/// The objects of `doc` outside the layer tree whose ids are in `want`, sorted by id. The art of
+/// the stored brushes is set on `doc` only while a command uses it ([`Document::mounted_art`]), so
+/// when an id is not found otherwise that art is set on a copy of `doc`, which gives its objects
+/// the ids `links.list` reports for them.
+///
+/// [`Document::mounted_art`]: vectorcraft_doc::Document::mounted_art
+pub(super) fn stored_objects(
+    doc: &vectorcraft_doc::Document,
+    mut want: std::collections::HashSet<u64>,
+) -> Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)> {
+    let mut out = vec![];
+    collect_stored(doc, &mut want, &mut out);
+    if !want.is_empty() && doc.mounted_art.is_empty() {
+        let art = vectorcraft_brush::stored_art::StoredArt::read(doc);
+        if !art.is_empty() {
+            let mut d = doc.clone();
+            art.mount(&mut d);
+            collect_stored(&d, &mut want, &mut out);
+        }
+    }
+    out.sort_by_key(|(id, _)| *id);
+    out
+}
+
+/// Adds the objects of `d` outside the layer tree whose ids are in `want` to `out`, taking their
+/// ids out of `want`.
+fn collect_stored(
+    d: &vectorcraft_doc::Document,
+    want: &mut std::collections::HashSet<u64>,
+    out: &mut Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)>,
+) {
+    d.visit_stored_arcs(|n, place| {
+        if !place.in_layers() && want.remove(&n.id.0) {
+            out.push((n.id.0, std::sync::Arc::clone(n)));
+        }
+    });
 }
 
 /// The ids of the selected image objects and placed documents.
@@ -177,6 +240,15 @@ fn selected_links(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<u64> {
         }
     }
     ids
+}
+
+/// [`selected_links`] with the app's window context, for a command run outside the panel (the
+/// selected images and placed documents alone when there is no window).
+pub(crate) fn selected_rows_of_app(app: &VectorcraftApp) -> Vec<u64> {
+    match app.ui_ctx.clone() {
+        Some(ctx) => selected_links(app, &ctx),
+        None => selected_images(app),
+    }
 }
 
 /// The rows of `list` whose image is selected.
@@ -287,6 +359,37 @@ pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
     });
 }
 
+/// Whether Unembed… can act on `embedded` selected embedded images: one goes to a picked file,
+/// several to a picked folder (the web downloads each one).
+pub(crate) fn can_unembed(app: &VectorcraftApp, embedded: usize) -> bool {
+    match embedded {
+        0 => false,
+        1 => true,
+        _ => app.services.download.is_some() || app.services.pick_folder.is_some(),
+    }
+}
+
+/// Write embedded images `ids` to new files in a picked folder and link each one to its file, in
+/// one undo step (the web downloads each one and links none).
+pub(crate) fn unembed_several(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    if app.services.download.is_some() {
+        for id in ids {
+            unembed(app, id, "");
+        }
+        return;
+    }
+    crate::picks::button(app, move |app| unembed_to_picked_folder(app, ids.clone()));
+}
+
+fn unembed_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let Some(folder) = crate::picks::folder(app) else { return };
+    let r = app.run("links.unembed", json!({ "ids": ids, "folder": folder }));
+    report(app, r, |v| {
+        let n = v["unembedded"].as_array().map_or(0, Vec::len);
+        crate::i18n::msg_n(n as u64, "Unembedded {n} image to {folder}", "Unembedded {n} images to {folder}", &[("folder", &folder)])
+    });
+}
+
 /// The UI commands `links.editOriginal` (open the linked file in its app) and `links.reveal`
 /// (show it in its folder) for image `id` (default: the selected linked image) → `{path}`.
 pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Result<Value, String> {
@@ -316,6 +419,48 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
         crate::io::open_original(app, &path)?;
     }
     Ok(json!({ "path": path }))
+}
+
+/// The UI command `links.copyInfo {ids?}` (the panel menu's Copy Info): copy the file names of
+/// images and placed documents `ids` (default: the selected rows, [`selected_rows_of_app`], in the
+/// order `links.list` gives them; `null` counts as left out) to the clipboard, one per line in that
+/// order → `{text, names}`. An embedded image gives the name its row shows.
+pub(crate) fn copy_info(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = "ids";
+    let given = match p.get(key) {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(a)) => {
+            let mut out = Vec::with_capacity(a.len());
+            for (index, value) in a.iter().enumerate() {
+                out.push(value.as_u64().ok_or_else(|| format!("`{key}` entry {index} is {value}, not a non-negative integer object id"))?);
+            }
+            Some(out)
+        }
+        Some(_) => return Err(format!("{key} must be an array of non-negative integer object ids")),
+    };
+    let list = app.session.execute("links.list", &json!({})).map_err(|e| e.to_string())?;
+    let rows: Vec<&Value> = list["links"].as_array().into_iter().flatten().collect();
+    let wanted = match given {
+        Some(wanted) => wanted,
+        None => {
+            let sel = selected_rows_of_app(app);
+            ids(&rows, |r| r["id"].as_u64().is_some_and(|id| sel.contains(&id)))
+        }
+    };
+    let by_id: std::collections::HashMap<u64, &str> =
+        rows.iter().filter_map(|r| Some((r["id"].as_u64()?, r["name"].as_str().unwrap_or_default()))).collect();
+    let mut names = Vec::with_capacity(wanted.len());
+    for id in &wanted {
+        let name = by_id.get(id).ok_or_else(|| format!("object {} is not an image or a linked file", *id))?;
+        names.push((*name).to_string());
+    }
+    if names.is_empty() {
+        return Err("select the images, or pass ids".into());
+    }
+    let text = names.join("\n");
+    app.clipboard_out = Some(text.clone());
+    app.status("Copied the link info");
+    Ok(json!({ "text": text, "names": names }))
 }
 
 /// Whether Edit Original may hand `path` to the system's default app: a regular file (after
@@ -360,8 +505,8 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
 }
 
 /// The tooltip of row `r`. A row outside the layer tree also names where it is stored
-/// (`links.list`'s `owner`): the symbol, graph design or pattern whose art holds it, and the object
-/// whose opacity mask holds it, by `mask` (that object's name) or else by its id.
+/// (`links.list`'s `owner`): the symbol, graph design, pattern or brush whose art holds it, and the
+/// object whose opacity mask holds it, by `mask` (that object's name) or else by its id.
 pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
     let tip = file_tip(r);
     let owner = &r["owner"];
@@ -370,14 +515,15 @@ pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
         Some("symbol") => Some(tl!("Symbols")),
         Some("graphDesign") => Some(tl!("Graph Design")),
         Some("pattern") => Some(tl!("Pattern")),
+        Some("brush") => Some(tl!("Brushes")),
         _ => None,
     };
     let tip = match art {
-        Some(kind) => format!("{tip}\n{kind}: {name}"),
+        Some(kind) => format!("{tip}\n{} {name}", crate::i18n::colon(kind)),
         None => tip,
     };
     match owner["maskOf"].as_u64() {
-        Some(id) => format!("{tip}\n{}: {}", tl!("Opacity Mask"), mask.unwrap_or_else(|| id.to_string())),
+        Some(id) => format!("{tip}\n{} {}", crate::i18n::colon(tl!("Opacity Mask")), mask.unwrap_or_else(|| id.to_string())),
         None => tip,
     }
 }
@@ -451,16 +597,32 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, rows: &[Value], id: u64,
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let o = options(ui.ctx());
+    let mut o = options(ui.ctx());
     super::layers::show_thumbs_of(app.session.active().map(|st| st.uid));
-    let Some(cache) = cached(app, ui.ctx(), &o) else {
+    let Some(mut cache) = cached(app, ui.ctx(), &o) else {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
+    // The row that `show_selected_image` asks for, used by this draw only and only in the document
+    // it was asked in. A Show filter that leaves the row out goes back to Show All, decided from the
+    // rows this frame draws and scrolls through.
+    let request: Option<(u64, u64)> = pstate(ui.ctx(), "links-scroll-to");
+    if request.is_some() {
+        set_pstate::<Option<(u64, u64)>>(ui.ctx(), "links-scroll-to", None);
+    }
+    let uid = app.session.active().map(|st| st.uid);
+    let scroll_to = request.filter(|(doc, _)| Some(*doc) == uid).map(|(_, id)| id);
+    let listed = |cache: &Cache, id: u64| cache.list["links"].as_array().is_some_and(|rows| rows.iter().any(|r| r["id"].as_u64() == Some(id)));
+    if scroll_to.filter(|id| o.show != "all" && !listed(&cache, *id)).is_some() {
+        set_options(ui.ctx(), |o| o.show = "all");
+        o = options(ui.ctx());
+        let Some(all) = cached(app, ui.ctx(), &o) else { return };
+        cache = all;
+    }
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let thumbs = super::layers::ThumbSource::of(app, st, &doc);
-    let selected = selected_links(app, ui.ctx());
+    let mut selected = selected_links(app, ui.ctx());
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let mut clicked: Option<(u64, egui::Modifiers, bool)> = None;
     widgets::list_box(ui, |ui| {
@@ -480,6 +642,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for r in rows {
                 let Some(id) = r["id"].as_u64() else { continue };
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+                if scroll_to == Some(id) {
+                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                }
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }
@@ -533,6 +698,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .and_then(|m| doc.node(NodeId(m)).or_else(|| cache.nested_node(m).map(|n| &**n)))
                     .map(|n| super::layers::shown_name(app, n, crate::i18n::current()));
                 let resp = resp.on_hover_text(status_tip(r, mask));
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, ui.is_enabled(), selected.contains(&id), name));
+                if resp.secondary_clicked() && !selected.contains(&id) {
+                    click(app, ui.ctx(), rows, id, egui::Modifiers::NONE);
+                    selected = selected_links(app, ui.ctx());
+                }
+                resp.context_menu(|ui| {
+                    row_context_menu(app, ui, r, id, &cache.list);
+                });
                 if resp.double_clicked() {
                     clicked = Some((id, egui::Modifiers::NONE, true));
                 } else if resp.clicked() {
@@ -600,6 +773,78 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
             )
         }
     });
+}
+
+/// Embed images `ids` (`links.embed`).
+fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let r = app.run("links.embed", json!({ "ids": ids }));
+    report(app, r, |v| {
+        let missing = v["missing"].as_array().map_or(0, Vec::len);
+        let n = v["embedded"].as_array().map_or(0, Vec::len);
+        if missing == 0 {
+            crate::i18n::msg_n(n as u64, "Embedded {n} image", "Embedded {n} images", &[])
+        } else {
+            crate::i18n::msg_n(
+                n as u64,
+                "Embedded {n} image; {missing} missing: relink them first",
+                "Embedded {n} images; {missing} missing: relink them first",
+                &[("missing", &missing.to_string())],
+            )
+        }
+    });
+}
+
+/// An item's right-click context menu in the Links panel.
+fn row_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, r: &Value, id: u64, list: &Value) {
+    let selected = selected_links(app, ui.ctx());
+    let sel = selected_rows(list, &selected);
+    let linked = ids(&sel, |r| r["linked"] == true);
+    let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
+    let modified = ids(&sel, |r| status_is(r, "modified") || (r["preview"] == true && !status_is(r, "missing")));
+    let can_edit = sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing"));
+    let in_canvas = app.session.active().is_some_and(|st| st.doc.node(NodeId(id)).is_some()) && !nested_row(r);
+
+    if menu_item(ui, tl!("Relink…"), !sel.is_empty() && can_pick(app), false) {
+        crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Go To Link"), in_canvas, false) {
+        go_to(app, id);
+        ui.close();
+    }
+    if menu_item(ui, tl!("Update Link"), !modified.is_empty(), false) {
+        let r = app.run("links.update", json!({ "ids": modified }));
+        report(app, r, |v| updated_status(v["updated"].as_array().map_or(0, Vec::len)));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Edit Original"), can_edit, false) {
+        let file_arg = if r["linked"] == true && !status_is(r, "missing") { json!({ "id": id }) } else { file_row(&sel) };
+        crate::menus::invoke(app, "links.editOriginal", file_arg);
+        ui.close();
+    }
+    if menu_item(ui, tl!("Show in Folder"), can_edit, false) {
+        let file_arg = if r["linked"] == true && !status_is(r, "missing") { json!({ "id": id }) } else { file_row(&sel) };
+        crate::menus::invoke(app, "links.reveal", file_arg);
+        ui.close();
+    }
+    ui.separator();
+    if status_is(r, "embedded") {
+        if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
+            match &embedded[..] {
+                [r] => {
+                    if let Some(id) = r["id"].as_u64() {
+                        let name = r["name"].as_str().unwrap_or("Image").to_string();
+                        unembed(app, id, &name);
+                    }
+                }
+                rows => unembed_several(app, rows.iter().filter_map(|r| r["id"].as_u64()).collect()),
+            }
+            ui.close();
+        }
+    } else if menu_item(ui, tl!("Embed Image"), !linked.is_empty(), false) {
+        embed_images(app, linked);
+        ui.close();
+    }
 }
 
 /// The params of Edit Original and Show in Folder for the selected rows `sel`: the first linked
@@ -692,13 +937,15 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
 }
 
 /// The panel's flyout menu: the link commands for the selected rows, Select Linked / Embedded /
-/// Missing / Modified for the whole document, and the Show, Sort and thumbnail options.
+/// Missing / Modified for the whole document, the Show and Sort options, Copy Info and the
+/// thumbnail options.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
-    let list = pstate::<Cache>(ui.ctx(), "links-cache").list;
+    let cache = pstate::<std::sync::Arc<Cache>>(ui.ctx(), "links-cache");
+    let list = &cache.list;
     let selected = selected_links(app, ui.ctx());
-    let sel = selected_rows(&list, &selected);
+    let sel = selected_rows(list, &selected);
     let linked = ids(&sel, |r| r["linked"] == true);
     let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
     let any = !sel.is_empty();
@@ -726,28 +973,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Embed Image(s)"), !linked.is_empty(), false) {
-        let r = app.run("links.embed", json!({ "ids": linked }));
-        report(app, r, |v| {
-            let missing = v["missing"].as_array().map_or(0, Vec::len);
-            let n = v["embedded"].as_array().map_or(0, Vec::len);
-            if missing == 0 {
-                crate::i18n::msg_n(n as u64, "Embedded {n} image", "Embedded {n} images", &[])
-            } else {
-                crate::i18n::msg_n(
-                    n as u64,
-                    "Embedded {n} image; {missing} missing: relink them first",
-                    "Embedded {n} images; {missing} missing: relink them first",
-                    &[("missing", &missing.to_string())],
-                )
-            }
-        });
+        embed_images(app, linked);
     }
-    if menu_item(ui, tl!("Unembed…"), embedded.len() == 1, false)
-        && let Some(r) = embedded.first()
-        && let Some(id) = r["id"].as_u64()
-    {
-        let name = r["name"].as_str().unwrap_or("Image").to_string();
-        unembed(app, id, &name);
+    if menu_item(ui, tl!("Unembed…"), can_unembed(app, embedded.len()), false) {
+        match &embedded[..] {
+            [r] => {
+                if let Some(id) = r["id"].as_u64() {
+                    let name = r["name"].as_str().unwrap_or("Image").to_string();
+                    unembed(app, id, &name);
+                }
+            }
+            rows => unembed_several(app, rows.iter().filter_map(|r| r["id"].as_u64()).collect()),
+        }
     }
     if menu_item(ui, tl!("Placement Options…"), any, false) {
         crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": ids(&sel, |_| true) }));
@@ -777,6 +1014,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!(label), true, o.sort == Some(id)) {
             set_options(ui.ctx(), |o| o.sort = if o.sort == Some(id) { None } else { Some(id) });
         }
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Copy Info"), any, false) {
+        crate::menus::invoke(app, "links.copyInfo", json!({ "ids": ids(&sel, |_| true) }));
     }
     ui.separator();
     for (px, label) in THUMBS {

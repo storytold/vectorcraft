@@ -9,7 +9,7 @@
 //! - `ui.menu.list`: flattened menu tree
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
-//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
+//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick|tripleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
 //!   drive the active tool through the same path as the mouse, after the synthetic input sent
 //!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
@@ -41,6 +41,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::ParamsPlace;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -239,6 +240,7 @@ fn wrap(r: Result<Value, String>) -> Outcome {
 pub fn all_commands(app: &VectorcraftApp) -> Value {
     let mut v: Vec<Value> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
     for (id, label, sc, params) in crate::menus::UI_COMMANDS {
+        let sc = crate::shortcut_editor::ui_command_default(id, sc, crate::keymap::platform());
         v.push(json!({"id": id, "label": label, "shortcut": sc, "params": params, "enabled": crate::menus::enabled(app, id), "ui": true}));
     }
     Value::Array(v)
@@ -266,6 +268,11 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
             "pinned": app.ui.task_bar_place.pinned,
             "rect": crate::canvas::task_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         },
+        // The Quick Pen toolbar: pinned (not saved either) and where it shows.
+        "quickPenToolbar": {
+            "pinned": app.ui.quick_pen_bar_place.pinned,
+            "rect": crate::canvas::quick_pen_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
+        },
         // The Free Transform tool's widget, where it shows.
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
@@ -273,11 +280,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
-        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index, view number (Window › New Window) and rect. Canvas
-        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
+        // last frame drew: each one's document index, view number (Window › New Window) and rect.
+        // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars
         // (`canvasRect`).
         "tiled": app.ui.tiled,
+        "tileLayout": app.ui.tile_layout.name(),
         "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
             "document": w.0,
             "view": w.1,
@@ -427,17 +435,19 @@ impl Hiding {
 }
 
 /// The paths outside the read roots that `v`'s strings and keys name at any depth, written as paths
-/// ([`unreadable_path_like`]) or held by a path param
-/// ([`vectorcraft_engine::file_access::is_path_key`]), a relative one too, each as a hidden library id
-/// (`loaded/<path>`) with `loaded/<file name>` shown. A reply hides them as it hides a hidden library's
-/// path, with that file name also for a hidden library shown as `loaded/<file name> (2)`, so that it
-/// reads the same whether or not a library was loaded from one of them.
+/// ([`unreadable_path_like`]) or held by a path param, a relative one too, each as a hidden library id
+/// (`loaded/<path>`) with `loaded/<file name>` shown. A param is a path param as the command it is
+/// for reads it ([`ParamsPlace`]: `engine.execute`'s `params`, a `command.batch` step's and a
+/// recorded step's), so a web link or an export's folder grouping is not one. A reply hides them as
+/// it hides a hidden library's path, with that file name also for a hidden library shown as
+/// `loaded/<file name> (2)`, so that it reads the same whether or not a library was loaded from one
+/// of them.
 fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
-    collect_sent_paths(v, false, out);
+    collect_sent_paths(v, ParamsPlace::top(None), false, out);
 }
 
-/// [`sent_paths`] on `v`, which a path param holds when `path_param` is set.
-fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String)>) {
+/// [`sent_paths`] on `v`, found at `place`, which a path param holds when `path_param` is set.
+fn collect_sent_paths(v: &Value, place: ParamsPlace, path_param: bool, out: &mut Vec<(String, String)>) {
     fn add(s: &str, path_param: bool, out: &mut Vec<(String, String)>) {
         if !unreadable_path_like(s) && !(path_param && !readable_value(s)) {
             return;
@@ -459,11 +469,18 @@ fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String
     }
     match v {
         Value::String(s) => add(s, path_param, out),
-        Value::Array(items) => items.iter().for_each(|item| collect_sent_paths(item, path_param, out)),
+        Value::Array(items) => {
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter().enumerate() {
+                collect_sent_paths(item, place.item(i, step), path_param, out);
+            }
+        }
         Value::Object(fields) => {
+            let carried = ParamsPlace::carried(fields);
             for (key, item) in fields {
                 add(key, false, out);
-                collect_sent_paths(item, vectorcraft_engine::file_access::is_path_key(key), out);
+                let (below, location) = place.member(key, carried);
+                collect_sent_paths(item, below, location.is_some(), out);
             }
         }
         _ => {}
@@ -1057,7 +1074,7 @@ fn steps_mut(set: &mut Value) -> impl Iterator<Item = (String, &mut serde_json::
 /// [`leave_out_unreadable_params`] takes out, each in one pass over the params.
 fn leave_out_unreadable_step(command: &str, params: &mut serde_json::Map<String, Value>) {
     leave_out_unreadable_pref_steps(command, params);
-    leave_out_unreadable_params(params);
+    leave_out_unreadable_params(params, ParamsPlace::of(command));
 }
 
 /// Takes out of the params of a step running `command` the folder preferences' values the request
@@ -1087,39 +1104,46 @@ fn leave_out_unreadable_pref_steps(command: &str, params: &mut serde_json::Map<S
     }
 }
 
-/// Takes out of a recorded step's params, at any depth (the commands of a `command.batch` step), the
-/// paths the request may not read: the value of a path param
-/// ([`vectorcraft_engine::file_access::is_path_key`]: `path`, `file`, `diffPath`, `destinationFolder`
-/// and the like), each path of a list under such a param, and under any other param, as a key too, a
-/// string written as a path ([`unreadable_path_like`]). An empty or blank value names no path and stays.
-fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
-    use vectorcraft_engine::file_access::is_path_key;
+/// Takes out of a recorded step's params at `place`, at any depth (the commands of a `command.batch`
+/// step), the paths the request may not read: the value of a path param as the command reads it
+/// ([`ParamsPlace`]: `path`, `file`, `diffPath`, `destinationFolder` and the like, but not a key that
+/// names part of the document in that command), each path of a list under such a param, and under
+/// any other param, as a key too, a string written as a path ([`unreadable_path_like`]). A web link,
+/// a choice or a switch whose name ends like a path param's (`alignToPath`, `linksFolder`) stays, and
+/// so does an empty or blank value, which names no path.
+fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>, place: ParamsPlace) {
     let shown = |p: &str| p.trim().is_empty() || readable_value(p);
+    let carried = ParamsPlace::carried(params);
     params.retain(|key, v| {
         !unreadable_path_like(key)
             && match v.as_str() {
-                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !shown(p)),
+                Some(p) => !unreadable_path_like(p) && !(place.member(key, carried).1.is_some() && !shown(p)),
                 None => true,
             }
     });
+    let carried = ParamsPlace::carried(params);
     for (key, v) in params.iter_mut() {
+        let (below, location) = place.member(key, carried);
         if let Value::Array(paths) = v
-            && is_path_key(key)
+            && location.is_some()
         {
             paths.retain(|p| p.as_str().is_none_or(shown));
         }
-        leave_out_unreadable_values(v);
+        leave_out_unreadable_values(v, below);
     }
 }
 
-/// [`leave_out_unreadable_params`] on each object `v` holds, and a string written as a path that the
-/// request may not read ([`unreadable_path_like`]) taken out of each list.
-fn leave_out_unreadable_values(v: &mut Value) {
+/// [`leave_out_unreadable_params`] on each object `v`, found at `place`, holds, and a string written
+/// as a path that the request may not read ([`unreadable_path_like`]) taken out of each list.
+fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
     match v {
-        Value::Object(fields) => leave_out_unreadable_params(fields),
+        Value::Object(fields) => leave_out_unreadable_params(fields, place),
         Value::Array(items) => {
             items.retain(|item| !item.as_str().is_some_and(unreadable_path_like));
-            items.iter_mut().for_each(leave_out_unreadable_values);
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter_mut().enumerate() {
+                leave_out_unreadable_values(item, place.item(i, step));
+            }
         }
         _ => {}
     }
@@ -1127,9 +1151,9 @@ fn leave_out_unreadable_values(v: &mut Value) {
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
-/// in recorded actions' steps outside the read root. The file selected in an open JavaScript Files
-/// dialog is named as `svgInteractivity.info` names the active document's linked files. The UI state
-/// itself is not changed.
+/// in recorded actions' steps and in the item an open Insert Menu Item dialog picked, outside the
+/// read root. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
+/// names the active document's linked files. The UI state itself is not changed.
 fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
@@ -1152,6 +1176,16 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
         && let Some(Value::Object(fields)) = dialog.get_mut("fields")
     {
         leave_out_unreadable_folders(fields);
+    }
+    // The menu item picked in an open Insert Menu Item dialog, such as a saved proof setup's file.
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::action_insert_menu_item::KIND)
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+    {
+        let command = fields.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let Some(Value::Object(params)) = fields.get_mut("params") {
+            leave_out_unreadable_step(&command, params);
+        }
     }
     if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
         && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::javascript_files::KIND)
@@ -1274,7 +1308,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
 /// `sent`, the request's params, holds ([`handle`]), and the recovery folders outside the read root
-/// that are in use or that a failure message named. The `path` and `files` entries of the reply's
+/// that are in use or that a failure message named, with each folder on the way to one that the reply
+/// writes as a whole path ([`writes_whole_path`]): a failure names a file or a missing folder there.
+/// The `path` and `files` entries of the reply's
 /// `result`, at any depth, that name a file the request gave inside the write roots, the file it
 /// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
@@ -1282,32 +1318,66 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
         return;
     }
     let mut given = Vec::new();
-    written_paths(sent, false, &mut given);
+    written_paths(sent, ParamsPlace::top(None), false, &mut given);
     let kept = kept_written_paths(reply, &given);
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
-    // The status text of a recovery copy that failed names the recovery folder it went to.
+    // The status text of a recovery copy that failed names the recovery folder it went to, or the
+    // first folder on the way to it that is a file or is missing.
     let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
     for folder in app.recovery.named.iter().chain(current.as_ref()) {
-        collect_sent_paths(&json!(folder), true, &mut paths);
+        collect_sent_paths(&json!(folder), ParamsPlace::top(None), true, &mut paths);
+        for on_the_way in std::path::Path::new(folder).ancestors().skip(1).map(|p| p.to_string_lossy()) {
+            if !on_the_way.is_empty() && writes_whole_path(reply, &on_the_way) {
+                collect_sent_paths(&json!(on_the_way), ParamsPlace::top(None), true, &mut paths);
+            }
+        }
     }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
     restore_written_paths(reply, kept);
 }
 
-/// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])
-/// that name a file inside the write roots; `v` is a path param's value when `path_param` is set.
-fn written_paths(v: &Value, path_param: bool, out: &mut Vec<String>) {
-    use vectorcraft_engine::file_access::{Access, current, is_path_key};
+/// Does `v` write `path` in a string or a key at any depth with no path text before it (a letter, a
+/// digit, `_`, `-`, `.`, `~` or a separator) or after it ([`continues_path`]), a Windows path
+/// ([`splits_at_backslash`]) with either separator and in any case of ASCII letters too? Only the text
+/// is compared: nothing on disk is looked up.
+fn writes_whole_path(v: &Value, path: &str) -> bool {
+    let windows = splits_at_backslash(path);
+    let path_before =
+        |before: &str| before.chars().next_back().is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'));
+    let whole = |s: &str| {
+        let spellings = if windows { vec![path.replace('\\', "/"), path.replace('/', "\\")] } else { vec![path.to_string()] };
+        spellings.iter().any(|p| occurrences(s, p, windows).into_iter().any(|at| !path_before(&s[..at]) && !continues_path(&s[at + p.len()..])))
+    };
+    match v {
+        Value::String(s) => whole(s),
+        Value::Array(items) => items.iter().any(|item| writes_whole_path(item, path)),
+        Value::Object(fields) => fields.iter().any(|(key, item)| whole(key) || writes_whole_path(item, path)),
+        _ => false,
+    }
+}
+
+/// The strings that `v`'s path params hold at any depth, as the command they are for reads them
+/// ([`ParamsPlace`]), that name a file inside the write roots; `v`, found at `place`, is a path
+/// param's value when `path_param` is set.
+fn written_paths(v: &Value, place: ParamsPlace, path_param: bool, out: &mut Vec<String>) {
+    use vectorcraft_engine::file_access::{Access, current};
     match v {
         Value::String(s) if path_param && !s.is_empty() && current().is_some_and(|r| r.check(s, Access::Write).is_ok()) => out.push(s.clone()),
-        Value::Array(items) => items.iter().for_each(|item| written_paths(item, path_param, out)),
+        Value::Array(items) => {
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter().enumerate() {
+                written_paths(item, place.item(i, step), path_param, out);
+            }
+        }
         Value::Object(fields) => {
+            let carried = ParamsPlace::carried(fields);
             for (key, item) in fields {
-                written_paths(item, is_path_key(key), out);
+                let (below, location) = place.member(key, carried);
+                written_paths(item, below, location.is_some(), out);
             }
         }
         _ => {}
@@ -1554,6 +1624,8 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // Create Object Mosaic converts New Size against the selected image's size as it is now.
+                crate::dialogs::object_mosaic::refresh(app);
                 // In order: a field that sets others (an export preset) goes before the fields after it.
                 // A field that fails leaves the dialog as it was before the request.
                 let before = app.ui.dialog.clone();
@@ -1842,7 +1914,7 @@ fn rotate_view_pointer(
         PointerKind::Up => {
             app.control_rotate_press = None;
         }
-        PointerKind::Move | PointerKind::DoubleClick => {}
+        PointerKind::Move | PointerKind::DoubleClick | PointerKind::TripleClick => {}
     }
     Ok(())
 }
@@ -1910,6 +1982,7 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
                     "up" => PointerKind::Up,
                     "move" => PointerKind::Move,
                     "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+                    "tripleclick" => PointerKind::TripleClick,
                     other => return Err(format!("unknown pointer kind `{other}`")),
                 };
                 PointerEvent::json_check(e)?;
@@ -2051,7 +2124,7 @@ fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
         r = app.run("window.panel", json!({"panel": pn}));
     }
     if let Some(st) = s("status") {
-        app.ui.status = st.to_string();
+        app.status(st);
     }
     for (k, flag) in [
         ("rulers", "view.rulers"),

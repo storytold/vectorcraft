@@ -5,6 +5,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::{Location, ParamsPlace};
 use vectorcraft_engine::{Session, command_specs};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::Fixture;
@@ -272,36 +273,37 @@ fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value
     cases
 }
 
-/// The strings in `v`, the value at `at` in a case of command `id`, that name a place on disk
-/// outside `dir`, as `id at: value`: `v` itself and the members of arrays in it when `named` (it is
-/// under a key that names a file or folder), and in objects at any depth, the values under such
-/// keys ([`names_location`]).
-fn outside_locations(id: &str, at: &str, v: &Value, named: bool, dir: &std::path::Path, out: &mut std::collections::BTreeSet<String>) {
+/// The strings in `v`, the value at `at` (found at `place`) in a case of command `id`, that name a
+/// place on disk outside `dir`, as `id at: value`: `v` itself and the members of arrays in it when
+/// `named` (it is under a key that names a file or folder), and in objects at any depth, the values
+/// under such keys as the command reads them (`vectorcraft_engine::cmd::ParamsPlace`).
+fn outside_locations(
+    id: &str,
+    at: &str,
+    v: &Value,
+    place: ParamsPlace,
+    named: bool,
+    dir: &std::path::Path,
+    out: &mut std::collections::BTreeSet<String>,
+) {
     match v {
         Value::String(s) if named && !std::path::Path::new(s).starts_with(dir) => {
             out.insert(format!("{id} {at}: {v}"));
         }
         Value::Array(a) => {
+            let step = ParamsPlace::step(a);
             for (i, x) in a.iter().enumerate() {
-                outside_locations(id, &format!("{at}[{i}]"), x, named, dir, out);
+                outside_locations(id, &format!("{at}[{i}]"), x, place.item(i, step), named, dir, out);
             }
         }
         Value::Object(o) => {
+            let carried = ParamsPlace::carried(o);
             for (k, x) in o {
-                outside_locations(id, &format!("{at}.{k}"), x, names_location(None, k), dir, out);
+                let (below, location) = place.member(k, carried);
+                outside_locations(id, &format!("{at}.{k}"), x, below, location.is_some(), dir, out);
             }
         }
         _ => {}
-    }
-}
-
-/// Does `key` name a file or folder, in command `spec` when given: a key in
-/// `vectorcraft_engine::cmd::key_location`'s list that `vectorcraft_engine::cmd::location_in` keeps
-/// for `spec`.
-fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> bool {
-    match spec {
-        Some(spec) => vectorcraft_engine::cmd::location_in(spec, key).is_some(),
-        None => vectorcraft_engine::cmd::key_location(key).is_some(),
     }
 }
 
@@ -309,7 +311,8 @@ fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> 
 /// (`vectorcraft_engine::cmd::location_keys`, so a command added later is checked too) or inside
 /// an object or an array at any depth, is inside the sweep's temp folder, so no run reads or
 /// writes in the working directory. `every_command_with_junk_params` sends every such key of every
-/// command alone in at least one case ([`junk_cases`]).
+/// command alone in at least one case ([`junk_cases`]). Which catalog keys name a file or folder is
+/// checked on its own by [`catalog_path_keys_match_location_policy`].
 #[test]
 fn sweep_cases_name_files_only_inside_the_temp_folder() {
     let dir = vectorcraft_testkit::TempDir::new("sweep");
@@ -330,13 +333,112 @@ fn sweep_cases_name_files_only_inside_the_temp_folder() {
         for p in &cases {
             let Some(o) = p.as_object() else { continue };
             for (k, v) in o {
-                outside_locations(c.id, k, v, names_location(Some(c), k), &dir, &mut outside);
+                let (below, location) = ParamsPlace::top(Some(c)).member(k, None);
+                outside_locations(c.id, k, v, below, location.is_some(), &dir, &mut outside);
             }
         }
     }
     assert!(unsent.is_empty(), "every_command_with_junk_params sends no case for {unsent:?}");
     let outside: Vec<String> = outside.into_iter().collect();
     assert!(outside.is_empty(), "{} cases name a location outside {}:\n{}", outside.len(), dir.display(), outside.join("\n"));
+}
+
+/// The param keys that name a file or a folder, and which.
+const LOCATION_KEYS: &[(&str, Location)] = &[
+    ("path", Location::File),
+    ("paths", Location::File),
+    ("file", Location::File),
+    ("files", Location::File),
+    ("diffPath", Location::File),
+    ("folder", Location::Folder),
+    ("dir", Location::Folder),
+    ("directory", Location::Folder),
+    ("destinationFolder", Location::Folder),
+    ("sourceFolder", Location::Folder),
+    ("fontsFolder", Location::Folder),
+    ("pluginsFolder", Location::Folder),
+    ("recoveryFolder", Location::Folder),
+    ("templatesFolder", Location::Folder),
+];
+
+/// Param keys that read like a file or folder key ([`reads_like_a_location`]) and name neither:
+/// web links, an export's grouping of its files, and choices and switches.
+const NOT_LOCATIONS: &[&str] = &[
+    "url",
+    "copyrightUrl",
+    "folders",
+    "alignToPath",
+    "wholePaths",
+    "emptyTextPaths",
+    "sortPaths",
+    "alterPaths",
+    "includeLinkedFiles",
+    "linksFolder",
+];
+
+/// Commands and the key in [`LOCATION_KEYS`] that, at the top of their params, names part of the
+/// document (a path of its art, a result field), not a file.
+const DOCUMENT_PARTS: &[(&str, &str)] = &[
+    ("object.setLiveShape", "path"),
+    ("path.reverse", "paths"),
+    ("object.pathfinder.options", "paths"),
+    ("object.maskImage", "path"),
+    ("text.createInPath", "path"),
+    ("symbol.instance.setAppearance", "path"),
+    ("symbol.instance.selectPart", "path"),
+    ("object.objectsOnPath.attach", "path"),
+    ("svgInteractivity.info", "files"),
+    ("addon.cleanup.rejoin", "paths"),
+];
+
+/// Does param key `k` read like one that names a file, a folder or a link: a bare name for one, or a
+/// name that ends like one?
+fn reads_like_a_location(k: &str) -> bool {
+    const ENDS: &[&str] = &["Path", "Paths", "File", "Files", "Folder", "Folders", "Dir", "Directory", "Url", "URL"];
+    matches!(k, "path" | "paths" | "file" | "files" | "folder" | "folders" | "dir" | "directory" | "url") || ENDS.iter().any(|end| k.ends_with(end))
+}
+
+/// Every key of every command that reads like a file or folder key (in its params description, the
+/// commands its `…` entries name and its schema) is in [`LOCATION_KEYS`] or [`NOT_LOCATIONS`], so a
+/// command that adds one fails here until it is sorted. The generic classifications
+/// (`vectorcraft_engine::cmd::key_location`, `vectorcraft_engine::file_access::is_path_key`) agree
+/// with those lists, and each command reads such a key as they say (`location_in`), less
+/// [`DOCUMENT_PARTS`].
+#[test]
+fn catalog_path_keys_match_location_policy() {
+    use vectorcraft_engine::cmd::{key_location, location_in, params::takes_key};
+    let catalog: Vec<(&vectorcraft_engine::CommandSpec, Vec<String>)> = command_specs().iter().map(|c| (c, command_param_keys(c))).collect();
+    let mut keys: std::collections::BTreeSet<String> =
+        catalog.iter().flat_map(|(_, keys)| keys.iter().filter(|k| reads_like_a_location(k)).cloned()).collect();
+    keys.extend(LOCATION_KEYS.iter().map(|(k, _)| k.to_string()).chain(NOT_LOCATIONS.iter().map(|k| k.to_string())));
+    let mut wrong = vec![];
+    for k in &keys {
+        let want = LOCATION_KEYS.iter().find(|(l, _)| l == k).map(|(_, l)| *l);
+        if want.is_none() && !NOT_LOCATIONS.contains(&k.as_str()) {
+            wrong.push(format!("`{k}` is in neither LOCATION_KEYS nor NOT_LOCATIONS"));
+            continue;
+        }
+        if key_location(k) != want {
+            wrong.push(format!("key_location(`{k}`) is {:?}, not {want:?}", key_location(k)));
+        }
+        if vectorcraft_engine::file_access::is_path_key(k) != want.is_some() {
+            wrong.push(format!("is_path_key(`{k}`) is {}", want.is_none()));
+        }
+        for (c, named) in &catalog {
+            if !named.contains(k) && !(c.params.contains('…') && takes_key(c.params, k)) {
+                continue;
+            }
+            let here = if DOCUMENT_PARTS.contains(&(c.id, k.as_str())) { None } else { want };
+            if location_in(c, k) != here {
+                wrong.push(format!("{}: location_in(`{k}`) is {:?}, not {here:?}", c.id, location_in(c, k)));
+            }
+        }
+    }
+    for (id, key) in DOCUMENT_PARTS {
+        let named = catalog.iter().any(|(c, _)| c.id == *id && c.params.contains(key));
+        assert!(named, "{id} doesn't name `{key}`");
+    }
+    assert!(wrong.is_empty(), "{} keys are classified unlike the reviewed lists:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// The cases sweep keys the command catalog names as files and folders: `document.open`'s
@@ -502,6 +604,17 @@ fn structured_junk() {
         ("brush.options", json!({"name": "Arrow", "params": {"width": -5, "direction": "diagonal", "flip_along": "yes"}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "flip_across": true}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 0, "spacing": 1e308, "fit": "nope", "side": null}})),
+        ("brush.apply", json!({"name": "Chain", "id": 2})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "colorization": {"method": "hueShift"}}}),
+        ),
+        ("brush.objectOptions", json!({"id": 2, "params": {"scale": "x", "fit": "nope", "side": null}})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"colorization": {"method": "hueShift", "key": {"model": "rgb", "r": 1e308, "g": -1e308, "b": 0}}}}),
+        ),
+        ("brush.objectOptions", json!({"ids": [1e308, -1], "params": {}, "reset": true})),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),
@@ -650,6 +763,10 @@ fn structured_junk() {
             )}),
         ),
         ("svgFilter.apply", json!({"name": "\u{0}", "ids": [u64::MAX]})),
+        ("svgFilter.apply", json!({"name": "Glow", "index": u64::MAX, "item": -1})),
+        ("svgFilter.apply", json!({"name": "Rough Edges", "index": [0], "ids": "x"})),
+        ("svgFilter.define", json!({"xml": "<filter id=\"x\"/>", "replace": "Glow"})),
+        ("svgFilter.delete", json!({"name": "Glow"})),
         ("svgFilter.delete", json!({"name": ["a"]})),
         (
             "effect.apply",
@@ -857,6 +974,13 @@ fn structured_junk() {
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
         ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
+        // Path Precision Tools: Tangent Circle.
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 1e6, "circle": u64::MAX})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4], "radius": f64::MIN_POSITIVE, "circle": -1})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 2], "radius": "1 mm"})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 0.01, "circle": 64})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4]})),
+        ("addon.pathtools.tangentCircle", json!({"ids": "x", "radius": f64::NAN, "circle": 1.5})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),
@@ -878,15 +1002,34 @@ fn structured_junk() {
         ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
         ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
         ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "all", "centerline": true})),
+        ("addon.pathtools.commonTangents", json!({"tangents": "x", "centerline": "y", "ids": [u64::MAX, -1]})),
+        ("addon.pathtools.commonTangents", json!({"tangents": null, "ids": [1, 2, 3, 4], "centerline": null})),
+        ("addon.pathtools.commonTangents", json!({"tangents": ["external"], "ids": "all"})),
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
+        ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
+        ("addon.pathtools.bridge", json!({"gap": -1e308, "reach": f64::MAX, "ids": [0, 1, 2]})),
+        ("addon.pathtools.bridge", json!({"gap": 1000, "reach": 10000, "radius": null, "keepOriginals": true})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
         ("addon.document.symbolsFromLayers", json!({"layers": "x", "replace": 3})),
         ("addon.document.symbolsFromLayers", json!({"layers": [1e308, -1, null, u64::MAX], "replace": true})),
         ("addon.document.symbolsFromLayers", json!({"layers": [], "replace": true})),
+        // Packaging Tools add-on.
+        ("addon.packaging.setRole", json!({"role": "cut", "ids": [u64::MAX], "overprint": "no"})),
+        ("addon.packaging.setRole", json!({"role": ["crease"], "ids": "all"})),
+        ("addon.packaging.setRole", json!({"role": "none", "overprint": null})),
+        ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
+        ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
+        ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
+        ("addon.packaging.check", json!({"ids": [u64::MAX, -1], "select": "yes", "tolerance": 1e308})),
+        ("addon.packaging.check", json!({"tolerance": "-5 mm", "select": true})),
+        ("addon.packaging.check", json!({"ids": [], "tolerance": null})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -914,6 +1057,12 @@ fn structured_junk() {
         ("addon.cutting.banner", json!({"hem": 0, "grommetInset": 0, "spacing": 0.01, "allArtboards": true})),
         ("addon.cutting.banner", json!({"spacing": "1 mm", "grommets": false, "swatch": 5, "left": null})),
         ("addon.cutting.banner", json!({"top": false, "right": false, "bottom": false, "left": false, "allArtboards": false})),
+        ("addon.cutting.nest", json!({"width": 1e6, "height": 1e6, "margin": 1e5, "spacing": 1e5, "roll": true})),
+        ("addon.cutting.nest", json!({"width": 1e-300, "height": f64::MAX, "margin": -1, "spacing": "1 mm", "artboard": u64::MAX})),
+        ("addon.cutting.nest", json!({"width": 0, "height": 0, "margin": 0, "spacing": 0, "usePreviewBounds": "no", "patterns": 1})),
+        ("addon.cutting.nest", json!({"roll": null, "artboard": -1, "width": "1 in", "height": [1]})),
+        ("addon.cutting.nest", json!({"rotate": true, "roll": true, "width": 1e-6, "margin": 0, "spacing": 0, "usePreviewBounds": true})),
+        ("addon.cutting.nest", json!({"rotate": "yes", "width": f64::NAN, "spacing": -0.0})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
@@ -925,6 +1074,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Unit Converter add-on.
+        ("addon.units.convert", json!({"value": f64::MAX, "unit": "yards"})),
+        ("addon.units.convert", json!({"value": "1e308m*1e308", "unit": "q"})),
+        ("addon.units.convert", json!({"value": "-2p6/0", "unit": ["mm"]})),
+        ("addon.units.convert", json!({"value": [1], "unit": 5})),
+        ("addon.units.selectionSize", json!({"ids": [u64::MAX]})),
         // Cutting Tools add-on: Stencil Bridges.
         ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
         ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),
@@ -1115,6 +1270,69 @@ fn polygon_properties_junk() {
                 Ok(_) => {
                     if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
                         failures.push(format!("object.setLiveShape {p} [{scale:?}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live rectangle's and ellipse's Rectangle and Ellipse Angle with junk values, drawn plain,
+/// scaled unevenly, flattened to nothing and sheared: never a panic, and the document stays sound.
+#[test]
+fn rectangle_and_ellipse_angle_junk() {
+    let mut failures = vec![];
+    for (shape, key) in [("shape.rectangle", "rectangleAngle"), ("shape.ellipse", "ellipseAngle")] {
+        for xf in [
+            None,
+            Some(("object.scale", json!({"sx": 300, "sy": 20}))),
+            Some(("object.scale", json!({"sx": 1e-300, "sy": 100}))),
+            Some(("object.shear", json!({"angle": 40}))),
+        ] {
+            for v in junk_values() {
+                let p = json!({ key: v });
+                let mut s = Fixture::Multi.session();
+                let Ok(_) = no_panic(s.execute(shape, &json!({"x": 60, "y": 60, "width": 80, "height": 50}))) else { continue };
+                if let Some((cmd, q)) = &xf {
+                    let _ = no_panic(s.execute(cmd, q));
+                }
+                match catch_quiet(|| no_panic(s.execute("object.setLiveShape", &p))) {
+                    Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{xf:?}]: {m}")),
+                    Ok(_) => {
+                        if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                            failures.push(format!("object.setLiveShape {p} [{xf:?}]: {e}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// A live line's Line Properties with junk values (the fixtures have no line), on a line, a line
+/// whose ends meet and one at the coordinate limit: never a panic, and the document stays sound.
+#[test]
+fn line_properties_junk() {
+    let mut cases: Vec<Value> = vec![json!({"lineLength": 4.0e6, "lineAngle": 45})];
+    for key in ["lineLength", "lineAngle"] {
+        for v in junk_values() {
+            cases.push(json!({ key: v }));
+        }
+    }
+    let mut failures = vec![];
+    for (a, b) in [((10.0, 20.0), (110.0, 70.0)), ((50.0, 50.0), (50.0, 50.0)), ((-4.0e6, 4.0e6), (4.0e6, -4.0e6))] {
+        for p in &cases {
+            let mut s = Fixture::Multi.session();
+            let Ok(_) = no_panic(s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}))) else {
+                continue;
+            };
+            match catch_quiet(|| no_panic(s.execute("object.setLiveShape", p))) {
+                Err(m) => failures.push(format!("PANIC object.setLiveShape {p} [{a:?} {b:?}]: {m}")),
+                Ok(_) => {
+                    if let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}"))) {
+                        failures.push(format!("object.setLiveShape {p} [{a:?} {b:?}]: {e}"));
                     }
                 }
             }
@@ -1360,7 +1578,41 @@ fn gradient_mesh_from_images_with_junk_params() {
     use vectorcraft_geom::Affine;
     let img = image::RgbaImage::from_fn(5, 3, |x, y| image::Rgba([x as u8 * 50, y as u8 * 90, 7, if x == 2 { 0 } else { 255 }]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let params = [
         json!({}),
         json!({"rows": 1, "cols": 1}),

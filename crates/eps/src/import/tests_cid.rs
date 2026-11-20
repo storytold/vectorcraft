@@ -136,6 +136,41 @@ fn codes_map_by_their_codespace_with_notdef_fallbacks() {
     width("<01>", 30.0);
 }
 
+/// `cshow` over a CMap runs its procedure once for each code, whatever its length, with the
+/// code's last byte and its width (PLRM 3rd ed., `cshow`).
+#[test]
+fn cshow_runs_once_for_each_cmap_code() {
+    let fonts = String::from_utf8(cid_font(true)).unwrap() + CMAP;
+    let check = |cond: &str| check(&format!("{fonts} /TestFont 50 selectfont {cond}"));
+    check("[ {pop pop} <418001> cshow ] dup length 2 eq exch aload pop 1 eq exch 65 eq and and");
+    check("0 {pop exch pop add} <418001> cshow 55 sub abs 0.01 lt");
+    check(
+        "{pop pop pop currentfont /CIDFontName get /seen exch def rootfont /FontName get /root exch def} <41> cshow seen /TestCID eq root /TestFont eq and",
+    );
+    // With the CIDFont current, the byte the procedure was given shows the glyph of its code's
+    // CID: <8001>'s last byte draws CID 2, not code 01's CID 1. Another string is an error.
+    let shown = "{pop pop ( ) dup 0 4 -1 roll put show} <418001> cshow";
+    check(&format!("gsave nulldevice 10 20 moveto {shown} currentpoint grestore pop 65 sub abs 0.01 lt"));
+    check("gsave nulldevice 10 20 moveto {{pop pop pop (B) show} <41> cshow} stopped grestore");
+    let r = import(&program(true, &format!("/TestFont 50 selectfont 10 20 moveto {shown}"))).unwrap();
+    let want = import(&program(true, "/TestFont 50 selectfont 10 20 moveto <418001> show")).unwrap();
+    let (p, q) = (paths(&r), paths(&want));
+    assert_eq!(p.len(), 2, "{p:?}");
+    for (a, b) in p.iter().zip(&q) {
+        assert!((a.x0 - b.x0).abs() < 0.01 && (a.width() - b.width()).abs() < 0.01 && (a.height() - b.height()).abs() < 0.01, "{p:?} {q:?}");
+    }
+}
+
+/// `kshow` over a CMap runs its procedure between each two codes with their values, whatever
+/// their length, and the next character follows where it moves the point (PLRM 3rd ed., `kshow`).
+#[test]
+fn kshow_runs_between_each_two_cmap_codes() {
+    let fonts = String::from_utf8(cid_font(true)).unwrap() + CMAP;
+    let check = |cond: &str| check(&format!("{fonts} /TestFont 50 selectfont {cond}"));
+    check("gsave nulldevice 10 20 moveto [ {} <418001> kshow ] grestore aload length 2 eq exch 16#8001 eq and exch 65 eq and");
+    check("gsave nulldevice 10 20 moveto {pop pop 100 0 rmoveto} <418001> kshow currentpoint grestore pop 165 sub abs 0.01 lt");
+}
+
 /// `usecmap` brings in another CMap's ranges and mappings; the CMap's own come after them.
 #[test]
 fn usecmap_takes_the_parents_mappings() {
@@ -175,6 +210,22 @@ fn type2_cidfonts_draw_their_truetype_glyphs_through_cidmap() {
         let (bh, bi) = (p[0], p[1]);
         assert!(bh.x0 > 10.0 && bh.x0 < 18.0 && bh.height() > 25.0 && bh.height() < 40.0, "{bh:?}");
         assert!(bi.x0 > 10.0 + 50.0 * wh - 1.0 && bi.x1 < 10.0 + 50.0 * (wh + wi), "{bi:?}");
+    }
+}
+
+/// A `cshow` procedure over a Type 2 CIDFont without a `FontMatrix` sees the CIDFont current at
+/// the scale its glyphs are drawn at: an em of the composite font's size, as with the identity.
+#[test]
+fn cshow_over_a_type2_cidfont_without_a_matrix_sees_it_at_its_drawn_scale() {
+    let (h, i) = (glyph('H').0, glyph('I').0);
+    let with = cid2_font(&format!("<0000{h:04x}{i:04x}>"));
+    let without = with.replace("/FontMatrix [1 0 0 1 0 0] def", "");
+    assert_ne!(with, without);
+    for fonts in [with, without] {
+        check(&format!(
+            "{fonts}/T2 /Identity-H [/TestCID2] composefont 50 scalefont setfont \
+             {{pop pop pop currentfont /FontMatrix get 0 get /m exch def}} <0001> cshow m 50 sub abs 0.01 lt"
+        ));
     }
 }
 
@@ -375,6 +426,30 @@ fn cmaps_map_codes_to_base_fonts_codes_and_glyph_names() {
         })
         .collect();
     assert_eq!(text, "ABC");
+    // A `cshow` procedure that shows the byte it was given, in the base font current while it
+    // runs, shows the character the code maps to, as `show` does.
+    let body = format!(
+        "{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 20 scalefont setfont 10 20 moveto \
+         {{pop pop ( ) dup 0 4 -1 roll put show}} <001000110012> cshow"
+    );
+    let r = super::tests::read(&body);
+    let text: String = all(&r.document)
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "ABC");
+    let body = format!(
+        "{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 50 scalefont setfont 10 20 moveto \
+         {{pop pop ( ) dup 0 4 -1 roll put show}} <000100020003> cshow"
+    );
+    let q = paths(&super::tests::read(&body));
+    assert_eq!(q.len(), 3, "{q:?}");
+    for (a, b) in p.iter().zip(&q) {
+        assert!((a.x0 - b.x0).abs() < 0.01 && (a.width() - b.width()).abs() < 0.01, "{p:?} {q:?}");
+    }
 }
 
 /// A CID-keyed font over a predefined Unicode CMap the file doesn't define, its CIDFont only
@@ -638,10 +713,11 @@ fn named_cid_type_in_charpath_cshow_and_glyphshow() {
 }
 
 /// A font name ending in the row-and-cell CMap `H` or `V` stays a font of the whole name, its
-/// strings read byte by byte, unless the part before the CMap names a CIDFont the file defines (or
-/// an installed face that covers Japanese). Type in a predefined CMap whose mappings aren't
-/// available is left out with a warning, each code moving the point one em, and a long string in a
-/// CID-keyed font over a predefined CMap shown in a loop runs out of the budget.
+/// strings read byte by byte, unless the part before the CMap names a CIDFont the file defines, a
+/// Japanese CIDFont a printer carries (or an installed face that covers Japanese). Type in a
+/// predefined CMap whose mappings aren't available is left out with a warning, each code moving
+/// the point one em, and a long string in a CID-keyed font over a predefined CMap shown in a loop
+/// runs out of the budget.
 #[test]
 fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
     for (font, family, style) in [("Futura-H", "Futura", "H"), ("Foo-Bold-H", "Foo", "Bold-H"), ("Foo-Condensed-V", "Foo", "Condensed-V")] {
@@ -665,6 +741,18 @@ fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
         let r = super::tests::read(&format!("{define} findfont 20 scalefont setfont 10 20 moveto <467c> show"));
         assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["日"], "{define}: {:?}", r.warnings);
     }
+    // The Japanese CIDFonts a printer carries (Adobe Technical Note #5014, appendix A.2) split at
+    // `H` or `V` without the file defining them or a face of their name being installed. A face
+    // with the whole name, when installed, is that face's.
+    for (font, vertical) in [("Ryumin-Light-H", false), ("GothicBBB-Medium-V", true)] {
+        if vectorcraft_text::FontDb::global().find_postscript(font).is_some() {
+            continue;
+        }
+        let r = super::tests::read(&format!("/{font} findfont 20 scalefont setfont 10 20 moveto <467c> show"));
+        let t = texts(&r);
+        assert_eq!(t.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["日"], "{font}: {:?}", r.warnings);
+        assert_eq!(t[0].vertical, vertical, "{font}");
+    }
     let r = super::tests::read("/Ryumin-Light-GBT-H findfont 20 scalefont setfont 10 20 moveto (AB) show 0 0 10 10 rectfill");
     assert!(texts(&r).is_empty(), "{:?}", all(&r.document));
     assert_eq!(super::tests::program_warnings(&r.warnings), [super::text::UNREAD_CMAP], "{:?}", r.warnings);
@@ -677,6 +765,10 @@ fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
         "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <09092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
         // A byte that starts no row-and-cell code is a code of its own, also before a tab: three.
         "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <21092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
+        // In the Johab code space each ASCII byte is a one-byte code and a Hangul code takes two
+        // bytes: three codes, across and down.
+        "/Ryumin-Light-KSC-Johab-H findfont 20 scalefont setfont <41428441> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
+        "/Ryumin-Light-KSC-Johab-V findfont 20 scalefont setfont 10 100 moveto <41428441> show currentpoint 40 sub abs 0.01 lt exch 10 sub abs 0.01 lt and",
     ] {
         let r = super::tests::read(&format!("{cond} {{ 0 0 10 10 rectfill }} if"));
         assert!(all(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Path { .. })), "{cond}");

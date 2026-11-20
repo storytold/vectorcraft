@@ -272,6 +272,79 @@ fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export`, and `file.exportAs` run as a command, write no file that carries the native
+/// document (a PDF with Preserve Editing, a native file, a `.ai` or EPS file) of a document that
+/// links a JavaScript file outside the read root, and the error names no file or folder; a PDF
+/// without Preserve Editing is written, and the person at the keyboard exports the native file.
+#[test]
+fn control_native_export_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("native-script");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let script = s(base.join("outside/menu.js"));
+    app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+    let out = |name: &str| s(base.join("out").join(name));
+    for (method, params) in [
+        ("app.export", json!({"path": out("a.pdf"), "wait": true})),
+        ("app.export", json!({"path": out("a.ai"), "wait": true})),
+        ("app.export", json!({"format": "eps"})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": out("a.vectorcraft"), "format": "vectorcraft"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("menu.js") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    let r = request(&mut app, &tx, "app.export", json!({"path": out("b.pdf"), "preserveEditing": false, "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": out("a.vectorcraft"), "format": "vectorcraft"})).unwrap();
+    let native = vectorcraft_format::load(&std::fs::read(out("a.vectorcraft")).unwrap()).unwrap();
+    assert_eq!(native.svg_scripts, [script]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.export`, and `file.exportAs` run as a command, write no SVG that would name a linked
+/// image's file outside the read root (Images: Link, Preserve Editing Capabilities), and the error
+/// names no file or folder. Embedded pixels are written; the person at the keyboard exports the
+/// link as stored.
+#[test]
+fn control_svg_export_refuses_a_linked_image_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("svg-image");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let photo = s(base.join("outside/photo.png"));
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    std::fs::write(&photo, png).unwrap();
+    app.run("file.place", json!({"path": photo, "link": true, "at": [50, 25]})).unwrap();
+    let path = s(base.join("out/a.svg"));
+    for (method, params) in [
+        ("app.export", json!({"path": path, "format": "svg", "images": "link", "wait": true})),
+        ("app.export", json!({"path": s(base.join("out/a.svgz")), "images": "link", "wait": true})),
+        ("app.export", json!({"format": "svg", "images": "link"})),
+        ("app.export", json!({"format": "svg", "preserveEditing": true})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": path, "format": "svg", "images": "link"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked image file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("photo.png") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    let r = request(&mut app, &tx, "app.export", json!({"path": path, "format": "svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains("data:image/png;base64,") && !svg.contains(&photo), "{svg}");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": path, "format": "svg", "images": "link"})).unwrap();
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.export` with a path writes the file when given an option only another format reads, and
 /// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
 /// as a command does the same; an export that automation did not ask for gets no such note.
@@ -383,7 +456,26 @@ fn control_render_matches_a_png_export_on_white() {
     std::fs::write(base.join("in/edges.svg"), svg).unwrap();
     let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/edges.svg"))}));
     assert_eq!(r["ok"], true, "{r}");
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let r = request(&mut app, &tx, "app.export", json!({"format": "png", "background": "white"}));
     let export = pixels(&r["result"]["dataBase64"]);
     let r = request(&mut app, &tx, "ui.render", json!({}));
@@ -412,7 +504,26 @@ fn control_render_draws_the_trace_view_with_trace_views() {
     app.run("select.all", json!({})).unwrap();
     app.run("imageTrace.make", json!({"params": {"ignoreWhite": true}})).unwrap();
     app.run("imageTrace.setView", json!({"view": "sourceImage"})).unwrap();
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let view = pixels(&request(&mut app, &tx, "ui.render", json!({"traceViews": true}))["result"]["pngBase64"]);
     let result = pixels(&request(&mut app, &tx, "ui.render", json!({}))["result"]["pngBase64"]);
     let (beside, middle) = (view.get_pixel(10, 10).0, view.get_pixel(50, 50).0);
@@ -558,6 +669,30 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let write_only = AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
     let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || crate::control::inspect(&app, &ctx));
     assert_eq!((&listed["opening"], &listed["ui"]["recent_files"]), (&json!([]), &json!([])), "{listed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out the file of a saved proof setup that an open Insert Menu Item dialog
+/// picked when it is outside the read root, and shows one inside it.
+#[test]
+fn ui_inspect_leaves_out_an_insert_menu_item_path_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-insert-menu-item");
+    let load = crate::dialogs::proof_setup::LOAD;
+    let (inside, outside) = (s(base.join("in/Press.vcproof")), s(base.join("outside/Press.vcproof")));
+    let dialog = |path: &str| {
+        let fields = json!({"find": "", "command": load, "params": {"path": path}, "note": ""});
+        Some(crate::state::Dialog::new(crate::dialogs::action_insert_menu_item::KIND, fields))
+    };
+    app.ui.dialog = dialog(&outside);
+    let ctx = egui::Context::default();
+    assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["dialog"]["fields"]["params"]["path"], outside, "the person sees it");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let fields = &r["result"]["ui"]["dialog"]["fields"];
+    assert_eq!((fields["command"].as_str(), fields["params"].get("path")), (Some(load), None), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["params"]["path"].clone()), Some(json!(outside)), "the UI state is not changed");
+    app.ui.dialog = dialog(&inside);
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["dialog"]["fields"]["params"]["path"], inside, "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1159,22 +1294,26 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
-/// the included file a failed run stopped in (also in its error line), by its file name; the person
-/// sees the paths.
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root (in
+/// the folder the person allowed it), and the included file a failed run stopped in (also in its
+/// error line), by its file name; the person sees the paths.
 #[test]
 fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     let (mut app, tx, base) = confined("inspect-script-report");
     let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let source = format!(
-        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        "Folder.selectDialog('Folder'); vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
         kept = json!(kept),
         hidden = json!(hidden)
     );
     let finish = |app: &mut VectorcraftApp, params: Value| {
         app.session.execute("script.run", &params).unwrap();
         for _ in 0..10_000 {
+            if app.session.script_picker().is_some() {
+                let paths = vec![s(base.clone())];
+                assert!(app.session.script_pick(vectorcraft_engine::script::files::PickAnswer::Allow { paths, always: false }));
+            }
             if app.session.script_pump().is_some() {
                 break;
             }
@@ -1195,7 +1334,9 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
     finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
     let person = crate::control::inspect(&app, &ctx);
-    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    // The report names the file by its real path (on macOS the temp folder is reached through a link).
+    let bad = std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap();
+    assert_eq!(person["scriptReport"]["file"], json!(s(bad)), "{person}");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
     assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");

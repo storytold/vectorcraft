@@ -43,7 +43,7 @@ pub struct OtFeatures {
     pub swash: bool,
     /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
     /// sets, alternates, titling, proportional and lining figures, superscript, subscript,
-    /// numerators and denominators, `aalt`.
+    /// numerators and denominators, `aalt`, H or V Style (`hkna`) and Roman Italics (`ital`).
     pub extra: u32,
     /// The value of each feature of [`EXTRA_FEATURES`] that is on, as a tag `salt=2` gives it: for
     /// a feature with alternates, which of them the font draws (the HarfBuzz feature value, 1 for
@@ -52,6 +52,10 @@ pub struct OtFeatures {
     pub extra_values: [u16; EXTRA_FEATURES.len()],
     /// The value `swsh=N` gives swashes ([`Self::swash`]), as [`Self::extra_values`] for `salt`.
     pub swash_value: u16,
+    /// Set a complex script (Indic, Arabic, Hebrew) glyph by glyph as the font maps its
+    /// characters, with none of its layout tables: the Standard composers. Set per paragraph by
+    /// layout from the paragraph's composer, not by a style.
+    pub unshaped_complex: bool,
 }
 
 /// The largest value a `tag=N` feature takes: a font's glyph ids are 16 bits, so is an alternate's
@@ -64,12 +68,19 @@ pub const MAX_STYLE_FEATURES: usize = 256;
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
 /// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr`,
-/// denominators `dnom` and access all alternates `aalt`.
+/// denominators `dnom`, access all alternates `aalt`, and the OpenType panel menu's H or V Style
+/// `hkna` (shaped as `vkna` in vertical type) and Roman Italics `ital`.
 /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_ae#tag-aalt>
-pub const EXTRA_FEATURES: [&str; 29] = [
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-hkna>
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-ital>
+pub const EXTRA_FEATURES: [&str; 31] = [
     "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
-    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom", "aalt",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom", "aalt", "hkna", "ital",
 ];
+
+/// The features of [`EXTRA_FEATURES`] that are only on or off: they substitute one form for each
+/// glyph, so they take no alternate's number (`hkna=2` is refused).
+const SWITCH_FEATURES: [&str; 2] = ["hkna", "ital"];
 
 impl Default for OtFeatures {
     fn default() -> Self {
@@ -87,6 +98,7 @@ impl Default for OtFeatures {
             extra: 0,
             extra_values: [0; EXTRA_FEATURES.len()],
             swash_value: 0,
+            unshaped_complex: false,
         }
     }
 }
@@ -107,10 +119,11 @@ struct ParsedTag<'a> {
     value: u16,
 }
 
-/// Can feature `name` take a value (`salt=2`)? The features of [`EXTRA_FEATURES`] and `swsh` can:
-/// each substitutes glyphs, and the value says which alternate.
+/// Can feature `name` take a value (`salt=2`)? The features of [`EXTRA_FEATURES`] but
+/// [`SWITCH_FEATURES`], and `swsh`, can: each substitutes glyphs, and the value says which
+/// alternate.
 fn takes_value(name: &str) -> bool {
-    name == "swsh" || EXTRA_FEATURES.contains(&name)
+    name == "swsh" || (EXTRA_FEATURES.contains(&name) && !SWITCH_FEATURES.contains(&name))
 }
 
 /// Read a feature tag: `tag`, `+tag`, `-tag` or, for a feature that takes a value, `tag=N` (`N`
@@ -159,6 +172,7 @@ impl OtFeatures {
             extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
             extra_values: [0; EXTRA_FEATURES.len()],
             swash_value: 0,
+            unshaped_complex: false,
         };
         change(&mut off);
         change(&mut on);
@@ -287,7 +301,8 @@ impl OtFeatures {
         let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
-        if st.kerning.is_some() {
+        // A monospaced width form turns the font's pair kerning off as well.
+        if st.kerning.is_some() || st.glyph_form.is_width() {
             v.push(f(b"kern", false));
         }
         let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
@@ -316,8 +331,13 @@ impl OtFeatures {
         }
         for (i, tag) in EXTRA_FEATURES.iter().enumerate() {
             if let (true, Ok(t)) = (s.extra & (1 << i) != 0, <[u8; 4]>::try_from(tag.as_bytes())) {
+                // H or V Style: the kana forms made for the writing direction, `vkna` in vertical type.
+                let t = if self.vertical && &t == b"hkna" { *b"vkna" } else { t };
                 v.push(f(&t, u32::from(s.extra_values.get(i).copied().unwrap_or(0).max(1))));
             }
+        }
+        if let Some(tag) = st.glyph_form.feature() {
+            v.push(f(tag, true));
         }
         if self.vertical {
             // Not `vrt2`: its glyphs are already turned on their side, and the layout turns Latin
@@ -329,15 +349,20 @@ impl OtFeatures {
             // Kerning for the glyphs `palt` makes proportional (OpenType `apkn`), with automatic
             // kerning only.
             v.push(f(b"apkn", st.kerning.is_none()));
+        } else if st.glyph_form.is_width() {
+            // Listed as off, not left out: in runs shaped together with proportional text, a
+            // feature left out is set back to the shaper's default, which for `apkn` is on.
+            v.push(f(b"apkn", false));
         }
         v
     }
 
     /// Does text in style `st` take proportional widths (`palt`)? Proportional Metrics in
-    /// horizontal type; vertical type takes proportional heights instead
+    /// horizontal type, except with a monospaced width form ([`vectorcraft_doc::GlyphForm::is_width`]),
+    /// which sets the characters on a fixed width; vertical type takes proportional heights instead
     /// ([`Self::proportional_vertical`]).
     pub(crate) fn proportional(&self, st: &CharStyle) -> bool {
-        st.proportional_metrics && !self.vertical
+        st.proportional_metrics && !self.vertical && !st.glyph_form.is_width()
     }
 
     /// Does text in style `st` take proportional heights (`vpal`)? Proportional Metrics in
@@ -428,6 +453,31 @@ mod tests {
             let st = CharStyle { features: vec![tag.into()], ..CharStyle::default() };
             let on: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
             assert_eq!(on, [tag], "{tag}");
+        }
+    }
+
+    /// H or V Style (`hkna`) and Roman Italics (`ital`) are known, round-trip through the stored
+    /// tags and reach the shaper: `hkna` as itself in horizontal type and as `vkna` in vertical
+    /// type, `ital` in both. Neither takes an alternate's number.
+    #[test]
+    fn kana_style_and_roman_italics_are_kept_and_shaped() {
+        for t in ["hkna", "-hkna", "+ital", "ital"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        for t in ["hkna=2", "ital=0", "vkna"] {
+            assert!(!OtFeatures::known_tag(t), "{t}");
+        }
+        assert_eq!(OtFeatures::from_tags(["ital", "hkna", "smcp"]).to_tags(), ["smcp", "hkna", "ital"]);
+        assert_eq!(OtFeatures::from_tags(["hkna", "ital", "-hkna"]).to_tags(), ["ital"]);
+        let st = CharStyle { features: vec!["hkna".into(), "ital".into()], ..CharStyle::default() };
+        let on = |vertical: bool| -> Vec<String> {
+            OtFeatures { vertical, ..OtFeatures::default() }.resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect()
+        };
+        assert_eq!(on(false), ["hkna", "ital"]);
+        assert_eq!(on(true), ["vkna", "ital", "vert"]);
+        let plain = |vertical: bool| OtFeatures { vertical, ..OtFeatures::default() }.resolve(&CharStyle::default());
+        for vertical in [false, true] {
+            assert!(!plain(vertical).iter().any(|f| [b"hkna", b"vkna", b"ital"].iter().any(|t| f.tag == Tag::new(t))), "off by default");
         }
     }
 
@@ -591,5 +641,45 @@ mod tests {
         assert_eq!((serbian.len(), russian.len()), (5, 5));
         assert!(serbian.iter().zip(&russian).all(|(s, r)| s != r), "every letter in its Serbian form");
         assert_eq!(outlines("sr-Latn"), serbian);
+    }
+
+    /// A monospaced width form (`fwid`, `hwid`, `twid`, `qwid`) and Proportional Metrics' `palt`
+    /// are mutually exclusive: with a width form `palt` is left out and the font's pair kerning
+    /// (`kern`, and `apkn` for `palt`'s glyphs) is turned off, with automatic or manual kerning,
+    /// and with the other forms they stay.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    #[test]
+    fn width_forms_turn_off_proportional_metrics() {
+        use vectorcraft_doc::GlyphForm;
+        let tags = |form, kerning, value| {
+            let st = CharStyle { proportional_metrics: true, glyph_form: form, kerning, ..CharStyle::default() };
+            OtFeatures::default().resolve(&st).iter().filter(|f| f.value == value).map(|f| f.tag.to_string()).collect::<Vec<_>>()
+        };
+        for form in [GlyphForm::Default, GlyphForm::Traditional, GlyphForm::Jis78] {
+            assert!(tags(form, None, 1).contains(&"palt".to_string()), "{form:?}: {:?}", tags(form, None, 1));
+            assert!(!tags(form, None, 0).contains(&"kern".to_string()), "{form:?}: {:?}", tags(form, None, 0));
+        }
+        for form in [GlyphForm::FullWidth, GlyphForm::HalfWidth, GlyphForm::ThirdWidth, GlyphForm::QuarterWidth] {
+            for kerning in [None, Some(0.0)] {
+                let on = tags(form, kerning, 1);
+                assert!(!on.contains(&"palt".to_string()) && !on.contains(&"apkn".to_string()), "{form:?}: {on:?}");
+                assert!(on.iter().any(|t| t.as_bytes() == form.feature().unwrap()), "{form:?}: {on:?}");
+                // Listed as off, so that runs shaped together with proportional text keep them off.
+                let off = tags(form, kerning, 0);
+                assert!(off.contains(&"kern".to_string()) && off.contains(&"apkn".to_string()), "{form:?} {kerning:?}: {off:?}");
+            }
+        }
+    }
+
+    /// A face's `GPOS` features are found apart from its `GSUB` ones: Source Sans 3 kerns with
+    /// `GPOS` and makes ligatures with `GSUB`.
+    #[test]
+    fn positioning_and_substitution_features_are_found_in_their_own_tables() {
+        let face = FontDb::global().face("Source Sans 3", "Regular").unwrap();
+        assert!(face.has_positioning_feature(*b"kern"));
+        assert!(!face.has_substitution_feature(*b"kern"));
+        assert!(face.has_substitution_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"fwid"));
     }
 }

@@ -1,6 +1,6 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
-//! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
+//! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
 //! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
@@ -28,6 +28,7 @@ pub(super) const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150
 /// The resolution range accepted by the custom field and remembered between exports.
 const PPI_RANGE: std::ops::RangeInclusive<f64> = 1.0..=4608.0;
 
+/// Whether a resolution can be offered again by the raster options.
 fn valid_ppi(ppi: f64) -> bool {
     ppi.is_finite() && PPI_RANGE.contains(&ppi)
 }
@@ -46,6 +47,10 @@ const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
 const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
+/// WebP compression labels: `lossless` true, then false.
+const WEBP_COMPRESSION_LABELS: [&str; 2] = ["Lossless", "Lossy"];
+/// The lossy WebP quality a new export starts with (0–100).
+const WEBP_QUALITY: u8 = 90;
 
 /// The dialog kind of a raster format (`pngOptions`, `jpgOptions`, `webpOptions`, `gifOptions`,
 /// `png8Options`).
@@ -60,16 +65,19 @@ fn format_of(d: &Dialog) -> Option<&'static Format> {
 /// Open the options of raster format `f` for an export whose params (format, path, artboard
 /// choice) are `params`.
 pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
-    let size = app.session.active().and_then(|st| export_size(&st.doc, &params));
-    let ppi = params
-        .get("ppi")
-        .and_then(Value::as_f64)
-        .filter(|ppi| valid_ppi(*ppi))
-        .or_else(|| app.ui.raster_export_ppi.filter(|ppi| valid_ppi(*ppi)))
-        .unwrap_or(72.0);
+    let selection = params[super::export_as::SELECTION_FIELD] == true;
+    let size = app.session.active().and_then(|st| match selection {
+        true => vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false).ok().map(|(_, r)| (r.width(), r.height())),
+        false => export_size(&st.doc, &params),
+    });
     if let Some(o) = params.as_object_mut() {
-        o.insert("ppi".into(), json!(ppi));
-        o.extend(defaults(app, f));
+        let mut initial = defaults(app, f);
+        initial.insert("ppi".into(), app.ui.raster_export_ppi.filter(|ppi| valid_ppi(*ppi)).map_or_else(|| json!(72), |ppi| json!(ppi)));
+        for (key, value) in initial {
+            if o.get(&key).is_none_or(Value::is_null) {
+                o.insert(key, value);
+            }
+        }
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
         }
@@ -89,6 +97,9 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
     match f.id {
         "png" => {
             o.insert("interlaced".into(), json!(false));
+        }
+        "webp" => {
+            o.extend([("lossless".into(), json!(true)), ("quality".into(), json!(WEBP_QUALITY))]);
         }
         "jpg" => {
             let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
@@ -157,7 +168,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("__otherPpi".into(), json!(i == 3));
             }
             if preset.is_none()
-                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, PPI_RANGE, " ppi", 0, 80.0)
+                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, PPI_RANGE, &super::ppi_suffix(), 0, 80.0)
             {
                 d.fields.insert("ppi".into(), json!(v));
             }
@@ -216,11 +227,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
         }
         "jpg" => jpeg_rows(ui, d, &label, screens),
         "gif" | "png8" => palette_rows(ui, d, &label),
-        "webp" => {
-            ui.label("");
-            label(ui, tl!("Lossless (lossy WebP isn't available yet)"));
-            ui.end_row();
-        }
+        "webp" => webp_rows(ui, d, &label),
         "psd" => psd_options::rows(ui, d, &label),
         id => tiff_bmp_tga::rows(ui, d, id, &label),
     }
@@ -257,6 +264,26 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, 
             d.fields.insert("quality".into(), json!(u32::from(q) * 10));
         }
         label(ui, QUALITY_BANDS[q as usize]);
+    });
+    ui.end_row();
+}
+
+/// The WebP Options rows: Lossless or Lossy compression, and the quality 0–100 that Lossy uses
+/// (dimmed while Lossless is chosen, keeping its value).
+fn webp_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
+    label(ui, tl!("Compression:"));
+    let lossless = d.fields.get("lossless").and_then(Value::as_bool).unwrap_or(true);
+    if let Some(i) = widgets::dropdown(ui, "ro-webp", WEBP_COMPRESSION_LABELS[usize::from(!lossless)], &WEBP_COMPRESSION_LABELS, 150.0) {
+        d.fields.insert("lossless".into(), json!(i == 0));
+    }
+    ui.end_row();
+
+    label(ui, tl!("Quality:"));
+    let mut q = d.f64("quality", f64::from(WEBP_QUALITY)).round().clamp(0.0, 100.0) as u8;
+    ui.add_enabled_ui(!lossless, |ui| {
+        if widgets::slider(ui, egui::Slider::new(&mut q, 0..=100)).changed() {
+            d.fields.insert("quality".into(), json!(q));
+        }
     });
     ui.end_row();
 }
@@ -354,8 +381,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
     let ppi = d.fields.get("ppi").and_then(Value::as_f64).filter(|ppi| valid_ppi(*ppi));
     app.ui.dialog = None;
-    let result = io::export(app, Some(&format), Some(path), &form::params(d))?;
-    if let Some(ppi) = ppi {
+    let mut params = form::params(d);
+    if format == "psd" {
+        psd_options::drop_unused(&mut params);
+    }
+    let result = io::export(app, Some(&format), Some(path), &super::export_as::exported(d, params))?;
+    if result.get("cancelled").and_then(Value::as_bool) != Some(true)
+        && let Some(ppi) = ppi
+    {
         app.ui.raster_export_ppi = Some(ppi);
     }
     Ok(result)

@@ -2,6 +2,7 @@ use super::*;
 
 mod caps;
 mod classic;
+mod cut_sides;
 mod lighting;
 mod multiple_lights;
 mod profile_limits;
@@ -326,6 +327,16 @@ fn only_the_longest_contour_of_a_compound_profile_carries_the_side_surface() {
     let (w, h) = revolve_surface_size(&PathData::from_bezpath(&bp), b, Revolve::default()).unwrap();
     assert!((w - 10.0 * std::f64::consts::PI).abs() < 1e-9 && (h - 80.0).abs() < 1e-3, "{w} {h}");
 }
+#[test]
+fn a_side_quad_lies_on_the_surface_at_its_corners_distances_from_the_axis() {
+    // An edge from 30 to 50 pt right of an axis at 10, at surface y -5 and 15, over a step from
+    // 0.25 to 0.5 radians: x is each angle times each corner's own distance from the axis.
+    let corners = surface_corners(Point::new(30.0, 0.0), Point::new(50.0, 20.0), 10.0, [-5.0, 15.0], [0.25, 0.5]);
+    assert_eq!(corners, [Point::new(5.0, -5.0), Point::new(10.0, 15.0), Point::new(20.0, 15.0), Point::new(10.0, -5.0)]);
+    // Left of the axis the distances are the same.
+    let left = surface_corners(Point::new(-10.0, 0.0), Point::new(-30.0, 20.0), 10.0, [-5.0, 15.0], [0.25, 0.5]);
+    assert_eq!(left, corners);
+}
 /// The square ring of [`a_ring_profile_is_measured_from_its_outer_side_at_mid_height`] with an
 /// anchor in the middle of its inner side.
 fn split_square() -> [Point; 6] {
@@ -374,4 +385,36 @@ fn malformed_and_degenerate_inputs_are_bounded() {
     assert!(f.len() <= 258);
     assert!(revolve(&p, Rect::new(f64::NAN, 0.0, 1.0, 1.0), Revolve::default()).is_err());
     assert!(revolve(&PathData::default(), b, Revolve::default()).unwrap().is_empty());
+}
+
+/// A revolved face carries its plane: the depth it gives at each corner of its drawing is the
+/// corner's view-space depth, with and without perspective. A face whose corners lie off one plane,
+/// or with a corner at or past the eye, has none.
+#[test]
+fn a_revolved_face_measures_its_depth_on_its_plane() {
+    let o = Revolve { rotation_x: -30.0, rotation_y: 25.0, ..Default::default() }.sanitized();
+    let origin = Point::new(50.0, 80.0);
+    let light = V3(0.0, 0.0, 1.0);
+    let [a, b, c, d] = [V3(-20.0, -10.0, 5.0), V3(20.0, -12.0, -15.0), V3(25.0, 15.0, -20.0), V3(-18.0, 14.0, 4.0)];
+    // The fourth corner moved onto the plane of the first three.
+    let n = b.sub(a).cross(c.sub(a));
+    let d = V3(d.0, d.1, a.2 - (n.0 * (d.0 - a.0) + n.1 * (d.1 - a.1)) / n.2);
+    let flat = [a, b, c, d];
+    for eye in [None, Some(400.0)] {
+        let face = project_face(&flat, None, o, origin, eye, light).unwrap().unwrap();
+        let plane = face.plane.unwrap();
+        for (p, v) in face.points.iter().zip(&flat) {
+            let depth = plane.depth_at(*p).unwrap();
+            assert!((depth - v.2).abs() < 1e-6, "{eye:?}: {depth} against {}", v.2);
+        }
+        let twisted = [a, b, c, V3(d.0, d.1, d.2 + 1.0)];
+        assert!(project_face(&twisted, None, o, origin, eye, light).unwrap().unwrap().plane.is_none(), "{eye:?}");
+    }
+    let past = [a, b, V3(c.0, c.1, 500.0)];
+    assert!(project_face(&past, None, o, origin, Some(400.0), light).unwrap().unwrap().plane.is_none());
+    assert!(project_face(&past, None, o, origin, Some(1000.0), light).unwrap().unwrap().plane.is_some());
+    // Every face of a revolved profile of straight edges has one.
+    let (p, b) = cylinder();
+    let faces = revolve(&p, b, Revolve { rotation_x: -30.0, perspective: 35.0, ..Default::default() }).unwrap();
+    assert!(!faces.is_empty() && faces.iter().all(|f| f.plane.is_some()));
 }

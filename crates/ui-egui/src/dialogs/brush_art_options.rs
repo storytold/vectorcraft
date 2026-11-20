@@ -9,7 +9,7 @@
 //! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
-//! `path`).
+//! `path`), `hueJitter` (°).
 //! Art: `width` (%), `widthMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation`),
 //! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
@@ -187,6 +187,7 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
                 f.insert(mode_key(key), json!(mode.id()));
             }
             f.insert("rotationRelativeTo".into(), json!(if s.rotation_relative_to_path { "path" } else { "page" }));
+            f.insert("hueJitter".into(), json!(s.hue_jitter));
         }
         BrushKind::Art(a) => {
             let (mode, start, end) = match a.scale {
@@ -254,7 +255,8 @@ fn scatter_mode(d: &Dialog, key: &str) -> Variation {
     Variation::parse(&d.str(&mode_key(key))).unwrap_or_default()
 }
 
-/// How an art brush's width varies: Fixed, or with the pen's pressure, tilt, bearing or rotation.
+/// How an art brush's width varies: Fixed, or with the pen's pressure, tilt, bearing, rotation or
+/// wheel.
 fn art_width_mode(d: &Dialog) -> Variation {
     Variation::parse(&d.str("widthMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
 }
@@ -268,6 +270,7 @@ pub(super) fn params(d: &Dialog) -> Value {
                 p[*key] = json!([clamped(d, &min_key(key), range), clamped(d, &max_key(key), range)]);
             }
             p["modes"] = json!(SCATTER.map(|(key, _)| scatter_mode(d, key).id()));
+            p["hue_jitter"] = json!(clamped(d, "hueJitter", Scatter::HUE_JITTER_RANGE));
             p
         }
         "art" => {
@@ -434,7 +437,6 @@ fn flips(ui: &mut egui::Ui, d: &mut Dialog) {
 
 fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let labels = [tl!("Size:"), tl!("Spacing:"), tl!("Scatter:"), tl!("Rotation:")];
-    let modes = Variation::ALL.map(Variation::label);
     egui::Grid::new("brush-options-scatter").num_columns(4).spacing([8.0, 8.0]).show(ui, |ui| {
         for (((key, suffix), range), text) in SCATTER.into_iter().zip(Scatter::RANGES).zip(labels) {
             super::swatch_options::label(ui, text);
@@ -448,7 +450,9 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
                     }
                 });
             }
-            if let Some(m) = widgets::dropdown(ui, ("brush-scatter-mode", key), mode.label(), &modes, 104.0).and_then(|i| Variation::ALL.get(i)) {
+            let offered = Variation::offered(key == "size");
+            let modes: Vec<&str> = offered.iter().map(|m| m.label()).collect();
+            if let Some(m) = widgets::dropdown(ui, ("brush-scatter-mode", key), mode.label(), &modes, 104.0).and_then(|i| offered.get(i)) {
                 d.fields.insert(mode_key(key), json!(m.id()));
             }
             ui.end_row();
@@ -457,6 +461,9 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(4.0);
     let relative = [("page", tl!("Page")), ("path", tl!("Path"))];
     super::form::choice(ui, d, "rotationRelativeTo", tl!("Rotation relative to:"), (LABEL_W, 104.0), &relative);
+    ui.add_space(4.0);
+    // Each copy turns its colors' hue by its own amount up to this many degrees either way.
+    widgets::label_row(ui, tl!("Hue Jitter:"), LABEL_W, |ui| number(ui, d, "hueJitter", Scatter::HUE_JITTER_RANGE, "°", true));
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
@@ -467,11 +474,18 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
         super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
         let mode = art_width_mode(d);
         number(ui, d, "widthMax", range, "%", mode.follows_pen());
-        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
+        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
         if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
             d.fields.insert("widthMode".into(), json!(m.id()));
         }
     });
+    // A path sets its own width, flips, overlap and colorization, not how the art scales or runs.
+    if d.bool(super::brush_options::OBJECT) {
+        flips(ui, d);
+        ui.add_space(4.0);
+        super::form::check(ui, d, "overlap", tl!("Overlap"));
+        return;
+    }
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -532,8 +546,11 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
-    tiles(ui, d);
-    ui.add_space(6.0);
+    // The tiles belong to the brush; a path sets its own scale, spacing, flips, fit and colorization.
+    if !d.bool(super::brush_options::OBJECT) {
+        tiles(ui, d);
+        ui.add_space(6.0);
+    }
     flips(ui, d);
     widgets::section_header(ui, tl!("Fit"));
     let fits = [("stretch", tl!("Stretch to fit")), ("addSpace", tl!("Add space to fit")), ("approximate", tl!("Approximate path"))];
@@ -719,12 +736,130 @@ fn tile_doc(art: &Node, w: f64, h: f64) -> Option<Document> {
     Some(doc)
 }
 
+/// The private dialog marker survives with its draft, never in the brush definition.
+const KEY_COLOR_DOC: &str = "__keyColorDoc";
+
+fn key_color_owner_valid(app: &VectorcraftApp) -> bool {
+    let Some(pick) = app.ui.brush_key_color_pick.as_ref() else { return false };
+    app.session.active().is_some_and(|doc| doc.uid == pick.doc)
+        && app.ui.dialog.as_ref().is_some_and(|dialog| {
+            dialog.kind == super::brush_options::KIND
+                && dialog.str("colorization") == "hueShift"
+                && dialog.fields.get(KEY_COLOR_DOC).and_then(Value::as_u64) == Some(pick.doc)
+        })
+}
+
+fn key_color_pick_active(app: &VectorcraftApp) -> bool {
+    key_color_owner_valid(app) && app.session.tool_id() == "eyedropper" && app.session.tool_options()["brushKeyColor"] == true
+}
+
+/// Only the owned Brush Options pick opens an input aperture; other modal owners still block it.
+pub(crate) fn brush_key_color_canvas(app: &VectorcraftApp, ctx: &egui::Context) -> Option<egui::Rect> {
+    (key_color_pick_active(app)
+        && !app.ui.about
+        && !app.ui.palette_open
+        && !app.file_dialog_open()
+        && !crate::updates_ui::blocks_input(app)
+        && !egui::Popup::is_any_open(ctx))
+    .then_some(app.canvas_rect)
+    .flatten()
+}
+
+/// Clear only the transient mode owned by this dialog, including a parked eyedropper.
+pub(crate) fn cancel_brush_key_color(app: &mut VectorcraftApp, restore: bool) {
+    let Some(pick) = app.ui.brush_key_color_pick.take() else { return };
+    let options = Map::from_iter([("brushKeyColor".into(), json!(false)), ("stop".into(), Value::Null)]);
+    app.session.set_tool_options(Some("eyedropper"), &options);
+    if restore && app.session.tool_id() == "eyedropper" {
+        app.return_to_tool(&pick.back);
+    }
+}
+
+/// Refresh before real canvas input and dialog layout, so a stale press cannot reach another tool.
+pub(crate) fn refresh_brush_key_color(app: &mut VectorcraftApp) -> bool {
+    if app.ui.brush_key_color_pick.is_none() || key_color_pick_active(app) {
+        return false;
+    }
+    let restore = !key_color_owner_valid(app) && app.session.tool_id() == "eyedropper";
+    cancel_brush_key_color(app, restore);
+    true
+}
+
+/// A foreground color click owns its physical Down/Up; the restored tool receives neither.
+pub(crate) fn brush_key_color_input(app: &mut VectorcraftApp, ui: &egui::Ui, response: &egui::Response, rect: egui::Rect) -> bool {
+    if app.ui.brush_key_color_pick.is_none() {
+        return false;
+    }
+    let (pointer, focused, lost) = ui.input(|input| {
+        let up = input
+            .events
+            .iter()
+            .position(|event| matches!(event, egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, .. }));
+        let gone = input.events.iter().position(|event| matches!(event, egui::Event::PointerGone));
+        let lost = gone.is_some_and(|gone| up.is_none_or(|up| gone < up))
+            || input.events.iter().any(|event| matches!(event, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. }))
+            || input.multi_touch().is_some()
+            || response.long_touched();
+        (input.pointer.clone(), input.focused, lost)
+    });
+    let pending = app.ui.brush_key_color_pick.as_ref().is_some_and(|pick| pick.press.is_some());
+    if pending && (!focused || lost || (!pointer.primary_down() && !pointer.primary_released())) {
+        cancel_brush_key_color(app, true);
+        return true;
+    }
+    if brush_key_color_canvas(app, ui.ctx()).is_none() {
+        if let Some(pick) = app.ui.brush_key_color_pick.as_mut() {
+            pick.press = None;
+        }
+        return false;
+    }
+    if !focused {
+        return true;
+    }
+    if pointer.primary_pressed()
+        && response.hovered()
+        && let Some(point) = pointer.interact_pos().filter(|point| rect.contains(*point) && ui.clip_rect().contains(*point))
+    {
+        let xf = crate::canvas::Xf::at(rect, app.view().unwrap_or(&crate::View::default()), app.canvas_ui_zoom);
+        if let Some(pick) = app.ui.brush_key_color_pick.as_mut() {
+            pick.press = Some(xf.to_doc(point));
+        }
+    }
+    if pointer.button_released(egui::PointerButton::Primary)
+        && let Some(point) = app.ui.brush_key_color_pick.as_mut().and_then(|pick| pick.press.take())
+    {
+        // The existing tool returns a deferred SwitchTool request. Release Eye before applying
+        // that request, so a held color click cannot start or finish a stroke in the prior tool.
+        let view = app.view_info();
+        let down = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, point.x, point.y);
+        let up = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Up, point.x, point.y);
+        let sampled = app.session.pointer(&down, view);
+        let released = app.session.pointer(&up, view);
+        crate::canvas::apply_requests(app, sampled);
+        crate::canvas::apply_requests(app, released);
+    }
+    true
+}
+
 /// Key Color eyedropper: sample the next click on the art into this dialog's `keyColor`.
-fn key_color_eyedropper(app: &mut VectorcraftApp) {
-    let back = app.session.tool_id();
-    app.select_tool("eyedropper");
+fn key_color_eyedropper(app: &mut VectorcraftApp, dialog: &mut Dialog) {
+    if app.ui.brush_key_color_pick.is_some() {
+        cancel_brush_key_color(app, true);
+        return;
+    }
+    let Some(doc) = app.session.active().map(|doc| doc.uid) else { return };
+    if dialog.fields.get(KEY_COLOR_DOC).and_then(Value::as_u64).is_some_and(|owner| owner != doc) {
+        return;
+    }
+    let back = app.session.tool_id().to_string();
+    if let Err(error) = app.try_select_tool("eyedropper") {
+        app.status(error);
+        return;
+    }
     app.session.set_tool_option("brushKeyColor", &json!(true));
     app.session.set_tool_option("stop", &json!(back));
+    dialog.fields.insert(KEY_COLOR_DOC.into(), json!(doc));
+    app.ui.brush_key_color_pick = Some(crate::state::BrushKeyColorPick { doc, back, press: None });
 }
 
 fn colorization_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
@@ -762,7 +897,7 @@ fn colorization_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog
                 }
             }
             if widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the key color"), false, 22.0).clicked() {
-                key_color_eyedropper(app);
+                key_color_eyedropper(app, d);
             }
         });
     });
@@ -770,6 +905,17 @@ fn colorization_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog
 
 /// Apply a sampled colour to the open Brush Options dialog (`brushKeyColor` tool request).
 pub(super) fn apply_key_color_sample(app: &mut VectorcraftApp, color: &Value) {
+    let marked = app.ui.dialog.as_ref().is_some_and(|dialog| dialog.fields.contains_key(KEY_COLOR_DOC));
+    if app.ui.brush_key_color_pick.is_some() {
+        if !key_color_owner_valid(app) {
+            cancel_brush_key_color(app, false);
+            return;
+        }
+        cancel_brush_key_color(app, false);
+    } else if marked {
+        // A reply cannot change the draft after its owned pick was cancelled or replaced.
+        return;
+    }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == super::brush_options::KIND) else { return };
     if d.str("colorization") != "hueShift" {
         return;

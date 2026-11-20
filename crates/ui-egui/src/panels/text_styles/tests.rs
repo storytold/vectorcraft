@@ -29,8 +29,8 @@ fn panels_draw_and_apply_headless() {
         out.textures_delta.clear();
     }
     app.run("charStyle.apply", target(&app, Kind::Char, json!({"name": "Big"}))).unwrap();
-    let (name, attrs) = current(&app, Kind::Char).unwrap();
-    assert_eq!((name.as_deref(), attrs["size"].as_f64()), (Some("Big"), Some(30.0)));
+    let (style, _) = text_style(&app).unwrap();
+    assert_eq!((current(&app, Kind::Char), style.size), (Some(Some("Big".to_string())), 30.0));
 }
 
 #[test]
@@ -818,6 +818,74 @@ fn the_styles_are_listed_once_per_document_version() {
     }
 }
 
+/// The style names of `id`'s runs (`Kind::Para`: of its paragraphs).
+fn frame_style_names(app: &VectorcraftApp, kind: Kind, id: u64) -> Vec<Option<String>> {
+    match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) if kind == Kind::Char => t.runs.iter().map(|r| r.style.style_name.clone()).collect(),
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).style_name.clone()).collect(),
+        _ => panic!("not text"),
+    }
+}
+
+/// With the Selection tool a selected frame of threaded text stands for its whole story, in both
+/// panels: no row shows as the current style while a locked or hidden frame has another style, a
+/// row click applies the style to every frame in one undo step and leaves other type alone, the
+/// row shows "+" while a hidden frame overrides the style, and an Alt-click clears that override.
+#[test]
+fn selection_tool_styles_reach_every_frame_of_the_story() {
+    use egui::Modifiers;
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        app.run("object.hide", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Plain"})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Second", "attrs": {}})).unwrap();
+        app.run(&format!("{}.apply", kind.prefix()), json!({"name": "Second", "ids": [c]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        for id in [a, b, c] {
+            assert!(!frame_style_names(&app, kind, id).is_empty(), "frame {id} holds text");
+        }
+        assert_eq!(current(&app, kind), None, "{what} Styles: the hidden frame has another style");
+
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, "Plain", Modifiers::NONE, rows);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{what} Styles: one undo step");
+        for id in [a, b, c] {
+            assert!(frame_style_names(&app, kind, id).iter().all(|n| n.as_deref() == Some("Plain")), "{what} Styles: frame {id}");
+        }
+        assert!(frame_style_names(&app, kind, other).iter().all(Option::is_none), "{what} Styles: other type keeps its style");
+        assert_eq!(current(&app, kind), Some(Some("Plain".to_string())));
+
+        app.run("text.setFormat", json!({"ids": [c], "kerning": 40, "composer": "singleLine"})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: the hidden frame's override shows: {shown}");
+        // A new context, so that this click does not count as the second click of a double-click.
+        click_text_held(&egui::Context::default(), &mut app, "Plain+", Modifiers::ALT, rows);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain"), "{what} Styles: Alt-click clears the override: {shown}");
+        app.run("edit.undo", json!({})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: undo brings the override back: {shown}");
+    }
+}
+
 /// A row dragged from the highlighted styles carries all of them: dropped on Create New Style it
 /// duplicates each in one undo step and highlights the copies, and dropped on Delete it deletes each
 /// but the Normal style in one undo step and clears the highlight. A row from outside the highlight
@@ -1201,7 +1269,7 @@ fn alt_clicking_new_paragraph_style_asks_for_its_name() {
     assert!(app.session.doc().unwrap().doc.para_styles.is_empty(), "no style is added before OK");
     set_name(&mut app, "Body Copy");
     crate::dialogs::confirm(&mut app).unwrap();
-    let (_, attrs) = current(&app, Kind::Para).unwrap();
+    let attrs = textstyles::para_attrs(&text_style(&app).unwrap().1);
     let doc = &app.session.doc().unwrap().doc;
     assert_eq!(doc.para_styles.iter().map(|s| (s.name.as_str(), &s.attrs)).collect::<Vec<_>>(), [("Body Copy", &attrs)]);
 
