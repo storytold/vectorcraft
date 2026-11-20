@@ -636,6 +636,10 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let bucket = bucket_color_params(s, p, cmd)?;
     let p = bucket.as_ref().unwrap_or(p);
+    // A bad `target` or `aligned` is refused for every kind of target: `item_target` reads no
+    // `target` once `id` or `ids` names an object, and selected characters read neither.
+    super::appearance::aligned(p, cmd)?;
+    super::appearance::targets_contents(p)?;
     let focus = switch_or(p, "focus", true, cmd)?;
     // An opacity alone places no gradient, so `span` may only be "object" with it.
     let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
