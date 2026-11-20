@@ -2777,6 +2777,7 @@ fn hovering_a_file_handling_row_shows_its_description() {
         ("Use System Defaults for Edit Original", "editOriginalSystemDefaults"),
         ("Mark Older Files as [Converted] When Opened", "appendConverted"),
         ("Use Compression", "useCompression"),
+        ("Embed Preview", "embedPreview"),
     ];
     let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
     // The last rows can be under the bottom of the list: the wheel scrolls them into view.
