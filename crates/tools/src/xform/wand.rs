@@ -165,7 +165,7 @@ impl Tool for LassoTool {
         self.mesh.options()
     }
 
-    /// Pick the gradient mesh points the Eyedropper held (`meshPoints`).
+    /// Pick the gradient mesh points the tool chosen before held (`meshPoints`).
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "meshPoints" {
             self.mesh.set_options(value);
