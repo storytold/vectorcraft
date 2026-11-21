@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Parametric Shape",
             [],
             None,
-            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do), otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
+            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
             has_doc,
             set
         ),
@@ -108,21 +108,24 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if shape != old {
         // Without a center, the reference point of the bounding box (as the Transform panel and
         // `object.setBounds` measure it; the geometric box where the preview leaves none) keeps
-        // its place: the new outline moves onto it.
+        // its place: the new outline moves onto it. The box after the edit is measured the same way
+        // as the box before it.
         let how = s.bounds_measure();
-        let boxed = move |d: &Document| {
-            effects::preview::oriented_bounds_with(d, &[id], how)
-                .or_else(|| effects::preview::oriented_bounds_with(d, &[id], effects::preview::Measure { preview: false, ..how }))
-        };
+        let geometric = effects::preview::Measure { preview: false, ..how };
+        let boxed = |d: &Document, m: effects::preview::Measure| effects::preview::oriented_bounds_with(d, &[id], m).map(|b| (m, b));
         let keep = match reference.filter(|_| p.get("center").is_none_or(Value::is_null)) {
-            Some(i) => Some((i, boxed(&s.doc()?.doc).ok_or_else(|| EngineError::Other("no bounds".into()))?.reference_point(i))),
+            Some(i) => {
+                let d = &s.doc()?.doc;
+                let (m, b) = boxed(d, how).or_else(|| boxed(d, geometric)).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+                Some((i, m, b.reference_point(i)))
+            }
             None => None,
         };
         let path = outline(&shape, C)?;
         s.edit(EDIT, |d, sel| {
             shape_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &shape, path);
-            if let Some((i, was)) = keep
-                && let Some(now) = boxed(d).map(|b| b.reference_point(i))
+            if let Some((i, m, was)) = keep
+                && let Some(now) = boxed(d, m).map(|(_, b)| b.reference_point(i))
                 && now != was
             {
                 let mut moved = shape;
