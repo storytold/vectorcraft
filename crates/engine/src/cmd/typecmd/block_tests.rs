@@ -672,6 +672,109 @@ fn point_type_with_nothing_to_fit_is_left_as_it_is() {
     assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
 }
 
+/// The distances between the baselines of `t`'s lines.
+fn baseline_steps(t: &TextObject) -> Vec<f64> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.lines.windows(2).map(|w| w[1].baseline - w[0].baseline).collect()
+}
+
+/// Block owns each character's leading (its size plus the line gap): a leading change from
+/// `text.setStyle`, `text.setRangeStyle` or `type.step` on area type with Block on changes the
+/// line gap by the difference from the first character's leading, in one undo step, and sticks.
+#[test]
+fn a_leading_change_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = area(&mut s, 300.0, 400.0, "BIG\na much longer second line\nmid one");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    let (first, second) = (t.runs[0].style.size, size_at(&t, 4));
+    let steps = baseline_steps(&t);
+    let n = undo_len(&s);
+
+    // The whole object: the first character's leading becomes the leading given.
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": first + 6.0})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+    let t = text(&s, id);
+    assert!((t.area.line_gap - 6.0).abs() < 1e-9, "line gap {}", t.area.line_gap);
+    assert!(t.runs.iter().all(|r| r.style.leading.is_some_and(|l| (l - r.style.size - 6.0).abs() < 1e-9)), "{:?}", t.runs);
+    assert_block(&t);
+    let wider = baseline_steps(&t);
+    assert!(wider.iter().zip(&steps).all(|(w, s)| (w - s - 6.0).abs() < 1e-6), "every line spreads: {steps:?} -> {wider:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(text(&s, id).area.line_gap, 0.0);
+
+    // A range: measured from the leading of its first character.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 10, "leading": second - 3.0})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap + 3.0).abs() < 1e-9, "line gap {}", t.area.line_gap);
+    assert!(baseline_steps(&t).iter().zip(&steps).all(|(w, s)| w < s), "every line tightens");
+
+    // Alt+Up/Down steps by the Size/Leading increment.
+    let inc = s.prefs.type_size_increment;
+    s.execute("type.step", &json!({"attribute": "leading", "by": 1, "id": id, "start": 0, "end": 3})).unwrap();
+    assert!((text(&s, id).area.line_gap - (inc - 3.0)).abs() < 1e-9);
+
+    // Auto: the first character's Auto leading, 120% of its size.
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": "auto"})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap - t.runs[0].style.size * 0.2).abs() < 1e-6, "line gap {}", t.area.line_gap);
+
+    // The leading the first character already has changes nothing.
+    let n = undo_len(&s);
+    let lead = text(&s, id).runs[0].style.leading.unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": lead})).unwrap();
+    assert_eq!(undo_len(&s), n, "no undo step");
+
+    // The gap stays within its range.
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": 5000})).unwrap();
+    assert_eq!(text(&s, id).area.line_gap, 1296.0);
+    // From a gap that holds every leading at its least, the leading given still applies.
+    s.execute("text.areaOptions", &json!({"lineGap": -1296})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": 1})).unwrap();
+    let lead = text(&s, id).runs[0].style.leading.unwrap();
+    assert!((lead - 1.0).abs() < 1e-6, "leading {lead}");
+    s.execute("text.areaOptions", &json!({"lineGap": 0})).unwrap();
+    // A size set with the leading: the gap follows the size Block gives the first character, on an
+    // empty line (whose size Block keeps) too.
+    s.execute("text.setStyle", &json!({"ids": [id], "size": 20, "leading": 50})).unwrap();
+    let lead = text(&s, id).runs[0].style.leading.unwrap();
+    assert!((lead - 50.0).abs() < 1e-6, "leading {lead}");
+    s.execute("text.setText", &json!({"text": "\nwords"})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "size": 20, "leading": 30})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(size_at(&t, 0), 20.0, "the empty line keeps the size set");
+    assert!((t.runs[0].style.leading.unwrap() - 30.0).abs() < 1e-6, "{:?}", t.runs[0].style);
+    s.execute("text.setText", &json!({"text": "BIG\na much longer second line\nmid one"})).unwrap();
+    s.execute("text.areaOptions", &json!({"lineGap": 0})).unwrap();
+
+    // Scaled type: the leading given and the line gap are in document points.
+    s.execute("object.scale", &json!({"sx": 200, "sy": 200})).unwrap();
+    let points = text(&s, id).style_scale().unwrap().points;
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": 150})).unwrap();
+    let t = text(&s, id);
+    let (size, lead) = (t.runs[0].style.size * points, t.runs[0].style.leading.unwrap() * points);
+    assert!((lead - 150.0).abs() < 1e-6, "leading {lead}");
+    assert!((t.area.line_gap - (150.0 - size)).abs() < 1e-6, "line gap {} for size {size}", t.area.line_gap);
+}
+
+/// Without Block (point type, and area type with Block off) a leading change sets the
+/// characters' leading and leaves the line gap.
+#[test]
+fn a_leading_change_without_block_sets_the_leading() {
+    let mut s = session();
+    let id = area(&mut s, 300.0, 400.0, "one\ntwo");
+    s.execute("text.areaOptions", &json!({"lineGap": 5})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": 30})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(t.area.line_gap, 5.0);
+    assert!(t.runs.iter().all(|r| r.style.leading == Some(30.0)));
+    let id = point(&mut s, "one\ntwo", json!({}));
+    s.execute("type.step", &json!({"attribute": "leading", "by": 1, "id": id, "start": 0, "end": 3})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(t.area.line_gap, 0.0);
+    assert_eq!(t.runs[0].style.leading, Some(12.0 * 1.2 + s.prefs.type_size_increment));
+}
+
 #[test]
 fn long_text_fits_in_a_bounded_number_of_layouts() {
     let mut s = session();
@@ -697,4 +800,110 @@ fn long_text_fits_in_a_bounded_number_of_layouts() {
     assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
     let bound = 2 * (2 + 2 * super::block::BLOCK_PASSES as u64) + 8;
     assert!(used <= bound, "point type: {used} layouts");
+}
+
+/// Area type with Block on, its lines at different sizes, and a line gap of 0.
+fn block_text(s: &mut Session) -> u64 {
+    let id = area(s, 300.0, 400.0, "BIG\na much longer second line\nmid one");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    assert_eq!(text(s, id).area.line_gap, 0.0);
+    id
+}
+
+/// The leading of the one-byte character at `byte` (`style_at` reads the character before a run
+/// end, so it is asked for the end of the character).
+fn leading_at(t: &TextObject, byte: usize) -> Option<f64> {
+    vectorcraft_text::edit::style_at(&t.runs, byte + 1).leading
+}
+
+/// `text.setRangeStyle {leading}` on a range of Block text moves the line gap by the change to
+/// the leading of the range's first character, and the range keeps the leading given.
+#[test]
+fn a_range_leading_change_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = block_text(&mut s);
+    let second = vectorcraft_text::edit::style_at(&text(&s, id).runs, 5).size;
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 10, "leading": second + 5.0})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap - 5.0).abs() < 1e-9, "line gap {}", t.area.line_gap);
+    assert!(leading_at(&t, 4).is_some_and(|l| (l - second - 5.0).abs() < 1e-9), "{:?}", leading_at(&t, 4));
+    assert!(t.runs.iter().all(|r| r.style.leading.is_some_and(|l| (l - r.style.size - 5.0).abs() < 1e-9)), "every line spreads");
+    // Reset Panel's form: the leading is set and Block keeps the line gap.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 10, "leading": "auto", "keepLineGap": true})).unwrap();
+    assert!((text(&s, id).area.line_gap - 5.0).abs() < 1e-9);
+    s.execute("text.setStyle", &json!({"ids": [id], "leading": "auto", "keepLineGap": true})).unwrap();
+    assert!((text(&s, id).area.line_gap - 5.0).abs() < 1e-9);
+    assert!(s.execute("text.setStyle", &json!({"ids": [id], "leading": 30, "keepLineGap": 1})).is_err(), "keepLineGap takes a bool");
+}
+
+/// `type.step {attribute: "leading"}` (Alt+Up/Down) on Block text moves the line gap by the step.
+#[test]
+fn a_leading_step_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = block_text(&mut s);
+    let inc = s.prefs.type_size_increment;
+    s.execute("type.step", &json!({"attribute": "leading", "by": -1, "id": id, "start": 0, "end": 3})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap + inc).abs() < 1e-9, "line gap {}", t.area.line_gap);
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - t.runs[0].style.size + inc).abs() < 1e-9));
+}
+
+/// A character style edited to set a leading while Block text uses it moves the line gap; a style
+/// without a leading leaves the gap.
+#[test]
+fn a_character_style_edited_to_a_leading_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = block_text(&mut s);
+    s.execute("charStyle.new", &json!({"name": "Plain", "attrs": {"tracking": 0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Plain", "id": id})).unwrap();
+    assert_eq!(text(&s, id).area.line_gap, 0.0, "no leading in the style");
+    s.execute("charStyle.edit", &json!({"name": "Plain", "to": "Plain", "attrs": {"tracking": 0, "leading": 60}})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap - (60.0 - t.runs[0].style.size)).abs() < 1e-6, "edit: line gap {}", t.area.line_gap);
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 60.0).abs() < 1e-6));
+}
+
+/// A character style that sets a leading, applied to Block text, moves the line gap.
+#[test]
+fn a_character_style_leading_applied_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = block_text(&mut s);
+    s.execute("charStyle.new", &json!({"name": "Loose", "attrs": {"leading": 50}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Loose", "id": id})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap - (50.0 - t.runs[0].style.size)).abs() < 1e-6, "apply: line gap {}", t.area.line_gap);
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 50.0).abs() < 1e-6));
+
+    // Clearing overrides gives the text the leading of the Normal style.
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"leading": 44}})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Plain", "attrs": {"tracking": 0}})).unwrap();
+    s.execute("text.areaOptions", &json!({"lineGap": 0})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Plain", "id": id, "clearOverrides": true})).unwrap();
+    let t = text(&s, id);
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 44.0).abs() < 1e-6), "clear: {:?}", leading_at(&t, 0));
+}
+
+/// Text Tweaker's leading ramp on Block text moves the line gap to its first character's value.
+#[test]
+fn a_text_tweaker_leading_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let id = block_text(&mut s);
+    s.execute("addon.type.textTweaker", &json!({"attribute": "leading", "from": 40, "to": 45, "ids": [id]})).unwrap();
+    let t = text(&s, id);
+    assert!((t.area.line_gap - (40.0 - t.runs[0].style.size)).abs() < 1e-6, "line gap {}", t.area.line_gap);
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 40.0).abs() < 1e-6));
+}
+
+/// The Eyedropper copying a leading onto Block text moves the line gap, so the first character
+/// takes the copied leading.
+#[test]
+fn an_eyedropper_leading_with_block_on_moves_the_line_gap() {
+    let mut s = session();
+    let source = point(&mut s, "source", json!({}));
+    s.execute("text.setStyle", &json!({"ids": [source], "leading": 33})).unwrap();
+    let id = block_text(&mut s);
+    s.execute("appearance.copyFrom", &json!({"source": source, "ids": [id]})).unwrap();
+    let t = text(&s, id);
+    assert!(t.area.line_gap != 0.0, "the line gap moved");
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 33.0).abs() < 1e-6), "{:?}", leading_at(&t, 0));
 }

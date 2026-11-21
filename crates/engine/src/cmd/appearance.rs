@@ -2003,7 +2003,12 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some((_, para)) = picked.text.as_ref().filter(|_| attrs.paragraph) {
                     t.edit_paras(Some(t.paragraphs_in(start, end)), |p| *p = para.clone());
                 }
-                super::typecmd::refresh_bounds(t);
+                // With Block on, the copied leading goes to the frame's line gap.
+                if characters.contains_key(&id) && start < end {
+                    super::typecmd::refresh_with_given_leading(t, start);
+                } else {
+                    super::typecmd::refresh_bounds(t);
+                }
             }
             check_text_bounds(d)?;
             let labels = super::graph::capture_label_text(d, &whole, kept_text, kept_para)?;
@@ -2265,7 +2270,12 @@ impl Picked {
                 t.set_all_paras(para.clone());
             }
             if text.is_some() && (a.character || a.paragraph) {
-                super::typecmd::refresh_bounds(t);
+                // With Block on, the copied leading goes to the frame's line gap.
+                if character.is_some() {
+                    super::typecmd::refresh_with_given_leading(t, 0);
+                } else {
+                    super::typecmd::refresh_bounds(t);
+                }
             }
             return;
         }
