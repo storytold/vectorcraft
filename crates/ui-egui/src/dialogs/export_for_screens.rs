@@ -242,7 +242,7 @@ pub(crate) fn drop_unread_screen_settings(settings: &mut Map<String, Value>) {
 
 /// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`), without
 /// the keys the export no longer reads.
-fn editable_row(row: &Value) -> Value {
+pub(super) fn editable_row(row: &Value) -> Value {
     let num = |k: &str| row.get(k).and_then(Value::as_f64);
     let text = match (num("width"), num("height"), num("ppi"), row.get("scale")) {
         (Some(w), ..) => format!("{w}w"),
@@ -367,11 +367,12 @@ fn selection_params(app: &VectorcraftApp, d: &Dialog) -> Result<(Map<String, Val
 /// The `folders` the dialog's sub-folder controls give: `none`, `format`, or a folder per scale
 /// (`rows`), or the `item` or `itemFormat` of an applied preset (`__itemFolders`) while the
 /// controls have not changed.
-fn folders(d: &Dialog) -> &'static str {
-    match (d.bool("subfolders"), d.str("subfolderBy").as_str()) {
+pub(super) fn folders(fields: &Map<String, Value>) -> &'static str {
+    let text = |k: &str| fields.get(k).and_then(Value::as_str).unwrap_or_default();
+    match (fields.get("subfolders").and_then(Value::as_bool).unwrap_or(false), text("subfolderBy")) {
         (false, _) => "none",
         (true, "format") => "format",
-        (true, _) => match d.str("__itemFolders").as_str() {
+        (true, _) => match text("__itemFolders") {
             "item" => "item",
             "itemFormat" => "itemFormat",
             _ => "rows",

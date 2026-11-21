@@ -13,8 +13,9 @@ use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, 
 use craft::ui::runtime::memory::SaveKey;
 use serde_json::{Map, Value, json};
 
-use super::form::{LivePreview, fields_of, grid_params}; // PLAN: assumed `LivePreview` (wg.A20) lives in `dialogs/form.rs`
+use super::form::{fields_of, grid_params};
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 
@@ -380,8 +381,7 @@ mod tests {
             let mut app = VectorcraftApp::new(Session::new(), Default::default());
             app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
             app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-            let ctx = egui::Context::default();
-            crate::theme::install_fonts(&ctx);
+            let ctx = crate::testing::ui_context();
             app.ui_ctx = Some(ctx.clone());
             Rig { app, ctx }
         }

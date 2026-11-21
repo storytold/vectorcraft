@@ -32,6 +32,7 @@ use serde_json::{Value, json};
 use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};
 
 use crate::VectorcraftApp;
+use crate::panels::learn::locate::{self, Home};
 use crate::state::{ToolbarCategory, ToolbarEdits};
 
 /// Where a tool dropped on a toolbar slot goes.
@@ -178,10 +179,11 @@ fn slots_json(app: &VectorcraftApp) -> Value {
 /// The slots of the toolbar the drawer edits (one made with New Toolbar, or the Tools panel's), as
 /// the `slot` param of `toolbar.addTool` counts them.
 fn target_slots(app: &VectorcraftApp) -> Vec<Vec<&'static str>> {
-    let slots: Vec<Vec<&'static str>> = match crate::custom_toolbars::drawer_target(&app.ui).and_then(|name| crate::custom_toolbars::find(&app.ui, name)) {
-        Some(bar) => bar.slots.iter().map(|s| s.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect()).collect(),
-        None => crate::toolbar::slots(app).into_iter().map(|(_, s)| s).collect(),
-    };
+    let slots: Vec<Vec<&'static str>> =
+        match crate::custom_toolbars::drawer_target(&app.ui).and_then(|name| crate::custom_toolbars::find(&app.ui, name)) {
+            Some(bar) => bar.slots.iter().map(|s| s.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect()).collect(),
+            None => crate::toolbar::slots(app).into_iter().map(|(_, s)| s).collect(),
+        };
     slots.into_iter().filter(|s| !s.is_empty()).collect()
 }
 
@@ -402,6 +404,11 @@ fn run(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
 }
 
+/// Whether the All Tools drawer lists `tool`.
+fn listed_tool(tool: &str) -> bool {
+    groups().iter().any(|(_, gs)| gs.iter().any(|g| g.iter().any(|t| t.id == tool)))
+}
+
 /// The All Tools drawer beside the toolbar `rail_out` came from, while `tools_drawer` is on. `opens`
 /// is the side of the rail the drawer opens on, the canvas side.
 pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailOutput<String>, opens: Side) {
@@ -423,7 +430,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
         .filter_map(|s| Some(ToolSlot::new(crate::toolbar::slot_id(s.first()?), s.iter().map(|id| crate::toolbar::rail_tool(id)).collect())))
         .collect();
     // Basic and Advanced show which layout the Tools panel has; Reset is the footer's Restore Defaults.
-    let command = |id: &str, p: Value| PanelRow::Command(CommandRef::with_params(id, p)); // PLAN: assumed CommandRef::with_params(&str, Value)
+    let command = |id: &str, p: Value| PanelRow::Command(CommandRef::with_params(id, p));
     let rows = vec![
         command("window.toolbarAdvanced", json!({ "advanced": false })),
         command("window.toolbarAdvanced", json!({ "advanced": true })),
@@ -432,16 +439,16 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
         command("window.toolbar.manage", json!({})),
     ];
     // A Learn link's tool that no shown toolbar holds: its row wears the mark, scrolled into view once.
-    let located = crate::panels::learn::locate::wanted_in_drawer(&app.ui).map(str::to_string); // PLAN: assumed Option<&'static str>
-    let reveal = located.is_some() && app.ui.learn_locate.as_ref().is_some_and(|l| !l.scrolled);
+    let located = locate::wanted(&app.ui, &Home::Drawer);
+    let reveal = locate::take_reveal(&mut app.ui, &Home::Drawer, listed_tool);
 
     let mut drawer = ToolbarDrawer::new(rail_out.response.rect, &listed, &toolbar, rail_out.dropped)
         .opened_by(opener)
         .opens(opens)
         .menu(rows)
         .mark(located.as_ref());
-    if reveal {
-        drawer = drawer.reveal(located.as_ref());
+    if reveal.is_some() {
+        drawer = drawer.reveal(reveal.as_ref());
     }
     // Show: the controls under the Tools panel's tools; a toolbar made with New Toolbar has none.
     let mut toggled = None;
@@ -460,9 +467,6 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
             }
         });
     });
-    if reveal {
-        crate::panels::learn::locate::scroll_once(&mut app.ui); // PLAN: owned by document-panels-w19; assumed unchanged
-    }
 
     for edit in out.edits {
         match edit {

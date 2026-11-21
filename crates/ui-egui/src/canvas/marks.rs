@@ -11,15 +11,15 @@ use craft::behavior::{CanvasView, Input, Metrics, Sense};
 // PLAN: assumed ui-egui depends on the `craft` facade with the draw, pages and ui features (manifest owned by hub-w1).
 use craft::draw::ui::slice::{SliceItem, SliceOrigin, SliceOverlay, SliceRules};
 use craft::pages::ui::marks::{HiddenMark, MarkAnchor, PlacedMark, TextFrameMarks};
+use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::{SelectionOutline, path_runs};
 use craft::ui::contract::{Common, Component, Cx, MeasureCx, PaintUi, Props, Role, Show as _};
 use craft::ui::fonts::FontRef;
-use craft::ui::primitives::{Draw, DocRun, DocText, PaintShape, StrokeWidth};
+use craft::ui::primitives::{DocRun, DocText, Draw, PaintShape, StrokeWidth};
 use craft::ui::runtime::env::Label;
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
-use craft::theme::Srgba;
 use egui::{Color32, Pos2, Response, Vec2};
 use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_engine::DocState;
@@ -502,21 +502,18 @@ pub(crate) struct ArtMarks<'a> {
     common: Common,
     /// The view that maps document points to the screen.
     view: CanvasView,
-    #[prop]
+    /// The fade outside the artboards, the bleed and the artboards' marks.
     fade: &'a [[Pos2; 4]],
-    #[prop]
     bleed: &'a [BezPath],
-    #[prop]
     artboard_marks: &'a [BezPath],
-    #[prop]
+    /// Simplify's original paths with their layer colours.
     original: &'a [(BezPath, [u8; 3])],
-    #[prop]
+    /// The Auto Spell Check segments, in document space.
     spelling: &'a [(Point, Point)],
-    #[prop]
+    /// Draw Inside's corner arms in screen points, and the layer colour they take.
     arms: &'a [[Pos2; 2]],
-    #[prop]
     arm_color: [u8; 3],
-    #[prop]
+    /// The print tiles.
     tiles: &'a [Tile],
 }
 

@@ -3,12 +3,10 @@
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::webexport;
 
-// PLAN: assumed path `craft::ui::patterns::form_dialogs::save_for_web` for the ex.W9 items.
-use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, TableOrder};
+use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, PALETTE_COLOR_KEY, TableOrder};
 
 use super::save_for_web::color_table::{apply, marks, restore, shift};
-use super::tests_export::{frame, set};
-use super::*;
+use super::tests_save_for_web::{app, frame, host, save, set};
 
 const A: [u8; 3] = [0x00, 0x00, 0x00];
 const B: [u8; 3] = [0x11, 0x11, 0x11];
@@ -56,17 +54,15 @@ fn every_table_edit_changes_the_lists_it_names() {
     run(&mut t, ColorTableEdit::WebShift, &[D], &shown).unwrap();
     run(&mut t, ColorTableEdit::UnshiftAll, &[], &shown).unwrap();
     assert_eq!((&t["shifted"], &t["webShift"]), (&json!({}), &json!([])));
-    for (order, id) in [
-        (TableOrder::Hue, "hue"),
-        (TableOrder::Luminance, "luminance"),
-        (TableOrder::Popularity, "popularity"),
-        (TableOrder::Unsorted, "none"),
-    ] {
+    for (order, id) in
+        [(TableOrder::Hue, "hue"), (TableOrder::Luminance, "luminance"), (TableOrder::Popularity, "popularity"), (TableOrder::Unsorted, "none")]
+    {
         run(&mut t, ColorTableEdit::Sort(order), &[], &shown).unwrap();
         assert_eq!(t["sort"], json!(id));
     }
     // The marks read the same lists, and skip entries that are not colours.
-    let mut t = json!({"locked": ["#000000", "nope", 7], "transparent": ["#ABCDEF"], "shifted": {"#111111": "#222222", "x": "#000000", "#333333": 5}});
+    let mut t =
+        json!({"locked": ["#000000", "nope", 7], "transparent": ["#ABCDEF"], "shifted": {"#111111": "#222222", "x": "#000000", "#333333": 5}});
     let m = marks(&t);
     assert_eq!((m.locked, m.transparent, m.shifted), (vec![A], vec![[0xab, 0xcd, 0xef]], vec![(B, C)]));
     t = json!(7);
@@ -129,18 +125,15 @@ fn a_picked_color_becomes_a_shift_and_cancel_shifts_nothing() {
     for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
         set(&mut app, k, v);
     }
-    // PLAN: assumed `dialogs::host::pump(&mut app, &ctx)`, `app.dialogs().take_color_request()`
-    // and `answer_color(id, key, Srgba)` (co.K13/co.K14, hub-w2 order).
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = app.ui_ctx.clone().expect("the app has a window");
     crate::dialogs::host::pump(&mut app, &ctx);
-    let (id, request) = app.dialogs().take_color_request().expect("the table asks for a colour");
-    assert_eq!(request.key, save_for_web::PALETTE_COLOR_KEY);
+    let (id, request) = host(&app).with(|h| h.take_color_request()).expect("the table asks for a colour");
+    assert_eq!(request.key, PALETTE_COLOR_KEY);
     // Cancel: nothing is answered, nothing shifts.
     crate::dialogs::host::pump(&mut app, &ctx);
     assert_eq!(app.web_export.table.get("shifted").cloned().unwrap_or(json!({})), json!({}));
     // OK: the answer arrives as a Shift event for the selected colour.
-    app.dialogs().answer_color(id, save_for_web::PALETTE_COLOR_KEY, craft::theme::Srgba::from_rgb(0, 255, 0));
+    host(&app).with(|h| h.answer_color(id, PALETTE_COLOR_KEY, craft::theme::Srgba::from_rgb(0, 255, 0)));
     crate::dialogs::host::pump(&mut app, &ctx);
     assert_eq!(app.web_export.table["shifted"], json!({"#0000ff": "#00ff00"}));
 }
@@ -174,12 +167,12 @@ fn delete_color_reaches_the_saved_file_and_is_remembered() {
     }
     frame(&mut app);
     let red = [0xcc, 0x33, 0x00];
-    // PLAN: assumed `app.web_export.table` is the dialog's table (ex.A10) and `confirm_by_id`
-    // saves through the host.
     apply(&mut app.web_export.table, &event(ColorTableEdit::Delete, &[red]), &[red, [0, 0, 255]]).unwrap();
     frame(&mut app);
-    let r = crate::dialogs::confirm_by_id(&mut app, save_for_web::KIND).unwrap();
-    let image = image::open(r["path"].as_str().unwrap()).unwrap().to_rgba8();
+    save(&mut app);
+    let path =
+        std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "gif")).expect("the GIF is saved");
+    let image = image::open(path).unwrap().to_rgba8();
     assert_eq!((image.get_pixel(20, 14).0, image.get_pixel(50, 20).0), ([0, 0, 255, 255], [0, 0, 255, 255]));
     assert_eq!(app.session.last_web_settings().color_table.deleted, ["#cc3300"]);
     app.run("file.saveForWeb", json!({})).unwrap();

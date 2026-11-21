@@ -23,7 +23,6 @@ use crate::panels::actions::{PAUSE_SECONDS, PLAYBACK_OPTIONS, PlaybackOptions, P
 const KEY: &str = "actionPlayback";
 
 /// The speeds, with the id their radio button has.
-// PLAN: assumed `PlaybackSpeed` is re-exported from `panels::actions` beside `PlaybackOptions` (menus-w15).
 const SPEEDS: [(PlaybackSpeed, &str); 3] =
     [(PlaybackSpeed::Accelerated, "accelerated"), (PlaybackSpeed::Step, "step"), (PlaybackSpeed::Pause, "pause")];
 

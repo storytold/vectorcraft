@@ -85,8 +85,7 @@ fn dragging_artwork_over_a_tab_switches_then_copies_on_drop() {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let tabs = frame(&mut app, &ctx, 0.0, vec![]);
     assert_eq!(tabs.len(), 2);
     let grab = at(&app, 100.0, 100.0);
@@ -134,8 +133,7 @@ fn drag_fixture_modifiers(modifiers: egui::Modifiers) -> (VectorcraftApp, egui::
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, 0.0, vec![]);
     // Fit changes the zoom in the title, and therefore the tab widths.
     let tabs = frame(&mut app, &ctx, 0.01, vec![]);
@@ -169,8 +167,7 @@ fn a_cmd_drag_held_during_a_merge_activates_another_tab() {
     app.select_tool("shapeBuilder");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     app.ui_ctx = Some(ctx.clone());
     frame(&mut app, &ctx, 0.0, vec![]);
     let tabs = frame(&mut app, &ctx, 0.01, vec![]);
@@ -307,8 +304,7 @@ fn hovering_back_to_a_source_whose_type_is_measured_again_resumes_move() {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, 0.0, vec![]);
     let tabs = frame(&mut app, &ctx, 0.01, vec![]);
     let grab = at(&app, 75.0, 80.0);
@@ -429,8 +425,7 @@ fn a_drop_on_a_document_with_other_assigned_profiles_copies_the_artwork() {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, 0.0, vec![]);
     let tabs = frame(&mut app, &ctx, 0.01, vec![]);
     let grab = at(&app, 75.0, 80.0);
@@ -462,8 +457,7 @@ fn dragging_artwork_over_another_views_tab_switches_to_that_view() {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, 0.0, vec![]);
     let tabs = frame(&mut app, &ctx, 0.01, vec![]);
     assert_eq!(tabs.len(), 2);

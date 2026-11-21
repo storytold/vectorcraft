@@ -56,10 +56,10 @@ pub struct CanvasCache {
     pub find_font: Option<FindFontCache>,
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
-    pub hidden_chars: canvas::HiddenChars,
+    pub hidden_chars: canvas::marks::HiddenChars,
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
-    pub spelling: canvas::SpellingMarks,
+    pub spelling: canvas::marks::SpellingMarks,
     /// The Hand, Zoom and Rotate View tools the Space key and its chords lend the canvas, between
     /// passes; the tool adapter takes it out for its call and puts it back.
     pub momentary: Option<craft::ui::canvas::Momentary>,
@@ -108,7 +108,7 @@ pub struct CanvasCache {
     /// What the Image Trace panel traces, for (document uid, revision).
     pub(crate) trace_target: Option<((u64, u64), Arc<crate::panels::image_trace::Target>)>,
     /// The Attributes panel's values and whether they apply, for the panel's key.
-    pub(crate) attributes_info: Option<(crate::panels::attributes::AttrKey, (crate::panels::attributes::AttributesInfo, bool))>,
+    pub(crate) attributes_info: Option<(crate::panels::attributes::AttrKey, (vectorcraft_engine::cmd::AttributesInfo, bool))>,
     /// The SVG Interactivity panel's values, for the panel's key.
     pub(crate) svg_info: Option<(crate::panels::svg_interactivity::SelKey, crate::panels::svg_interactivity::Info)>,
     /// The CSS Properties panel's code, for the panel's key.
@@ -140,9 +140,9 @@ pub struct CanvasCache {
     /// The Appearance panel's summary of the selection, for (document uid, revision).
     // PLAN: assumed key (document uid, revision) and `panels::appearance::Summary` (ap.AS1 names the cache, not its key).
     pub(crate) appearance_summary: Option<((u64, u64), Option<Arc<crate::panels::appearance::Summary>>)>,
-    /// The Transparency panel's values of the selection, for (document uid, revision).
-    // PLAN: assumed key (document uid, revision) and `panels::transparency::State` (appearance-w9's request names the field only).
-    pub(crate) transparency_state: Option<((u64, u64), Arc<crate::panels::transparency::State>)>,
+    /// The Transparency panel's values of the selection and its first object, for the panel's key.
+    pub(crate) transparency_state:
+        Option<(crate::panels::transparency::StateKey, vectorcraft_engine::cmd::TransparencyInfo, Option<Arc<vectorcraft_doc::Node>>)>,
     /// The Navigator's view region, for (document uid, revision, View Artboard Contents Only).
     pub nav_region: Option<((u64, u64, bool), vectorcraft_geom::Rect)>,
     /// The Document Info panel's values, for (document uid, revision, selection only, options).

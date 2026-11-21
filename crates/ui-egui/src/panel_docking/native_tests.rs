@@ -129,9 +129,8 @@ impl Harness {
             host.time += 0.05;
             (host.infos(), host.focus == ViewportId::ROOT, host.time)
         };
-        let mut input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
-        // PLAN: assumed `embed::before_input(ctx, &mut input, &mut app.frame_input)` (hub-w1 M7; shell A1).
-        craft::ui::shell::embed::before_input(&self.ctx, &mut input, &mut self.app.frame_input);
+        let input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
+        craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let app = &mut self.app;
         let mut full = self.ctx.run_ui(input, |ui| {
             app.logic(ui.ctx());
@@ -149,9 +148,7 @@ impl Harness {
 
     /// The viewport of the floating window holding `panel`.
     fn viewport(&self, panel: &str) -> ViewportId {
-        let layout = layout_of(&self.app.ui);
-        let window = floating_window(layout, panel).expect("the panel floats");
-        craft::ui::patterns::dock::DockArea::<String>::window_viewport(area_id(), window.id)
+        window_viewport(&self.app, panel).expect("the panel floats in a window of its own")
     }
 
     /// Float `panel` into a native window and give that window the keyboard.
@@ -319,12 +316,11 @@ fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     let styles = h.app.session.active().unwrap().doc.graphic_styles.len();
     let art = |h: &Harness| format!("{:?}", h.app.session.active().unwrap().doc.node(id).map(|n| &n.kind));
     let before = art(&h);
-    // PLAN: assumed `app.canvas_view()` is the `View` with `canvas: Rect` and `to_screen(Point)` (hub-w1 M12, cv.S4).
-    let view = h.app.canvas_view();
+    let view = h.app.canvas_view().expect("the canvas was drawn");
     let from = view.to_screen(vectorcraft_geom::Point::new(35.0, 30.0));
     let window = h.host.borrow().windows.get(&viewport).map(|w| w.rect).unwrap();
     let to = window.min + vec2(60.0, 120.0) - ORIGIN.to_vec2();
-    assert!(view.canvas.contains(to), "the window lies over the canvas");
+    assert!(view.rect.contains(to), "the window lies over the canvas");
     h.frame(vec![Event::PointerMoved(from), button(from, true)]);
     for k in 1..=8 {
         h.frame(vec![Event::PointerMoved(from + (to - from) * (k as f32 / 8.0))]);

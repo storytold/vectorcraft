@@ -91,13 +91,10 @@ pub(super) fn confirm(app: &mut VectorcraftApp) {
 /// One control request, answered as the control channel answers it.
 pub(super) fn call_raw(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let ctx = ctx(app);
-    let (req, reply) = craft::automation::ControlRequest::new(method, params);
-    // PLAN: assumed hub-w2 note 9: `control::handle(app, &ctx, &ControlRequest)` queues the request and
-    // `control::poll_input(app, &ctx)` runs the ones waiting for an input pass.
-    let _ = crate::control::handle(app, &ctx, &req);
+    let (req, _reply) = crate::control::ControlRequest::new(method, params);
+    let crate::control::Outcome::Done(reply) = crate::control::handle(app, &ctx, &req) else { panic!("{method} is answered at once") };
     pump(app);
-    crate::control::poll_input(app, &ctx);
-    reply.try_recv().expect("the request is answered")
+    reply
 }
 
 /// A control request that must succeed; its result.
@@ -216,22 +213,22 @@ fn a_landscape_job_goes_upright_to_a_queue_that_does_not_turn_it() {
 
 #[test]
 fn without_a_print_service_print_saves_a_pdf() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
+    let picker = crate::tests_picks::scripted(&mut app);
     let written: Written = Rc::default();
     let w = written.clone();
-    let services = Services {
-        pick_save: Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name)))),
-        write: Some(Box::new(move |p: &str, b: &[u8]| {
-            w.borrow_mut().push((p.to_string(), b.to_vec()));
-            Ok(())
-        })),
-        ..Default::default()
-    };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    app.services.write = Some(Box::new(move |p: &str, b: &[u8]| {
+        w.borrow_mut().push((p.to_string(), b.to_vec()));
+        Ok(())
+    }));
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.print", json!({})).unwrap();
     pump(&mut app);
     confirm(&mut app);
+    picker.answer_saved("/tmp/Untitled-1.pdf", None);
+    let ctx = ctx(&app);
+    crate::tests_picks::poll(&mut app, &ctx);
     let w = written.borrow();
     assert_eq!(w.len(), 1);
     assert!(w[0].0.ends_with(".pdf"), "{}", w[0].0);
@@ -284,9 +281,9 @@ fn dragging_the_preview_moves_the_placement_on_the_paper() {
         ),
     ] {
         let before = app.session.execute("print.preview", &json!({ "settings": settings })).unwrap();
-        let mut dialog_fields = super::print::fields_of(&settings);
-        // PLAN: assumed `move_placement(&mut DialogFields, &Value, Pos2, Pos2)`: the sheet, the gesture's first position on the paper, the current one.
-        super::print::move_placement(&mut dialog_fields, &before["sheets"][0], egui::Pos2::ZERO, egui::pos2(dx, dy));
+        let (dx, dy) = (f64::from(dx), f64::from(dy));
+        let mut dialog_fields = super::print::fields_of(&serde_json::from_value(settings.clone()).unwrap()).unwrap();
+        super::print::move_placement(&mut dialog_fields, &before["sheets"][0], (dx, dy));
         let moved = super::print::settings(&dialog_fields);
         if settings.get("tileOrigin").is_some() {
             assert_eq!(moved["placement"], Value::Null, "the placement stays");
@@ -294,7 +291,6 @@ fn dragging_the_preview_moves_the_placement_on_the_paper() {
         let after = app.session.execute("print.preview", &json!({ "settings": moved })).unwrap();
         let (t0, t1) = (&before["sheets"][0]["trim"], &after["sheets"][0]["trim"]);
         let delta = (t1[0].as_f64().unwrap() - t0[0].as_f64().unwrap(), t1[1].as_f64().unwrap() - t0[1].as_f64().unwrap());
-        let (dx, dy) = (f64::from(dx), f64::from(dy));
         assert!((delta.0 - dx).abs() < tolerance && (delta.1 - dy).abs() < tolerance, "{settings}: moved {delta:?}, dragged {:?}", (dx, dy));
     }
 }

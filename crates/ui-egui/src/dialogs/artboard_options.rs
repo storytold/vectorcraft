@@ -19,23 +19,23 @@
 
 use std::cell::Cell;
 
+use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
+use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
+use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
 use craft::ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::runtime::requests::ColorRequest;
-use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
 use craft::ui::text::{NumberField, TextField};
-use craft::theme::variant::Tone;
 use egui::Ui;
 use serde_json::{Value, json};
-use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use vectorcraft_color::Color;
 use vectorcraft_doc::{LAYER_COLORS, LayerColor, VIDEO_PIXEL_ASPECT_RANGE};
 use vectorcraft_engine::cmd::color_value;
@@ -43,10 +43,11 @@ use vectorcraft_engine::cmd::newdoc::DocSettings;
 use vectorcraft_geom::{Point, Rect};
 
 use crate::VectorcraftApp;
+use crate::canvas::rulers::unit_kind;
 use crate::panels::artboards::{FILLS, fill_colors};
 // PLAN: op.A10 must derive `Debug, PartialEq` on `ArtboardSizeChoice` (the value is compared by the form).
 use crate::panels::properties::{ArtboardSizeChoice, artboard_presets, artboard_size_controls};
-use crate::panels::transform::{artboard_rect, unit_kind}; // PLAN: assumed `unit_kind(Unit) -> UnitKind` from object-panels-w9
+use crate::panels::transform::artboard_rect;
 
 /// The field of the guide label, as `artboard.setProps` and `artboard.new` take it: a layer
 /// color's name, `#rrggbb`, or null for none.
@@ -471,8 +472,12 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
 
 /// Background Color: None, White and Black (in the document's color mode), Custom and Select Custom Color….
 fn background_row(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &Setup) {
-    let named: Vec<NamedColor> =
-        FILLS.iter().zip(&s.fills).enumerate().map(|(k, (name, fill))| NamedColor::new(k.to_string(), tl!(*name), fill.as_ref().map(swatch))).collect();
+    let named: Vec<NamedColor> = FILLS
+        .iter()
+        .zip(&s.fills)
+        .enumerate()
+        .map(|(k, (name, fill))| NamedColor::new(k.to_string(), tl!(*name), fill.as_ref().map(swatch)))
+        .collect();
     let chosen = fill_index(&s.fills, &v.color).map_or(ChosenColor::Custom, |k| ChosenColor::Named(k.to_string()));
     match color_row(ui, cx, tl!("Background Color:"), BACKGROUND, &chosen, &named, v.custom_background) {
         Some(ChosenColor::Named(id)) => {
@@ -682,7 +687,8 @@ fn confirm_new(app: &mut VectorcraftApp, v: &ArtboardOptionsValue) -> Result<Val
     if let Some(label) = &v.guide_label {
         p[GUIDE_LABEL] = json!(label);
     }
-    for (key, on) in [("showCenterMark", v.show_center_mark), ("showCrossHairs", v.show_cross_hairs), ("showVideoSafeAreas", v.show_video_safe_areas)] {
+    for (key, on) in [("showCenterMark", v.show_center_mark), ("showCrossHairs", v.show_cross_hairs), ("showVideoSafeAreas", v.show_video_safe_areas)]
+    {
         if on {
             p[key] = json!(true);
         }
@@ -870,8 +876,12 @@ mod tests {
         let ab = board(&app, 0);
         assert_eq!((ab.show_video_safe_areas, ab.video_ruler_pixel_aspect_ratio, undo_len(&app)), (true, 1.5, undo + 1));
         app.select_tool("artboard");
-        crate::dialogs::open_tool_dialog(&mut app, "artboardOptions", &json!({"index": 0, "name": "Artboard 1", "x": 0, "y": 0, "width": 200, "height": 150,
-            "showVideoSafeAreas": true, "videoRulerPixelAspectRatio": 1.5}));
+        crate::dialogs::open_tool_dialog(
+            &mut app,
+            "artboardOptions",
+            &json!({"index": 0, "name": "Artboard 1", "x": 0, "y": 0, "width": 200, "height": 150,
+            "showVideoSafeAreas": true, "videoRulerPixelAspectRatio": 1.5}),
+        );
         let v = app.dialogs().unwrap().with(|h| h.get::<ArtboardOptionsDialog>().unwrap().value.clone());
         assert_eq!((v.show_video_safe_areas, v.pixel_aspect), (true, 1.5));
         open_new(&mut app).unwrap();
@@ -897,7 +907,10 @@ mod tests {
             ok(&mut app).unwrap();
             let names: Vec<_> = app.session.doc().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
             assert_eq!(boards(&app)[1], want, "column {column}");
-            assert_eq!((boards(&app)[0].width(), boards(&app)[0].height(), names[0].as_str(), names[1].as_str()), (300.0, 150.0, "Wide", "Artboard 2"));
+            assert_eq!(
+                (boards(&app)[0].width(), boards(&app)[0].height(), names[0].as_str(), names[1].as_str()),
+                (300.0, 150.0, "Wide", "Artboard 2")
+            );
             app.run("edit.undo", json!({})).unwrap();
             assert_eq!(*app.session.doc().unwrap().doc, *before, "one undo step");
         }

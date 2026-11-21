@@ -151,8 +151,7 @@ mod tests {
             |_, r| r,
         );
         assert_eq!(r.unwrap()["background"], true);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         assert!(!frame(&mut app, &ctx).contains("Exporting a.png"), "not before the delay");
         age(&mut app);
         frame(&mut app, &ctx); // a new window measures itself unseen first
@@ -181,8 +180,7 @@ mod tests {
             |_, r| r,
         )
         .unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         age(&mut app);
         frame(&mut app, &ctx);
         assert!(frame(&mut app, &ctx).contains("Exporting b.png"));
@@ -206,8 +204,7 @@ mod tests {
             let r = app.run("file.save", json!({"path": format!("/docs/{name}.vectorcraft")})).unwrap();
             assert_eq!(r["background"], true, "{r}");
         }
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         assert!(!frame(&mut app, &ctx).contains("Saving a.vectorcraft"), "not before the delay");
         age(&mut app);
         frame(&mut app, &ctx);

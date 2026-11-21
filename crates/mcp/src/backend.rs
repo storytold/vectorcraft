@@ -47,10 +47,8 @@ impl Remote {
     /// Connect to `addr` (e.g. `127.0.0.1:7979`) with the app's control `token`, failing fast when
     /// nothing is listening.
     pub fn connect(addr: &str, token: &str) -> std::io::Result<Self> {
-        let sock = addr
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("cannot resolve {addr}")))?;
+        let sock =
+            addr.to_socket_addrs()?.next().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("cannot resolve {addr}")))?;
         let client = ControlClient::connect(sock, token).map_err(std::io::Error::other)?;
         Ok(Self { addr: addr.to_string(), sock, token: token.to_string(), client: Some(client) })
     }
@@ -61,7 +59,7 @@ impl Remote {
 
     /// The open connection; a new one when the app closed the last (an idle connection, a restart).
     fn open_client(&mut self, method: &str) -> Result<&mut ControlClient, String> {
-        if !self.client.as_ref().is_some_and(ControlClient::is_open) {
+        if self.client.as_ref().is_none_or(ControlClient::is_broken) {
             self.client = None;
             let client = ControlClient::connect(self.sock, &self.token)
                 .map_err(|e| format!("VectorCraft app at {} is not reachable: {e}; `{method}`: nothing was sent", self.addr))?;
@@ -77,15 +75,12 @@ impl Backend for Remote {
         let client = self.open_client(method)?;
         // The app can't stop what it runs, but a cancelled call stops waiting for it.
         let cancellable = vectorcraft_engine::cancel::is_cancellable();
-        let result = if cancellable {
-            client.call_until(method, params, &vectorcraft_engine::cancel::is_cancelled)
-        } else {
-            client.call(method, params)
-        };
+        let result =
+            if cancellable { client.call_until(method, params, &vectorcraft_engine::cancel::is_cancelled) } else { client.call(method, params) };
         match result {
             Ok(value) => Ok(value),
             // The connection survived: the app answered with this error.
-            Err(e) if client.is_open() => Err(e),
+            Err(e) if !client.is_broken() => Err(e),
             Err(_) if cancellable && vectorcraft_engine::cancel::is_cancelled() => Err(format!(
                 "VectorCraft app at {addr}: `{method}` cancelled; the app may still finish what it was asked, which can't be stopped from here"
             )),

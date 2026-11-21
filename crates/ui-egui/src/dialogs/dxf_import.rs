@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
 use craft::ui::display::{Picture, PictureSize, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
@@ -28,7 +28,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::fileio;
 
-use super::host::{HoldsOk, open_held};
+use super::host::open_held;
 use super::import_pdf::{DialogFile, other_place_params, place_source, render_preview, with_file};
 use crate::{VectorcraftApp, io};
 
@@ -58,7 +58,15 @@ pub struct DxfChoices {
 
 impl Default for DxfChoices {
     fn default() -> Self {
-        DxfChoices { layout: "Model".into(), fit: false, unit: Unit::Millimeters, scale: 1.0, scale_lineweights: false, center: true, merge_layers: false }
+        DxfChoices {
+            layout: "Model".into(),
+            fit: false,
+            unit: Unit::Millimeters,
+            scale: 1.0,
+            scale_lineweights: false,
+            center: true,
+            merge_layers: false,
+        }
     }
 }
 
@@ -159,13 +167,17 @@ impl StackDialog for DxfImportDialog {
                             }
                         });
                         FieldGroup::new(tl!("Scaling")).show(ui, |ui, _| {
-                            if let Some(fit) = craft::ui::choice::Checkbox::new(Bind::given(c.fit)).label(tl!("Scale to Fit Artboard")).show(ui).value().copied() {
+                            if let Some(fit) =
+                                craft::ui::choice::Checkbox::new(Bind::given(c.fit)).label(tl!("Scale to Fit Artboard")).show(ui).value().copied()
+                            {
                                 c.fit = fit;
                             }
                             Field::new(tl!("Scale")).show(ui, |ui, _| {
                                 Row::new().show(ui, |ui, _| {
                                     Text::new("1").show(ui);
-                                    if let Some(unit) = Select::new(tl!("Unit"), Bind::given(c.unit), &units).enabled(!c.fit).show(ui).value().copied() {
+                                    if let Some(unit) =
+                                        Select::new(tl!("Unit"), Bind::given(c.unit), &units).enabled(!c.fit).show(ui).value().copied()
+                                    {
                                         c.unit = unit;
                                     }
                                     Text::new("=").show(ui);
@@ -193,7 +205,9 @@ impl StackDialog for DxfImportDialog {
                             }
                         });
                         FieldGroup::new(tl!("Options")).show(ui, |ui, _| {
-                            if let Some(on) = craft::ui::choice::Checkbox::new(Bind::given(c.center)).label(tl!("Center Artwork")).show(ui).value().copied() {
+                            if let Some(on) =
+                                craft::ui::choice::Checkbox::new(Bind::given(c.center)).label(tl!("Center Artwork")).show(ui).value().copied()
+                            {
                                 c.center = on;
                             }
                             if let Some(on) =
@@ -272,7 +286,9 @@ impl StackDialog for DxfImportDialog {
         match field {
             "layout" => c.layout = value.as_str().ok_or_else(rejected)?.to_owned(),
             "unit" => c.unit = value.as_str().and_then(Unit::named).ok_or_else(rejected)?,
-            "scale" => c.scale = value.as_f64().ok_or_else(rejected)?.clamp(*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end()),
+            "scale" => {
+                c.scale = value.as_f64().ok_or_else(rejected)?.clamp(*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end())
+            }
             "fit" => c.fit = flag()?,
             "scaleLineweights" => c.scale_lineweights = flag()?,
             "center" => c.center = flag()?,
@@ -284,9 +300,13 @@ impl StackDialog for DxfImportDialog {
     }
 }
 
-// PLAN: assumed `HoldsOk { type Answer; fn take_ok(&mut self) -> Option<Self::Answer>; fn answer_ok(&mut self, Result<(), Label>) }` (wg.A17).
 impl HoldsOk for DxfImportDialog {
     type Answer = DxfChoices;
+
+    /// OK always files its choices for the app to judge.
+    fn held_ok(self) -> Self {
+        self
+    }
 
     fn take_ok(&mut self) -> Option<DxfChoices> {
         self.held.take()
@@ -319,12 +339,7 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         }
     }
     let file = DialogFile::new(bytes.to_vec());
-    let source = Source {
-        place: place.map(|p| other_place_params(p, &["dxf"])),
-        name: name.to_string(),
-        path,
-        file: file.clone(),
-    };
+    let source = Source { place: place.map(|p| other_place_params(p, &["dxf"])), name: name.to_string(), path, file: file.clone() };
     let dialog = DxfImportDialog::new(place.is_some(), file, &info, choices);
     open_held(app, dialog, move |app, choices| confirm(app, &source, choices)).is_some()
 }

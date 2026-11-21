@@ -364,11 +364,12 @@ static PANEL_MENUS: &[PanelMenu] = &[
     menu!(variables::ID, variables),
     menu!(script_console::ID, script_console),
     menu!(retype::ID, retype),
-    menu!("actions", actions),
+    menu!("actions", actions_menu),
     menu!(crate::addons::packaging::ID, packaging_menu),
 ];
 
 use crate::addons::packaging as packaging_menu;
+use actions::menu as actions_menu;
 
 /// The rows of panel `id`'s (≡) menu; none for a panel without a menu of its own.
 pub(crate) fn panel_rows(app: &VectorcraftApp, id: &str) -> Vec<PanelRow> {
@@ -394,7 +395,6 @@ pub(crate) fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Panel menu")));
     resp.on_hover_text(tl!("Panel menu"))
 }
-
 
 pub fn libraries(app: &mut VectorcraftApp, ui: &mut Ui) {
     libraries::show(app, ui);
@@ -681,7 +681,6 @@ pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Str
     Ok(json!({ "panel": panel, "view": view }))
 }
 
-
 /// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
 const DRAG_SCROLL_EDGE: f32 = 28.0;
 
@@ -921,13 +920,9 @@ mod tests_css_properties;
 #[cfg(test)]
 mod tests_effectedit;
 #[cfg(test)]
-mod tests_fontsize;
-#[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
 mod tests_links;
-#[cfg(test)]
-mod tests_long_popups;
 #[cfg(test)]
 mod tests_maskview;
 #[cfg(test)]

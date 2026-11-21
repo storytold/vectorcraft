@@ -1,4 +1,3 @@
-// PLAN: assumed paths of the framework crates and of the op.A15 `Panel` test harness.
 use craft::text::ui::find::FindReplaceDialog;
 use craft::ui::dialog::DialogHost;
 use craft::ui::dialog::StackDialog;
@@ -6,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 
 use crate::VectorcraftApp;
-use crate::testing::Panel;
+use crate::tests::panel_harness::Panel;
 
 /// An app on a document holding point type `texts`, bottom first, with nothing selected → the
 /// app and the type objects' ids.
@@ -107,11 +106,9 @@ fn the_edit_menu_rows_open_their_dialogs() {
     let rows: [(&str, &str, Shown); 3] = [
         ("Find and Replace…", super::COMMAND, |h| h.get::<FindReplaceDialog>().is_some()),
         ("Check Spelling…", crate::dialogs::check_spelling::COMMAND, |h| !h.open_dialogs().is_empty()),
-        (
-            "Edit Custom Dictionary…",
-            crate::dialogs::custom_dictionary::COMMAND,
-            |h| h.get::<craft::ui::patterns::form_dialogs::HostedListManager>().is_some(),
-        ),
+        ("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND, |h| {
+            h.get::<craft::ui::patterns::form_dialogs::HostedListManager>().is_some()
+        }),
     ];
     for (label, command, shown) in rows {
         let (app, _) = app_with(&["Hello zqvmisspelt world"]);
@@ -198,7 +195,11 @@ fn replace_waits_for_a_match_of_the_text_as_it_is() {
     set(p.app(), "replace", json!("x"));
     for button in ["Find Next", "Replace", "Replace & Find", "Replace All"] {
         p.click(button);
-        assert_eq!((plain(p.app(), ids[0]), undo_steps(p.app()), matched(p.app())), ("cat cart".to_string(), steps, None), "{button} with no Find text");
+        assert_eq!(
+            (plain(p.app(), ids[0]), undo_steps(p.app()), matched(p.app())),
+            ("cat cart".to_string(), steps, None),
+            "{button} with no Find text"
+        );
     }
     set(p.app(), "find", json!("cat"));
     for button in ["Replace", "Replace & Find"] {

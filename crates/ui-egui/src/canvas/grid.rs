@@ -1,7 +1,9 @@
-use super::{Color32, Pos2, Shape, VectorcraftApp, pos2};
-// PLAN: assumed crate paths `craft::ui::canvas_controls::{CanvasGrid, GridLine}` and `craft::ui::style::DataColor`
+use craft::color_ui::display::DisplayTransform;
 use craft::ui::canvas_controls::{CanvasGrid, GridLine};
 use craft::ui::style::DataColor;
+use egui::{Color32, Pos2, Shape, pos2};
+
+use super::VectorcraftApp;
 
 /// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), converted
 /// into the display profile `display` when there is one, cached per look, and its cell size in
@@ -9,7 +11,7 @@ use craft::ui::style::DataColor;
 pub(crate) fn checker_texture(
     ctx: &egui::Context,
     setup: &vectorcraft_doc::DocSetup,
-    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+    display: Option<&DisplayTransform>,
 ) -> (egui::TextureHandle, f32) {
     // A tile of its own with a display profile, so a preview drawn in sRGB beside the canvas
     // doesn't make the canvas's tile again each frame.
@@ -23,7 +25,7 @@ pub(crate) fn checker_texture(
 pub(crate) fn checker_tile(
     ctx: &egui::Context,
     grid_colors: [vectorcraft_color::Color; 2],
-    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+    display: Option<&DisplayTransform>,
     id: egui::Id,
 ) -> egui::TextureHandle {
     let colors = grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
@@ -68,11 +70,8 @@ pub(super) fn document_grid(app: &VectorcraftApp, st: &vectorcraft_engine::DocSt
     let prefs = &app.session.prefs;
     let (line, color) = grid_look(prefs);
     let spacing = st.doc.grid.spacing;
-    let grid = CanvasGrid::new("Grid")
-        .spacing((spacing, spacing).into())
-        .subdivisions(st.doc.grid.subdivisions)
-        .color(DataColor::new(color))
-        .line(line);
+    let grid =
+        CanvasGrid::new("Grid").spacing((spacing, spacing).into()).subdivisions(st.doc.grid.subdivisions).color(DataColor::new(color)).line(line);
     Some((grid, prefs.grids_in_back))
 }
 

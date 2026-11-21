@@ -1,8 +1,8 @@
 //! The Anchor Inspector panel's Shared Edges section: the Shared Edge Merge Tool's brush and
 //! coincidence, and Keep Shared Points Together.
 
-use craft::ui::contract::{Bind, Show as _};
 use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Show as _};
 use craft::ui::display::Text;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::text::NumberField;

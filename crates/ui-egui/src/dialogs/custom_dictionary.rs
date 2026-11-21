@@ -10,9 +10,7 @@
 
 // PLAN: assumed paths of the framework crates in this app's dependencies.
 use craft::ui::dialog::{DialogId, DialogResult, dialog_id};
-use craft::ui::patterns::form_dialogs::{
-    ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords,
-};
+use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::spelling::custom_word;
 
@@ -152,8 +150,7 @@ mod tests {
     use serde_json::json;
 
     use crate::VectorcraftApp;
-    // PLAN: assumed path of the op.A15 `Panel` test harness.
-    use crate::testing::Panel;
+    use crate::tests::panel_harness::Panel;
     use craft::ui::patterns::form_dialogs::HostedListManager;
 
     // The custom dictionary is the whole process's: each test here uses words no other test does.

@@ -1,7 +1,6 @@
 //! Dialogs. Each dialog is a file here that the dialog host owns and shows; [`host`] opens held
 //! dialogs, serves every module once per frame and reaches the open ones for automation.
 
-pub(crate) mod actions;
 pub mod action_batch;
 pub mod action_insert_menu_item;
 pub mod action_new;
@@ -9,11 +8,11 @@ pub mod action_playback;
 pub mod action_select_object;
 pub mod action_set_options;
 pub mod action_stop;
+pub(crate) mod actions;
 pub mod artboard_options;
 pub mod attributes_panel_options;
 pub mod blend_options;
 pub(crate) mod brush_art_options;
-pub(crate) use brush_art_options::{brush_key_color_canvas, brush_key_color_input, cancel_brush_key_color, refresh_brush_key_color};
 pub mod brush_delete;
 pub mod brush_options;
 pub mod brush_replace_art;
@@ -87,8 +86,8 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
-pub mod object_mosaic;
 pub(crate) mod object_dialogs;
+pub mod object_mosaic;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub(crate) mod option_form;
@@ -163,12 +162,12 @@ mod tiff_bmp_tga;
 pub mod tile_edge_color;
 pub(crate) mod tool_options;
 mod tools;
-pub(crate) mod track_cube;
 pub mod tracing_presets;
+pub(crate) mod track_cube;
 pub(crate) mod transform;
 pub mod transform_each;
-pub(crate) mod variation;
 pub mod variables;
+pub(crate) mod variation;
 pub mod warichu;
 mod warp_effect;
 pub mod width_point;
@@ -176,7 +175,8 @@ pub mod width_point;
 pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
-pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
+pub(crate) use effect_params::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, shown_choices};
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 // PLAN: these re-exports are kept as they were; export-w13 removes any whose item it deletes.
@@ -186,9 +186,9 @@ pub(crate) use export_for_screens::{
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
-pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffix, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, read_number_list};
+pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document};
-pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
@@ -253,7 +253,6 @@ mod tests_print_presets;
 
 #[cfg(test)]
 mod tests_print_advanced;
-
 
 #[cfg(test)]
 mod tests_perspective;

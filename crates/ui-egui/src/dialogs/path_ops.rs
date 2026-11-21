@@ -6,20 +6,21 @@
 // PLAN: the framework import paths below are assumed from the contract rows (craft-ui-patterns re-exports contract and
 // runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
 use craft::ui::contract::{Bind, FieldLabelRole, SideLabel};
+use craft::ui::dialog::DialogId;
+use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::{BelowRows, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::value_drag::SliderScale;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
-use craft::ui::form::Field;
 use craft::ui::text::{NumberField, NumberOutput};
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::PathData;
 
 use super::form;
 // PLAN: assumed `LivePreview` is exported by `dialogs::form` (wg.A20, widgets-w11).
-use super::preview::LivePreview;
 use super::host::{HeldOptions, open_held, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
 
 /// Simplify's Corner Point Angle Threshold when the dialog opens, in degrees. An anchor whose
@@ -100,7 +101,7 @@ impl PathOp {
 /// The open Average-family, Offset Path or Simplify dialog's live state.
 pub(crate) struct Open {
     op: PathOp,
-    id: super::host::DialogId,
+    id: DialogId,
     preview: LivePreview,
     /// The params the preview last answered for.
     last: Value,
@@ -112,7 +113,7 @@ pub(crate) struct Open {
 
 /// The open Split Into Grid dialog's live state.
 pub(crate) struct SplitOpen {
-    id: super::host::DialogId,
+    id: DialogId,
     preview: LivePreview,
     last: Value,
 }
@@ -362,7 +363,8 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
         }
         match op {
             PathOp::Simplify => {
-                let kept = result.fields.bool("retain").unwrap_or(false).then(|| ParamDialog::remembered(&rows(op, &Map::new(), lengths), &result.fields));
+                let kept =
+                    result.fields.bool("retain").unwrap_or(false).then(|| ParamDialog::remembered(&rows(op, &Map::new(), lengths), &result.fields));
                 set_saved_value(&ctx, &SIMPLIFY_KEY, kept);
             }
             PathOp::AverageJoin | PathOp::OffsetPath => result.remember(&ctx),
@@ -431,7 +433,7 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
 }
 
 /// Whether the dialog `id` previews, and its values.
-fn dialog_state(app: &VectorcraftApp, id: super::host::DialogId) -> Option<(bool, DialogFields)> {
+fn dialog_state(app: &VectorcraftApp, id: DialogId) -> Option<(bool, DialogFields)> {
     app.dialogs()?.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone())))
 }
 

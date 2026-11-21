@@ -874,7 +874,7 @@ fn tabs_rect(app: &VectorcraftApp) -> egui::Rect {
 /// Sets the canvas to a 1000 by 700 pt area starting `top` points down the window, at `zoom`.
 fn show_canvas(app: &mut VectorcraftApp, top: f32, zoom: f64) {
     if let Some(v) = app.view_mut() {
-        v.rect = egui::Rect::from_min_size(egui::pos2(50.0, top), vec2(1000.0, 700.0));
+        v.rect = egui::Rect::from_min_size(egui::pos2(50.0, top), egui::vec2(1000.0, 700.0));
         v.zoom = zoom;
     }
 }
@@ -929,7 +929,7 @@ fn above_text_keeps_the_zoom_on_a_ruler_wider_than_asked() {
     assert!((scale(&app, narrowest) - 0.5).abs() < 1e-3);
     // The panel made wider than the narrowest floating window fits the span to its ruler again.
     let window = app.ui.dock_workspace.layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
-    window.rect = egui::Rect::from_min_size(window.rect.min, vec2(400.0, window.rect.height()));
+    window.rect = egui::Rect::from_min_size(window.rect.min, egui::vec2(400.0, window.rect.height()));
     let wide = scale(&app, tabs_rect(&app).width());
     assert!((wide - (400.0 - 8.0) / span).abs() < 1e-3, "{wide}");
 }

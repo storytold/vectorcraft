@@ -5,19 +5,18 @@
 use craft::ui::dialog::{OpenDialog, StandardPrompt};
 use serde_json::{Value, json};
 
-use crate::dialogs::confirm::{REPLACE_FILES, ReplaceFiles};
+use crate::dialogs::confirm::ReplaceFiles;
 use crate::tests_svg::app;
 use crate::{VectorcraftApp, dialogs};
 
 /// Gives `app` a window to host dialogs in.
-fn host(app: &mut VectorcraftApp) {
-    // PLAN: assumed `ui_ctx: Option<egui::Context>` on the app (lib.rs:203).
+pub(super) fn host(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.get_or_insert_with(egui::Context::default).clone();
-    crate::theme::install_fonts(&ctx);
+    crate::testing::install(&ctx);
 }
 
 /// One frame of the host (which opens a queued question), then the pump.
-fn pass(app: &mut VectorcraftApp) {
+pub(super) fn pass(app: &mut VectorcraftApp) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let Some(dialogs) = app.dialogs() else { return };
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui)));
@@ -31,7 +30,7 @@ fn open_dialogs(app: &VectorcraftApp) -> Vec<OpenDialog> {
 }
 
 /// Sets `fields` on the top dialog and answers it: OK when `ok`, else Cancel.
-fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
+pub(super) fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
     pass(app);
     let ctx = app.ui_ctx.clone().unwrap();
     app.dialogs().unwrap().with(|host| {
@@ -49,7 +48,7 @@ fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
 }
 
 /// The files the replace question open now names.
-fn replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
+pub(super) fn replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
     app.dialogs()?.with(|host| host.get::<StandardPrompt>().and_then(|p| p.tag_as::<ReplaceFiles>()).map(|r| r.files.clone()))
 }
 
@@ -71,7 +70,10 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
     let open = open_dialogs(&app);
     assert_eq!(open.len(), 1);
     let f = open[0].fields.clone().unwrap();
-    assert_eq!((&f["format"], &f["separateArtboards"], &f["embedProfiles"], &f["pdfCompatible"]), (&json!("vectorcraft"), &json!(false), &json!(true), &json!(true)));
+    assert_eq!(
+        (&f["format"], &f["separateArtboards"], &f["embedProfiles"], &f["pdfCompatible"]),
+        (&json!("vectorcraft"), &json!(false), &json!(true), &json!(true))
+    );
     assert!(written.borrow().is_empty(), "nothing is written before OK");
     answer(&mut app, &[("separateArtboards", json!(true)), ("all", json!(false)), ("range", json!("9"))], true);
     assert_eq!(open_dialogs(&app).len(), 1, "a bad range keeps the dialog open");

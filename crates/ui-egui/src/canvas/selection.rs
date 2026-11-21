@@ -16,15 +16,15 @@ use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::{HoverOutline, HoverShape, SelectionOutline};
 use craft::ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintUi, Props as _, Role, Show as _};
 use craft::ui::style::{ComponentStyle, DataColor, StyleCx};
-use egui::{Rect, Response, Shape, Stroke, StrokeKind, vec2};
+use egui::{Color32, Rect, Response, Shape, Stroke, StrokeKind, vec2};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::{DocState, Prefs};
-use vectorcraft_geom::{AnchorKind, PathEl};
+use vectorcraft_geom::{AnchorKind, BezPath, PathData, PathEl, Point};
 
 use super::cursor::ViewKey;
 use super::outline::{c32, node_outline, selection_hit_at, too_many_anchors, walk_drawn};
-// PLAN: `BodyKind`, `Win`, `revolve_editing(app)` and `ViewKey::from(CanvasView)` are canvas-w10's (cv.S1, S2, S5); their paths here follow the contract.
-use super::{BezPath, BodyKind, Color32, Point, VectorcraftApp, Win};
+// PLAN: `BodyKind`, `Win` and `ViewKey::from(CanvasView)` are canvas-w10's (cv.S1, S2, S5); their paths here follow the contract.
+use super::{BodyKind, VectorcraftApp, Win};
 // PLAN: `anchors` takes `tool_points` because the Curvature tool's own points come from `session.overlays`, which only `show` may call (`&mut app`).
 // PLAN: BezierOverlay selects anchors of every path under `HandlesShown`, so a whole-selected container draws handles that the old marks hid outside Direct Selection.
 
@@ -93,7 +93,7 @@ pub(super) struct Dots {
 /// it stroked while the revision stays.
 pub(super) fn outline_revision(paths: &[BezPath], key: Option<&BezPath>, extra: impl Hash) -> u64 {
     fn add(path: &BezPath, hasher: &mut DefaultHasher) {
-        let mut point = |p: &vectorcraft_geom::Point| {
+        let mut point = |p: &Point| {
             p.x.to_bits().hash(hasher);
             p.y.to_bits().hash(hasher);
         };
@@ -208,7 +208,7 @@ pub(super) fn outlines(app: &VectorcraftApp, st: &DocState) -> Vec<Outlined> {
 }
 
 /// The spine of each selected blend, or of the blend a selected key object belongs to, with the blend's id.
-fn blend_spines(st: &DocState) -> Vec<(NodeId, vectorcraft_geom::Path)> {
+fn blend_spines(st: &DocState) -> Vec<(NodeId, PathData)> {
     let is_blend = |id: &NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
     let mut seen: Vec<NodeId> = vec![];
     let mut spines = vec![];
@@ -230,7 +230,7 @@ fn srgba(color: Color32) -> Srgba {
 }
 
 /// `path` as a path the anchors layer edits, keyed `key`, in `color`.
-fn edit_path(key: u64, path: &vectorcraft_geom::Path, color: Color32) -> EditPath {
+fn edit_path(key: u64, path: &PathData, color: Color32) -> EditPath {
     let subpaths = path
         .subpaths
         .iter()
@@ -243,7 +243,7 @@ fn edit_path(key: u64, path: &vectorcraft_geom::Path, color: Color32) -> EditPat
 }
 
 /// The points of a gradient mesh or an envelope's mesh, each an open subpath of one corner anchor.
-fn grid_path(key: u64, points: impl Iterator<Item = vectorcraft_geom::Point>, color: Color32) -> EditPath {
+fn grid_path(key: u64, points: impl Iterator<Item = Point>, color: Color32) -> EditPath {
     let subpaths = points.map(|p| EditSubpath::new(vec![Knot::corner(p)], false)).collect();
     EditPath::new(key, subpaths).colored(Some(srgba(color)))
 }
@@ -296,8 +296,11 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool_points: bool) ->
             if segments.is_some() {
                 return;
             }
-            let knots: Vec<KnotRef> =
-                path.anchors().filter(|(si, ai, _)| partial.is_none_or(|set| set.contains(&(*si, *ai)))).map(|(si, ai, _)| KnotRef::new(si, ai)).collect();
+            let knots: Vec<KnotRef> = path
+                .anchors()
+                .filter(|(si, ai, _)| partial.is_none_or(|set| set.contains(&(*si, *ai))))
+                .map(|(si, ai, _)| KnotRef::new(si, ai))
+                .collect();
             if !knots.is_empty() {
                 chosen.push((c.id.0, knots));
             }
@@ -450,7 +453,7 @@ fn tool_draws_points(app: &mut VectorcraftApp) -> bool {
 /// outlines, the anchors, then the dots. They show only with the edges on and outside a Revolve edit. A `Pane` body is
 /// display-only, so it shows no hover.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, _win: Win, kind: BodyKind) {
-    if !app.ui.view.edges || super::revolve_editing(app) {
+    if !app.ui.view.edges || crate::dialogs::three_d::gizmo_shown(app) {
         return;
     }
     let rect = space.view.rect;

@@ -4,27 +4,31 @@
 //! perspective) is the page every 3D effect shares; the classic effects add the track cube to it ([`super::track_cube`]).
 
 // PLAN: assumed import paths for the framework items (craft_ui_patterns form_dialogs, craft_ui, craft_draw, craft_behavior).
+use craft::behavior::CanvasView;
 use craft::behavior::geometry::quad::{BoxAllow, BoxRules, BoxState, Parts, ScaleRule};
 use craft::behavior::kurbo::{BezPath, Point, Rect, Size, Vec2};
-use craft::behavior::CanvasView;
 use craft::draw::ui::transform::{RotateZone, TransformBox};
 use craft::theme::Srgba;
+use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::Canvas;
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft::ui::runtime::env::UnitKind;
-use craft::ui::style::DataColor;
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::SelectionOutline;
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
-use craft::ui::buttons::{Button, IconButton};
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::SliderScale;
 use egui::{Color32, Response, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MAX_MAPS, SurfaceMap};
+use vectorcraft_effects::{
+    CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MAX_MAPS,
+    SurfaceMap,
+};
 
-use super::three_d::{Data, Place, bevel_row, c3, light_editor, with_fields};
+use super::revolve::{Place, bevel_row, c3, light_editor};
+use super::three_d::{Data, with_fields};
 use crate::VectorcraftApp;
 
 /// The field that holds the number of the surface Map Art shows.
@@ -40,7 +44,7 @@ const MAP_SYMBOL: &str = "mapSymbol";
 
 /// The unit of the general-unit length rows.
 fn length_unit(unit: Unit) -> UnitKind {
-    crate::units::unit_kind(unit) // PLAN: assumed `fn unit_kind(Unit) -> UnitKind`
+    crate::canvas::rulers::unit_kind(unit)
 }
 
 /// Where the rows show: the 3D and Materials panel marks its fields with `__panel`.
@@ -79,8 +83,12 @@ fn toggle_row(effect: &str, key: &str, label: &'static str) -> Param {
 /// The Cap row: its two ids are the JSON booleans the effect stores.
 fn cap_row(effect: &str) -> Param {
     let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get("cap").and_then(Value::as_bool)).unwrap_or(true);
-    Param::new("cap", c3("Cap"), ParamKind::radio(vec![("true".into(), c3("Solid").into()), ("false".into(), c3("Hollow").into())], Some(default.to_string())))
-        .resettable()
+    Param::new(
+        "cap",
+        c3("Cap"),
+        ParamKind::radio(vec![("true".into(), c3("Solid").into()), ("false".into(), c3("Hollow").into())], Some(default.to_string())),
+    )
+    .resettable()
 }
 
 /// Map Art…, which shows the Map Art page. The 3D and Materials panel has no such button.
@@ -144,8 +152,13 @@ pub(crate) fn surface_params(data: &Data, fields: &DialogFields, effect: &str) -
         unlit_off(range_row(effect, "ambient", tl!("Ambient Light"), (0.0, 100.0), Some(UnitKind::Percent), 1)),
     ];
     if effect != CLASSIC_ROTATE {
-        rows.push(range_row(effect, "highlightIntensity", tl!("Highlight Intensity"), (0.0, 100.0), Some(UnitKind::Percent), 1).enabled_when("surface", "plastic"));
-        rows.push(range_row(effect, "highlightSize", tl!("Highlight Size"), (0.0, 100.0), Some(UnitKind::Percent), 1).enabled_when("surface", "plastic"));
+        rows.push(
+            range_row(effect, "highlightIntensity", tl!("Highlight Intensity"), (0.0, 100.0), Some(UnitKind::Percent), 1)
+                .enabled_when("surface", "plastic"),
+        );
+        rows.push(
+            range_row(effect, "highlightSize", tl!("Highlight Size"), (0.0, 100.0), Some(UnitKind::Percent), 1).enabled_when("surface", "plastic"),
+        );
     }
     rows.push(unlit_off(range_row(effect, "blendSteps", tl!("Blend Steps"), (1.0, 256.0), None, 0)));
     rows.push(unlit_off(choice_row(options, "shadingColor", tl!("Shading Color"))));
@@ -262,8 +275,7 @@ fn set_map_value(fields: &mut DialogFields, key: &str, value: Value) -> Result<(
 
 /// A step button of the surface navigator.
 fn step(ui: &mut Ui, icon: &'static str, tip: &'static str, enabled: bool) -> bool {
-    // PLAN: assumed `IconId::new(&str)` and `IconButton::new(IconId)`; icons chevrons_left, chevron_left, chevron_right, chevrons_right.
-    IconButton::new(craft::ui::icons::IconId::new(icon)).label(tip).tooltip(tip).enabled(enabled).show(ui).clicked()
+    IconButton::new(craft::behavior::IconId::new(icon)).label(tip).tooltip(tip).enabled(enabled).show(ui).clicked()
 }
 
 /// The surface navigator: first, previous, the number, next, last, and "Hidden" for a surface the viewer cannot see.
@@ -446,7 +458,8 @@ pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -
     } else {
         rows.push(Param::read_only_text(MAP_SYMBOL, tl!("Symbol"), tl!("None")));
     }
-    let art = map.as_ref().and_then(|m| data.doc.as_ref().and_then(|d| vectorcraft_effects::graphic_bounds(d, &m.symbol))).map(|r| (r.width(), r.height()));
+    let art =
+        map.as_ref().and_then(|m| data.doc.as_ref().and_then(|d| vectorcraft_effects::graphic_bounds(d, &m.symbol))).map(|r| (r.width(), r.height()));
     let flat = Flat { width: surface.width, height: surface.height, visible: surface.visible, art, doc: data.doc.clone(), revision: data.revision };
     let flat_row = flat.clone();
     rows.push(Param::custom("__mapFlat", "", move |ui, fields, _| flat_view(ui, fields, &flat_row)).full_width());
@@ -463,7 +476,9 @@ pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -
         ];
         let kinds = [unit, unit, Some(UnitKind::Percent), Some(UnitKind::Percent), Some(UnitKind::Degrees)];
         for i in 0..MAP_KEYS.len() {
-            let row = Param::new(MAP_KEYS[i], labels[i], ParamKind::range(bounds[i].0, bounds[i].1, values[i], SliderScale::Linear)).decimals(2).on_set(set_map_value);
+            let row = Param::new(MAP_KEYS[i], labels[i], ParamKind::range(bounds[i].0, bounds[i].1, values[i], SliderScale::Linear))
+                .decimals(2)
+                .on_set(set_map_value);
             rows.push(match kinds[i] {
                 Some(kind) => row.unit(kind),
                 None => row,

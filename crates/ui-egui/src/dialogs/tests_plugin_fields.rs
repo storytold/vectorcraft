@@ -10,6 +10,7 @@ use vectorcraft_plugins::wat as tpl;
 
 use super::tests_plugin_export::{fields, top};
 use super::*;
+use crate::VectorcraftApp;
 
 /// A filter whose parameters use every presentation key.
 fn manifest(id: &str) -> String {
@@ -40,13 +41,9 @@ fn harness(id: &str) -> Harness {
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             if !std::mem::replace(&mut fonts, true) {
-                // PLAN: hub-w1's `testing::ui_context()` makes a context of its own; the harness's context needs the same install.
-                crate::theme::install_fonts(ui.ctx());
-                crate::theme::apply(ui.ctx(), Default::default());
+                crate::testing::install(ui.ctx());
                 return;
             }
-            // PLAN: assumed `VectorcraftApp::ui(&mut self, &mut egui::Ui)`, the whole frame of kb.C26's `key_frame`.
-            app.logic(ui.ctx());
             app.ui(ui);
         },
         app,
@@ -73,9 +70,11 @@ fn remove(h: &mut Harness, id: &str) {
 fn labels_units_sections_text_and_lists_come_from_the_manifest() {
     let id = "test.ui.fields.shown";
     let parsed = vectorcraft_plugins::manifest::Manifest::parse(manifest(id).as_bytes()).unwrap();
-    let rows = crate::form::plugin_params(&parsed, &Map::new());
+    let rows = super::form::plugin_params(&parsed, &Map::new());
     let at = |key: &str| rows.iter().position(|p| p.key == key).unwrap_or_else(|| panic!("no row for {key}"));
-    let section = |label: &str| rows.iter().position(|p| p.key.starts_with("section:") && p.label.as_str() == label).unwrap_or_else(|| panic!("no {label} section"));
+    let section = |label: &str| {
+        rows.iter().position(|p| p.key.starts_with("section:") && p.label.as_str() == label).unwrap_or_else(|| panic!("no {label} section"))
+    };
     // The parameters outside groups come first, then each group's section, its rows in manifest order.
     let (fill, outline) = (section("Fill"), section("Outline"));
     assert!(at("outline") < at("title") && at("title") < fill, "ungrouped rows lead");

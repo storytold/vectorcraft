@@ -12,9 +12,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 use craft::keymap::CommandRef;
+use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{ActivateOn, CollectionEvent, Props as _, SelectMode, Show as _, ShowCollection as _, WordSetCx as _};
-use craft::ui::display::Text;
+use craft::ui::display::{Divider, Text};
 use craft::ui::list::{Finding, Findings, FindingsList, FindingsWords, List, ListRow, Severity, ThumbSize};
 use craft::ui::menu::PanelRow;
 use egui::Ui;
@@ -23,9 +24,8 @@ use vectorcraft_engine::doc::Document;
 
 use super::cleanup::Positional;
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp};
 use crate::panels::empty_state;
-use crate::widgets;
 
 /// The panel's id (`window.panel {panel: "foldLines"}`).
 pub const ID: &str = "foldLines";
@@ -42,19 +42,19 @@ pub const ROLES: &[(&str, &str)] =
     &[("Cut Line", "cut"), ("Crease Line", "crease"), ("Partial Cut Line", "partialCut"), ("Perforation Line", "perforation")];
 
 /// Object › Plug-ins › Packaging Tools.
-pub fn menu() -> Vec<Item> {
-    let make = |label, role: &str| Item::Cmd(label, SET_ROLE, json!({ "role": role }));
+pub fn menu() -> Vec<Node> {
+    let make = |label, role: &str| cp(label, SET_ROLE, json!({ "role": role }));
     vec![
-        Item::Cmd("Fold Lines", "window.panel", json!({ "panel": ID })),
-        Item::Sep,
+        cp("Fold Lines", "window.panel", json!({ "panel": ID })),
+        Sep,
         make("Make Cut Line", "cut"),
         make("Make Crease Line", "crease"),
         make("Make Partial Cut Line", "partialCut"),
         make("Make Perforation Line", "perforation"),
-        Item::Sep,
-        Item::Cmd("Check Fold Lines", CHECK, Value::Null),
-        Item::Sep,
-        Item::Cmd("Fold Preview", PREVIEW, json!({})),
+        Sep,
+        c("Check Fold Lines", CHECK),
+        Sep,
+        cp("Fold Preview", PREVIEW, json!({})),
     ]
 }
 
@@ -178,7 +178,7 @@ fn select_issue(app: &mut VectorcraftApp, checked: &Checked, n: usize) {
 /// The Check button, then the last check's summary and issues (errors and warnings by their icons);
 /// clicking an issue, or Enter on it, selects its objects.
 fn show_check(app: &mut VectorcraftApp, ui: &mut Ui) {
-    widgets::divider(ui);
+    Divider::horizontal().show(ui);
     if Button::new(tl!("Check").to_string()).show(ui).clicked() {
         run_check(app, json!({}));
     }
@@ -193,12 +193,11 @@ fn show_check(app: &mut VectorcraftApp, ui: &mut Ui) {
         .zip(&checked.issues)
         .map(|(id, issue)| Finding::new(id, if issue.error { Severity::Error } else { Severity::Warning }, crate::i18n::msg(&issue.message)))
         .collect();
-    let out = FindingsList::new(tl!("Issues").to_string()).show_items(ui, &Findings::new(&findings), &mut |key, icx| {
-        match findings.get(*key as usize) {
+    let out =
+        FindingsList::new(tl!("Issues").to_string()).show_items(ui, &Findings::new(&findings), &mut |key, icx| match findings.get(*key as usize) {
             Some(finding) => finding.row(&icx.words::<FindingsWords>()),
             None => ListRow::spacer(),
-        }
-    });
+        });
     for event in &out.events {
         if let CollectionEvent::Activate(n) = event {
             select_issue(app, &checked, *n as usize);

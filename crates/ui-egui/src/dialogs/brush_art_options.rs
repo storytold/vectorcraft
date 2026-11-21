@@ -50,7 +50,8 @@ use super::brush_options::{clamped, mode_key, stroke_preview};
 use crate::VectorcraftApp;
 
 /// Scatter values: (field, suffix), in [`Scatter::RANGES`] order.
-const SCATTER: [(&str, UnitKind); 4] = [("size", UnitKind::Percent), ("spacing", UnitKind::Percent), ("scatter", UnitKind::Percent), ("rotation", UnitKind::Degrees)];
+const SCATTER: [(&str, UnitKind); 4] =
+    [("size", UnitKind::Percent), ("spacing", UnitKind::Percent), ("scatter", UnitKind::Percent), ("rotation", UnitKind::Degrees)];
 
 /// Art brush directions, in the order of their arrows (→ ← ↓ ↑).
 const DIRECTIONS: [Direction; 4] = [Direction::LeftToRight, Direction::RightToLeft, Direction::TopToBottom, Direction::BottomToTop];
@@ -144,7 +145,9 @@ pub(super) fn tile_choice(f: &DialogFields, key: &str) -> String {
     let set = |field: &str| def.and_then(|d| d.get(field)).is_some_and(|v| !v.is_null());
     match CORNER_TILES.iter().find(|(_, corner, _, _)| corner == art) {
         Some((_, corner, _, _)) if corner_art_field(def, corner).is_some() => "original".into(),
-        Some((_, _, source, _)) => def.and_then(|d| d.get(source)).and_then(Value::as_str).filter(|s| CornerSource::parse(s).is_some()).unwrap_or("none").into(),
+        Some((_, _, source, _)) => {
+            def.and_then(|d| d.get(source)).and_then(Value::as_str).filter(|s| CornerSource::parse(s).is_some()).unwrap_or("none").into()
+        }
         None if set(art) => "original".into(),
         None => "none".into(),
     }
@@ -505,7 +508,8 @@ fn art_rows(object: bool) -> Vec<Param> {
         let entries = variation_entries(&modes);
         Row::new()
             .show(ui, |ui, _| {
-                let slid = Slider::new(Bind::given(clamped(f, "width", range)), range.0..=range.1).step(1.0).label(tl!("Width")).id_salt("width").show(ui);
+                let slid =
+                    Slider::new(Bind::given(clamped(f, "width", range)), range.0..=range.1).step(1.0).label(tl!("Width")).id_salt("width").show(ui);
                 if let Some(value) = slid.value() {
                     f.set("width", value.round());
                 }
@@ -525,7 +529,12 @@ fn art_rows(object: bool) -> Vec<Param> {
         ];
         rows.push(Param::new("scaleMode", tl!("Brush Scale Options"), ParamKind::radio(scales, Some("stretch".into()))));
         for (key, label) in [("guideStart", tl!("Start")), ("guideEnd", tl!("End"))] {
-            rows.push(Param::number(key, label, 0.0, 1.0, 0).bounds(Some(0.0), Some(100.0)).unit(UnitKind::Percent).enabled_when("scaleMode", "betweenGuides"));
+            rows.push(
+                Param::number(key, label, 0.0, 1.0, 0)
+                    .bounds(Some(0.0), Some(100.0))
+                    .unit(UnitKind::Percent)
+                    .enabled_when("scaleMode", "betweenGuides"),
+            );
         }
         rows.push(direction_row());
     }
@@ -607,11 +616,16 @@ fn tiles_row() -> Param {
                     let choice = tile_choice(f, key);
                     let original_enabled = original_available(f, field);
                     let choices = tile_choices(f, corner);
-                    let entries: Vec<Entry<String>> =
-                        choices.iter().map(|(id, label)| Entry::new(id.clone(), label.clone()).enabled(id != "original" || original_enabled)).collect();
+                    let entries: Vec<Entry<String>> = choices
+                        .iter()
+                        .map(|(id, label)| Entry::new(id.clone(), label.clone()).enabled(id != "original" || original_enabled))
+                        .collect();
                     // A tile that shows no art says what it is instead.
                     let shown = (choice != "original" && pattern_choice(f, &choice).is_none()).then_some(choice.as_str());
-                    let art = drawn.and_then(|d| preview_def.get(d)).filter(|_| shown.is_none()).and_then(|v| serde_json::from_value::<Node>(v.clone()).ok());
+                    let art = drawn
+                        .and_then(|d| preview_def.get(d))
+                        .filter(|_| shown.is_none())
+                        .and_then(|v| serde_json::from_value::<Node>(v.clone()).ok());
                     let label = shown.and_then(|c| choices.iter().find(|(id, _)| id == c)).map_or(tl!("None"), |(_, l)| l.as_str()).to_string();
                     let key_hash = drawn.and_then(|d| preview_def.get(d)).map_or(0, art_hash);
                     Stack::new().show(ui, |ui, _| {
@@ -638,8 +652,7 @@ fn tiles_row() -> Param {
 
 /// A tile preview's pixels: the document `build` makes at `size`, white where it makes none.
 fn blank_if_none(size: [usize; 2], build: impl FnOnce(f64, f64) -> Option<Document>) -> ColorImage {
-    // PLAN: `widgets::doc_image` (wg.S11, widgets-w13) is the renderer; its path is assumed here.
-    crate::widgets::doc_image(size, build).unwrap_or_else(|| ColorImage::filled(size, Color32::WHITE))
+    crate::graphics::doc_image(size, build).unwrap_or_else(|| ColorImage::filled(size, Color32::WHITE))
 }
 
 // ---------- colorization ----------
@@ -789,7 +802,9 @@ fn key_color_pick_active(app: &VectorcraftApp) -> bool {
 /// The pump runs once a frame, so it reads the frame's events once.
 fn input_lost(app: &VectorcraftApp) -> bool {
     app.ui_ctx.as_ref().is_some_and(|ctx| {
-        ctx.input(|input| !input.focused || input.events.iter().any(|event| matches!(event, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. })))
+        ctx.input(|input| {
+            !input.focused || input.events.iter().any(|event| matches!(event, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. }))
+        })
     })
 }
 

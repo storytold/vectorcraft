@@ -33,7 +33,6 @@ use vectorcraft_color::{Color, GradientPaint, Paint};
 use super::host::{HeldOptions, open_held_with};
 use crate::VectorcraftApp;
 use crate::panels::color::{color_of_values, gamut, model_values};
-use crate::theme::Tokens;
 
 /// The dialog kind of Swatch Options.
 pub const KIND: &str = "swatchOptions";
@@ -175,7 +174,14 @@ pub(super) fn name_row() -> Param {
 }
 
 /// A hosted dialog for the command `key`, whose rows are `rows`: the one way the colour dialogs build theirs.
-pub(super) fn hosted(ctx: &egui::Context, key: &'static str, title: &str, fields: DialogFields, rows: Vec<Param>, previews: bool) -> HostedParamDialog {
+pub(super) fn hosted(
+    ctx: &egui::Context,
+    key: &'static str,
+    title: &str,
+    fields: DialogFields,
+    rows: Vec<Param>,
+    previews: bool,
+) -> HostedParamDialog {
     let title = title.to_owned();
     HostedParamDialog::new(ctx, key, fields, move |values| {
         ParamDialog::new(key, title.clone(), rows.clone()).values(Bind::bound(values)).previews(previews)
@@ -333,16 +339,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     if let Some(open) = app.ui.swatch_options.as_mut() {
         open.last = want;
     }
-}
-
-/// The fields' grid of the swatch dialogs.
-pub(super) fn grid<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    egui::Grid::new("swatch-options").num_columns(2).spacing([10.0, 8.0]).show(ui, add).inner
-}
-
-/// A dimmed field label in the swatch dialogs' grid.
-pub(super) fn label(ui: &mut egui::Ui, s: &str) {
-    crate::widgets::field_label(ui, egui::RichText::new(s).color(Tokens::get(ui.ctx()).text_dim));
 }
 
 /// A warning under the colour of the swatch dialogs.

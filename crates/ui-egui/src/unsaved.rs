@@ -59,7 +59,7 @@ pub(crate) struct Closing {
 /// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
 /// again when it answers. (Elsewhere the dialog is a window of its own, and closing goes on.)
 pub(crate) fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
-    if app.file_sheet_open() { Err(crate::picks::busy().into()) } else { Ok(()) }
+    if app.file_sheet_open() { Err(crate::file_asks::busy().into()) } else { Ok(()) }
 }
 
 /// Finishes the work that decides whether there is anything left to save: the saves running in
@@ -118,8 +118,7 @@ fn position(app: &VectorcraftApp, uid: u64) -> Option<usize> {
 fn ask(app: &mut VectorcraftApp, i: usize, then: Then) -> Result<Value, String> {
     let docs = app.session.documents();
     let uid = docs.get(i).ok_or("no such document")?.uid;
-    let uids: Vec<u64> =
-        if then == Then::Close { vec![uid] } else { docs.iter().skip(i).filter(|d| d.is_dirty()).map(|d| d.uid).collect() };
+    let uids: Vec<u64> = if then == Then::Close { vec![uid] } else { docs.iter().skip(i).filter(|d| d.is_dirty()).map(|d| d.uid).collect() };
     let front = app.session.active().map(|d| d.uid).filter(|f| then == Then::Close && *f != uid);
     let guard = CloseGuard::new(then.scope(), uids);
     show_question(app, &guard, uid)?;
@@ -242,9 +241,6 @@ fn advance(app: &mut VectorcraftApp, mut closing: Closing, mut step: GuardStep<u
                     }
                 },
             },
-            // `GuardStep` is not exhaustive for this match only through its variants; a new one stops the operation.
-            #[allow(unreachable_patterns)]
-            _ => return,
         };
     }
 }
@@ -261,22 +257,26 @@ pub(crate) fn ready_for_test(app: &mut VectorcraftApp) -> egui::Context {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use crate::tests_picks::{Picker, poll, scripted};
     use vectorcraft_engine::Session;
 
-    /// An app whose Save As picks `out.vectorcraft` and records written paths.
-    fn app() -> (VectorcraftApp, Arc<Mutex<Vec<String>>>) {
-        let written = Arc::new(Mutex::new(vec![]));
-        let w = written.clone();
-        let services = crate::Services {
-            pick_save: Some(Box::new(|_: &crate::FilePick| Some("out.vectorcraft".to_string()))),
-            write: Some(Box::new(move |p: &str, _: &[u8]| {
-                w.lock().unwrap().push(p.to_string());
-                Ok(())
-            })),
-            ..Default::default()
-        };
-        (VectorcraftApp::new(Session::new(), services), written)
+    fn app() -> VectorcraftApp {
+        VectorcraftApp::new(Session::new(), crate::Services::default())
+    }
+
+    /// The window's first frame, then a file service whose picks the test answers and a writer that
+    /// records the paths written.
+    fn ready_with_picks(app: &mut VectorcraftApp) -> (egui::Context, Picker) {
+        let ctx = ready_for_test(app);
+        let picker = scripted(app);
+        (ctx, picker)
+    }
+
+    /// Save As picks `out.vectorcraft`, and what it asked runs.
+    fn save_as_out(app: &mut VectorcraftApp, ctx: &egui::Context, picker: &Picker) {
+        picker.answer_saved("out.vectorcraft", None);
+        poll(app, ctx);
+        pump(app, ctx);
     }
 
     fn new_doc(app: &mut VectorcraftApp, dirty: bool) {
@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn clean_documents_close_at_once_keeping_views_aligned() {
-        let (mut app, _) = app();
+        let mut app = app();
         for _ in 0..3 {
             new_doc(&mut app, false);
         }
@@ -343,10 +343,10 @@ mod tests {
 
     #[test]
     fn closing_a_modified_document_asks_and_cancel_keeps_it() {
-        let (mut app, written) = app();
+        let mut app = app();
         new_doc(&mut app, true);
         new_doc(&mut app, false);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, picker) = ready_with_picks(&mut app);
         assert!(any_dirty(&app));
         assert_eq!(app.run("file.close", json!({ "index": 0 })).unwrap(), json!({ "pending": KIND }));
         assert_eq!((docs(&app), pending(&app), app.session.active_index()), (2, Some(0), Some(0)));
@@ -357,39 +357,41 @@ mod tests {
         // Save writes the file (Save As for an untitled document), then closes it.
         app.run("file.close", json!({ "index": 0 })).unwrap();
         answer(&mut app, &ctx, CloseAnswer::Save);
-        assert_eq!(*written.lock().unwrap(), vec!["out.vectorcraft".to_string()]);
+        save_as_out(&mut app, &ctx, &picker);
+        assert_eq!(picker.written(), vec!["out.vectorcraft".to_string()]);
         assert_eq!((docs(&app), app.views.len()), (1, 1));
     }
 
     #[test]
     fn closing_a_modified_background_tab_keeps_the_front_document_after_dont_save() {
-        let (mut app, written) = app();
+        let mut app = app();
         let [a, _, c] = front_and_modified_background_tab(&mut app);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, picker) = ready_with_picks(&mut app);
         assert_eq!(app.run("file.close", json!({ "index": 1 })).unwrap(), json!({ "pending": KIND }));
         // The question shows the document it asks about.
         assert_eq!((pending(&app), app.session.active_index()), (Some(1), Some(1)));
         answer(&mut app, &ctx, CloseAnswer::DontSave);
         let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
         assert_eq!((uids, front_uid(&app), app.views.len()), (vec![a, c], Some(a), 2));
-        assert!(written.lock().unwrap().is_empty());
+        assert!(picker.written().is_empty());
     }
 
     #[test]
     fn closing_a_modified_background_tab_keeps_the_front_document_after_save() {
-        let (mut app, written) = app();
+        let mut app = app();
         let [a, _, c] = front_and_modified_background_tab(&mut app);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, picker) = ready_with_picks(&mut app);
         close(&mut app, 1).unwrap();
         answer(&mut app, &ctx, CloseAnswer::Save);
-        assert_eq!(*written.lock().unwrap(), vec!["out.vectorcraft".to_string()]);
+        save_as_out(&mut app, &ctx, &picker);
+        assert_eq!(picker.written(), vec!["out.vectorcraft".to_string()]);
         let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
         assert_eq!((uids, front_uid(&app)), (vec![a, c], Some(a)));
     }
 
     #[test]
     fn cancel_keeps_the_asked_background_tab_in_front() {
-        let (mut app, _) = app();
+        let mut app = app();
         let [_, b, _] = front_and_modified_background_tab(&mut app);
         let ctx = ready_for_test(&mut app);
         close(&mut app, 1).unwrap();
@@ -405,7 +407,7 @@ mod tests {
     /// the question was open, the closed document's neighbor comes to the front as before.
     #[test]
     fn a_front_document_closed_meanwhile_is_not_brought_back() {
-        let (mut app, _) = app();
+        let mut app = app();
         let [a, _, c] = front_and_modified_background_tab(&mut app);
         let ctx = ready_for_test(&mut app);
         close(&mut app, 1).unwrap();
@@ -417,7 +419,7 @@ mod tests {
 
     #[test]
     fn close_all_does_not_remember_a_front_document() {
-        let (mut app, _) = app();
+        let mut app = app();
         front_and_modified_background_tab(&mut app);
         let ctx = ready_for_test(&mut app);
         app.run("file.closeAll", json!({})).unwrap();
@@ -429,12 +431,14 @@ mod tests {
 
     #[test]
     fn a_cancelled_save_as_keeps_the_document_open() {
-        let (mut app, _) = app();
-        app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+        let mut app = app();
         new_doc(&mut app, true);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, picker) = ready_with_picks(&mut app);
         close(&mut app, 0).unwrap();
         answer(&mut app, &ctx, CloseAnswer::Save);
+        picker.cancel();
+        poll(&mut app, &ctx);
+        pump(&mut app, &ctx);
         assert_eq!(docs(&app), 1);
         assert!(app.closing.is_none() && !question_open(&app));
         assert!(!app.ui.status.is_empty(), "the failure is reported");
@@ -442,11 +446,11 @@ mod tests {
 
     #[test]
     fn close_all_and_quit_ask_once_per_modified_document() {
-        let (mut app, written) = app();
+        let mut app = app();
         new_doc(&mut app, false);
         new_doc(&mut app, true);
         new_doc(&mut app, true);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, picker) = ready_with_picks(&mut app);
         // Close All: asks about each modified document in turn, then closes the rest.
         app.run("file.closeAll", json!({})).unwrap();
         assert_eq!(pending(&app), Some(1));
@@ -454,13 +458,14 @@ mod tests {
         assert_eq!((docs(&app), pending(&app)), (2, Some(1)));
         answer(&mut app, &ctx, CloseAnswer::DontSave);
         assert_eq!((docs(&app), app.views.len(), question_open(&app)), (0, 0, false));
-        assert!(written.lock().unwrap().is_empty());
+        assert!(picker.written().is_empty());
         // Quit: nothing modified quits at once; otherwise only after every answer.
         new_doc(&mut app, true);
         app.run("app.quit", json!({})).unwrap();
         assert_ne!(app.ui.status, "quit");
         assert_eq!(pending(&app), Some(0));
         answer(&mut app, &ctx, CloseAnswer::Save);
+        save_as_out(&mut app, &ctx, &picker);
         assert_eq!(app.ui.status, "quit");
         app.ui.status.clear();
         app.run("app.quit", json!({})).unwrap();
@@ -470,7 +475,7 @@ mod tests {
     #[test]
     fn the_control_channels_quit_says_when_it_asks_first() {
         // #830: it answered null at once, before the question.
-        let (mut app, _) = app();
+        let mut app = app();
         new_doc(&mut app, true);
         let ctx = ready_for_test(&mut app);
         let quit = |app: &mut VectorcraftApp| {

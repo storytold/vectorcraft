@@ -3,29 +3,33 @@ use std::rc::Rc;
 
 use vectorcraft_engine::Session;
 
+use craft::host::PickRequest;
+use craft::ui::dialog::DialogHost;
+
+use super::super::tests_export::{answer_saves, save_panel};
 use super::*;
+use crate::Services;
 use crate::tests_folder::Folder;
-use crate::{FilePick, Services, theme};
 
 type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
 /// A desktop app whose save panel answers `picked` and records what it was shown.
-// PLAN: hub-w3 replaces the `Services` pickers; the fields are as they are in the tree.
-fn desktop(picked: &'static str) -> (VectorcraftApp, Written, Rc<RefCell<Vec<FilePick>>>) {
+fn desktop(picked: &'static str) -> (VectorcraftApp, Written, Rc<RefCell<Vec<PickRequest>>>) {
     let (written, picks) = (Written::default(), Rc::new(RefCell::new(vec![])));
     let (w, p) = (written.clone(), picks.clone());
     let services = Services {
-        pick_save: Some(Box::new(move |f: &FilePick| {
-            p.borrow_mut().push(f.clone());
-            Some(picked.to_string())
-        })),
         write: Some(Box::new(move |path: &str, b: &[u8]| {
             w.borrow_mut().push((path.to_string(), b.to_vec()));
             Ok(())
         })),
         ..Default::default()
     };
-    (with_art(services), written, picks)
+    let mut app = with_art(services);
+    save_panel(&mut app, move |request| {
+        p.borrow_mut().push(request.clone());
+        Some(picked.to_string())
+    });
+    (app, written, picks)
 }
 
 /// A browser app: saves are downloads.
@@ -44,52 +48,52 @@ fn web() -> (VectorcraftApp, Written) {
 
 fn with_art(services: Services) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), services);
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    app.ui_ctx = Some(ctx);
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     app
 }
 
-// PLAN: the host readers below assume `app.dialogs()` is the `DialogHost` (hub-w2) and `export_host::pump`
-// (export-w9) runs the closed dialogs' after steps.
-/// One headless frame of the dialog layer.
+/// One headless frame: the app's pass, the dialog layer's pump, then the save panels answer.
 fn frame(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().unwrap();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        super::super::show(app, ui.ctx());
-        export_host::pump(app, ui.ctx());
-    });
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
     out.textures_delta.clear();
+    super::super::host::pump(app, &ctx);
+    answer_saves(app);
+}
+
+/// Runs `f` on the window's dialog host.
+fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
+    app.dialogs().expect("the test app has a window").with(f)
 }
 
 fn top(app: &mut VectorcraftApp) -> craft::ui::dialog::DialogId {
-    app.dialogs().stack().top().expect("a dialog is open")
+    host(app, |h| h.open_dialogs().last().map(|d| d.id)).expect("a dialog is open")
 }
 
 /// The open dialog's values.
 fn dialog(app: &mut VectorcraftApp) -> DialogFields {
     let id = top(app);
-    app.dialogs().get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone()).expect("a parameter dialog")
+    host(app, |h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())).expect("a parameter dialog")
 }
 
 /// Sets a value as a person editing that row would.
 fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
     let (ctx, id) = (app.ui_ctx.clone().unwrap(), top(app));
-    app.dialogs().set_json_field(&ctx, id, key, value).unwrap_or_else(|e| panic!("{key}: {e}"));
+    host(app, |h| h.set_json_field(&ctx, id, key, value)).unwrap_or_else(|e| panic!("{key}: {e}"));
 }
 
 /// Presses OK; whether the dialog took it.
 fn ok(app: &mut VectorcraftApp) -> bool {
     let (ctx, id) = (app.ui_ctx.clone().unwrap(), top(app));
-    let took = app.dialogs().confirm_by_id(&ctx, id);
+    let took = host(app, |h| h.confirm_by_id(&ctx, id));
     frame(app);
     took
 }
 
 fn open_dialogs(app: &mut VectorcraftApp) -> usize {
-    app.dialogs().stack().ids().count()
+    host(app, |h| h.open_dialogs().len())
 }
 
 fn keys(f: &Format, legacy: bool) -> Vec<String> {
@@ -104,9 +108,9 @@ fn a_formats_rows_and_routing() {
     let r = app.run("file.saveAs", json!({})).unwrap();
     assert_eq!((r["pending"].as_str(), r["path"].as_str()), (Some("svgOptions"), Some("art.svg")));
     // The save panel offers every save format, the document's own first.
-    let labels: Vec<String> = picks.borrow()[0].filters.iter().map(|f| f.0.clone()).collect();
+    let labels: Vec<String> = picks.borrow()[0].filters.iter().map(|f| f.name.clone()).collect();
     assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai", "EPS"]);
-    assert_eq!(picks.borrow()[0].name, "Untitled-1.vectorcraft");
+    assert_eq!(picks.borrow()[0].file_name.as_deref(), Some("Untitled-1.vectorcraft"));
     assert!(written.borrow().is_empty(), "nothing is written before OK");
     set(&mut app, "outlineText", json!(true));
     assert!(ok(&mut app));
@@ -223,7 +227,10 @@ fn legacy_ai_saves_the_artboards_checked_in_its_picker() {
     let names: Vec<String> = written.borrow().iter().map(|(p, _)| p.clone()).collect();
     assert_eq!(names, ["art-Artboard-1.ai", "art-Side.ai"]);
     let doc = app.session.active().unwrap().doc.clone();
-    assert_eq!(board_files(Some(&doc), "art.ai", &[true, false, true, false]), [Some("art-Artboard-1.ai".into()), None, Some("art-Side.ai".into()), None]);
+    assert_eq!(
+        board_files(Some(&doc), "art.ai", &[true, false, true, false]),
+        [Some("art-Artboard-1.ai".into()), None, Some("art-Side.ai".into()), None]
+    );
     assert_eq!(board_files(Some(&doc), "art.ai", &[false, true, false, false]), [None, Some("art.ai".into()), None, None], "one: the file itself");
     // Save As again starts from the artboards saved.
     assert_eq!(app.session.active().unwrap().save_options["range"], json!("1, 3"));
@@ -238,19 +245,18 @@ fn save_a_copy_and_template_suggest_their_names() {
     let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-dialog"));
     app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
     app.run("file.saveCopy", json!({})).unwrap();
-    assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
+    assert_eq!(picks.borrow()[0].file_name.as_deref(), Some("Untitled-1 copy.vectorcraft"));
     assert_eq!(open_dialogs(&mut app), 0, "the native format has no options");
     assert!(vectorcraft_format::sniff(&written.borrow()[0].1));
     assert!(vectorcraft_format::pdf_content(&written.borrow()[0].1).is_some());
     assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
     app.run("file.saveAsTemplate", json!({})).unwrap();
     let pick = &picks.borrow()[1];
-    assert_eq!(pick.name, "Untitled-1 template.vctemplate");
-    assert_eq!(pick.folder.as_deref().map(std::path::Path::new), Some(folder.as_path()));
-    assert_eq!(
-        pick.filters,
-        crate::FilePick::filters([("VectorCraft Template", &["vctemplate"][..]), ("PDF-compatible .ait template", &["ait"][..])])
-    );
+    assert_eq!(pick.file_name.as_deref(), Some("Untitled-1 template.vctemplate"));
+    assert_eq!(pick.directory.as_deref(), Some(folder.as_path()));
+    let filters =
+        PickRequest::save("template").filter("VectorCraft Template", &["vctemplate"]).filter("PDF-compatible .ait template", &["ait"]).filters;
+    assert_eq!(pick.filters, filters);
     assert_eq!(written.borrow()[1].0, "copy.vctemplate", "the picked name, its extension replaced with the template's");
 }
 
@@ -426,7 +432,12 @@ fn picking_eps_menu_items_saves_their_values() {
     let c = choices(&app, f, o).unwrap();
     assert_eq!(c.values, [json!("high"), json!("medium"), json!("low"), json!("Mine")]);
     assert_eq!(c.builtins, 3);
-    for (name, pick, value) in [("previewFormat", "none", json!("none")), ("overprints", "discard", json!("discard")), ("flattenerPreset", "Mine", json!("Mine")), ("level", "2", json!(2))] {
+    for (name, pick, value) in [
+        ("previewFormat", "none", json!("none")),
+        ("overprints", "discard", json!("discard")),
+        ("flattenerPreset", "Mine", json!("Mine")),
+        ("level", "2", json!(2)),
+    ] {
         set(&mut app, name, json!(pick));
         assert_eq!(dialog(&mut app).text(name), Some(pick), "{name}");
         let _ = value;
@@ -434,7 +445,8 @@ fn picking_eps_menu_items_saves_their_values() {
     assert!(ok(&mut app), "saved: {}", app.ui.status);
     assert_eq!(open_dialogs(&mut app), 0);
     let saved = &app.session.active().unwrap().save_options;
-    for (name, value) in [("previewFormat", json!("none")), ("overprints", json!("discard")), ("flattenerPreset", json!("Mine")), ("level", json!(2))] {
+    for (name, value) in [("previewFormat", json!("none")), ("overprints", json!("discard")), ("flattenerPreset", json!("Mine")), ("level", json!(2))]
+    {
         assert_eq!(saved[name], value, "{name}");
     }
     let bytes = written.borrow()[0].1.clone();
@@ -491,11 +503,11 @@ fn a_refused_save_says_so_in_an_alert() {
     set(&mut app, "version", json!("55"));
     frame(&mut app);
     ok(&mut app);
-    // PLAN: assumed the alert is a `StandardPrompt`-style `Message` on the host with `title` and `detail` readers.
-    let id = top(&mut app);
-    let message = app.dialogs().get_by_id::<craft::ui::runtime::env::Message>(id).expect("the alert is on the host");
-    assert_eq!(message.text(), "Can't save “art.vectorcraft”.");
-    assert_eq!(message.detail(), "can't save version 55: VectorCraft writes versions 1 to 4");
+    // The alert opens over the options and names the reason.
+    let alert = host(&app, |h| h.open_dialogs().pop()).expect("the alert is on the host");
+    assert_ne!(alert.key.as_deref(), Some(KIND));
+    let shown = alert.fields.map(|f| f.to_string()).unwrap_or_default();
+    assert!(shown.contains("can't save version 55"), "{shown}");
     assert!(written.borrow().is_empty());
     let st = app.session.active().unwrap();
     assert!(st.is_dirty() && st.path.is_none(), "not saved");

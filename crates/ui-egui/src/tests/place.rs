@@ -214,7 +214,11 @@ fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     let want = app.canvas_view().unwrap().to_doc(pos);
     let uid = app.session.active().unwrap().uid;
     for name in ["a.png", "a.svg", "a.ai", "a.vectorcraft"] {
-        assert_eq!(app.drop_target(name, DropSpot::Canvas(want), true), DropTarget::Place(DropAt { doc: uid, reverts: 0, at: want, embed: true }), "{name}");
+        assert_eq!(
+            app.drop_target(name, DropSpot::Canvas(want), true),
+            DropTarget::Place(DropAt { doc: uid, reverts: 0, at: want, embed: true }),
+            "{name}"
+        );
         assert_eq!(app.drop_target(name, DropSpot::Elsewhere, false), DropTarget::Open, "{name} on the tab bar");
     }
 }
@@ -232,7 +236,11 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
         assert_eq!(app.drop_target(name, DropSpot::Unknown, false), DropTarget::Open, "{name}");
     }
     for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
-        assert_eq!(app.drop_target(name, DropSpot::Unknown, false), DropTarget::Place(DropAt { doc: uid, reverts: 0, at: center, embed: false }), "{name}");
+        assert_eq!(
+            app.drop_target(name, DropSpot::Unknown, false),
+            DropTarget::Place(DropAt { doc: uid, reverts: 0, at: center, embed: false }),
+            "{name}"
+        );
     }
 }
 
@@ -248,8 +256,7 @@ fn a_dropped_file_of_each_library_kind_opens_in_its_destination() {
             crate::panels::library_panel::last_open(&app.ui).is_some_and(|o| o.id == format!("loaded/{path}"))
         }),
         ("dropped.jsx", b"#target acme\napp.executeMenuCommand('acmecopyall');\n".to_vec(), |app, _| {
-            // PLAN: assumed `HostedReport` in `dialogs::script_check` (menus-w23)
-            app.dialogs().is_some_and(|d| d.with(|h| h.get::<crate::dialogs::script_check::HostedReport>().is_some()))
+            app.dialogs().is_some_and(|d| d.with(|h| h.get::<craft::ui::patterns::form_dialogs::HostedReport>().is_some()))
         }),
         ("dropped.vclibrary", library.into_bytes(), |app, _| app.ui.status == "Imported library Dropped"),
         // PLAN: `DialogState::snapshot(..).review` (shortcuts-w8) is not asserted; the dialog open is
@@ -527,8 +534,7 @@ fn one_file_places_centred_in_the_view_and_replace_swaps_the_selection() {
 fn the_control_bar_shows_the_image_file_link_colour_mode_and_ppi() {
     use crate::tests_removeanchors::{control_frame, has};
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let dir = Folder::new("ui-place-control-bar");
     let path = dir.file("photo.png", &png(30, 30, 300.0));
     app.run("file.place", json!({"path": path})).unwrap();
@@ -590,8 +596,7 @@ fn the_control_bars_file_name_relinks_the_image() {
     let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
     app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
     let before = selected_image(&app).geometric_bounds().unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     click_label(&mut app, &ctx, "red.png");
     for s in ["Replace…", "Go To Link", "Edit Original", "Update Link", "Placement Options…"] {
         item(&mut app, &ctx, s);
@@ -623,8 +628,7 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
     let mut app = app();
     let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
     app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let bar = control_frame(&mut app, &ctx, vec![]);
     for s in ["Embedded", "Unembed…", "Image Trace", "Mask", "Crop Image", "Opacity:"] {
         assert!(has(&bar, s), "{s}");
@@ -670,8 +674,7 @@ fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
     let mut app = app();
     let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
     let img = app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap()["ids"][0].as_u64().unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     click_label(&mut app, &ctx, "Mask");
     let st = app.session.active().unwrap();
     let group = &st.doc.layers[0].children().unwrap()[0];
@@ -804,7 +807,7 @@ fn cursor_gesture(app: &mut VectorcraftApp, mods: vectorcraft_tools::Mods, to: (
     use vectorcraft_tools::{PointerEvent, PointerKind};
     let view = app.view_info();
     for (kind, (x, y)) in [(PointerKind::Down, (10.0, 10.0)), (PointerKind::Drag, to), (PointerKind::Up, to)] {
-        crate::canvas::drag::dispatch(app, &PointerEvent::new(kind, x, y).with_mods(mods), view);
+        crate::canvas::dispatch(app, &PointerEvent::new(kind, x, y).with_mods(mods), view);
     }
 }
 
@@ -818,8 +821,7 @@ fn click(app: &mut VectorcraftApp) {
 #[test]
 fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -847,8 +849,7 @@ fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
 #[test]
 fn holding_a_chord_bound_to_a_command_repeats_it_with_the_place_cursor_loaded() {
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     app.run("shortcuts.set", json!({"id": "view.zoomIn", "shortcut": "Shift+Escape", "force": true})).unwrap();
     let dir = Folder::new("ui-place-held-chord");
     let paths: Vec<String> = ["chord-a.png", "chord-b.png"].iter().map(|name| dir.file(name, &png(10, 10, 72.0))).collect();

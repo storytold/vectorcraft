@@ -54,12 +54,12 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
 
 /// Opens the dialog the menu item of command `id` opens, as the reference app's does; `None` when `id`'s
 /// item opens none.
-// PLAN: assumed `object_dialogs::open_from_menu` and `addons::dialogs::open_from_menu` return whether they
-// opened a dialog, and `halftone`, `rearrange_artboards`, `rename_artboards` and `smart_punctuation` each have
-// `CMD` and `open(app) -> Result<Value, String>`.
 pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
-    if crate::dialogs::object_dialogs::open_from_menu(app, id) || crate::addons::dialogs::open_from_menu(app, id) {
+    if crate::dialogs::object_dialogs::open_from_menu(app, id) {
         return Some(Ok(Value::Null));
+    }
+    if let Some(opened) = crate::addons::dialogs::open_from_menu(app, id) {
+        return Some(opened);
     }
     if crate::dialogs::variables::opens(id) {
         crate::dialogs::variables::open(app, id, None);
@@ -69,59 +69,9 @@ pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Res
         crate::dialogs::halftone::CMD => crate::dialogs::halftone::open(app),
         crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
         crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
-        crate::dialogs::smart_punctuation::CMD => crate::dialogs::smart_punctuation::open(app),
+        crate::dialogs::smart_punctuation::COMMAND => crate::dialogs::smart_punctuation::open(app),
         _ => return None,
     })
-}
-
-/// The event a focused text field takes for Edit-menu command `id` (Select All, Cut, Copy,
-/// Paste), as the same keys would send it.
-pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
-    Some(match id {
-        "select.all" => egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
-        "edit.copy" => egui::Event::Copy,
-        "edit.cut" => egui::Event::Cut,
-        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.written_clipboard_text()?),
-        _ => return None,
-    })
-}
-
-/// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
-/// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
-/// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
-/// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`]. With text selected in a label (a Document
-/// Info value), Copy and Cut copy that text, as their keys do ([`crate::shortcuts::leave_to_labels`]).
-pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
-    let label_event = match id {
-        "edit.copy" => Some(("edit.copy", egui::Event::Copy)),
-        "edit.cut" => Some(("edit.cut", egui::Event::Cut)),
-        _ => None,
-    };
-    match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
-        Some((field, e)) => to_field(ctx, field, e),
-        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(app, ctx, id)) => {
-            if let Some((_, e)) = label_event {
-                ctx.input_mut(|i| i.events.push(e));
-            }
-            // The labels' text replaces the formats of an earlier Copy or Cut not written yet, even
-            // in a frame whose keys are not this window's.
-            app.drop_unwritten_formats();
-        }
-        None if id == "select.all" && crate::panels::artboards::selects_all(app) => crate::panels::artboards::select_all(app),
-        None => invoke(app, id, p),
-    }
-}
-
-/// The text field that has the keyboard, if any.
-pub(super) fn focused_text_field(ctx: &egui::Context) -> Option<egui::Id> {
-    ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())
-}
-
-/// Give text field `field` the keyboard (back) and event `e`, a [`field_event`], this frame.
-pub(super) fn to_field(ctx: &egui::Context, field: egui::Id, e: egui::Event) {
-    ctx.memory_mut(|m| m.request_focus(field));
-    ctx.input_mut(|i| i.events.push(e));
 }
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).

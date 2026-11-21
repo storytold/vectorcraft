@@ -18,7 +18,8 @@ use craft::ui::menu::PanelRow;
 use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft::ui::style::TypeRole;
+use craft::ui::runtime::env::Env;
+use craft::ui::style::{TypeRole, rgba_color};
 use egui::load::SizedTexture;
 use egui::{Ui, vec2};
 use serde::{Deserialize, Serialize};
@@ -29,9 +30,8 @@ use vectorcraft_engine::cmd::flatten::{FlattenReport, Highlight, Overprints};
 use vectorcraft_geom::{Affine, Rect as DRect};
 use vectorcraft_render::RenderOptions;
 
-use crate::dialogs::flatten;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, form};
+use crate::VectorcraftApp;
+use crate::dialogs::{flatten, form};
 
 /// The panel id (Window → Flattener Preview).
 pub const ID: &str = "flattenerPreview";
@@ -196,7 +196,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
-    let t = Tokens::get(ui.ctx());
+    // The highlighted art takes the theme's error colour.
+    let highlight = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.solid);
     let mut set = app.ui.flattener_preview.clone();
     let mut refresh_now = false;
     Row::new().show(ui, |ui, _| {
@@ -226,7 +227,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let params = flatten::option_params(&[], "");
         let mut options = Map::new();
         flatten::put_options(&mut options, &set.options);
-        // PLAN: assumed `form::fields_of(&[Param], &Map) -> DialogFields` and `form::json_of(&[Param], &DialogFields) -> Map` (wg.S12)
         let mut fields = form::fields_of(&params, &options);
         let out = ParamRows::new(tl!("Flattener options"), &params, Bind::bound(&mut fields)).show(ui);
         if out.changed
@@ -235,7 +235,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             set.options = o;
         }
     }
-    preview_area(app, ui, &t, set.highlight, set.overprints);
+    preview_area(app, ui, highlight, set.highlight, set.overprints);
     if set.highlight != Highlight::None {
         let count = app.flattener_preview.shot.as_ref().map_or(0, |s| s.report.objects(set.highlight).len() + s.report.areas(set.highlight).len());
         let areas = matches!(set.highlight, Highlight::RasterizedRegions | Highlight::AllRasterized);
@@ -259,8 +259,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The preview: the whole snapshot rendered once per [`Key`], grey under a highlight with the
-/// highlighted art in `t.highlight`, in a pane that zooms and pans it.
-fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, h: Highlight, overprints: Overprints) {
+/// highlighted art in the theme's error colour, in a pane that zooms and pans it.
+fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32, h: Highlight, overprints: Overprints) {
     let FlattenerPreviewModel { shot, renderer, view, drawn, .. } = &mut app.flattener_preview;
     let Some(shot) = shot.as_ref() else { return };
     let w = ui.available_width();
@@ -271,7 +271,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, h: Highlight,
     let k = (shot.generation, h, overprints == Overprints::Simulate, px);
     if *key != Some(k) || tex.is_none() {
         let r = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
-        let img = render(r, shot, shot.fit, [px, px], h, overprints, t.highlight);
+        let img = render(r, shot, shot.fit, [px, px], h, overprints, highlight);
         match tex {
             Some(tx) => tx.set(img, egui::TextureOptions::LINEAR),
             None => *tex = Some(ui.ctx().load_texture("flattener-preview", img, egui::TextureOptions::LINEAR)),
@@ -392,8 +392,7 @@ mod tests {
 
     /// Two headless frames of the panel (the texture uploads in the first).
     fn frame(app: &mut VectorcraftApp) -> egui::Context {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         for _ in 0..2 {
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
             out.textures_delta.clear();

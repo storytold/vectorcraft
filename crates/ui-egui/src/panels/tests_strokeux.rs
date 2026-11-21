@@ -6,7 +6,7 @@
 use egui::Modifiers;
 use serde_json::json;
 
-use super::panel_harness::Panel;
+use crate::tests::panel_harness::Panel;
 // PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
 use super::tests_appearance::{app_with_rect, run};
 use super::*;
@@ -22,7 +22,8 @@ fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     let surfaces: [Show; 3] = [stroke::show, properties::show, crate::chrome::control_bar];
     let mut panel = Panel::new(app, stroke::show);
     for show in surfaces {
-        let mut p = Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
+        let mut p =
+            Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
         assert_eq!(p.value("Weight").as_deref(), Some(mm.as_str()));
         *panel.app() = std::mem::replace(&mut *p.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
     }
@@ -167,7 +168,9 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
 /// Units > Stroke.
 #[test]
 fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
-    for (unit, part, after) in [("points", "step up", 0.5), ("points", "step down", 0.0), ("millimeters", "step up", 0.5), ("millimeters", "step down", 0.0)] {
+    for (unit, part, after) in
+        [("points", "step up", 0.5), ("points", "step down", 0.0), ("millimeters", "step up", 0.5), ("millimeters", "step down", 0.0)]
+    {
         let mut app = app_with_rect();
         app.session.prefs.units_stroke = unit.into();
         let a = app.session.active().unwrap().selection.objects[0];

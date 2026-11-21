@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 // PLAN: assumed crate paths for the framework items below; none is used elsewhere in this crate yet.
 use craft::keymap::CommandRef;
-use craft::ui::runtime::commands::CommandStates;
 use craft::ui::dialog::StackDialog;
 use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::CommandStates;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
@@ -123,7 +123,7 @@ fn close_screens(p: &Panel, ok: bool) -> bool {
     let host = p.app().dialogs().expect("a window");
     let closed = host.with(|h| if ok { h.confirm::<ExportForScreensDialog>(&ctx) } else { h.cancel::<ExportForScreensDialog>(&ctx) });
     if ok {
-        crate::dialogs::pump(&mut p.app(), &ctx); // PLAN: assumed ex.A8 pump path
+        crate::dialogs::host::pump(&mut p.app(), &ctx);
     }
     closed
 }

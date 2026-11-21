@@ -48,6 +48,7 @@ use std::sync::Arc;
 
 // PLAN: assumed `craft-color-ui`, `craft-theme`, `craft-behavior` and `craft-keymap` are dependencies of
 // vectorcraft-ui-egui (Cargo.toml is not in this set's table); `craft_ui` does not re-export them at the base.
+use craft::behavior::Mixed;
 use craft::behavior::Selection;
 use craft::color_ui::AreaMode;
 use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit, ColorArea, ColorStrip, ColorWheel, WheelInner};
@@ -55,7 +56,6 @@ use craft::keymap::CommandRef;
 use craft::theme::{ColorModel, HsbModel, ModelValues, RgbModel, Srgba};
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
 use craft::ui::contract::{ActivateOn, Bind, EditResponse, Props as _, Show as _};
-use craft::behavior::Mixed;
 use craft::ui::display::{Shade, Text};
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -70,10 +70,9 @@ use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to
 use vectorcraft_doc::{ColorMode, NodeId};
 
 // PLAN: assumed `crate::edits::{apply_edits, EditPath}` (wg.A16, widgets-w13) and `crate::panels::Live` (co.A2, hub-w2).
-use super::color::{Target, apply, gamut, target};
+use super::color::{Target, apply, gamut, wheel_target};
 use super::{Live, alt_held};
 use crate::VectorcraftApp;
-use crate::dialogs::color_picker::Channel;
 use crate::edits::{EditPath, apply_edits};
 
 pub const ID: &str = "colorWheel";
@@ -100,6 +99,53 @@ impl View {
 
     pub fn parse(s: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|v| v.id() == s)
+    }
+}
+
+/// The component the box's strip edits; the field shows the other two.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Channel {
+    #[default]
+    Hue,
+    Saturation,
+    Brightness,
+    Red,
+    Green,
+    Blue,
+}
+
+impl Channel {
+    pub const ALL: [Channel; 6] = [Channel::Hue, Channel::Saturation, Channel::Brightness, Channel::Red, Channel::Green, Channel::Blue];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Channel::Hue => "hue",
+            Channel::Saturation => "saturation",
+            Channel::Brightness => "brightness",
+            Channel::Red => "red",
+            Channel::Green => "green",
+            Channel::Blue => "blue",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.id() == s)
+    }
+
+    /// The channel's name, translated: Hue, Saturation, Brightness, Red, Green or Blue.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Channel::Hue => tl!("Hue"),
+            Channel::Saturation => tl!("Saturation"),
+            Channel::Brightness => tl!("Brightness"),
+            Channel::Red => tl!("Red"),
+            Channel::Green => tl!("Green"),
+            Channel::Blue => tl!("Blue"),
+        }
+    }
+
+    pub(crate) fn is_hsb(self) -> bool {
+        matches!(self, Channel::Hue | Channel::Saturation | Channel::Brightness)
     }
 }
 
@@ -381,7 +427,10 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
 pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
     let command = |row: String| PanelRow::Command(CommandRef::new(row_id(&row)));
     let mut rows = vec![command("view.wheel".into()), command("view.box".into())];
-    rows.push(PanelRow::Submenu(Label::from(tl!("Box Channel").to_string()), Channel::ALL.into_iter().map(|ch| command(channel_row_id(ch))).collect()));
+    rows.push(PanelRow::Submenu(
+        Label::from(tl!("Box Channel").to_string()),
+        Channel::ALL.into_iter().map(|ch| command(channel_row_id(ch))).collect(),
+    ));
     rows.push(PanelRow::Separator);
     rows.extend(["gamut", "sliders.hsl", "sliders.oklch", "harmony"].map(|row| command(row.into())));
     rows.push(PanelRow::Submenu(Label::from(tl!("Harmony Rule").to_string()), harmony_rules().map(|rule| command(rule_row_id(rule))).collect()));
@@ -923,8 +972,7 @@ fn oklch_stops(panel: &mut WheelUi, lch: [f64; 3], i: usize, max: f64, max_c: f6
         return stops.clone();
     }
     let last = (TRACK_SAMPLES - 1) as f64;
-    let stops: Vec<Srgba> =
-        (0..TRACK_SAMPLES).map(|s| oklch_track(oklch_with(lch, i, s as f64 / last * max), (i == 1).then_some(max_c))).collect();
+    let stops: Vec<Srgba> = (0..TRACK_SAMPLES).map(|s| oklch_track(oklch_with(lch, i, s as f64 / last * max), (i == 1).then_some(max_c))).collect();
     panel.oklch_tracks[i] = Some((key, stops.clone()));
     stops
 }
@@ -1049,7 +1097,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 fn show_with(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui) {
-    let tgt = target(app);
+    let tgt = wheel_target(app, ui);
     let color = tgt.color();
     let cms = cms::active();
     // With None, a pattern or a "?" proxy the widgets show no markers, and a pick applies its color.

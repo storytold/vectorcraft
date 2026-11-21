@@ -28,16 +28,16 @@
 use std::sync::Arc;
 
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft::ui::primitives::ContentPainterCx;
 use craft::ui::display::{Picture, PictureSize};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft::ui::value_drag::SliderScale;
 use craft::ui::pickers::Select;
+use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::{Label, UnitKind};
 use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
 use egui::{Color32, Rect, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{Bristle, Brush, BrushKind, Calligraphic, Variation};
@@ -48,7 +48,7 @@ use crate::VectorcraftApp;
 
 // PLAN: the `craft::ui::…` import paths above follow the framework crates' module layout; the app tree
 // has no other user of these components yet. `brush_art_options::{params, edited_def, fields,
-// reconcile_pattern_choices, heading, rows}` are called with `&DialogFields` where they took `&Dialog`,
+// heading, rows}` are called with `&DialogFields` where they took `&Dialog`,
 // and `app.session.general_unit()` is taken to be the framework's `UnitKind`.
 
 /// The dialog key of Brush Options.
@@ -158,7 +158,6 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
     if let Some(st) = app.session.active() {
         f.insert("__patterns".into(), serde_json::to_value(&st.doc.patterns).unwrap_or_default());
     }
-    brush_art_options::reconcile_pattern_choices(&mut f);
     open_dialog(app, &f, None)
 }
 
@@ -360,7 +359,6 @@ pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -
     let def = serde_json::to_value(&b).map_err(|e| e.to_string())?;
     let mut f = fields(&b, def)?;
     f.insert("__patterns".into(), patterns);
-    brush_art_options::reconcile_pattern_choices(&mut f);
     f.insert(CREATE.into(), json!(true));
     if let Some(ids) = ids {
         f.insert(IDS.into(), ids);

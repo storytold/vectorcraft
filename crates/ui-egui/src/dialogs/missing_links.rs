@@ -879,11 +879,11 @@ mod tests {
         // Reopened: an open file would only come to the front (#3455).
         app.run("file.close", json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
-        // PLAN: assumed `confirm::open_question(&VectorcraftApp) -> Option<(String, String, String)>` and
-        // `confirm::answer_question(&mut VectorcraftApp, bool)` (widgets-w10): OK runs the question's command.
         let (_, _, command) = super::super::confirm::open_question(&app).expect("asks");
         assert_eq!(command, "links.update");
-        super::super::confirm::answer_question(&mut app, true);
+        // OK runs the question's command once the question has closed.
+        let question = crate::tests::picks::open_dialogs(&app).pop().map(|d| d.id).expect("the question is open");
+        crate::tests::picks::answer_dialog(&mut app, question, &[], true);
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 0);
         // Manually: no question.
         app.run("prefs.set", json!({"key": "updateLinks", "value": "manually"})).unwrap();

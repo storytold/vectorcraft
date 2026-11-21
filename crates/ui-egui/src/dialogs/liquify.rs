@@ -89,7 +89,7 @@ fn params(k: LiquifyKind, lengths: LengthUnits) -> Vec<Param> {
         rows.push(check("affectOut", tl!("Out Tangent Handles"), false));
     }
     rows.push(check("showBrush", tl!("Show Brush Size"), true));
-    let hint = crate::i18n::fmt(tl!("{shortcut} with the tool sizes the brush"), &[("shortcut", crate::menus::pretty_shortcut("Alt+Drag").as_str())]);
+    let hint = crate::i18n::fmt(tl!("{shortcut} with the tool sizes the brush"), &[("shortcut", crate::keymap::chord_text("Alt+Drag").as_str())]);
     rows.push(Param::read_only_text("hint", "", hint).full_width());
     rows
 }

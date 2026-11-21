@@ -5,16 +5,15 @@
 //! a preset (`resolutionPreset`). OK runs the command with them: one undo step. On an error the
 //! dialog stays open. [`params`] lays out the options of Effect › Rasterize… with the same rows.
 
-use craft::ui::runtime::env::UnitKind;
-use craft::ui::dialog::DialogId;
 use craft::ui::contract::Bind;
+use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Map, Value, json};
 use vectorcraft_effects::RASTERIZE;
 use vectorcraft_render::AntiAlias;
 
-use super::effect::EffectCx;
-use super::effect_params::own_choices;
+use super::effect_params::{EffectCx, own_choices};
 use super::form::{fields_of, json_of};
 use super::halftone::options;
 use super::host::{HeldOptions, open_held_with};
@@ -71,7 +70,8 @@ pub(crate) fn params(cx: &EffectCx, effect: bool) -> Vec<Param> {
     } else {
         vec![if cx.cmyk { ("cmyk", "CMYK") } else { ("rgb", "RGB") }, ("grayscale", "Grayscale"), ("bitmap", "Bitmap")]
     };
-    let backgrounds: Vec<(&str, &str)> = own_choices(RASTERIZE, "background", false).unwrap_or_default().into_iter().map(|(label, id)| (id, label)).collect();
+    let backgrounds: Vec<(&str, &str)> =
+        own_choices(RASTERIZE, "background", false).unwrap_or_default().into_iter().map(|(label, id)| (id, label)).collect();
     let mut rows = vec![
         Param::new("resolutionPreset", tl!("Resolution:"), ParamKind::choice(options(&presets), Some(if effect { "document" } else { "72" }.into()))),
         Param::new("resolution", tl!("Resolution:"), ParamKind::int(Some(1), None, 72))
@@ -97,8 +97,7 @@ pub(crate) fn params(cx: &EffectCx, effect: bool) -> Vec<Param> {
 
 /// Open the dialog on the active document's settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    // PLAN: assumed VectorcraftApp::egui_ctx(&self) -> Option<egui::Context>
-    let ctx = app.egui_ctx().ok_or("no window")?;
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let values = app.session.execute(CMD, &json!({})).map_err(|e| e.to_string())?;
     let mut values = values.as_object().cloned().unwrap_or_default();
     preset_of(&mut values);
@@ -122,18 +121,32 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     app.effect_dialogs.raster = Some(Open { id });
     Ok(Value::Null)
 }
-// PLAN: the settings dialog has no preview, so it has no `pump`; hub-w2 must not list one.
 
 #[cfg(test)]
 mod tests {
+    use craft::ui::dialog::DialogId;
     use craft::ui::patterns::form_dialogs::HostedParamDialog;
     use serde_json::json;
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
 
+    /// An app with a window and a 200 × 200 document.
+    fn app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app
+    }
+
     fn pump(app: &mut VectorcraftApp) {
-        crate::dialogs::host::pump(app, &egui::Context::default());
+        let ctx = app.ui_ctx.clone().unwrap();
+        crate::dialogs::host::pump(app, &ctx);
+    }
+
+    /// The text of field `key` of the open dialog `id`.
+    fn text(app: &VectorcraftApp, id: DialogId, key: &str) -> Option<String> {
+        app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().text(key).map(str::to_string)))
     }
 
     fn set(app: &mut VectorcraftApp, dialog: Option<&str>, field: &str, value: serde_json::Value) {
@@ -144,21 +157,21 @@ mod tests {
         app.run("ui.dialog.set", params).unwrap();
     }
 
-    fn ok(app: &mut VectorcraftApp, id: craft::ui::dialog::DialogId) {
-        let ctx = egui::Context::default();
-        let _ = app.dialogs().confirm_by_id(&ctx, id);
+    fn ok(app: &mut VectorcraftApp, id: DialogId) {
+        let ctx = app.ui_ctx.clone().unwrap();
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
         pump(app);
     }
 
     #[test]
     fn raster_effects_settings_draw_and_ok_is_one_undo_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut app = app();
         crate::menus::invoke(&mut app, "document.rasterEffectsSettings", json!({}));
         let id = app.effect_dialogs.raster.as_ref().unwrap().id;
-        let shown = app.dialogs().get_by_id::<HostedParamDialog>(id).map(|d| d.fields().text("colorModel").map(str::to_string));
-        assert_eq!(shown, Some(Some("rgb".to_string())));
-        for (k, v) in [("resolutionPreset", json!("300")), ("background", json!("white")), ("addAround", json!(36)), ("colorModel", json!("grayscale"))] {
+        assert_eq!(text(&app, id, "colorModel").as_deref(), Some("rgb"));
+        for (k, v) in
+            [("resolutionPreset", json!("300")), ("background", json!("white")), ("addAround", json!(36)), ("colorModel", json!("grayscale"))]
+        {
             set(&mut app, Some(super::CMD), k, v);
         }
         // Other resolutions show their own field.
@@ -174,26 +187,22 @@ mod tests {
         // Rasterize… starts from these settings.
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         crate::menus::invoke(&mut app, "object.rasterize", json!({}));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(
-            (d.fields["ppi"].as_f64(), d.fields["background"].as_str(), d.fields["addAround"].as_f64()),
-            (Some(200.0), Some("white"), Some(36.0))
-        );
-        crate::dialogs::confirm(&mut app).unwrap();
+        let rasterize = crate::tests::picks::open_dialogs(&app).pop().expect("Rasterize… is open");
+        let fields = rasterize.fields.unwrap_or_default();
+        assert_eq!((fields["ppi"].as_f64(), fields["background"].as_str(), fields["addAround"].as_f64()), (Some(200.0), Some("white"), Some(36.0)));
+        ok(&mut app, rasterize.id);
         let st = app.session.active().unwrap();
         assert!(st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Image(_)))));
     }
 
     #[test]
     fn rasterize_effect_dialog_previews_and_ok_applies_its_options_as_one_undo_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut app = app();
         let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
         let steps = app.session.active().unwrap().history.undo.len();
         crate::menus::invoke(&mut app, "effect.dialog", json!({"effect": "rasterize"}));
         let dialog = app.effect_dialogs.effect.as_ref().unwrap().id;
-        let preset = app.dialogs().get_by_id::<HostedParamDialog>(dialog).map(|d| d.fields().text("resolutionPreset").map(str::to_string));
-        assert_eq!(preset, Some(Some("document".to_string())));
+        assert_eq!(text(&app, dialog, "resolutionPreset").as_deref(), Some("document"));
         pump(&mut app);
         assert!(app.session.in_interaction(), "previews");
         set(&mut app, None, "resolutionPreset", json!("other"));

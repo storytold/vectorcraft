@@ -19,8 +19,7 @@ fn app() -> VectorcraftApp {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx
 }
 
@@ -119,7 +118,6 @@ fn clicking_a_library_brush_adds_it_to_the_documents_brushes_in_one_step() {
     app.run("window.brushLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
 }
-
 
 /// A built-in library lists its brushes in the UI language, and Find matches the name shown and
 /// the brush's own name. The brush keeps its own name for its tile, a click and the document's
@@ -253,7 +251,6 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let entries = crate::menus::menu_entries(&app);
     assert!(entries.iter().any(|e| under(e) && e.command.as_deref() == Some("ui.saveBrushLibrary") && !e.enabled));
 }
-
 
 #[test]
 fn save_brushes_writes_a_user_library_that_reopens_and_adds_to_another_document() {

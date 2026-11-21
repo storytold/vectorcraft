@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 // PLAN: assumed `craft::ui::contract` re-exports the behavior crate's edit-stream types.
 use craft::behavior::{CancelReason, EditEvent, GestureId, Mixed};
+use craft::ui::canvas::CanvasSpace;
 use craft::ui::patterns::form_dialogs::DialogFields;
 use craft::ui::testing::Fixture;
 use serde_json::{Map, Value, json};
@@ -535,8 +536,7 @@ fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"shade": false}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     let texts = frame_events(&ctx, &mut app, vec![], show);
     click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
@@ -574,8 +574,7 @@ fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"bevel": "cove", "bevelWidth": 2.0, "depth": 30.0}}))
         .unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     let nodes = controls(&mut app, &ctx);
     let reset = named(&nodes, "Reset");
@@ -614,8 +613,7 @@ fn materials_app() -> (VectorcraftApp, egui::Context) {
     app.run("select.set", json!({"ids": [square]})).unwrap();
     set_type(&mut app, "extrude").unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     // PLAN: assumed `Model::page` is a `String` naming the page ("materials").
     app.three_d.page = "materials".into();
     (app, ctx)
@@ -781,14 +779,14 @@ fn handles_fixture(app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture
 }
 
 /// The canvas's mapping between document points and the screen over `rect`.
-// PLAN: assumed `handles::show`'s `CanvasSpace` is the canvas's `Xf` (ef.C19 gives no constructor).
-fn canvas_space(app: &VectorcraftApp, rect: egui::Rect) -> crate::canvas::Xf {
-    crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default())
+fn canvas_space(app: &VectorcraftApp, rect: egui::Rect) -> CanvasSpace {
+    let view = app.view().cloned().unwrap_or_default();
+    CanvasSpace::new(view.canvas(app.ui_scaling(), rect), 1.0)
 }
 
 /// Where document point (`x`, `y`) is on the canvas of [`handles_fixture`].
 fn screen_at(app: &Rc<RefCell<VectorcraftApp>>, fixture: &Fixture, x: f64, y: f64) -> egui::Pos2 {
-    canvas_space(&app.borrow(), fixture.shown()).to_screen(vectorcraft_geom::Point::new(x, y))
+    canvas_space(&app.borrow(), fixture.shown()).view.to_screen(vectorcraft_geom::Point::new(x, y))
 }
 
 /// Whether a drag from `from` moves a graphic (it records an undo step then); a drag that did is undone.
@@ -858,9 +856,8 @@ fn a_hidden_fill_shows_no_handles_for_its_graphics() {
         n.appearance.effects_mut(Some(fill)).unwrap().push(fx);
         fill
     };
-    // PLAN: assumed `handles::graphic_handles(&VectorcraftApp)` keeps its result shape and reads the page from `Model`.
-    let shown = |app: &VectorcraftApp| handles::graphic_handles(app).is_some_and(|(_, _, handles)| !handles.is_empty());
-    assert!(shown(&app), "the visible fill's graphic has a handle");
+    let shown = |app: &mut VectorcraftApp| handles::graphic_handles(app).is_some_and(|(_, _, handles)| !handles.is_empty());
+    assert!(shown(&mut app), "the visible fill's graphic has a handle");
     {
         let st = app.session.active_mut().unwrap();
         let id = st.selection.objects[0];
@@ -869,7 +866,7 @@ fn a_hidden_fill_shows_no_handles_for_its_graphics() {
             f.visible = false;
         }
     }
-    assert!(!shown(&app), "the hidden fill draws no graphic, so it has no handle");
+    assert!(!shown(&mut app), "the hidden fill draws no graphic, so it has no handle");
 }
 
 #[test]
@@ -1025,8 +1022,7 @@ fn a_key_leaves_the_other_setting_as_each_selected_effect_has_it() {
 /// moves only the selected light to the back of the object, then back to the front.
 #[test]
 fn the_lighting_widget_selects_a_light_and_moves_it_behind_the_object() {
-    let spec =
-        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
+    let spec = |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
     let (app, mut fixture) = lighting(json!({"lights": [spec(0.0), spec(180.0)]}));
     let history = undo_len(&app.borrow());
     let (_, second) = light(&fixture, 2);
@@ -1113,13 +1109,13 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     assert_eq!(list.len(), 1, "{list:?}");
     assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
     let asset = list[0]["id"].as_u64().unwrap();
-    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
     assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
     // Already an asset: no undo step, the same asset selected again, the panel left showing.
-    super::set_pstate(&ctx, "asset-export-selected", Vec::<u64>::new());
+    crate::panels::asset_export::doc_panel(&mut app).unwrap().selection = Default::default();
     super::export_3d_object(&mut app, &ctx).unwrap();
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
-    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
     assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
     // Undo takes the asset away.
     app.run("edit.undo", json!({})).unwrap();

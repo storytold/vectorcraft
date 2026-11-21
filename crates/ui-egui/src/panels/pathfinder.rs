@@ -3,10 +3,10 @@
 //! sets theirs.
 
 use craft::behavior::{IconId, Mixed};
-use craft::theme::{ColorToken, Srgba};
 use craft::keymap::CommandRef;
+use craft::theme::{ColorToken, Srgba};
 use craft::ui::buttons::{Button, IconButton, ToggleButton};
-use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, TooltipSpec};
+use craft::ui::contract::{Bind, Gap, MemoProps, Props as _, Show as _, ShowContainer as _, TooltipSpec};
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
 use craft::ui::primitives::{Glyph, IconSpec, paint_icon};
@@ -78,6 +78,7 @@ pub(crate) fn operands(app: &VectorcraftApp) -> usize {
 
 /// A Shape Mode's icon. While `mixed` (the selected members' modes differ) a question mark sits on a
 /// disc of the panel color in its lower right corner, so it reads over the icon.
+#[derive(MemoProps)]
 struct ShapeModeGlyph {
     icon: IconId,
     mixed: bool,
@@ -156,7 +157,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     Section::fixed(tl!("Pathfinders:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for (icon, label, op) in PATHFINDERS {
-                IconButton::command(IconSpec::svg(IconId::new(icon)), CommandRef::new(format!("object.pathfinder.{op}"))).tooltip(tip(label)).show(ui);
+                IconButton::command(IconSpec::svg(IconId::new(icon)), CommandRef::new(format!("object.pathfinder.{op}")))
+                    .tooltip(tip(label))
+                    .show(ui);
             }
         });
     });
@@ -200,6 +203,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
+    use craft::automation::actions::{Action, ActionStep};
     use craft::ui::patterns::form_dialogs::HostedParamDialog;
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     use egui::Modifiers;
@@ -579,12 +583,15 @@ mod tests {
     fn actions_panel_play_records_pathfinder_step() {
         let mut p = Panel::new(two_squares(), show);
         p.click("Intersect");
-        // PLAN: assumed `crate::panels::actions::{Action, ActionStep}` over menus-w13's `ActionList`
-        // (`push(Action) -> Result<usize, _>`) and `actions::play(app, index) -> Result<_, String>`.
-        let step = crate::panels::actions::ActionStep::new("object.pathfinder.unite", json!({}));
-        let idx = p.app().ui.actions.push(crate::panels::actions::Action::new("Unite", vec![step])).unwrap();
+        let mut action = Action::new("Unite", vec![ActionStep::new("object.pathfinder.unite", json!({}))]);
+        action.set = Some("Pathfinder".into());
+        let (set, idx) = {
+            let mut app = p.app();
+            let flat = app.ui.actions.push(action).unwrap();
+            crate::panels::actions::model::place(&app.ui.actions, flat).unwrap()
+        };
         select_two_squares(&mut p.app(), 110.0);
-        crate::panels::actions::play(&mut p.app(), idx).unwrap();
+        crate::panels::actions::playback::play(&mut p.app(), set, idx).unwrap();
         assert_eq!(p.app().last_pathfinder.as_deref(), Some("unite"));
         select_two_squares(&mut p.app(), 210.0);
         press_repeat(&mut p.app());

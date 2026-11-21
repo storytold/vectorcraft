@@ -5,8 +5,7 @@
 //! for the folder the copies go in ([`export_all`], #4920). Batch Trace Folder asks for the folder of
 //! images and then the folder the results go in ([`batch_trace`], #4921).
 
-// PLAN: assumed `craft::host::files::{PickRequest, Picked}` as the import path of the picker types.
-use craft::host::files::{PickRequest, Picked};
+use craft::host::{PickRequest, Picked};
 use craft::menu::Node;
 use serde_json::{Value, json};
 
@@ -107,9 +106,7 @@ fn batch_trace_from(app: &mut VectorcraftApp, p: &Value, keys: &'static [&'stati
         return finish_batch_trace(app, p);
     };
     let p = p.clone();
-    Ok(ask(app, PickRequest::folder("document"), Owner::Free, move |app, picked| {
-        batch_trace_from(app, &with_folder(&p, key, &picked)?, rest)
-    }))
+    Ok(ask(app, PickRequest::folder("document"), Owner::Free, move |app, picked| batch_trace_from(app, &with_folder(&p, key, &picked)?, rest)))
 }
 
 fn finish_batch_trace(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {

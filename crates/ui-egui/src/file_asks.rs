@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use craft::dialogs::ui::UnavailableWords;
-use craft::host::{Host, PickId, PickKind, PickRequest, Picked};
+use craft::host::{FileFilter, Host, PickId, PickKind, PickRequest, Picked};
 use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 // PLAN: assumed re-export paths for `HostedParamDialog`, `PathRequest` and `Env`.
 use craft::ui::patterns::form_dialogs::HostedParamDialog;
@@ -167,6 +167,11 @@ pub(crate) fn answer_path(app: &mut VectorcraftApp, dialog: DialogId, key: Strin
             d.answer_path(key, path);
         }
     });
+}
+
+/// The file types of `list`, `(label, extensions)` as the engine lists them, as a picker offers them.
+pub(crate) fn filters(list: &[(&str, &[&str])]) -> Vec<FileFilter> {
+    list.iter().map(|&(name, extensions)| FileFilter::new(name, extensions)).collect()
 }
 
 /// The first file of an Open answer as the params of an open command: `path`, or the bytes with the

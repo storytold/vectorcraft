@@ -285,13 +285,13 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.cancel::<HostedAlert>(&ctx));
         assert!(safe_to_close(&app));
 
-        let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut app.services);
-        // The command asks again with the answer: until then it reports that it has none.
-        assert!(app.run("file.open", json!({})).is_err());
+        let picker = crate::tests_picks::scripted(&mut app);
+        // The command goes on with the answer: until then the dialog is open.
+        app.run("file.open", json!({})).unwrap();
         assert!(app.file_dialog_open());
         assert!(!safe_to_close(&app), "a file dialog");
-        shown.answer(&[]);
-        crate::picks::poll(&mut app, &egui::Context::default());
+        picker.cancel();
+        crate::tests_picks::poll(&mut app, &ctx);
         assert!(!app.file_dialog_open());
         assert!(safe_to_close(&app));
 
@@ -314,9 +314,11 @@ mod tests {
         app.opening.pending.clear();
         assert!(safe_to_close(&app));
 
-        use crate::panels::actions::{Action, ActionSet, PlaybackSpeed, play};
-        let step = ("object.move".to_owned(), json!({"dx": 1, "dy": 0}));
-        app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Move", vec![step.clone(), step])])];
+        use crate::panels::actions::tests_support::{action, push_set};
+        use crate::panels::actions::{PlaybackSpeed, play};
+        let step = ("object.move", json!({"dx": 1, "dy": 0}));
+        app.ui.actions = craft::automation::actions::ActionList::new();
+        push_set(&mut app, "Test", vec![action("Move", &[step.clone(), step])]);
         app.ui.action_playback.speed = PlaybackSpeed::Step;
         assert_eq!(play(&mut app, 0, 0).unwrap()["pending"], json!(1));
         app.run("file.save", json!({"path": "/docs/saved.vectorcraft"})).unwrap();

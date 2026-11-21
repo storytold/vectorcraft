@@ -185,9 +185,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
         }
         return;
     }
-    let Some((fields, selected, asked)) = dialogs.with(|host| {
-        host.get_by_id::<NearestDialog>(id).map(|d| (d.fields.clone(), d.selected, d.found.as_ref().map(|(key, _)| key.clone())))
-    }) else {
+    let Some((fields, selected, asked)) = dialogs
+        .with(|host| host.get_by_id::<NearestDialog>(id).map(|d| (d.fields.clone(), d.selected, d.found.as_ref().map(|(key, _)| key.clone()))))
+    else {
         return;
     };
     let Some(st) = app.session.active() else { return };

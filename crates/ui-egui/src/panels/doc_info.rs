@@ -127,7 +127,7 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
             }
             "Raster Effects" => {
                 let ppi = info["document"]["rasterEffectsPpi"].as_f64()?;
-                Some(fill(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
+                Some(crate::i18n::fmt(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
             }
             "Grid Size" | "Grid Colors" | "Simulate Colored Paper" | "Flattener Preset" => {
                 transparency_value(&info["document"]["transparency"], label)
@@ -182,11 +182,6 @@ fn transparency_value(t: &Value, label: &str) -> Option<String> {
     Some(shown.to_string())
 }
 
-/// [`crate::i18n::fill_once`]: a name that holds `{…}` text stays as it is.
-fn fill(template: &str, args: &[(&str, &str)]) -> String {
-    crate::i18n::fill_once(template, args)
-}
-
 /// A `fontUses` entry as Fonts shows it: the font's type (the format names TrueType and OpenType
 /// stay as they are) and its number of uses in the language's plural forms.
 fn font_use_value(e: &Value) -> Option<String> {
@@ -197,7 +192,7 @@ fn font_use_value(e: &Value) -> Option<String> {
         _ => return None,
     };
     let uses = crate::i18n::tn(e["uses"].as_u64()?, "{n} use", "{n} uses");
-    Some(fill(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
+    Some(crate::i18n::fmt(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
 }
 
 /// A `fontDetails` entry as Font Details shows it: the font's file (or that it is built in) and
@@ -213,18 +208,21 @@ fn font_detail_value(e: &Value) -> Option<String> {
             _ => return None,
         };
         let file = e["file"].as_str().unwrap_or(tl!("built in"));
-        Some(fill(tl!("{file}; {embedding}"), &[("file", file), ("embedding", embedding)]))
+        Some(crate::i18n::fmt(tl!("{file}; {embedding}"), &[("file", file), ("embedding", embedding)]))
     };
     let face = || Some((e["family"].as_str()?, e["style"].as_str()?));
     match e["match"].as_str()? {
         "exact" => found(),
         "style" => {
             let ((family, style), detail) = (face()?, found()?);
-            Some(fill(tl!("substituted: shown in {family} {style} ({detail})"), &[("family", family), ("style", style), ("detail", &detail)]))
+            Some(crate::i18n::fmt(
+                tl!("substituted: shown in {family} {style} ({detail})"),
+                &[("family", family), ("style", style), ("detail", &detail)],
+            ))
         }
         "missingWithFallback" => {
             let (family, style) = face()?;
-            Some(fill(tl!("missing: shown in {family} {style}"), &[("family", family), ("style", style)]))
+            Some(crate::i18n::fmt(tl!("missing: shown in {family} {style}"), &[("family", family), ("style", style)]))
         }
         "missing" => Some(tl!("missing").to_string()),
         _ => None,
@@ -234,8 +232,11 @@ fn font_detail_value(e: &Value) -> Option<String> {
 /// An `imageObjects` entry as Linked Images and Embedded Images show it: its size in pixels, and
 /// for a linked image the file it shows.
 fn image_value(o: &Value) -> Option<String> {
-    let size = fill(tl!("{width} × {height} px"), &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())]);
-    if o["linked"] == true { Some(fill(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
+    let size = crate::i18n::fmt(
+        tl!("{width} × {height} px"),
+        &[("width", &o["width"].as_u64()?.to_string()), ("height", &o["height"].as_u64()?.to_string())],
+    );
+    if o["linked"] == true { Some(crate::i18n::fmt(tl!("{size} — {file}"), &[("size", &size), ("file", o["file"].as_str()?)])) } else { Some(size) }
 }
 
 /// A `repeatObjects` entry as Repeat Objects shows it: its kind and the number of instances it
@@ -250,12 +251,16 @@ fn repeat_value(e: &Value) -> Option<String> {
     let n = e["instances"].as_u64()?;
     let instances = crate::i18n::tn(n, "{n} instance", "{n} instances");
     if e["type"] != "grid" {
-        return Some(fill(tl!("{kind}, {instances}"), &[("kind", kind), ("instances", &instances)]));
+        return Some(crate::i18n::fmt(tl!("{kind}, {instances}"), &[("kind", kind), ("instances", &instances)]));
     }
     let (rows, cols) = (e["rows"].as_u64()?, e["cols"].as_u64()?);
     let (shown_rows, shown_cols) = (crate::i18n::tn(rows, "{n} row", "{n} rows"), crate::i18n::tn(cols, "{n} column", "{n} columns"));
-    let grid = fill(tl!("{kind}, {rows} × {cols}"), &[("kind", kind), ("rows", &shown_rows), ("cols", &shown_cols)]);
-    Some(if n < rows.saturating_mul(cols) { fill(tl!("{grid}, {instances}"), &[("grid", &grid), ("instances", &instances)]) } else { grid })
+    let grid = crate::i18n::fmt(tl!("{kind}, {rows} × {cols}"), &[("kind", kind), ("rows", &shown_rows), ("cols", &shown_cols)]);
+    Some(if n < rows.saturating_mul(cols) {
+        crate::i18n::fmt(tl!("{grid}, {instances}"), &[("grid", &grid), ("instances", &instances)])
+    } else {
+        grid
+    })
 }
 
 /// A `gradientObjects` entry as Gradient Objects shows it: its gradients, a swatch's name as it
@@ -492,7 +497,6 @@ mod tests {
         assert!(err.contains("category `colors`"), "{err}");
     }
 
-
     /// Section `id`'s rows as the panel shows them for `info`: each label and its shown value.
     fn shown_rows(info: &Value, id: &str) -> Vec<(String, String)> {
         let section = info["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap_or_else(|| panic!("no {id}"));
@@ -586,7 +590,6 @@ mod tests {
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
     }
-
 
     /// Document shows the transparency settings with their values in the interface language (two
     /// custom grid colors as they are), and while the Artboard tool is the current tool the

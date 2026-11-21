@@ -34,7 +34,7 @@ use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
 use crate::VectorcraftApp;
 use crate::caches::SymbolInstances;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp, sub};
 use crate::panel_drag::PanelDrag;
 
 /// The largest side of a symbol thumbnail, in pixels. A larger chip draws its thumbnail scaled up.
@@ -306,7 +306,11 @@ fn instance_flags(app: &VectorcraftApp) -> InstanceFlags {
             &walked
         }
     };
-    InstanceFlags { any: !found.ids.is_empty(), changed: found.changed, transformed: found.transformed.unwrap_or_else(|| transformed(&st.doc, &found.ids)) }
+    InstanceFlags {
+        any: !found.ids.is_empty(),
+        changed: found.changed,
+        transformed: found.transformed.unwrap_or_else(|| transformed(&st.doc, &found.ids)),
+    }
 }
 
 /// The names of the symbols the selected instances are instances of, each once.
@@ -364,7 +368,10 @@ const ITEM_ROWS: [(&str, &str); 6] = [
 /// instance of it (`linked`, [`linked_symbols`]).
 fn item_rows(linked: &[String], name: &str) -> Vec<Entry<String>> {
     let has_instances = linked.iter().any(|n| n == name);
-    ITEM_ROWS.iter().map(|&(command, label)| Entry::new(command.to_string(), tl!(label)).enabled(command != ITEM_BREAK_LINK || has_instances)).collect()
+    ITEM_ROWS
+        .iter()
+        .map(|&(command, label)| Entry::new(command.to_string(), tl!(label)).enabled(command != ITEM_BREAK_LINK || has_instances))
+        .collect()
 }
 
 /// Runs the context menu row `command` ([`item_rows`]) on symbol `name`.
@@ -451,7 +458,11 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         Divider::vertical().show(ui);
         // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
         let edit = !shared.is_empty()
-            && IconButton::new(IconSpec::svg(IconId::new("dc-place-symbol"))).label(tl!("Edit Symbol")).tooltip(tl!("Edit Symbol")).show(ui).clicked();
+            && IconButton::new(IconSpec::svg(IconId::new("dc-place-symbol")))
+                .label(tl!("Edit Symbol"))
+                .tooltip(tl!("Edit Symbol"))
+                .show(ui)
+                .clicked();
         // The select reports a pick of another symbol only.
         let replace = Field::new(tl!("Replace:"))
             .show(ui, |ui, _| Select::new(tl!("Replace:"), Bind::given(shared.clone()), &entries).show(ui))
@@ -546,8 +557,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .drags(true)
                     .row_menu(PresetRowMenu::Host)
                     .row_items(|key: &SymbolKey| item_rows(&linked, &key.name))
-                    .thumb(|cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SymbolKey>| paint_symbol(cx, rect, &doc, &keys, &info.key.name))
-                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| art_of(drag, uid).is_some()))
+                    .thumb(|cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SymbolKey>| {
+                        paint_symbol(cx, rect, &doc, &keys, &info.key.name)
+                    })
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| {
+                        art_of(drag, uid).is_some()
+                    }))
                     .empty(tl!("No symbols in this document"))
                     .show(ui)
             })
@@ -1011,7 +1026,7 @@ pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<LibraryInfo
 }
 
 /// Window → Symbol Libraries.
-pub(crate) fn window_menu() -> Vec<Item> {
+pub(crate) fn window_menu() -> Vec<crate::menus::Node> {
     const SLOTS: [&str; 10] = [
         "window.userSymbolLibrary1",
         "window.userSymbolLibrary2",
@@ -1024,14 +1039,14 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userSymbolLibrary9",
         "window.userSymbolLibrary10",
     ];
-    let open = |b: &'static symbollib::BuiltinSymbolLibrary| Item::Cmd(b.name, SymbolLibraries::OPEN, json!({ "library": b.id }));
-    let mut items: Vec<Item> = symbollib::BUILTIN.iter().map(open).collect();
+    let open = |b: &'static symbollib::BuiltinSymbolLibrary| cp(b.name, SymbolLibraries::OPEN, json!({ "library": b.id }));
+    let mut items: Vec<crate::menus::Node> = symbollib::BUILTIN.iter().map(open).collect();
     items.extend([
-        Item::Sep,
-        Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
-        Item::Sep,
-        Item::Cmd("Other Library…", "window.symbolLibrary.other", Value::Null),
-        Item::Cmd("Save Symbols…", "ui.saveSymbolLibrary", Value::Null),
+        Sep,
+        sub("User Defined", SLOTS.iter().map(|&id| c("User Library", id)).collect()),
+        Sep,
+        c("Other Library…", "window.symbolLibrary.other"),
+        c("Save Symbols…", "ui.saveSymbolLibrary"),
     ]);
     items
 }

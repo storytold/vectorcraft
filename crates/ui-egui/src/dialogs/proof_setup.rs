@@ -33,7 +33,7 @@ use vectorcraft_render::proof;
 use super::host::{HeldOptions, open_held_with};
 use crate::VectorcraftApp;
 use crate::file_asks::{Owner, ask};
-use crate::menus::Item;
+use crate::menus::Node;
 
 /// The dialog kind of Proof Setup › Customize.
 pub const KIND: &str = "proofSetup";
@@ -142,7 +142,8 @@ fn rows(fields: &DialogFields) -> Vec<Param> {
     let intents = Intent::ALL.iter().map(|i| (i.id().to_string(), i.label().to_string().into())).collect();
     // Simulate Paper Color shows the press black too, so its box shows checked while paper is on.
     let black = Param::new("simulateBlack", tl!("Simulate Black Ink").to_string(), ParamKind::bool(false));
-    let black = if paper && !rgb { black.enabled_when("simulatePaper", false).disabled_value(true) } else { black.enabled_when_in("device", cmyk.clone()) };
+    let black =
+        if paper && !rgb { black.enabled_when("simulatePaper", false).disabled_value(true) } else { black.enabled_when_in("device", cmyk.clone()) };
     vec![
         Param::new(
             "device",
@@ -304,10 +305,8 @@ fn save(app: &mut VectorcraftApp, fields: &DialogFields) {
     if made.is_some() {
         saved().made = made;
     }
-    let mut request = PickRequest::save("proof-setups")
-        .file_name(format!("{}.{EXT}", tl!("Proof Setup")))
-        .filter("Proof setups", &[EXT])
-        .suggested_extension(EXT);
+    let mut request =
+        PickRequest::save("proof-setups").file_name(format!("{}.{EXT}", tl!("Proof Setup"))).filter("Proof setups", &[EXT]).suggested_extension(EXT);
     if let Some(dir) = dir {
         request = request.directory(dir);
     }
@@ -486,8 +485,8 @@ pub fn saved_revision() -> u64 {
 }
 
 /// View › Proof Setup's saved setups, each by its file's name, loading it with Proof Colors on.
-pub fn saved_items() -> Vec<Item> {
-    saved().setups.iter().map(|&(name, ref path)| Item::Cmd(name, LOAD, json!({ "path": path }))).collect()
+pub fn saved_items() -> Vec<Node> {
+    saved().setups.iter().map(|&(name, ref path)| crate::menus::named(name, LOAD, json!({ "path": path }))).collect()
 }
 
 #[cfg(test)]
@@ -520,8 +519,7 @@ mod tests {
     fn app() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         app.ui_ctx = Some(ctx.clone());
         (app, ctx)
     }

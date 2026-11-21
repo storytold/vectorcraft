@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 
 use craft::behavior::{ColumnWidth, IconId};
 use craft::egui::{Response, Ui};
-use craft::host::files::{PickRequest, Picked};
+use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::overlay::Trigger;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
@@ -95,7 +95,8 @@ fn put(row: &mut Value, key: &str, value: Value) {
 /// Is `name` a built-in PDF preset's? Those are ours (translated where listed); the saved ones are
 /// names. The name is matched exactly, so `default` and `Default` are not the built-in.
 fn is_builtin_preset(name: &str) -> bool {
-    static NAMES: LazyLock<Vec<String>> = LazyLock::new(|| vectorcraft_pdf::builtin_presets(vectorcraft_pdf::APP).into_iter().map(|p| p.name).collect());
+    static NAMES: LazyLock<Vec<String>> =
+        LazyLock::new(|| vectorcraft_pdf::builtin_presets(vectorcraft_pdf::APP).into_iter().map(|p| p.name).collect());
     NAMES.iter().any(|n| n == name)
 }
 
@@ -276,7 +277,6 @@ pub(crate) fn preset_pick(app: &mut VectorcraftApp, fields: &mut Map<String, Val
             settings.insert("formats".into(), fields.get("formats").cloned().unwrap_or(json!([])));
             settings.insert("settings".into(), fields.get("settings").cloned().unwrap_or(json!({})));
             settings.insert("prefix".into(), json!(text(fields, "prefix")));
-            // PLAN: export-w13 owns `folders`; it is read here as `folders(&Map<String, Value>) -> &'static str`.
             settings.insert("folders".into(), json!(folders(fields)));
             for key in ["includeBleed", "includeArtboardFill"] {
                 settings.insert(key.into(), json!(flag(fields, key)));
@@ -402,7 +402,8 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
                 }
                 let (format, quality) = (row["format"].as_str().unwrap_or("png"), row["quality"].as_u64());
                 let marked = row.get("marks").is_some_and(|m| !m.is_null());
-                let current = FORMATS.iter().position(|(_, f, q, print)| *f == format && *print == marked && q.is_none_or(|q| Some(u64::from(q)) == quality));
+                let current =
+                    FORMATS.iter().position(|(_, f, q, print)| *f == format && *print == marked && q.is_none_or(|q| Some(u64::from(q)) == quality));
                 let picked = Select::new(tl!("Format"), Bind::given(current.unwrap_or(usize::MAX)), &formats)
                     .placeholder(format.to_uppercase())
                     .id_salt(("efs-fmt", i))
@@ -498,10 +499,8 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
         _ => png_options::raster_params(id, true, None),
     };
     let formats: Vec<Entry<&'static str>> = SETTINGS.iter().zip(SETTINGS_LABELS).map(|((f, _), label)| Entry::new(*f, label)).collect();
-    let pdf_presets: Vec<Entry<String>> = presets
-        .iter()
-        .map(|n| Entry::new(n.clone(), (if is_builtin_preset(n) { tl!(n) } else { n.as_str() }).to_string()))
-        .collect();
+    let pdf_presets: Vec<Entry<String>> =
+        presets.iter().map(|n| Entry::new(n.clone(), (if is_builtin_preset(n) { tl!(n) } else { n.as_str() }).to_string())).collect();
     let mut switch = None;
     let mut changed: Option<Map<String, Value>> = None;
     let mut done = false;

@@ -29,12 +29,12 @@ impl FunctionKey {
 
     /// The chord the key is pressed as; none when `key` is not 1 to [`FUNCTION_KEYS`].
     pub fn chord(self) -> Option<Chord> {
-        (1..=FUNCTION_KEYS).contains(&self.key).then(|| crate::keymap::vc_chord(&self.shortcut())).flatten()
+        (1..=FUNCTION_KEYS).contains(&self.key).then(|| Chord::parse(&self.shortcut()).ok()).flatten()
     }
 
     /// The key as the menus show shortcuts on this platform (`Ctrl+Shift+F5`, `⇧⌘F5`).
     pub fn text(self) -> String {
-        crate::menus::pretty_shortcut(&self.shortcut())
+        crate::keymap::chord_text(&self.shortcut())
     }
 
     /// The function key that params `p` give: `key` (1 to 15, F1 to F15; 0 or null for none), `cmd`
@@ -57,10 +57,11 @@ impl FunctionKey {
 /// The function returns an error message if the function key is invalid or reserved on this platform.
 pub fn key_error(key: FunctionKey) -> Option<String> {
     let Some(chord) = key.chord() else { return Some("no such function key".into()) };
-    if crate::keymap::platform() == Platform::Windows && (key.key == 1 || key.cmd && !key.shift && matches!(key.key, 4 | 6)) {
+    let platform = crate::keymap::platform();
+    if platform == Platform::Windows && (key.key == 1 || key.cmd && !key.shift && matches!(key.key, 4 | 6)) {
         return Some(format!("{} cannot be used on Windows", key.text()));
     }
-    if crate::keymap::template().is_reserved(&chord) {
+    if craft::keymap::reserved::system(platform).contains(&chord) {
         return Some(format!("{} is reserved by the system", key.text()));
     }
     None
@@ -73,7 +74,6 @@ pub(super) fn playable_chord(key: FunctionKey) -> Option<Chord> {
 /// The actions of `list` that a function key plays, in list order: each action's name and the
 /// chord its key is pressed as. The shortcut catalogue makes a row of each; a key that
 /// [`key_error`] refuses on this platform gives none, so it never plays.
-// PLAN: menus-w13's root `actions.rs` needs `pub use keys::function_keys` for menus-w5's catalogue builder.
 pub fn function_keys(list: &ActionList) -> Vec<(String, Chord)> {
     list.actions().iter().filter_map(|a| Some((a.name.clone(), playable_chord(model::function_key(a)?)?))).collect()
 }

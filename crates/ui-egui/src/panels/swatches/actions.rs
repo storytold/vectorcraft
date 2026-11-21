@@ -1,7 +1,7 @@
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::menu::PanelRow;
 use craft::ui::dialog::StandardPrompt;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use serde_json::{Value, json};
 
 use super::dnd::group_of;
@@ -60,7 +60,8 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
         app.run("swatch.delete", params).ok();
         return;
     }
-    let prompt = StandardPrompt::confirm_delete(names.iter().take(4).cloned(), names.len()).paragraph(tl!("Art using a deleted global swatch keeps its colour."));
+    let prompt = StandardPrompt::confirm_delete(names.iter().take(4).cloned(), names.len())
+        .paragraph(tl!("Art using a deleted global swatch keeps its colour."));
     // PLAN: assumed `confirm::ask_prompt(app, prompt, command, params)`: the confirm host over a `StandardPrompt`.
     crate::dialogs::confirm::ask_prompt(app, prompt, "swatch.delete", params);
 }

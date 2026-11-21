@@ -6,10 +6,8 @@
 //! The one field is `name`. The style being renamed or the styles to merge are held by the dialog's
 //! OK, not by a field, so a name another style has refuses the OK and keeps the dialog open.
 
-// PLAN: assumed paths `craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param,
-// ParamDialog, ParamKind}` and `craft::ui::contract::Bind`.
 use craft::ui::contract::Bind;
-use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 
 use super::host;
@@ -43,14 +41,13 @@ impl Target {
 /// Open the dialog with `name` in its field; OK runs `target`.
 fn open_with(app: &mut VectorcraftApp, name: String, target: Target) -> Result<Value, String> {
     let params = vec![Param::new("name", tl!("Style Name:").to_string(), ParamKind::text(name.clone()))];
-    // PLAN: assumed `VectorcraftApp::ctx() -> &egui::Context`.
-    let dialog = HostedParamDialog::command(app.ctx(), KIND, DialogFields::from_pairs([("name", name)]), move |fields| {
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let dialog = HostedParamDialog::command(&ctx, KIND, DialogFields::from_pairs([("name", name)]), move |fields| {
         ParamDialog::command(KIND, tl!("Graphic Style Options").to_string(), params.clone()).values(Bind::bound(fields))
     });
-    // PLAN: assumed `host::open_held(app, dialog, ok) -> Option<_>` with
-    // `ok: FnMut(&mut VectorcraftApp, &DialogFields) -> Result<(), String> + Send + 'static`; an `Err` keeps the dialog open.
-    host::open_held(app, dialog, move |app, fields| target.run(app, fields.text("name").unwrap_or_default()).map(|_| ()))
-        .ok_or("no window")?;
+    // An `Err` (a name another style has) keeps the dialog open with the reason.
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| target.run(app, result.fields.text("name").unwrap_or_default()).map(|_| ());
+    host::open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -84,11 +81,13 @@ pub fn open_merge(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value,
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests_warp::{accept, set, windowed};
     use super::*;
+    use craft::ui::dialog::DialogId;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
         app
@@ -98,26 +97,38 @@ mod tests {
         app.session.active().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect()
     }
 
+    /// The keys of the open dialogs, the top one last.
+    fn open_keys(app: &VectorcraftApp) -> Vec<Option<String>> {
+        crate::tests::picks::open_dialogs(app).into_iter().map(|d| d.key).collect()
+    }
+
+    /// The open Graphic Style Options.
+    fn options(app: &VectorcraftApp) -> DialogId {
+        crate::tests::picks::open_dialogs(app)
+            .into_iter()
+            .find(|d| d.key.as_deref() == Some(KIND))
+            .map(|d| d.id)
+            .expect("Graphic Style Options is open")
+    }
+
     #[test]
     fn names_a_new_style_then_renames_it() {
         let mut app = app();
         app.run("ui.graphicStyleOptions", json!({})).unwrap();
-        // PLAN: assumed test helpers of `dialogs::host`: `open_dialogs`, `set_json_field`, `confirm_by_id`, `pump`.
-        assert_eq!(host::open_dialogs(&app), [KIND]);
-        host::set_json_field(&mut app, KIND, "name", json!("Glow"));
-        host::confirm_by_id(&mut app, KIND);
-        host::pump(&mut app);
-        assert!(host::open_dialogs(&app).is_empty() && names(&app).last().unwrap() == "Glow");
+        assert_eq!(open_keys(&app), [Some(KIND.to_string())]);
+        let id = options(&app);
+        set(&app, id, "name", json!("Glow"));
+        accept(&mut app, id);
+        assert!(open_keys(&app).is_empty() && names(&app).last().unwrap() == "Glow");
 
         app.run("ui.graphicStyleOptions", json!({"name": "Glow"})).unwrap();
-        host::set_json_field(&mut app, KIND, "name", json!("Sunshine"));
-        host::confirm_by_id(&mut app, KIND);
-        host::pump(&mut app);
-        assert_eq!(host::open_dialogs(&app), [KIND], "a taken name keeps the dialog open");
+        let id = options(&app);
+        set(&app, id, "name", json!("Sunshine"));
+        accept(&mut app, id);
+        assert_eq!(open_keys(&app), [Some(KIND.to_string())], "a taken name keeps the dialog open");
         assert!(!names(&app).iter().any(|n| n == "Glow copy"));
-        host::set_json_field(&mut app, KIND, "name", json!("Halo"));
-        host::confirm_by_id(&mut app, KIND);
-        host::pump(&mut app);
+        set(&app, id, "name", json!("Halo"));
+        accept(&mut app, id);
         assert_eq!(names(&app).last().unwrap(), "Halo");
         assert!(app.run("ui.graphicStyleOptions", json!({"name": "nope"})).is_err());
     }

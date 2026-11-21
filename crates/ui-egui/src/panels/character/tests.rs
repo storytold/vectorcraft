@@ -1,8 +1,8 @@
 use super::*;
+use crate::i18n::LangExt;
 use craft::behavior::{EditEvent, Mixed};
 use craft::text::ui::character::{BaselinePosition, Caps, CharacterChange, CharacterRows, CharacterValues, Kerning, Leading};
 use craft::text::ui::type_options::TextAntiAlias;
-use crate::i18n::LangExt;
 use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_engine::Session;
@@ -362,12 +362,15 @@ fn variable_fonts_get_a_slider_per_axis() {
     reset_panel(&mut app);
     assert_eq!(axes(&app).into_iter().collect::<Vec<_>>(), [("wght".to_string(), 650.0)]);
     // Weights differ across the selection, widths agree: a change of the width leaves the weights alone.
-    let bold = app.run("text.create", json!({"x": 20, "y": 160, "text": "lIn", "font": TWO_AXIS_FAMILY, "style": "Bold"})).unwrap()["id"].as_u64().unwrap();
+    let bold =
+        app.run("text.create", json!({"x": 20, "y": 160, "text": "lIn", "font": TWO_AXIS_FAMILY, "style": "Bold"})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id, bold]})).unwrap();
     let mixed = values(&app).mixed_axes;
     assert!(mixed.contains(b"wght") && !mixed.contains(b"wdth"), "{mixed:?}");
     change(&mut app, CharacterChange::Axes(vec![(*b"wdth", 90.0)]));
-    let font_axes = |app: &VectorcraftApp, id: u64| story_frame(app, id).runs.iter().map(|r| (r.style.font_axes.get("wght").copied(), r.style.font_axes.get("wdth").copied())).collect::<Vec<_>>();
+    let font_axes = |app: &VectorcraftApp, id: u64| {
+        story_frame(app, id).runs.iter().map(|r| (r.style.font_axes.get("wght").copied(), r.style.font_axes.get("wdth").copied())).collect::<Vec<_>>()
+    };
     assert_eq!(font_axes(&app, id), [(Some(650.0), Some(90.0))], "the mixed axis is untouched");
     assert_eq!(font_axes(&app, bold), [(None, Some(90.0))]);
     // The Type tool's range takes the change, not the whole object.
@@ -481,11 +484,12 @@ fn superscript_and_underline_decide_from_the_text_with_the_typing_applied() {
         app.select_tool("type");
         app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
         app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let backspace =
             |pressed| egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-        let raw = egui::RawInput { events: vec![backspace(true), backspace(false)], ..Default::default() };
-        ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+        // The keymap builds in the first pass.
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![backspace(true), backspace(false)]);
         assert_eq!(app.session.tool_options()["typing"], json!(true), "{command}");
         let node = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
             NodeKind::Text(t) => (t.plain_text(), t.runs.iter().map(|r| (r.style.position.id(), r.style.underline)).collect::<Vec<_>>()),
@@ -567,9 +571,11 @@ fn story_selected_ids(app: &VectorcraftApp) -> Vec<u64> {
 /// submenus' checks (none for a mixed selection).
 #[test]
 fn the_panel_menu_rows_run_their_commands_and_check_by_state() {
-    use crate::dialogs::tate_chu_yoko::TateChuYokoDialog; // PLAN: assumed path (type-w23)
-    use crate::dialogs::warichu::WarichuDialog; // PLAN: assumed path (type-w23)
+    use craft::ui::dialog::dialog_id;
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The settings rows open their dialogs on the window's host.
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "ABC", "size": 13})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -581,7 +587,9 @@ fn the_panel_menu_rows_run_their_commands_and_check_by_state() {
         (toggle("smallCaps"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.small_caps.is_some())),
         (toggle("superscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "superscript")),
         (toggle("subscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "subscript")),
-        (CommandRef::new("type.systemLayout"), false, |a, id| a.session.active().unwrap().doc.setup.system_layout && story_frame(a, id).system_layout),
+        (CommandRef::new("type.systemLayout"), false, |a, id| {
+            a.session.active().unwrap().doc.setup.system_layout && story_frame(a, id).system_layout
+        }),
         (CommandRef::new("type.fractionalWidths"), false, |a, id| story_frame(a, id).fractional_widths),
         (toggle("tateChuYoko"), true, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.tate_chu_yoko)),
         (toggle("warichu"), true, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.warichu)),
@@ -610,10 +618,10 @@ fn the_panel_menu_rows_run_their_commands_and_check_by_state() {
         assert_eq!(on(&app, id), start, "{}: run again", command.key());
     }
     // The settings rows open their dialogs.
-    for (row, open) in [(&settings, true), (&warichu_settings, false)] {
+    for (row, kind) in [(&settings, crate::dialogs::tate_chu_yoko::KIND), (&warichu_settings, crate::dialogs::warichu::KIND)] {
         assert!(listed(&app).contains(row), "{}", row.key());
         fire(&mut app, row);
-        let opened = if open { app.dialogs().is_open::<TateChuYokoDialog>() } else { app.dialogs().is_open::<WarichuDialog>() };
+        let opened = app.dialogs().is_some_and(|d| d.with(|h| h.get_by_id::<HostedParamDialog>(dialog_id(kind)).is_some()));
         assert!(opened, "{}", row.key());
     }
     // Submenus check the value the selected characters share, and none when they differ.

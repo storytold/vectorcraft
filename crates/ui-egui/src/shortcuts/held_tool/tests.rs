@@ -204,7 +204,7 @@ fn a_view_tool_drag_counts_as_using_the_held_tool() {
         assert_eq!(app.session.tool_id(), "hand", "let go during the pan: {let_go_during_pan}");
         keys.frame(&mut app, 0.02, vec![button(at, true)]);
         keys.frame(&mut app, 0.03, vec![egui::Event::PointerMoved(to)]);
-        assert!(crate::canvas::tool_adapter::in_gesture(&app, &keys.ctx), "the Hand pans");
+        assert!(crate::canvas::in_gesture(&app, &keys.ctx), "the Hand pans");
         if let_go_during_pan {
             keys.frame(&mut app, 0.05, vec![key(false)]);
             assert_eq!(app.session.tool_id(), "hand", "the Hand stays during the pan");
@@ -273,10 +273,11 @@ fn a_dialog_opened_during_the_hold_counts_as_using_the_tool() {
         let enter =
             egui::Event::Key { key: Key::Enter, physical_key: Some(Key::Enter), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
         keys.frame(&mut app, 0.05, vec![enter]);
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialog), "Enter opens the {dialog} dialog");
+        let top = crate::tests::picks::open_dialogs(&app).pop().and_then(|d| d.key);
+        assert_eq!(top, Some(format!("object.{dialog}")), "Enter opens the {dialog} dialog");
         keys.release(&mut app, 0.1, key);
         assert_eq!(app.session.tool_id(), tool, "{tool} stays while its dialog is open");
-        crate::dialogs::cancel(&mut app);
+        crate::shortcuts::tests::close_top_dialog(&mut app, false);
         keys.frame(&mut app, 0.15, vec![]);
         assert_eq!(app.session.tool_id(), "pen", "after the {dialog} dialog");
     }
@@ -293,7 +294,7 @@ fn another_dialog_opened_during_the_hold_does_not_use_the_tool() {
     app.run("file.newDialog", json!({})).unwrap();
     keys.frame(&mut app, 0.05, vec![]);
     keys.release_s(&mut app, 0.1);
-    crate::dialogs::cancel(&mut app);
+    crate::shortcuts::tests::close_top_dialog(&mut app, false);
     keys.frame(&mut app, 0.15, vec![]);
     assert_eq!(app.session.tool_id(), "scale");
 }

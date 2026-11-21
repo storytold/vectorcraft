@@ -2,12 +2,10 @@ use serde_json::Value;
 use vectorcraft_doc::Unit;
 
 use super::*;
-use crate::panels::tests_units::{cancel_dialog, confirm_dialog, set_dialog_field};
+use crate::panels::tests_units::{cancel_dialog, confirm_dialog, run_menu, set_dialog_field};
 use crate::tests::panel_harness::Panel;
 
-// PLAN: assumed op.A15 `Panel` API: `new(app, draw)`, `app()`, `app_mut()`, `into_app()`, `frame()`,
-// `value(name) -> Option<String>`, `shows(name)`, `enabled(name)`, `click(name)`, `type_into(name, text)`,
-// `press_on(name, Key)` (focus the control, then press the key).
+// PLAN: assumed op.A15 `Panel::into_app(self) -> VectorcraftApp` (object-panels-w8).
 
 fn panel(app: VectorcraftApp) -> Panel {
     Panel::new(app, show)
@@ -48,11 +46,11 @@ fn use_preview_bounds_shows_the_visual_size_and_checks_the_align_flyout() {
     app.run("stroke.set", json!({"weight": 10})).unwrap();
     let mut p = panel(app);
     assert_eq!(p.value("Width"), Some(pt(100.0)));
-    assert_ne!(checked(p.app(), "ui.align.usePreviewBounds"), Some(true));
-    p.app_mut().run("ui.align.usePreviewBounds", json!({})).unwrap();
+    assert_ne!(checked(&p.app(), "ui.align.usePreviewBounds"), Some(true));
+    p.app().run("ui.align.usePreviewBounds", json!({})).unwrap();
     p.frame();
     assert_eq!((p.value("Width"), p.value("Height")), (Some(pt(110.0)), Some(pt(60.0))));
-    assert_eq!(checked(p.app(), "ui.align.usePreviewBounds"), Some(true));
+    assert_eq!(checked(&p.app(), "ui.align.usePreviewBounds"), Some(true));
 }
 
 /// Measure Type by Glyph Bounds is checked while `typeGlyphBounds` is on, and the bounding box of
@@ -83,7 +81,7 @@ fn use_preview_bounds_shows_the_size_after_geometry_effects() {
     app.run("effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": offset}, "item": null})).unwrap();
     let mut p = panel(app);
     assert_eq!((p.value("Width"), p.value("Height")), (Some(pt(100.0)), Some(pt(50.0))));
-    set_pref(p.app_mut(), "usePreviewBounds", true);
+    set_pref(&mut p.app(), "usePreviewBounds", true);
     p.frame();
     assert_eq!((p.value("Width"), p.value("Height")), (Some(pt(100.0 + 2.0 * offset)), Some(pt(50.0 + 2.0 * offset))));
 }
@@ -98,7 +96,7 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     let bx = p.app().selection_box().unwrap();
     assert!((degrees(&p, "Rotate").unwrap() - bx.angle).abs() < 0.05);
     assert_eq!((p.value("Width"), p.value("Height")), (Some(pt(bx.rect.width())), Some(pt(bx.rect.height()))));
-    p.app_mut().run("object.resetBoundingBox", json!({})).unwrap();
+    p.app().run("object.resetBoundingBox", json!({})).unwrap();
     p.frame();
     assert_eq!(degrees(&p, "Rotate"), Some(0.0));
 }
@@ -109,7 +107,7 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
 fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
     let mut app = new_app();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
-    crate::menus::run_fired(&mut app, "object.rotateBoundingBox", json!({})); // PLAN: assumed `run_fired(&mut app, &str, Value)`
+    run_menu(&mut app, "object.rotateBoundingBox");
     set_dialog_field(&mut app, "angle", json!(90));
     let bounds = |app: &VectorcraftApp| {
         let st = app.session.doc().unwrap();
@@ -134,10 +132,10 @@ fn a_rectangle_shows_linked_and_unlinked_corner_types() {
     assert!(p.shows("Corner") && !p.shows("Top Left Corner"));
     assert_eq!(p.value("Corner").map(|s| s.is_empty()), Some(false), "one kind: the menu reads it");
     // Kinds that differ leave the linked menu blank.
-    p.app_mut().run("object.setLiveShape", json!({"kind": "chamfer", "corners": [2]})).unwrap();
+    p.app().run("object.setLiveShape", json!({"kind": "chamfer", "corners": [2]})).unwrap();
     p.frame();
     assert!(p.shows("Corner") && blank(p.value("Corner")));
-    set_pref(p.app_mut(), "singleCornerRadius", false);
+    set_pref(&mut p.app(), "singleCornerRadius", false);
     p.frame();
     assert!(!p.shows("Corner") && p.shows("Top Left Corner") && p.shows("Bottom Left Corner"));
 }
@@ -227,10 +225,10 @@ fn a_rectangle_and_an_ellipse_show_their_angle() {
         assert!(key.is_some(), "{shape}: the angle is kept");
         p.frame();
         assert_eq!(p.app().canvas.shape_angle, key, "{shape}: not measured again");
-        p.app_mut().run("select.set", json!({"ids": ids})).unwrap();
+        p.app().run("select.set", json!({"ids": ids})).unwrap();
         p.frame();
         assert!(blank(p.value("Angle")), "{shape}: mixed angles");
-        p.app_mut().run("select.set", json!({"ids": [ids[1]]})).unwrap();
+        p.app().run("select.set", json!({"ids": [ids[1]]})).unwrap();
         p.frame();
         assert_eq!(degrees(&p, "Angle"), Some(60.0), "{shape}");
         app = p.into_app();
@@ -258,20 +256,21 @@ fn the_constrain_pie_angle_link_keeps_the_span() {
     let mut p = panel(app);
     p.click(LINK);
     assert!(p.app().ui.constrain_pie_angle, "a click turns it on");
-    p.press_on(LINK, egui::Key::Space);
+    // The click left the focus on the link.
+    p.key(egui::Key::Space, egui::Modifiers::NONE);
     assert!(!p.app().ui.constrain_pie_angle, "Space turns it off");
     p.click(LINK);
     assert!(p.app().ui.constrain_pie_angle);
-    let n = undo(p.app());
+    let n = undo(&p.app());
     p.type_into("Pie Start Angle", "60");
-    assert_eq!(pie(p.app()), (60.0, 150.0));
-    assert_eq!(undo(p.app()), n + 1, "one undo step");
+    assert_eq!(pie(&p.app()), (60.0, 150.0));
+    assert_eq!(undo(&p.app()), n + 1, "one undo step");
     p.type_into("Pie End Angle", "200");
-    assert_eq!(pie(p.app()), (110.0, 200.0));
+    assert_eq!(pie(&p.app()), (110.0, 200.0));
     p.click(LINK);
     assert!(!p.app().ui.constrain_pie_angle);
     p.type_into("Pie Start Angle", "100");
-    assert_eq!(pie(p.app()), (100.0, 200.0), "off, the end stays");
+    assert_eq!(pie(&p.app()), (100.0, 200.0), "off, the end stays");
 }
 
 /// A live line shows its Line Properties: a typed length keeps its first end in place and a typed
@@ -294,28 +293,28 @@ fn a_line_shows_and_takes_its_line_properties() {
     let mut p = panel(app);
     assert_eq!(p.value("Line Length"), Some(pt(100.0)));
     assert!((degrees(&p, "Line Angle").unwrap() - 306.87).abs() < 0.05);
-    let n = undo(p.app());
+    let n = undo(&p.app());
     p.type_into("Line Length", "50");
-    let (a, b) = ends(p.app());
+    let (a, b) = ends(&p.app());
     assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "{a:?} {b:?}");
-    assert_eq!(undo(p.app()), n + 1, "one undo step per edit");
+    assert_eq!(undo(&p.app()), n + 1, "one undo step per edit");
     p.type_into("Line Angle", "90");
-    let (a, b) = ends(p.app());
+    let (a, b) = ends(&p.app());
     assert!(near(a, 65.0, 95.0) && near(b, 65.0, 45.0), "{a:?} {b:?}");
-    assert_eq!(undo(p.app()), n + 2, "one undo step per edit");
+    assert_eq!(undo(&p.app()), n + 2, "one undo step per edit");
     assert_eq!(degrees(&p, "Line Angle"), Some(90.0));
-    p.app_mut().run("edit.undo", json!({})).unwrap();
-    let (a, b) = ends(p.app());
+    p.app().run("edit.undo", json!({})).unwrap();
+    let (a, b) = ends(&p.app());
     assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "one undo step: {a:?} {b:?}");
     // With a rectangle selected too, the fields would set the line alone: they don't show.
-    let rect = p.app_mut().run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    p.app_mut().run("select.set", json!({"ids": [id, rect]})).unwrap();
+    let rect = p.app().run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    p.app().run("select.set", json!({"ids": [id, rect]})).unwrap();
     p.frame();
     assert!(!p.shows("Line Length"));
-    p.app_mut().run("select.set", json!({"ids": [id]})).unwrap();
+    p.app().run("select.set", json!({"ids": [id]})).unwrap();
     p.frame();
     assert!(p.shows("Line Length"));
-    p.app_mut().run("object.expandShape", json!({})).unwrap();
+    p.app().run("object.expandShape", json!({})).unwrap();
     p.frame();
     assert!(!p.shows("Line Length"));
 }
@@ -327,7 +326,7 @@ fn the_artboard_tool_shows_the_active_artboard() {
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
     let mut p = panel(app);
     assert_eq!(p.value("Width"), Some(pt(40.0)), "the selection first");
-    p.app_mut().run("tool.select", json!({"tool": "artboard"})).unwrap();
+    p.app().run("tool.select", json!({"tool": "artboard"})).unwrap();
     p.frame();
     // Centre reference point: X 150, Y 100, W 300, H 200; no rotate/shear for artboards.
     let r = p.app().session.active().unwrap().doc.artboards[0].rect;
@@ -347,15 +346,15 @@ fn selected_guides_show_their_position() {
     let mut p = panel(app);
     assert_eq!(p.value("X"), Some(pt(120.0)));
     assert!(p.enabled("X") && !p.enabled("Y"));
-    p.app_mut().run("guide.select", json!({"indexes": [0, 1]})).unwrap();
+    p.app().run("guide.select", json!({"indexes": [0, 1]})).unwrap();
     p.frame();
     assert_eq!((p.value("X"), p.value("Y")), (Some(pt(120.0)), Some(pt(45.0))));
     // The field's edit: the vertical guide moves, the horizontal one stays.
-    p.app_mut().run("guide.move", json!({"dx": 30})).unwrap();
-    assert_eq!(selected_guides(p.app()), Some((Some(150.0), Some(45.0))));
+    p.app().run("guide.move", json!({"dx": 30})).unwrap();
+    assert_eq!(selected_guides(&p.app()), Some((Some(150.0), Some(45.0))));
     // Art selected with them: the art's box, as before.
-    p.app_mut().run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
-    assert_eq!(selected_guides(p.app()), None);
+    p.app().run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+    assert_eq!(selected_guides(&p.app()), None);
 }
 
 /// #1824: with an anchor selected with Direct Selection the panel shows that anchor's position,
@@ -367,11 +366,11 @@ fn an_anchor_selection_shows_and_moves_its_own_box() {
     let id = app.run("path.create", square).unwrap()["id"].as_u64().unwrap();
     let mut p = panel(app);
     assert_eq!((p.value("X"), p.value("Width")), (Some(pt(70.0)), Some(pt(100.0))), "the whole path");
-    p.app_mut().run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
+    p.app().run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
     p.frame();
     assert_eq!((p.value("X"), p.value("Y"), p.value("Width")), (Some(pt(120.0)), Some(pt(30.0)), Some(pt(0.0))));
     p.type_into("X", "150");
-    let n = first_selected(p.app()).unwrap();
+    let n = first_selected(&p.app()).unwrap();
     let Some(path) = n.path_data() else { panic!("a path") };
     let xs: Vec<f64> = path.subpaths[0].anchors.iter().map(|a| a.p.x).collect();
     assert_eq!(xs, [20.0, 150.0, 120.0, 20.0]);
@@ -437,7 +436,8 @@ fn the_menu_chooses_whether_the_object_its_pattern_or_both_transform() {
                 // The centre reference point: X 150 becomes 170.
                 let mut p = Panel::new(app, draw);
                 p.type_into("X", "170");
-                let app = p.app_mut();
+                let mut guard = p.app();
+                let app = &mut *guard;
                 let x0 = app.selection_box().unwrap().rect.x0;
                 assert_eq!(x0, if item == 1 { 100.0 } else { 120.0 }, "{case}: the object");
                 assert_eq!(tiles(app, id), [1.0, 0.0, 0.0, 1.0, if item == 0 { 0.0 } else { 20.0 }, 0.0], "{case}: the tiles");
@@ -464,7 +464,10 @@ fn the_menu_choice_also_applies_to_rotation_and_shear() {
             let before = (app.selection_box().unwrap(), tiles(&app, id));
             let mut p = panel(app);
             p.type_into(field, "30");
-            let after = (p.app().selection_box().unwrap(), tiles(p.app(), id));
+            let after = {
+                let app = p.app();
+                (app.selection_box().unwrap(), tiles(&app, id))
+            };
             assert_eq!(after.0 != before.0, item != 1, "{case}: the object {:?} → {:?}", before.0, after.0);
             // Turned or sheared tiles change their matrix's linear part; moved ones only its offset.
             assert_eq!(after.1[..4] != before.1[..4], item != 0, "{case}: the tiles {:?} → {:?}", before.1, after.1);
@@ -484,16 +487,16 @@ fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_
         app.run("select.set", json!({"ids": [id]})).unwrap();
         let mut p = Panel::new(app, draw);
         assert_eq!((p.value("X"), p.value("Y")), (Some(pt(140.0)), Some(pt(70.0))), "the centre");
-        assert_ne!(checked(p.app(), "ui.transform.registrationPoint"), Some(true));
-        p.app_mut().run("ui.transform.registrationPoint", json!({})).unwrap();
+        assert_ne!(checked(&p.app(), "ui.transform.registrationPoint"), Some(true));
+        p.app().run("ui.transform.registrationPoint", json!({})).unwrap();
         assert!(p.app().session.prefs.use_registration_point_for_symbol);
-        assert_eq!(checked(p.app(), "ui.transform.registrationPoint"), Some(true));
+        assert_eq!(checked(&p.app(), "ui.transform.registrationPoint"), Some(true));
         p.frame();
         assert_eq!((p.value("X"), p.value("Y")), (Some(pt(100.0)), Some(pt(50.0))), "the top-left");
         p.type_into("X", "30");
         assert_eq!(p.app().selection_box().unwrap().rect, Rect::new(30.0, 50.0, 110.0, 90.0));
         // Any other selection: the reference point.
-        p.app_mut().run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
+        p.app().run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
         p.frame();
         assert_eq!(p.value("X"), Some(pt(210.0)), "the centre");
     }
@@ -528,8 +531,8 @@ fn the_control_bar_fields_use_the_shared_reference_point() {
         p.type_into("Width", "200");
         p.type_into("Height", "100");
         assert_eq!(p.app().selection_box().unwrap().rect, sized, "reference {refi}: W and H");
-        p.app_mut().run("edit.undo", json!({})).unwrap();
-        p.app_mut().run("edit.undo", json!({})).unwrap();
+        p.app().run("edit.undo", json!({})).unwrap();
+        p.app().run("edit.undo", json!({})).unwrap();
         assert_eq!(p.app().selection_box().unwrap().rect, moved, "reference {refi}: undo");
     }
 }
@@ -568,19 +571,19 @@ fn use_registration_point_for_symbol_follows_a_transformed_instance() {
         // A new X moves the registration point there.
         p.type_into("X", &format!("{}", q.x - 40.0));
         let q = vectorcraft_geom::Point::new(q.x - 40.0, q.y);
-        assert!(near(registration(p.app(), id), q), "{case}: moved to {q:?}, now {:?}", registration(p.app(), id));
+        assert!(near(registration(&p.app(), id), q), "{case}: moved to {q:?}, now {:?}", registration(&p.app(), id));
         // The rotation field turns it about the registration point.
         let angle = p.app().selection_box().unwrap().angle;
         let before = p.app().session.active().unwrap().revision;
         p.type_into("Rotate", &format!("{}", angle + 30.0));
         assert_ne!(p.app().session.active().unwrap().revision, before, "{case}: turned");
-        assert!(near(registration(p.app(), id), q), "{case}: rotated about {q:?}, now {:?}", registration(p.app(), id));
+        assert!(near(registration(&p.app(), id), q), "{case}: rotated about {q:?}, now {:?}", registration(&p.app(), id));
         // The flips mirror it about the registration point.
         for flip in ["ui.transform.flipHorizontal", "ui.transform.flipVertical"] {
             let before = p.app().session.active().unwrap().revision;
-            p.app_mut().run(flip, json!({})).unwrap();
+            p.app().run(flip, json!({})).unwrap();
             assert_ne!(p.app().session.active().unwrap().revision, before, "{case}: {flip} flipped");
-            assert!(near(registration(p.app(), id), q), "{case}: {flip} about {q:?}, now {:?}", registration(p.app(), id));
+            assert!(near(registration(&p.app(), id), q), "{case}: {flip} about {q:?}, now {:?}", registration(&p.app(), id));
         }
     }
 }
@@ -645,7 +648,10 @@ fn the_shear_field_shows_the_error_for_an_angle_with_no_shear() {
         let (before, revision) = (shear_app().selection_box().unwrap(), 0);
         let _ = revision;
         let mut p = panel(shear_app());
-        let (rev, undo) = (p.app().session.active().unwrap().revision, p.app().session.doc().unwrap().history.undo.len());
+        let (rev, undo) = {
+            let app = p.app();
+            (app.session.active().unwrap().revision, app.session.doc().unwrap().history.undo.len())
+        };
         p.type_into("Shear", typed);
         let app = p.app();
         assert!(!app.ui.status.is_empty(), "{typed}: an error shows");
@@ -667,32 +673,41 @@ fn align_to_pixel_grid_shows_and_sets_the_property() {
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
     let aligned = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().extras().pixel_aligned;
     let mut p = panel(app);
-    assert_eq!(pixel_aligned_state(p.app()).map(|s| (s.0, s.1)), Some((Some(false), true)));
+    assert_eq!(pixel_aligned_state(&p.app()).map(|s| (s.0, s.1)), Some((Some(false), true)));
     assert!(p.enabled(BOX));
     p.click(BOX);
-    assert!(aligned(p.app(), a) && aligned(p.app(), b));
+    {
+        let app = p.app();
+        assert!(aligned(&app, a) && aligned(&app, b));
+    }
     let x0 = p.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).unwrap().geometric_bounds().unwrap().x0;
     // The default 1 pt stroke is odd and centered: the edges go to half points.
     assert_eq!(x0, 10.5);
-    p.app_mut().run("object.setPixelAligned", json!({"ids": [b], "on": false})).unwrap();
+    p.app().run("object.setPixelAligned", json!({"ids": [b], "on": false})).unwrap();
     p.frame();
-    assert_eq!(pixel_aligned_state(p.app()).map(|s| s.0), Some(None));
+    assert_eq!(pixel_aligned_state(&p.app()).map(|s| s.0), Some(None));
     p.click(BOX);
-    assert!(aligned(p.app(), a) && aligned(p.app(), b));
+    {
+        let app = p.app();
+        assert!(aligned(&app, a) && aligned(&app, b));
+    }
     p.click(BOX);
-    assert!(!aligned(p.app(), a) && !aligned(p.app(), b));
-    let t = p.app_mut().run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
-    p.app_mut().run("select.set", json!({"ids": [a, t]})).unwrap();
+    {
+        let app = p.app();
+        assert!(!aligned(&app, a) && !aligned(&app, b));
+    }
+    let t = p.app().run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    p.app().run("select.set", json!({"ids": [a, t]})).unwrap();
     p.frame();
-    assert_eq!(pixel_aligned_state(p.app()).map(|s| s.1), Some(false));
+    assert_eq!(pixel_aligned_state(&p.app()).map(|s| s.1), Some(false));
     assert!(!p.enabled(BOX));
     // A path inside a compound path snaps with the compound path, so it cannot be aligned alone.
-    p.app_mut().run("select.set", json!({"ids": [a, b]})).unwrap();
-    let c = p.app_mut().run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
-    assert_eq!(pixel_aligned_state(p.app()).map(|s| s.1), Some(true));
+    p.app().run("select.set", json!({"ids": [a, b]})).unwrap();
+    let c = p.app().run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(pixel_aligned_state(&p.app()).map(|s| s.1), Some(true));
     let member = p.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().children().unwrap()[0].id.0;
-    p.app_mut().run("select.set", json!({"ids": [member]})).unwrap();
-    assert_eq!(pixel_aligned_state(p.app()).map(|s| s.1), Some(false));
+    p.app().run("select.set", json!({"ids": [member]})).unwrap();
+    assert_eq!(pixel_aligned_state(&p.app()).map(|s| s.1), Some(false));
 }
 
 /// The Align to Pixel Grid state measured from scratch in one pass over the selection, with the ids
@@ -771,34 +786,34 @@ fn align_to_pixel_grid_state_is_measured_once_per_revision() {
     let saved = (*app.session.active().unwrap().doc).clone();
     let mut p = panel(app);
     p.frame();
-    let k = key(p.app());
+    let k = key(&p.app());
     assert_eq!(p.app().canvas.pixel_aligned, Some((k, Some((Some(false), true)))));
     // A wrong answer planted for this revision shows: the state is not measured again.
-    p.app_mut().canvas.pixel_aligned = Some((k, PLANTED));
-    assert_eq!(pixel_aligned_shown(p.app_mut()), PLANTED);
+    p.app().canvas.pixel_aligned = Some((k, PLANTED));
+    assert_eq!(pixel_aligned_shown(&mut p.app()), PLANTED);
     p.frame();
     assert_eq!(p.app().canvas.pixel_aligned, Some((k, PLANTED)));
-    measured_again(p.app_mut(), "an edit", |app| {
+    measured_again(&mut p.app(), "an edit", |app| {
         app.run("object.setPixelAligned", json!({"ids": [a], "on": true})).unwrap();
     });
-    measured_again(p.app_mut(), "Undo", |app| {
+    measured_again(&mut p.app(), "Undo", |app| {
         app.run("edit.undo", json!({})).unwrap();
     });
-    measured_again(p.app_mut(), "Redo", |app| {
+    measured_again(&mut p.app(), "Redo", |app| {
         app.run("edit.redo", json!({})).unwrap();
     });
-    measured_again(p.app_mut(), "a new selection", |app| {
+    measured_again(&mut p.app(), "a new selection", |app| {
         app.run("select.set", json!({"ids": [a]})).unwrap();
     });
-    measured_again(p.app_mut(), "a new document", |app| {
+    measured_again(&mut p.app(), "a new document", |app| {
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 10})).unwrap();
     });
-    measured_again(p.app_mut(), "back to the first document", |app| {
+    measured_again(&mut p.app(), "back to the first document", |app| {
         app.session.set_active(0);
     });
-    assert_eq!(pixel_aligned_shown(p.app_mut()), Some((Some(true), true)));
-    measured_again(p.app_mut(), "the document read back", |app| {
+    assert_eq!(pixel_aligned_shown(&mut p.app()), Some((Some(true), true)));
+    measured_again(&mut p.app(), "the document read back", |app| {
         assert!(app.session.replace_document(0, saved));
     });
 }
@@ -911,8 +926,7 @@ fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
 /// on, and leaves it closed with it off.
 #[test]
 fn a_frame_after_a_shape_shows_the_transform_panel() {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
     for on in [false, true] {
         let mut app = app_without_transform_panel();

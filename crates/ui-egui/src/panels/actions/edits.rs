@@ -1,27 +1,39 @@
 //! The Actions panel's edit commands. Each one checks its params and the app's limits, then makes
-//! one [`ActionList`] call; the list keeps names unique and the order of its sets.
-// PLAN: assumed crate paths `craft_ui_panels`, `craft_ui` for the framework crates the sheet names by directory.
+//! one [`ActionList`](craft::automation::actions::ActionList) call; the list keeps names unique and
+//! the order of its sets.
 
-use craft::automation::actions::{Action, ActionList, ActionListError, ActionStep};
+use std::collections::BTreeSet;
+
+use craft::automation::actions::{Action, ActionColor, ActionListError, ActionStep};
 use craft::automation::ui::actions::{ActionSelection, ActionsWords, LibraryPrompt};
-use craft::ui::runtime::words::CommonWords;
 use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::runtime::env::Env;
+use craft::ui::runtime::words::CommonWords;
 use serde_json::{Value, json};
 
 use super::model;
-use super::{COLORS, FunctionKey, files, key_error};
+use super::{FunctionKey, files, key_error};
 use crate::VectorcraftApp;
 use crate::dialogs::action_batch::BatchDialog;
 use crate::dialogs::action_insert_menu_item::InsertMenuItemDialog;
 use crate::dialogs::action_select_object::SelectObjectDialog;
 use crate::dialogs::action_set_options::SetOptionsDialog;
 use crate::dialogs::action_stop::RecordStopDialog;
+use crate::dialogs::actions::{Target, open_or_say};
 
-// PLAN: assumed `wrapped_dialog!(Name, Inner)` in the crate root makes a `StackDialog` newtype over `Inner` with the same `Result`.
-crate::wrapped_dialog!(ActionsQuestion, StandardPrompt);
+/// The key of the questions the panel asks before it deletes, clears or resets sets.
+const QUESTION: &str = "actionsQuestion";
 
-/// The place of a step in a dialog: set index, action index in the set, step index.
-type Place = (usize, usize, usize);
+/// The questions of Delete, Clear Actions and Reset Actions on the dialog host, told apart by their
+/// tag: the names of the sets to delete, or the [`LibraryPrompt`]. The wrapper keeps their answers
+/// apart from the app's other prompts.
+pub(crate) struct ActionsQuestion(pub(crate) StandardPrompt);
+
+crate::dialogs::confirm::wrapped_dialog!(ActionsQuestion, StandardPrompt, QUESTION);
+
+/// The place a step dialog holds: set index, action index in the set, and the step the new one goes
+/// after (none: the action's end).
+type Place = (usize, usize, Option<usize>);
 
 /// The command that includes or excludes steps ([`include_steps`]).
 pub const INCLUDE_STEPS: &str = "ui.action.stepsIncluded";
@@ -73,6 +85,11 @@ fn list_error(e: ActionListError) -> String {
     }
 }
 
+/// The name of the set at index `set` of [`ActionList::sets`](craft::automation::actions::ActionList::sets).
+fn set_named(app: &VectorcraftApp, set: usize) -> Result<String, String> {
+    model::set_name(&app.ui.actions, set).map(str::to_string).ok_or_else(|| "no such action set".into())
+}
+
 /// The `set`, `action` params as (set, index in the set, list index).
 fn action_of(app: &VectorcraftApp, p: &Value) -> Result<(usize, usize, usize), String> {
     let (set, at) = index(p, "set").zip(index(p, "action")).ok_or("no such action")?;
@@ -80,16 +97,21 @@ fn action_of(app: &VectorcraftApp, p: &Value) -> Result<(usize, usize, usize), S
     Ok((set, at, flat))
 }
 
-/// The actions of set `set`, copied, for the file limits that run before an edit.
-fn members_cloned(app: &VectorcraftApp, set: usize) -> Vec<Action> {
-    model::members(&app.ui.actions, set).into_iter().filter_map(|i| app.ui.actions.action(i).cloned()).collect()
+/// Err when `edit`, made to a copy of the actions of `set`, would give the set a file that Load
+/// Actions… refuses ([`model::edit_keeps_set_loadable`]); the limits run before the list changes.
+fn keeps_loadable(app: &VectorcraftApp, set: &str, edit: impl FnOnce(&mut Vec<Action>)) -> Result<(), String> {
+    let before = model::stored_actions(&app.ui.actions, set);
+    let mut after = before.clone();
+    edit(&mut after);
+    model::edit_keeps_set_loadable(app, set, &before, &after)
 }
 
-/// Makes the action at list index `flat` the selection (with its step), in set `set`, as the panel shows it.
-fn select(app: &mut VectorcraftApp, set: usize, flat: usize, step: Option<usize>) {
-    app.ui.action_set = Some(set);
+/// Makes the action at list index `flat` the selection (with its step), and its set the current and
+/// only selected one, as the panel shows it.
+fn select(app: &mut VectorcraftApp, flat: usize, step: Option<usize>) {
+    let set = app.ui.actions.set_of(flat).map(str::to_string);
     let panel = &mut app.ui.actions_panel;
-    panel.selected_sets = model::set_name(&app.ui.actions, set).into_iter().collect();
+    panel.selected_sets = set.iter().cloned().collect();
     if step.is_some()
         && let Some(action) = app.ui.actions.action(flat)
     {
@@ -99,6 +121,7 @@ fn select(app: &mut VectorcraftApp, set: usize, flat: usize, step: Option<usize>
         Some(step) => ActionSelection::Step(flat, step),
         None => ActionSelection::Action(flat),
     });
+    app.ui.action_set = set;
 }
 
 /// Renames the action at `flat`; a recording into it and the panel's expansion follow the name.
@@ -115,15 +138,12 @@ fn rename(app: &mut VectorcraftApp, flat: usize, name: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// The color that params `p` give: `color`, one of [`COLORS`], or null or `""` for none.
-fn color_param(p: &Value) -> Result<Option<String>, String> {
+/// The color that params `p` give: `color`, the file name of an [`ActionColor`], or null or `""`
+/// for none.
+fn color_param(p: &Value) -> Result<ActionColor, String> {
     match p.get("color") {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => match v.as_str() {
-            Some("") => Ok(None),
-            Some(c) if COLORS.iter().any(|(id, _)| *id == c) => Ok(Some(c.to_string())),
-            _ => Err("no such color".into()),
-        },
+        None | Some(Value::Null) => Ok(ActionColor::None),
+        Some(v) => v.as_str().and_then(|c| ActionColor::ALL.into_iter().find(|color| color.name() == c)).ok_or_else(|| "no such color".into()),
     }
 }
 
@@ -135,22 +155,28 @@ fn automatic_align_to_param(p: &Value) -> Result<Option<bool>, String> {
     }
 }
 
-/// Moves dialogs that hold a step's place: `f` gives the new place, or `None` to close the dialog.
+/// Moves the Record Stop, Insert Menu Item and Set Selection dialogs that hold a step's place: `f`
+/// gives the new place, or `None` to close the dialog. A dialog with no place inserts into the
+/// recording, which no edit moves.
 fn retarget_step_dialogs(app: &VectorcraftApp, f: impl Fn(Place) -> Option<Place>) {
     let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
+    // Whether the dialog stays open, with its place moved.
+    let moved = |target: &mut Target| {
+        let (Some(set), Some(action)) = (target.set, target.action) else { return true };
+        let Some((set, action, step)) = f((set, action, target.step)) else { return false };
+        *target = Target { set: Some(set), action: Some(action), step };
+        true
+    };
     macro_rules! follow {
         ($host:expr, $($d:ty),+) => {$(
-            if let Some(d) = $host.get_mut::<$d>() {
-                match f((d.set, d.action, d.step)) {
-                    Some(place) => (d.set, d.action, d.step) = place,
-                    None => {
-                        $host.cancel::<$d>(&ctx);
-                    }
-                }
+            if $host.get_mut::<$d>().is_some_and(|d| !moved(&mut d.target)) {
+                $host.cancel::<$d>(&ctx);
             }
         )+};
     }
-    dialogs.with(|host| follow!(host, RecordStopDialog, InsertMenuItemDialog, SelectObjectDialog));
+    dialogs.with(|host| {
+        follow!(host, RecordStopDialog, InsertMenuItemDialog, SelectObjectDialog);
+    });
 }
 
 /// Moves every dialog that holds a set index: `f` gives the new index, or `None` to close it.
@@ -158,7 +184,6 @@ fn retarget_set_dialogs(app: &VectorcraftApp, f: impl Fn(usize) -> Option<usize>
     retarget_step_dialogs(app, |(set, action, step)| f(set).map(|set| (set, action, step)));
     let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
     dialogs.with(|host| {
-        // PLAN: assumed `BatchDialog { set: usize, action: usize }` and `SetOptionsDialog { set: Option<usize> }` (None: a new set).
         if let Some(d) = host.get_mut::<BatchDialog>() {
             match f(d.set) {
                 Some(set) => d.set = set,
@@ -180,6 +205,20 @@ fn retarget_set_dialogs(app: &VectorcraftApp, f: impl Fn(usize) -> Option<usize>
     });
 }
 
+/// Whether a dialog that holds a set index is open ([`retarget_set_dialogs`]).
+fn set_dialog_open(app: &VectorcraftApp) -> bool {
+    let placed = |target: Option<&Target>| target.is_some_and(|t| t.set.is_some());
+    app.dialogs().is_some_and(|dialogs| {
+        dialogs.with(|host| {
+            placed(host.get::<RecordStopDialog>().map(|d| &d.target))
+                || placed(host.get::<InsertMenuItemDialog>().map(|d| &d.target))
+                || placed(host.get::<SelectObjectDialog>().map(|d| &d.target))
+                || host.is_open::<BatchDialog>()
+                || host.get::<SetOptionsDialog>().is_some_and(|d| d.set.is_some())
+        })
+    })
+}
+
 /// Closes the dialogs of the deleted set `set` and moves those of later sets down.
 fn close_set_dialogs(app: &VectorcraftApp, set: usize) {
     retarget_set_dialogs(app, |held| match held.cmp(&set) {
@@ -189,17 +228,14 @@ fn close_set_dialogs(app: &VectorcraftApp, set: usize) {
     });
 }
 
-/// Moves the step dialogs of the steps after `step` in the action at (`set`, `action`) by `delta`, and closes
-/// the one on `step` itself when `delta` is -1 (the step was deleted).
-fn follow_step_dialogs(app: &VectorcraftApp, set: usize, action: usize, step: usize, delta: isize) {
-    retarget_step_dialogs(app, |(s, a, held)| {
-        if (s, a) != (set, action) || held < step {
-            return Some((s, a, held));
+/// Moves the step dialogs of the steps from `step` on in the action at (`set`, `action`) by `delta`,
+/// and closes the one on `step` itself when `delta` is negative (the step was deleted).
+pub(super) fn follow_step_dialogs(app: &VectorcraftApp, set: usize, action: usize, step: usize, delta: isize) {
+    retarget_step_dialogs(app, |(s, a, held)| match held {
+        Some(held) if (s, a) == (set, action) && held >= step => {
+            (held != step || delta >= 0).then(|| (s, a, Some(held.saturating_add_signed(delta))))
         }
-        if held == step && delta < 0 {
-            return None;
-        }
-        Some((s, a, held.saturating_add_signed(delta)))
+        _ => Some((s, a, held)),
     });
 }
 
@@ -222,7 +258,8 @@ pub fn include_steps(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
     if (step.is_some() && action.is_none()) || (others && step.is_none()) {
         return Err("no such action step".into());
     }
-    let members = model::members(&app.ui.actions, model::set_exists(&app.ui.actions, set).then_some(set).ok_or("no such action set")?);
+    let name = set_named(app, set)?;
+    let members = model::members(&app.ui.actions, &name);
     let targets: Vec<usize> = match action {
         None => members.clone(),
         Some(at) => vec![*members.get(at).ok_or("no such action")?],
@@ -233,34 +270,37 @@ pub fn include_steps(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
         return Err("no such action step".into());
     }
     // The exclusions each action gets, worked out before any of them changes.
-    let mut changes: Vec<(usize, std::collections::BTreeSet<usize>)> = Vec::new();
+    let mut changes: Vec<(usize, usize, BTreeSet<usize>)> = Vec::new();
     let (mut now, mut then) = (0, 0);
     for &flat in &targets {
         let Some(a) = app.ui.actions.action(flat) else { continue };
-        let count = app.ui.actions.step_count(flat);
-        let every = || if included { Default::default() } else { (0..count).collect() };
+        let count = a.steps.len();
+        let every = || if included { BTreeSet::new() } else { (0..count).collect() };
         let mut excluded = match step {
-            Some(_) if !others => a.excluded_steps.clone(),
+            Some(_) if !others => a.disabled.clone(),
             _ => every(),
         };
         if let Some(si) = step {
-            if if others { a.excluded_steps.contains(&si) } else { !included } {
+            if if others { a.disabled.contains(&si) } else { !included } {
                 excluded.insert(si);
             } else {
                 excluded.remove(&si);
             }
         }
-        now += a.excluded_steps.range(..count).count();
+        now += a.disabled.range(..count).count();
         then += excluded.range(..count).count();
-        changes.push((flat, excluded));
+        changes.push((flat, count, excluded));
     }
     // Each excluded step takes [`files::EXCLUDED_BYTES`] in the file; only exclusions past the
     // ones the set has now can make it too large.
-    if then > now && model::set_file_len(app, set) + (then - now) * files::EXCLUDED_BYTES > files::MAX_SET_FILE {
-        return Err("the action set would be larger than 8 MiB".into());
+    if then > now {
+        let [_, _, len] = model::set_sizes(app, &name, &model::stored_actions(&app.ui.actions, &name));
+        if len + (then - now) * files::EXCLUDED_BYTES > files::MAX_SET_FILE {
+            return Err("the action set would be larger than 8 MiB".into());
+        }
     }
-    for (flat, excluded) in changes {
-        for i in 0..app.ui.actions.step_count(flat) {
+    for (flat, count, excluded) in changes {
+        for i in 0..count {
             app.ui.actions.set_step(flat, i, !excluded.contains(&i)).map_err(list_error)?;
         }
     }
@@ -278,11 +318,11 @@ pub fn rename_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
     if name.is_empty() {
         return Err("name is empty".into());
     }
-    let mut kept = members_cloned(app, set);
-    if let Some(a) = kept.get_mut(at) {
-        a.name = name.to_string();
-    }
-    model::edit_keeps_set_loadable(app, Some(set), &kept)?;
+    keeps_loadable(app, &set_named(app, set)?, |actions| {
+        if let Some(a) = actions.get_mut(at) {
+            a.name = name.to_string();
+        }
+    })?;
     rename(app, flat, name)?;
     Ok(json!({ "name": name }))
 }
@@ -291,7 +331,7 @@ pub fn rename_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
 /// (spaces trimmed from both ends, made unique when taken) after the last action of set `set` (0 is the top set)
 /// and starts recording into it; Stop Playing/Recording ends the recording. `key` (1 to 15, F1 to F15; 0 or
 /// null for none) with `cmd` (Ctrl, Command on macOS) and `shift` is the function key that plays
-/// it, and `color` (one of [`COLORS`]; null or `""` for none) its Button Mode color. The action's
+/// it, and `color` (the file name of an [`ActionColor`]; null or `""` for none) its Button Mode color. The action's
 /// `automaticAlignTo` chooses Align's reference from the live selection at playback, false by default;
 /// its recorded step params stay as they are. The function key takes priority over command shortcuts.
 /// The set becomes current and the only selected set, and the new action is selected. While an
@@ -303,7 +343,7 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
         return Err("an action is already recording".into());
     }
     let set = index(p, "set").ok_or("no such action set")?;
-    let set_name = model::set_name(&app.ui.actions, set).ok_or("no such action set")?;
+    let set_name = set_named(app, set)?;
     let name = p.get("name").and_then(Value::as_str).map(str::trim).unwrap_or_default();
     if name.is_empty() {
         return Err("name is empty".into());
@@ -315,16 +355,13 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
         return Err(message);
     }
     let name = app.ui.actions.unique_name(name);
-    let mut action = Action::new(name.clone(), vec![]);
-    action.set = Some(set_name);
-    let mut kept = members_cloned(app, set);
-    kept.push(action.clone());
-    model::edit_keeps_set_loadable(app, Some(set), &kept)?;
+    let mut action = Action { set: Some(set_name.clone()), color, ..Action::new(name.clone(), vec![]) };
+    model::set_function_key(&mut action, key);
+    model::set_automatic_align_to(&mut action, automatic_align_to);
+    keeps_loadable(app, &set_name, |actions| actions.push(action.clone()))?;
     let flat = app.ui.actions.push(action).map_err(list_error)?;
-    app.ui.actions.set_color(flat, model::color(color.as_deref())).map_err(list_error)?;
-    model::set_options(&mut app.ui.actions, flat, key.map(Some), Some(automatic_align_to)).map_err(list_error)?;
-    super::recording::start_recording(app, set, name, Some(app.ui.actions.action(flat).map(|a| a.name.clone()).unwrap_or_default()));
-    select(app, set, flat, None);
+    super::recording::start_recording(app, set, name.clone(), Some(name));
+    select(app, flat, None);
     let at = model::place(&app.ui.actions, flat).map_or(0, |(_, at)| at);
     Ok(json!({ "set": set, "action": at }))
 }
@@ -332,16 +369,16 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
 /// `ui.action.options {set, action, name?, key?, cmd?, shift?, color?, automaticAlignTo?}`: changes the
 /// action at index `action` of set `set` (0 is the top set) and keeps its steps. `name` renames it
 /// (spaces trimmed from both ends), `key` (1 to 15, F1 to F15; 0 or null for none) with `cmd`
-/// (Ctrl, Command on macOS) and `shift` sets the function key that plays it, and `color` (one of
-/// [`COLORS`]; null or `""` for none) its Button Mode color; a param left out keeps what the action
-/// has, and `cmd` or `shift` alone changes that modifier of the action's key. `automaticAlignTo`
-/// chooses Align's reference from the live selection at playback; false uses the recorded targets,
-/// and omission or null keeps the choice. Stored steps stay unchanged. The action's function key
-/// takes priority over command shortcuts. An index past the last set or action, an empty name, a
-/// name another action has, a key or color that is not one of them, or a change that would give the
-/// set a file that Load Actions… refuses ([`model::edit_keeps_set_loadable`]) is an error, and then
-/// nothing changes. The panel menu's Action Options… runs this for the selected action.
-/// → {name, key, color, automaticAlignTo}
+/// (Ctrl, Command on macOS) and `shift` sets the function key that plays it, and `color` (the file
+/// name of an [`ActionColor`]; null or `""` for none) its Button Mode color; a param left out keeps
+/// what the action has, and `cmd` or `shift` alone changes that modifier of the action's key.
+/// `automaticAlignTo` chooses Align's reference from the live selection at playback; false uses the
+/// recorded targets, and omission or null keeps the choice. Stored steps stay unchanged. The
+/// action's function key takes priority over command shortcuts. An index past the last set or
+/// action, an empty name, a name another action has, a key or color that is not one of them, or a
+/// change that would give the set a file that Load Actions… refuses
+/// ([`model::edit_keeps_set_loadable`]) is an error, and then nothing changes. The panel menu's
+/// Action Options… runs this for the selected action. → {name, key, color, automaticAlignTo}
 pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (set, at, flat) = action_of(app, p)?;
     let had = app.ui.actions.action(flat).and_then(model::function_key);
@@ -371,25 +408,36 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     {
         return Err(message);
     }
+    // The action as the edit leaves it, measured in its set before anything changes.
+    let mut edited = app.ui.actions.action(flat).cloned().ok_or("no such action")?;
     if let Some(name) = &name {
-        let mut kept = members_cloned(app, set);
-        if let Some(a) = kept.get_mut(at) {
-            a.name = name.clone();
+        edited.name = name.clone();
+    }
+    if let Some(color) = color {
+        edited.color = color;
+    }
+    if let Some(key) = key {
+        model::set_function_key(&mut edited, key);
+    }
+    if let Some(on) = automatic_align_to {
+        model::set_automatic_align_to(&mut edited, on);
+    }
+    keeps_loadable(app, &set_named(app, set)?, |actions| {
+        if let Some(a) = actions.get_mut(at) {
+            *a = edited.clone();
         }
-        model::edit_keeps_set_loadable(app, Some(set), &kept)?;
+    })?;
+    if let Some(name) = &name {
         // The only edit that can be refused goes first, so a refusal changes nothing.
         rename(app, flat, name)?;
     }
-    if let Some(color) = color {
-        app.ui.actions.set_color(flat, model::color(color.as_deref())).map_err(list_error)?;
-    }
-    model::set_options(&mut app.ui.actions, flat, key, automatic_align_to).map_err(list_error)?;
-    let action = app.ui.actions.action(flat).ok_or("no such action")?;
+    app.ui.actions.set_color(flat, edited.color).map_err(list_error)?;
+    app.ui.actions.set_options(flat, edited.options.clone()).map_err(list_error)?;
     Ok(json!({
-        "name": action.name,
-        "key": model::function_key(action),
-        "color": action.color,
-        "automaticAlignTo": model::automatic_align_to(action),
+        "name": app.ui.actions.action(flat).map_or(edited.name.as_str(), |a| a.name.as_str()),
+        "key": model::function_key(&edited),
+        "color": (edited.color != ActionColor::None).then_some(edited.color.name()),
+        "automaticAlignTo": model::automatic_align_to(&edited),
     }))
 }
 
@@ -400,9 +448,9 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// action records is an error, and so is an `enabled` that is not true, false or null; then the
 /// view does not change. → {enabled}
 pub fn button_mode(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let button_mode = &mut app.ui.actions_panel.settings.button_mode;
-    let enabled = crate::menus::opt_bool(p, "enabled")?.unwrap_or(!*button_mode);
-    if enabled && !*button_mode && app.ui.recording.is_some() {
+    let on = app.ui.actions_panel.settings.button_mode;
+    let enabled = crate::menus::opt_bool(p, "enabled")?.unwrap_or(!on);
+    if enabled && !on && app.ui.recording.is_some() {
         return Err("an action is already recording".into());
     }
     app.ui.actions_panel.settings.button_mode = enabled;
@@ -423,7 +471,7 @@ pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         return Err("`params` must be an object".into());
     }
     let (message, allow_continue) = super::stop_params(p)?;
-    insert(app, p, (super::STOP_STEP.to_string(), json!({"message": message, "allowContinue": allow_continue})))
+    insert(app, p, ActionStep::new(super::STOP_STEP, json!({"message": message, "allowContinue": allow_continue})))
 }
 
 /// `ui.action.insertMenuItem {set?, action?, step?, command, params?}`: inserts the command of a
@@ -453,11 +501,11 @@ pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
         return Err("no menu item that can be inserted runs this command".into());
     }
     let params = match command {
-        "object.align" => super::super::align::menu_align_params(app, params),
+        "object.align" => crate::panels::align::menu_align_params(app, params),
         "effect.apply" => crate::dialogs::pathfinder_options::menu_effect_params(app, params),
         _ => params,
     };
-    insert(app, p, (command.to_string(), params))
+    insert(app, p, ActionStep::new(command, params))
 }
 
 /// `ui.action.insertSelectPath {set?, action?, step?}`: inserts a step that selects the path
@@ -475,7 +523,7 @@ pub fn insert_select_path(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
     }
     let st = app.session.active().ok_or("no document open")?;
     let params = vectorcraft_engine::stored_path_step(st)?;
-    insert(app, p, (SELECT_PATH_STEP.to_string(), params))
+    insert(app, p, ActionStep::new(SELECT_PATH_STEP, params))
 }
 
 /// The note, Case Sensitive and Whole Word in a Select Object step's params, the note without its
@@ -514,23 +562,23 @@ pub(crate) fn select_object_params(p: &Value) -> Result<(String, bool, bool), St
 /// step}, or {recording: true}
 pub fn insert_select_object(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (note, case_sensitive, whole_word) = select_object_params(p)?;
-    insert(app, p, (SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word})))
+    insert(app, p, ActionStep::new(SELECT_OBJECT_STEP, json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word})))
 }
 
 /// Puts `step` where params `p` say ([`insert_stop`]) → what [`insert_stop`] returns. When the
 /// recording in progress adds steps to the set, the limits count them as Stop Playing/Recording
 /// would leave the set.
-fn insert(app: &mut VectorcraftApp, p: &Value, (command, params): (String, Value)) -> Result<Value, String> {
+fn insert(app: &mut VectorcraftApp, p: &Value, step: ActionStep) -> Result<Value, String> {
     if p.get("set").is_none() && p.get("action").is_none() && p.get("step").is_none() {
         if app.ui.recording.is_none() {
             return Err("no such action".into());
         }
-        model::recording_room(app, &command, &params)?;
-        app.session.journal.push((command, params));
+        model::recording_room(app, &step.command, &step.params)?;
+        app.session.journal.push((step.command, step.params));
         return Ok(json!({"recording": true}));
     }
     let (set, at, flat) = action_of(app, p)?;
-    let recorded = model::recorded_into(app, set);
+    let recorded = super::recording::recorded_into(app, set);
     let pending = recorded.as_ref().filter(|r| r.into == Some(at)).map_or(0, |r| r.steps.len());
     let count = app.ui.actions.step_count(flat);
     let after = match p.get("step") {
@@ -540,13 +588,13 @@ fn insert(app: &mut VectorcraftApp, p: &Value, (command, params): (String, Value
     if count + pending >= files::MAX_ACTION_STEPS {
         return Err("the action already has 10,000 steps".into());
     }
-    app.ui.actions.insert_step(flat, after, ActionStep::new(command, params)).map_err(list_error)?;
-    // The file limit counts the steps the recording adds, so it runs on the set as it would be saved.
-    if let Err(e) = model::edit_keeps_set_loadable(app, Some(set), &members_cloned(app, set)) {
-        // Taking out the step just put in restores the exclusions it shifted.
-        app.ui.actions.delete_step(flat, after).map_err(list_error)?;
-        return Err(e);
-    }
+    keeps_loadable(app, &set_named(app, set)?, |actions| {
+        if let Some(a) = actions.get_mut(at) {
+            a.steps.insert(after, step.clone());
+            a.remap_steps(|i| Some(if i >= after { i + 1 } else { i }));
+        }
+    })?;
+    app.ui.actions.insert_step(flat, after, step).map_err(list_error)?;
     // The recording's steps stay after the steps that were before them.
     if let (Some(r), Some(slot)) = (&recorded, app.ui.recording_at)
         && r.into == Some(at)
@@ -554,7 +602,7 @@ fn insert(app: &mut VectorcraftApp, p: &Value, (command, params): (String, Value
     {
         app.ui.recording_at = Some(slot + 1);
     }
-    select(app, set, flat, Some(after));
+    select(app, flat, Some(after));
     Ok(json!({"set": set, "action": at, "step": after}))
 }
 
@@ -600,7 +648,7 @@ pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let step = index(p, "step").filter(|&s| s < app.ui.actions.step_count(source)).ok_or("no such action step")?;
     let to_set = match p.get("toSet") {
         None => set,
-        Some(_) => index(p, "toSet").filter(|&s| model::set_exists(&app.ui.actions, s)).ok_or("no such action set")?,
+        Some(_) => index(p, "toSet").filter(|&s| model::set_name(&app.ui.actions, s).is_some()).ok_or("no such action set")?,
     };
     let to_action = match p.get("toAction") {
         None => at,
@@ -615,16 +663,27 @@ pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     // The step's index once it is in place, counted without it in its own action.
     let to = if same && before > step { before - 1 } else { before };
     // The limits run on the sets as the move leaves them.
-    let mut from_kept = members_cloned(app, set);
-    let moved = from_kept.get_mut(at).filter(|a| step < a.steps.len()).map(|a| a.steps.remove(step)).ok_or("no such action step")?;
+    let moved = app.ui.actions.action(source).and_then(|a| a.steps.get(step)).cloned().ok_or("no such action step")?;
+    let take = |actions: &mut Vec<Action>| {
+        if let Some(a) = actions.get_mut(at) {
+            a.steps.remove(step);
+        }
+    };
+    let put = |actions: &mut Vec<Action>| {
+        if let Some(a) = actions.get_mut(to_action) {
+            a.steps.insert(to.min(a.steps.len()), moved.clone());
+        }
+    };
+    let (from_name, to_name) = (set_named(app, set)?, set_named(app, to_set)?);
     if to_set == set {
-        from_kept.get_mut(to_action).ok_or("no such action")?.steps.insert(to, moved);
+        keeps_loadable(app, &from_name, |actions| {
+            take(actions);
+            put(actions);
+        })?;
     } else {
-        let mut to_kept = members_cloned(app, to_set);
-        to_kept.get_mut(to_action).ok_or("no such action")?.steps.insert(to, moved);
-        model::edit_keeps_set_loadable(app, Some(to_set), &to_kept)?;
+        keeps_loadable(app, &to_name, put)?;
+        keeps_loadable(app, &from_name, take)?;
     }
-    model::edit_keeps_set_loadable(app, Some(set), &from_kept)?;
     let name_of = |app: &VectorcraftApp, flat: usize| app.ui.actions.action(flat).map(|a| a.name.clone());
     let (source_name, dest_name) = (name_of(app, source), name_of(app, dest));
     app.ui.actions.move_step(source, step, dest, to).map_err(list_error)?;
@@ -645,20 +704,18 @@ pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if let Some(ActionSelection::Step(a, s)) = app.ui.actions_panel.selected.clone() {
         let (a2, s2) = follow((a, s));
         if (a, s) == (source, step) {
-            select(app, to_set, a2, Some(s2));
+            select(app, a2, Some(s2));
         } else {
             app.ui.actions_panel.selected = Some(ActionSelection::Step(a2, s2));
         }
     }
     // A step dialog open on a step of either action follows it.
     retarget_step_dialogs(app, |(ds, da, held)| {
-        if (ds, da) != (set, at) && (ds, da) != (to_set, to_action) {
-            return Some((ds, da, held));
-        }
+        let Some(held) = held.filter(|_| (ds, da) == (set, at) || (ds, da) == (to_set, to_action)) else { return Some((ds, da, held)) };
         let id = if (ds, da) == (set, at) { source } else { dest };
         let (id, s) = follow((id, held));
         let (ds, da) = if id == dest { (to_set, to_action) } else { (set, at) };
-        Some((ds, da, s))
+        Some((ds, da, Some(s)))
     });
     Ok(json!({"set": to_set, "action": to_action, "step": to, "moved": true}))
 }
@@ -666,42 +723,46 @@ pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 /// Makes the set named `name`, empty, and selects it. A name that is empty or taken is an error.
 pub(crate) fn new_set(app: &mut VectorcraftApp, name: &str) -> Result<(), String> {
     let name = name.trim();
-    let mut kept = vec![];
-    model::edit_keeps_set_loadable(app, None, &mut kept)?;
     app.ui.actions.new_set(name).map_err(list_error)?;
-    app.ui.action_set = app.ui.actions.sets().iter().position(|s| *s == name);
+    app.ui.action_set = Some(name.to_string());
     app.ui.actions_panel.selected = Some(ActionSelection::Set(name.to_string()));
     app.ui.actions_panel.selected_sets = vec![name.to_string()];
     Ok(())
 }
 
-/// Renames the set `set` to `name`; a selection, a collapse and an open dialog keep the set.
+/// Renames the set `set` to `name`; a selection, a collapse, the current set and an open dialog keep
+/// the set.
 pub(crate) fn rename_set(app: &mut VectorcraftApp, set: &str, name: &str) -> Result<(), String> {
     let name = name.trim();
     app.ui.actions.rename_set(set, name).map_err(list_error)?;
-    let panel = &mut app.ui.actions_panel;
+    // A recording into the set measures its file again.
+    app.ui.recording_base = None;
     let renamed = |s: &mut String| {
         if s == set {
             *s = name.to_string();
         }
     };
+    let panel = &mut app.ui.actions_panel;
     if let Some(ActionSelection::Set(s)) = &mut panel.selected {
         renamed(s);
     }
     panel.selected_sets.iter_mut().for_each(renamed);
     panel.settings.collapsed_sets.iter_mut().for_each(renamed);
+    if let Some(current) = &mut app.ui.action_set {
+        renamed(current);
+    }
     Ok(())
 }
 
 /// `ui.actionSet.delete {names?: [name]}`: deletes the action sets with these names, with their
 /// actions (default: the current set). A name that is gone is an error ("the action sets changed;
 /// nothing was deleted") and nothing is deleted. A recording into a deleted set stops, and its steps
-/// are dropped; a recording into another set goes on. An open Set Options, New Action or Batch dialog
-/// for a deleted set closes. When the current set is deleted, no set is current afterwards. → {deleted: n}
+/// are dropped; a recording into another set goes on. An open Set Options, Batch or step dialog for
+/// a deleted set closes. When the current set is deleted, no set is current afterwards. → {deleted: n}
 pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let sets: Vec<String> = app.ui.actions.sets().into_iter().map(str::to_string).collect();
     let names: Vec<String> = match p.get("names") {
-        None | Some(Value::Null) => app.ui.action_set.and_then(|s| sets.get(s)).cloned().into_iter().collect(),
+        None | Some(Value::Null) => app.ui.action_set.clone().filter(|current| sets.contains(current)).into_iter().collect(),
         Some(v) => v
             .as_array()
             .ok_or("the action set names are not a list")?
@@ -714,7 +775,9 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     at.dedup();
     // The selected action is found again by name once the list has shifted.
     let selected = match &app.ui.actions_panel.selected {
-        Some(ActionSelection::Action(i) | ActionSelection::Step(i, _)) => app.ui.actions.action(*i).map(|a| (a.name.clone(), model::place(&app.ui.actions, *i))),
+        Some(ActionSelection::Action(i) | ActionSelection::Step(i, _)) => {
+            app.ui.actions.action(*i).map(|a| (a.name.clone(), model::place(&app.ui.actions, *i)))
+        }
         _ => None,
     };
     let selected_step = match app.ui.actions_panel.selected {
@@ -738,7 +801,7 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         }
     }
     if !at.is_empty() {
-        app.ui.action_set = app.ui.action_set.filter(|c| !at.contains(c)).map(|c| c - at.iter().filter(|&&s| s < c).count());
+        app.ui.action_set = app.ui.action_set.take().filter(|current| !names.contains(current));
         let panel = &mut app.ui.actions_panel;
         panel.selected_sets.clear();
         if matches!(&panel.selected, Some(ActionSelection::Set(s)) if names.contains(s)) {
@@ -766,32 +829,37 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
 /// error, and nothing is copied. → {set, action?}
 pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let set = match p.get("set") {
-        None | Some(Value::Null) => app.ui.action_set.filter(|&s| model::set_exists(&app.ui.actions, s)).ok_or("no action set is current")?,
-        Some(_) => index(p, "set").filter(|&s| model::set_exists(&app.ui.actions, s)).ok_or("no such action set")?,
+        None | Some(Value::Null) => app
+            .ui
+            .action_set
+            .as_deref()
+            .and_then(|current| app.ui.actions.sets().iter().position(|s| *s == current))
+            .ok_or("no action set is current")?,
+        Some(_) => index(p, "set").filter(|&s| model::set_name(&app.ui.actions, s).is_some()).ok_or("no such action set")?,
     };
-    let members = model::members(&app.ui.actions, set);
+    let name = set_named(app, set)?;
+    let members = model::members(&app.ui.actions, &name);
     let action = match p.get("action") {
         None | Some(Value::Null) => None,
         Some(_) => Some(index(p, "action").filter(|&a| a < members.len()).ok_or("no such action")?),
     };
     if let Some(at) = action {
         let flat = *members.get(at).ok_or("no such action")?;
-        let mut kept = members_cloned(app, set);
-        if let Some(copy) = kept.get(at).cloned() {
-            kept.insert(at + 1, copy);
-        }
-        model::edit_keeps_set_loadable(app, Some(set), &kept)?;
+        keeps_loadable(app, &name, |actions| {
+            if let Some(copy) = actions.get(at).cloned() {
+                actions.insert(at + 1, copy);
+            }
+        })?;
         // The steps hold engine commands only, so nothing in them points at an action.
         let copy = app.ui.actions.duplicate_action(flat, |_, _, _| {}).map_err(list_error)?;
         // A Record Stop, Insert Menu Item or Set Selection dialog open on a later action of the set follows it down.
         retarget_step_dialogs(app, |(s, a, step)| Some((s, if s == set && a > at { a + 1 } else { a }, step)));
         retarget_batch_actions(app, |(s, a)| (s, if s == set && a > at { a + 1 } else { a }));
-        select(app, set, copy, None);
+        select(app, copy, None);
         return Ok(json!({ "set": set, "action": at + 1 }));
     }
-    let name = model::set_name(&app.ui.actions, set).ok_or("no such action set")?;
-    let copied: Vec<Action> = members_cloned(app, set);
-    model::edit_keeps_set_loadable(app, None, &copied)?;
+    // The copy is a new set, measured as Load Actions… measures one.
+    model::edit_keeps_set_loadable(app, &name, &[], &model::stored_actions(&app.ui.actions, &name))?;
     let copy = app.ui.actions.duplicate_set(&name, |_, _, _| {}).map_err(list_error)?;
     let at = app.ui.actions.sets().iter().position(|s| *s == copy).ok_or("no such action set")?;
     if let Some((rec, ..)) = app.ui.recording.as_mut()
@@ -800,7 +868,7 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         *rec += 1;
     }
     retarget_set_dialogs(app, |held| Some(if held >= at { held + 1 } else { held }));
-    app.ui.action_set = Some(at);
+    app.ui.action_set = Some(copy.clone());
     let panel = &mut app.ui.actions_panel;
     panel.selected = Some(ActionSelection::Set(copy.clone()));
     panel.selected_sets = vec![copy];
@@ -818,13 +886,23 @@ fn retarget_batch_actions(app: &VectorcraftApp, f: impl Fn((usize, usize)) -> (u
     }
 }
 
-/// Ends the panel's per-list state after the whole list changed: nothing is selected, expanded or open.
+/// Ends the panel's per-list state after the whole list changed: nothing is selected or expanded,
+/// and no dialog that holds a set stays open.
 fn clear_panel(app: &mut VectorcraftApp) {
     let panel = &mut app.ui.actions_panel;
     panel.selected = None;
     panel.selected_sets.clear();
     panel.expanded.clear();
     retarget_set_dialogs(app, |_| None);
+}
+
+/// After Reset Actions or Replace Actions… put new sets in place of every set: the first becomes
+/// current and selected, and the panel clears what named the old sets ([`clear_panel`]).
+pub(super) fn replace_sets(app: &mut VectorcraftApp) {
+    clear_panel(app);
+    let first = app.ui.actions.sets().first().map(|s| s.to_string());
+    app.ui.actions_panel.selected_sets = first.iter().cloned().collect();
+    app.ui.action_set = first;
 }
 
 /// Refuses a whole-list command while an action records or plays (also while it waits at a stop).
@@ -851,10 +929,10 @@ fn object_params<'a>(p: &'a Value, only: &str) -> Result<Option<&'a serde_json::
 }
 
 /// `ui.actionSet.reset {mode?: "replace" | "append"}`: Reset Actions. `replace` (the default)
-/// replaces every set in the panel with a new copy of the built-in sets ([`model::default_actions`]), makes
-/// the first one current and selected, clears the panel's selected action and step and its expanded
-/// actions, and closes an open Set Options, New Action, Batch or step dialog that names a set. When
-/// the panel already shows the built-in sets, nothing changes. `append` adds a new copy of the
+/// replaces every set in the panel with a new copy of the built-in sets ([`model::default_sets`]),
+/// makes the first one current and selected, clears the panel's selected action and step and its
+/// expanded actions, and closes an open Set Options, Batch or step dialog that names a set. When the
+/// panel already shows the built-in sets that way, nothing changes. `append` adds a new copy of the
 /// built-in sets after the sets there are, a name already in use getting the next free number
 /// (`Default Actions 2`), and keeps the current set and the selection. Omitted params (`null`) count as
 /// `{}`. Params of another type, another key, or another `mode` is an error, and so is a reset while
@@ -870,43 +948,34 @@ pub fn reset(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         },
     };
     require_idle(app)?;
-    let mut defaults = model::default_actions();
     if append {
         let first = app.ui.actions.sets().len();
-        let mut renamed: Vec<(String, String)> = Vec::new();
-        for action in &mut defaults {
-            let Some(old) = action.set.clone() else { continue };
-            let free = match renamed.iter().find(|(o, _)| *o == old) {
-                Some((_, free)) => free.clone(),
-                None => {
-                    let free = model::free_set_name(&app.ui.actions, &old);
-                    renamed.push((old, free.clone()));
-                    free
-                }
-            };
-            action.set = Some(free);
-        }
-        // PLAN: assumed `ActionList::reset(&mut self, defaults: Vec<Action>, append: bool) -> bool` (whether the list changed; keeps one undo of the whole-list command).
-        app.ui.actions.reset(defaults, true);
+        app.ui.actions.reset(model::default_sets(), true, |_, _| {});
         return Ok(json!({ "changed": true, "mode": "append", "set": first }));
     }
-    let changed = app.ui.actions.reset(defaults, false);
-    if changed {
-        clear_panel(app);
-        app.ui.action_set = Some(0);
-        let first = app.ui.actions.sets().first().map(|s| s.to_string());
-        app.ui.actions_panel.selected_sets = first.into_iter().collect();
+    let defaults = model::default_list();
+    let first = defaults.sets().first().map(|s| s.to_string());
+    let panel = &app.ui.actions_panel;
+    let shown = app.ui.action_set == first
+        && panel.selected_sets.iter().eq(first.iter())
+        && panel.selected.is_none()
+        && panel.expanded.is_empty()
+        && !set_dialog_open(app);
+    if shown && app.ui.actions.actions() == defaults.actions() && app.ui.actions.sets() == defaults.sets() {
+        return Ok(json!({ "changed": false, "mode": "replace", "set": 0 }));
     }
-    Ok(json!({ "changed": changed, "mode": "replace", "set": 0 }))
+    app.ui.actions.reset(model::default_sets(), false, |_, _| {});
+    replace_sets(app);
+    Ok(json!({ "changed": true, "mode": "replace", "set": 0 }))
 }
 
 /// `ui.actionSet.clear {names?: [name]}`: Clear Actions. Deletes every set in the panel with its
 /// actions, the built-in Default Actions set included, so no set is current or selected; the
 /// panel's selected action and step and its expanded actions are cleared, and an open Set Options,
-/// New Action, Batch or step dialog that names a set closes. `names` holds the panel's set names in
-/// panel order, which the menu's question passes: when the sets are no longer exactly those, nothing
-/// is deleted. With no sets, nothing changes. Omitted params (`null`) count as `{}`. Params of another
-/// type, another key, `names` that is not a list of names, or a clear while an action records or plays
+/// Batch or step dialog that names a set closes. `names` holds the panel's set names in panel order,
+/// which the menu's question passes: when the sets are no longer exactly those, nothing is deleted.
+/// With no sets, nothing changes. Omitted params (`null`) count as `{}`. Params of another type,
+/// another key, `names` that is not a list of names, or a clear while an action records or plays
 /// (also while it waits at a stop) is an error, and then nothing changes. No undo step is recorded.
 /// → {cleared: the number of sets deleted}
 pub fn clear(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -928,7 +997,6 @@ pub fn clear(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if cleared == 0 {
         return Ok(json!({ "cleared": 0 }));
     }
-    // PLAN: assumed `ActionList::clear_all(&mut self)`; keeps one undo of the whole-list command.
     app.ui.actions.clear_all();
     app.ui.action_set = None;
     clear_panel(app);
@@ -936,29 +1004,29 @@ pub fn clear(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Opens the question of deleting the sets `names`; the answer runs [`DELETE_SETS`] ([`take_answers`]).
-pub(crate) fn ask_delete(app: &VectorcraftApp, names: Vec<String>) {
+pub(crate) fn ask_delete(app: &mut VectorcraftApp, names: Vec<String>) {
     let prompt = StandardPrompt::confirm_delete(names.iter().take(4), names.len()).tag(names);
-    open_question(app, prompt);
+    open_or_say(app, ActionsQuestion(prompt));
 }
 
-/// Opens Clear All Actions' question; OK runs [`CLEAR`].
-pub(crate) fn ask_clear(app: &VectorcraftApp) {
-    open_question(app, library_prompt(&LibraryPrompt::ClearAll));
+/// Opens Clear Actions' question; OK runs [`CLEAR`].
+pub(crate) fn ask_clear(app: &mut VectorcraftApp) {
+    ask_library(app, &LibraryPrompt::ClearAll);
 }
 
 /// Opens Reset Actions' question; OK runs [`RESET`] replacing, Append runs it appending.
-pub(crate) fn ask_reset(app: &VectorcraftApp) {
-    open_question(app, library_prompt(&LibraryPrompt::Reset));
+pub(crate) fn ask_reset(app: &mut VectorcraftApp) {
+    ask_library(app, &LibraryPrompt::Reset);
 }
 
-fn library_prompt(question: &LibraryPrompt) -> StandardPrompt {
-    // PLAN: assumed the panel's words are the defaults until the app's catalogs reach this module.
-    question.prompt(&ActionsWords::default(), &CommonWords::default())
-}
-
-fn open_question(app: &VectorcraftApp, prompt: StandardPrompt) {
-    if let Some(dialogs) = app.dialogs() {
-        dialogs.with(|host| host.open(ActionsQuestion(prompt)));
+/// Opens the panel's question `question`, in the interface language.
+fn ask_library(app: &mut VectorcraftApp, question: &LibraryPrompt) {
+    match app.ui_ctx.as_ref().map(Env::of_root) {
+        Some(env) => {
+            let prompt = question.prompt(&env.words::<ActionsWords>(), &env.words::<CommonWords>());
+            open_or_say(app, ActionsQuestion(prompt));
+        }
+        None => app.status("no window"),
     }
 }
 

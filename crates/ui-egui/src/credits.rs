@@ -2,7 +2,7 @@
 //! with recorded consent) and the AI models that helped. The tables are baked into the binary by
 //! build.rs from contributors/contributors.json; nothing is read at run time.
 
-use craft::behavior::canvas::zoom::about::{self, AboutInfo, AboutLink, Credits, HostedAbout, ModelCredit};
+use craft::ui::patterns::form_dialogs::{self as about, AboutInfo, AboutLink, Credits, HostedAbout, ModelCredit};
 
 use crate::VectorcraftApp;
 
@@ -69,7 +69,8 @@ pub(crate) fn discord_url(app: &mut VectorcraftApp) -> String {
 pub fn about_info(app: &mut VectorcraftApp) -> AboutInfo {
     let discord = discord_url(app);
     let links = crate::community::link_urls(app).map(|(label, url)| AboutLink::new(tl!(label), url));
-    let mut built_with = tl!("Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.").to_string();
+    let mut built_with =
+        tl!("Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.").to_string();
     // The GPU the window renders with, for bug reports (Preferences › Performance picks it).
     if let Some(adapter) = &app.graphics_adapter {
         built_with.push('\n');

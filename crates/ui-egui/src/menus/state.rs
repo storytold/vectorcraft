@@ -71,7 +71,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             .get("group")
             .and_then(Value::as_str)
             .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
-        "window.toolbar" => app.ui.toolbar,
+        "window.toolbar" => crate::toolbar::shown(&app.ui),
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
         "window.toolbarCompact" => app.ui.toolbar_compact,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
@@ -104,7 +104,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(&app.ui, id))
+            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(app, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
@@ -315,15 +315,8 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
             app.session.active().is_some()
         }
-        "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
-            (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
-                && crate::dialogs::char_style_options::can_reset(d)
-        }),
-        "ui.paraStyleOptions.resetPanel" => app
-            .ui
-            .dialog
-            .as_ref()
-            .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
+        "ui.charStyleOptions.resetPanel" => style_tab_resets(app, false),
+        "ui.paraStyleOptions.resetPanel" => style_tab_resets(app, true),
         "ui.newArtboard" | "artboard.selectAll" | crate::dialogs::check_spelling::COMMAND => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
@@ -405,5 +398,23 @@ fn selected_placed(app: &VectorcraftApp) -> bool {
 pub(super) fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObject) -> bool) -> bool {
     app.session.active().is_some_and(|st| {
         st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(&n.kind, vectorcraft_doc::NodeKind::Image(im) if keep(im))))
+    })
+}
+
+/// Whether the open paragraph (`para`) or character style dialog, its options or a new style, has settings on its
+/// shown tab for Reset Panel to clear.
+fn style_tab_resets(app: &VectorcraftApp, para: bool) -> bool {
+    use crate::dialogs::char_style_options::CharStyleOptions;
+    use crate::dialogs::new_text_style::NewTextStyle;
+    use crate::dialogs::para_style_options::ParaStyleOptions;
+    app.dialogs().is_some_and(|dialogs| {
+        dialogs.with(|host| {
+            let options = if para {
+                host.get_mut::<ParaStyleOptions>().map(|d| d.hosted_mut().can_reset_tab())
+            } else {
+                host.get_mut::<CharStyleOptions>().map(|d| d.hosted_mut().can_reset_tab())
+            };
+            options.or_else(|| host.get_mut::<NewTextStyle>().filter(|d| d.para == para).map(|d| d.hosted_mut().can_reset_tab())).unwrap_or(false)
+        })
     })
 }

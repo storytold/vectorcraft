@@ -15,15 +15,16 @@ use vectorcraft_pdf::Overprint;
 
 // PLAN: assumed the facade `craft_ui` re-exports these framework items at its root.
 use craft::ui::contract::{Bind, TooltipSpec};
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, HostedPdfExport, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, HostedPdfExport, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::patterns::presets::{NamedPresetEvent, PresetPicker, PresetRow};
-use craft::ui::value_drag::SliderScale;
 use craft::ui::runtime::env::UnitKind;
+use craft::ui::value_drag::SliderScale;
 
-use super::form::{self, LivePreview}; // PLAN: assumed `LivePreview` (wg.A20) lives in `form`
-use super::host::{HeldOptions, open_held_with}; // PLAN: assumed wg.A17 lives in `dialogs::host`
-use super::save_pdf::SavePdfJob; // PLAN: assumed ex.A12's `SavePdfJob` is `pub(crate)` there
+use super::form;
+use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
+use super::save_pdf::SavePdfJob;
 use crate::VectorcraftApp;
 
 /// The key of the Flatten Transparency dialog.
@@ -69,9 +70,7 @@ pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
 /// `reasons` is what their tooltip says.
 pub(crate) fn option_params(fixed: &[&str], reasons: &str) -> Vec<Param> {
     let d = FlattenOptions::default();
-    let ppi = |key, label, default| {
-        Param::number(key, label, default, 1.0, 0).bounds(Some(1.0), Some(2400.0)).unit(UnitKind::PixelsPerInch)
-    };
+    let ppi = |key, label, default| Param::number(key, label, default, 1.0, 0).bounds(Some(1.0), Some(2400.0)).unit(UnitKind::PixelsPerInch);
     let switches = [
         ("textToOutlines", tl!("Convert All Text to Outlines")),
         ("strokesToOutlines", tl!("Convert All Strokes to Outlines")),
@@ -125,13 +124,7 @@ pub(crate) fn preset_rows(app: &VectorcraftApp) -> (Vec<PresetRow<String>>, Vec<
 
 /// A picker over `presets` bound to the text field `key`, for a `Param::custom` row. While
 /// `custom` is true no preset is current and the picker shows `[Custom]`.
-pub(crate) fn preset_picker(
-    ui: &mut egui::Ui,
-    fields: &mut DialogFields,
-    key: &str,
-    presets: &[PresetRow<String>],
-    custom: bool,
-) -> egui::Response {
+pub(crate) fn preset_picker(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, presets: &[PresetRow<String>], custom: bool) -> egui::Response {
     let current = if custom { None } else { fields.text(key).map(str::to_string) };
     let mut value = current.clone();
     // PLAN: assumed `PresetPicker::new(label, value, rows, state)`, `.placeholder(..)` and a `show` output with `.response`.
@@ -179,10 +172,7 @@ pub(crate) fn custom_dialog(ctx: &egui::Context, parent: &HostedPdfExport, job: 
         ParamDialog::new(
             CUSTOM_KEY,
             tl!("Custom Transparency Flattener Options"),
-            option_params(
-                &FIXED,
-                tl!("PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept."),
-            ),
+            option_params(&FIXED, tl!("PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.")),
         )
     })
 }
@@ -333,9 +323,7 @@ mod tests {
     /// A document with a half-transparent red square over a blue one, both selected.
     fn scene() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        app.ui_ctx = Some(ctx);
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         for (x, color) in [(10, "#0000ff"), (60, "#ff0000")] {
             let id = app.run("shape.rectangle", json!({"x": x, "y": x, "width": 100, "height": 100})).unwrap()["id"].clone();
@@ -378,7 +366,8 @@ mod tests {
 
     fn confirm(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().unwrap();
-        assert!(app.dialogs().unwrap().with(|h| h.confirm::<HostedParamDialog>(&ctx)) || true);
+        // A held OK answers in the frames after the press.
+        app.dialogs().unwrap().with(|h| h.confirm::<HostedParamDialog>(&ctx));
         frame(app);
         frame(app);
     }

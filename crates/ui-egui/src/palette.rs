@@ -469,7 +469,9 @@ fn tool_home(app: &VectorcraftApp, tool: &str) -> String {
         Some(t) => crate::i18n::fmt(tl!("{toolbar}, in the {tool} group"), &[("tool", crate::i18n::tr(lang, t.label)), ("toolbar", name)]),
         None => name.to_string(),
     };
-    let toolbars_shown = app.ui.screen_mode < 3 && app.ui.tab_hid.is_none();
+    // Tab hides every toolbar with the panels, as the main window's shell left it.
+    let tab_hidden = app.ui_ctx.as_ref().is_some_and(|ctx| craft::ui::shell::chrome_state(ctx, egui::ViewportId::ROOT).hidden);
+    let toolbars_shown = app.ui.screen_mode < 3 && !tab_hidden;
     let main = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool));
     // A group torn off into a strip shows each of its tools on its own button.
     let main = main.map(|slot| {
@@ -488,7 +490,7 @@ fn tool_home(app: &VectorcraftApp, tool: &str) -> String {
         })
     };
     if toolbars_shown {
-        if app.ui.toolbar
+        if crate::toolbar::shown(&app.ui)
             && let Some(main) = &main
         {
             return main.clone();
@@ -756,6 +758,7 @@ mod tests {
     use super::*;
     use craft::ui::menu::rank;
     use craft::ui::runtime::commands::{self, FirePhase, FireSource, Fired, ResolvedCommand};
+    use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
     use craft::ui::runtime::overlay;
     use serde_json::json;
     use vectorcraft_engine::Session;
@@ -772,8 +775,7 @@ mod tests {
     /// Fires `command` from `source` and runs it as the window runs a fired command.
     fn fire(app: &mut VectorcraftApp, ctx: &egui::Context, command: CommandRef, source: FireSource) {
         let fired = Fired::new(command, source, FirePhase::Press, ctx.input(|i| i.time));
-        // PLAN: assumed menus-w6 `menus::run_fired(&mut VectorcraftApp, &egui::Context, &Fired)`, which calls `record_pick` for a palette pick that ran; shortcuts-w9 wrote this runner as `shortcuts::run_fired`
-        crate::menus::run_fired(app, ctx, &fired);
+        crate::shortcuts::run_fired(app, ctx, &fired);
     }
 
     /// A pick of result `id`: the command its entry runs ([`crate::keymap::command_of`]), fired
@@ -849,7 +851,12 @@ mod tests {
     fn haystack(e: &HelpEntry) -> String {
         let english = e.english().map_or("", |l| l.as_str());
         let path = e.path().iter().map(|p| p.as_str()).collect::<Vec<_>>().join(" › ");
-        [english, e.label().as_str(), path.as_str()].into_iter().chain(e.ids().iter().map(String::as_str)).collect::<Vec<_>>().join("\n").to_lowercase()
+        [english, e.label().as_str(), path.as_str()]
+            .into_iter()
+            .chain(e.ids().iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .to_lowercase()
     }
 
     /// The ids of the results whose texts hold every word of `query` ([`haystack`]).
@@ -958,7 +965,8 @@ mod tests {
     }
 
     /// The Asset Export commands the palette lists.
-    const ASSET_EXPORT: [&str; 6] = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set", "assets.export3D", "assets.set3DFormat"];
+    const ASSET_EXPORT: [&str; 6] =
+        ["assets.export", "assets.remove", "assets.rename", "assets.settings.set", "assets.export3D", "assets.set3DFormat"];
 
     /// #4864: a pick of an Asset Export command, which the palette runs with no params, opens the
     /// Asset Export panel instead of failing on the missing params or exporting nowhere.
@@ -1095,8 +1103,11 @@ mod tests {
     /// nothing and reports why the command can't run.
     #[test]
     fn a_pick_of_a_dimmed_command_says_why_it_cannot_run() {
-        let cases =
-            [("addon.image.removeBackground", Fixture::Multi.session()), ("object.createObjectMosaic", Fixture::Multi.session()), ("edit.findReplace", Session::new())];
+        let cases = [
+            ("addon.image.removeBackground", Fixture::Multi.session()),
+            ("object.createObjectMosaic", Fixture::Multi.session()),
+            ("edit.findReplace", Session::new()),
+        ];
         for (id, session) in cases {
             let mut app = app_on(session);
             assert!(!menus::enabled(&app, id), "{id}");
@@ -1814,10 +1825,8 @@ mod tests {
             assert_eq!(home(&format!("tool:{tool}")), tool_home(&app, tool), "{tool}");
         }
         assert!(!label("tool:knife").contains(" › "), "{}", label("tool:knife"));
-        let none = entries
-            .iter()
-            .find(|e| !is_tool(e) && e.home().is_some_and(|h| h.as_str() == tl!("No menu item")))
-            .expect("a command with no menu item");
+        let none =
+            entries.iter().find(|e| !is_tool(e) && e.home().is_some_and(|h| h.as_str() == tl!("No menu item"))).expect("a command with no menu item");
         assert_eq!(none.label().as_str(), name_of(&names(Lang::EN), id_of(none)), "a row with no home keeps its whole name");
     }
 
@@ -1860,7 +1869,9 @@ mod tests {
     /// comes before a hidden toolbar made with New Toolbar.
     #[test]
     fn a_tool_row_names_its_toolbar_slot() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        // A window, so Tab hides the chrome in the shell's pass.
+        let mut window = Window::on(Session::new());
+        let app = &mut window.app;
         let home = |app: &VectorcraftApp, id: &str| home_of(app, id);
         assert_eq!(home(&app, "tool:groupSelection"), "Toolbar, in the Direct Selection Tool group");
         assert_eq!(home(&app, "tool:directSelection"), "Toolbar");
@@ -1880,7 +1891,7 @@ mod tests {
         };
         // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
         // Tool: the row names that toolbar.
-        app.ui.toolbar = false;
+        crate::toolbar::set_shown(&mut app.ui, false);
         assert_eq!(home(&app, "tool:pen"), "Toolbar");
         app.ui.custom_toolbars.push(bar("Drawing", &["pen", "curvature"], true));
         assert_eq!(home(&app, "tool:pen"), "Drawing");
@@ -1889,11 +1900,14 @@ mod tests {
         assert_eq!(home(&app, "tool:curvature"), "{tool}, in the Pen Tool group");
         app.ui.custom_toolbars[0].name = "Drawing".into();
         // Tab hides the toolbars made with New Toolbar too: the hidden Tools panel comes first.
-        app.ui.tab_hid = Some(crate::state::TabHid { dock: true, toolbar: true, control_bar: true });
-        assert_eq!(home(&app, "tool:pen"), "Toolbar");
-        app.ui.tab_hid = None;
+        request_chrome_toggle(&window.ctx, egui::ViewportId::ROOT, ChromeToggle::Panels);
+        window.frame(vec![]);
+        assert_eq!(home(&window.app, "tool:pen"), "Toolbar");
+        request_chrome_toggle(&window.ctx, egui::ViewportId::ROOT, ChromeToggle::ShowPanels);
+        window.frame(vec![]);
+        let app = &mut window.app;
         // The Tools panel shown again comes first.
-        app.ui.toolbar = true;
+        crate::toolbar::set_shown(&mut app.ui, true);
         assert_eq!(home(&app, "tool:pen"), "Toolbar");
         // In Presentation Mode no toolbar shows; the tool still lives on the Tools panel.
         app.ui.screen_mode = 3;
@@ -2041,10 +2055,8 @@ mod tests {
     #[test]
     fn no_reason_shows_a_command_id() {
         let window = Window::on(Session::new());
-        let reasons: Vec<(String, String)> = items()
-            .into_iter()
-            .filter_map(|(_, id, _)| hint_of(&window.resolved(&id)).map(|why| (id, why)))
-            .collect();
+        let reasons: Vec<(String, String)> =
+            items().into_iter().filter_map(|(_, id, _)| hint_of(&window.resolved(&id)).map(|why| (id, why))).collect();
         assert!(reasons.len() > 100, "with no document most results can't run: {}", reasons.len());
         for (id, why) in &reasons {
             let command = crate::keymap::command_of(id).id;

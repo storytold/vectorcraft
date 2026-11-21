@@ -7,8 +7,9 @@ use std::rc::Rc;
 use serde_json::json;
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{Written, app_saving, confirm, fields, frame, kind, names, rgba, set};
+use super::tests_export::{Written, app_saving, confirm, fields, frame, kind, names, on_save, rgba, set};
 use super::*;
+use crate::VectorcraftApp;
 
 /// The last file written, as text.
 fn last_text(written: &Written) -> String {
@@ -22,9 +23,9 @@ fn png_size(png: &[u8]) -> (u32, u32) {
 }
 
 /// Pick `path` in the next save panels.
-fn picking(app: &mut VectorcraftApp, path: &str) {
+fn picking(path: &str) {
     let picked = path.to_string();
-    app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+    on_save(move |_| Some(picked.clone()));
 }
 
 /// How many paths a native document's JSON (or the input an exporter plug-in is given) holds.
@@ -42,7 +43,7 @@ fn export_selection_continues_in_each_formats_options() {
     for (ext, options) in [("pdf", "savePdf"), ("svg", "svgOptions"), ("png", "pngOptions"), ("eps", "epsOptions"), ("dxf", "dxfOptions")] {
         let path = format!("/out/sel.{ext}");
         let before = names(&written).len();
-        picking(&mut app, &path);
+        picking(&path);
         app.run("document.exportSelection", json!({})).unwrap();
         assert_eq!(kind(&app).as_deref(), Some(options), "{ext}");
         assert_eq!(names(&written).len(), before, "{ext}: nothing is written before OK");
@@ -111,7 +112,7 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
     app.run("file.exportAs", json!({"path": "/out/all.vectorcraft"})).unwrap();
     let all = paths_in(&written.borrow().last().unwrap().1);
-    picking(&mut app, "/out/sel.vectorcraft");
+    picking("/out/sel.vectorcraft");
     app.run("document.exportSelection", json!({})).unwrap();
     assert!(kind(&app).is_none(), "written at once");
     assert_eq!(names(&written).last().map(String::as_str), Some("/out/sel.vectorcraft"));
@@ -123,7 +124,7 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
     {
         let wasm = wat::parse_str(tpl::echo_exporter(&tpl::exporter(id, &format!(r#"["{ext}"]"#), params), Echo::Input)).unwrap();
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
-        picking(&mut app, &format!("/out/sel.{ext}"));
+        picking(&format!("/out/sel.{ext}"));
         app.run("document.exportSelection", json!({})).unwrap();
         if params != "{}" {
             assert!(kind(&app).is_some(), "{id} asks for its parameters");
@@ -201,10 +202,10 @@ fn nothing_selected_stops_before_the_save_panel() {
     app.run("select.none", json!({})).unwrap();
     let asked = Rc::new(Cell::new(false));
     let a = asked.clone();
-    app.services.pick_save = Some(Box::new(move |_| {
+    on_save(move |_| {
         a.set(true);
         Some("/out/sel.pdf".into())
-    }));
+    });
     let e = app.run("document.exportSelection", json!({})).unwrap_err();
     assert!(e.contains("select something to export"), "{e}");
     assert!(!asked.get() && kind(&app).is_none() && written.borrow().is_empty());

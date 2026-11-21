@@ -7,14 +7,16 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use craft::ui::contract::{Bind, TooltipSpec};
+use craft::ui::contract::{Bind, Scroll, Show as _, ShowContainer as _, TooltipSpec};
+use craft::ui::dialog::DialogId;
+use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::text::SelectableText;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio;
 
 use super::export_host::{self, After, Export, Open};
-// PLAN: assumed `form::{fields_of, json_of}` (wg.S12, widgets-w12) live in `dialogs::form`.
 use super::form::{fields_of, json_of};
 use super::png_options::{check, choice};
 use crate::{VectorcraftApp, io};
@@ -67,7 +69,7 @@ pub(crate) struct SvgCodeKey {
     options: String,
     roots: Option<String>,
     path: Option<String>,
-    selected: Option<Vec<vectorcraft_doc::ObjectId>>,
+    selected: Option<Vec<vectorcraft_doc::NodeId>>,
 }
 
 /// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
@@ -254,8 +256,8 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
         Mode::Save => "file.saveAs",
         Mode::SaveCopy => "file.saveCopy",
     };
-    // PLAN: assumed `After: From<Value>` (the command's result, what ex.A1's `confirm` hands the host).
-    app.run(id, params).map(After::from)
+    // The command runs in OK, so a refusal keeps the dialog open; nothing follows its closing.
+    app.run(id, params).map(|_| None)
 }
 
 /// The SVG options the dialog's OK writes with: [`options`], with hidden layers kept (not
@@ -340,7 +342,7 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
         let stem = fileio::file_stem(&st.doc.title);
         let (doc, enc) = encode_page(st, &svg, selection)?;
         let dir = super::preview_folders::temp_folder_under(PREVIEW_ROOT)?;
-        let target = format!("{dir}/{}.svg", super::save_for_web::preview_name(&stem));
+        let target = format!("{dir}/{}.svg", super::preview_folders::preview_name(&stem));
         let named = enc.named(&doc, &target);
         for (p, bytes) in &named {
             io::write_to(&mut app.services, p, bytes).inspect_err(|_| super::preview_folders::remove_preview_folder(&dir))?;
@@ -394,27 +396,30 @@ fn code_text(app: &mut VectorcraftApp, mode: Mode, selection: bool, fields: &Dia
     Some(text)
 }
 
-/// Fills the open dialog's code view with the SVG the options write, while Show Code is on; the
-/// host calls it each pass.
-pub(super) fn refresh_code(app: &mut VectorcraftApp, dialog: &mut HostedParamDialog, mode: Mode, selection: bool) {
-    if dialog.fields().bool("showCode") != Some(true) {
+/// Fills the code view of the open dialog `id` with the SVG the options write, while Show Code is
+/// on; the export host calls it each pass. The document is encoded with no lock on the host held.
+pub(super) fn refresh_code(app: &mut VectorcraftApp, id: DialogId, mode: Mode, selection: bool) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(fields) = dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())) else { return };
+    if fields.bool("showCode") != Some(true) {
         return;
     }
-    let Some(text) = code_text(app, mode, selection, dialog.fields()) else { return };
-    if dialog.fields().text("__code") != Some(&*text) {
-        dialog.set_field("__code", FieldValue::Text(text.to_string()));
+    let Some(text) = code_text(app, mode, selection, &fields) else { return };
+    if fields.text("__code") != Some(&*text) {
+        dialogs.with(|h| h.get_mut_by_id::<HostedParamDialog>(id).map(|d| d.set_field("__code", FieldValue::Text(text.to_string()))));
     }
 }
 
 /// The code view row: the text `refresh_code` keeps in `__code`, read-only and selectable.
 fn code_view(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) -> egui::Response {
     let code = fields.text("__code").unwrap_or_default();
-    // PLAN: the sheet names `Stack` + `Scroll::vertical()` + `SelectableText::mono().multiline()`; their builders are not in this tree.
-    egui::ScrollArea::vertical()
-        .max_height(260.0)
-        .auto_shrink([false, true])
-        .show(ui, |ui| ui.add(egui::Label::new(egui::RichText::new(code).monospace()).selectable(true)))
-        .inner
+    Stack::new()
+        .scroll(Scroll::vertical())
+        .room_height(260.0)
+        .show(ui, |ui, _| {
+            SelectableText::new(tl!("Code"), code).mono().multiline().show(ui);
+        })
+        .output
 }
 
 #[cfg(test)]
@@ -424,10 +429,10 @@ mod tests {
 
     use vectorcraft_engine::Session;
 
-    use super::super::tests_export::{frame, kind, set};
+    use super::super::tests_export::{confirm, frame, kind, set, try_confirm};
     use super::super::tests_raster_formats::fields;
     use super::*;
-    use crate::{Services, theme};
+    use crate::Services;
 
     type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
@@ -443,6 +448,7 @@ mod tests {
             ..Default::default()
         };
         let mut app = VectorcraftApp::new(Session::new(), services);
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 120, "height": 80, "artboards": 2})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
         (app, written)
@@ -460,10 +466,8 @@ mod tests {
 
     /// The URLs the app asked egui to open in one frame.
     fn open_urls(app: &mut VectorcraftApp) -> Vec<String> {
-        // PLAN: hub-w3 deletes `Services::open_url`; the URL reaches the frame as `OutputCommand::OpenUrl`.
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        let out = ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx()));
+        let ctx = app.ui_ctx.clone().expect("a test app has a window");
+        let out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
         out.platform_output
             .commands
             .iter()
@@ -514,10 +518,10 @@ mod tests {
         assert_eq!(opened, [io::file_url(&path)]);
         assert_eq!(written.borrow().len(), 1);
         assert_eq!(written.borrow()[0].0, path);
-        assert_eq!(kind(&app), Some(KIND), "the dialog stays open");
+        assert_eq!(kind(&app).as_deref(), Some(KIND), "the dialog stays open");
         assert_eq!(app.ui.svg_options, remembered, "nothing is remembered");
         assert!(app.session.active().unwrap().path.is_none());
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(written.borrow()[1].0, "/tmp/out.svg");
         assert_eq!(text(&written, 0), text(&written, 1), "the preview is the file OK writes");
         opened.extend(open_urls(&mut app));
@@ -534,7 +538,7 @@ mod tests {
         set(&mut app, "range", json!("5"));
         assert!(show_in_browser(&mut app, Mode::Export, false).is_err());
         assert!(written.borrow().is_empty() && open_urls(&mut app).is_empty());
-        assert_eq!(kind(&app), Some(KIND));
+        assert_eq!(kind(&app).as_deref(), Some(KIND));
     }
 
     /// A write that fails opens nothing and removes the folder made for that preview.
@@ -556,7 +560,7 @@ mod tests {
         app.run("shape.rectangle", json!({"x": 70, "y": 40, "width": 20, "height": 20})).unwrap();
         start(&mut app, Mode::Export, "/tmp/selection.svg", true);
         show_in_browser(&mut app, Mode::Export, true).unwrap_or_else(|e| panic!("{e}"));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(written.borrow()[1].0, "/tmp/selection.svg");
         assert_eq!(text(&written, 0), text(&written, 1));
         assert_eq!(text(&written, 0).matches("<rect").count(), 1, "{}", text(&written, 0));
@@ -574,7 +578,7 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.path.as_deref(), st.is_dirty()), (None, dirty));
         assert_eq!(open_urls(&mut app).len(), 1);
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(written.borrow()[1].0, "/tmp/doc.svg");
         assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/tmp/doc.svg"));
     }
@@ -590,7 +594,7 @@ mod tests {
         app.run("layer.setProps", json!({"id": notes, "visible": false})).unwrap();
         start(&mut app, Mode::Save, "/tmp/doc.svg", false);
         show_in_browser(&mut app, Mode::Save, false).unwrap_or_else(|e| panic!("{e}"));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert!(text(&written, 0).contains("id=\"Notes\""), "{}", text(&written, 0));
         assert_eq!(text(&written, 0).replace("<title>Untitled-1</title>", "<title>doc</title>"), text(&written, 1));
     }
@@ -641,15 +645,15 @@ mod tests {
     fn export_as_svg_opens_the_options_and_remembers_them() {
         let (mut app, written) = app();
         start(&mut app, Mode::Export, "/tmp/out.svg", false);
-        assert_eq!(kind(&app), Some(KIND));
+        assert_eq!(kind(&app).as_deref(), Some(KIND));
         // Show Code draws the SVG the options write.
         set(&mut app, "showCode", json!(true));
         frame(&mut app);
-        assert_eq!(kind(&app), Some(KIND));
+        assert_eq!(kind(&app).as_deref(), Some(KIND));
         set(&mut app, "decimals", json!(1));
         set(&mut app, "allArtboards", json!(false));
         set(&mut app, "range", json!("1"));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(kind(&app), None);
         let svg = text(&written, 0);
         assert_eq!(written.borrow()[0].0, "/tmp/out.svg");
@@ -670,8 +674,8 @@ mod tests {
         let before = app.ui.svg_options.clone();
         set(&mut app, "allArtboards", json!(false));
         set(&mut app, "range", json!("9"));
-        assert!(super::super::confirm(&mut app).is_err());
-        assert_eq!(kind(&app), Some(KIND));
+        assert!(try_confirm(&mut app).is_err());
+        assert_eq!(kind(&app).as_deref(), Some(KIND));
         assert!(written.borrow().is_empty());
         assert_eq!(app.ui.svg_options, before);
     }
@@ -750,7 +754,7 @@ mod tests {
         start(&mut app, Mode::Export, "/tmp/selection.svg", true);
         set(&mut app, "showCode", json!(true));
         let code = code(&mut app, None);
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         let svg = text(&written, 0);
         assert_eq!(written.borrow()[0].0, "/tmp/selection.svg");
         assert_eq!(code, svg, "Show Code shows what OK writes");
@@ -770,7 +774,7 @@ mod tests {
         let o = written_options(Mode::Save, &fields(&app));
         let keys = o.as_object().unwrap();
         assert!(UI_KEYS.iter().all(|k| !keys.contains_key(*k)) && keys.keys().all(|k| !k.starts_with("__")), "{o}");
-        super::super::confirm(&mut app).unwrap_or_else(|e| panic!("{e}"));
+        try_confirm(&mut app).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(written.borrow()[0].0, "/tmp/panel.svg");
     }
 
@@ -778,7 +782,7 @@ mod tests {
     fn all_artboards_export_one_file_each() {
         let (mut app, written) = app();
         start(&mut app, Mode::Export, "/tmp/set.svg", false);
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         let names: Vec<String> = written.borrow().iter().map(|(p, _)| p.clone()).collect();
         assert_eq!(names, ["/tmp/set-Artboard-1.svg", "/tmp/set-Artboard-2.svg"]);
     }
@@ -791,7 +795,7 @@ mod tests {
         frame(&mut app);
         assert_eq!(fields(&app).text("path"), Some("/tmp/doc.svg"));
         set(&mut app, "styling", json!("style"));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert!(text(&written, 0).contains("style=\"fill:"));
         let st = app.session.active().unwrap();
         assert_eq!(st.path.as_deref(), Some("/tmp/doc.svg"));
@@ -820,7 +824,7 @@ mod tests {
         app.run("file.saveAs", json!({"path": "/tmp/doc.svg"})).unwrap();
         frame(&mut app);
         assert!(fields(&app).get("artboard").is_none());
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
     }
 
@@ -837,7 +841,7 @@ mod tests {
         frame(&mut app);
         assert_ne!(fields(&app).bool("variableData"), Some(true), "off at first");
         set(&mut app, "variableData", json!(true));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         let svg = text(&written, 0);
         assert!(svg.contains("<variable varName=\"Name\"") && svg.contains("dataSetName=\"Row\"") && svg.contains("<p>Bob</p>"), "{svg}");
     }
@@ -853,7 +857,7 @@ mod tests {
         // Tiny shows Presentation Attributes (disabled) and greys out Embed Fonts; the code view
         // reads the Latin-1 file.
         frame(&mut app);
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         let bytes = written.borrow()[0].1.clone();
         assert!(bytes.starts_with(b"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"));
         let svg = vectorcraft_svg::text_of(&bytes).unwrap();
@@ -862,7 +866,7 @@ mod tests {
         start(&mut app, Mode::Export, "/tmp/tiny.svg", false);
         set(&mut app, "profile", json!("svg11"));
         set(&mut app, "embedFonts", json!(true));
-        super::super::confirm(&mut app).unwrap();
+        confirm(&mut app);
         // Two artboards: two files each time; the type is on the first.
         assert_eq!(written.borrow().len(), 4);
         assert!(String::from_utf8_lossy(&written.borrow()[2].1).contains("@font-face{"));

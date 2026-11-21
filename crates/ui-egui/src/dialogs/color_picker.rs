@@ -24,6 +24,7 @@ use vectorcraft_doc::ColorMode;
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
 
+use super::preview::LivePreview;
 use crate::panels::color::{color_of_values, gamut, model_values};
 use crate::panels::color_json;
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries};
@@ -52,8 +53,8 @@ pub(crate) struct Open {
     pub start: Srgba,
     /// OK with `start` unchanged leaves the target as it is (an artboard opened without a `color`).
     pub keep: bool,
-    /// The params of the last preview on the art.
-    pub previewed: Option<Value>,
+    /// The live preview of its colour on the target.
+    pub preview: LivePreview,
 }
 
 /// The records of the colour area's open dialogs: one holder, so the app has one field for them.
@@ -105,7 +106,7 @@ pub(crate) fn open_picker(app: &VectorcraftApp) -> Option<DialogId> {
 /// The document's swatches and the swatch libraries as the picker's Color Swatches view: solid
 /// colours only, tints as their colour.
 fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
-    let solid = |swatches: &[vectorcraft_doc::Swatch]| -> Vec<(Label, Srgba)> {
+    let solid = |swatches: &[vectorcraft_color::Swatch]| -> Vec<(Label, Srgba)> {
         swatches.iter().filter_map(|s| Some((Label::from(s.name.as_str()), srgba_of(&s.paint.color()?)))).collect()
     };
     let mut libraries = Vec::new();
@@ -183,7 +184,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     // OK with the artboard's color (or the white that stands in for none) unchanged keeps the artboard as it is.
     let keep = artboard.is_some() && p.get("color").is_none();
-    app.color_dialogs.pickers.push(Open { id, target, start, keep, previewed: None });
+    app.color_dialogs.pickers.push(Open { id, target, start, keep, preview: LivePreview::default() });
     Ok(Value::Null)
 }
 
@@ -197,7 +198,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let key = request.key.clone();
         let child = ColorPickerDialog::from_request(request).eyedropper(true).add_to_swatches(false).gamut(gamut(app));
         let id = dialogs.with(|h| h.open_child(child, parent));
-        app.color_dialogs.pickers.push(Open { id, target: Target::Answer { parent, key }, start, keep: false, previewed: None });
+        app.color_dialogs.pickers.push(Open { id, target: Target::Answer { parent, key }, start, keep: false, preview: LivePreview::default() });
     }
     let busy = app.screen_pick.busy();
     let mut pickers = std::mem::take(&mut app.color_dialogs.pickers);
@@ -237,19 +238,21 @@ fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &craft::ui::sh
 }
 
 /// What a closed picker did: OK writes its colour, Cancel puts the art back.
-fn finish(app: &mut VectorcraftApp, dialogs: &craft::ui::shell::WindowDialogs, open: &Open, result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>) {
+fn finish(
+    app: &mut VectorcraftApp,
+    dialogs: &craft::ui::shell::WindowDialogs,
+    open: &mut Open,
+    result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>,
+) {
+    let preview = std::mem::take(&mut open.preview);
     match (result, &open.target) {
         (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => dialogs.with(|h| h.answer_color(*parent, key, r.picked.color)),
         (Some(DialogResult::Ok(r)), _) => {
-            if let Err(e) = commit(app, open, &r.picked) {
+            if let Err(e) = commit(app, open, preview, &r.picked) {
                 app.status(e);
             }
         }
-        _ => {
-            if open.previewed.is_some() {
-                let _ = app.session.cancel_interaction();
-            }
-        }
+        _ => preview.cancel(app),
     }
 }
 
@@ -284,7 +287,7 @@ fn preview(app: &mut VectorcraftApp, open: &mut Open, picked: &PickedColor) {
     let untouched = !app.session.in_interaction() && picked.color == open.start;
     let artboard = matches!(open.target, Target::Artboard(_));
     let selected = artboard || app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
-    if untouched || !selected || open.previewed.as_ref() == Some(&params) {
+    if untouched || !selected {
         return;
     }
     let label = match open.target {
@@ -292,26 +295,18 @@ fn preview(app: &mut VectorcraftApp, open: &mut Open, picked: &PickedColor) {
         Target::Stroke => "Stroke Color",
         _ => "Fill Color",
     };
-    // A failure to begin (typing that can't be kept) shows, and nothing previews.
-    if let Err(e) = app.begin_interaction(label) {
-        app.status(e);
-        return;
-    }
-    if let Err(e) = app.session.preview(cmd, &params) {
-        app.status(e.to_string());
-    }
-    open.previewed = Some(params);
+    open.preview.run(app, true, label, cmd, &params);
 }
 
 /// OK: apply the colour to the target, keeping the live preview as one undo step. An untouched
 /// artboard picker with `keep` leaves the artboard as it was.
-fn commit(app: &mut VectorcraftApp, open: &Open, picked: &PickedColor) -> Result<(), String> {
+fn commit(app: &mut VectorcraftApp, open: &Open, preview: LivePreview, picked: &PickedColor) -> Result<(), String> {
     if open.keep && !app.session.in_interaction() && picked.color == open.start {
         return Ok(());
     }
     let c = in_document_model(app, color_of(picked));
     let (cmd, params) = paint_command(&open.target, c);
-    super::form::commit_preview(app, cmd, params)?;
+    preview.commit(app, cmd, params)?;
     // A color picked for the fill or stroke also becomes the Color Guide's base color.
     if !matches!(open.target, Target::Artboard(_)) {
         crate::panels::color_guide::choose_base(app, c);

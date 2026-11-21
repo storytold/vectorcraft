@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::{CanvasView, DropOperation, Input, Metrics, Sense};
-use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer}; // PLAN: assumed path of the ui-canvas items
+use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer};
 use craft::ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, Pointer as _, Props, Role, Show as _};
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Pos2, Rect, Response, Ui, Vec2};
@@ -18,11 +18,12 @@ use super::BodyKind;
 use super::outline::{hit_at, hit_with};
 use crate::VectorcraftApp;
 use crate::doc_windows::Win;
-use crate::panels::brushes::BrushKey;
-use crate::panels::graphic_styles::StyleKey;
-use crate::panels::libraries::{LibraryKey, LibraryKind}; // PLAN: assumed `LibraryKind::of_panel(&str) -> Option<LibraryKind>` with Graphic, Symbol, Brush
-use crate::panels::symbols::SymbolKey;
 use crate::panel_drag::PanelDrag;
+use crate::panels::brushes::BrushKey;
+use crate::panels::brushes::BrushLibraries;
+use crate::panels::graphic_styles::StyleKey;
+use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
+use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 
 /// Artwork a Selection move carries out of its canvas: the objects the move started with (an Alt-copy's preview copies
 /// are not carried), the press point they were grabbed at, and the source's revision when the carry began, so an edited
@@ -126,11 +127,8 @@ impl Component for CanvasDrops<'_> {
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let rect = cx.rect();
         let sources = &self.sources;
-        let art = Target {
-            rect,
-            view: &self.view,
-            make: |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())),
-        };
+        let art =
+            Target { rect, view: &self.view, make: |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())) };
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
         if self.kind == BodyKind::Live {
             let to = |make: fn(&_) -> Option<Payload>| Target { rect, view: &self.view, make };
@@ -216,27 +214,29 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 let (dx, dy) = (at.x - art.grab.x, at.y - art.grab.y);
                 run(app, "object.move", json!({"ids": art.ids, "dx": dx, "dy": dy, "copy": drop.op == DropOperation::Copy}))
             } else {
-                run(app, "edit.dropSelection", json!({"sourceDocument": art.document, "ids": art.ids, "grab": [art.grab.x, art.grab.y], "at": [at.x, at.y]}))
+                run(
+                    app,
+                    "edit.dropSelection",
+                    json!({"sourceDocument": art.document, "ids": art.ids, "grab": [art.grab.x, art.grab.y], "at": [at.x, at.y]}),
+                )
             }
         }
-        Payload::Symbol(key) => {
-            run(app, "symbol.placeFromDocument", json!({"sourceDocument": key.doc, "name": key.name, "x": at.x, "y": at.y}))
-        }
+        Payload::Symbol(key) => run(app, "symbol.placeFromDocument", json!({"sourceDocument": key.doc, "name": key.name, "x": at.x, "y": at.y})),
         Payload::Library(key) if key.folder => Ok(()),
-        Payload::Library(key) => match LibraryKind::of_panel(&key.panel) {
-            Some(LibraryKind::Graphic) => {
-                run(app, "library.use", json!({"library": key.panel, "kind": "graphic", "item": key.name, "center": [at.x, at.y]}))
+        Payload::Library(key) => match library_panel::parse(&key.panel) {
+            Some((kind, library)) if kind.kind == SymbolLibraries::KIND => {
+                run(app, "symbol.addFromLibrary", json!({"library": library, "name": key.name, "place": true, "x": at.x, "y": at.y}))
             }
-            Some(LibraryKind::Symbol) => {
-                run(app, "symbol.addFromLibrary", json!({"library": key.panel, "name": key.name, "place": true, "x": at.x, "y": at.y}))
-            }
-            Some(LibraryKind::Brush) => {
+            Some((kind, library)) if kind.kind == BrushLibraries::KIND => {
                 let Some(hit) = hit() else { return Ok(()) };
                 let owner = owner(app, &hit)?;
-                run(app, "brush.addFromLibrary", json!({"library": key.panel, "name": key.name, "apply": true, "ids": [owner]}))
+                run(app, "brush.addFromLibrary", json!({"library": library, "name": key.name, "apply": true, "ids": [owner]}))
             }
-            None => Ok(()),
+            _ => Ok(()),
         },
+        Payload::Panel(PanelDrag::LibraryGraphic { library, item }) => {
+            run(app, "library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]}))
+        }
         Payload::Brush(key) => match hit() {
             None if brush_has_art(app, key) => run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y})),
             None => Ok(()),

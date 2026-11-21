@@ -11,13 +11,14 @@ use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 
+/// The key of the Replace Brush Art question.
+pub const KIND: &str = "brushReplaceArt";
+
 /// The Replace Brush Art prompt; `StandardPrompt` has one id and one result type for every custom
 /// prompt, so each question is a type of its own.
 pub struct ReplaceArtQuestion(StandardPrompt);
 
-// PLAN: assumed `prompt_wrapper!(Wrapper)` in dialogs/confirm.rs (widgets-w10): the delegating
-// `impl StackDialog` over the wrapper's one `StandardPrompt` field.
-super::confirm::prompt_wrapper!(ReplaceArtQuestion);
+super::confirm::wrapped_dialog!(ReplaceArtQuestion, StandardPrompt, KIND);
 
 /// What the question is about: the document it was asked in, the brush and the art.
 struct ReplaceArtAsk {

@@ -1,14 +1,14 @@
 use craft::behavior::{CanvasView, EditEvent};
+use craft::ui::canvas::{PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
+use craft::ui::contract::{Rename, Show as _};
 use craft::ui::primitives::Checker;
 use craft::ui::style::DataColor;
-use craft::ui::canvas::{DocRect, PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
-use craft::ui::contract::Component;
-use craft::font_catalog::system::collection::Rename;
+use egui::Color32;
 use serde_json::json;
+use vectorcraft_geom::{BezPath, Point};
 
-use super::{BezPath, Color32, Point, VectorcraftApp, View};
-// PLAN: assumed `BodyKind { Live, Pane }` and `CanvasSpace` at `super::` (canvas-w10, cv.S2); the contract names them.
-use super::{BodyKind, CanvasSpace};
+use super::{BodyKind, CanvasSpace, VectorcraftApp};
+use crate::View;
 use crate::doc_windows::Win;
 
 /// The length on screen, in points, of each arm of an artboard's center mark (a cross), at any zoom.
@@ -16,10 +16,6 @@ const CENTER_MARK_ARM: f32 = 6.0;
 
 /// The fade's color: black at 40% opacity, which shows each channel under it at 60% of its value.
 pub(super) const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
-
-fn doc_rect(r: vectorcraft_geom::Rect) -> DocRect {
-    DocRect::new(r.x0, r.y0, r.x1, r.y1)
-}
 
 fn closed(r: vectorcraft_geom::Rect) -> BezPath {
     let mut path = BezPath::new();
@@ -33,11 +29,8 @@ fn closed(r: vectorcraft_geom::Rect) -> BezPath {
 
 /// The transparency grid's cells: the setup's two colors and its cell size.
 pub(super) fn checker_of(setup: &vectorcraft_doc::DocSetup) -> Checker {
-    let mut checker = Checker::new();
-    checker.size = Some(setup.grid_size.cell());
     let [light, dark] = setup.grid_colors.map(|c| DataColor::new(crate::panels::c32(&c)));
-    (checker.light, checker.dark) = (Some(light), Some(dark));
-    checker
+    Checker::new().size(setup.grid_size.cell()).colors(light, dark)
 }
 
 /// The page frames of document `st` seen through `view`: one per artboard, named "01 - name" with the
@@ -56,7 +49,7 @@ pub(super) fn frames(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, vi
         .iter()
         .enumerate()
         .map(|(i, ab)| {
-            let mut frame = PageFrame::new(doc_rect(ab.rect)).active(i == view.artboard).renames(!ab.locked);
+            let mut frame = PageFrame::new(ab.rect).active(i == view.artboard).renames(!ab.locked);
             if named {
                 frame = frame.name(format!("{:02} - {}", i + 1, ab.name));
             }
@@ -93,7 +86,7 @@ pub(super) fn apply(app: &mut VectorcraftApp, out: &PasteboardOutput) -> Option<
     if let Some((i, mods)) = out.name_clicked {
         select_named_artboard(app, i, mods.shift);
     }
-    if let Some(EditEvent::Commit(Rename { key, name })) = &out.rename {
+    if let Some(EditEvent::Commit(Rename { key, name, .. })) = &out.rename {
         commit_artboard_name(app, *key, name);
     }
     out.context_at
@@ -101,12 +94,12 @@ pub(super) fn apply(app: &mut VectorcraftApp, out: &PasteboardOutput) -> Option<
 
 /// Shows the pasteboard and artboards of window `win`'s document. `Live` applies what it reports and
 /// returns the menu point; `Pane` is display only.
-pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, _space: &CanvasSpace, win: Win, kind: BodyKind) -> Option<Point> {
+pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, win: Win, kind: BodyKind) -> Option<Point> {
     let (Some(st), Some(view)) = (app.session.documents().get(win.0), crate::doc_windows::view(app, win)) else { return None };
     let outline = view.outline;
     let list = frames(app, st, view, outline);
-    // PLAN: assumed `Component::show(ui) -> PasteboardOutput` for `Pasteboard`; its color is the canvas's (canvas-w10 decisions).
-    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside(true).show(ui);
+    // The pasteboard's colour is the canvas's (`Canvas::pasteboard`).
+    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside(true).show_at(ui, space.view.rect);
     match kind {
         BodyKind::Live => apply(app, &out),
         BodyKind::Pane => None,

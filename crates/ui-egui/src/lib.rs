@@ -177,6 +177,8 @@ pub struct VectorcraftApp {
     pub(crate) channel: Option<ControlChannel>,
     /// The window captures the control channel asked for.
     pub(crate) captures: Captures,
+    /// Where a control-channel Rotate View drag began, kept between its requests.
+    pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// The egui context the UI's textures were uploaded to (0: none yet; see
     /// [`Self::adopt_context`]).
     context: u64,
@@ -216,10 +218,6 @@ pub struct VectorcraftApp {
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
     /// while the internal clipboard is empty. It enables the Paste menu items.
     pub(crate) system_paste: bool,
-    /// The modifiers held when an egui `PasteImage` asked the rich system clipboard to be read.
-    /// Consumed once by the next `tick`; storing the paste-time chord keeps a later pass's stale
-    /// modifiers from choosing Paste in Place instead of Paste (or the reverse).
-    pub(crate) clipboard_image_request: Option<egui::Modifiers>,
     /// When `system_paste` was last checked in line (app time, s; at most once per frame).
     system_paste_at: f64,
     /// File dialogs shown off the UI thread, what runs again with their answers, and the replace
@@ -257,13 +255,12 @@ pub struct VectorcraftApp {
     /// The menu bar's model and the command states the frame publishes.
     pub(crate) menus: menus::model::Menus,
     /// The Keyboard Shortcuts dialog, while it is open.
-    // PLAN: assumed `crate::shortcut_editor::ShortcutsDialogState` (kb.C27 names the type, not its module; shortcuts-w8).
     pub(crate) shortcuts_dialog: Option<shortcut_editor::ShortcutsDialogState>,
     /// The bindings the active shortcut set changes, as the key stage takes them: rebuilt from
     /// [`UiState::shortcut_sets`] when the set changes.
     pub(crate) shortcut_overrides: Arc<craft::keymap::Overrides>,
     /// Messages waiting for the dialog that shows them.
-    pub(crate) told: dialogs::Told,
+    pub(crate) told: dialogs::host::Told,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
@@ -290,9 +287,6 @@ pub struct VectorcraftApp {
     // PLAN: export-w17 asks for the open Save PDF record's field (ex.A12), but no row in this set's bundle gives its name or type; export-w17 adds it.
     /// The open dialogs of the Object menu.
     pub(crate) object_dialogs: dialogs::object_dialogs::ObjectDialogs,
-    /// The open tool option dialogs.
-    // PLAN: assumed `crate::dialogs::tools::ToolDialogs` (sheet note 5 names the field only; object-dialogs-w5 owns dialogs/tools.rs).
-    pub(crate) tool_dialogs: dialogs::tools::ToolDialogs,
     /// The open dialogs of the colour area.
     pub(crate) color_dialogs: dialogs::color_picker::ColorDialogs,
     /// The plug-in dialog, while one is open.

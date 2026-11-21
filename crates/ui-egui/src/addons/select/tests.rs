@@ -111,5 +111,9 @@ fn a_search_keeps_the_choice_it_hides_and_a_double_click_fits_its_artboard() {
     crate::dialogs::host::pump(&mut app, &window);
     assert_eq!(app.view().unwrap().artboard, 2, "the artboard is active");
     assert!(host(&app, |h| h.is_open::<ArtboardsDialog>()), "the dialog stays open");
-    assert_eq!(host(&app, |h| h.get::<ArtboardsDialog>().map(|d| (d.fields.artboards.clone(), d.go_to))), Some((vec![0, 1], None)), "the choice is kept, the request done");
+    assert_eq!(
+        host(&app, |h| h.get::<ArtboardsDialog>().map(|d| (d.fields.artboards.clone(), d.go_to))),
+        Some((vec![0, 1], None)),
+        "the choice is kept, the request done"
+    );
 }

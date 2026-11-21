@@ -1,12 +1,13 @@
 //! The 3D dialog through the app frame: what its controls do to the document.
 use egui::{Event, Key, Modifiers, PointerButton, vec2};
 use serde_json::{Value, json};
-use vectorcraft_effects::{
-    CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, INFLATE, REVOLVE, ROTATE, ROTATION_PRESETS, merged_params,
-};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, INFLATE, REVOLVE, ROTATE, ROTATION_PRESETS, merged_params};
 use vectorcraft_engine::Session;
 
-use std::{cell::{RefCell, RefMut}, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
 use craft::ui::testing::{Fixture, Target};
 
@@ -59,14 +60,12 @@ impl ThreeD {
     }
 
     fn json(&self, key: &str) -> Value {
-        // PLAN: assumed `json_fields()` returns a `serde_json::Map<String, Value>`
-        three_d::with_fields(&mut self.app(), |d| d.json_fields().get(key).cloned().unwrap_or(Value::Null))
+        three_d::with_fields(&mut self.app(), |d| d.json_fields().and_then(|f| f.get(key).cloned())).flatten().unwrap_or(Value::Null)
     }
 
     /// The surfaces of the object the Map Art page shows.
-    fn surfaces(&self) -> Option<Vec<vectorcraft_effects::Surface>> {
-        // PLAN: assumed `Session.data.surfaces: Vec<Surface>` visible to this crate
-        self.app().three_d_dialog.as_ref().map(|s| s.data.surfaces.clone())
+    fn surfaces(&self) -> Option<std::sync::Arc<Vec<vectorcraft_effects::MapSurface>>> {
+        self.app().three_d_dialog.as_ref().and_then(|s| s.data.read().unwrap().surfaces.clone())
     }
 
     fn target(&self, name: &str) -> Target {
@@ -294,7 +293,9 @@ fn automatic_smooth_shading_previews_saves_and_respects_cancel_and_one_step_undo
                 .appearance
                 .items
                 .iter()
-                .filter(|item| matches!(item, vectorcraft_doc::AppearanceItem::Fill(f) if matches!(f.paint, vectorcraft_doc::color::Paint::Gradient(_))))
+                .filter(
+                    |item| matches!(item, vectorcraft_doc::AppearanceItem::Fill(f) if matches!(f.paint, vectorcraft_doc::color::Paint::Gradient(_))),
+                )
                 .count();
         });
         count
@@ -402,10 +403,9 @@ fn the_track_cube_is_off_while_a_rotation_is_mixed() {
     ])));
     fields.borrow_mut().set_mixed("rotationX");
     let shown = fields.clone();
-    let params = [super::super::three_d_classic::track_cube::row()];
-    // PLAN: assumed `ParamRows::new(label, &[Param], Bind<DialogFields>)` and `Bind::new(&mut T)`
+    let params = [super::super::track_cube::row()];
     let mut fixture = craft::ui::testing::Fixture::new(move |ui| {
-        craft::ui::patterns::form_dialogs::ParamRows::new("Rotation", &params, craft::ui::contract::Bind::new(&mut shown.borrow_mut())).show(ui);
+        craft::ui::patterns::form_dialogs::ParamRows::new("Rotation", &params, craft::ui::contract::Bind::bound(&mut *shown.borrow_mut())).show(ui);
     });
     fixture.settle();
     let cube = fixture.by_label("Track cube").expect("the cube is shown");

@@ -28,10 +28,10 @@ use vectorcraft_tools::distort::perspective::GridDefinition;
 use vectorcraft_tools::distort::perspective::define::{BUILTINS, is_builtin};
 
 use super::perspective_grid::word;
-use crate::file_asks::{self, Owner};
-use crate::menus::Item;
-use crate::panels::label_or_name;
 use crate::VectorcraftApp;
+use crate::file_asks::{self, Owner};
+use crate::menus::{Node, c, cp};
+use crate::panels::label_or_name;
 
 /// The dialog kind of Perspective Grid Presets.
 pub const KIND: &str = "perspectiveGridPresets";
@@ -324,17 +324,17 @@ pub fn slot_preset(app: &VectorcraftApp, id: &str) -> Option<String> {
 
 /// View → Perspective Grid → One/Two/Three Point Perspective (`kind` 1–3): the built-in views of
 /// the type, then the saved presets' slots (`slots`, the type's ids).
-pub fn menu(kind: u8, slots: [&'static str; SLOTS]) -> Vec<Item> {
-    let mut items: Vec<Item> = BUILTINS
+pub fn menu(kind: u8, slots: [&'static str; SLOTS]) -> Vec<Node> {
+    let mut items: Vec<Node> = BUILTINS
         .iter()
         .filter(|b| b.1 == kind)
         .enumerate()
         .map(|(i, b)| {
             // The normal view is the type's preset (`kind`), as before named presets.
             let p = if i == 0 { json!({ "kind": kind }) } else { json!({ "name": b.0 }) };
-            Item::Cmd(b.0, "perspective.grid.preset", p)
+            cp(b.0, "perspective.grid.preset", p)
         })
         .collect();
-    items.extend(slots.map(|id| Item::Cmd("User Preset", id, Value::Null)));
+    items.extend(slots.map(|id| c("User Preset", id)));
     items
 }

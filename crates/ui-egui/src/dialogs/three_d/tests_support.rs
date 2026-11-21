@@ -24,8 +24,12 @@ impl ThreeD {
     pub(crate) fn new(app: VectorcraftApp) -> Self {
         let app = Rc::new(RefCell::new(app));
         let shown = app.clone();
-        // PLAN: assumed `crate::shell::show(&mut VectorcraftApp, &mut Ui)`, the app frame entry of hub-w1's smoke trial
-        let mut fixture = Fixture::new(move |ui| crate::shell::show(&mut shown.borrow_mut(), ui));
+        // The window's frame: the background work, then the whole layout, as the host runs them.
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
         fixture.room(vec2(1440.0, 900.0));
         Self { fixture, app }
     }

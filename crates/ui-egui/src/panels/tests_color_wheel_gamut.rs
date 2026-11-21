@@ -6,10 +6,9 @@ use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, ColorSettings};
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{Settings, View};
+use super::color_wheel::{Channel, Settings, View};
 use super::tests_color_wheel::Panel;
 use crate::VectorcraftApp;
-use crate::dialogs::color_picker::Channel;
 
 /// An app with a selected rectangle filled with `fill`, its Color Wheel panel on `view` with Show
 /// Out-of-Gamut Colors set to `gamut`.

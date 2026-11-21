@@ -13,8 +13,7 @@ fn app_with_doc() -> VectorcraftApp {
 
 /// Draw one canvas frame; whether it drew the document (else the Home screen).
 fn shows_document(app: &mut VectorcraftApp) -> bool {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
     out.textures_delta.clear();
@@ -78,10 +77,11 @@ fn cmd_alt_n_makes_a_document_without_the_new_document_dialog() {
     use vectorcraft_engine::cmd::newdoc;
     let ctx = egui::Context::default();
     let press = |app: &mut VectorcraftApp| {
+        // The first frame of a context builds the keymap the key stage reads.
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
         let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT;
         let ev = egui::Event::Key { key: egui::Key::N, physical_key: None, pressed: true, repeat: false, modifiers };
-        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-        out.textures_delta.clear();
+        crate::tests_synthetic::key_frame(app, &ctx, vec![ev]);
     };
     let made = |app: &VectorcraftApp| {
         let d = &app.session.active().expect("a document").doc;
@@ -161,8 +161,7 @@ fn click_home_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: e
 #[test]
 fn home_lists_recent_files_and_a_click_opens_one() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let dir = std::env::temp_dir().join("vectorcraft-home-recent");
     let missing = dir.join("Gone.svg").to_string_lossy().into_owned();
     app.ui.recent_files = (0..9).map(|i| dir.join(format!("Drawing {i}.svg")).to_string_lossy().into_owned()).collect();
@@ -183,8 +182,7 @@ fn home_lists_recent_files_and_a_click_opens_one() {
 fn home_has_a_learn_section_that_opens_the_learn_panel() {
     use crate::panels::learn::{self, Tab, View, catalog};
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let texts = visible_home_texts(&mut app, &ctx, TALL, 0.0, vec![]);
     let has = |s: &str| texts.iter().any(|(t, _)| t == s);
     assert!(has("Learn"), "{texts:?}");
@@ -212,8 +210,7 @@ fn home_learn_section_over_open_documents_leaves_them_as_they_are() {
     app.run("file.new", json!({})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("app.home", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let at = text_at(&mut app, &ctx, 0.0, "Add a gradient");
     click_home_at(&mut app, &ctx, 0.5, at, 1);
     assert!(learn::visible(&app.ui));
@@ -340,8 +337,7 @@ fn close_prompt(app: &mut VectorcraftApp, ctx: &egui::Context) {
 #[test]
 fn reopening_while_a_dialog_is_open_waits_for_it_to_close() {
     let (mut app, d, path) = saved_and_another("dialog");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     open_prompt(&mut app, &ctx);
     assert_eq!(crate::io::open_reporting(&mut app, &path).unwrap(), serde_json::Value::Null);
     crate::opening::poll(&mut app);
@@ -367,8 +363,7 @@ fn a_queued_reopen_keeps_the_roots_it_was_asked_in() {
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("file.saveAs", json!({"path": path})).unwrap();
     app.run("document.activate", json!({"index": 1})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     open_prompt(&mut app, &ctx);
     let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[]).unwrap();
     assert_eq!(file_access::confine(roots.as_ref(), || crate::io::open_reporting(&mut app, &path)).unwrap(), serde_json::Value::Null);

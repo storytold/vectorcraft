@@ -4,6 +4,7 @@ use std::rc::Rc;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
+use super::super::tests_export::{answer_saves, save_panel};
 use super::*;
 use crate::Services;
 // PLAN: assumed paths of the framework items the host helpers name.
@@ -96,6 +97,7 @@ fn summary(app: &VectorcraftApp) -> String {
 fn pump(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().expect("a UI context");
     crate::dialogs::host::pump(app, &ctx);
+    answer_saves(app);
 }
 
 fn confirm_id(app: &mut VectorcraftApp, id: DialogId) {
@@ -216,10 +218,10 @@ fn save_summary_requires_a_path() {
     let (mut app, written, _) = app();
     let asked: Rc<RefCell<usize>> = Rc::default();
     let a = asked.clone();
-    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+    save_panel(&mut app, move |pick| {
         *a.borrow_mut() += 1;
-        Some(format!("/tmp/{}", pick.name))
-    }));
+        Some(format!("/tmp/{}", pick.file_name.as_deref().unwrap_or_default()))
+    });
     app.run("file.export.pdf", json!({})).unwrap();
     assert_eq!(app.run(SAVE_SUMMARY, json!({})).unwrap_err(), "missing `path`");
     assert_eq!(app.run(SAVE_SUMMARY, json!({"path": null})).unwrap_err(), "missing `path`");
@@ -336,10 +338,11 @@ fn the_save_summary_button_writes_the_summary() {
     let (mut app, written, _) = app();
     let suggested: Rc<RefCell<Vec<String>>> = Rc::default();
     let s = suggested.clone();
-    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
-        s.borrow_mut().push(pick.name.clone());
-        Some(format!("/tmp/{}", pick.name))
-    }));
+    save_panel(&mut app, move |pick| {
+        let name = pick.file_name.clone().unwrap_or_default();
+        s.borrow_mut().push(name.clone());
+        Some(format!("/tmp/{name}"))
+    });
     app.run("file.export.pdf", json!({})).unwrap();
     let untouched = line_count(&summary(&app));
     set_field(&app, "thumbnails", json!(true));
@@ -356,14 +359,14 @@ fn the_save_summary_button_writes_the_summary() {
     }
     assert!(is_open(&app), "the dialog stays open");
     // Canceled: nothing written, no status, the dialog stays.
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    save_panel(&mut app, |_| None);
     app.ui.status.clear();
     press(&mut app, "Save Summary…");
     assert_eq!(written.borrow().len(), 1, "a canceled panel writes nothing");
     assert!(app.ui.status.is_empty(), "{}", app.ui.status);
     assert!(is_open(&app));
     // A failed write: a message over the dialog.
-    app.services.pick_save = Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name))));
+    save_panel(&mut app, |pick| Some(format!("/tmp/{}", pick.file_name.as_deref().unwrap_or_default())));
     app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("disk full".into())));
     press(&mut app, "Save Summary…");
     let open = open_dialogs(&app);
@@ -537,10 +540,10 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     // Without a path, bad options are refused before a save dialog asks for one.
     let asked = Rc::new(RefCell::new(0));
     let a = asked.clone();
-    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
+    save_panel(&mut app, move |pick| {
         *a.borrow_mut() += 1;
-        Some(format!("/tmp/picked-{}", pick.name))
-    }));
+        Some(format!("/tmp/picked-{}", pick.file_name.as_deref().unwrap_or_default()))
+    });
     app.run("ui.savePdfDialog", json!({"range": "7"})).unwrap();
     set_field(&app, "artboards", json!("range"));
     confirm(&mut app);
@@ -613,7 +616,7 @@ fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
     app.run("ui.savePdfDialog", json!({"compatibility": "1.4", "marks": {"trim": true}})).unwrap();
     assert_eq!(fget(&app, "compatibility"), "1.4");
     assert_eq!(fget(&app, "marks.weight"), 0.25, "the rest of a section keeps its defaults");
-    set_field(&app, "preset", json!(pdf::DEFAULT_PRESET));
+    set_field(&app, "preset", json!(vectorcraft_pdf::default_preset_name(APP)));
     assert_eq!(fget(&app, "compatibility"), "1.7");
     assert_eq!(fget(&app, "marks.trim"), false);
     cancel(&mut app);
@@ -716,7 +719,7 @@ fn the_security_section_takes_passwords_that_presets_drop() {
     assert_eq!((s.security.open_password.as_str(), s.security.permissions_password.as_str()), ("open", "own"));
     assert_eq!(fget(&app, "security.copy"), false);
     set_field(&app, "standard", json!("pdfA2b"));
-    set_field(&app, "preset", json!(pdf::DEFAULT_PRESET));
+    set_field(&app, "preset", json!(vectorcraft_pdf::default_preset_name(APP)));
     let s = with_pdf(&app, |d| d.settings().clone());
     assert!(s.security.open_password.is_empty() && s.security.permissions_password.is_empty(), "presets carry no passwords");
     assert_eq!(fget(&app, "security.copy"), true);
@@ -748,7 +751,7 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
     // A preset keeps the flattener preset.
     app.run("pdf.preset.save", json!({"name": "Old", "compatibility": "1.3", "flattenerPreset": "Low Resolution"})).unwrap();
     let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
-    assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
+    assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (vectorcraft_pdf::Compatibility::Pdf13, "Low Resolution"));
 }
 
 #[test]

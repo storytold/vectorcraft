@@ -23,7 +23,8 @@ use craft::draw::ui::brush_settings::{TipAngle, TipEllipse};
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::runtime::env::UnitKind;
+use craft::ui::runtime::env::{Env, UnitKind};
+use craft::ui::style::rgba_color;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::{Slider, SliderScale};
 use egui::{Response, Ui};
@@ -34,7 +35,6 @@ use super::host::open_held;
 use super::variation::variation_param;
 use super::{form, tool_options};
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
 
 /// The dialog kind of the freehand tools' Tool Options.
 pub const KIND: &str = "freehandOptions";
@@ -178,14 +178,15 @@ fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
 /// Three dabs of `tip`, as a stroke of it lays them down.
 // PLAN: a `Picture::painter` replaces the plain allocation once its `ThumbAspect` is known to this set.
 fn dabs(ui: &mut Ui, tip: TipAngle) {
-    let t = Tokens::get(ui.ctx());
+    let tokens = Env::of(ui).tokens;
+    let (dim, ink) = (rgba_color(tokens.color.text.muted), rgba_color(tokens.color.text.normal));
     let long = DAB_LONG;
     let (response, painter) = ui.allocate_painter(egui::vec2(7.0 * long, 2.0 * long), egui::Sense::hover());
     let a = tip.degrees.clamp(-180.0, 180.0).to_radians();
     let u = egui::vec2(a.cos() as f32, -a.sin() as f32);
     let v = egui::vec2(-u.y, u.x);
     let short = long * (tip.roundness.clamp(0.0, 1.0) as f32).max(0.001);
-    for (i, color) in [t.text_dim, t.text, t.text_dim].into_iter().enumerate() {
+    for (i, color) in [dim, ink, dim].into_iter().enumerate() {
         let center = egui::pos2(response.rect.min.x + long + i as f32 * 2.5 * long, response.rect.center().y);
         let points = (0..32)
             .map(|k| {
@@ -253,7 +254,9 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             rows.push(check(key, label));
         }
     }
-    for (key, label, default) in [("closeWithin", tl!("Close paths when ends are within:"), 15.0), ("editWithin", tl!("Edit selected paths within:"), 12.0)] {
+    for (key, label, default) in
+        [("closeWithin", tl!("Close paths when ends are within:"), 15.0), ("editWithin", tl!("Edit selected paths within:"), 12.0)]
+    {
         if has(key) {
             rows.push(pixels(key, label, default));
         }
@@ -279,10 +282,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone();
     let build = {
         let (tool, present) = (tool.to_owned(), present.clone());
-        move |fields: &mut DialogFields| {
-            // PLAN: assumed `tool_options::title(tool: &str) -> Label` ("{tool} Options").
-            ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))
-        }
+        move |fields: &mut DialogFields| ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))
     };
     let ok = {
         let (tool, present) = (tool.to_owned(), present);

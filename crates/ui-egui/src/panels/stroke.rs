@@ -14,9 +14,7 @@ use craft::ui::form::Field;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
-use craft::ui::primitives::{
-    ContentPainterCx, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, Thumbnails, ThumbnailOptions,
-};
+use craft::ui::primitives::{ContentPainterCx, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::style::DataColor;
@@ -26,8 +24,8 @@ use egui::{Rect, Ui, pos2};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, Node, StrokeLayer, Unit, WidthProfile};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, Node, StrokeLayer, Unit, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{Live, character, current_stroke, live_run, stroke_mixed};
@@ -176,7 +174,8 @@ fn convert<A: Serialize, B: DeserializeOwned + Default>(a: A) -> B {
 pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
     let base = draw::StrokeStyle { dash_unit: draw::DashUnit::Document, ..Default::default() };
     let Some(s) = st else { return base };
-    let (dashes, offset, corners) = s.dash.as_ref().map_or((vec![], 0.0, false), |d| (d.pattern.iter().map(|v| *v as f32).collect(), d.offset, d.align_corners));
+    let (dashes, offset, corners) =
+        s.dash.as_ref().map_or((vec![], 0.0, false), |d| (d.pattern.iter().map(|v| *v as f32).collect(), d.offset, d.align_corners));
     draw::StrokeStyle {
         width: s.width as f32,
         align: convert(s.align),
@@ -300,7 +299,8 @@ pub(crate) fn weight_number(app: &VectorcraftApp, weight: Option<f64>) -> Number
     let unit = app.session.stroke_unit();
     let lengths = LengthUnits::new(UnitKind::Points, shown_kind(unit), 72.0);
     let ladder = LADDERS.iter().find(|(u, _)| *u == unit).or_else(|| LADDERS.iter().find(|(u, _)| *u == Unit::Points)).map(|(_, l)| l);
-    let field = NumberField::length(tl!("Weight"), Bind::given(weight), lengths).range(0.0..=1000.0).step_arrows(StepArrows::Leading).scrub_by_label();
+    let field =
+        NumberField::length(tl!("Weight"), Bind::given(weight), lengths).range(0.0..=1000.0).step_arrows(StepArrows::Leading).scrub_by_label();
     match ladder {
         // PLAN: assumed `fields::stops_stepper(size, stops, shown)` (wg.S8) over the ladder's stops in points.
         Some(l) => field.presets(&l.rows).stepper(crate::fields::stops_stepper(1.0, &l.stops, lengths)),
@@ -321,7 +321,6 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
             }
             WeightTarget::Shown => live_run(app, tl!("Stroke Weight"), "stroke.set", json!({"weight": w}), phase),
             WeightTarget::Item(index) => {
-                // PLAN: assumed `appearance::aligned` is `pub(super)` (appearance-w6).
                 let params = super::appearance::aligned(app, json!({"index": index, "weight": w}));
                 live_run(app, tl!("Stroke Weight"), "appearance.setItem", params, phase);
             }
@@ -388,13 +387,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The arrowhead rows: the start and end heads with Swap, the two scales with their link, and the alignment.
 fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     let custom: Vec<Arrowhead> = app.session.arrowheads.heads().iter().cloned().map(Arrowhead::Custom).collect();
-    let entries: Vec<Entry<Option<Arrowhead>>> =
-        std::iter::once(None).chain(Arrowhead::ALL.iter().cloned().map(Some)).chain(custom.into_iter().map(Some)).map(|a| Entry::new(a.clone(), arrow_name(a.as_ref()))).collect();
-    let heads = [(st.and_then(|s| s.start_arrow.clone()), true, tl!("Start arrowhead"), "startArrow"), (st.and_then(|s| s.end_arrow.clone()), false, tl!("End arrowhead"), "endArrow")];
+    let entries: Vec<Entry<Option<Arrowhead>>> = std::iter::once(None)
+        .chain(Arrowhead::ALL.iter().cloned().map(Some))
+        .chain(custom.into_iter().map(Some))
+        .map(|a| Entry::new(a.clone(), arrow_name(a.as_ref())))
+        .collect();
+    let heads = [
+        (st.and_then(|s| s.start_arrow.clone()), true, tl!("Start arrowhead"), "startArrow"),
+        (st.and_then(|s| s.end_arrow.clone()), false, tl!("End arrowhead"), "endArrow"),
+    ];
     Field::new(tl!("Arrowheads")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             for (head, start, label, key) in heads {
-                let out = Select::new(label, Bind::given(head), &entries).picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start)).show(ui);
+                let out =
+                    Select::new(label, Bind::given(head), &entries).picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start)).show(ui);
                 // A custom head goes with its art, as document.inspect reports it.
                 if let Some(a) = out.events.landed() {
                     set(app, json!({ key: a }));
@@ -510,13 +516,12 @@ impl ThumbSource<(String, bool)> for ArrowSource<'_> {
 
 /// Draws an arrowhead preview (the head as the canvas draws it) in `rect`: a line with the head at the left (`start`)
 /// or right end, in the ink of the surface.
-// PLAN: assumed `Priority` in `craft::ui::runtime::jobs`, `ThumbnailOptions: Default`.
 pub(crate) fn arrow_thumb(cx: &ContentPainterCx, rect: Rect, arrow: Option<&Arrowhead>, start: bool) {
     let ctx = cx.painter.ctx().clone();
     let thumbs = Thumbnails::<(String, bool)>::in_context(&ctx, "stroke-arrows", ThumbnailOptions::default());
     let key = (arrow_key(arrow), start);
     let request = ThumbRequest::for_cell(rect.width().max(rect.height()), cx.pixels_per_point());
-    let state = thumbs.state(&ctx, &ArrowSource(arrow), &key, &request, craft::host::jobs::Priority::VISIBLE);
+    let state = thumbs.state(&ctx, &ArrowSource(arrow), &key, &request, craft::ui::primitives::Priority::VISIBLE);
     thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false).tint(DataColor::new(cx.ink())));
 }
 
@@ -602,9 +607,8 @@ pub(crate) fn profile_select(app: &mut VectorcraftApp, ui: &mut Ui) {
         entries.push(Entry::new(e.id.to_string(), super::label_or_name(e.label, e.built_in)));
         shapes.push((e.id.to_string(), silhouette(e.points).map(<[_]>::to_vec)));
     }
-    let tip = TooltipSpec::new(tl!("Variable Width Profile")).disabled_text(tl!(
-        "The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile."
-    ));
+    let tip = TooltipSpec::new(tl!("Variable Width Profile"))
+        .disabled_text(tl!("The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile."));
     let out = Select::new(tl!("Profile"), Bind::given(picked), &entries)
         .picture(|id: &String, cx, rect| {
             if let Some((_, points)) = shapes.iter().find(|(i, _)| i == id) {
@@ -621,7 +625,8 @@ pub(crate) fn profile_select(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The command a ≡ menu row runs to ask for the name of a new saved profile.
 fn add_profile(app: &VectorcraftApp) -> CommandRef {
-    let params = json!({"command": "stroke.widthProfile.add", "label": "Variable Width Profile", "params": {"name": app.session.next_profile_name()}});
+    let params =
+        json!({"command": "stroke.widthProfile.add", "label": "Variable Width Profile", "params": {"name": app.session.next_profile_name()}});
     CommandRef::with_params("ui.paramDialog", params)
 }
 
@@ -649,8 +654,14 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let shown = current_stroke(app).and_then(|s| s.profile);
     let saved = shown.as_ref().and_then(|p| app.session.profile_entry(Some(p))).is_some_and(|e| !e.built_in);
     states.set(CommandRef::new("stroke.widthProfile.delete"), CommandState::new().title(tl!("Delete Profile")).enabled(saved));
-    states.set(CommandRef::new("stroke.widthProfile.reset"), CommandState::new().title(tl!("Reset Profiles")).enabled(enabled("stroke.widthProfile.reset")));
-    states.set(CommandRef::new("stroke.arrowheads.edit"), CommandState::new().title(tl!("Edit Arrowheads…")).enabled(enabled("stroke.arrowheads.edit")));
+    states.set(
+        CommandRef::new("stroke.widthProfile.reset"),
+        CommandState::new().title(tl!("Reset Profiles")).enabled(enabled("stroke.widthProfile.reset")),
+    );
+    states.set(
+        CommandRef::new("stroke.arrowheads.edit"),
+        CommandState::new().title(tl!("Edit Arrowheads…")).enabled(enabled("stroke.arrowheads.edit")),
+    );
 }
 
 /// Runs the Stroke panel's own menu command: Hide or Show Options. `None` for any other id.
@@ -665,8 +676,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::panels::tests_panel::Panel;
-    // PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
+    use crate::tests::panel_harness::Panel;
 
     #[test]
     fn editing_an_extended_dash_keeps_other_stroke_options_and_is_undoable() {

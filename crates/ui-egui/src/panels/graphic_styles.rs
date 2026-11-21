@@ -39,10 +39,10 @@ use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_footer::FooterAction;
 use vectorcraft_geom::{Affine, Point, shapes};
 
-use super::library_panel::{self, LibraryKind, LibraryRef, Row};
+use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
 use super::{alt_held, selection_len};
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::{Item, Sep, c, cp, sub};
 use crate::panel_drag::PanelDrag;
 
 /// A style of the panel: its name, which is unique in a document.
@@ -254,7 +254,10 @@ pub(crate) struct StyleThumbs<'a> {
 
 impl ThumbSource<StyleKey> for StyleThumbs<'_> {
     fn revision(&self, key: &StyleKey, _: &ThumbRequest) -> Revision {
-        let look = self.d.graphic_style_index(key).map(|i| self.looks.get(i).copied().unwrap_or_else(|| look_hash(Paints::of(self.d), &self.d.graphic_styles[i])));
+        let look = self
+            .d
+            .graphic_style_index(key)
+            .map(|i| self.looks.get(i).copied().unwrap_or_else(|| look_hash(Paints::of(self.d), &self.d.graphic_styles[i])));
         thumb_revision(self.app, look.unwrap_or_default(), self.preview)
     }
 
@@ -640,8 +643,17 @@ fn row_id(row: &str) -> String {
 // PLAN: assumed A15 shapes: `menu_rows(&VectorcraftApp) -> Vec<Item>` with ids from `row_id` leaked to `&'static str`
 // by `ROWS`, `menu_states(&VectorcraftApp) -> Vec<(&'static str, bool, bool)>` as (id, enabled, checked),
 // `run(&mut VectorcraftApp, &str, &Value) -> Result<Value, String>`.
-const ROWS: [&str; 9] =
-    ["ui.graphicStyles.new", "ui.graphicStyles.duplicate", "ui.graphicStyles.merge", "ui.graphicStyles.delete", "ui.graphicStyles.selectUnused", "ui.graphicStyles.preview", "ui.graphicStyles.options", "ui.graphicStyles.square", "ui.graphicStyles.text"];
+const ROWS: [&str; 9] = [
+    "ui.graphicStyles.new",
+    "ui.graphicStyles.duplicate",
+    "ui.graphicStyles.merge",
+    "ui.graphicStyles.delete",
+    "ui.graphicStyles.selectUnused",
+    "ui.graphicStyles.preview",
+    "ui.graphicStyles.options",
+    "ui.graphicStyles.square",
+    "ui.graphicStyles.text",
+];
 
 /// The panel menu.
 pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<Item> {
@@ -811,17 +823,22 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    /// Find matches a style's name as shown and as stored.
-    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
-        lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
+    fn rows<'a>(lib: &'a Self::Lib, _id: &str) -> Vec<Row<'a, LibStyle>> {
+        lib.iter().map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
     }
     /// A built-in library's style in the UI language; a User Defined or loaded library's style as
     /// it is named.
     fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
         super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
-    // PLAN: assumed ap.AS9 `thumb(app, cx, rect, item)` in place of `draw` and `row_icons`.
+    /// Find matches a style's name as shown and as stored.
+    fn row(id: &str, s: &LibStyle, label: &str) -> PresetRow<LibraryKey> {
+        let name = s.style().name.clone();
+        let key = LibraryKey { panel: library_panel::panel_id(Self::KIND, id), name: name.clone(), folder: false };
+        let mut row = PresetRow::item(key, label, 0);
+        row.search_name = Some(name);
+        row
+    }
     /// The style on the Graphic Styles panel's preview shape.
     fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx<'_>, r: Rect, s: &LibStyle) {
         let source = LibThumbs { app, style: s, preview: app.ui.graphic_styles_panel.preview };
@@ -882,7 +899,7 @@ pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<LibraryInfo
 }
 
 /// Window → Graphic Style Libraries.
-pub(crate) fn window_menu() -> Vec<Item> {
+pub(crate) fn window_menu() -> Vec<crate::menus::Node> {
     const SLOTS: [&str; 10] = [
         "window.userGraphicStyleLibrary1",
         "window.userGraphicStyleLibrary2",
@@ -895,15 +912,14 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userGraphicStyleLibrary9",
         "window.userGraphicStyleLibrary10",
     ];
-    let open =
-        |b: &'static vectorcraft_doc::style_libs::BuiltinStyleLibrary| Item::Cmd(b.name, GraphicStyleLibraries::OPEN, json!({ "library": b.id }));
-    let mut items: Vec<Item> = STYLE_LIBRARIES.iter().map(open).collect();
+    let open = |b: &'static vectorcraft_doc::style_libs::BuiltinStyleLibrary| cp(b.name, GraphicStyleLibraries::OPEN, json!({ "library": b.id }));
+    let mut items: Vec<crate::menus::Node> = STYLE_LIBRARIES.iter().map(open).collect();
     items.extend([
-        Item::Sep,
-        Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
-        Item::Sep,
-        Item::Cmd("Other Library…", "window.graphicStyleLibrary.other", Value::Null),
-        Item::Cmd("Save Graphic Style Library…", "ui.saveGraphicStyleLibrary", Value::Null),
+        Sep,
+        sub("User Defined", SLOTS.iter().map(|&id| c("User Library", id)).collect()),
+        Sep,
+        c("Other Library…", "window.graphicStyleLibrary.other"),
+        c("Save Graphic Style Library…", "ui.saveGraphicStyleLibrary"),
     ]);
     items
 }

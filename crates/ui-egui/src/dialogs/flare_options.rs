@@ -23,8 +23,9 @@ use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::extra::{FLARE_OPTIONS, flare_params};
 
-use super::form::{self, LivePreview};
+use super::form;
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use super::tool_options;
 use crate::VectorcraftApp;
 use crate::canvas::general_lengths;
@@ -224,8 +225,11 @@ fn command(app: &VectorcraftApp, open: &Open, fields: &Map<String, Value>) -> Op
 
 /// The tool options `fields` hold: each option the dialog has, and the two check boxes.
 fn option_values(fields: &Map<String, Value>) -> Map<String, Value> {
-    let mut values: Map<String, Value> =
-        FLARE_OPTIONS.iter().filter(|(k, ..)| fields.contains_key(*k)).map(|(k, default, ..)| (k.to_string(), json!(number(fields, k, *default)))).collect();
+    let mut values: Map<String, Value> = FLARE_OPTIONS
+        .iter()
+        .filter(|(k, ..)| fields.contains_key(*k))
+        .map(|(k, default, ..)| (k.to_string(), json!(number(fields, k, *default))))
+        .collect();
     for key in ["raysOn", "ringsOn"] {
         values.insert(key.into(), json!(on(fields, key)));
     }

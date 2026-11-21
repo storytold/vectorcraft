@@ -50,14 +50,13 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mu
 fn context() -> egui::Context {
     let ctx = egui::Context::default();
     ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
+    crate::testing::install(&ctx);
     ctx
 }
 
 /// One frame of the whole app with `events`: the shell draws the app bar and applies the panels' toggles.
 fn shell_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Node> {
-    // PLAN: assumed `crate::tests::synthetic::key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Node>` (kb.C26).
-    crate::tests::synthetic::key_frame(app, ctx, events)
+    frame(app, ctx, events, |app, ui| app.ui(ui))
 }
 
 /// Hide the panels as Tab does: `window.dock`, applied by one shell frame.
@@ -169,7 +168,6 @@ fn window_learn_shows_a_hidden_dock() {
     assert!(!shown(&app));
 }
 
-
 /// `learn.show` opens the panel on a tutorial's steps; `learn.list` lists every tutorial.
 #[test]
 fn learn_show_opens_a_tutorial_and_learn_list_lists_them() {
@@ -277,7 +275,6 @@ fn finishing_a_tutorial_offers_next_up_in_its_skill() {
     let text = painted_text(&mut app, show);
     assert!(text.contains("View more") && !text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
 }
-
 
 /// A skill's last tutorial, finished, says so and offers Back to skills instead of Next Up, even
 /// when another skill follows; `learn.next` there is an error.
@@ -420,7 +417,6 @@ fn the_tabs_rows_and_back_run_their_commands() {
     press(&mut app, "Back", View { tab: Tab::Skills, skill: None, tutorial: None });
 }
 
-
 /// `learn.tab` switches tabs and keeps what the Skills tab had open; `learn.skill` opens a skill's
 /// tutorials and answers the skill as `learn.list` lists it; `learn.back` goes up one level and
 /// keeps the view on the list of skills and on the For you tab.
@@ -489,7 +485,6 @@ fn a_tool_name_in_a_step_is_a_link_that_locates_the_tool() {
     let shown_tutorial = app.run("learn.show", json!({"tutorial": "pen-paths"})).unwrap();
     assert_eq!(shown_tutorial["steps"][0], "Choose the Pen tool.");
 }
-
 
 /// A missing, mistyped or unknown tool id is an error and changes nothing.
 #[test]
@@ -576,7 +571,6 @@ fn a_step_s_check_box_marks_only_that_step() {
     assert_eq!(app.ui.learn_progress, before);
 }
 
-
 /// Finishing tutorials fills only their own skill's ring and count, once each however often they
 /// are finished; the skill's tutorial rows show which are finished; `learn.list` answers the same.
 #[test]
@@ -593,10 +587,7 @@ fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
     let values = |app: &mut VectorcraftApp, view: View| {
         app.ui.learn = view;
         let nodes = frame(app, &ctx, vec![], show);
-        nodes
-            .iter()
-            .filter_map(|n| Some((n.label()?.to_string(), n.description().map(str::to_string))))
-            .collect::<Vec<_>>()
+        nodes.iter().filter_map(|n| Some((n.label()?.to_string(), n.description().map(str::to_string)))).collect::<Vec<_>>()
     };
     let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
     let rows = values(&mut app, skills.clone());

@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 
+use craft::menu::Node;
 use craft::ui::canvas::{ViewCommands, ViewRequest};
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
@@ -15,7 +16,7 @@ use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::form;
 use crate::dialogs::tool_options::reference_param;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp};
 
 /// Zoom to Selection: a view command, since the view is the interface's.
 pub const ZOOM: &str = "addon.arrange.zoomSelection";
@@ -51,18 +52,18 @@ const ATTRIBUTES: [(&str, &str); 7] = [
 ];
 
 /// Object › Plug-ins › Arrange Tools.
-pub fn menu() -> Vec<Item> {
+pub fn menu() -> Vec<Node> {
     vec![
-        Item::Cmd("Arrange in Grid…", GRID, Value::Null),
-        Item::Cmd("Swap Objects", "addon.arrange.swap", json!({})),
-        Item::Cmd("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
-        Item::Cmd("Replace with Top Object…", REPLACE, Value::Null),
-        Item::Cmd("Set Size of Each…", SIZE, Value::Null),
-        Item::Cmd("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
-        Item::Cmd("Randomize Opacity…", OPACITY, Value::Null),
-        Item::Cmd("Sort Objects…", SORT, Value::Null),
-        Item::Sep,
-        Item::Cmd("Zoom to Selection", ZOOM, json!({})),
+        c("Arrange in Grid…", GRID),
+        cp("Swap Objects", "addon.arrange.swap", json!({})),
+        cp("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
+        c("Replace with Top Object…", REPLACE),
+        c("Set Size of Each…", SIZE),
+        cp("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
+        c("Randomize Opacity…", OPACITY),
+        c("Sort Objects…", SORT),
+        Sep,
+        cp("Zoom to Selection", ZOOM, json!({})),
     ]
 }
 

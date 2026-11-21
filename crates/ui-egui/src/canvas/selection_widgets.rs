@@ -22,8 +22,8 @@ use vectorcraft_tools::{Action, Mods, PointerEvent, PointerKind, ToolContext};
 use vectorcraft_tools::{mirror, repeat_grid, repeat_radial, select, shaperwidget, trace_split};
 
 use super::BodyKind;
-use crate::cursors::tool_cursor;
 use crate::VectorcraftApp;
+use crate::cursors::tool_cursor;
 
 #[cfg(test)]
 mod tests;
@@ -517,9 +517,8 @@ pub(super) fn plan(app: &mut VectorcraftApp, held: &mut Option<Held>, widget: Wi
 pub(super) fn advance(app: &mut VectorcraftApp, held: &mut Option<Held>, widget: Widget, g: Gesture, mods: Mods) {
     let actions = plan(app, held, widget, g, mods);
     if !actions.is_empty() {
-        // PLAN: assumed `canvas::drag::apply_requests(app, Result<Vec<UiRequest>>)` survives the cutover.
         let result = app.session.apply_actions(actions);
-        super::drag::apply_requests(app, result);
+        super::apply_requests(app, result);
     }
 }
 
@@ -540,7 +539,7 @@ pub(super) fn end_hidden(app: &mut VectorcraftApp, held: &mut Option<Held>, layo
 /// Which widgets the app's tool and view show.
 pub(super) fn shown(app: &VectorcraftApp) -> Show {
     let tool = app.session.tool_id();
-    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let revolve_edit = super::revolve_editing(app);
     let selecting = tool == "selection" && app.ui.view.edges && !revolve_edit;
     Show { nine: true, selecting, shaper: matches!(tool, "shaper" | "selection") && !revolve_edit, trace: selecting && !app.outline_view() }
 }

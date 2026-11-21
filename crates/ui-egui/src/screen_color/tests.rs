@@ -7,8 +7,7 @@ use super::*;
 
 /// An app with a document and a selected rectangle, and the window the pick runs in.
 fn app() -> (VectorcraftApp, egui::Context) {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.ui_ctx = Some(ctx.clone());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -20,7 +19,9 @@ fn app() -> (VectorcraftApp, egui::Context) {
 fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: Result<Srgba, ScreenError>) {
     for _ in 0..2 {
         let result = result.clone();
-        app.screen_pick.tick_with(ctx, target(ctx), &move || Box::new(StillCapture::new(result.clone().map(|c| craft::platform::screen::Capture::Color([c.r, c.g, c.b])))));
+        app.screen_pick.tick_with(ctx, target(ctx), &move || {
+            Box::new(StillCapture::new(result.clone().map(|c| craft::platform::screen::Capture::Color([c.r, c.g, c.b]))))
+        });
     }
     settle(app, ctx);
 }

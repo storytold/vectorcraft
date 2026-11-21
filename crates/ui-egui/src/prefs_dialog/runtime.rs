@@ -72,10 +72,6 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.canvas.worker_started = false;
         app.canvas.key = None;
     }
-    // Cards show only with Show Tool Tips on: an open card goes away as soon as tool tips are turned off.
-    let p = &app.session.prefs;
-    let cards = crate::toolbar::card::CardPrefs { on: p.show_tool_cards && p.show_tool_tips, animated_zoom: crate::canvas::animated_zoom(p) };
-    crate::toolbar::card::set_prefs(ctx, cards);
     let touch = ctx.input(|i| i.has_touch_screen());
     if touch != app.touch_screen {
         app.touch_screen = touch;

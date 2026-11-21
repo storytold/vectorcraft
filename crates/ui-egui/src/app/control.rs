@@ -1,3 +1,4 @@
+use craft::automation::ControlChannel;
 use craft::automation::screenshot::{DocumentId, Finished, settle_ms};
 use craft::ui::runtime::motion;
 use craft::ui::runtime::windows::WindowHost;
@@ -23,7 +24,6 @@ fn write_automation_file(
             Some(write) => write(path, png),
             None => Err("no writer configured".to_owned()),
         };
-        // PLAN: assumed `Hiding::hide_error(&self, error: &str, sent: &Value) -> String` (hub-w2's split of `hide_in_deferred_reply`)
         written.map_err(|error| hiding.hide_error(&error, &json!({"path": path})))
     })
 }
@@ -33,13 +33,18 @@ impl VectorcraftApp {
     /// transport queued, each inside the automation roots, and answers the requests that waited for
     /// injected input.
     pub(crate) fn run_control(&mut self, ctx: &egui::Context) {
+        if self.channel.is_none() {
+            return;
+        }
         let host = WindowHost::of(ctx);
         let document = self.document_identity();
-        self.channel.captures.note_windows(&host, document);
-        let finished = self.channel.captures.drain(motion::now(), document);
+        let finished = self.channel.as_mut().map_or_else(Vec::new, |channel| {
+            channel.captures.note_windows(&host, document);
+            channel.captures.drain(motion::now(), document)
+        });
         self.finish_captures(finished);
         let settle = settle_ms(ctx.global_style().animation_time);
-        while let Some(req) = self.channel.next_request() {
+        while let Some(req) = self.channel.as_mut().and_then(ControlChannel::next_request) {
             let roots = self.automation_roots.clone();
             self.ui.answering_control = true;
             // Guarded per request: a panic must not stop the requests behind it.
@@ -48,24 +53,27 @@ impl VectorcraftApp {
             let reply = match answer {
                 Ok(reply) => reply,
                 Err(msg) => {
-                    self.picks.recover();
                     self.session.set_replaying(false);
                     control::err(format!("internal error: {msg} (please report this bug)"))
                 }
             };
-            // PLAN: `job_finished` for a `ui.pointer` reply that waits on the tool's edit (`Reply::AfterJob`) is called where that edit is applied (hub-w2, chunk plan w9)
             let document = self.document_identity();
-            self.channel.settle(req, reply, document, settle);
+            if let Some(channel) = self.channel.as_mut() {
+                channel.settle(req, reply, document, settle);
+            }
         }
-        self.channel.poll_input(&host);
+        if let Some(channel) = self.channel.as_mut() {
+            channel.poll_input(&host);
+        }
     }
 
     /// The UI phase of a pass: counts the pass toward the captures' settling and issues the due
     /// ones; a capture that expired or lost its window is answered here.
     pub(crate) fn issue_captures(&mut self, ctx: &egui::Context) {
         let document = self.document_identity();
-        self.channel.captures.note_pass();
-        let finished = self.channel.captures.issue(&WindowHost::of(ctx), motion::now(), document);
+        let Some(channel) = self.channel.as_mut() else { return };
+        channel.captures.note_pass();
+        let finished = channel.captures.issue(&WindowHost::of(ctx), motion::now(), document);
         self.finish_captures(finished);
     }
 
@@ -77,7 +85,9 @@ impl VectorcraftApp {
         let hiding = control::deferred_hiding(self);
         let roots = self.automation_roots.clone();
         let write = &mut self.services.write;
-        self.channel.finish_captures(finished, &mut |path, png| write_automation_file(roots.as_ref(), write, &hiding, path, png));
+        if let Some(channel) = self.channel.as_mut() {
+            channel.finish_captures(finished, &mut |path, png| write_automation_file(roots.as_ref(), write, &hiding, path, png));
+        }
     }
 
     /// The active document's identity: its process-unique uid and revision. A capture records it

@@ -190,7 +190,6 @@ pub(super) struct Recorded {
 
 /// What Stop Playing/Recording adds to the set at index `set`; None when the recording in progress
 /// adds nothing to it.
-// PLAN: menus-w18's `edits::insert` calls this as `model::recorded_into`; it is `recording::recorded_into`.
 pub(super) fn recorded_into(app: &VectorcraftApp, set: usize) -> Option<Recorded> {
     let (recording_set, name, _) = app.ui.recording.as_ref()?;
     let list = &app.ui.actions;
@@ -307,7 +306,6 @@ fn follow_recorded(app: &mut VectorcraftApp, flat: usize, from: usize, added: us
         *step += added;
     }
     if let Some((set, at)) = model::place(&app.ui.actions, flat) {
-        // PLAN: menus-w18's `edits::follow_step_dialogs` is private; it needs `pub(super)` for this call.
         super::edits::follow_step_dialogs(app, set, at, from, isize::try_from(added).unwrap_or(isize::MAX));
     }
 }

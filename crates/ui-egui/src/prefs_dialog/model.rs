@@ -5,13 +5,13 @@ use std::collections::BTreeSet;
 use std::sync::{Mutex, PoisonError};
 
 // PLAN: assumed import paths through the `craft_ui` facade, as in `prefs_dialog.rs`.
+use craft::host::PickRequest;
+use craft::theme::Rgba;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry};
 use craft::ui::form::{SliderField, SliderFieldLayout};
-use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesModel, RowKind, RowSpec};
+use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesDraft, PreferencesModel, RowKind, RowSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
-use craft::theme::Rgba;
-use craft_files::PickRequest;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, PrefSpec, folder_check, spec};
@@ -19,8 +19,8 @@ use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, 
 use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
 use crate::VectorcraftApp;
 use crate::i18n::Lang;
-use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
 use craft::color_ui::ui::ColorPickerDialog;
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
 
 /// The pixel size every point-stored length field of this port uses.
 const PIXELS_PER_INCH: f64 = 72.0;
@@ -188,10 +188,7 @@ impl Live<'_> {
 
     /// The row `key`: its label, search text, help and state.
     fn row<'s>(&'s self, key: &'s str, label: &'static str, english: &'static str, kind: RowKind<'s>) -> RowSpec<'s> {
-        let row = RowSpec::new(key, label, kind)
-            .keywords(intern(format!("{english} {key}")))
-            .visible(self.visible(key))
-            .enabled(self.enabled(key));
+        let row = RowSpec::new(key, label, kind).keywords(intern(format!("{english} {key}"))).visible(self.visible(key)).enabled(self.enabled(key));
         match self.help(key) {
             Some(help) => row.help(help),
             None => row,
@@ -216,8 +213,7 @@ impl Live<'_> {
             }
             PrefKind::Length { min, max, measure } => {
                 // In the window's own Units choice, so a change there shows right away.
-                // PLAN: assumed cv.B5a `pub(crate) fn unit_kind(vectorcraft_doc::Unit) -> UnitKind`.
-                let shown = crate::units::unit_kind(vectorcraft_doc::Unit::named(self.text_of(measure.pref_key())).unwrap_or_default());
+                let shown = crate::canvas::rulers::unit_kind(vectorcraft_doc::Unit::named(self.text_of(measure.pref_key())).unwrap_or_default());
                 RowKind::length(self.num_of(key).unwrap_or(min), min..=max, LengthUnits::new(UnitKind::Points, shown, PIXELS_PER_INCH))
             }
             PrefKind::Int { min, max } => RowKind::int(self.w.draft.get::<i64>(key).unwrap_or(min), min..=max),
@@ -232,8 +228,9 @@ impl Live<'_> {
             }
             PrefKind::Text if key == "interfaceLanguage" => {
                 // `auto` plus every registered language, by its own name.
-                let options: Vec<Entry<&str>> =
-                    std::iter::once(Entry::new("auto", tl!("Auto"))).chain(Lang::for_picker().into_iter().map(|l| Entry::new(l.code(), l.name()))).collect();
+                let options: Vec<Entry<&str>> = std::iter::once(Entry::new("auto", tl!("Auto")))
+                    .chain(Lang::for_picker().into_iter().map(|l| Entry::new(l.code(), l.name())))
+                    .collect();
                 let value = Lang::for_picker().into_iter().map(Lang::code).find(|c| c.eq_ignore_ascii_case(self.text_of(key))).unwrap_or("auto");
                 RowKind::choice(value, options)
             }
@@ -271,7 +268,8 @@ impl Live<'_> {
 
     /// Sets every key of the draft to its default, as the answered Reset question does.
     fn reset_all(&mut self) {
-        let keys: Vec<String> = Prefs::default().to_json().as_object().into_iter().flatten().map(|(k, _)| k.clone()).filter(|k| super::is_known(k)).collect();
+        let keys: Vec<String> =
+            Prefs::default().to_json().as_object().into_iter().flatten().map(|(k, _)| k.clone()).filter(|k| super::is_known(k)).collect();
         self.w.reset_keys(keys.iter().map(String::as_str));
         crate::original_editor::reset(self.app);
     }
@@ -294,7 +292,15 @@ impl Live<'_> {
     }
 
     /// A slider over `range` for the number row `key`, which writes `to_value` of its result.
-    fn slider(&mut self, ui: &mut egui::Ui, key: &str, range: std::ops::RangeInclusive<f64>, step: f64, unit: Option<UnitKind>, to_value: fn(f64) -> Value) {
+    fn slider(
+        &mut self,
+        ui: &mut egui::Ui,
+        key: &str,
+        range: std::ops::RangeInclusive<f64>,
+        step: f64,
+        unit: Option<UnitKind>,
+        to_value: fn(f64) -> Value,
+    ) {
         let label = spec(key).map_or("", |s| tl!(s.label));
         let old = self.num_of(key).unwrap_or(*range.start());
         let mut value = old;
@@ -336,8 +342,8 @@ impl PreferencesModel for Live<'_> {
                 let (mut export, mut import, mut reset) = (false, false, false);
                 ui.horizontal_wrapped(|ui| {
                     export = Button::new(tl!("Export Preferences…")).show(ui).clicked();
-                    // Not on the web, which has no open dialog that returns a file here.
-                    if crate::picks::can(self.app, &crate::picks::PickRequest::Open(crate::FilePick::default())) {
+                    // Not on the web, whose open dialog answers with the file's contents, not a path to import.
+                    if !crate::io::is_web(self.app) {
                         import = Button::new(tl!("Import Preferences…")).show(ui).clicked();
                     }
                     reset = Button::new(tl!("Reset Preferences")).show(ui).clicked();
@@ -346,7 +352,7 @@ impl PreferencesModel for Live<'_> {
                     super::export_preferences(self.app);
                 }
                 if import {
-                    super::import_preferences(self.app, self.w);
+                    super::import_preferences(self.app);
                 }
                 if reset {
                     super::ask(self.w);
@@ -363,6 +369,22 @@ impl PreferencesModel for Live<'_> {
 
     fn custom_page(&mut self, _ui: &mut egui::Ui, _page: &str) {}
 
+    fn reset_page(&mut self, page: &str) {
+        let keys: Vec<&str> = PREF_SPECS.iter().filter(|s| s.category == page).map(|s| s.key).collect();
+        self.w.reset_keys(keys);
+    }
+
+    fn nested(&mut self, ui: &mut egui::Ui) {
+        self.w.nested.run(ui);
+        self.take_answers();
+    }
+
+    fn nested_open(&self) -> bool {
+        !self.w.nested.is_empty()
+    }
+}
+
+impl PreferencesDraft for Live<'_> {
     fn differs(&self) -> bool {
         self.w.draft != self.w.opened
     }
@@ -378,8 +400,11 @@ impl PreferencesModel for Live<'_> {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
         let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
-        let (smart_guides, snap_to_grid, task_bar) =
-            (flag("__smartGuides", self.app.ui.view.smart_guides), flag("__snapToGrid", self.app.ui.view.snap_to_grid), flag("__taskBar", self.app.ui.task_bar));
+        let (smart_guides, snap_to_grid, task_bar) = (
+            flag("__smartGuides", self.app.ui.view.smart_guides),
+            flag("__snapToGrid", self.app.ui.view.snap_to_grid),
+            flag("__taskBar", self.app.ui.task_bar),
+        );
         self.app.ui.view.smart_guides = smart_guides;
         self.app.ui.view.snap_to_grid = snap_to_grid;
         self.app.ui.task_bar = task_bar;
@@ -392,19 +417,5 @@ impl PreferencesModel for Live<'_> {
 
     fn cancel(&mut self) {
         crate::original_editor::cancel(self.app);
-    }
-
-    fn reset_page(&mut self, page: &str) {
-        let keys: Vec<&str> = PREF_SPECS.iter().filter(|s| s.category == page).map(|s| s.key).collect();
-        self.w.reset_keys(keys);
-    }
-
-    fn nested(&mut self, ui: &mut egui::Ui) {
-        self.w.nested.run(ui);
-        self.take_answers();
-    }
-
-    fn nested_open(&self) -> bool {
-        !self.w.nested.is_empty()
     }
 }

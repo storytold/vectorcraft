@@ -13,15 +13,14 @@
 
 use std::sync::{Arc, RwLock};
 
-use serde_json::{Value, json};
 use craft::cms::{Builtin, Profile};
 use craft::color_ui::display::{DisplayTransform, check_monitor};
 use craft::color_ui::ui::ProfileWords;
+use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect};
 
-// PLAN: assumed `craft::cms` is reachable from this crate (hub-w1 applies the manifest) and
-// `craft::color_ui::ui::ProfileWords` is public; `ProfileWords::english` needs `WordSet` in scope.
-use craft::i18n::words::WordSet as _;
+// `ProfileWords::english` is a `WordSet` method.
+use craft::i18n::WordSet as _;
 
 /// The most bytes of a display profile's ICC file that are read.
 pub const MAX_PROFILE_BYTES: usize = 1 << 20;

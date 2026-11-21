@@ -248,13 +248,14 @@ fn language_command_sets_the_preference() {
     assert_eq!(checked(&app, "app.language", &serde_json::json!({"lang": "auto"})), Some(true));
     // Every registered language is in the Mac App menu's Language, by its own name (the in-window
     // bar has no Language menu).
-    let layout = crate::native_menu::mac_layout(&app, &crate::native_menu::from_tree(&app, &crate::menus::menu_tree()), Lang::EN);
+    crate::menus::model::refresh(&mut app, &crate::testing::ui_context());
+    let layout = craft::menu::mac_layout(&app.menus.bar, &crate::menus::native::options());
     let app_menu = layout.bar.menus.into_iter().find(|m| m.title == "VectorCraft").expect("App menu");
-    fn items(nodes: &[crate::native_menu::Node], out: &mut Vec<String>) {
+    fn items(nodes: &[crate::menus::Node], out: &mut Vec<String>) {
         for n in nodes {
             match n {
-                crate::native_menu::Node::Item(it) if it.command == Some("app.language") => out.push(it.label.clone()),
-                crate::native_menu::Node::Submenu { children, .. } => items(children, out),
+                crate::menus::Node::Item(it) if it.command.id == "app.language" => out.push(it.label.clone()),
+                crate::menus::Node::Submenu { children, .. } => items(children, out),
                 _ => {}
             }
         }
@@ -737,24 +738,25 @@ const MENU_KEEP_AS_IS: &[&str] = &[
 
 /// Every menu title, submenu, item and header label with its command and params (`""`/null for
 /// the ones that run nothing).
-fn menu_labels() -> Vec<(&'static str, &'static str, serde_json::Value)> {
-    use crate::menus::Item;
-    fn walk(items: &[Item], out: &mut Vec<(&'static str, &'static str, serde_json::Value)>) {
+fn menu_labels() -> Vec<(String, String, serde_json::Value)> {
+    use crate::menus::Node;
+    fn walk(items: &[Node], out: &mut Vec<(String, String, serde_json::Value)>) {
         for i in items {
             match i {
-                Item::Cmd(l, id, p) => out.push((l, id, p.clone())),
-                Item::Todo(l, _) | Item::Header(l) => out.push((l, "", serde_json::Value::Null)),
-                Item::Sub(l, children) => {
-                    out.push((l, "", serde_json::Value::Null));
+                Node::Item(it) if it.command.id == crate::menus::TODO => out.push((it.label.clone(), String::new(), serde_json::Value::Null)),
+                Node::Item(it) => out.push((it.label.clone(), it.command.id.clone(), it.command.params.clone())),
+                Node::Heading(l) => out.push((l.clone(), String::new(), serde_json::Value::Null)),
+                Node::Submenu { label, children, .. } => {
+                    out.push((label.clone(), String::new(), serde_json::Value::Null));
                     walk(children, out);
                 }
-                Item::Sep => {}
+                _ => {}
             }
         }
     }
     let mut labels = vec![];
     for (title, items) in crate::menus::menu_tree() {
-        labels.push((title, "", serde_json::Value::Null));
+        labels.push((title.to_string(), String::new(), serde_json::Value::Null));
         walk(&items, &mut labels);
     }
     labels
@@ -768,15 +770,17 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
 /// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
 /// effect's `@id` row when the catalog has one, any other command by its id's row or its English
 /// label, and a submenu or an unbuilt item by its English label.
-fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<&'static str> {
-    use crate::menus::Item;
+fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
+    use crate::menus::Node;
     match item {
-        Item::Cmd(l, id, p) => {
+        Node::Item(it) if it.command.id == crate::menus::TODO => Some(tr(lang, &it.label)),
+        Node::Item(it) => {
+            let (id, p) = (it.command.id.as_str(), &it.command.params);
             let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
-            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, l)))
+            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, &it.label)))
         }
-        Item::Todo(l, _) | Item::Sub(l, _) => Some(tr(lang, l)),
-        Item::Header(_) | Item::Sep => None,
+        Node::Submenu { label, .. } => Some(tr(lang, label)),
+        _ => None,
     }
 }
 
@@ -785,15 +789,16 @@ fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<&'static st
 /// alike in every language.
 #[test]
 fn menu_items_side_by_side_have_different_labels() {
-    use crate::menus::Item;
-    fn walk(lang: Lang, path: &str, items: &[Item], out: &mut Vec<String>) {
+    use crate::menus::Node;
+    fn walk(lang: Lang, path: &str, items: &[Node], out: &mut Vec<String>) {
         let mut seen: std::collections::BTreeMap<&str, (&str, &str)> = std::collections::BTreeMap::new();
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
-                Item::Cmd(l, id, p) => (*l, menu_item_effect(id, p).unwrap_or(id)),
-                Item::Todo(l, _) | Item::Sub(l, _) => (*l, "submenu or unbuilt item"),
-                Item::Header(_) | Item::Sep => continue,
+                Node::Item(it) if it.command.id == crate::menus::TODO => (it.label.as_str(), "submenu or unbuilt item"),
+                Node::Item(it) => (it.label.as_str(), menu_item_effect(&it.command.id, &it.command.params).unwrap_or(it.command.id.as_str())),
+                Node::Submenu { label, .. } => (label.as_str(), "submenu or unbuilt item"),
+                _ => continue,
             };
             match seen.get(shown) {
                 Some(&(other, other_what)) if other != english => {
@@ -804,8 +809,8 @@ fn menu_items_side_by_side_have_different_labels() {
                     seen.insert(shown, (english, what));
                 }
             }
-            if let Item::Sub(l, children) = item {
-                walk(lang, &format!("{path} › {l}"), children, out);
+            if let Node::Submenu { label, children, .. } = item {
+                walk(lang, &format!("{path} › {label}"), children, out);
             }
         }
     }
@@ -842,17 +847,19 @@ fn label_shows_an_id_finds_ids_in_backticks_and_bare_keys() {
 /// Menu items show words, never the command or effect id their catalog row is keyed by.
 #[test]
 fn menu_items_never_show_an_id() {
-    fn walk(lang: Lang, items: &[crate::menus::Item], out: &mut Vec<String>) {
+    fn walk(lang: Lang, items: &[crate::menus::Node], out: &mut Vec<String>) {
         for item in items {
-            if let crate::menus::Item::Cmd(l, id, p) = item {
-                let key = menu_item_effect(id, p).unwrap_or(id);
-                let shown = shown_menu_label(lang, item).unwrap_or_default();
-                if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
-                    out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.code()));
+            match item {
+                crate::menus::Node::Item(it) if it.command.id != crate::menus::TODO => {
+                    let (l, id) = (&it.label, it.command.id.as_str());
+                    let key = menu_item_effect(id, &it.command.params).unwrap_or(id);
+                    let shown = shown_menu_label(lang, item).unwrap_or_default();
+                    if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
+                        out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.code()));
+                    }
                 }
-            }
-            if let crate::menus::Item::Sub(_, children) = item {
-                walk(lang, children, out);
+                crate::menus::Node::Submenu { children, .. } => walk(lang, children, out),
+                _ => {}
             }
         }
     }
@@ -972,7 +979,8 @@ fn untranslated_report() {
         add(code, "tl! strings", literals.iter().filter(|s| !has(lang, s)).cloned().collect::<BTreeSet<_>>());
         add(code, "undo labels", undo.iter().filter(|s| crate::panels::history::step_name(lang, s).is_none()).cloned().collect::<BTreeSet<_>>());
         add(code, "undo label templates", scan.templates.iter().filter(|t| !has(lang, t)).cloned().collect::<BTreeSet<_>>());
-        let render_site = RENDER_SITE_ROWS.iter().filter(|(ctx, src)| catalog.get(lang, ctx, src).is_none()).map(|(ctx, src)| format!("{ctx}: {src}"));
+        let render_site =
+            RENDER_SITE_ROWS.iter().filter(|(ctx, src)| catalog.get(lang, ctx, src).is_none()).map(|(ctx, src)| format!("{ctx}: {src}"));
         add(code, "render-site labels", render_site.collect());
         add(code, "swatch names", swatch_names.iter().filter(|n| catalog.get(lang, "swatch", n).is_none()).cloned().collect::<BTreeSet<_>>());
     }
@@ -983,17 +991,17 @@ fn untranslated_report() {
     let labels = menu_labels();
     let language_name = |l: &str| Lang::all().any(|lang| lang.name() == l);
     // Font names and sizes, and installed plug-ins' own names, are not interface text.
-    let interface = |(label, id, p): &(&str, &str, serde_json::Value)| {
-        *id != "text.setStyle"
+    let interface = |(label, id, p): &(String, String, serde_json::Value)| {
+        id != "text.setStyle"
             && !crate::menus::lists_plugin(id, p)
-            && strings.contains(*label)
-            && !MENU_KEEP_AS_IS.contains(label)
+            && strings.contains(label.as_str())
+            && !MENU_KEEP_AS_IS.contains(&label.as_str())
             && !language_name(label)
     };
-    let mut shown: BTreeSet<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
+    let mut shown: BTreeSet<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.clone()).collect();
     shown.extend(toggled_labels());
     shown.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
-    shown.extend(crate::native_menu::MAC_LABELS.iter().map(|l| l.to_string()));
+    shown.extend(crate::menus::MAC_LABELS.iter().map(|l| l.to_string()));
     shown.extend(vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES.iter().map(|l| l.to_string()));
     for code in KEEPS_MENU_NAMES {
         let lang = lang(code);
@@ -1084,7 +1092,7 @@ fn untranslated_report_checks_every_message_crate_and_schema_phrase() {
 fn kept_menu_names_are_menu_labels_left_in_english() {
     let labels = menu_labels();
     for keep in MENU_KEEP_AS_IS {
-        assert!(labels.iter().any(|(l, ..)| l == keep), "`{keep}` isn't a menu label");
+        assert!(labels.iter().any(|(l, ..)| l == *keep), "`{keep}` isn't a menu label");
         for code in KEEPS_MENU_NAMES {
             assert!(!has(lang(code), keep), "{code}: `{keep}` is both kept and translated");
         }

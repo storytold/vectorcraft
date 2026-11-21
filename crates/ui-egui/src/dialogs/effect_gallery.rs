@@ -12,32 +12,32 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use craft::theme::variant::Tone;
+use craft::ui::contract::Revision;
 use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::notices::{Notice, NoticeLayout};
+use craft::ui::patterns::form_dialogs::FieldValue;
 use craft::ui::primitives::textures::{ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::runtime::egui::widgets::Checkbox;
+use craft::ui::runtime::egui::widgets::Picture;
 use craft::ui::runtime::env::{Env, Label};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::runtime::requests::PathRequest;
 use craft::ui::runtime::words::CommonWords;
 use craft::ui::sections::{DialogRole, FooterButton};
-use craft::ui::contract::Revision;
-use craft::ui::patterns::form_dialogs::FieldValue;
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS, PixelSpace};
 use vectorcraft_geom::{Affine, Point};
 use vectorcraft_imaging::ui::filter_gallery::{
-    EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGalleryWords as _, FilterIndex,
-    FilterGallerySession, FilterTree, FilterTreeLayout, GalleryFilter, GalleryThumb, LayerId, SessionField,
+    EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGallerySession, FilterGalleryWords as _,
+    FilterIndex, FilterTree, FilterTreeLayout, GalleryFilter, GalleryThumb, LayerId, SessionField,
 };
-use craft::ui::runtime::egui::widgets::Checkbox;
-use craft::ui::runtime::egui::widgets::Picture;
 
-use super::{EffectCx, effect, effect_params, file_asks, json_of};
 use super::file_asks::Owner;
+use super::{EffectCx, effect, effect_params, file_asks, json_of};
 use crate::VectorcraftApp;
 
 // PLAN: the crate paths of the framework items (`craft::ui::…`, `vectorcraft_imaging::ui::filter_gallery`), `EffectCx::new(id)`,
@@ -254,7 +254,17 @@ impl EffectGalleryDialog {
         let first = catalog.categories.first().and_then(|category| category.filters.first()).cloned().unwrap_or_default();
         let index = FilterIndex::of(&catalog);
         let session = FilterGallerySession::new(&first, &catalog);
-        EffectGalleryDialog { id: dialog_id(KEY), open: true, catalog, index, session, selected: 0, preview_on: true, held: HeldAnswer::new(), asked: None }
+        EffectGalleryDialog {
+            id: dialog_id(KEY),
+            open: true,
+            catalog,
+            index,
+            session,
+            selected: 0,
+            preview_on: true,
+            held: HeldAnswer::new(),
+            asked: None,
+        }
     }
 
     /// The layers as the batch takes them.
@@ -326,13 +336,9 @@ impl StackDialog for EffectGalleryDialog {
             FooterButton::new(words.ok.clone(), DialogRole::Accept).stays_open(true).enabled(!held.is_waiting()),
             FooterButton::new(words.cancel.clone(), DialogRole::Cancel),
         ];
-        let dialog = Dialog::new(tl!("Effect Gallery"))
-            .opened(Bind::bound(open))
-            .buttons(buttons)
-            .close_on_enter(true)
-            .footer(|ui, _| {
-                Checkbox::new(Bind::bound(&mut on)).label(tl!("Preview")).show(ui);
-            });
+        let dialog = Dialog::new(tl!("Effect Gallery")).opened(Bind::bound(open)).buttons(buttons).close_on_enter(true).footer(|ui, _| {
+            Checkbox::new(Bind::bound(&mut on)).label(tl!("Preview")).show(ui);
+        });
         let shown = dialog.show(ui, |ui, cx| {
             changes.clear();
             picked_layer = None;
@@ -571,9 +577,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     fn frame(app: &mut VectorcraftApp) -> egui::Context {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        crate::theme::apply(&ctx, Default::default());
+        let ctx = crate::testing::ui_context();
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| crate::dialogs::host::pump(app, ui.ctx()));
         out.textures_delta.clear();

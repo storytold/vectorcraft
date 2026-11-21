@@ -18,6 +18,8 @@ use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
 use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
+use craft::ui::runtime::env::Env;
+use craft::ui::style::rgba_color;
 use craft::ui::text::HexField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
@@ -63,7 +65,8 @@ fn defaults() -> Map<String, Value> {
 fn params() -> Vec<Param> {
     vec![
         choice_param("hpglVersion", tl!("Version:"), Version::ALL.iter().map(|v| (v.id(), v.label()))),
-        Param::number("curveTolerance", tl!("Curve Tolerance:"), DEFAULT_TOLERANCE, 0.1, 2).bounds(Some(*TOLERANCE_RANGE.start()), Some(*TOLERANCE_RANGE.end())),
+        Param::number("curveTolerance", tl!("Curve Tolerance:"), DEFAULT_TOLERANCE, 0.1, 2)
+            .bounds(Some(*TOLERANCE_RANGE.start()), Some(*TOLERANCE_RANGE.end())),
         choice_param("origin", tl!("Origin:"), Origin::ALL.iter().map(|o| o.id()).zip(ORIGIN_NAMES)),
         pens_param(),
         check_param("sortPaths", tl!("Draw the Nearest Path Next")),
@@ -114,11 +117,9 @@ fn pen_key(i: usize) -> String {
 /// Pens: One Pen per Color (`pens` null) or Pen Table (`pens` the colors, pen 1's first), with a
 /// row per pen (its number, color and a Remove button) and Add.
 fn pens_param() -> Param {
-    Param::custom("pens", tl!("Pens:"), |ui, fields, cx| {
-        ui.vertical(|ui| pens_ui(ui, fields, cx)).response
-    })
-    .companions([SET_ASIDE, PEN_ERROR])
-    .full_width()
+    Param::custom("pens", tl!("Pens:"), |ui, fields, cx| ui.vertical(|ui| pens_ui(ui, fields, cx)).response)
+        .companions([SET_ASIDE, PEN_ERROR])
+        .full_width()
 }
 
 /// The pens row. Switching to Pen Table asks the host (`penTable`): the table starts from the document's pens, which
@@ -152,7 +153,8 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
         }
     }
     if let Some(e) = fields.text(PEN_ERROR) {
-        ui.colored_label(crate::theme::Tokens::get(ui.ctx()).error, crate::i18n::message(crate::i18n::current(), e));
+        let error = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.fg);
+        ui.colored_label(error, crate::i18n::message(crate::i18n::current(), e));
     }
     // A table longer than a plot takes (set through `ui.dialog.set`) draws no rows: OK refuses it.
     let Some(mut pens) = list.filter(|a| a.len() <= MAX_PENS) else { return };
@@ -199,22 +201,25 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
 /// the host's pump, which holds no lock on the dialog while the document is read.
 pub(super) fn pen_ask(app: &mut VectorcraftApp, id: DialogId) {
     let Some(selection) = app.export_dialogs.0.iter().find(|o| o.id == id).map(|o| o.selection) else { return };
-    let Some(mut copy) = app.dialogs().get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone()) else { return };
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(mut copy) = dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())) else { return };
     let shown = copy.clone();
     let result = set_pen_table(&mut copy, true, || automatic_pens(app, &shown, selection));
-    let Some(dialog) = app.dialogs().get_mut_by_id::<HostedParamDialog>(id) else { return };
-    match result {
-        Ok(()) => {
-            for key in ["pens", SET_ASIDE] {
-                match copy.get(key) {
-                    Some(v) => dialog.set_field(key, v.clone()),
-                    None => dialog.clear_field(key),
+    dialogs.with(|h| {
+        let Some(dialog) = h.get_mut_by_id::<HostedParamDialog>(id) else { return };
+        match result {
+            Ok(()) => {
+                for key in ["pens", SET_ASIDE] {
+                    match copy.get(key) {
+                        Some(v) => dialog.set_field(key, v.clone()),
+                        None => dialog.clear_field(key),
+                    }
                 }
+                dialog.clear_field(PEN_ERROR);
             }
-            dialog.clear_field(PEN_ERROR);
+            Err(e) => dialog.set_field(PEN_ERROR, FieldValue::Text(e)),
         }
-        Err(e) => dialog.set_field(PEN_ERROR, FieldValue::Text(e)),
-    }
+    });
 }
 
 /// The pens an export from a dialog holding `fields` with no pen table would get: its options, artboard choice and

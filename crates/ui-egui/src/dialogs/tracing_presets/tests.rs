@@ -11,8 +11,7 @@ use super::*;
 /// An app with a window, and the context of it.
 fn windowed(services: crate::Services) -> (VectorcraftApp, egui::Context) {
     let mut app = VectorcraftApp::new(Session::new(), services);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     app.adopt_context(&ctx);
     (app, ctx)
 }

@@ -7,19 +7,25 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use super::shortcut_import::{foreign_set, remember};
-use crate::{VectorcraftApp, io, shortcut_editor, theme};
+use crate::{VectorcraftApp, io, shortcut_editor};
 
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Default::default())
 }
 
-/// One headless frame of Keyboard Shortcuts, which takes up a pending review.
+/// One frame of a window, which builds its keymap, then a pass of Keyboard Shortcuts in it, which
+/// takes up a pending review.
 fn frame(app: &mut VectorcraftApp) {
     let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
+    crate::tests::synthetic::key_frame(app, &ctx, vec![]);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| shortcut_editor::show(app, ui));
     out.textures_delta.clear();
+}
+
+/// Keyboard Shortcuts' keymap, once a frame has given it one.
+fn dialog_keymap(app: &mut VectorcraftApp) -> &mut craft::keymap::Keymap {
+    frame(app);
+    app.shortcuts_dialog.as_mut().and_then(|d| d.keymap.as_mut()).expect("the dialog's keymap")
 }
 
 /// The review the dialog shows: its set's name and each entry's item, line and target.
@@ -27,7 +33,7 @@ fn frame(app: &mut VectorcraftApp) {
 #[allow(clippy::type_complexity)]
 fn review(app: &VectorcraftApp) -> Option<(String, Vec<(String, usize, Option<craft::keymap::CommandRef>)>)> {
     let d = app.shortcuts_dialog.as_ref()?;
-    let r = d.state.snapshot(&d.keymap)?.review?;
+    let r = d.state.snapshot(d.keymap.as_ref()?)?.review?;
     Some((r.name, r.entries.into_iter().map(|e| (e.item, e.line, e.target)).collect()))
 }
 
@@ -116,10 +122,7 @@ fn remembered_choices_answer_the_next_import() {
     let (set, options) = foreign_set(&read(&mut app, kys));
     assert!(options.remembered.is_empty() && !options.codes.contains_key("key:931"));
     let [undo, thing] = [&set.entries[0], &set.entries[1]];
-    let targets = BTreeMap::from([
-        (undo.remember_key(), Some(crate::keymap::command_of("edit.undo"))),
-        (thing.remember_key(), None),
-    ]);
+    let targets = BTreeMap::from([(undo.remember_key(), Some(crate::keymap::command_of("edit.undo"))), (thing.remember_key(), None)]);
     let codes = BTreeMap::from([("key:931".to_string(), Some("Z".to_string())), ("mods:21".to_string(), Some("Cmd+Alt".to_string()))]);
     shortcut_editor::open(&mut app);
     remember(&mut app, &set, &targets, &codes);
@@ -144,7 +147,8 @@ fn keyboard_shortcuts_import_reads_both_kinds_of_set() {
     let files: BTreeMap<&str, Vec<u8>> = BTreeMap::from([
         (
             "/sets/Mine.json",
-            serde_json::to_vec(&shortcut_editor::export_json("Mine", &crate::keymap::overrides_from(&[("tool:pen", "Shift+9")]))).unwrap(),
+            serde_json::to_vec(&json!({"format": "vectorcraft-shortcuts", "version": 1, "set": "Mine", "overrides": {"tool:pen": "Shift+9"}}))
+                .unwrap(),
         ),
         ("/sets/Text.json", b"\xEF\xBB\xBF  /Menus { /Acme\\ Undo { /Key 1 } }".to_vec()),
     ]);
@@ -161,6 +165,9 @@ fn keyboard_shortcuts_import_reads_both_kinds_of_set() {
     app.run("shortcuts.import", json!({ "path": kys })).unwrap();
     frame(&mut app);
     assert_eq!((review(&app).map(|r| (r.0, r.1.len())), reads.get()), (Some(("On Disk".into(), 4)), before));
+    // The import waits while Keyboard Shortcuts is open.
+    assert!(app.run("shortcuts.import", json!({"path": "/sets/Text.json"})).is_err());
+    app.shortcuts_dialog = None;
     app.run("shortcuts.import", json!({"path": "/sets/Text.json"})).unwrap();
     frame(&mut app);
     assert_eq!(review(&app).map(|r| r.0).as_deref(), Some("Text"), "text that starts with a slash name is a text set");
@@ -202,11 +209,11 @@ fn an_imported_function_key_goes_to_its_target() {
         "codes": {"keys": [{"value": 1000, "key": "F2"}], "modifiers": []},
     });
     let (set, options) = foreign_set(&kys);
-    let dialog = app.shortcuts_dialog.as_mut().unwrap();
-    let planned = craft::keymap::plan(&set, &dialog.keymap, &options);
-    planned.apply(&mut dialog.keymap);
-    let f2 = crate::keymap::vc_chord("F2").unwrap();
-    assert_eq!(dialog.keymap.holder(&f2), Some(crate::keymap::command_of("edit.duplicate")));
+    let keymap = dialog_keymap(&mut app);
+    let planned = craft::keymap::plan(&set, keymap, &options);
+    planned.apply(keymap);
+    let f2 = crate::keymap::stored::parse_vc("F2").unwrap();
+    assert_eq!(keymap.holder(&f2), Some(crate::keymap::command_of("edit.duplicate")));
 }
 
 /// A name of 1,500 characters and 14 repeats of a label stay within what `plan` reads.
@@ -221,8 +228,7 @@ fn long_names_stay_within_what_plan_reads() {
     let (set, options) = foreign_set(&read);
     let path = &set.entries[0].path;
     assert!(path.len() <= MAX_PATH_SEGMENTS && path.iter().all(|s| s.chars().count() <= MAX_IMPORT_TEXT));
-    let dialog = app.shortcuts_dialog.as_ref().unwrap();
-    let _ = craft::keymap::plan(&set, &dialog.keymap, &options);
+    let _ = craft::keymap::plan(&set, dialog_keymap(&mut app), &options);
 }
 
 /// A plug-in row picked as a target stores under its `plugin.dialog {id}` key and reads back under
@@ -242,13 +248,15 @@ fn an_imported_shortcut_reaches_a_filter_plugin_picked_as_its_target() {
         "codes": {"keys": [{"value": 1000, "key": "F11"}], "modifiers": [{"value": 1000, "mods": "Cmd+Alt+Shift"}]},
     });
     let (set, options) = foreign_set(&kys);
-    let dialog = app.shortcuts_dialog.as_mut().unwrap();
-    let planned = craft::keymap::plan(&set, &dialog.keymap, &options);
-    planned.apply(&mut dialog.keymap);
-    let saved = crate::keymap::stored::to_value(dialog.keymap.overrides());
-    assert_eq!(saved, json!({ key.as_str(): "Cmd+Alt+Shift+F11" }), "not a binding of plugin.dialog without its id");
-    let reloaded = crate::keymap::stored::from_value(saved);
-    assert_eq!(reloaded.get(&crate::keymap::stored_key(&key)).map(<[String]>::len), Some(1), "read back under the filter's id");
+    let keymap = dialog_keymap(&mut app);
+    let planned = craft::keymap::plan(&set, keymap, &options);
+    planned.apply(keymap);
+    let stored = crate::keymap::stored_key(&key);
+    let saved = keymap.overrides().get(&stored).map(<[String]>::to_vec).expect("a binding of the filter's item");
+    assert!(keymap.overrides().get("plugin.dialog").is_none(), "not a binding of plugin.dialog without its id");
+    assert_eq!(crate::keymap::entry_of_stored(&stored), key);
+    let reloaded = crate::keymap::stored::from_value(json!({ key.as_str(): saved[0] }));
+    assert_eq!(reloaded.get(&stored).map(<[String]>::len), Some(1), "read back under the filter's id");
 
     vectorcraft_plugins::registry::remove(id);
     assert!(shortcut_editor::entries().iter().all(|e| e.key != key), "a removed filter is no target");

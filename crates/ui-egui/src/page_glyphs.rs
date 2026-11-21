@@ -1,10 +1,12 @@
 //! Glyphs drawn in code for the page-orientation and artboard-layout toggles.
 
+use craft::ui::contract::MemoProps;
 use craft::ui::primitives::Glyph;
 use craft::ui::style::UiTokens;
 use egui::{Painter, Pos2, Rect, Shape, Stroke, vec2};
 
 /// A portrait or landscape sheet with a folded corner. The selected look is the button's own.
+#[derive(MemoProps)]
 pub struct PageGlyph {
     /// The sheet lies wide.
     pub landscape: bool,
@@ -26,12 +28,13 @@ impl Glyph for PageGlyph {
 
 /// Small artboards in the grid cells `tiles` (column, row), faded, and over them their order as a
 /// line from a dot on the first to an arrowhead on the last.
-pub struct LayoutGlyph<'a> {
+#[derive(MemoProps)]
+pub struct LayoutGlyph {
     /// The cells, in the order of the artboards.
-    pub tiles: &'a [(u8, u8)],
+    pub tiles: &'static [(u8, u8)],
 }
 
-impl Glyph for LayoutGlyph<'_> {
+impl Glyph for LayoutGlyph {
     fn paint(&self, painter: &Painter, _tokens: &UiTokens, rect: Rect, color: egui::Color32, _mirrored: bool) {
         let tiles = self.tiles;
         // Cells at most half the room a side: a row's artboards stand tall, a column's lie flat.

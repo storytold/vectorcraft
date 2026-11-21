@@ -449,14 +449,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         open: &shared.ui.appearance_panel.open,
         pass: &pass,
     };
-    let shown = Stack::new()
-        .fill()
-        .footer(|ui, _| *footer.borrow_mut() = Some(footer_bar(has, can, can_delete, list_id).show_footer(ui)))
-        .show(ui, |ui, _| {
+    let shown = Stack::new().fill().footer(|ui, _| *footer.borrow_mut() = Some(footer_bar(has, can, can_delete, list_id).show_footer(ui))).show(
+        ui,
+        |ui, _| {
             // A pass's own rows report its parts.
             *pass.borrow_mut() = Pass::default();
             show_list(ui, &cx, &rows, &order, &mut selection, list_id, copy)
-        });
+        },
+    );
     let pass = pass.into_inner();
     if let Some(list) = shown.inner {
         let opener = list.response.clone();
@@ -712,7 +712,7 @@ enum Act {
     /// The row's swatch was clicked, with Shift (the mixer) or without (the swatches).
     Swatch(RowKey, Painted, bool),
     /// The stroke weight field's output.
-    Weight(WeightTarget, NumberOutput<f64>),
+    Weight(WeightTarget, NumberOutput),
     /// The inline editor of effect `k` of list `item` changed these parameters.
     Params(Option<usize>, usize, serde_json::Map<String, Value>),
     /// The inline editor of effect `k` of list `item` asks for the effect's dialog.
@@ -809,9 +809,11 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
     let Some(it) = stack.and_then(|ap| ap.items.get(i)) else { return ListRow::new(Label::Empty) };
     let fill = it.is_fill();
     let (name, link) = if fill { (tl!("Fill"), tl!("Fill:")) } else { (tl!("Stroke"), tl!("Stroke:")) };
-    let mut row = ListRow::new(name)
-        .toggle(ToggleCell::eye(EYE, it.visible()))
-        .cell_field(NAME, Link::new(link).tooltip(tl!("Click to edit")), link_output(cx.pass, key));
+    let mut row = ListRow::new(name).toggle(ToggleCell::eye(EYE, it.visible())).cell_field(
+        NAME,
+        Link::new(link).tooltip(tl!("Click to edit")),
+        link_output(cx.pass, key),
+    );
     // The first trailing part added is the outermost: the profile closes the row, the swatch sits
     // nearest the label.
     if let AppearanceItem::Stroke(st) = it {
@@ -1068,9 +1070,9 @@ impl DisplayOrder<RowKey> for StackRows {
 
     /// The note and new art's rows are never picked: they only show what is there.
     fn enabled(&self, at: usize) -> bool {
-        self.rows.get(at).is_some_and(|row| {
-            !matches!(row.key, RowKey::Mixed | RowKey::NewArtItem(_) | RowKey::NewArtEffect(..) | RowKey::NewArtOpacity)
-        })
+        self.rows
+            .get(at)
+            .is_some_and(|row| !matches!(row.key, RowKey::Mixed | RowKey::NewArtItem(_) | RowKey::NewArtEffect(..) | RowKey::NewArtOpacity))
     }
 }
 
@@ -1168,7 +1170,7 @@ pub(crate) fn summary(app: &mut VectorcraftApp) -> Option<Arc<Summary>> {
 /// `params` of an item or effect command the panel runs, with `aligned` when the selected objects'
 /// stacks differ: its indices are then rows of the first object's stack, which each other object
 /// edits where it has them (the panel lists only the rows they share).
-fn aligned(app: &VectorcraftApp, mut params: Value) -> Value {
+pub(super) fn aligned(app: &VectorcraftApp, mut params: Value) -> Value {
     let differ = app.session.active().is_some_and(|st| {
         let mut aps = st.selection.subjects().iter().filter_map(|id| st.doc.node(*id)).map(|n| &n.appearance);
         aps.next().is_some_and(|first| aps.any(|a| a != first))
@@ -1661,7 +1663,14 @@ fn contents_move(n: &Node, remaining: &[RowKey], gap: usize, parent: Option<RowK
 }
 
 /// The fills/strokes `set` (ascending) moved or copied to `gap` of `remaining`.
-fn items_move(n: &Node, order: &[RowKey], remaining: &[RowKey], gap: usize, set: &[usize], mv: &ReorderMove<RowKey>) -> Option<(&'static str, Value)> {
+fn items_move(
+    n: &Node,
+    order: &[RowKey],
+    remaining: &[RowKey],
+    gap: usize,
+    set: &[usize],
+    mv: &ReorderMove<RowKey>,
+) -> Option<(&'static str, Value)> {
     let grabbed = match mv.key {
         RowKey::Item(g) => g,
         _ => *set.first()?,

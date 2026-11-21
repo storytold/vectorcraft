@@ -10,8 +10,8 @@ use vectorcraft_doc::{BlendSpec, NodeId, NodeKind};
 use vectorcraft_engine::Session;
 
 use super::blend::show;
-use super::test_panel::Panel; // PLAN: assumed module path of op.A15's `Panel`
 use crate::VectorcraftApp;
+use crate::tests::panel_harness::Panel;
 
 /// A document with two 20 pt squares 200 pt apart, both selected.
 fn app() -> VectorcraftApp {

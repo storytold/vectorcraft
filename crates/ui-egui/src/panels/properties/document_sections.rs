@@ -77,8 +77,7 @@ pub(super) fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             let out = NumberField::length(tl!("Keyboard Increment"), Bind::given(Some(app.session.prefs.keyboard_increment)), lengths)
                 .range(0.001..=1296.0)
                 .show(ui);
-            // PLAN: assumed `panels::edits::{apply_edits, EditPath}` (widgets-w13, wg.A16)
-            crate::panels::edits::apply_edits(app, &out.edit, crate::panels::edits::EditPath::Scope, |app, v: &Option<f64>, _| {
+            crate::edits::apply_edits(app, &out.edit, crate::edits::EditPath::Scope, |app, v: &Option<f64>, _| {
                 if let Some(value) = *v {
                     app.run("prefs.set", json!({ "key": "keyboardIncrement", "value": value })).ok();
                 }

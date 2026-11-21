@@ -100,7 +100,7 @@ pub(super) fn follow(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let gesture = app.session.tool_busy() || app.session.pointer_held();
         // A dialog, or a canvas drag that does not reach the tool (a pan, zoom or turn of the view),
         // defers the decision.
-        let dialog = app.any_dialog_open() || crate::canvas::tool_adapter::in_gesture(app, ctx);
+        let dialog = app.any_dialog_open() || crate::canvas::in_gesture(app, ctx);
         let active = app.session.tool_id();
         let on = app.session.prefs.hold_tool_keys;
         let Some(held) = app.held_tool.last_mut() else { return };
@@ -126,10 +126,9 @@ pub(super) fn follow(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // The canvas takes a pointer press of the same pass, and the tool an Enter press, after
         // this: the decision waits for the next pass, measured from this one.
         let (pressed, now) = ctx.input(|i| {
-            let pressed = i
-                .events
-                .iter()
-                .any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. } | egui::Event::Key { key: egui::Key::Enter, pressed: true, .. }));
+            let pressed = i.events.iter().any(|e| {
+                matches!(e, egui::Event::PointerButton { pressed: true, .. } | egui::Event::Key { key: egui::Key::Enter, pressed: true, .. })
+            });
             (pressed, i.time)
         });
         if pressed && released == now {

@@ -1,40 +1,57 @@
 //! Preferences ▸ Units: the General unit in the Transform panel, the Control bar, dialogs and the
 //! Preferences dialog; the Type unit in the Character panel; the change showing in the next frame.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 
 use super::tests_appearance::{app_with_rect, run};
 use super::*;
-use crate::dialogs::HostedParamDialog;
 use crate::tests::panel_harness::Panel;
+use craft::ui::dialog::StackDialog;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
 
-// PLAN: assumed hub-w2 dialog host: `app.dialogs().get::<HostedParamDialog>() -> Option<&mut HostedParamDialog>`
-// with `set_json_field(&str, Value)` and `json_fields() -> Value`, and `confirm_by_id` / `cancel_by_id`
-// taking `HostedParamDialog::ID`; tool dialogs apply through `tool_options::pump`.
+/// Runs menu command `id` as a click on its item does, in a window, so a dialog it opens has a host.
+pub(crate) fn run_menu(app: &mut VectorcraftApp, id: &str) {
+    if app.ui_ctx.is_none() {
+        app.adopt_context(&crate::testing::ui_context());
+    }
+    crate::menus::invoke(app, id, json!({}));
+}
+
+/// `f` over the open hosted dialog, with the window's context; `None` when none is open.
+fn with_dialog<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedParamDialog, &egui::Context) -> R) -> Option<R> {
+    let ctx = app.ui_ctx.clone()?;
+    app.dialogs()?.with(|host| host.get_mut::<HostedParamDialog>().map(|d| f(d, &ctx)))
+}
 
 /// The open hosted dialog's field `name`, as the dialog shows it.
 pub(crate) fn dialog_field(app: &mut VectorcraftApp, name: &str) -> Option<Value> {
-    let dialog = app.dialogs().get::<HostedParamDialog>()?;
-    dialog.json_fields().get(name).cloned()
+    with_dialog(app, |d, _| d.json_fields()?.get(name).cloned()).flatten()
 }
 
 /// Sets the open hosted dialog's field `name`, as typing in it does.
 pub(crate) fn set_dialog_field(app: &mut VectorcraftApp, name: &str, value: Value) {
-    if let Some(dialog) = app.dialogs().get::<HostedParamDialog>() {
-        dialog.set_json_field(name, value);
-    }
+    let set = with_dialog(app, |d, ctx| d.set_json_field(ctx, name, value));
+    assert_eq!(set, Some(Ok(())), "{name}");
 }
 
-/// OK in the open hosted dialog.
+/// OK in the open hosted dialog; the app's dialog pass runs what it answered.
 pub(crate) fn confirm_dialog(app: &mut VectorcraftApp) {
-    app.dialogs().confirm_by_id(HostedParamDialog::ID);
-    crate::tool_options::pump(app);
+    close_dialog(app, true);
 }
 
 /// Cancel in the open hosted dialog.
 pub(crate) fn cancel_dialog(app: &mut VectorcraftApp) {
-    app.dialogs().cancel_by_id(HostedParamDialog::ID);
+    close_dialog(app, false);
+}
+
+fn close_dialog(app: &mut VectorcraftApp, ok: bool) {
+    let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) else { panic!("no window") };
+    dialogs.with(|host| {
+        let id = host.get::<HostedParamDialog>().map(StackDialog::id).expect("a hosted dialog is open");
+        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
+    });
+    crate::dialogs::host::pump(app, &ctx);
 }
 
 fn bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -55,14 +72,14 @@ fn panels_show_millimetres_after_the_preference_changes() {
     let mut p = Panel::new(app_with_rect(), transform::show);
     assert_eq!(side_mm(), "35.2778 mm");
     assert_eq!(p.value("Width"), Some(Unit::Points.format(100.0)), "points first");
-    general_mm(p.app_mut());
+    general_mm(&mut p.app());
     // The next frame: no restart, nothing cached.
     p.frame();
     assert_eq!(p.value("Width"), Some(side_mm()), "Transform panel");
     let mut b = Panel::new(p.into_app(), bar);
     assert_eq!(b.value("Width"), Some(side_mm()), "Control bar");
     // Document Setup back to points: everything follows the document.
-    run(b.app_mut(), "document.setUnits", json!({"units": "Points"}));
+    run(&mut b.app(), "document.setUnits", json!({"units": "Points"}));
     b.frame();
     assert_eq!(b.value("Width"), Some(Unit::Points.format(100.0)));
 }
@@ -71,7 +88,7 @@ fn panels_show_millimetres_after_the_preference_changes() {
 fn dialog_lengths_show_in_the_general_unit() {
     let mut app = app_with_rect();
     general_mm(&mut app);
-    crate::menus::run_fired(&mut app, "object.move", json!({})); // PLAN: assumed `run_fired(&mut app, &str, Value)`
+    run_menu(&mut app, "object.move");
     assert_eq!(dialog_field(&mut app, "dx"), Some(json!(Unit::Millimeters.format(0.0))), "Move");
     // A typed unit wins; the move is in points.
     set_dialog_field(&mut app, "dx", json!("10 mm"));
@@ -97,11 +114,11 @@ fn type_sizes_follow_units_type() {
     general_mm(&mut app);
     let mut p = Panel::new(app, character::show);
     // PLAN: assumed `character::type_unit(&VectorcraftApp) -> Unit` (type-w10 note 12) and a "Font Size" control.
-    assert_eq!(character::type_unit(p.app()), Unit::Points, "General leaves type alone");
+    assert_eq!(character::type_unit(&p.app()), Unit::Points, "General leaves type alone");
     assert_eq!(p.value("Font Size"), Some(Unit::Points.format(24.0)));
-    p.app_mut().run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
+    p.app().run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
     p.frame();
-    assert_eq!(character::type_unit(p.app()), Unit::Inches);
+    assert_eq!(character::type_unit(&p.app()), Unit::Inches);
     assert_eq!(p.value("Font Size"), Some(Unit::Inches.format(24.0)));
 }
 
@@ -110,17 +127,16 @@ fn the_preferences_dialog_shows_the_documents_units() {
     let mut app = app_with_rect();
     run(&mut app, "document.setUnits", json!({"units": "Millimeters"}));
     crate::prefs_dialog::open(&mut app, Some("General"));
-    // PLAN: assumed shell-w18 shapes: `fields(&app) -> Value`, `set_field(&mut app, &str, Value)`, `confirm(&mut app) -> Result`.
-    assert_eq!(crate::prefs_dialog::fields(&app)["unitsGeneral"], json!("millimeters"));
+    assert_eq!(crate::prefs_dialog::fields(&app).unwrap()["unitsGeneral"], json!("millimeters"));
     let inc = app.session.prefs.keyboard_increment;
     let mut p = Panel::new(app, |app, ui| crate::prefs_dialog::show(app, ui));
     assert_eq!(p.value("Keyboard Increment"), Some(Unit::Millimeters.format(inc)), "Keyboard Increment in mm");
     // Choosing another General unit in the dialog shows at once, and OK applies it.
-    crate::prefs_dialog::set_field(p.app_mut(), "unitsGeneral", json!("inches"));
+    crate::prefs_dialog::set_field(&mut p.app(), "unitsGeneral", json!("inches")).unwrap();
     p.frame();
     assert_eq!(p.value("Keyboard Increment"), Some(Unit::Inches.format(inc)));
-    let mut app = p.into_app();
-    crate::prefs_dialog::confirm(&mut app).unwrap();
+    crate::prefs_dialog::confirm(&mut p.app()).unwrap();
+    let app = p.app();
     assert_eq!(app.session.active().unwrap().doc.units, Unit::Inches);
     assert_eq!(app.session.prefs.units_general, "inches");
 }

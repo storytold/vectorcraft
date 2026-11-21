@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
 
-use crate::{VectorcraftApp, dialogs, io, menus, theme};
+use crate::{VectorcraftApp, dialogs, io, menus};
 
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
 const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
@@ -27,13 +27,9 @@ pub(super) fn window(app: VectorcraftApp) -> Window {
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             if !std::mem::replace(&mut fonts, true) {
-                // PLAN: hub-w1's `testing::ui_context()` makes a context of its own; the harness's context needs the same install.
-                theme::install_fonts(ui.ctx());
-                theme::apply(ui.ctx(), Default::default());
+                crate::testing::install(ui.ctx());
                 return;
             }
-            // PLAN: assumed `VectorcraftApp::ui(&mut self, &mut egui::Ui)`, the whole frame of kb.C26's `key_frame`.
-            app.logic(ui.ctx());
             app.ui(ui);
         },
         app,
@@ -489,14 +485,14 @@ fn ui_install_plugin_takes_no_grant_or_heavy_budget_from_its_params() {
 /// is refused at Accelerated and at Step by Step, and nothing is installed.
 #[test]
 fn an_action_step_cannot_grant_a_plugin_its_permissions() {
-    use crate::panels::actions::{PlaybackSpeed, action, play, push_set};
+    use crate::panels::actions::tests_support::{action, push_set};
+    use crate::panels::actions::{PlaybackSpeed, play};
     let mut app = app();
     let id = "test.ui.approval.action";
     let manifest = format!(r#"{{"id":"{id}","name":"Asks","kind":"filter","permissions":["doc.read"]}}"#);
     let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     let step = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]});
-    // PLAN: assumed menus-w19's `push_set(&mut VectorcraftApp, &str, Vec<Action>)` and `action(&str, Vec<(&str, Value)>) -> Action`.
-    push_set(&mut app, "Test", vec![action("Install", vec![("plugin.install", step)])]);
+    push_set(&mut app, "Test", vec![action("Install", &[("plugin.install", step)])]);
     for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
         app.ui.action_playback.speed = speed;
         let e = play(&mut app, 0, 0).unwrap_err();

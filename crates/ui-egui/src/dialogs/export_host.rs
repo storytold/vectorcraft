@@ -129,14 +129,43 @@ fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Resu
         Export::Raster { .. } => png_options::confirm(app, open, fields),
         Export::Svg { .. } => svg_options::confirm(app, open, fields),
         Export::Eps => eps_options::confirm(app, open, fields),
-        // PLAN: assumed `eps_options::confirm_custom(app, &Open, &DialogFields) -> Result<After, String>` (export-w11)
-        Export::EpsCustom { .. } => eps_options::confirm_custom(app, open, fields),
+        Export::EpsCustom { parent } => confirm_custom(app, *parent, fields),
         Export::Dxf => dxf_options::confirm(app, open, fields),
         Export::Hpgl { .. } => hpgl_options::confirm(app, open, fields),
         Export::Office => office_export::confirm(app, open, fields),
         Export::Text => text_export::confirm(app, open, fields),
         Export::Save { .. } => save_options::confirm(app, open, fields),
     }
+}
+
+/// The values of the open dialog `id`.
+fn fields_of(app: &VectorcraftApp, id: DialogId) -> Option<DialogFields> {
+    app.dialogs()?.with(|host| host.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone()))
+}
+
+/// Custom… of EPS Options `parent`: Custom Transparency Flattener Options over it.
+fn open_custom(app: &mut VectorcraftApp, parent: DialogId) {
+    let Some(fields) = fields_of(app, parent) else { return };
+    let dialog = eps_options::custom_dialog(app, parent, &fields);
+    if open(app, Export::EpsCustom { parent }, false, dialog).is_none() {
+        app.status("no window");
+    }
+}
+
+/// OK of Custom Transparency Flattener Options: EPS Options `parent` takes the custom options. The host's lock is
+/// released while a held OK runs, so the parent is written through it here.
+fn confirm_custom(app: &mut VectorcraftApp, parent: DialogId, fields: &DialogFields) -> Result<After, String> {
+    let mut values = fields_of(app, parent).ok_or("EPS Options is no longer open")?;
+    eps_options::custom_ok(app, &mut values, fields)?;
+    let dialogs = app.dialogs().ok_or("no window")?;
+    dialogs.with(|host| {
+        if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(parent) {
+            for (key, value) in values.iter() {
+                d.set_field(key, value.clone());
+            }
+        }
+    });
+    Ok(None)
 }
 
 /// Reports a failed step on the status line.
@@ -167,20 +196,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             }
             continue;
         };
-        if footer.as_deref() == Some("browser") && matches!(kind, Export::Svg { .. }) {
-            // PLAN: assumed `svg_options::browser_preview(app, id) -> Result<Value, String>` (export-w10)
-            let result = svg_options::browser_preview(app, id);
-            report(app, result);
+        if let Export::Svg { mode } = kind {
+            if footer.as_deref() == Some(svg_options::BROWSER_ACTION)
+                && let Some(fields) = fields_of(app, id)
+            {
+                let result = svg_options::browser_preview(app, &svg_options::preview_params(mode, selection, &fields));
+                report(app, result);
+            }
+            svg_options::refresh_code(app, id, mode, selection);
         }
         for action in actions {
             match (&kind, action.as_str()) {
-                // PLAN: assumed `eps_options::open_custom(app, parent: DialogId)` (export-w11)
-                (Export::Eps, "custom") => eps_options::open_custom(app, id),
-                // PLAN: assumed `hpgl_options::pen_ask(app, id, selection) -> Result<(), String>` (export-w11)
-                (Export::Hpgl { .. }, "penTable") => {
-                    let result = hpgl_options::pen_ask(app, id, selection);
-                    report(app, result);
-                }
+                (Export::Eps, "custom") => open_custom(app, id),
+                (Export::Hpgl { .. }, "penTable") => hpgl_options::pen_ask(app, id),
                 _ => {}
             }
         }

@@ -48,9 +48,8 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
     ctx
 }
 
@@ -208,5 +207,3 @@ fn choosing_a_listed_font_sets_it_on_the_selected_live_text() {
     click(&mut app, &ctx, "Source Serif 4 Regular");
     assert!(app.session.active().unwrap().doc == before);
 }
-
-

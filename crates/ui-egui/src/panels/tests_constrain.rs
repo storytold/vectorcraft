@@ -3,6 +3,7 @@
 //! Alt+Enter in their fields applies the value to a copy of the selection, passed on as `copy`, and
 //! Ctrl/Cmd+Enter in W or H keeps the proportions whether the link is on or off.
 
+use craft::draw::ui::TransformGroups;
 use egui::Modifiers;
 use serde_json::json;
 
@@ -27,8 +28,7 @@ fn size(app: &VectorcraftApp) -> (f64, f64) {
 
 /// Every field the object groups show.
 fn fields_all(app: &mut VectorcraftApp, ui: &mut Ui) {
-    // PLAN: assumed `transform::TransformGroups` is reachable from `transform` and `object_fields(app, ui, groups)`.
-    transform::object_fields(app, ui, transform::TransformGroups::ALL);
+    transform::object_fields(app, ui, TransformGroups::ALL);
 }
 
 /// The Artboard tool's fields.

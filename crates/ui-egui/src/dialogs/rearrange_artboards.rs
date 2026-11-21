@@ -7,7 +7,8 @@
 //! Fields: `layout` (`gridByRow` | `gridByColumn` | `row` | `column`), `order` (`leftToRight` |
 //! `rightToLeft`), `columns` (the rows of a grid by column), `spacing` (pt) and `moveArtwork`.
 
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
@@ -16,7 +17,6 @@ use craft::ui::primitives::{Glyph, IconSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::style::{TypeRole, UiTokens};
 use craft::ui::text::NumberField;
-use craft::ui::choice::Segmented;
 use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -30,6 +30,7 @@ pub(crate) const CMD: &str = "artboard.rearrange";
 
 /// A layout toggle's picture: small artboards in the grid cells (column, row), tinted, and over them their order as a
 /// line from a dot on the first to an arrowhead on the last.
+#[derive(MemoProps)]
 struct CellsGlyph(&'static [(u8, u8)]);
 
 impl Glyph for CellsGlyph {
@@ -164,49 +165,49 @@ pub(crate) struct RearrangeArtboardsDialog {
 
 /// The rows of the dialog for a document of `artboards` artboards, Spacing shown in `unit`.
 fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, unit: Unit) {
-        Field::new(tl!("Layout:")).id_salt("layout").show(ui, |ui, _| {
-            let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL
-                .into_iter()
-                .map(|l| {
-                    let (tip, glyph) = layout_glyph(l, v.rtl);
-                    Entry::new(l, tip).icon(IconSpec::glyph(glyph))
-                })
-                .collect();
-            if let Some(l) = Segmented::new(tl!("Layout:"), Bind::given(v.layout), &entries).show(ui).value().copied() {
-                v.layout = l;
-            }
-        });
-        Field::new(tl!("Layout Order:")).id_salt("order").enabled(v.has_order()).show(ui, |ui, _| {
-            let entries = [
-                Entry::new(false, tl!("Change to Left-to-Right Layout")).icon(IconSpec::glyph(&LEFT_TO_RIGHT)),
-                Entry::new(true, tl!("Change to Right-to-Left Layout")).icon(IconSpec::glyph(&RIGHT_TO_LEFT)),
-            ];
-            if let Some(rtl) = Segmented::new(tl!("Layout Order:"), Bind::given(v.rtl), &entries).show(ui).value().copied() {
-                v.rtl = rtl;
-            }
-        });
-        // The rows of a grid by column.
-        let count = if v.layout == ArtboardLayout::GridByColumn { tl!("Rows:") } else { tl!("Columns:") };
-        Field::new(count).id_salt("columns").enabled(v.is_grid()).show(ui, |ui, _| {
-            let most = artboards.max(1) as f64;
-            let field = NumberField::new(count, Bind::given(Some(v.columns))).range(1.0..=most).step(1.0).show(ui);
-            if let Some(Some(columns)) = field.edit.value().copied() {
-                v.columns = columns.round().clamp(1.0, most);
-            }
-        });
-        Field::new(tl!("Spacing:")).id_salt("spacing").show(ui, |ui, _| {
-            let units = LengthUnits::new(UnitKind::Points, length_kind(unit), 72.0);
-            let field = NumberField::length(tl!("Spacing:"), Bind::given(Some(v.spacing)), units).show(ui);
-            if let Some(Some(spacing)) = field.edit.value().copied() {
-                v.spacing = spacing;
-            }
-        });
-        Field::new(tl!("Options:")).id_salt("options").show(ui, |ui, _| {
-            if let Some(on) = check(ui, tl!("Move Artwork with Artboard"), v.move_artwork, true) {
-                v.move_artwork = on;
-            }
-        });
-        Text::new(crate::i18n::fmt(tl!("Artboards: {n}"), &[("n", &artboards.to_string())])).role(TypeRole::Caption).show(ui);
+    Field::new(tl!("Layout:")).id_salt("layout").show(ui, |ui, _| {
+        let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL
+            .into_iter()
+            .map(|l| {
+                let (tip, glyph) = layout_glyph(l, v.rtl);
+                Entry::new(l, tip).icon(IconSpec::glyph(glyph))
+            })
+            .collect();
+        if let Some(l) = Segmented::new(tl!("Layout:"), Bind::given(v.layout), &entries).show(ui).value().copied() {
+            v.layout = l;
+        }
+    });
+    Field::new(tl!("Layout Order:")).id_salt("order").enabled(v.has_order()).show(ui, |ui, _| {
+        let entries = [
+            Entry::new(false, tl!("Change to Left-to-Right Layout")).icon(IconSpec::glyph(&LEFT_TO_RIGHT)),
+            Entry::new(true, tl!("Change to Right-to-Left Layout")).icon(IconSpec::glyph(&RIGHT_TO_LEFT)),
+        ];
+        if let Some(rtl) = Segmented::new(tl!("Layout Order:"), Bind::given(v.rtl), &entries).show(ui).value().copied() {
+            v.rtl = rtl;
+        }
+    });
+    // The rows of a grid by column.
+    let count = if v.layout == ArtboardLayout::GridByColumn { tl!("Rows:") } else { tl!("Columns:") };
+    Field::new(count).id_salt("columns").enabled(v.is_grid()).show(ui, |ui, _| {
+        let most = artboards.max(1) as f64;
+        let field = NumberField::new(count, Bind::given(Some(v.columns))).range(1.0..=most).step(1.0).show(ui);
+        if let Some(Some(columns)) = field.edit.value().copied() {
+            v.columns = columns.round().clamp(1.0, most);
+        }
+    });
+    Field::new(tl!("Spacing:")).id_salt("spacing").show(ui, |ui, _| {
+        let units = LengthUnits::new(UnitKind::Points, length_kind(unit), 72.0);
+        let field = NumberField::length(tl!("Spacing:"), Bind::given(Some(v.spacing)), units).show(ui);
+        if let Some(Some(spacing)) = field.edit.value().copied() {
+            v.spacing = spacing;
+        }
+    });
+    Field::new(tl!("Options:")).id_salt("options").show(ui, |ui, _| {
+        if let Some(on) = check(ui, tl!("Move Artwork with Artboard"), v.move_artwork, true) {
+            v.move_artwork = on;
+        }
+    });
+    Text::new(crate::i18n::fmt(tl!("Artboards: {n}"), &[("n", &artboards.to_string())])).role(TypeRole::Caption).show(ui);
 }
 
 impl StackDialog for RearrangeArtboardsDialog {

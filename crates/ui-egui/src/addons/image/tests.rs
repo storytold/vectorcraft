@@ -1,11 +1,13 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use serde_json::json;
+use craft::ui::testing::Fixture;
+use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 
-use serde_json::Value;
-
+use crate::addons::dialogs::tests::ctx;
 use crate::{VectorcraftApp, menus};
 
 /// An app with one image open and selected: 12 × 10 pixels, white, a near-white ring one pixel in
@@ -57,6 +59,7 @@ fn app() -> VectorcraftApp {
     }
     .unwrap();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("document.open", json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
     app.run("select.all", json!({})).unwrap();
     app
@@ -135,17 +138,13 @@ fn masked_alphas(app: &VectorcraftApp) -> [u8; 3] {
     [(0, 0), (1, 1), (4, 4)].map(|(x, y)| px.get_pixel(x, y).0[3])
 }
 
-// PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog { id, fields }` (host.rs:383)
 /// The open dialog's values as automation lists them.
 fn dialog_fields(app: &VectorcraftApp) -> Value {
-    app.dialogs()
-        .expect("window host")
-        .with(|host| host.open_dialogs().first().and_then(|d| d.fields.clone()))
-        .expect("a dialog opens")
+    app.dialogs().expect("window host").with(|host| host.open_dialogs().first().and_then(|d| d.fields.clone())).expect("a dialog opens")
 }
 
 fn set(app: &VectorcraftApp, key: &str, value: Value) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     app.dialogs()
         .expect("window host")
         .with(|host| {
@@ -157,13 +156,13 @@ fn set(app: &VectorcraftApp, key: &str, value: Value) {
 
 /// Runs the frame's pump: the open dialog's preview.
 fn pump(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     crate::dialogs::host::pump(app, &ctx);
 }
 
 /// Answers the open dialog with OK or Cancel, then runs the frame's pump.
 fn answer(app: &mut VectorcraftApp, ok: bool) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     app.dialogs().expect("window host").with(|host| {
         let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
         if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
@@ -211,7 +210,10 @@ fn color_mask_previews_keeps_its_settings_and_comes_off() {
     // Remove Background… opens on Edge Color, Contiguous and Match distance; OK is one undo step.
     click(&mut app, "Remove Background…");
     let fields = dialog_fields(&app);
-    assert_eq!((fields["background"].as_str(), fields["contiguous"].as_bool(), fields["match"].as_str()), (Some("edges"), Some(true), Some("distance")));
+    assert_eq!(
+        (fields["background"].as_str(), fields["contiguous"].as_bool(), fields["match"].as_str()),
+        (Some("edges"), Some(true), Some("distance"))
+    );
     answer(&mut app, true);
     assert!(closed(&app));
     assert_eq!(steps(&app), n + 3, "one undo step");
@@ -222,19 +224,27 @@ fn color_mask_previews_keeps_its_settings_and_comes_off() {
 /// the Control bar's button removes it at once (no dialog) with the defaults, as one step.
 #[test]
 fn properties_and_the_control_bar_remove_the_background_at_once() {
-    let mut app = app();
+    let app = Rc::new(RefCell::new(app()));
     let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
-    let n = steps(&app);
-    // PLAN: assumed `Fixture::by_label(&str) -> Option<_>` and `Fixture::click_label(&str)` over the shell frame
-    // (`ui_context()`, sh.SH4), as chrome-w19 and files-w15 use them for the Properties panel and the Control bar.
-    let mut fixture = craft::ui::testing::Fixture::shell(&mut app, &crate::ui_context());
-    assert!(fixture.by_label("Remove Background").is_some(), "Properties offers it");
-    fixture.click_label("Remove Background");
+    let n = steps(&app.borrow());
+    let shown = Rc::clone(&app);
+    let mut properties = Fixture::new(move |ui| crate::panels::properties::show(&mut shown.borrow_mut(), ui));
+    properties.room(egui::vec2(280.0, 900.0)).settle();
+    assert!(properties.by_label("Remove Background").is_some(), "Properties offers it");
+    let shown = Rc::clone(&app);
+    let mut bar = Fixture::new(move |ui| crate::chrome::control_bar(&mut shown.borrow_mut(), ui));
+    bar.room(egui::vec2(2400.0, 300.0)).settle();
+    let button = bar.by_label("Remove Background").expect("the Control bar offers it");
+    bar.click(&button);
+    // The bar's press fires its command; the window runs what a frame fired.
+    let ctx = bar.ctx().clone();
+    for fired in &craft::ui::runtime::frame::take_output(&ctx).fired {
+        crate::shortcuts::run_fired(&mut app.borrow_mut(), &ctx, fired);
+    }
+    let app = app.borrow();
     assert!(closed(&app), "it runs at once");
     assert_eq!(steps(&app), n + 1, "one undo step");
     // The defaults (tolerance and softness 10): the white goes, the near-white ring fades.
     let [corner, ring, block] = alphas(&app);
     assert!(corner == 0 && ring > 0 && ring < 255 && block == 255, "{:?}", alphas(&app));
 }
-
-

@@ -15,6 +15,7 @@ pub mod shared_edge;
 pub mod tangent_circle;
 
 use craft::behavior::ColumnWidth;
+use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Divider, Text};
@@ -33,7 +34,7 @@ use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, par
 use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::host::open_held;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp};
 use crate::panels::empty_state;
 
 /// The Anchor Inspector panel's id (`window.panel {panel: "anchorInspector"}`).
@@ -107,33 +108,33 @@ pub(crate) fn effect_choices(effect: &str, key: &str) -> Option<&'static [(&'sta
 }
 
 /// Object › Plug-ins › Path Precision Tools.
-pub fn menu() -> Vec<Item> {
-    let tool = |label, id: &str| Item::Cmd(label, "tool.select", json!({ "tool": id }));
+pub fn menu() -> Vec<Node> {
+    let tool = |label, id: &str| cp(label, "tool.select", json!({ "tool": id }));
     vec![
         tool("Anchor Eraser Brush", anchor_eraser::ID),
         tool("Extend Path Tool", extend_path::ID),
         tool("Measure & Inspect Tool", measure_inspect::ID),
         tool("Parametric Shape Tool", parametric_shape::ID),
-        Item::Cmd("Corner Tool", corner::COMMAND, json!({})),
-        Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
+        cp("Corner Tool", corner::COMMAND, json!({})),
+        c("Set Corners…", set_corners::COMMAND),
         tool("Slide Anchor Along Path", slide_anchor::ID),
-        Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        cp("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
         tool("Tangent Circle Tool", tangent_circle_tool::ID),
         tool("Trim at Crossings Tool", trim::ID),
-        Item::Sep,
-        Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
-        Item::Cmd("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
-        Item::Sep,
-        Item::Cmd("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
-        Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
-        Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
-        Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
-        Item::Cmd("Smooth Bridge…", bridge::COMMAND, Value::Null),
-        Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
-        Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
-        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
-        Item::Cmd("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
-        Item::Cmd("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
+        Sep,
+        cp("Anchor Inspector", "window.panel", json!({ "panel": ID })),
+        cp("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
+        Sep,
+        cp("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
+        cp("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
+        c("Divide into Dashes…", dashes::COMMAND),
+        cp("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
+        c("Smooth Bridge…", bridge::COMMAND),
+        cp("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
+        c("Tangent Circle…", tangent_circle::COMMAND),
+        cp("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
+        cp("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
+        cp("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
     ]
 }
 

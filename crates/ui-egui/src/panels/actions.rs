@@ -9,7 +9,8 @@ use craft::automation::actions::{Action, ActionStep};
 use craft::automation::ui::actions::{
     ActionMove, ActionPlace, ActionSelection, ActionsEvent, ActionsHost, ActionsPanel, ActionsPanelCommands, ShortcutChoice, StepCells,
 };
-use craft::ui::contract::SweepStep; // PLAN: assumed path of the framework's `SweepStep` in the app's `craft` facade
+use craft::keymap::CommandRef;
+use craft::ui::contract::SweepStep;
 use serde_json::{Value, json};
 
 use crate::{UiState, VectorcraftApp};
@@ -44,17 +45,15 @@ mod tests_stops;
 
 pub(crate) use files::can_load;
 pub use files::{ACTIONS_EXT, LOAD_SET, REPLACE_SET, SAVE_SET, load_set, replace_set, save_set};
-pub use keys::{FUNCTION_KEYS, FunctionKey, key_error};
+pub use keys::{FUNCTION_KEYS, FunctionKey, function_keys, key_error};
 pub use model::{default_list, default_sets, deserialize_current_set};
 pub use playback::{
-    CONTINUE_PLAYBACK, PAUSE_SECONDS, PLAY_ACTION, PLAY_AT, PLAYBACK_OPTIONS, PlaybackOptions, Playing, STOP_STEP, continue_playback,
+    CONTINUE_PLAYBACK, PAUSE_SECONDS, PLAY_ACTION, PLAY_AT, PLAYBACK_OPTIONS, PlaybackOptions, PlaybackSpeed, Playing, STOP_STEP, continue_playback,
     deserialize_playback, play, play_action, play_at, playback_drawn, playback_held, playback_options, tick_playback, waiting_at_stop,
 };
-// PLAN: assumed visibility of these playback items is `pub(crate)` as at the base.
 pub(crate) use playback::{KnownCommands, has_stop, is_ui_step, shown_text, step_place, stop_params, unknown_commands};
 pub use recording::{START_RECORDING, STOP_RECORDING, record, stop};
 pub(crate) use recording::{after_journaled_edit, after_recorded_command, before_recorded_command};
-// PLAN: assumed menus-w18 keeps these names and visibilities from the base.
 pub use edits::{
     ACTION_OPTIONS, BUTTON_MODE, CLEAR, DELETE_SETS, DELETE_STEP, DUPLICATE, INCLUDE_STEPS, INSERT_MENU_ITEM, INSERT_SELECT_OBJECT,
     INSERT_SELECT_PATH, INSERT_STOP, MOVE_STEP, NEW_ACTION, RENAME_ACTION, RESET, SELECT_OBJECT_STEP, SELECT_PATH_STEP, action_options,
@@ -80,7 +79,7 @@ impl ActionHost {
     fn of(app: &VectorcraftApp) -> Self {
         let recording = app.ui.recording_into.as_deref().and_then(|name| app.ui.actions.actions().iter().position(|a| a.name == name));
         let pending = recording
-            .and_then(|_| recording::recording_start(app)) // PLAN: assumed `pub(super) fn recording_start(&VectorcraftApp) -> Option<usize>`
+            .and_then(|_| recording::recording_start(app))
             .map(|start| model::steps_from(app.session.journal_for_action(start)))
             .unwrap_or_default();
         Self { recording, pending, playing: app.ui.action_playing.is_some() }
@@ -126,7 +125,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let current = match &app.ui.actions_panel.selected {
         Some(ActionSelection::Set(name)) => Some(name.clone()),
         Some(ActionSelection::Action(i) | ActionSelection::Step(i, _)) => app.ui.actions.set_of(*i).map(str::to_string),
-        None => None,
+        _ => None,
     };
     if current.is_some() {
         app.ui.action_set = current;
@@ -168,7 +167,7 @@ fn apply(app: &mut VectorcraftApp, event: ActionsEvent) {
         ActionsEvent::Save { set: Some(name) } => run(app, SAVE_SET, json!({ "name": name })),
         ActionsEvent::Delete(selection) => delete(app, selection),
         ActionsEvent::DeleteSets(names) => {
-            edits::ask_delete_sets(app, names); // PLAN: assumed `pub(crate) fn ask_delete_sets(&mut VectorcraftApp, Vec<String>)` in menus-w18's edits
+            edits::ask_delete(app, names);
             Ok(())
         }
         ActionsEvent::Rename { action, text } => action_command(app, RENAME_ACTION, action, json!({ "name": text })),
@@ -177,7 +176,7 @@ fn apply(app: &mut VectorcraftApp, event: ActionsEvent) {
             let key = choice.map_or_else(|| json!({ "key": 0 }), |c| json!({ "key": c.key, "cmd": c.command, "shift": c.shift }));
             action_command(app, ACTION_OPTIONS, action, key)
         }
-        ActionsEvent::Duplicate(selection) => duplicate(app, selection),
+        ActionsEvent::Duplicate(selection) => duplicate_row(app, selection),
         ActionsEvent::Reorder(mv) => reorder(app, mv),
         ActionsEvent::Toggle(step) => toggle(app, step),
         // Record Again and Allow Tool Recording are not offered by VectorCraft: the panel emits them
@@ -195,9 +194,9 @@ fn run(app: &mut VectorcraftApp, id: &str, params: Value) -> Result<(), String> 
     app.run(id, params).map(drop)
 }
 
-/// A panel-menu command, which acts on the panel's selection.
+/// A panel-menu command, which acts on the panel's selection; the menu shows its own refusals.
 fn command(app: &mut VectorcraftApp, command: ActionsPanelCommands) -> Result<(), String> {
-    menu::run(app, command) // PLAN: assumed `pub(super) fn run(&mut VectorcraftApp, ActionsPanelCommands) -> Result<(), String>` in menus-w18's menu.rs
+    menu::run(app, &CommandRef::from(command).id, &Value::Null).unwrap_or(Ok(Value::Null)).map(drop)
 }
 
 /// The (set, action) indexes the commands take for the action at list index `action`.
@@ -241,7 +240,7 @@ fn begin_recording(app: &mut VectorcraftApp, into: Option<usize>) -> Result<(), 
 fn delete(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), String> {
     match selection {
         ActionSelection::Set(name) => {
-            edits::ask_delete_sets(app, vec![name]);
+            edits::ask_delete(app, vec![name]);
             Ok(())
         }
         ActionSelection::Action(action) => {
@@ -253,6 +252,7 @@ fn delete(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), St
             let (set, at) = located(&app.ui.actions, action)?;
             run(app, DELETE_STEP, json!({ "set": set, "action": at, "step": step }))
         }
+        _ => Ok(()),
     }
 }
 
@@ -278,7 +278,7 @@ pub(crate) fn duplicate_selection(app: &mut VectorcraftApp) {
 }
 
 /// Copies the row and selects the copy.
-fn duplicate(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), String> {
+fn duplicate_row(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(), String> {
     let params = match selection {
         ActionSelection::Action(action) => {
             let (set, at) = located(&app.ui.actions, action)?;
@@ -291,6 +291,7 @@ fn duplicate(app: &mut VectorcraftApp, selection: ActionSelection) -> Result<(),
         ActionSelection::Step(action, step) => {
             return app.ui.actions.duplicate_step(action, step).map_err(|e| e.to_string());
         }
+        _ => return Ok(()),
     };
     let copy = app.run(DUPLICATE, params)?;
     let index = |key: &str| copy[key].as_u64().and_then(|i| usize::try_from(i).ok());
@@ -352,6 +353,7 @@ fn toggle(app: &mut VectorcraftApp, step: SweepStep<ActionSelection>) -> Result<
             let (set, at) = located(list, *action)?;
             json!({ "set": set, "action": at, "step": step, "included": edit.on, "others": others })
         }
+        _ => return Ok(()),
     };
     run(app, INCLUDE_STEPS, params)
 }

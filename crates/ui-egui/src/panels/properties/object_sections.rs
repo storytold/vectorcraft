@@ -1,9 +1,10 @@
 //! The Properties panel's sections of the selected image, Image Trace object and Objects on Path groups.
 
 use craft::behavior::{Anchor9, ColumnWidth, Mixed};
+use craft::host::PickKind;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Sizing};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Grid;
@@ -11,7 +12,7 @@ use craft::ui::pickers::{ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::sections::Section;
 use craft::ui::style::TypeRole;
-use craft::ui::text::NumberField;
+use craft::ui::text::{NumberField, NumberPick};
 use egui::Ui;
 use serde_json::json;
 
@@ -37,10 +38,7 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                     action.run(app, id, &name);
                 }
             }
-            // PLAN: assumed `crate::file_asks::{can, PickKind}` (fl.A6)
-            if crate::file_asks::can(app, crate::file_asks::PickKind::Open)
-                && Button::new(tl!("Replace…")).sizing(Sizing::FillWidth).show(ui).clicked()
-            {
+            if crate::file_asks::can(app, PickKind::Open) && Button::new(tl!("Replace…")).sizing(Sizing::FillWidth).show(ui).clicked() {
                 links::replace(app, vec![id]);
             }
             Button::command(CommandRef::with_params("window.panel.activate", json!({ "panel": links::ID })))
@@ -132,15 +130,15 @@ pub(super) fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop
             }
         });
         Field::new(tl!("Rotate:")).show(ui, |ui, _| {
-            // PLAN: assumed `panels::fields::stops_stepper(step, presets)` returning a stepper closure, and `transform::ANGLE_PRESETS` as `[Entry<NumberPick>; _]` (object-panels-w9)
+            let presets: Vec<Entry<NumberPick>> =
+                transform::ANGLE_PRESETS.iter().map(|v| Entry::new(NumberPick::Number(*v), format!("{v}°"))).collect();
             let out = NumberField::new(tl!("Rotate"), Bind::given(oop.rotate))
                 .unit_kind(UnitKind::Degrees)
-                .presets(&transform::ANGLE_PRESETS)
+                .presets(&presets)
                 .range(-360.0..=f64::INFINITY)
-                .stepper(crate::panels::fields::stops_stepper(15.0, &transform::ANGLE_PRESETS))
+                .stepper(crate::fields::stops_stepper(15.0, &transform::ANGLE_PRESETS, |v| format!("{v:.2}")))
                 .show(ui);
-            // PLAN: assumed `panels::edits::{apply_edits, EditPath}` (widgets-w13, wg.A16)
-            crate::panels::edits::apply_edits(app, &out.edit, crate::panels::edits::EditPath::Scope, |app, v: &Option<f64>, _| {
+            crate::edits::apply_edits(app, &out.edit, crate::edits::EditPath::Scope, |app, v: &Option<f64>, _| {
                 if let Some(a) = *v
                     && oop.rotate != Some(a)
                 {

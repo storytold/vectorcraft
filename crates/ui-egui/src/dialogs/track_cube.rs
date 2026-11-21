@@ -7,14 +7,13 @@ use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, DisabledLook, Edit as _, EditResponse, Focus as _, Input, MeasureCx, Name, PaintUi, PartsCx,
     Pointer as _, Props as _, Remember as _, Role, Show as _,
 };
+use craft::ui::patterns::form_dialogs::Param;
 use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
 use craft::ui::style::StyleCx;
-use craft::ui::patterns::form_dialogs::Param;
 use egui::{Color32, Pos2, Rect, Stroke, Vec2, vec2};
 use serde_json::json;
 
 use super::revolve_lights::RowStyle;
-use crate::theme::Tokens;
 
 /// The settings the track cube turns, as every 3D effect names them.
 const ROTATION_KEYS: [&str; 3] = ["rotationX", "rotationY", "rotationZ"];
@@ -375,7 +374,7 @@ impl Component for TrackCube<'_> {
     fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
         let m = rotation(cx.value().map(degrees).unwrap_or_default());
         let content = ui.content_painter(cx);
-        paint_cube(&content.painter, cx.rect, m, self.active, cx.is_focused());
+        paint_cube(&content.painter, cx.style, cx.rect, m, self.active, cx.is_focused());
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> EditResponse<[Mixed<f64>; 3]> {
@@ -413,12 +412,12 @@ pub(crate) fn row() -> Param {
 }
 
 /// Draws the track cube at rotation `m` in `rect`, with the grip under the pointer or in hand lit.
-fn paint_cube(painter: &egui::Painter, rect: Rect, m: M3, active: Option<Grip>, focused: bool) {
-    let t = Tokens::get(painter.ctx());
+fn paint_cube(painter: &egui::Painter, s: &RowStyle, rect: Rect, m: M3, active: Option<Grip>, focused: bool) {
     let center = rect.center();
-    painter.rect_filled(rect, 2.0, t.input);
+    let colors = [s.axis_x.egui(), s.axis_y.egui(), s.axis_z.egui()];
+    painter.rect_filled(rect, 2.0, s.well.egui());
     let ring = if active == Some(Grip::Ring) { 0.6 } else { 0.3 };
-    painter.circle_stroke(center, (RING_IN + RING_OUT) / 2.0, Stroke::new(RING_OUT - RING_IN, t.axis_z.gamma_multiply(ring)));
+    painter.circle_stroke(center, (RING_IN + RING_OUT) / 2.0, Stroke::new(RING_OUT - RING_IN, colors[2].gamma_multiply(ring)));
     // Front blue; top and bottom light, sides mid and back dark gray. Only faces turned to the
     // viewer are drawn, and on a cube those never overlap.
     for (axis, side) in (0..3).flat_map(|axis| [(axis, true), (axis, false)]) {
@@ -427,7 +426,7 @@ fn paint_cube(painter: &egui::Painter, rect: Rect, m: M3, active: Option<Grip>, 
         }
         // PLAN: the gray steps are literals; the data tokens of area plan §2 w3 were not visible to this writer.
         let fill = match (axis, side) {
-            (2, true) => t.axis_z,
+            (2, true) => colors[2],
             (2, false) => Color32::from_gray(90),
             (1, _) => Color32::from_gray(205),
             _ => Color32::from_gray(155),
@@ -435,16 +434,15 @@ fn paint_cube(painter: &egui::Painter, rect: Rect, m: M3, active: Option<Grip>, 
         let points: Vec<Pos2> = face_corners(axis, side).iter().map(|&i| corner(m, center, i)).collect();
         painter.add(egui::Shape::convex_polygon(points, fill, Stroke::NONE));
     }
-    let colors = [t.axis_x, t.axis_y, t.axis_z];
     for (i, j, axis) in edges() {
         if !edge_visible(m, i, axis) {
             continue;
         }
         let lit = active == Some(Grip::Edge(axis));
-        let stroke = if lit { Stroke::new(2.5, colors[axis]) } else { Stroke::new(1.0, t.text_dim) };
+        let stroke = if lit { Stroke::new(2.5, colors[axis]) } else { Stroke::new(1.0, s.muted.egui()) };
         painter.line_segment([corner(m, center, i), corner(m, center, j)], stroke);
     }
-    let border = if focused { t.accent } else { t.input_border };
+    let border = if focused { s.accent } else { s.edge }.egui();
     painter.rect_stroke(rect, 2.0, Stroke::new(1.0, border), egui::StrokeKind::Inside);
 }
 

@@ -5,13 +5,20 @@ use serde_json::json;
 
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 
-use super::tests_export::{app, frame, kind, set};
+use super::tests_export::{app, confirm, frame, kind, set, try_confirm};
 use super::*;
+use crate::VectorcraftApp;
 
-/// The values of the open options dialog.
+/// The values of the top dialog, a parameter dialog; empty when none is open.
 pub(super) fn fields(app: &VectorcraftApp) -> DialogFields {
-    // PLAN: assumed the open dialog is a `HostedParamDialog` on the window host (`app.dialogs()`, hub-w3).
-    app.dialogs().get::<HostedParamDialog>().map(|d| d.fields().clone()).unwrap_or_default()
+    app.dialogs()
+        .and_then(|dialogs| {
+            dialogs.with(|host| {
+                let id = host.open_dialogs().last()?.id;
+                host.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())
+            })
+        })
+        .unwrap_or_else(DialogFields::new)
 }
 
 /// A JPEG's SOF marker and component count.
@@ -57,14 +64,14 @@ fn raster_option_rows_reach_the_export_params() {
     for (format, sets, check) in rows {
         let (mut app, written) = app(1);
         app.run("file.exportAs", json!({"format": format})).unwrap();
-        confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(kind(&app).map(|k| k.strip_suffix("Options").map(str::to_string)), Some(Some(format.to_string())));
         frame(&mut app);
         for (key, value) in sets {
             set(&mut app, key, value.clone());
         }
         frame(&mut app);
-        confirm(&mut app).unwrap_or_else(|e| panic!("{format}: {e}"));
+        try_confirm(&mut app).unwrap_or_else(|e| panic!("{format}: {e}"));
         let file = written.borrow()[0].1.clone();
         check(&file);
     }
@@ -77,7 +84,7 @@ fn a_cmyk_document_exports_cmyk_by_default() {
     app.run("object.convertDocumentColorMode", json!({"mode": "cmyk"})).unwrap();
     for format in ["jpg", "tiff", "psd"] {
         app.run("file.exportAs", json!({"format": format})).unwrap();
-        confirm(&mut app).unwrap();
+        confirm(&mut app);
         assert_eq!(fields(&app).text("colorModel"), Some("cmyk"), "{format}");
     }
 }
@@ -87,17 +94,17 @@ fn text_export_options_write_the_stories() {
     let (mut app, written) = app(1);
     app.run("text.create", json!({"x": 5, "y": 30, "text": "Hello\nthere"})).unwrap();
     app.run("file.exportAs", json!({"format": "txt"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("txtOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("txtOptions"));
     assert_eq!((fields(&app).text("path"), fields(&app).text("encoding")), (Some("/out/Untitled-1.txt"), Some("utf8")));
     frame(&mut app);
     set(&mut app, "lineEndings", json!("crlf"));
     set(&mut app, "encoding", json!("bogus"));
-    assert!(confirm(&mut app).is_err());
-    assert_eq!(kind(&app), Some("txtOptions"), "a bad option keeps the dialog open");
+    assert!(try_confirm(&mut app).is_err());
+    assert_eq!(kind(&app).as_deref(), Some("txtOptions"), "a bad option keeps the dialog open");
     set(&mut app, "encoding", json!("utf8"));
     frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.txt");
+    confirm(&mut app);
     assert_eq!(kind(&app), None);
     let (path, bytes) = written.borrow().last().cloned().unwrap();
     assert_eq!((path.as_str(), bytes.as_slice()), ("/out/Untitled-1.txt", &b"Hello\r\nthere\r\n"[..]));
@@ -108,11 +115,11 @@ fn text_export_options_write_the_stories() {
 fn webp_is_lossless_by_default() {
     let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "webp"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("webpOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("webpOptions"));
     frame(&mut app);
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["warnings"], json!([]), "{r}");
+    confirm(&mut app);
+    assert!(!app.ui.status.contains("note"), "{}", app.ui.status);
     assert_eq!(&written.borrow()[0].1[12..16], b"VP8L", "lossless by default");
 }
 
@@ -122,13 +129,14 @@ fn save_for_office_documents_picks_the_resolution() {
     let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("document.exportForOffice")).unwrap();
     assert_eq!((item.path[0].as_str(), item.label.as_str(), item.enabled), ("File", "Save for Office Documents…", true));
     app.run("document.exportForOffice", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("saveForOffice"));
+    assert_eq!(kind(&app).as_deref(), Some("saveForOffice"));
     frame(&mut app);
     set(&mut app, "ppi", json!(300));
     set(&mut app, "artboard", json!(1));
     set(&mut app, "transparent", json!(true));
     frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.png");
+    confirm(&mut app);
+    assert_eq!(written.borrow()[0].0, "/out/Untitled-1.png");
     let img = craft_image_codecs::decode(&written.borrow()[0].1)
         .map(|__cimg| {
             let (__w, __h) = __cimg.dimensions();
@@ -152,7 +160,7 @@ fn save_for_office_documents_picks_the_resolution() {
     // With a path (agents), no dialog.
     let r = app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(r["path"], "/x/o.png");
-    assert!(app.ui.dialog.is_none());
+    assert!(kind(&app).is_none());
     let img = craft_image_codecs::decode(&written.borrow()[1].1)
         .map(|__cimg| {
             let (__w, __h) = __cimg.dimensions();

@@ -3,21 +3,21 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use serde_json::{Value, json};
-use vectorcraft_engine::Session;
-
-use super::*;
-use crate::Services;
-// PLAN: assumed `craft_ui` names (see `save_for_web.rs`).
 use craft::ui::dialog::{DialogId, StackDialog};
 use craft::ui::patterns::form_dialogs::HostedSaveForWeb;
 use craft::ui::shell::WindowDialogs;
+use serde_json::{Value, json};
+use vectorcraft_engine::Session;
 
-type Log = Rc<RefCell<Vec<String>>>;
+use super::tests_export::{answer_saves, save_panel};
+use super::*;
+use crate::{Services, VectorcraftApp};
 
-/// An app with a 60×40 pt document (an ellipse), whose save panel answers inside `dir`; `web`
+pub(super) type Log = Rc<RefCell<Vec<String>>>;
+
+/// An app with a 60×40 pt document (an ellipse), whose save panel answers `<dir>/<suggested name>`; `web`
 /// downloads instead (into the log). Its window context is the one [`frame`] runs.
-fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
+pub(super) fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
     let log = Log::default();
     let l = log.clone();
     let mut services = Services::default();
@@ -29,11 +29,11 @@ fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
         }));
     }
     let mut app = VectorcraftApp::new(Session::new(), services);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    app.ui_ctx = Some(ctx);
-    // PLAN: assumed the scripted file service of fl.A20: a save panel that answers `<dir>/<suggested name>`.
-    crate::tests::picks::save_in(&mut app, dir);
+    app.ui_ctx = Some(crate::testing::ui_context());
+    // The files go to disk, where the tests read them back.
+    app.services.write = Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    let dir = dir.to_path_buf();
+    save_panel(&mut app, move |p| Some(dir.join(p.file_name.as_deref().unwrap_or_default()).to_string_lossy().into_owned()));
     app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
     app.run("paint.setStroke", json!({"none": true})).unwrap();
     app.run("shape.ellipse", json!({"x": 5, "y": 4, "width": 30, "height": 20})).unwrap();
@@ -52,7 +52,7 @@ fn two_artboards(dir: &std::path::Path) -> VectorcraftApp {
     app
 }
 
-fn host(app: &VectorcraftApp) -> WindowDialogs {
+pub(super) fn host(app: &VectorcraftApp) -> WindowDialogs {
     app.dialogs().expect("the app has a window")
 }
 
@@ -60,19 +60,17 @@ fn is_open(app: &VectorcraftApp) -> bool {
     host(app).with(|h| h.get::<HostedSaveForWeb>().is_some())
 }
 
-fn id(app: &VectorcraftApp) -> DialogId {
+pub(super) fn id(app: &VectorcraftApp) -> DialogId {
     host(app).with(|h| h.get::<HostedSaveForWeb>().map(StackDialog::id)).expect("Save for Web is open")
 }
 
 /// The open dialog's values, as automation lists them.
-// PLAN: assumed `DialogHost::json_fields(id) -> Option<Value>` (the sheet's `json_fields`).
 fn fields(app: &VectorcraftApp) -> Value {
-    let id = id(app);
-    host(app).with(|h| h.json_fields(id)).expect("the dialog lists its values")
+    host(app).with(|h| h.get::<HostedSaveForWeb>().and_then(StackDialog::json_fields)).expect("the dialog lists its values")
 }
 
 /// Sets the field `key` as the user editing that control would.
-fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
+pub(super) fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
     let ctx = app.ui_ctx.clone().expect("the app has a window");
     let id = id(app);
     host(app).with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
@@ -96,7 +94,7 @@ fn frame_opened(app: &mut VectorcraftApp) -> Vec<String> {
         .collect()
 }
 
-fn frame(app: &mut VectorcraftApp) {
+pub(super) fn frame(app: &mut VectorcraftApp) {
     frame_opened(app);
 }
 
@@ -114,14 +112,16 @@ fn opened(app: &mut VectorcraftApp) -> Vec<String> {
 
 /// Presses Save… (the dialog asks for a path, the scripted panel answers, the dialog closes and the
 /// pump writes the files).
-fn confirm(app: &mut VectorcraftApp) {
+pub(super) fn confirm(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().expect("the app has a window");
     let id = id(app);
     host(app).with(|h| h.confirm_by_id(&ctx, id));
     settle(app);
+    answer_saves(app);
+    settle(app);
 }
 
-fn save(app: &mut VectorcraftApp) {
+pub(super) fn save(app: &mut VectorcraftApp) {
     confirm(app);
     assert!(!is_open(app), "Save closes the dialog");
 }

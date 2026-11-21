@@ -4,8 +4,8 @@ use vectorcraft_engine::Session;
 use vectorcraft_tools::addons::parametric_shape::ShapeKind;
 
 use super::{ID, KIND, readout};
-use crate::tests_labels::painted_text;
-use crate::{VectorcraftApp, menus};
+use crate::VectorcraftApp;
+use crate::addons::dialogs::tests as host;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -13,12 +13,11 @@ fn app() -> VectorcraftApp {
     app
 }
 
-/// An app with a window, which the held options dialogs need.
-fn app_with_window() -> (VectorcraftApp, egui::Context) {
+/// An app with a window, which the dialogs open in.
+fn app_with_window() -> VectorcraftApp {
     let mut app = app();
-    let ctx = egui::Context::default();
-    app.ui_ctx = Some(ctx.clone());
-    (app, ctx)
+    app.ui_ctx = Some(crate::testing::ui_context());
+    app
 }
 
 #[test]
@@ -46,38 +45,47 @@ fn the_inspector_shows_the_selected_anchor_and_its_buttons_edit() {
     assert!(a.lengths.iter().all(|l| *l > 0.0) && a.angles.iter().all(|d| d.is_some()), "{:?} {:?}", a.lengths, a.angles);
 }
 
+/// Runs `f` on the held options dialog, `None` when none is open.
+fn held<R>(app: &VectorcraftApp, f: impl FnOnce(Option<&mut HostedParamDialog>) -> R) -> R {
+    app.dialogs().expect("the window's dialogs").with(|h| f(h.get_mut::<HostedParamDialog>()))
+}
+
 #[test]
 fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
-    let (mut app, ctx) = app_with_window();
-    // PLAN: assumed `VectorcraftApp::dialogs(&mut self) -> &mut DialogHost` (hub-w2).
-    let numbers = |app: &mut VectorcraftApp| {
-        let d = app.dialogs().get::<HostedParamDialog>().expect("the held dialog");
-        (d.fields().number("size"), d.fields().number("tolerance"), d.fields().bool("pressure"))
+    let mut app = app_with_window();
+    let ctx = host::ctx(&app);
+    let numbers = |app: &VectorcraftApp| {
+        held(app, |d| {
+            let f = d.expect("the held dialog").fields();
+            (f.number("size"), f.number("tolerance"), f.bool("pressure"))
+        })
     };
     let ok = |app: &mut VectorcraftApp, set: &[(&str, FieldValue)]| {
-        let d = app.dialogs().get_mut::<HostedParamDialog>().expect("the held dialog");
-        for (key, value) in set {
-            d.set_field(*key, value.clone());
-        }
-        app.dialogs().confirm::<HostedParamDialog>(&ctx);
+        held(app, |d| {
+            let d = d.expect("the held dialog");
+            for (key, value) in set {
+                d.set_field(*key, value.clone());
+            }
+        });
+        app.dialogs().expect("the window's dialogs").with(|h| h.confirm::<HostedParamDialog>(&ctx));
         crate::dialogs::host::pump(app, &ctx);
     };
     app.run("tool.options", json!({"tool": "anchorEraserBrush"})).unwrap();
-    assert_eq!(numbers(&mut app), (Some(20.0), Some(10.0), Some(false)));
+    assert_eq!(numbers(&app), (Some(20.0), Some(10.0), Some(false)));
     ok(&mut app, &[("size", FieldValue::Number(64.0)), ("pressure", FieldValue::Bool(true))]);
-    assert!(app.dialogs().get::<HostedParamDialog>().is_none(), "OK closes the dialog");
+    assert!(held(&app, |d| d.is_none()), "OK closes the dialog");
     let o = app.session.tool_options_of("anchorEraserBrush");
     assert_eq!((o["size"].as_f64(), o["pressure"].as_bool()), (Some(64.0), Some(true)));
     // The Extend Path tool's mode: a value the tool refuses keeps the dialog open and the option as it was.
     app.run("tool.options", json!({"tool": "extendPath"})).unwrap();
     ok(&mut app, &[("mode", FieldValue::Text("bogus".into()))]);
-    assert!(app.dialogs().get::<HostedParamDialog>().is_some(), "a refusal keeps the dialog open");
+    assert!(held(&app, |d| d.is_some()), "a refusal keeps the dialog open");
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
     ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
     // The Tangent Circle tool's radius for Shift.
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
-    assert_eq!(app.dialogs().get::<HostedParamDialog>().unwrap().fields().number("radius"), Some(36.0));
+    assert_eq!(held(&app, |d| d.expect("the held dialog").fields().number("radius")), Some(36.0));
     ok(&mut app, &[("radius", FieldValue::Number(12.5))]);
     assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
@@ -170,7 +178,7 @@ fn the_effect_choices_offer_the_effects_default_and_only_values_its_params_name(
 /// says why.
 #[test]
 fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
-    let mut app = app();
+    let mut app = app_with_window();
     let oval = app.run("shape.ellipse", json!({"x": 180.0, "y": 120.0, "width": 80.0, "height": 60.0})).unwrap()["id"].as_u64().unwrap();
     let point =
         |app: &mut VectorcraftApp, x: f64, y: f64| app.run("path.create", json!({"anchors": [{"x": x, "y": y}]})).unwrap()["id"].as_u64().unwrap();
@@ -198,28 +206,25 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     };
     let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
     let open = |app: &mut VectorcraftApp| {
-        let entries = menus::menu_entries(app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Common Tangents…").unwrap();
-        assert!(item.enabled);
-        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(app, &cmd, p);
+        host::open_item(app, "Path Precision Tools", "Common Tangents…");
+        host::dialog_id(app)
     };
 
     // Each choice previews the same two lines, and OK with that choice keeps them as one step;
     // undo puts the document back as it was.
     let mut first: Option<Vec<Vec<(i64, i64)>>> = None;
     for (_, kind) in super::TANGENT_KINDS {
-        open(&mut app);
-        let d = app.ui.dialog.as_mut().unwrap();
-        crate::dialogs::set_field(d, "preview".into(), json!(true));
-        crate::dialogs::set_field(d, "tangents".into(), json!(kind));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let id = open(&mut app);
+        host::set(&app, id, "preview", json!(true));
+        host::set(&app, id, "tangents", json!(kind));
+        host::frame(&mut app);
         assert_eq!(count(&app), nodes + 2, "{kind}: the two lines from the point");
         let previewed = lines(&app);
         assert_eq!(previewed.len(), 2, "{kind}");
         let first = first.get_or_insert_with(|| previewed.clone());
         assert_eq!(&previewed, first, "{kind}: the same lines as the first choice");
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(host::confirm(&app, id), "{kind}: OK is enabled");
+        host::frame(&mut app);
         assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 2), "{kind}: one undo step");
         assert_eq!(&lines(&app), first, "{kind}: OK keeps the previewed lines");
         app.run("edit.undo", json!({})).unwrap();
@@ -230,16 +235,17 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     let first = first.unwrap();
 
     // Switching the choice while the preview is on keeps the same two lines on the canvas.
-    open(&mut app);
-    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    let id = open(&mut app);
+    host::set(&app, id, "preview", json!(true));
+    host::frame(&mut app);
     for (_, kind) in super::TANGENT_KINDS.iter().rev() {
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "tangents".into(), json!(kind));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        host::set(&app, id, "tangents", json!(kind));
+        host::frame(&mut app);
         assert_eq!(count(&app), nodes + 2, "{kind}: switched in place");
         assert_eq!(lines(&app), first, "{kind}: the same lines after the switch");
     }
-    crate::dialogs::cancel(&mut app);
+    host::cancel(&app, id);
+    host::frame(&mut app);
     assert_eq!(app.session.doc().unwrap().doc, start, "Cancel takes the preview away");
     assert_eq!(steps(&app), n, "and adds no undo step");
 
@@ -247,8 +253,9 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     let inside = point(&mut app, 220.0, 150.0);
     app.run("select.set", json!({"ids": [oval, inside]})).unwrap();
     let (n, nodes) = (steps(&app), count(&app));
-    open(&mut app);
-    crate::dialogs::confirm(&mut app).unwrap();
+    let id = open(&mut app);
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
     assert_eq!((steps(&app), count(&app)), (n, nodes));
     assert!(app.ui.status.contains("The point lies inside the path"), "{}", app.ui.status);
 }

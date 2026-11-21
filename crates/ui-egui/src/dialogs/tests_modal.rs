@@ -9,6 +9,7 @@ use vectorcraft_engine::Session;
 
 use super::tests::{SCREEN, app, cancel, confirm, field, fields, flag, frame, is_open, set, set_all, settle, window};
 use super::*;
+use crate::VectorcraftApp;
 
 /// The name of the strip's slider in the access tree.
 // PLAN: assumed the strip's slider is named "Level" (od.OS9).
@@ -225,5 +226,38 @@ fn simplify_slider_auto_simplify_and_a_click_outside_keep_the_result() {
 fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path() {
     let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-SLIDER_BODY_MARKER
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 20 + i * 8, "y": 150.0 + 60.0 * (f64::from(i) / 6.0).sin()})).collect();
+    let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+    let path = |app: &VectorcraftApp| {
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.to_vec()
+    };
+    let original = path(&app);
+    let run: Vec<_> = (10..=30).map(|i| json!([0, i])).collect();
+    app.run("select.anchors", json!({"id": id, "anchors": run})).unwrap();
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+    let kept = |app: &VectorcraftApp, how: &str| {
+        let now = path(app);
+        assert!(now.len() < 41, "{how}: the run loses anchors");
+        assert_eq!(now[..10], original[..10], "{how}: the anchors before the run");
+        assert_eq!(now[10].p, original[10].p, "{how}: the run's start anchor");
+        assert_eq!(now[now.len() - 10..], original[31..], "{how}: the anchors after the run");
+        assert_eq!(now[now.len() - 11].p, original[30].p, "{how}: the run's end anchor");
+    };
+    crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+    app.object_dialogs.strip.as_mut().expect("the slider is open").level = 20.0;
+    settle(&mut app);
+    assert_eq!(simplify_preview(&app), json!({"level": 20.0}));
+    kept(&app, "the slider's preview");
+    frame(&mut app, vec![key(egui::Key::Enter)]);
+    assert!(!simplify_slider::showing(&app) && !app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    kept(&app, "the slider");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(path(&app), original);
+    open_simplify_dialog(&mut app);
+    set(&mut app, "tolerance", json!(4));
+    settle(&mut app);
+    assert!(confirm(&mut app));
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
+    kept(&app, "the dialog");
 }

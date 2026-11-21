@@ -1,4 +1,8 @@
-use super::{BezPath, Color32, Node, NodeKind, Point, SymbolBoxes, VectorcraftApp};
+use egui::Color32;
+use vectorcraft_doc::{Node, NodeKind, SymbolBoxes};
+use vectorcraft_geom::{BezPath, Point};
+
+use super::VectorcraftApp;
 
 pub(super) fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])

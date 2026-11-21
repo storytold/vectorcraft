@@ -3,9 +3,10 @@
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use serde_json::json;
 
-// PLAN: assumed `fields(&app)` returns the values of the top hosted dialog (export-w9's helpers).
-use super::tests_export::{app, fields, frame, kind, names, set};
+use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm};
+use super::tests_raster_formats::fields;
 use super::*;
+use crate::VectorcraftApp;
 
 fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
@@ -33,11 +34,11 @@ fn line(d: &DialogFields) -> String {
 fn export_as_dxf_shows_dxf_options_then_writes_and_remembers_them() {
     let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "dxf"})).unwrap();
-    assert_eq!(kind(&app), Some("exportAs"));
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     frame(&mut app);
     set(&mut app, "useArtboards", json!(true));
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("dxfOptions"), "DXF Options follow");
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("dxfOptions"), "DXF Options follow");
     let d = fields(&app);
     assert_eq!((show(&d, "path"), show(&d, "version"), show(&d, "preserve")), ("/out/Untitled-1.dxf".into(), "2018".into(), "appearance".into()));
     frame(&mut app);
@@ -47,9 +48,9 @@ fn export_as_dxf_shows_dxf_options_then_writes_and_remembers_them() {
     set(&mut app, "unit", json!("Inches"));
     frame(&mut app);
     set(&mut app, "colors", json!("256"));
-    let r = confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(kind(&app).is_none());
-    assert_eq!(r["path"], "/out/Untitled-1.dxf");
+    assert_eq!(names(&written), ["/out/Untitled-1.dxf"]);
     let dxf = text(&written.borrow()[0].1);
     assert!(dxf.contains("$ACADVER\n  1\nAC1009"), "{dxf}");
     // The next DXF Options start from these choices, but not from this export's path.
@@ -76,7 +77,7 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     set(&mut app, "colors", json!("256"));
     frame(&mut app);
     assert_eq!(show(&fields(&app), "dxfPreset"), "cnc", "matching every field again");
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     let dxf = text(&written.borrow()[0].1);
     let lines: Vec<&str> = dxf.lines().collect();
     let header = |var: &str| lines.iter().position(|l| *l == var).and_then(|i| lines.get(i + 2)).map(|v| v.trim());
@@ -93,7 +94,7 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     assert_eq!(line(&fields(&app)), "custom 2000 Inches 1.0 256 editability false true false false");
     // A preset set and confirmed without drawing (the control channel) sets its fields too.
     set(&mut app, "dxfPreset", json!("cnc"));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!((app.ui.dxf_options["dxfPreset"].as_str(), app.ui.dxf_options["unit"].as_str()), (Some("cnc"), Some("Millimeters")));
     // A field set after the preset, with no frame between, keeps its value and shows Custom.
     app.run("ui.dxfOptionsDialog", json!({"dxfPreset": "custom"})).unwrap();
@@ -107,7 +108,7 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     frame(&mut app);
     assert_eq!(show(&fields(&app), "unit"), "Millimeters");
     set(&mut app, "unit", json!("Inches"));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     let remembered = ["dxfPreset", "version", "unit"].map(|k| app.ui.dxf_options[k].as_str());
     assert_eq!(remembered, [Some("custom"), Some("2000"), Some("Inches")]);
 }
@@ -122,7 +123,7 @@ fn include_placed_images_and_fill_hatches_follow_the_preset_and_a_change_shows_c
     app.run("ui.dxfOptionsDialog", json!({"path": "/out/a.dxf"})).unwrap();
     frame(&mut app);
     assert_eq!(shown(&app), ("custom".into(), true, true));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(text(&written.borrow()[0].1).contains("\nHATCH\n"), "Custom keeps the fill's hatch");
     app.run("ui.dxfOptionsDialog", json!({"path": "/out/b.dxf"})).unwrap();
     set(&mut app, "dxfPreset", json!("cnc"));
@@ -139,7 +140,7 @@ fn include_placed_images_and_fill_hatches_follow_the_preset_and_a_change_shows_c
     set(&mut app, "includeImages", json!(false));
     frame(&mut app);
     assert_eq!(shown(&app).0, "cnc");
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(!text(&written.borrow()[1].1).contains("\nHATCH\n"), "CNC / CAM writes the fill's outline alone");
     let remembered = ["includeImages", "includeHatches"].map(|k| app.ui.dxf_options[k].as_bool());
     assert_eq!(remembered, [Some(false), Some(false)]);
@@ -156,12 +157,12 @@ fn bad_dxf_options_keep_the_dialog_open() {
     let (mut app, written) = app(1);
     app.run("ui.dxfOptionsDialog", json!({"path": "/out/a.dxf"})).unwrap();
     set(&mut app, "scale", json!(-1));
-    assert!(confirm(&mut app).is_err());
-    assert_eq!(kind(&app), Some("dxfOptions"));
+    assert!(try_confirm(&mut app).is_err());
+    assert_eq!(kind(&app).as_deref(), Some("dxfOptions"));
     set(&mut app, "scale", json!(1));
     set(&mut app, "dxfPreset", json!("laser"));
     frame(&mut app);
-    let e = confirm(&mut app).unwrap_err();
+    let e = try_confirm(&mut app).unwrap_err();
     assert!(e.contains("custom or cnc"), "{e}");
     set(&mut app, "dxfPreset", json!("custom"));
     set(&mut app, "scale", json!(10));
@@ -169,11 +170,11 @@ fn bad_dxf_options_keep_the_dialog_open() {
     app.run("select.none", json!({})).unwrap();
     set(&mut app, "selectedOnly", json!(true));
     frame(&mut app);
-    let e = confirm(&mut app).unwrap_err();
+    let e = try_confirm(&mut app).unwrap_err();
     assert!(e.contains("select something"), "{e}");
     assert!(written.borrow().is_empty());
     set(&mut app, "selectedOnly", json!(false));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/a.dxf"]);
 }
 
@@ -183,11 +184,11 @@ fn dwg_is_listed_but_points_to_dxf() {
     app.run("file.exportAs", json!({"format": "dwg"})).unwrap();
     assert_eq!(show(&fields(&app), "format"), "dwg");
     frame(&mut app);
-    let e = confirm(&mut app).unwrap_err();
+    let e = try_confirm(&mut app).unwrap_err();
     assert!(e.contains("DWG") && e.contains("DXF"), "{e}");
-    assert_eq!(kind(&app), Some("exportAs"), "the dialog stays open to pick DXF");
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"), "the dialog stays open to pick DXF");
     set(&mut app, "format", json!("dxf"));
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("dxfOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("dxfOptions"));
     assert!(written.borrow().is_empty());
 }

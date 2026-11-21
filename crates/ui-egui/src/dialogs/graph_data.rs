@@ -146,8 +146,7 @@ impl Lines {
         if self.key.as_ref().is_some_and(|(r, w, ws)| *r == rows && *w == sheet.width && *ws == sheet.widths) {
             return;
         }
-        let own: BTreeMap<u32, f32> =
-            sheet.widths.iter().enumerate().filter_map(|(c, w)| Some((u32::try_from(c).ok()?, digits_px((*w)?)))).collect();
+        let own: BTreeMap<u32, f32> = sheet.widths.iter().enumerate().filter_map(|(c, w)| Some((u32::try_from(c).ok()?, digits_px((*w)?)))).collect();
         self.rows = LineIndex::uniform(ROW_H, u32::try_from(rows).unwrap_or(u32::MAX));
         self.columns = LineIndex::new(&own, digits_px(width(sheet)), MAX_COLS as u32);
         self.key = Some((rows, sheet.width, sheet.widths.clone()));
@@ -821,7 +820,7 @@ mod tests {
         egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
             move |ui, app: &mut VectorcraftApp| {
                 if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
+                    crate::testing::install(ui.ctx());
                     return;
                 }
                 if let Some(dialogs) = app.dialogs() {
@@ -1063,13 +1062,7 @@ mod tests {
         assert_eq!((digits(&h, 0), digits(&h, 1), digits(&h, 2)), (7, 17, 7));
         // Esc in the middle of a drag puts the width back.
         drag(&mut h, 2, 70.0, false);
-        h.event(egui::Event::Key {
-            key: egui::Key::Escape,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: Default::default(),
-        });
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
         h.step();
         h.event(button(edge(&h, 2), false));
         h.step();

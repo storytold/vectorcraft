@@ -3,8 +3,9 @@
 
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard};
 
-use craft::ui::runtime::env::Label;
+use craft::ui::contract::Bind;
 use craft::ui::dialog::DialogId;
+use craft::ui::runtime::env::Label;
 // PLAN: assumed paths of the form-dialog and live-preview items for the app crate.
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamLayout, ParamResult};
 use serde_json::{Map, Value};
@@ -13,10 +14,10 @@ use vectorcraft_effects::{MAP_ART, MAP_INVISIBLE, MAP_SHADE, MapSurface, is_clas
 
 use super::form::{fields_of, json_of};
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use super::revolve::{self, BevelChoice, Place};
 use crate::VectorcraftApp;
 use crate::caches::MapSurfacesKey;
-use crate::live_preview::LivePreview;
 
 /// The page whose rows are Map Art's.
 const MAP_ART_PAGE: &str = "mapArt";
@@ -83,8 +84,7 @@ pub(crate) fn data(app: &VectorcraftApp, effect: Option<&str>, params: &Map<Stri
 impl Session {
     /// The command OK runs, and the params it takes.
     fn command(&self, params: &Map<String, Value>) -> (&'static str, Value) {
-        // PLAN: assumed effect.rs's shared builder `command(effect, item, index, edit_target, aligned, &Map)`.
-        super::effect::command(&self.effect, self.item.as_ref(), self.index, &self.edit_target, self.aligned, params)
+        super::effect::command_for(&self.effect, self.item.as_ref(), self.index, &self.edit_target, self.aligned, params.clone(), None)
     }
 
     /// The command, its params and the effect's params for the dialog's values.
@@ -108,16 +108,18 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     fields.set("__effect", effect.clone());
     fields.set("__page", revolve::pages(&effect, Place::Dialog).first().map_or("rotation", |p| p.0).to_string());
     fields.set("__light", 0i64);
-    let ctx = app.ctx().ok_or("no window")?; // PLAN: assumed `VectorcraftApp::ctx() -> Option<egui::Context>`
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let build_data = Arc::clone(&shared);
     let title = label.clone();
+    // The canvas of the current window: the gizmo and the droppers work there while the dialog is open.
+    let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
     let dialog = HostedParamDialog::new(&ctx, "effect.dialog", fields, move |f| {
-        // PLAN: assumed `ParamDialog::new(key, title)` and `crate::canvas::main_canvas_id()`.
-        ParamDialog::new("effect.dialog", title.clone())
-            .params(revolve::params(&read(&build_data), f, Place::Dialog))
-            .previews(true)
-            .canvas(crate::canvas::main_canvas_id())
-            .layout(ParamLayout::Stacked)
+        let rows = revolve::params(&read(&build_data), f, Place::Dialog);
+        let dialog = ParamDialog::new("effect.dialog", title.clone(), rows).values(Bind::bound(f)).previews(true).layout(ParamLayout::Stacked);
+        match canvas {
+            Some(canvas) => dialog.canvas(canvas),
+            None => dialog,
+        }
     });
     if let Some(old) = app.three_d_dialog.take() {
         old.preview.cancel(app);
@@ -194,7 +196,11 @@ pub(crate) fn hint(app: &VectorcraftApp) -> Option<&'static str> {
 /// The hint for `effect` with the dialog's `fields`: the gizmo's use while Preview is on and the page has one.
 pub(crate) fn hint_for(effect: &str, previewing: bool, fields: &DialogFields) -> &'static str {
     let lighting = fields.text("__page") == Some("lighting");
-    let lit = if is_classic_three_d(effect) { matches!(fields.text("surface"), Some("diffuse" | "plastic")) } else { fields.bool("shade").unwrap_or(false) };
+    let lit = if is_classic_three_d(effect) {
+        matches!(fields.text("surface"), Some("diffuse" | "plastic"))
+    } else {
+        fields.bool("shade").unwrap_or(false)
+    };
     if !previewing || (lighting && !lit) {
         tl!("Drag values or labels. Double-click a value to type.")
     } else if lighting {
@@ -217,7 +223,8 @@ fn surfaces(app: &mut VectorcraftApp, s: &Session, fields: &DialogFields, params
         shaping.remove(key);
     }
     let item = s.item.as_ref().and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
-    let key = MapSurfacesKey { uid: st.uid, revision: st.revision, object, item, index: s.index, effect: s.effect.clone(), params: Value::Object(shaping) };
+    let key =
+        MapSurfacesKey { uid: st.uid, revision: st.revision, object, item, index: s.index, effect: s.effect.clone(), params: Value::Object(shaping) };
     if let Some((kept_key, kept)) = &app.canvas.map_surfaces
         && *kept_key == key
     {

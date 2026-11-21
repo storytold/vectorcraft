@@ -3,12 +3,10 @@ use egui::{Event, PointerButton, Pos2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
+use craft::ui::dialog::DialogId;
+use craft::ui::rails::ToolTips as _;
+
 use super::*;
-// PLAN: assumed hosted dialog API of hub-w2: `crate::dialogs::ToolOptions` (state of the tool-options dialog, `fields` a JSON map),
-// `app.dialogs().get::<D>() -> Option<&D>`, `get_mut::<D>() -> Option<&mut D>`, `is_open::<D>() -> bool`,
-// `confirm_by_id(id) -> Result<_, String>`, `cancel_by_id(id)` (the id of a tool's dialog is the tool's id), and
-// `crate::dialogs::open_tool_dialog(app, tool, params)` kept.
-use crate::dialogs::ToolOptions;
 
 /// A fresh app with a document `width` by `height` points.
 fn app_with(width: u32, height: u32) -> VectorcraftApp {
@@ -19,7 +17,6 @@ fn app_with(width: u32, height: u32) -> VectorcraftApp {
 
 /// A context that makes screen-reader nodes, set up as the app runs.
 fn reader() -> egui::Context {
-    // PLAN: assumed `crate::testing::ui_context() -> egui::Context` (hub-w1)
     let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     ctx
@@ -102,14 +99,36 @@ pub(crate) fn wheel(at: Pos2, dy: f32) -> Vec<Event> {
     ]
 }
 
-/// The field `key` of the open tool-options dialog.
-fn field(app: &mut VectorcraftApp, key: &str) -> Option<serde_json::Value> {
-    app.dialogs().get::<ToolOptions>().and_then(|d| d.fields.get(key).cloned())
+/// `app` with a window to host its dialogs in.
+fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {
+    app.ui_ctx = Some(crate::testing::ui_context());
+    app
 }
 
-/// Types `value` into the field `key` of the open tool-options dialog.
-fn set_field(app: &mut VectorcraftApp, key: &str, value: serde_json::Value) {
-    app.dialogs().get_mut::<ToolOptions>().expect("the dialog is open").fields.insert(key.into(), value);
+/// The open tool-options dialog: its id and the fields automation reads.
+fn tool_dialog(app: &VectorcraftApp) -> Option<(DialogId, serde_json::Value)> {
+    app.dialogs()?.with(|host| host.open_dialogs().pop()).map(|d| (d.id, d.fields.unwrap_or_default()))
+}
+
+/// The field `key` of the open tool-options dialog.
+fn field(app: &VectorcraftApp, key: &str) -> Option<serde_json::Value> {
+    tool_dialog(app)?.1.get(key).cloned()
+}
+
+/// Types `value` into the field `key` of the open tool-options dialog; a value the dialog refuses fails the test.
+fn set_field(app: &VectorcraftApp, key: &str, value: serde_json::Value) {
+    let (id, _) = tool_dialog(app).expect("the dialog is open");
+    let ctx = app.ui_ctx.clone().expect("a window");
+    app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|e| panic!("{key}: {e}"));
+}
+
+/// Answers the open tool-options dialog with OK or Cancel; the frame's pump takes the answer.
+fn answer(app: &mut VectorcraftApp, ok: bool) {
+    let (id, _) = tool_dialog(app).expect("the dialog is open");
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let taken = app.dialogs().expect("a window").with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
+    assert!(taken, "the dialog took the answer");
+    crate::dialogs::host::pump(app, &ctx);
 }
 
 /// A double-click on a tool's button opens what `open_options` opens: the artboard's, a graph's and the tools' dialogs
@@ -208,16 +227,16 @@ fn clicking_the_active_blend_tool_button_finishes_the_blend() {
 #[test]
 fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
     for (tool, key, count) in [("polygon", "sides", 3), ("star", "points", 7)] {
-        let mut app = app_with(300, 300);
+        let mut app = windowed(app_with(300, 300));
         app.select_tool(tool);
         assert!(open_options(&mut app, tool).is_err(), "upstream toolbar opening behavior stays unchanged");
-        assert!(!app.dialogs().is_open::<ToolOptions>());
+        assert!(tool_dialog(&app).is_none());
         let objects =
             |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>();
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":120,"y":130}));
         assert!(field(&mut app, if tool == "polygon" { "radius" } else { "radius1" }).is_some());
         set_field(&mut app, key, json!(count));
-        app.dialogs().confirm_by_id(tool).unwrap();
+        answer(&mut app, true);
         assert_eq!(objects(&app), 1, "deliberate exact-size placement");
         assert_eq!(app.session.tool_options()[key], count);
         for round in 0..3 {
@@ -241,7 +260,7 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":140,"y":150}));
         assert_eq!(field(&mut app, key), Some(json!(count)), "reopening uses the chosen count");
         set_field(&mut app, key, json!(9));
-        app.dialogs().cancel_by_id(tool);
+        answer(&mut app, false);
         assert_eq!(objects(&app), 4);
         assert_eq!(app.session.tool_options()[key], count, "Cancel keeps the count");
     }
@@ -253,14 +272,8 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
 fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     let mut app = app_with(200, 200);
     let ctx = reader();
-    let footer = [
-        "Color (, or Shift+,)",
-        "Gradient (. or Shift+.)",
-        "None (/)",
-        "Draw Normal (Shift+D)",
-        "Draw Behind (Shift+D)",
-        "Draw Inside (Shift+D)",
-    ];
+    let footer =
+        ["Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)", "Draw Normal (Shift+D)", "Draw Behind (Shift+D)", "Draw Inside (Shift+D)"];
     let mut nodes = vec![];
     for (k, double) in [false, true].into_iter().enumerate() {
         app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
@@ -375,7 +388,7 @@ fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     let plain = |line: &Vec<(String, bool)>| line.iter().map(|(s, _)| s.as_str()).collect::<String>();
     assert_eq!(lines.len(), 3, "{lines:?}");
     assert_eq!(plain(&lines[0]), "Click the object to select");
-    let shift = crate::menus::shown_shortcut("Shift+Click");
+    let shift = crate::keymap::chord_text("Shift+Click");
     assert_eq!(lines[1], vec![(shift.clone(), true), (" to select multiple objects".to_string(), false)]);
     assert!(plain(&lines[2]).ends_with(" the object to duplicate"), "{lines:?}");
     // A segment that runs on past a key keeps its pieces on one line.
@@ -385,13 +398,12 @@ fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     // The Zoom tool's card follows the animated zoom's hint.
     assert_ne!(card::lines("zoom", false), card::lines("zoom", true));
 
-    // PLAN: assumed `Cards` and its `ToolTips<String>` impl are in scope through `super::*` (chrome-w10)
     let mut app = app_with(300, 300);
-    assert!(!Cards { app: &app }.has(&"selection".to_string()), "off by default");
+    assert!(!card::Cards::new(&app).has(&"selection".to_string()), "off by default");
     app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    assert!(Cards { app: &app }.has(&"selection".to_string()));
+    assert!(card::Cards::new(&app).has(&"selection".to_string()));
     assert_eq!(vectorcraft_tools::catalog::tool_description("lasso"), None);
-    assert!(!Cards { app: &app }.has(&"lasso".to_string()), "no description: the tool tip");
+    assert!(!card::Cards::new(&app).has(&"lasso".to_string()), "no description: the tool tip");
     app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    assert!(!Cards { app: &app }.has(&"selection".to_string()), "tool tips off: no card");
+    assert!(!card::Cards::new(&app).has(&"selection".to_string()), "tool tips off: no card");
 }

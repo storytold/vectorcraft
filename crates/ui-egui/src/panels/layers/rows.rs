@@ -10,7 +10,7 @@ use super::cells::ArtDrag;
 use super::model::{DocLayers, RowId, opens};
 use super::{Document, LayerFilter, Node, NodeId, NodeKind, Value, VectorcraftApp, json};
 use crate::edits::{EditPath, apply_event};
-use crate::widgets::Live;
+use crate::panels::Live;
 
 /// Whether row `n` can take what is moved (`moving`, objects only when `objects`) inside it. A
 /// layer takes them; a group or an Intertwine group takes objects; an Intertwine group, or a group

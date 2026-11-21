@@ -1,7 +1,10 @@
-use super::cursor::only_view_differs;
 use craft::behavior::CanvasView;
+use egui::{Color32, Pos2, Shape, pos2, vec2};
+use vectorcraft_geom::{Affine, Point};
 
-use super::{Affine, CacheKey, Color32, Point, Pos2, Shape, VectorcraftApp, color_image_owned, pos2, vec2};
+use super::cursor::only_view_differs;
+use super::{VectorcraftApp, color_image_owned};
+use crate::CacheKey;
 
 /// The fraction of the canvas's resolution, each way, that [`Fill`] is rendered at.
 const FILL_SCALE: f64 = 0.25;

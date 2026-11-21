@@ -16,10 +16,10 @@ use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue,
 use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Value, json};
 
-use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use crate::VectorcraftApp;
-use crate::units::general_lengths; // PLAN: assumed path of cv.B5b's `general_lengths`
+use crate::canvas::general_lengths;
 
 /// The dialog kind of Blend Options.
 pub const KIND: &str = "blendOptions";
@@ -128,9 +128,9 @@ fn params(fields: &DialogFields) -> Value {
 /// Runs the live preview of the open dialog while its Preview box is on.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut preview) = app.object_dialogs.blend.take() else { return };
-    let state = app.dialogs().and_then(|d| {
-        d.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields()))))
-    });
+    let state = app
+        .dialogs()
+        .and_then(|d| d.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields())))));
     if let Some((previewing, p)) = state {
         // The answer only reports the preview's status, which the preview itself shows.
         let _ = preview.run(app, previewing, PREVIEW_LABEL, CMD, &p);

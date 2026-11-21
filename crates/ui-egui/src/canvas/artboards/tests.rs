@@ -96,7 +96,10 @@ fn the_fade_covers_the_pasteboard_and_not_the_boards() {
     let covers = |p: Point| {
         let s = view.to_screen(p);
         quads.iter().any(|q| {
-            let (lo, hi) = (q.iter().fold(egui::Pos2::new(f32::MAX, f32::MAX), |a, p| a.min(*p)), q.iter().fold(egui::Pos2::new(f32::MIN, f32::MIN), |a, p| a.max(*p)));
+            let (lo, hi) = (
+                q.iter().fold(egui::Pos2::new(f32::MAX, f32::MAX), |a, p| a.min(*p)),
+                q.iter().fold(egui::Pos2::new(f32::MIN, f32::MIN), |a, p| a.max(*p)),
+            );
             s.x > lo.x && s.x < hi.x && s.y > lo.y && s.y < hi.y
         })
     };

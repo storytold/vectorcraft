@@ -19,7 +19,6 @@ use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::Color;
 
-use super::DialogResult;
 use super::swatch_options::NO_WINDOW;
 use crate::VectorcraftApp;
 use crate::placing::Taken;
@@ -142,7 +141,8 @@ impl StackDialog for SwatchConflictDialog {
         let (position, count) = (self.index + 1, self.conflicts.len());
         let name = current["name"].as_str().unwrap_or_default();
         let message = crate::i18n::fmt(tl!("This document already has a swatch named “{name}” with another color."), &[("name", name)]);
-        let counter = (count > 1).then(|| crate::i18n::fmt(tl!("Conflict {n} of {count}"), &[("n", &position.to_string()), ("count", &count.to_string())]));
+        let counter =
+            (count > 1).then(|| crate::i18n::fmt(tl!("Conflict {n} of {count}"), &[("n", &position.to_string()), ("count", &count.to_string())]));
         let chips = [(tl!("Document"), chip(current["document"].as_str())), (tl!("Pasted"), chip(current["clipboard"].as_str()))];
         let answers = [FooterButton::new(common.ok.clone(), DialogRole::Accept), FooterButton::new(common.cancel.clone(), DialogRole::Cancel)];
         let Self { choice, apply_to_all, open, .. } = self;
@@ -211,7 +211,7 @@ impl StackDialog for SwatchConflictDialog {
 /// instead and answer `{dialog}`. A question still open from an earlier paste is replaced by this one: the host
 /// answers it Cancel.
 // PLAN: files-w8 owns `placing::cancel_swatch_paste`; the replaced question's Cancel reaches the paste through `take`.
-pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<DialogResult> {
+pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Result<Value, String>> {
     if params.get("swatchConflict").is_some() {
         return None;
     }

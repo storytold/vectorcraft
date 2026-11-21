@@ -1,6 +1,5 @@
 use super::*;
-// PLAN: assumed the shared panel harness (op.A15, object-panels-w8) is `crate::panels::tests_panel::Panel`.
-use crate::panels::tests_panel::Panel;
+use crate::tests::panel_harness::Panel;
 
 #[test]
 fn single_object_aligns_to_artboard() {
@@ -61,7 +60,6 @@ fn a_lone_object_aligns_to_the_artboard() {
     assert_eq!(bounds(&buttons.app()).x0, 0.0, "the artboard's left edge");
 }
 
-
 /// #541: while the selection has a key object Align aligns to it, whatever Align To says;
 /// choosing Align to Selection lets the key go.
 #[test]
@@ -88,7 +86,6 @@ fn back_and_front() -> (VectorcraftApp, Value, Value) {
     app.run("select.set", json!({"ids": [front, back]})).unwrap();
     (app, back, front)
 }
-
 
 /// The left edge of object `id`.
 fn left_edge(app: &VectorcraftApp, id: &Value) -> f64 {
@@ -586,7 +583,11 @@ fn a_key_anchor_is_chosen_named_and_aligned_to() {
     app.run("select.key", json!({"id": id, "anchor": [0, 2]})).unwrap();
     let mut panel = Panel::new(app, show);
     panel.frame();
-    assert_eq!((align_to(&panel.app()), align_to_checks(&panel.app())), (AlignTo::Key, vec![Some(false), Some(true), Some(false)]), "chosen automatically");
+    assert_eq!(
+        (align_to(&panel.app()), align_to_checks(&panel.app())),
+        (AlignTo::Key, vec![Some(false), Some(true), Some(false)]),
+        "chosen automatically"
+    );
     assert!(panel.shows("Align to Key Anchor"));
     panel.click("Horizontal Align Left");
     assert_eq!(xs(&panel.app()), [150.0, 200.0, 150.0], "to the key anchor's x: {}", panel.app().ui.status);

@@ -8,11 +8,13 @@
 
 use std::collections::BTreeMap;
 
+use craft::host::{PickRequest, Picked};
 use craft::keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS, NotRead};
 use craft::keymap::{CommandRef, ForeignEntry, ForeignKey, ForeignSet, ImportOptions, NoneDefined, Start};
 use serde_json::{Value, json};
 
-use crate::{FilePick, VectorcraftApp, shortcut_editor};
+use crate::file_asks::{self, Owner};
+use crate::{VectorcraftApp, shortcut_editor};
 
 /// The files Keyboard Shortcuts' Import… lists: VectorCraft's own sets and sets another app saved as
 /// text.
@@ -22,6 +24,11 @@ pub const IMPORT_EXTS: &[&str] = &["json", "kys"];
 const DESCRIBED_KEYS: &[(i64, &str)] = &[(48, "0")];
 /// `/Modifiers 0` is none.
 const DESCRIBED_MODS: &[(i64, &str)] = &[(0, "")];
+
+/// The file dialog that opens a shortcut set: one of [`IMPORT_EXTS`].
+pub(crate) fn open_request() -> PickRequest {
+    PickRequest::open(shortcut_editor::SHORTCUT_SETS).filter("Shortcut sets", IMPORT_EXTS)
+}
 
 /// A file named as a shortcut set another app saves (`.kys`).
 pub fn is_kys(path: &str) -> bool {
@@ -69,13 +76,12 @@ pub fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Some(path) => open_read(app, json!({ "path": path })),
         None => {
             // A shortcut set belongs to no document.
-            // PLAN: assumed `file_asks::{PickRequest::Open(FilePick), Owner::Free, Picked { name, path: Option<String>, bytes: Vec<u8> }}` (fl.A3)
-            let pick = FilePick { filters: vec![FilePick::filter("Shortcut sets", IMPORT_EXTS)], ..Default::default() };
-            Ok(crate::file_asks::ask(app, crate::file_asks::PickRequest::Open(pick), crate::file_asks::Owner::Free, |app, picked| {
-                match picked.path {
-                    Some(path) => open_read(app, json!({ "path": path })),
-                    None => open(app, &picked.name, &picked.bytes),
+            Ok(file_asks::ask(app, open_request(), Owner::Free, |app, picked| match picked {
+                Picked::Contents(files) => {
+                    let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                    open(app, &name, &bytes)
                 }
+                picked => open_read(app, json!({ "path": picked.first_path().ok_or("cancelled")?.to_string_lossy() })),
             }))
         }
     }
@@ -94,8 +100,14 @@ pub(crate) fn foreign_set(read: &Value) -> (ForeignSet, ImportOptions) {
     let mut remembered = BTreeMap::new();
     for e in read["entries"].as_array().into_iter().flatten() {
         // Room for the name within the segments `plan` reads.
-        let mut path: Vec<String> =
-            e["section"].as_array().into_iter().flatten().filter_map(Value::as_str).take(MAX_PATH_SEGMENTS.saturating_sub(2)).map(within_cap).collect();
+        let mut path: Vec<String> = e["section"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .take(MAX_PATH_SEGMENTS.saturating_sub(2))
+            .map(within_cap)
+            .collect();
         path.push(within_cap(e["name"].as_str().unwrap_or_default()));
         let code = |field: &str| e[field].as_u64().and_then(|n| u32::try_from(n).ok());
         let (key, mods) = (code("key"), code("modifiers"));
@@ -131,10 +143,10 @@ pub(crate) fn foreign_set(read: &Value) -> (ForeignSet, ImportOptions) {
             NotRead::new(line, n["text"].as_str().unwrap_or_default().to_string())
         })
         .collect();
-    // PLAN: assumed `ForeignSet::with_truncated(self, usize)` and `with_not_read(self, Vec<NotRead>)` (kb.C19d)
     let mut set = ForeignSet::new(entries).with_truncated(usize::from(read["truncated"].as_bool().unwrap_or(false))).with_not_read(not_read);
     set.name = read["set"].as_str().map(str::to_string);
-    let options = ImportOptions { start: Start::Defaults, none_defined: NoneDefined::Keep, suggest: true, remembered, codes, ..ImportOptions::default() };
+    let options =
+        ImportOptions { start: Start::Defaults, none_defined: NoneDefined::Keep, suggest: true, remembered, codes, ..ImportOptions::default() };
     (set, options)
 }
 
@@ -151,7 +163,7 @@ pub(crate) fn remember(
     for entry in &set.entries {
         let (Some(answer), Some(name)) = (targets.get(&entry.remember_key()), entry.path.last()) else { continue };
         let mut m = json!({ "kind": "name", "name": name, "target": answer.as_ref().map(crate::keymap::entry_key).unwrap_or_default() });
-        let label = answer.as_ref().and_then(|c| app.shortcuts_dialog.as_ref()?.keymap.bindable(c)).map(|d| d.label.clone());
+        let label = answer.as_ref().and_then(|c| app.shortcuts_dialog.as_ref()?.keymap.as_ref()?.bindable(c)).map(|d| d.label.clone());
         if let Some(label) = label {
             m["label"] = json!(label);
         }

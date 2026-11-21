@@ -9,21 +9,27 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::SystemTime;
 
 // PLAN: assumed the framework paths below (craft::text::ui re-exports, craft_ui widgets and runtime, craft::font_manager).
+use craft::behavior::EditEvent;
 use craft::font_manager::axes::{FontAxis, NamedInstance};
 use craft::font_manager::picker::{FilterLayout, FontScript};
-use craft::behavior::EditEvent;
 use craft::keymap::CommandRef;
+use craft::text::ui::DocUnit;
 use craft::text::ui::character::{
     AxesLayout, BaselinePosition, Caps, CharacterChange, CharacterControls, CharacterControlsOutput, CharacterRows, CharacterValues, FaceAxes,
     FontHeightReference as HeightReference, FontPickerSource, Kerning, Leading, SIZE_PRESETS, keys,
 };
-use craft::text::ui::DocUnit;
 use craft::text::ui::type_options::TextAntiAlias;
-use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::runtime::focus::{self, FocusTarget};
-use craft::ui::runtime::egui::widgets::{Checkbox, Divider, Link, NumberField, NumberPick, PanelRow, Popover, Row};
+use craft::ui::buttons::Link;
+use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Lazy};
+use craft::ui::display::Divider;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::popover::Popover;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::Env;
+use craft::ui::runtime::focus::{self, FocusTarget};
+use craft::ui::text::{NumberField, NumberPick};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
@@ -1028,11 +1034,8 @@ pub(crate) fn values(app: &mut VectorcraftApp) -> CharacterValues {
             None,
         ),
     };
-    let leading = if shared(app, |s| s.leading.is_none()) == Some(true) {
-        Some(Leading::Auto)
-    } else {
-        shared_leading(app).map(|v| Leading::Fixed(v as f32))
-    };
+    let leading =
+        if shared(app, |s| s.leading.is_none()) == Some(true) { Some(Leading::Auto) } else { shared_leading(app).map(|v| Leading::Fixed(v as f32)) };
     // The two flags are one choice here: both on, or a selection that differs, is mixed.
     let caps = match (shared(app, |s| s.all_caps), shared(app, |s| s.small_caps.is_some())) {
         (Some(false), Some(false)) => Some(Caps::Normal),
@@ -1042,8 +1045,8 @@ pub(crate) fn values(app: &mut VectorcraftApp) -> CharacterValues {
     };
     let position = shared_position(app);
     let (axes, mixed_axes) = axis_values(app);
-    let language = shared(app, |s| s.language.clone())
-        .map(|l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
+    let language =
+        shared(app, |s| s.language.clone()).map(|l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
     CharacterValues {
         family: shared(app, |s| s.font_family.clone()),
         style: shared(app, |s| s.font_style.clone()),

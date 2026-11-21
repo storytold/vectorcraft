@@ -70,7 +70,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         Some(id) => (id.to_string(), o["points"].clone()),
         None => ("custom".to_string(), o["size"].clone()),
     };
-    let fields = [("detect", o["detect"].clone()), ("size", json!(size)), ("custom", custom), ("color", o["color"].clone()), ("closeGaps", json!(false))];
+    let fields =
+        [("detect", o["detect"].clone()), ("size", json!(size)), ("custom", custom), ("color", o["color"].clone()), ("closeGaps", json!(false))];
     let values = Map::from_iter(fields.map(|(key, value)| (key.to_owned(), value)));
     option_form::open(app, &SPEC, values, json!({ "ids": groups })).ok_or("no window")?;
     Ok(Value::Null)
@@ -246,8 +247,17 @@ mod tests {
         // Object › Live Paint › Gap Options… runs the command that opens the dialog.
         let tree = crate::menus::menu_tree();
         let (_, object) = tree.iter().find(|(t, _)| *t == "Object").unwrap();
-        let live = object.iter().find_map(|i| if let crate::menus::Item::Sub("Live Paint", items) = i { Some(items) } else { None }).unwrap();
-        assert!(live.iter().any(|i| matches!(i, crate::menus::Item::Cmd("Gap Options…", "ui.livePaintGapOptions", _))), "{live:?}");
+        let live = object
+            .iter()
+            .find_map(|n| match n {
+                crate::menus::Node::Submenu { label, children, .. } if label == "Live Paint" => Some(children),
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            live.iter().any(|n| matches!(n, crate::menus::Node::Item(i) if i.label == "Gap Options…" && i.command.id == "ui.livePaintGapOptions")),
+            "{live:?}"
+        );
         crate::menus::invoke(&mut app, "ui.livePaintGapOptions", json!({}));
         assert!(is_open(&app), "Object › Live Paint › Gap Options… opens the dialog");
         let shown = fields(&app);

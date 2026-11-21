@@ -25,7 +25,8 @@ use craft::behavior::{IconId, SelectionChange, keyed};
 use craft::ui::buttons::{Button, IconButton, Link};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{
-    Bind, CollectionEvent, Gap, LabelKind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, Sizing, clicked,
+    Bind, CollectionEvent, Gap, LabelKind, MemoProps, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, Sizing,
+    clicked,
 };
 use craft::ui::display::Text;
 use craft::ui::form::Field;
@@ -86,9 +87,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let keys = [0_usize, 1];
     let source = keyed(&keys, |key: &usize| *key);
     let shown = TABS.iter().position(|(tab, _)| *tab == app.ui.learn.tab).unwrap_or(0);
-    let out = TabStrip::new(tl!("Learn")).kind(TabKind::Panel).shown(shown).show_items(ui, &source, &mut |key, _| {
-        TabItem::new(if *key == 0 { tl!("For you") } else { tl!("Skills") })
-    });
+    let out = TabStrip::new(tl!("Learn"))
+        .kind(TabKind::Panel)
+        .shown(shown)
+        .show_items(ui, &source, &mut |key, _| TabItem::new(if *key == 0 { tl!("For you") } else { tl!("Skills") }));
     if let Some((tab, name)) = picked(out.response.events).and_then(|i| TABS.get(i))
         && *tab != app.ui.learn.tab
     {
@@ -293,6 +295,7 @@ fn practice(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::T
 
 /// A skill's progress ring: an outline, with the share `done` of `total` drawn over it clockwise
 /// from the top. With no tutorials it stays empty.
+#[derive(MemoProps)]
 struct SkillRing {
     done: usize,
     total: usize,
@@ -327,6 +330,7 @@ impl Glyph for SkillRing {
 }
 
 /// A tutorial's mark: an outline, filled with a check mark once it is finished (true).
+#[derive(MemoProps)]
 struct TutorialCheck(bool);
 
 impl Glyph for TutorialCheck {

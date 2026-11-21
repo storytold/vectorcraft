@@ -2,7 +2,6 @@ use craft::menu::Node;
 
 use super::*;
 use crate::i18n::LangExt;
-use crate::theme;
 
 /// The nodes of the top-level menu `title`.
 fn menu_nodes(title: &str) -> Vec<Node> {
@@ -50,11 +49,8 @@ fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
     craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
-    let raw = egui::RawInput {
-        events,
-        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))),
-        ..Default::default()
-    };
+    let raw =
+        egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))), ..Default::default() };
     ctx.run_ui(raw, |ui| {
         app.logic(ui.ctx());
         app.ui(ui);
@@ -87,8 +83,7 @@ fn help_f1_opens_discover_without_a_document() {
     let help = menu_nodes("Help");
     assert!(command_rows(&help).iter().any(|(label, id, _)| (*label, *id) == ("VectorCraft Help…", "help.discover")));
     assert!(enabled(&app, "help.discover"));
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     for _ in 0..3 {
         app_frame(&mut app, &ctx, vec![]);
     }
@@ -149,8 +144,7 @@ fn help_f1_opens_discover_without_a_document() {
         app.session.pointer(&up, view).unwrap();
     }
     assert!(app.session.tool_ends_on_escape(view));
-    let canvas_ctx = egui::Context::default();
-    theme::install_fonts(&canvas_ctx);
+    let canvas_ctx = crate::testing::ui_context();
     app_frame(&mut app, &canvas_ctx, vec![key(egui::Key::Escape)]);
     assert!(!app.session.tool_ends_on_escape(view));
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
@@ -190,8 +184,7 @@ fn discover_says_why_a_tool_cannot_be_marked() {
     app.run("window.dock", json!({})).unwrap();
     assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
     let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
 
     let found = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
     let hit = found["results"].as_array().unwrap().iter().find(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap().clone();
@@ -581,9 +574,9 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert!(ids.iter().all(|id| !enabled(&app, id)), "type on a closed path and on an open one");
     // A palette pick runs the command with no params.
     app.run("select.set", json!({"ids": [closed]})).unwrap();
-    // PLAN: assumed `menus::run_fired(&mut VectorcraftApp, Fired)` and `Fired` at `craft::ui::runtime::commands`
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
-    crate::menus::run_fired(&mut app, Fired::new(craft::menu::CommandRef::new(ids[0]), FireSource::Palette, FirePhase::Press, 0.0));
+    let fired = Fired::new(craft::menu::CommandRef::new(ids[0]), FireSource::Palette, FirePhase::Press, 0.0);
+    crate::shortcuts::run_fired(&mut app, &egui::Context::default(), &fired);
     let doc = &app.session.active().unwrap().doc;
     let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(t) => match t.kind {

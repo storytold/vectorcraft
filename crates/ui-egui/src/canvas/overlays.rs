@@ -13,9 +13,10 @@ use craft::ui::primitives::{DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
 use craft::ui::runtime::env::Label;
 use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
 use egui::{Color32, CornerRadius, Pos2, Rect as ScreenRect, Response, Vec2};
+use vectorcraft_tools::Overlay;
 
 use super::artboards::names_an_artboard;
-use super::{BezPath, Overlay, VectorcraftApp, tool_adapter};
+use super::{VectorcraftApp, tool_adapter};
 
 /// The part key of a hover tip's disc.
 const TIP: PartKey = PartKey::new("tip");
@@ -31,7 +32,7 @@ const BADGE_OFFSET: Vec2 = Vec2::new(14.0, 14.0);
 /// on the canvas of `space`. The extras lie under the tool's own marks.
 pub(super) fn show(app: &VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, overlays: &[Overlay], extra: &[Overlay]) {
     let rect = space.view.rect;
-    let options = super::selection::path_options(&app.session.prefs); // PLAN: assumed `selection::path_options(&Prefs) -> PathOptionsSettings` (canvas-w17)
+    let options = super::selection::path_options(&app.session.prefs);
     let quiet = tool_adapter::in_gesture(app, ui.ctx()) || tool_adapter::view_tool_held(app);
     let lists = [extra, overlays];
     for (i, o) in extra.iter().chain(overlays).enumerate() {
@@ -59,7 +60,7 @@ fn show_control(ui: &mut egui::Ui, rect: ScreenRect, o: &Overlay) {
         }
         Overlay::SharedPath { path, color, width, dash } => {
             let paths = std::slice::from_ref(&**path);
-            // PLAN: assumed `selection::outline_revision(&[BezPath], Option<&BezPath>, ([u8; 3], f32, Option<f64>)) -> u64` (canvas-w17); the outline has no width prop, so `width` only keys the revision.
+            // The outline has no width prop, so `width` only keys the revision.
             let revision = super::selection::outline_revision(paths, None, (*color, *width, *dash));
             let outline = if dash.is_some() { SelectionOutline::dashed(Label::Empty, paths) } else { SelectionOutline::solid(Label::Empty, paths) };
             outline.color(data(*color)).revision(revision).show_at(ui, rect);
@@ -246,7 +247,14 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
 }
 
 /// Strokes `points`, closed back to the first when `closed`, solid or in the theme's dashes.
-fn stroke_run(draw: &Draw<'_>, mut points: Vec<Pos2>, closed: bool, dashed: bool, width: impl Into<craft::ui::primitives::DataStrokeWidth>, color: DataColor) {
+fn stroke_run(
+    draw: &Draw<'_>,
+    mut points: Vec<Pos2>,
+    closed: bool,
+    dashed: bool,
+    width: impl Into<craft::ui::primitives::DataStrokeWidth>,
+    color: DataColor,
+) {
     if closed {
         points.extend(points.first().copied());
     }

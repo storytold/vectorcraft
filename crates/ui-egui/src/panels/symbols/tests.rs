@@ -453,36 +453,60 @@ fn footer_or_menu_row_with_modifiers_to_command() {
         app
     };
     let rows: [(&str, fn() -> VectorcraftApp, fn(&mut VectorcraftApp, &mut Ui), fn(&mut Panel), Check); 22] = [
-        ("New Symbol with Shift", rect, show, |p| p.click_with("New Symbol", Modifiers::SHIFT), |p, undo, what| {
-            let mut app = p.app();
-            assert_eq!(dialog_kind(&app).as_deref(), Some(symbol_options::KIND), "{what}: asks for Symbol Options");
-            assert_eq!(symbols(&mut app).len(), 2, "{what}: no symbol before OK");
-            ok(&mut app);
-            assert_eq!(art(&app, "New Symbol"), (0, 1), "{what}: the rectangle stays ordinary art");
-            assert!(art_still_selected(&app), "{what}: and stays selected");
-            assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
-        }),
-        ("New Symbol with Shift and Alt", rect, show, |p| p.click_with("New Symbol", Modifiers::SHIFT | Modifiers::ALT), |p, undo, what| {
-            let mut app = p.app();
-            assert_eq!(dialog_kind(&app), None, "{what}: Alt skips Symbol Options");
-            assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"], "{what}");
-            assert_eq!(art(&app, "New Symbol"), (0, 1), "{what}: the rectangle stays ordinary art");
-            assert!(art_still_selected(&app), "{what}: and stays selected");
-            assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
-        }),
-        ("New Symbol with Alt", rect, show, |p| p.click_with("New Symbol", Modifiers::ALT), |p, _, what| {
-            let app = p.app();
-            assert_eq!(dialog_kind(&app), None, "{what}: Alt skips Symbol Options");
-            assert_eq!(art(&app, "New Symbol"), (1, 0), "{what}: the rectangle becomes an instance");
-        }),
-        ("Symbol Options", with_all, show, |p| p.click("Symbol Options"), |p, undo, what| {
-            let mut app = p.app();
-            assert_eq!(dialog_kind(&app).as_deref(), Some(symbol_options::KIND), "{what}");
-            assert_eq!(field(&app, "name"), json!("Dot"), "{what}: on the current symbol");
-            cancel(&mut app);
-            assert_eq!(undo_len(&app), undo, "{what}: opening it adds no undo step");
-            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{what}");
-        }),
+        (
+            "New Symbol with Shift",
+            rect,
+            show,
+            |p| p.click_with("New Symbol", Modifiers::SHIFT),
+            |p, undo, what| {
+                let mut app = p.app();
+                assert_eq!(dialog_kind(&app).as_deref(), Some(symbol_options::KIND), "{what}: asks for Symbol Options");
+                assert_eq!(symbols(&mut app).len(), 2, "{what}: no symbol before OK");
+                ok(&mut app);
+                assert_eq!(art(&app, "New Symbol"), (0, 1), "{what}: the rectangle stays ordinary art");
+                assert!(art_still_selected(&app), "{what}: and stays selected");
+                assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
+            },
+        ),
+        (
+            "New Symbol with Shift and Alt",
+            rect,
+            show,
+            |p| p.click_with("New Symbol", Modifiers::SHIFT | Modifiers::ALT),
+            |p, undo, what| {
+                let mut app = p.app();
+                assert_eq!(dialog_kind(&app), None, "{what}: Alt skips Symbol Options");
+                assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"], "{what}");
+                assert_eq!(art(&app, "New Symbol"), (0, 1), "{what}: the rectangle stays ordinary art");
+                assert!(art_still_selected(&app), "{what}: and stays selected");
+                assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
+            },
+        ),
+        (
+            "New Symbol with Alt",
+            rect,
+            show,
+            |p| p.click_with("New Symbol", Modifiers::ALT),
+            |p, _, what| {
+                let app = p.app();
+                assert_eq!(dialog_kind(&app), None, "{what}: Alt skips Symbol Options");
+                assert_eq!(art(&app, "New Symbol"), (1, 0), "{what}: the rectangle becomes an instance");
+            },
+        ),
+        (
+            "Symbol Options",
+            with_all,
+            show,
+            |p| p.click("Symbol Options"),
+            |p, undo, what| {
+                let mut app = p.app();
+                assert_eq!(dialog_kind(&app).as_deref(), Some(symbol_options::KIND), "{what}");
+                assert_eq!(field(&app, "name"), json!("Dot"), "{what}: on the current symbol");
+                cancel(&mut app);
+                assert_eq!(undo_len(&app), undo, "{what}: opening it adds no undo step");
+                assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{what}");
+            },
+        ),
         (
             "Symbol Options with Alt",
             || {
@@ -499,19 +523,37 @@ fn footer_or_menu_row_with_modifiers_to_command() {
                 assert_eq!(field(&app, "name"), json!("Leaf"), "{what}: on the current symbol");
             },
         ),
-        ("Symbol Options without symbols", art_only, show, |p| p.click("Symbol Options"), |p, _, what| {
-            assert!(!p.enabled("Symbol Options"), "{what}: disabled without a current symbol");
-            assert_eq!(dialog_kind(&p.app()), None, "{what}: no symbol, no dialog");
-        }),
-        ("a click on a symbol", leaf_and_dot, show, |p| p.click("Leaf"), |p, _, what| {
-            let app = p.app();
-            assert_eq!((editing(&app), current(&app)), (None, Some("Leaf".into())), "{what}: makes it current");
-        }),
-        ("a double click on a symbol", leaf_and_dot, show, |p| p.double_click("Leaf"), |p, _, what| {
-            let app = p.app();
-            assert_eq!(editing(&app).as_deref(), Some("Leaf"), "{what}: edits it");
-            assert_eq!(art(&app, "Leaf").0, 1, "{what}: no instance is placed");
-        }),
+        (
+            "Symbol Options without symbols",
+            art_only,
+            show,
+            |p| p.click("Symbol Options"),
+            |p, _, what| {
+                assert!(!p.enabled("Symbol Options"), "{what}: disabled without a current symbol");
+                assert_eq!(dialog_kind(&p.app()), None, "{what}: no symbol, no dialog");
+            },
+        ),
+        (
+            "a click on a symbol",
+            leaf_and_dot,
+            show,
+            |p| p.click("Leaf"),
+            |p, _, what| {
+                let app = p.app();
+                assert_eq!((editing(&app), current(&app)), (None, Some("Leaf".into())), "{what}: makes it current");
+            },
+        ),
+        (
+            "a double click on a symbol",
+            leaf_and_dot,
+            show,
+            |p| p.double_click("Leaf"),
+            |p, _, what| {
+                let app = p.app();
+                assert_eq!(editing(&app).as_deref(), Some("Leaf"), "{what}: edits it");
+                assert_eq!(art(&app, "Leaf").0, 1, "{what}: no instance is placed");
+            },
+        ),
         (
             "a double click on a symbol in Large List View",
             || {
@@ -527,16 +569,28 @@ fn footer_or_menu_row_with_modifiers_to_command() {
                 assert_eq!(art(&app, "Dot").0, 0, "{what}: no instance is placed");
             },
         ),
-        ("Redefine Symbol in the menu with Shift", rect, show, |p| fire_menu_row(&mut p.app(), "symbol.update", None, Mods::SHIFT), |p, undo, what| {
-            let app = p.app();
-            assert!((art_ratio(&app, "Dot") - 3.0).abs() < 1e-6, "{what}: Dot is the 60 × 20 rectangle");
-            assert_eq!(art(&app, "Dot"), (0, 1), "{what}: the rectangle stays ordinary art");
-            assert!(art_still_selected(&app), "{what}: and stays selected");
-            assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
-        }),
-        ("Redefine Symbol in the menu", rect, show, |p| fire_menu_row(&mut p.app(), "symbol.update", None, Mods::NONE), |p, _, what| {
-            assert_eq!(art(&p.app(), "Dot"), (1, 0), "{what}: the rectangle becomes an instance");
-        }),
+        (
+            "Redefine Symbol in the menu with Shift",
+            rect,
+            show,
+            |p| fire_menu_row(&mut p.app(), "symbol.update", None, Mods::SHIFT),
+            |p, undo, what| {
+                let app = p.app();
+                assert!((art_ratio(&app, "Dot") - 3.0).abs() < 1e-6, "{what}: Dot is the 60 × 20 rectangle");
+                assert_eq!(art(&app, "Dot"), (0, 1), "{what}: the rectangle stays ordinary art");
+                assert!(art_still_selected(&app), "{what}: and stays selected");
+                assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
+            },
+        ),
+        (
+            "Redefine Symbol in the menu",
+            rect,
+            show,
+            |p| fire_menu_row(&mut p.app(), "symbol.update", None, Mods::NONE),
+            |p, _, what| {
+                assert_eq!(art(&p.app(), "Dot"), (1, 0), "{what}: the rectangle becomes an instance");
+            },
+        ),
         (
             "New Symbol… in the menu with Shift",
             rect,
@@ -551,11 +605,17 @@ fn footer_or_menu_row_with_modifiers_to_command() {
                 assert_eq!(undo_len(&app), undo + 1, "{what}: one undo step");
             },
         ),
-        ("New Symbol… in the menu", rect, show, |p| fire_menu_row(&mut p.app(), "ui.symbolOptions", Some(&json!({})), Mods::NONE), |p, _, what| {
-            let mut app = p.app();
-            ok(&mut app);
-            assert_eq!(art(&app, "New Symbol"), (1, 0), "{what}: the rectangle becomes an instance");
-        }),
+        (
+            "New Symbol… in the menu",
+            rect,
+            show,
+            |p| fire_menu_row(&mut p.app(), "ui.symbolOptions", Some(&json!({})), Mods::NONE),
+            |p, _, what| {
+                let mut app = p.app();
+                ok(&mut app);
+                assert_eq!(art(&app, "New Symbol"), (1, 0), "{what}: the rectangle becomes an instance");
+            },
+        ),
         (
             "Sort by Name",
             || {
@@ -652,11 +712,17 @@ fn footer_or_menu_row_with_modifiers_to_command() {
                 assert_eq!(picked, [true, true], "{what}: both instances of A");
             },
         ),
-        ("the Control bar's Edit Symbol", leaf_selected, symbol_bar, |p| p.click("Edit Symbol"), |p, _, what| {
-            let app = p.app();
-            assert_eq!(editing(&app).as_deref(), Some("Leaf"), "{what}: the selected instance's symbol");
-            assert!(instance_of(&app, "Leaf").is_some(), "{what}: the instance keeps its link");
-        }),
+        (
+            "the Control bar's Edit Symbol",
+            leaf_selected,
+            symbol_bar,
+            |p| p.click("Edit Symbol"),
+            |p, _, what| {
+                let app = p.app();
+                assert_eq!(editing(&app).as_deref(), Some("Leaf"), "{what}: the selected instance's symbol");
+                assert!(instance_of(&app, "Leaf").is_some(), "{what}: the instance keeps its link");
+            },
+        ),
         (
             "the Control bar's Replace",
             || {
@@ -682,9 +748,15 @@ fn footer_or_menu_row_with_modifiers_to_command() {
                 assert!(matches!(replaced, Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Star"), "{what}: the instance is replaced");
             },
         ),
-        ("the Control bar with art selected", rect, symbol_bar, |_| {}, |p, _, what| {
-            assert!(!p.shows("Replace:"), "{what}: no Replace menu for art that is not an instance");
-        }),
+        (
+            "the Control bar with art selected",
+            rect,
+            symbol_bar,
+            |_| {},
+            |p, _, what| {
+                assert!(!p.shows("Replace:"), "{what}: no Replace menu for art that is not an instance");
+            },
+        ),
     ];
     for (what, setup, draw, act, check) in rows {
         let app = setup();
@@ -798,7 +870,11 @@ fn dialog_fields_to_symbol_params() {
                     assert!((shown - want).abs() < 1e-9, "{what}: {key}: {shown}");
                 }
                 ok(app);
-                assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["nineSlice"], json!(guides), "{what}: untouched guides stay exact");
+                assert_eq!(
+                    app.run("symbol.list", json!({})).unwrap()["symbols"][0]["nineSlice"],
+                    json!(guides),
+                    "{what}: untouched guides stay exact"
+                );
                 app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
                 set_field(app, "sliceRight", json!(-125.5));
                 ok(app);
@@ -1501,11 +1577,7 @@ fn an_alt_art_drop_that_cannot_redefine_changes_nothing() {
     let leaf = symbol_art(&app, "Leaf");
     let undo = undo_len(&app);
     let mut p = harness(app, layers_and_symbols);
-    let cases = [
-        ("a Leaf instance", "Placed", "Leaf"),
-        ("a layer", "Layer 1", "Leaf"),
-        ("art released outside the list", "Art", "Symbol Options"),
-    ];
+    let cases = [("a Leaf instance", "Placed", "Leaf"), ("a layer", "Layer 1", "Leaf"), ("art released outside the list", "Art", "Symbol Options")];
     for (case, from, to) in cases {
         p.drag(from, to, Modifiers::ALT);
         let mut app = p.app();

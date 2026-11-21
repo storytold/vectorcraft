@@ -83,7 +83,9 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let rows: Vec<(String, String)> = app
         .session
         .active()
-        .map(|st| st.doc.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", unit.number(a.rect.width()), unit.format(a.rect.height())))).collect())
+        .map(|st| {
+            st.doc.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", unit.number(a.rect.width()), unit.format(a.rect.height())))).collect()
+        })
         .unwrap_or_default();
     let fields = Fields { artboards: vec![app.view().map_or(0, |v| v.artboard)], relation: "overlap".into(), search: String::new() };
     app.dialogs().ok_or("no window")?.with(|host| host.open(ArtboardsDialog { fields, rows, go_to: None }));
@@ -170,7 +172,9 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut
         .empty(label(tl!("No artboards match.")))
         .selection(Bind::bound(&mut selection))
         .show_items(ui, &source, &mut |&i, item| match rows.get(i) {
-            Some((name, size)) => ListRow::new(name.clone()).lead_text((i + 1).to_string(), widest.clone()).trailing(size.clone()).state(item.row.clone()),
+            Some((name, size)) => {
+                ListRow::new(name.clone()).lead_text((i + 1).to_string(), widest.clone()).trailing(size.clone()).state(item.row.clone())
+            }
             None => ListRow::new(""),
         });
     for event in out.events {
@@ -187,7 +191,8 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut
             choose_shown(&mut fields.artboards, &visible, false);
         }
         // Rows hidden by the search stay chosen: the count says how many are.
-        let count = crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &fields.artboards.len().to_string()), ("total", &rows.len().to_string())]);
+        let count =
+            crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &fields.artboards.len().to_string()), ("total", &rows.len().to_string())]);
         Text::new(Label::from(count.to_string())).shade(Shade::Muted).show(ui);
     });
     let relations: Vec<Entry<String>> = RELATIONS.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
@@ -205,7 +210,8 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut
 pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
-    let (answer, go_to) = dialogs.with(|host| (host.take_by_id::<ArtboardsDialog>(id), host.get_mut_by_id::<ArtboardsDialog>(id).and_then(|d| d.go_to.take())));
+    let (answer, go_to) =
+        dialogs.with(|host| (host.take_by_id::<ArtboardsDialog>(id), host.get_mut_by_id::<ArtboardsDialog>(id).and_then(|d| d.go_to.take())));
     if let Some(index) = go_to {
         // An artboard the list showed a frame ago can't be missing, and a failure only leaves the view.
         app.run("view.goToArtboard", json!({ "index": index })).ok();

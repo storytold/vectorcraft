@@ -5,8 +5,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use craft::color_ui::self;
-use craft::color_ui::ui::{GradientPreview, ImagePreview};
+use craft::color_ui::ui::{self as color_ui, GradientPreview, ImagePreview};
 use craft::theme::Srgba;
 use craft::ui::primitives::{CachedTexture, ContentPainterCx, FacePaint};
 use egui::emath::GuiRounding;
@@ -83,7 +82,10 @@ pub fn paint_rect(cx: &ContentPainterCx<'_>, rect: Rect, paint: &Paint) {
             let mut shapes = vec![Shape::rect_filled(rect, 0.0, Color32::from_gray(200))];
             for i in 0..4 {
                 let x = rect.left() + rect.width() * i as f32 / 4.0;
-                shapes.push(Shape::line_segment([pos2(x, rect.bottom()), pos2(x + rect.width() / 4.0, rect.top())], Stroke::new(1.0, Color32::from_gray(90))));
+                shapes.push(Shape::line_segment(
+                    [pos2(x, rect.bottom()), pos2(x + rect.width() / 4.0, rect.top())],
+                    Stroke::new(1.0, Color32::from_gray(90)),
+                ));
             }
             cx.data_shapes(shapes);
         }
@@ -199,7 +201,8 @@ mod tests {
         assert!(at(&chip, 2, 4).abs_diff(191) <= 2 && at(&chip, 2, 0).abs_diff(64) <= 2, "{chip:?}");
         assert!(at(&chip, 0, 2).abs_diff(128) <= 2, "{chip:?}");
         let c = vectorcraft_geom::kurbo::Point::new(50.0, 50.0);
-        gp.geom = Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::kurbo::Vec2::new(10.0, 0.0), aspect: -1.0, focal: None });
+        gp.geom =
+            Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::kurbo::Vec2::new(10.0, 0.0), aspect: -1.0, focal: None });
         let mirrored = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
         assert!(at(&mirrored, 2, 4).abs_diff(64) <= 2 && at(&mirrored, 2, 0).abs_diff(191) <= 2, "{mirrored:?}");
     }

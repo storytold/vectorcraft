@@ -7,16 +7,16 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 // PLAN: assumed ui-egui depends on craft-host, craft-ui-panels and craft-ui (hub-w1/hub-w2 add them).
-use craft::host::{Host, PickKind, Picked, ScriptedFiles};
+use craft::host::{Host, PickKind, PickRequest, Picked, ScriptedFiles};
 use craft::ui::contract::Bind;
+use craft::ui::dialog::{DialogId, OpenDialog, PromptKind, StandardPrompt};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::requests::{PathKind, PathRequest};
-use craft::ui::dialog::{DialogId, OpenDialog};
 use egui::{Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use crate::picks::PickRequest;
+use crate::dialogs::confirm::REPLACE_FILES;
 use crate::{Services, VectorcraftApp, file_asks};
 
 const SVG: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="10" height="10"/></svg>"#;
@@ -24,13 +24,12 @@ const SVG: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height
 /// The scripted file service of one test: picks stay open until the test answers them.
 pub(crate) struct Picker {
     files: Arc<ScriptedFiles>,
-    ctx: egui::Context,
     written: Rc<RefCell<Vec<String>>>,
 }
 
 impl Picker {
     /// The requests of every pick asked so far.
-    pub(crate) fn requests(&self) -> Vec<craft::host::PickRequest> {
+    pub(crate) fn requests(&self) -> Vec<PickRequest> {
         self.files.requests()
     }
     /// The newest open pick answers `paths`.
@@ -45,40 +44,40 @@ impl Picker {
     pub(crate) fn cancel(&self) {
         self.files.answer(Picked::Cancelled);
     }
-    /// Picks report whether they are sheets on the window; call before the first ask, because the
-    /// service is replaced.
-    pub(crate) fn sheets(self, on: bool) -> Picker {
-        let files = Arc::new(ScriptedFiles::held().sheets(on));
-        install(&self.ctx, files.clone());
-        Picker { files, ctx: self.ctx, written: self.written }
-    }
     /// The paths files were written to.
     pub(crate) fn written(&self) -> Vec<String> {
         self.written.borrow().clone()
     }
 }
 
-fn install(ctx: &egui::Context, files: Arc<ScriptedFiles>) {
-    // PLAN: assumed the app's context carries a Host (hub-w1).
-    let host = Host::try_of_ctx(ctx).expect("the app's context carries its host");
-    host.with_files(files).install(ctx);
+/// Give `app` a scripted file service, a reader of [`SVG`] at any path (unless it has a reader) and
+/// a writer that lists the paths written.
+pub(crate) fn scripted(app: &mut VectorcraftApp) -> Picker {
+    scripted_files(app, ScriptedFiles::held())
 }
 
-/// Give `app` a scripted file service, a reader of [`SVG`] at any path and a writer that lists the
-/// paths written.
-// PLAN: fl.A20 names neither `written()` nor the reader and writer; files-w7's sheet requires both.
-pub(crate) fn scripted(app: &mut VectorcraftApp) -> Picker {
-    let ctx = app.ui_ctx.get_or_insert_with(egui::Context::default).clone();
-    let files = Arc::new(ScriptedFiles::held());
-    install(&ctx, files.clone());
+/// [`scripted`] with picks that report whether they are sheets on the window (macOS).
+pub(crate) fn scripted_sheets(app: &mut VectorcraftApp, on: bool) -> Picker {
+    scripted_files(app, ScriptedFiles::held().sheets(on))
+}
+
+/// [`scripted`] with `files` as the app's file service: the app's host carries it, and so does the
+/// window's context, as a frame installs the app's host there.
+fn scripted_files(app: &mut VectorcraftApp, files: ScriptedFiles) -> Picker {
+    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
+    let files = Arc::new(files);
+    app.host = Arc::new(app.host.with_files(files.clone()));
+    Host::clone(&app.host).install(&ctx);
     let written = Rc::new(RefCell::new(Vec::new()));
     let w = written.clone();
-    app.services.read = Some(Box::new(|_: &str| Ok(SVG.to_vec())));
-    app.services.write = Some(Box::new(move |path: &str, _: &[u8]| {
+    app.services.read.get_or_insert_with(|| Box::new(|_: &str| Ok(SVG.to_vec())));
+    // A writer the test gave goes on getting the bytes.
+    let mut given = app.services.write.take();
+    app.services.write = Some(Box::new(move |path: &str, bytes: &[u8]| {
         w.borrow_mut().push(path.to_string());
-        Ok(())
+        given.as_mut().map_or(Ok(()), |write| write(path, bytes))
     }));
-    Picker { files, ctx, written }
+    Picker { files, written }
 }
 
 /// Run what the frame runs for the picks: their continuations, then the saves.
@@ -105,6 +104,67 @@ pub(crate) fn answer_dialog(app: &mut VectorcraftApp, id: DialogId, fields: &[(&
             assert!(h.confirm_by_id(&ctx, id), "OK was refused");
         }
     });
+    crate::dialogs::host::pump(app, &ctx);
+}
+
+/// The open question whether to replace a file: [`file_asks::ask_replace`]'s, with the file name it
+/// names, or the replace-files question of a save or export, which names a list.
+fn replace_question(app: &VectorcraftApp) -> Option<(DialogId, Option<String>)> {
+    app.dialogs()?.with(|h| {
+        h.open_dialogs().into_iter().rev().find_map(|d| {
+            if d.key.as_deref() == Some(REPLACE_FILES) {
+                return Some((d.id, None));
+            }
+            match h.get_by_id::<StandardPrompt>(d.id)?.kind() {
+                PromptKind::ReplaceFile { name, .. } => Some((d.id, Some(name.clone()))),
+                _ => None,
+            }
+        })
+    })
+}
+
+/// The file name the open replace question ([`file_asks::ask_replace`]) names.
+pub(crate) fn replace_asked(app: &VectorcraftApp) -> Option<String> {
+    replace_question(app).and_then(|(_, name)| name)
+}
+
+/// Proceeds with (`proceed`) or cancels the open replace question, then runs the app's pump over
+/// the answer, where what it allows is written.
+pub(crate) fn answer_replace(app: &mut VectorcraftApp, proceed: bool) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    let (id, _) = replace_question(app).expect("a replace question is open");
+    let host = app.dialogs().expect("the window's dialog host");
+    let answered = host.with(|h| if proceed { h.confirm_by_id(&ctx, id) } else { h.cancel_by_id(&ctx, id) });
+    assert!(answered, "the replace question took the answer");
+    crate::dialogs::host::pump(app, &ctx);
+}
+
+/// Opens a question on the window and draws one frame, so the app counts a dialog open → its id.
+pub(crate) fn show_question(app: &mut VectorcraftApp) -> DialogId {
+    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
+    crate::dialogs::confirm::ask(app, "Go on?", "", "edit.undo", json!({}));
+    draw_dialogs(app, &ctx);
+    open_dialogs(app).last().map(|d| d.id).expect("the question is open")
+}
+
+/// Closes dialog `id` and draws one frame, so the app no longer counts it open.
+pub(crate) fn close_shown(app: &mut VectorcraftApp, id: DialogId) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    app.dialogs().expect("the window's dialog host").with(|h| h.cancel_by_id(&ctx, id));
+    draw_dialogs(app, &ctx);
+}
+
+/// One frame that draws the open dialogs and runs the app's pump over their answers.
+pub(crate) fn draw_dialogs(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs(app, ui));
+    out.textures_delta.clear();
+}
+
+/// Presses Cancel on dialog `id` and runs the app's pump over the answer.
+pub(crate) fn cancel_dialog(app: &mut VectorcraftApp, id: DialogId) {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    let host = app.dialogs().expect("the window's dialog host");
+    assert!(host.with(|h| h.cancel_by_id(&ctx, id)), "Cancel was refused");
     crate::dialogs::host::pump(app, &ctx);
 }
 
@@ -201,7 +261,7 @@ fn at(texts: &[(String, Rect)], label: &str) -> Pos2 {
 /// Draw `draw` until it settles, then click its text `label`.
 fn click(app: &mut VectorcraftApp, label: &str, draw: impl Fn(&mut VectorcraftApp, &mut egui::Ui)) {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
-    crate::theme::install_fonts(&ctx);
+    crate::testing::install(&ctx);
     frame(&ctx, app, vec![], &draw);
     frame(&ctx, app, vec![], &draw);
     let pos = at(&frame(&ctx, app, vec![], &draw), label);
@@ -210,7 +270,7 @@ fn click(app: &mut VectorcraftApp, label: &str, draw: impl Fn(&mut VectorcraftAp
 }
 
 /// The open dialogs, drawn as the shell draws them, then the app's pump over their answers.
-fn dialogs(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+pub(crate) fn dialogs(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if let Some(host) = app.dialogs() {
         host.with(|h| h.run(ui));
     }
@@ -226,19 +286,34 @@ fn a_command_asks_for_a_file_and_goes_on_with_the_answer() {
     type Then = fn(&mut VectorcraftApp, &Picker);
     // PLAN: `ui.findLinksInFolder` needs a linked image and a folder search; the find-links tests cover it.
     let rows: [(&str, PickKind, Answer, Then); 3] = [
-        ("file.open", PickKind::Open, |p| p.answer(&["/art/a.svg"]), |app, _| {
-            assert_eq!(app.session.documents().len(), 2);
-            assert_eq!(app.session.active().and_then(|d| d.path.clone()).as_deref(), Some("/art/a.svg"));
-        }),
-        ("file.saveAs", PickKind::Save, |p| p.answer_saved("/art/poster.svg", None), |app, p| {
-            // SVG Options asks next, and its OK writes the file there.
-            let options = find(app, "svgOptions").expect("SVG Options");
-            answer_dialog(app, options, &[], true);
-            assert_eq!(p.written(), ["/art/poster.svg"]);
-        }),
-        ("file.place", PickKind::Open, |p| p.answer(&["/art/p.svg"]), |app, _| {
-            assert!(!open_dialogs(app).is_empty(), "the place dialog opens: {}", app.ui.status);
-        }),
+        (
+            "file.open",
+            PickKind::Open,
+            |p| p.answer(&["/art/a.svg"]),
+            |app, _| {
+                assert_eq!(app.session.documents().len(), 2);
+                assert_eq!(app.session.active().and_then(|d| d.path.clone()).as_deref(), Some("/art/a.svg"));
+            },
+        ),
+        (
+            "file.saveAs",
+            PickKind::Save,
+            |p| p.answer_saved("/art/poster.svg", None),
+            |app, p| {
+                // SVG Options asks next, and its OK writes the file there.
+                let options = find(app, "svgOptions").expect("SVG Options");
+                answer_dialog(app, options, &[], true);
+                assert_eq!(p.written(), ["/art/poster.svg"]);
+            },
+        ),
+        (
+            "file.place",
+            PickKind::Open,
+            |p| p.answer(&["/art/p.svg"]),
+            |app, _| {
+                assert!(!open_dialogs(app).is_empty(), "the place dialog opens: {}", app.ui.status);
+            },
+        ),
     ];
     for (command, kind, answer, then) in rows {
         let mut a = app();
@@ -272,7 +347,7 @@ fn a_command_asks_for_a_file_and_goes_on_with_the_answer() {
 #[test]
 fn a_pdf_automation_asked_for_is_not_opened_when_its_save_panel_answers() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(true);
+    let picker = scripted_sheets(&mut app, true);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     let view = json!({"viewAfterSaving": true});
@@ -336,7 +411,7 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
     assert_eq!(path, "/keys/list.txt");
     assert!(text.starts_with("Keyboard Shortcuts\n"), "{text}");
-    assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+S"))), "{text}");
+    assert!(text.contains(&format!("\t{}\n", crate::keymap::chord_text("Ctrl+S"))), "{text}");
 }
 
 /// The file type picked in Export Text's save panel picks the file: a name typed with `.pdf` or
@@ -456,7 +531,7 @@ fn an_answer_for_a_closed_document_is_dropped() {
     app.sync_views();
     picker.answer_saved("/art/a.svg", None);
     settle(&mut app);
-    assert_eq!(app.ui.status, file_asks::CLOSED);
+    assert_eq!(app.ui.status, file_asks::closed());
     assert!(picker.written().is_empty());
     assert!(find(&app, "svgOptions").is_none(), "no SVG Options");
     assert_eq!(app.session.documents().iter().map(|d| d.path.clone()).collect::<Vec<_>>(), [None]);
@@ -469,7 +544,7 @@ fn an_answer_for_a_closed_document_is_dropped() {
 #[test]
 fn nothing_closes_or_quits_while_a_sheet_is_open() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(true);
+    let picker = scripted_sheets(&mut app, true);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     assert!(!app.file_dialog_open() && !app.file_sheet_open());
@@ -477,7 +552,7 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     assert!(app.file_dialog_open() && app.file_sheet_open());
     let refused = |app: &mut VectorcraftApp| {
         for (id, p) in [("app.quit", json!({})), ("file.close", json!({})), ("file.close", json!({"index": 0})), ("file.closeAll", json!({}))] {
-            assert_eq!(app.run(id, p.clone()), Err(file_asks::BUSY.to_string()), "{id} {p}");
+            assert_eq!(app.run(id, p.clone()), Err(file_asks::busy().to_string()), "{id} {p}");
         }
         assert_eq!(app.session.documents().len(), 2);
         assert_ne!(app.ui.status, "quit");
@@ -511,11 +586,11 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
 #[test]
 fn no_view_closes_while_a_sheet_is_open() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(true);
+    let picker = scripted_sheets(&mut app, true);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();
     assert!(app.run("file.open", json!({})).is_err());
-    assert_eq!(app.run("file.close", json!({})), Err(file_asks::BUSY.to_string()));
+    assert_eq!(app.run("file.close", json!({})), Err(file_asks::busy().to_string()));
     assert_eq!(crate::doc_windows::windows(&app), [(0, 1), (0, 2)]);
     picker.cancel();
     settle(&mut app);
@@ -528,7 +603,7 @@ fn no_view_closes_while_a_sheet_is_open() {
 #[test]
 fn on_linux_documents_close_while_a_dialog_is_open() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(false);
+    let picker = scripted_sheets(&mut app, false);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
@@ -538,7 +613,7 @@ fn on_linux_documents_close_while_a_dialog_is_open() {
     assert_eq!(app.session.documents().len(), 1);
     picker.answer_saved("/art/a.svg", None);
     settle(&mut app);
-    assert_eq!(app.ui.status, file_asks::CLOSED);
+    assert_eq!(app.ui.status, file_asks::closed());
     assert!(picker.written().is_empty());
     assert!(find(&app, "svgOptions").is_none());
     // Quit goes on too.
@@ -553,7 +628,7 @@ fn on_linux_documents_close_while_a_dialog_is_open() {
 #[test]
 fn an_open_answer_goes_on_after_the_active_document_closes() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(false);
+    let picker = scripted_sheets(&mut app, false);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     assert!(app.run("file.open", json!({})).is_err());
     app.run("file.close", json!({})).unwrap();
@@ -561,7 +636,7 @@ fn an_open_answer_goes_on_after_the_active_document_closes() {
     picker.answer(&["/art/b.svg"]);
     settle(&mut app);
     assert_eq!(app.session.documents().iter().map(|d| d.path.clone()).collect::<Vec<_>>(), [Some("/art/b.svg".to_string())]);
-    assert_ne!(app.ui.status, file_asks::CLOSED);
+    assert_ne!(app.ui.status, file_asks::closed());
 }
 
 /// Save Changes' Save, answered by its Save panel, saves and closes the document it asked about,
@@ -569,7 +644,7 @@ fn an_open_answer_goes_on_after_the_active_document_closes() {
 #[test]
 fn save_changes_answers_for_its_own_document() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(false);
+    let picker = scripted_sheets(&mut app, false);
     let modified = |app: &mut VectorcraftApp| app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     // X clean, A modified and untitled, C modified with a file.
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
@@ -596,7 +671,7 @@ fn save_changes_answers_for_its_own_document() {
 #[test]
 fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
     let mut app = app();
-    let picker = scripted(&mut app).sheets(false);
+    let picker = scripted_sheets(&mut app, false);
     // A clean and in front, B modified and untitled, C clean.
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
@@ -635,14 +710,14 @@ fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, close: bool) -> Vec<
 fn the_window_stays_open_while_a_sheet_is_on_it() {
     for sheets in [true, false] {
         let mut app = app();
-        let picker = scripted(&mut app).sheets(sheets);
+        let picker = scripted_sheets(&mut app, sheets);
         let ctx = app.ui_ctx.clone().unwrap();
         app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
         app_frame(&ctx, &mut app, false);
         assert!(app.run("file.open", json!({})).is_err());
         let commands = app_frame(&ctx, &mut app, true);
         assert_eq!(commands.contains(&egui::ViewportCommand::CancelClose), sheets, "sheets: {sheets}");
-        assert_eq!(app.ui.status == file_asks::BUSY, sheets, "sheets: {sheets}: {}", app.ui.status);
+        assert_eq!(app.ui.status == file_asks::busy(), sheets, "sheets: {sheets}: {}", app.ui.status);
         assert_eq!(app.session.documents().len(), 1);
         picker.cancel();
         app_frame(&ctx, &mut app, false);

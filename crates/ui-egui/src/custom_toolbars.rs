@@ -20,25 +20,21 @@
 //! typed for the selected toolbar renames it, + copies the selected toolbar or, with none selected,
 //! makes a new one, and Delete deletes it).
 
-// PLAN: assumed paths and signatures of items written beside this set:
-// `panel_docking::{apply(app, Option<&egui::Context>, Vec<Action<String>>) -> Result<Vec<String>, String>,
-// floating_window (pub(crate)), floating_size(&str) -> Vec2 (pub(crate)), column_of, panels_shown}`;
-// the framework's `HostedListManager::{new(key, title, name_label, actions), renames(kind),
-// set_entries(Vec<ListManagerEntry>), take_choice() -> Option<ListManagerChoice>}` and
-// `ListManagerWords::default()`; `craft_ui` re-exports of the widgets and patterns named below.
-
 use std::collections::BTreeSet;
 use std::sync::atomic::Ordering;
 
-use craft::ui::docking::Action;
-use craft::behavior::dock::DockEdge;
-use craft::ui::runtime::commands::keymap::CommandRef;
-use craft::ui::rails::RailFooter;
+use craft::behavior::IconId;
+use craft::behavior::dock::{Action, DockEdge};
+use craft::ui::buttons::IconButton;
+use craft::ui::contract::{PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Divider;
+use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::form_dialogs::{
     ActionEnabled, DialogFields, FieldValue, HostedListManager, HostedParamDialog, ListManagerAction, ListManagerChoice, ListManagerEntry,
     ListManagerWords, Param, ParamDialog, ParamKind, ParamResult,
 };
-use craft::ui::runtime::egui::widgets::{IconButton, IconId, Menu, MenuItem, PopupKind, Trigger};
+use craft::ui::rails::RailFooter;
+use craft::ui::runtime::commands::CommandRef;
 use egui::pos2;
 use serde_json::{Value, json};
 use vectorcraft_tools::tool_info;
@@ -135,7 +131,8 @@ fn blank_name(ui: &UiState) -> String {
     (1..).map(|i| format!("Toolbar {i}")).find(|n| find(ui, n).is_none()).unwrap_or_default()
 }
 
-/// Floats the panel of toolbar `id` `width` points wide, at the first step from `first` of the cascade
+/// Floats the panel of toolbar `id` `width` points wide (the dock's float width for it when `width` is
+/// not positive), at the first step from `first` of the cascade
 /// from `from` (16 right and 24 down a step) where no other toolbar's window sits, and shows the
 /// panels, which ends a Tab hide.
 fn float_new(app: &mut VectorcraftApp, id: u32, from: [f32; 2], first: u32, width: f32) -> Result<(), String> {
@@ -159,7 +156,7 @@ pub(crate) fn create(app: &mut VectorcraftApp, name: &str) -> Result<String, Str
     }
     let id = next_id(&app.ui.custom_toolbars);
     app.ui.custom_toolbars.push(CustomToolbar { id, name: name.clone(), slots: vec![], last_used: Default::default() });
-    float_new(app, id, NEW_AT, 0, panel_docking::floating_size(&panel_id(id)).x)?;
+    float_new(app, id, NEW_AT, 0, 0.0)?;
     Ok(name)
 }
 
@@ -231,7 +228,7 @@ pub(crate) fn duplicate(app: &mut VectorcraftApp, name: Option<&str>) -> Result<
     app.ui.custom_toolbars.push(copy);
     match source {
         Some(r) => float_new(app, id, [r.min.x, r.min.y], 1, r.width())?,
-        None => float_new(app, id, NEW_AT, 0, panel_docking::floating_size(&panel_id(id)).x)?,
+        None => float_new(app, id, NEW_AT, 0, 0.0)?,
     }
     Ok(name)
 }
@@ -241,8 +238,11 @@ pub(crate) fn delete(app: &mut VectorcraftApp, name: &str) -> Result<(), String>
     let k = index(&app.ui, name)?;
     let Some(bar) = app.ui.custom_toolbars.get(k) else { return Err(format!("no toolbar named `{name}`")) };
     let (id, bar_name) = (bar.id, bar.name.clone());
-    let mut panels: Vec<String> =
-        crate::toolbar::strips(app, Some(&bar_name)).iter().filter_map(|tools| tools.first()).map(|first| strip_id(Owner::Toolbar(id), first)).collect();
+    let mut panels: Vec<String> = crate::toolbar::strips(app, Some(&bar_name))
+        .iter()
+        .filter_map(|tools| tools.first())
+        .map(|first| strip_id(Owner::Toolbar(id), first))
+        .collect();
     panels.push(panel_id(id));
     close_drawer(&mut app.ui, &bar_name, None);
     close_panels(app, panels);
@@ -305,7 +305,7 @@ fn set_shown(app: &mut VectorcraftApp, name: &str, show: Option<bool>) -> Result
     let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
     let (id, name) = (bar.id, bar.name.clone());
     let panel = panel_id(id);
-    let shown = panel_docking::visible(&app.ui, &panel);
+    let shown = panel_docking::visible(app, &panel);
     let show = show.unwrap_or(!shown);
     if show && !shown {
         // A hidden panel comes back where it was.
@@ -440,7 +440,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                         let double = place.as_ref().is_some_and(|(_, column)| column.steps == Some(2));
                         json!({
                             "name": b.name,
-                            "shown": panel_docking::visible(&app.ui, &panel),
+                            "shown": panel_docking::visible(app, &panel),
                             "double": double,
                             "slots": b.slots,
                             "floating": docked.is_none(),
@@ -476,20 +476,19 @@ pub fn sync(ui: &UiState) {
 /// Window › Toolbars: Advanced, Double Column, Compact Tools and Keep Tools Beside the Canvas,
 /// the toolbars made with New Toolbar (each checked while it shows), New Toolbar… and Manage
 /// Toolbars….
-pub fn menu_items() -> Vec<crate::menus::Item> {
-    use crate::menus::Item;
-    let c = |label: &'static str, id: &'static str| Item::Cmd(label, id, Value::Null);
+pub fn menu_items() -> Vec<crate::menus::Node> {
+    use crate::menus::{Sep, c, named};
     let mut v = vec![
         c("Advanced", "window.toolbarAdvanced"),
         c("Double Column", "window.toolbarColumns"),
         c("Compact Tools", "window.toolbarCompact"),
         c("Keep Tools Beside the Canvas", "window.toolsBesideCanvas"),
-        Item::Sep,
+        Sep,
     ];
     let names = names_store().read().map(|v| v.clone()).unwrap_or_default();
     if !names.is_empty() {
-        v.extend(names.into_iter().map(|n| Item::Cmd(n, "window.toolbar.custom", json!({ "name": n }))));
-        v.push(Item::Sep);
+        v.extend(names.into_iter().map(|n| named(n, "window.toolbar.custom", json!({ "name": n }))));
+        v.push(Sep);
     }
     v.push(c("New Toolbar…", "window.toolbar.new"));
     v.push(c("Manage Toolbars…", "window.toolbar.manage"));
@@ -521,10 +520,9 @@ pub(crate) fn add_menu(app: &VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer
         if !held.is_empty() {
             MenuItem::heading(crate::i18n::colon(tl!("Remove Tool"))).show(ui);
             for tool in held.iter().filter_map(|id| tool_info(id)) {
-                // PLAN: assumed `MenuItem::label(impl Into<Label>)` naming the row by the tool, not by the command.
                 MenuItem::command(command("toolbar.removeTool", tool.id)).label(tool.label).show(ui);
             }
-            ui.separator();
+            Divider::horizontal().show(ui);
         }
         for (cat, tools) in crate::edit_toolbar::sections() {
             MenuItem::heading(crate::i18n::colon(tl!(cat))).show(ui);
@@ -540,18 +538,23 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
-    use crate::menus::Item;
+    use crate::menus::Node;
 
     fn app() -> VectorcraftApp {
         VectorcraftApp::new(Session::new(), Default::default())
     }
 
     /// The items of Window › Toolbars: (label, command id, params).
-    fn toolbars_menu(app: &VectorcraftApp) -> Vec<(&'static str, &'static str, Value)> {
+    fn toolbars_menu(app: &VectorcraftApp) -> Vec<(String, String, Value)> {
         crate::shortcut_editor::sync(&app.ui);
         let window = crate::menus::menu_tree().into_iter().find(|(m, _)| *m == "Window").map(|(_, items)| items).unwrap();
-        let Some(Item::Sub(_, items)) = window.into_iter().find(|i| matches!(i, Item::Sub("Toolbars", _))) else { panic!("no Toolbars submenu") };
-        items.into_iter().filter_map(|i| if let Item::Cmd(l, id, p) = i { Some((l, id, p)) } else { None }).collect()
+        let Some(items) = window.into_iter().find_map(|n| match n {
+            Node::Submenu { label, children, .. } if label == "Toolbars" => Some(children),
+            _ => None,
+        }) else {
+            panic!("no Toolbars submenu")
+        };
+        items.into_iter().filter_map(|n| if let Node::Item(i) = n { Some((i.label, i.command.id, i.command.params)) } else { None }).collect()
     }
 
     /// One frame of the whole window, `height` points tall, with `events` as its input.
@@ -581,7 +584,7 @@ mod tests {
     }
 
     fn shown(app: &VectorcraftApp, name: &str) -> bool {
-        panel_docking::visible(&app.ui, &panel_id(find(&app.ui, name).unwrap().id))
+        panel_docking::visible(app, &panel_id(find(&app.ui, name).unwrap().id))
     }
 
     /// New Toolbar named "Mine" is listed under Window › Toolbars, checked while it shows; its item
@@ -589,22 +592,22 @@ mod tests {
     #[test]
     fn a_new_toolbar_is_listed_under_window_toolbars() {
         let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let last: Vec<_> = toolbars_menu(&app).iter().rev().take(2).map(|(l, id, _)| (*l, *id)).collect();
+        let ctx = crate::testing::ui_context();
+        let menu = toolbars_menu(&app);
+        let last: Vec<_> = menu.iter().rev().take(2).map(|(l, id, _)| (l.as_str(), id.as_str())).collect();
         assert_eq!(last, [("Manage Toolbars…", "window.toolbar.manage"), ("New Toolbar…", "window.toolbar.new")]);
         assert_eq!(app.run("window.toolbar.new", json!({"name": " Mine "})).unwrap(), json!({"toolbar": "Mine"}));
         let menu = toolbars_menu(&app);
-        let item = menu.iter().find(|(l, ..)| *l == "Mine").expect("Mine is listed");
-        assert_eq!((item.1, &item.2), ("window.toolbar.custom", &json!({"name": "Mine"})));
-        assert_eq!(crate::menus::checked(&app, item.1, &item.2), Some(true));
-        assert_eq!(crate::menus::display_label(&app, item.1, item.0), "Mine", "listed by its own name");
+        let item = menu.iter().find(|(l, ..)| l == "Mine").expect("Mine is listed");
+        assert_eq!((item.1.as_str(), &item.2), ("window.toolbar.custom", &json!({"name": "Mine"})));
+        assert_eq!(crate::menus::checked(&app, &item.1, &item.2), Some(true));
+        assert_eq!(crate::menus::display_label(&app, &item.1, &item.0), "Mine", "listed by its own name");
         // A blank toolbar, floating, shown.
         assert!(find(&app.ui, "mine").unwrap().slots.is_empty() && shown(&app, "Mine"));
         // Its item hides it and shows it again.
         assert_eq!(app.run("window.toolbar.custom", json!({"name": "Mine"})).unwrap(), json!(false));
         assert!(!shown(&app, "Mine"));
-        assert_eq!(crate::menus::checked(&app, item.1, &item.2), Some(false));
+        assert_eq!(crate::menus::checked(&app, &item.1, &item.2), Some(false));
         assert_eq!(app.run("window.toolbar.custom", json!({"name": "MINE", "show": true})).unwrap(), json!(true));
         assert!(shown(&app, "Mine"));
         // Names: not empty, not taken whatever the case.
@@ -629,7 +632,7 @@ mod tests {
         assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft::ui::dialog::dialog_id(NEW_KEY)).is_some());
         assert_eq!(app.ui.custom_toolbars.len(), 1);
         app.run("window.toolbar.new", json!({"name": "Toolbar 1"})).unwrap();
-        let names: Vec<&str> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();
+        let names: Vec<String> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();
         assert_eq!(names, ["Mine", "Toolbar 1"]);
         let list = app.run("window.toolbar.list", json!({})).unwrap();
         let blank = |name: &str| json!({"name": name, "shown": true, "double": false, "slots": [], "floating": true, "side": "left", "order": null});
@@ -693,7 +696,6 @@ mod tests {
         // Reset makes it blank again.
         assert_eq!(app.run("toolbar.reset", json!({"toolbar": "Mine"})).unwrap(), json!([]));
         // Workspaces saved before New Toolbar load without toolbars.
-        // PLAN: assumed `WorkspaceRecord: Default + Serialize + Deserialize` with a `toolbars` field (chrome-w14).
         let mut old = serde_json::to_value(crate::workspaces::WorkspaceRecord::default()).unwrap();
         old.as_object_mut().unwrap().remove("toolbars");
         assert!(serde_json::from_value::<crate::workspaces::WorkspaceRecord>(old).unwrap().toolbars.is_empty());
@@ -707,8 +709,7 @@ mod tests {
     #[test]
     fn a_new_toolbar_shows_without_the_tools_panel_until_tab() {
         let mut app = app();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
+        let ctx = crate::testing::ui_context();
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
         app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
@@ -719,18 +720,18 @@ mod tests {
         window_frame(&mut app, &ctx, 0.1, 800.0);
         let mine = panel_id(find(&app.ui, "Mine").unwrap().id);
         let (mine_strip, tools_strip) = (strip_id(Owner::Toolbar(find(&app.ui, "Mine").unwrap().id), "pen"), strip_id(Owner::Tools, "pen"));
-        assert!(panel_docking::visible(&app.ui, &mine) && panel_docking::visible(&app.ui, &mine_strip) && panel_docking::visible(&app.ui, &tools_strip));
+        assert!(panel_docking::visible(&app, &mine) && panel_docking::visible(&app, &mine_strip) && panel_docking::visible(&app, &tools_strip));
         // Window › Tools hides the Tools panel and its strip alone.
         app.run("window.toolbar", json!({})).unwrap();
         window_frame(&mut app, &ctx, 0.2, 800.0);
         assert!(!crate::toolbar::shown(&app.ui));
-        assert!(!panel_docking::visible(&app.ui, &tools_strip), "a strip torn off Tools stays hidden with Tools");
-        assert!(panel_docking::visible(&app.ui, &mine) && panel_docking::visible(&app.ui, &mine_strip));
+        assert!(!panel_docking::visible(&app, &tools_strip), "a strip torn off Tools stays hidden with Tools");
+        assert!(panel_docking::visible(&app, &mine) && panel_docking::visible(&app, &mine_strip));
         app.run("window.editToolbar", json!({"toolbar": "Mine", "open": true})).unwrap();
         assert_eq!(drawer_target(&app.ui), Some("Mine"));
         // Hiding the toolbar takes its strip with it.
         app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
-        assert!(!panel_docking::visible(&app.ui, &mine_strip), "a strip follows its toolbar");
+        assert!(!panel_docking::visible(&app, &mine_strip), "a strip follows its toolbar");
         assert_eq!(drawer_target(&app.ui), None, "the drawer beside a hidden toolbar closes");
         app.run("window.toolbar.custom", json!({"name": "Mine", "show": true})).unwrap();
         // Tab hides it and a second Tab shows it.
@@ -815,7 +816,7 @@ mod tests {
         assert_eq!(app.ui.custom_toolbars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Mine", "Only in Drawing"]);
     }
 
-    fn listed(app: &VectorcraftApp) -> Vec<&'static str> {
+    fn listed(app: &VectorcraftApp) -> Vec<String> {
         toolbars_menu(app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect()
     }
 
@@ -825,7 +826,7 @@ mod tests {
     fn manage_toolbars_renames_duplicates_and_deletes() {
         let mut app = app();
         let menu = toolbars_menu(&app);
-        assert_eq!(menu.last().map(|(l, id, _)| (*l, *id)), Some(("Manage Toolbars…", "window.toolbar.manage")));
+        assert_eq!(menu.last().map(|(l, id, _)| (l.as_str(), id.as_str())), Some(("Manage Toolbars…", "window.toolbar.manage")));
         app.run("window.workspace.new", json!({"name": "Drawing"})).unwrap();
         app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
         app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();

@@ -20,13 +20,13 @@ use craft::ui::patterns::dock::{HostedNewWorkspace, NewWorkspace, WorkspaceSwitc
 // `new(title, name_label, entries, actions)`, `renames(kind)`, `set_entries(Vec<ListManagerEntry>)`,
 // `take_choice() -> Option<ListManagerChoice>`.
 use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerEntry};
+use craft::ui::rails::LastUsed;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::layout_migration::Outcome;
-// PLAN: assumed `LastUsed` is reachable as `crate::state::LastUsed` (hub-w1's ch.P1 field type).
-use crate::state::{CustomToolbar, DockTab, LastUsed, UiState};
 use crate::VectorcraftApp;
+use crate::layout_migration::Outcome;
+use crate::state::{CustomToolbar, DockTab, UiState};
 
 /// The most workspaces whose changes are remembered; the oldest go first.
 const MAX_REMEMBERED: usize = 64;
@@ -399,11 +399,7 @@ fn apply_record(ui: &mut UiState, w: &WorkspaceRecord) {
 
 /// The record `id` was saved with (a built-in's, or the user's).
 fn saved_record(w: &Workspaces, id: &str) -> WorkspaceRecord {
-    w.records
-        .get(id)
-        .cloned()
-        .or_else(|| builtins().into_iter().find(|b| builtin_id(b.name) == id).map(|b| b.record))
-        .unwrap_or_default()
+    w.records.get(id).cloned().or_else(|| builtins().into_iter().find(|b| builtin_id(b.name) == id).map(|b| b.record)).unwrap_or_default()
 }
 
 /// The text the user reads for a refused name.
@@ -527,19 +523,18 @@ pub fn sync(ui: &UiState) {
 }
 
 /// Window → Workspace submenu items.
-pub fn menu_items() -> Vec<crate::menus::Item> {
-    use crate::menus::Item;
-    let mut v: Vec<Item> =
-        builtins().into_iter().map(|b| Item::Cmd(crate::shortcut_editor::intern(b.name), "window.workspace", json!({"name": b.name}))).collect();
+pub fn menu_items() -> Vec<crate::menus::Node> {
+    use crate::menus::{Node, Sep, c, named};
+    let mut v: Vec<Node> = builtins().into_iter().map(|b| named(b.name, "window.workspace", json!({"name": b.name}))).collect();
     let custom = names_store().read().map(|v| v.clone()).unwrap_or_default();
     if !custom.is_empty() {
-        v.push(Item::Sep);
-        v.extend(custom.into_iter().map(|n| Item::Cmd(n, "window.workspace", json!({"name": n}))));
+        v.push(Sep);
+        v.extend(custom.into_iter().map(|n| named(n, "window.workspace", json!({"name": n}))));
     }
-    v.push(Item::Sep);
-    v.push(Item::Cmd("Reset Essentials", "window.workspace.reset", Value::Null));
-    v.push(Item::Cmd("New Workspace…", "window.workspace.new", Value::Null));
-    v.push(Item::Cmd("Manage Workspaces…", "window.workspace.manage", Value::Null));
+    v.push(Sep);
+    v.push(c("Reset Essentials", "window.workspace.reset"));
+    v.push(c("New Workspace…", "window.workspace.new"));
+    v.push(c("Manage Workspaces…", "window.workspace.manage"));
     v
 }
 

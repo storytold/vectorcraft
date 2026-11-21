@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use craft::behavior::{IconId, Selection, keyed};
-use craft::host::files::{PickKind, PickRequest};
+use craft::host::{PickKind, PickRequest};
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
@@ -36,9 +36,9 @@ use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
 
+use crate::VectorcraftApp;
 use crate::addons::select::link_status;
 use crate::file_asks::{self, Owner};
-use crate::VectorcraftApp;
 
 pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
@@ -209,10 +209,7 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Cache>> {
 /// the ids `links.list` reports for them.
 ///
 /// [`Document::mounted_art`]: vectorcraft_doc::Document::mounted_art
-pub(super) fn stored_objects(
-    doc: &vectorcraft_doc::Document,
-    mut want: std::collections::HashSet<u64>,
-) -> Vec<(u64, Arc<vectorcraft_doc::Node>)> {
+pub(super) fn stored_objects(doc: &vectorcraft_doc::Document, mut want: std::collections::HashSet<u64>) -> Vec<(u64, Arc<vectorcraft_doc::Node>)> {
     let mut out = vec![];
     collect_stored(doc, &mut want, &mut out);
     if !want.is_empty() && doc.mounted_art.is_empty() {
@@ -452,7 +449,6 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
         let opened = app.run("document.open", json!({ "path": path }))?;
         // Its missing fonts are asked about as for a document opened with File › Open.
         crate::dialogs::missing_fonts::after_open(app, &opened);
-        crate::dialogs::settle(app);
         return Ok(json!({ "path": path }));
     }
     if reveal {
@@ -665,10 +661,11 @@ fn act(app: &mut VectorcraftApp, act: Act, target: Option<u64>) {
     let cache = Arc::clone(&app.ui.links.cache);
     let selected = selected_links(app);
     let f = Facts::of(&cache.list, &selected);
-    let file_arg = || match target.filter(|id| f.rows.iter().any(|r| r["id"].as_u64() == Some(*id) && r["linked"] == true && !status_is(r, "missing"))) {
-        Some(id) => json!({ "id": id }),
-        None => f.file_row(),
-    };
+    let file_arg =
+        || match target.filter(|id| f.rows.iter().any(|r| r["id"].as_u64() == Some(*id) && r["linked"] == true && !status_is(r, "missing"))) {
+            Some(id) => json!({ "id": id }),
+            None => f.file_row(),
+        };
     match act {
         Act::Relink => crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": f.all() })),
         Act::RelinkToFolder => relink_to_folder(app, f.all()),
@@ -730,10 +727,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let by_id: HashMap<u64, &Value> = rows.iter().filter_map(|r| Some((r["id"].as_u64()?, r))).collect();
     let row_ids: Vec<u64> = rows.iter().filter_map(|r| r["id"].as_u64()).collect();
-    // PLAN: assumed `thumbs::link_thumbnails(&Context)` and `NodeThumbs::new(&Document, lookup)`
-    // of document-panels-w8; `lookup` gives the objects outside the layer tree.
-    let thumbs = super::thumbs::link_thumbnails(ui.ctx());
-    let nodes = super::thumbs::NodeThumbs::new(&doc, |id| cache.nested_node(id).cloned());
+    // `lookup` gives the objects outside the layer tree.
+    let thumbs = super::layers::link_thumbnails(ui.ctx());
+    let nodes = super::layers::NodeThumbs::new(&doc, |id| cache.nested_node(id).cloned());
     let (thumbs, nodes) = (&thumbs, &nodes);
     let ppp = ui.ctx().pixels_per_point();
 
@@ -742,9 +738,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     Panel::new(tl!("Links"))
         .footer(|ui, _| {
             let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
-            let actions = std::iter::once(info).chain(
-                FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))),
-            );
+            let actions = std::iter::once(info)
+                .chain(FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))));
             footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
         })
         .show(ui, |ui, _| {
@@ -761,7 +756,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let mut row = ListRow::new(name.to_string()).thumb(o.thumb, move |cx, rect| {
                     // PLAN: assumed `state(..).shown()` gives the texture to paint, if ready.
                     let request = craft::ui::primitives::ThumbRequest::for_cell(rect.width(), ppp);
-                    let shown = thumbs.state(cx.ctx(), nodes, &super::thumbs::NodeThumb { uid: uid.unwrap_or_default(), node }, &request, craft::host::queue::Priority::VISIBLE).shown();
+                    let shown = thumbs
+                        .state(
+                            cx.ctx(),
+                            nodes,
+                            &super::layers::NodeThumb { uid: uid.unwrap_or_default(), node },
+                            &request,
+                            craft::host::queue::Priority::VISIBLE,
+                        )
+                        .shown();
                     if let Some(texture) = shown {
                         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                         cx.painter().image(texture, rect, uv, egui::Color32::WHITE);
@@ -826,7 +829,14 @@ fn rows_of(cache: &Cache) -> &[Value] {
 fn show_row_menu(ui: &mut Ui, opener: &egui::Response, app: &VectorcraftApp, f: &Facts, r: &Value) -> Option<(Act, u64)> {
     let id = r["id"].as_u64()?;
     let last = if status_is(r, "embedded") { (Act::Unembed, "Unembed…") } else { (Act::Embed, "Embed Image") };
-    let items = [(Act::Relink, "Relink…"), (Act::GoTo, "Go To Link"), (Act::Update, "Update Link"), (Act::Edit, "Edit Original"), (Act::Reveal, "Show in Folder"), last];
+    let items = [
+        (Act::Relink, "Relink…"),
+        (Act::GoTo, "Go To Link"),
+        (Act::Update, "Update Link"),
+        (Act::Edit, "Edit Original"),
+        (Act::Reveal, "Show in Folder"),
+        last,
+    ];
     let shown = Menu::context(tl!("Link"), opener).show(ui, |ui, _| {
         let mut ran = None;
         for (a, label) in items {

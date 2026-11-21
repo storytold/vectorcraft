@@ -18,20 +18,19 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::menu::Menu;
 use craft::ui::tabs::{TabKind, TabStrip};
 // PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamRows};
 use craft::behavior::EditEvents;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamRows};
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
 use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
-use super::live_run;
+use super::{Live, live_run};
 use crate::VectorcraftApp;
 use crate::dialogs::form;
 use crate::dialogs::revolve::{self, Place};
 use crate::dialogs::three_d as host;
 use crate::dialogs::three_d_materials as materials;
-use crate::widgets::Live;
 
 pub(crate) mod handles;
 pub(crate) use handles::FrameKey;
@@ -501,7 +500,8 @@ pub(crate) fn expand_as_wireframes(app: &mut VectorcraftApp) -> Result<(), Strin
 /// is the single light) is left as it is.
 pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut DialogFields) {
     let Some(st) = app.session.active() else { return };
-    let mut effects = st.selection.objects.iter().filter_map(|id| find(st.doc.node(*id)?)).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params));
+    let mut effects =
+        st.selection.objects.iter().filter_map(|id| find(st.doc.node(*id)?)).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params));
     let Some(first) = effects.next() else { return };
     for other in effects {
         let differing: Vec<&String> = other

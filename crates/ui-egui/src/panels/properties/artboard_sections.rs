@@ -8,7 +8,6 @@ use craft::theme::Srgba;
 use craft::ui::buttons::{Button, IconButton, ToggleButton};
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
 use craft::ui::controls::disclosure::DisclosureGlyph;
-use craft::ui::controls::PageGlyph;
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Grid, Row};
 use craft::ui::menu::{Menu, MenuItem};
@@ -23,6 +22,7 @@ use vectorcraft_engine::cmd::newdoc;
 
 use super::object_sections::HALVES;
 use crate::VectorcraftApp;
+use crate::page_glyphs::PageGlyph;
 use crate::panels::{artboards, transform};
 
 /// Edit Artboards (the Artboard tool): a Transform section with the active artboard's reference
@@ -55,12 +55,9 @@ pub(super) fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                             app.run("artboard.setProps", json!({ "index": i, "name": name })).ok();
                         }
                     }
-                    IconButton::command(
-                        IconId::new("dc-artboard-options"),
-                        CommandRef::with_params("tool.options", json!({ "tool": "artboard" })),
-                    )
-                    .label(tl!("Artboard Options"))
-                    .show(ui);
+                    IconButton::command(IconId::new("dc-artboard-options"), CommandRef::with_params("tool.options", json!({ "tool": "artboard" })))
+                        .label(tl!("Artboard Options"))
+                        .show(ui);
                 });
             });
             artboard_fill_row(app, ui, i, ab.color);
@@ -167,8 +164,7 @@ pub(crate) fn artboard_size_controls(
         (pw - w).abs() < 0.01 && (ph - h).abs() < 0.01
     };
     let presets = artboard_presets(app);
-    let current =
-        presets.iter().flat_map(|(_, l)| l).find(|s| same(s)).map_or(tl!("Custom"), |s| crate::dialogs::preset_name(&s.name)).to_string();
+    let current = presets.iter().flat_map(|(_, l)| l).find(|s| same(s)).map_or(tl!("Custom"), |s| crate::dialogs::preset_name(&s.name)).to_string();
     // The preset's width and height as listed, or the orientation clicked, or the fit chosen.
     let mut preset = None;
     let mut orientation = None;

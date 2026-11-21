@@ -11,9 +11,9 @@
 use std::borrow::Cow;
 
 use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection, SelectionChange};
-use craft::color_ui::ui::{ChannelRow, ChannelRule, HarmonyWheel};
-use craft::theme::Rgba;
+use craft::color_ui::ui::{ChannelRow, ChannelRule, ColorPanelMode, HarmonyWheel};
 use craft::theme::variant::Tone;
+use craft::theme::{ModelValues, Rgba};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
 use craft::ui::contract::{Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _};
@@ -33,7 +33,8 @@ use vectorcraft_color::Color;
 use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
-use super::color::{ColorPanelMode, ModelValues, color_of_values};
+// PLAN: assumed `crate::panels::srgba(&Color) -> Srgba` beside `c32` (co.A11, hub-w2).
+use super::color::color_of_values;
 use super::{active_paint, c32, color_json, proxy_cmd, srgba};
 use crate::VectorcraftApp;
 
@@ -421,12 +422,8 @@ fn icon(name: &'static str) -> IconSpec<'static> {
 /// The footer under a tab: one action per command of `ids`, from the end edge, with `icons`; a click runs
 /// the command the same way the panel menu does.
 fn footer(app: &mut VectorcraftApp, ui: &mut Ui, ids: &[&str], icons: &[&'static str], labels: Vec<Label>) {
-    let actions: Vec<_> = ids
-        .iter()
-        .zip(icons)
-        .zip(labels)
-        .map(|((id, name), label)| FooterAction::new(icon(name), label).enabled(enabled(app, id)))
-        .collect();
+    let actions: Vec<_> =
+        ids.iter().zip(icons).zip(labels).map(|((id, name), label)| FooterAction::new(icon(name), label).enabled(enabled(app, id))).collect();
     let out = FooterBar::actions(actions).show_footer(ui);
     // The footer runs twice per pass: the sizing pass measures it and must report nothing.
     if ui.is_sizing_pass() {
@@ -440,9 +437,10 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui, ids: &[&str], icons: &[&'static
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let titles = [tl!("Create").to_string(), tl!("My Themes").to_string()];
     let cur = app.ui.color_themes_panel.tab;
-    let strip = TabStrip::new(tl!("Color Themes")).kind(TabKind::Text).shown(cur).show_items(ui, &Names(&titles), &mut |key, _| {
-        Tab::new(titles.get(*key).cloned().unwrap_or_default()).id_salt(("ct-tab", *key))
-    });
+    let strip = TabStrip::new(tl!("Color Themes"))
+        .kind(TabKind::Text)
+        .shown(cur)
+        .show_items(ui, &Names(&titles), &mut |key, _| Tab::new(titles.get(*key).cloned().unwrap_or_default()).id_salt(("ct-tab", *key)));
     for event in strip.response.events {
         if let CollectionEvent::Selection(SelectionChange::Set(keys)) = event
             && let Some(&tab) = keys.last()
@@ -499,7 +497,9 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
             d.set_selected(c);
         }
         let can_set = app.session.active().is_some() && d.colors.get(d.sel).is_some();
-        if IconButton::new(icon("paint-bucket")).label(tl!("Set the current fill or stroke to the selected color")).enabled(can_set).show(ui).clicks == 1 {
+        if IconButton::new(icon("paint-bucket")).label(tl!("Set the current fill or stroke to the selected color")).enabled(can_set).show(ui).clicks
+            == 1
+        {
             set_active_color(app, &d);
         }
         let current = active_paint(app).color();
@@ -538,7 +538,13 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
         Notice::new(Tone::Neutral, tl!("No matches.")).show(ui);
     } else {
         let names: Vec<String> = rows.iter().map(|(n, _)| n.clone()).collect();
-        let mut selection = app.ui.color_themes_panel.picked.as_ref().and_then(|p| names.iter().position(|n| n == p)).map_or_else(Selection::default, Selection::single);
+        let mut selection = app
+            .ui
+            .color_themes_panel
+            .picked
+            .as_ref()
+            .and_then(|p| names.iter().position(|n| n == p))
+            .map_or_else(Selection::default, Selection::single);
         let out = List::new(tl!("My Themes")).select(craft::ui::contract::SelectMode::Single).selection(Bind::bound(&mut selection)).show_items(
             ui,
             &Names(&names),

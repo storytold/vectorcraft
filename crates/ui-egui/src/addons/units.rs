@@ -11,6 +11,7 @@
 //! its unit when Copy with Units is on.
 
 use craft::behavior::{IconId, NavShape};
+use craft::menu::Node;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
 use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
@@ -25,7 +26,7 @@ use vectorcraft_doc::{Unit, finite_in_every_unit};
 
 use crate::VectorcraftApp;
 use crate::canvas::rulers::unit_kind;
-use crate::menus::Item;
+use crate::menus::cp;
 use crate::panels::empty_state;
 use crate::panels::transform;
 
@@ -35,8 +36,8 @@ pub const ID: &str = "unitConverter";
 pub const SELECTION_SIZE: &str = "addon.units.selectionSize";
 
 /// Object › Plug-ins › Unit Converter.
-pub fn menu() -> Vec<Item> {
-    vec![Item::Cmd("Unit Converter Panel", "window.panel", json!({ "panel": ID }))]
+pub fn menu() -> Vec<Node> {
+    vec![cp("Unit Converter Panel", "window.panel", json!({ "panel": ID }))]
 }
 
 /// The selection's side the fields show and Apply sets.

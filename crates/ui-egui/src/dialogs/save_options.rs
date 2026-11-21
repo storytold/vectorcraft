@@ -33,12 +33,14 @@ use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode, TEMPLATE_FORMATS};
 use vectorcraft_eps::{Level, Overprint, Preview};
 
-// PLAN: assumed paths for the framework items below (the app's craft_ui re-exports).
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Bind, CollectionEvent, TooltipSpec};
-use craft::ui::runtime::env::Label;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, TooltipSpec};
+use craft::ui::list::{ThumbAspect, ToggleState};
+use craft::ui::notices::Notice;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::runtime::egui::widgets::{Button, Notice, ThumbAspect, Tile, TileGrid, TilePartEvent, ToggleState};
+use craft::ui::runtime::env::Label;
+use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
 
 use super::export_host::{self, After, Export, Open};
 use super::{export_for_screens, form};
@@ -176,7 +178,8 @@ fn choices(app: &VectorcraftApp, f: &Format, o: &FormatOption) -> Option<Choices
         "level" => (Level::ALL.iter().filter_map(|l| Some((json!(l.id().parse::<u64>().ok()?), l.label().to_string()))).collect(), None),
         "flattenerPreset" => {
             let id = |name: &str| FlattenOptions::PRESETS.into_iter().find(|id| FlattenOptions::preset_label(id) == Some(name));
-            let pairs = app.session.flattener_presets().iter().map(|p| (id(&p.name).map_or_else(|| json!(p.name), |id| json!(id)), p.name.clone())).collect();
+            let pairs =
+                app.session.flattener_presets().iter().map(|p| (id(&p.name).map_or_else(|| json!(p.name), |id| json!(id)), p.name.clone())).collect();
             (pairs, Some(FlattenOptions::builtin_presets().len()))
         }
         _ => return None,
@@ -393,11 +396,10 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
         .vertical(|ui| {
             ui.label(tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file."));
             ui.horizontal(|ui| {
-                // PLAN: assumed Button::new(label).show(ui) answers a response with `clicked()`.
-                if Button::new(tl!("Select All")).show(ui).clicked() {
+                if Button::new(tl!("Select All")).show(ui).clicks > 0 {
                     boards.iter_mut().for_each(|b| *b = true);
                 }
-                if Button::new(tl!("Clear")).show(ui).clicked() {
+                if Button::new(tl!("Clear")).show(ui).clicks > 0 {
                     boards.iter_mut().for_each(|b| *b = false);
                 }
                 let checked = boards.iter().filter(|b| **b).count();
@@ -405,7 +407,6 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
                 ui.label(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)]));
             });
             if !boards.iter().any(|b| *b) {
-                // PLAN: assumed Notice::new(tone, message).show(ui).
                 Notice::new(Tone::Warn, tl!("Check an artboard to save.")).show(ui);
             }
             // PLAN: assumed TileGrid::show_items(ui, &source, &mut |key, _| tile) as the framework's stories call it;
@@ -419,9 +420,10 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
                 match menus.thumbs.get(*i).cloned().flatten() {
                     Some(tex) => {
                         let size = tex.size_vec2();
-                        // PLAN: assumed ContentPainterCx::painter() draws in the thumbnail rect.
-                        tile.thumb(ThumbAspect::new(size.x.max(1.0) as u32, size.y.max(1.0) as u32), move |cx, rect| {
-                            cx.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+                        // The thumbnail's pixel size is at most a few hundred: it fits `u16`.
+                        let aspect = ThumbAspect::new(size.x.max(1.0) as u16, size.y.max(1.0) as u16);
+                        tile.thumb(aspect, move |cx, rect| {
+                            cx.picture(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0);
                         })
                     }
                     None => tile,

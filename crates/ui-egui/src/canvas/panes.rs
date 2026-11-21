@@ -8,13 +8,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use craft::ui::canvas::{SplitAt, SplitLayout, SplitViews};
+use craft::behavior::kurbo::Vec2;
+use craft::behavior::{CanvasView, ZoomScheme};
+use craft::ui::canvas::{CanvasSpace, SplitAt, SplitLayout, SplitViews};
 use craft::ui::contract::{Bind, ShowContainer as _};
 use craft::ui::primitives::textures::{LoadedPicture, Priority, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::runtime::env::Env;
+use egui::Ui;
+use serde_json::json;
+use vectorcraft_geom::{Affine, Point};
 
-use super::{Affine, BodyKind, CacheKey, Point, Tokens, Ui, VectorcraftApp, View, backdrop, cache_key, frame_options, frame_ppp, frame_view, json};
-use super::{pixel_region, placed_key, plugin_key};
+use super::BodyKind;
+use super::raster::{backdrop, cache_key, frame_options, frame_ppp, frame_view, pixel_region, placed_key, plugin_key};
 use crate::doc_windows::Win;
+use crate::state::View;
+use crate::{CacheKey, VectorcraftApp};
 
 /// Whose render a pane draws: its document's uid and its view's number.
 type Slot = (u64, u32);
@@ -40,7 +48,6 @@ struct PaneFrame {
     size: (u32, u32),
     view: Affine,
     opts: vectorcraft_render::RenderOptions,
-    // PLAN: assumed `craft::color_ui::display::DisplayTransform`, the type canvas-w12's `render_pane` takes.
     display: Option<Arc<craft::color_ui::display::DisplayTransform>>,
     cms: Arc<vectorcraft_color::cms::Cms>,
     /// Where the picture lies on the screen: the pane's art area, or the document pixels' rect in Pixel Preview.
@@ -59,7 +66,8 @@ impl ThumbSource<PaneKey> for PaneSource {
 
     fn render(&self, _: &PaneKey, _: &ThumbRequest) -> ThumbRender {
         let f = &self.frame;
-        let (doc, opts, display, cms, cache, (w, h), view) = (f.doc.clone(), f.opts.clone(), f.display.clone(), f.cms.clone(), f.cache.clone(), f.size, f.view);
+        let (doc, opts, display, cms, cache, (w, h), view) =
+            (f.doc.clone(), f.opts.clone(), f.display.clone(), f.cms.clone(), f.cache.clone(), f.size, f.view);
         ThumbRender::Later(Box::new(move |_| {
             let mut renderer = vectorcraft_render::Renderer::new();
             let img = render_pane(&mut renderer, (&doc, w, h, view, &opts), display.as_deref(), cms, cache.over());
@@ -115,19 +123,18 @@ fn render_pane(
     img
 }
 
-/// The frame window `w`'s pane renders, painted into `space`; `None` when the window has no document.
-fn pane_frame(app: &mut VectorcraftApp, ui: &Ui, space: egui::Rect, w: Win) -> Option<PaneFrame> {
+/// The frame window `w`'s pane renders through `cv`, the view its canvas shows; `None` when the
+/// window has no document.
+fn pane_frame(app: &mut VectorcraftApp, ui: &Ui, cv: &CanvasView, w: Win) -> Option<PaneFrame> {
     let ctx = ui.ctx();
-    let t = Tokens::get(ctx);
+    let env = Env::of(ui);
     let ppp = ctx.pixels_per_point();
-    let ui_zoom = ctx.zoom_factor();
+    let space = cv.rect;
     let v = crate::doc_windows::view(app, w).copied()?;
     let st = app.session.documents().get(w.0)?;
-    let cv = v.canvas(ui_zoom, space);
     // View › Pixel Preview, as the canvas draws it.
     let max_side = ctx.input(|i| i.max_texture_side);
-    // PLAN: assumed `pixel_region(&CanvasView, max_side)`, the replacement of the `Xf` form.
-    let pixel = (app.ui.view.pixel_preview && v.screen_zoom(ui_zoom) * f64::from(ppp) > 1.0).then(|| pixel_region(&cv, max_side)).flatten();
+    let pixel = (app.ui.view.pixel_preview && cv.zoom * f64::from(ppp) > 1.0).then(|| pixel_region(cv, max_side)).flatten();
     // The pane's frame fits the largest texture side the display supports, as the canvas's does.
     let ppp = frame_ppp(space.size(), ppp, max_side);
     let side = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
@@ -135,16 +142,17 @@ fn pane_frame(app: &mut VectorcraftApp, ui: &Ui, space: egui::Rect, w: Win) -> O
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
     let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
-    let drawn = v.on_screen(ui_zoom);
-    let mut cache = cache_key(app, ui, st, &t, &drawn, (pw, ph, ppp), (pixel, smooth_images, plugins, placed));
+    let mut cache = cache_key(app, ui, st, env.tokens.tokens(), cv, (pw, ph, ppp), (pixel, smooth_images, plugins, placed));
     // The current document's drag and Image Trace hold are not this document's, and this view has
     // its own Outline or Preview.
     (cache.dragging, cache.trace_source, cache.outline) = (false, None, v.outline);
     cache.backdrop = backdrop(app, st, v.outline);
     let opts = frame_options(app, &cache, st.shown_mask(), smooth_images);
-    let (fw, fh, view) = frame_view(pixel, (pw, ph), &drawn, ppp);
+    let (fw, fh, view) = frame_view(pixel, (pw, ph), cv, ppp);
     let on_screen = match pixel {
-        Some([x0, y0, x1, y1]) => egui::Rect::from_two_pos(cv.to_screen(Point::new(x0 as f64, y0 as f64)), cv.to_screen(Point::new(x1 as f64, y1 as f64))),
+        Some([x0, y0, x1, y1]) => {
+            egui::Rect::from_two_pos(cv.to_screen(Point::new(x0 as f64, y0 as f64)), cv.to_screen(Point::new(x1 as f64, y1 as f64)))
+        }
         None => space,
     };
     Some(PaneFrame {
@@ -161,10 +169,11 @@ fn pane_frame(app: &mut VectorcraftApp, ui: &Ui, space: egui::Rect, w: Win) -> O
     })
 }
 
-/// Paint window `w`'s picture over `space`, its art area, from the render of its document: the
+/// Paint window `w`'s picture over its canvas `space` from the render of its document: the
 /// previous picture shows until a new one lands.
-pub(super) fn pane_picture(app: &mut VectorcraftApp, ui: &mut Ui, space: egui::Rect, w: Win) {
-    let Some(frame) = pane_frame(app, ui, space, w) else { return };
+pub(super) fn pane_picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, w: Win) {
+    let Some(frame) = pane_frame(app, ui, &space.view, w) else { return };
+    let space = space.view.rect;
     let ctx = ui.ctx().clone();
     let request = ThumbRequest::for_cell(space.width().max(space.height()), ctx.pixels_per_point());
     let (key, placed) = (frame.key, frame.placed);
@@ -402,33 +411,31 @@ pub(crate) fn refit_resized(app: &mut VectorcraftApp, areas: &[(Win, egui::Rect)
 
 /// Fit `v` to show its artboard (the first if it has gone) in `area`, with the interface zoomed by
 /// `ui_zoom` on a screen of `pixels_per_point`, as Fit Artboard in Window does.
-fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui_zoom, pixels_per_point): (f32, f32), scheme: &craft::behavior::ZoomScheme) {
+fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui_zoom, pixels_per_point): (f32, f32), scheme: &ZoomScheme) {
     if let Some(target) = doc.artboards.get(v.artboard).or(doc.artboards.first()).map(|a| a.rect) {
-        // PLAN: assumed `View::canvas(ui_scaling, rect) -> CanvasView` and `View::set_canvas(&CanvasView, ui_scaling)` (cv.S4).
         let mut view = v.canvas(ui_zoom, area);
-        craft::behavior::canvas::zoom::fit_rect(&mut view, target, target.size(), pixels_per_point, kurbo::Vec2::new(FIT_MARGIN, FIT_MARGIN), scheme);
+        craft::behavior::canvas::zoom::fit_rect(&mut view, target, target.size(), pixels_per_point, Vec2::new(FIT_MARGIN, FIT_MARGIN), scheme);
         v.set_canvas(&view, ui_zoom);
         v.fitted = true;
     }
 }
 
-/// Fit window `w`'s view to its pane when it is unfitted.
-fn fit_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, cell: egui::Rect) {
+/// Fit window `w`'s view to its pane when it is unfitted, with the zoom stops of `ui`'s scope.
+fn fit_window(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) {
     let area = art_area(app, w, cell);
     let Some(doc) = app.session.documents().get(w.0).map(|st| st.doc.clone()) else { return };
-    // PLAN: assumed `crate::view::zoom_scheme(&VectorcraftApp) -> craft::behavior::ZoomScheme` (cv.F13).
-    let scheme = crate::view::zoom_scheme(app);
+    let scheme = Env::of(ui).get::<ZoomScheme>();
+    let scaling = (app.ui_scaling(), ui.ctx().pixels_per_point());
     if let Some(v) = crate::doc_windows::view_mut(app, w).filter(|v| !v.fitted) {
-        fit_pane(v, &doc, area, (ctx.zoom_factor(), ctx.pixels_per_point()), &scheme);
+        fit_pane(v, &doc, area, scaling, &scheme);
     }
 }
 
 /// Window `w`'s document body of `kind` in `cell`, its view fitted first. True when a press in its
 /// canvas background asks for its window to become the current one.
 fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, w: Win, cell: egui::Rect, kind: BodyKind) -> bool {
-    fit_window(app, ui.ctx(), w, cell);
+    fit_window(app, ui, w, cell);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(cell));
-    // PLAN: assumed `show_document(app, ui, win, kind) -> bool` (cv.S1 returns whether the background got a press).
     super::show_document(app, &mut child, w, kind)
 }
 

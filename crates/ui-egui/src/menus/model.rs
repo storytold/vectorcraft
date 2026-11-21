@@ -2,15 +2,16 @@
 //! catalog the framework resolves menu rows, shortcuts and the palette from. It is rebuilt only
 //! when what the rows depend on changes ([`state_key`]).
 
+use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
 
-use craft::keymap::{CommandDef, CommandRef, Mods, Scope};
-use craft::ui::menu::Alternate;
-use craft::menu::{Item, Labeled, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
+use craft::keymap::{Binding, CommandDef, CommandRef, Mods, Scope};
+use craft::menu::{Item, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
 use craft::tracked::Tracked;
+use craft::ui::list::ThumbAspect;
+use craft::ui::menu::Alternate;
 use craft::ui::runtime::commands::{AppCatalog, CommandGate, CommandInput, CommandState, CommandStates};
 use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
@@ -34,8 +35,6 @@ const TODO_TOOLTIP: &str = "Coming soon — tracked in the parity plan";
 pub(crate) struct Menus {
     key: Option<u64>,
     target: Option<Target>,
-    /// Shown title or command key to its English text, for the bar's mnemonics.
-    english: HashMap<String, String>,
     /// The menus as built, before a layout.
     pub(crate) bar: MenuBar,
     /// `bar` laid out for the shell's target: what the in-window bar shows.
@@ -43,20 +42,6 @@ pub(crate) struct Menus {
     /// The states of the catalogued commands and of every menu item's reference.
     pub(crate) states: Tracked<CommandStates>,
     catalog: Option<AppCatalog>,
-}
-
-impl Menus {
-    /// The English text of a row or title the bar names, for its mnemonic hooks.
-    pub(crate) fn english_of(&self, labeled: Labeled<'_>) -> Option<String> {
-        let key = if let Labeled::Command(command) = labeled {
-            command.key()
-        } else if let Labeled::Title(title) = labeled {
-            title.to_string()
-        } else {
-            return None;
-        };
-        self.english.get(&key).cloned()
-    }
 }
 
 /// What the Home screen remembers when it opens (`app.home`): the active document and the
@@ -74,7 +59,7 @@ pub(crate) fn home_showing(app: &VectorcraftApp) -> bool {
 
 /// A label the layout writes itself, in the UI language: `{app}` is filled in before the lookup
 /// because the catalog's rows read `Hide VectorCraft`, and the layout fills it in only afterwards.
-fn translate_label(english: &'static str) -> String {
+pub(crate) fn translate_label(english: &'static str) -> String {
     let source = english.replace("{app}", APP_NAME);
     crate::i18n::tr(crate::i18n::current(), &source).to_owned()
 }
@@ -118,8 +103,7 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
 /// when the rows' state ([`state_key`]) or the shell's target changed.
 pub(crate) fn refresh(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let target = Target::of_shell(&WindowHost::of(ctx).shell());
-    let pressed = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. } | egui::Event::Key { pressed: true, .. })));
-    let key = state_key(app, pressed.then(|| ctx.cumulative_pass_nr()));
+    let key = state_key(app, pressed_pass(ctx));
     if app.menus.key == Some(key) && app.menus.target == Some(target) {
         return;
     }
@@ -128,10 +112,22 @@ pub(crate) fn refresh(app: &mut VectorcraftApp, ctx: &egui::Context) {
     app.menus.target = Some(target);
 }
 
+/// The frame's pass number when it has a click or a key press: the `input` of [`state_key`].
+pub(crate) fn pressed_pass(ctx: &egui::Context) -> Option<u64> {
+    let pressed = ctx
+        .input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. } | egui::Event::Key { pressed: true, .. })));
+    pressed.then(|| ctx.cumulative_pass_nr())
+}
+
+/// Whether Keyboard Shortcuts records a chord: menu commands wait meanwhile.
+pub(crate) fn recording_shortcut(app: &VectorcraftApp) -> bool {
+    app.shortcuts_dialog.as_ref().is_some_and(|d| d.state.is_recording())
+}
+
 /// The command input of the frame: the catalog, the states and the gate that refuses commands
 /// while a file dialog is open or the shortcuts dialog records a chord.
 pub(crate) fn command_input(app: &VectorcraftApp) -> CommandInput {
-    let blocked = app.file_dialog_open() || crate::shortcut_editor::is_recording(app);
+    let blocked = app.file_dialog_open() || recording_shortcut(app);
     let mut input = CommandInput::new().states(&app.menus.states);
     if let Some(catalog) = &app.menus.catalog {
         input = input.catalog(catalog.clone());
@@ -154,25 +150,31 @@ fn role(title: &str) -> MenuRole {
 fn generation() -> u64 {
     let mut h = DefaultHasher::new();
     let fonts = vectorcraft_text::FontDb::global();
-    (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), crate::shortcut_editor::GENERATION.load(Ordering::Relaxed), fonts.generation())
+    (
+        crate::i18n::current().code(),
+        plugin_revision(),
+        crate::scripts_menu::revision(),
+        crate::shortcut_editor::GENERATION.load(Ordering::Relaxed),
+        fonts.generation(),
+    )
         .hash(&mut h);
     h.finish()
 }
 
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
-    let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), english: HashMap::new(), refs: Vec::new() };
+    let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), refs: Vec::new() };
     let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english)
         .into_iter()
         .map(|(title, nodes)| {
             let shown = build.title(title, true);
-            Menu::new(shown, build.nodes(nodes)).role(role(title))
+            let translated = shown != title;
+            let menu = Menu::new(shown, build.nodes(nodes)).role(role(title));
+            if translated { menu.english(title) } else { menu }
         })
         .collect();
-    let Build { mut states, english, refs, .. } = build;
+    let Build { mut states, refs, .. } = build;
 
     let defs = catalog_defs(app, &refs, &mut states);
-    crate::panels::actions::menu::states(app, &mut states);
-    crate::panels::script_console::states(app, &mut states);
     crate::panels::panel_menu_states(app, &mut states);
 
     let bar = MenuBar::new(menus);
@@ -183,7 +185,6 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),
     }
-    app.menus.english = english;
     app.menus.bar = bar;
     app.menus.laid = laid;
     app.menus.states.edit(|s| *s = states);
@@ -196,12 +197,18 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
 // PLAN: ActionsPanelCommands' defs (area plan X6) are menus-w18's; their signature is not visible here.
 fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], states: &mut CommandStates) -> Vec<CommandDef> {
     let snapshot = crate::shortcut_editor::snapshot();
-    let mut defs: Vec<CommandDef> = crate::keymap::catalog_defs(crate::keymap::platform(), &snapshot)
-        .into_iter()
-        .map(|d| match crate::panels::command_icon(&d.command.id) {
-            Some(icon) => d.with_icon(icon),
-            None => d,
-        })
+    // An action's function key comes first: it takes priority over the command shortcuts.
+    let plays = crate::panels::actions::function_keys(&app.ui.actions).into_iter().map(|(name, chord)| {
+        let play = CommandRef::with_params(crate::panels::actions::PLAY_ACTION, json!({ "action": name }));
+        CommandDef::new(play, name, Scope::app()).with_default(Binding::new(chord))
+    });
+    let mut defs: Vec<CommandDef> = plays
+        .chain(crate::keymap::catalog_defs(crate::keymap::platform(), &snapshot).into_iter().map(|d| {
+            match crate::panels::command_icon(&d.command.id) {
+                Some(icon) => d.with_icon(icon),
+                None => d,
+            }
+        }))
         .collect();
     let mut known: HashSet<String> = defs.iter().map(|d| d.command.key()).collect();
     for (command, label, checkable) in refs {
@@ -239,23 +246,14 @@ struct Build<'a> {
     app: &'a VectorcraftApp,
     lang: crate::i18n::Lang,
     states: CommandStates,
-    english: HashMap<String, String>,
     /// Every command reference the tree holds, its English label, and whether it is checkable.
     refs: Vec<(CommandRef, String, bool)>,
 }
 
 impl Build<'_> {
-    /// `source` as shown: translated when `translate` (a plug-in's or folder's name is not), with
-    /// the shown text remembered against its English.
-    fn title(&mut self, source: &str, translate: bool) -> String {
-        if !translate {
-            return source.to_string();
-        }
-        let shown = crate::i18n::tr(self.lang, source).to_string();
-        if shown != source {
-            self.english.insert(shown.clone(), source.to_string());
-        }
-        shown
+    /// `source` as shown: translated when `translate` (a plug-in's or folder's name is not).
+    fn title(&self, source: &str, translate: bool) -> String {
+        if translate { crate::i18n::tr(self.lang, source).to_string() } else { source.to_string() }
     }
 
     fn nodes(&mut self, nodes: Vec<Node>) -> Vec<Node> {
@@ -269,10 +267,18 @@ impl Build<'_> {
             Node::Heading(text) => Node::Heading(self.title(&text, true)),
             // A plug-in's submenu shows its name as it is, as its items do, and so does a subfolder of
             // the Scripts folder.
-            Node::Submenu { label, children, role, platforms } => {
+            Node::Submenu { label, children, role, platforms, .. } => {
                 let named = holds_plugin_commands(&children) || crate::scripts_menu::is_folder(&children);
-                let label = self.title(&label, !named);
-                Node::Submenu { label, children: self.nodes(children), role, platforms }
+                let shown = self.title(&label, !named);
+                let translated = shown != label;
+                let mut submenu = Node::submenu(shown, self.nodes(children)).platforms(platforms);
+                if translated {
+                    submenu = submenu.english(label);
+                }
+                match role {
+                    Some(role) => submenu.role(role),
+                    None => submenu,
+                }
             }
             other => other,
         })
@@ -333,7 +339,10 @@ impl Build<'_> {
                 item.alternate(run_with(held(true, false), crate::addons::select::link_status::with_shift(params.clone())))
             }
             "text.setStyle" if self.app.session.prefs.font_preview => match params.get("font").and_then(Value::as_str) {
-                Some(font) => item.sample(crate::font_menu::menu_sample(font, self.app.session.prefs.font_samples_on_white)),
+                // The sample's slot after the family's name is 90 by 16, as the in-window bar had it.
+                Some(font) => {
+                    item.sample(ThumbAspect::new(90, 16), crate::font_menu::menu_sample(font, self.app.session.prefs.font_samples_on_white))
+                }
                 None => item,
             },
             _ => item,

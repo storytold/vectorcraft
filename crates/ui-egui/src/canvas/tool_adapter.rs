@@ -3,17 +3,19 @@
 
 use std::cell::{Cell, RefCell, RefMut};
 
+use craft::behavior::{CancelReason, CanvasView, Cursor, PointerKind as Device, PressPhase};
 use craft::keymap::{Chord, Key};
-use craft::behavior::{CanvasView, CancelReason, Cursor, PointerKind as Device, PressPhase};
-use craft::ui::canvas::{
-    Autoscroll, CanvasTool, Momentary, MomentaryShift, ToolAction, ToolClaims, ToolContext, ToolHost, ToolHostResponse, ToolKey, ToolPass, ToolPointer,
-};
 use craft::ui::canvas::ToolPath;
+use craft::ui::canvas::{
+    Autoscroll, CanvasTool, Momentary, MomentaryShift, ToolAction, ToolClaims, ToolContext, ToolHost, ToolHostResponse, ToolKey, ToolPass,
+    ToolPointer,
+};
 use serde_json::json;
 use vectorcraft_engine::ViewInfo;
+use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind, ToolKey as EngineKey};
 
-use super::{Point, Ui, VectorcraftApp};
+use super::{Ui, VectorcraftApp};
 use crate::cursors::tool_cursor;
 
 /// The tools that change only the view: they neither autoscroll nor take the document's presses under a modal.
@@ -30,7 +32,8 @@ const BRACKETS_CURLY: &[Chord] = &[
 ];
 const BRACKETS_C: &[Chord] = &[Chord::plain(Key::OpenBracket), Chord::plain(Key::CloseBracket), Chord::plain(Key::C)];
 const CLOSE_BRACKET: &[Chord] = &[Chord::plain(Key::CloseBracket)];
-const PLANES: &[Chord] = &[Chord::plain(Key::Num1), Chord::plain(Key::Num2), Chord::plain(Key::Num3), Chord::plain(Key::Num4), Chord::plain(Key::Num5)];
+const PLANES: &[Chord] =
+    &[Chord::plain(Key::Num1), Chord::plain(Key::Num2), Chord::plain(Key::Num3), Chord::plain(Key::Num4), Chord::plain(Key::Num5)];
 const TAB: &[Chord] = &[Chord::plain(Key::Tab)];
 const HOME_END: &[Chord] = &[Chord::plain(Key::Home), Chord::plain(Key::End)];
 
@@ -190,7 +193,7 @@ impl CanvasTool for SessionTool<'_> {
 
     fn drag(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
         self.send(PointerKind::Drag, pointer, cx);
-        let carried = crate::drops::carry_out(&mut self.app(), cx, pointer);
+        let carried = super::drops::carry_out(&mut self.app(), cx, pointer);
         self.carrying.set(carried);
     }
 
@@ -239,7 +242,8 @@ impl CanvasTool for SessionTool<'_> {
         let view = self.view;
         let claim = |app: &mut VectorcraftApp, key: EngineKey| app.session.tool_claims_key(key, view);
         let curly = app.session.tool_claims_key_with(EngineKey::BracketLeft, Mods { shift: true, ..Mods::default() }, view);
-        let (left, right, c) = (claim(&mut app, EngineKey::BracketLeft), claim(&mut app, EngineKey::BracketRight), claim(&mut app, EngineKey::Letter('c')));
+        let (left, right, c) =
+            (claim(&mut app, EngineKey::BracketLeft), claim(&mut app, EngineKey::BracketRight), claim(&mut app, EngineKey::Letter('c')));
         // shortcut: the sets are the combinations the tools have; a tool with another mix needs its own slice.
         let keys = match (left, right, curly, c) {
             (true, true, true, _) => BRACKETS_CURLY,
@@ -300,7 +304,8 @@ impl CanvasTool for SessionTool<'_> {
 
     fn takes_every_move(&self) -> bool {
         let app = self.app();
-        app.session.tool_wants_samples() || app.session.active().is_some_and(|st| st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy"))
+        app.session.tool_wants_samples()
+            || app.session.active().is_some_and(|st| st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy"))
     }
 
     fn autoscrolls(&self) -> bool {
@@ -335,8 +340,8 @@ fn host_run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, tool: &mut dyn C
 /// One pass of the canvas's tool: the pointer and keys through the host, the view it moved, the document under the
 /// pointer, and the tool's overlays over the picture.
 pub(crate) fn run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass) -> ToolHostResponse {
-    if crate::panels::three_d::gizmo_shown(app) {
-        // PLAN: assumed `three_d::gizmo_shown(app) -> bool` (effects area): the Revolve gizmo owns the pointer.
+    if crate::dialogs::three_d::gizmo_shown(app) {
+        // The 3D dialog's gizmo owns the pointer.
         return ToolHostResponse::default();
     }
     if matches!(pass.press.phase, PressPhase::Idle) || !pass.press.phase.is_press() {
@@ -399,9 +404,10 @@ fn host_run_session(tool: &mut SessionTool<'_>, ui: &Ui, pass: &ToolPass) -> Too
 /// The session's overlays, then the text threads and Live Paint gaps under them, shown over the picture.
 fn show_overlays(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, view_info: ViewInfo) {
     let Some(space) = pass.space else { return };
-    let revolve = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let revolve = crate::dialogs::three_d::gizmo_shown(app);
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.
-    let list = if !revolve && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) { app.session.overlays(view_info) } else { vec![] };
+    let list =
+        if !revolve && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) { app.session.overlays(view_info) } else { vec![] };
     if app.session.tool_overlays_pending() {
         ui.ctx().request_repaint();
     }
@@ -417,10 +423,10 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, view_info: 
     super::overlays::show(app, ui, space, &list, &extra);
 }
 
-/// Whether any canvas shown has a tool gesture in progress.
+/// Whether the canvas has a tool gesture in progress. Only the current window's body is live: panes and the other
+/// windows take no presses.
 pub(crate) fn in_gesture(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    // PLAN: assumed `canvas::shown_canvas_ids(app) -> Vec<egui::Id>` from cv.S1 (canvas-w10).
-    super::shown_canvas_ids(app).into_iter().any(|id| ToolHost::in_gesture(ctx, id))
+    crate::doc_windows::current(app).is_some_and(|win| ToolHost::in_gesture(ctx, super::canvas_id(win)))
 }
 
 /// Whether a momentary view tool (Space, Cmd+Space, ...) is in effect.

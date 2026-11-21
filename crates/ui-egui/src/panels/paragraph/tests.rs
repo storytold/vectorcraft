@@ -546,7 +546,10 @@ fn more_options_opens_bullets_and_numbering_on_its_tab() {
     for tab in ["bullets", "numbers"] {
         more_options(&mut app, tab);
         // PLAN: assumed `app.dialogs().get::<BulletsDialog>()` and `json_fields()` (type-w27, hub-w1).
-        let dialog = app.dialogs().get::<crate::dialogs::bullets_numbering::BulletsDialog>().unwrap_or_else(|| panic!("More Options opens the dialog on {tab}"));
+        let dialog = app
+            .dialogs()
+            .get::<crate::dialogs::bullets_numbering::BulletsDialog>()
+            .unwrap_or_else(|| panic!("More Options opens the dialog on {tab}"));
         assert_eq!(dialog.json_fields()["tab"], json!(tab));
     }
     app.run("ui.bulletsAndNumbering", json!({})).unwrap();
@@ -580,8 +583,8 @@ fn convert_to_text_makes_the_selected_paragraphs_numbers_characters() {
     assert_eq!((options["anchor"].as_u64(), options["caret"].as_u64()), (Some(8), Some(8)), "the caret stays after the T of Two");
     let typemenu = crate::menus::menu_tree().into_iter().find(|(title, _)| *title == "Type").map(|(_, items)| items).unwrap_or_default();
     let found = typemenu.iter().any(|item| {
-        matches!(item, crate::menus::Item::Sub("Bullets and Numbering", items)
-            if items.iter().any(|i| matches!(i, crate::menus::Item::Cmd("Convert to Text", "type.convertListToText", _))))
+        matches!(item, crate::menus::Node::Submenu { label, children, .. } if label == "Bullets and Numbering"
+            && children.iter().any(|n| matches!(n, crate::menus::Node::Item(i) if i.label == "Convert to Text" && i.command.id == "type.convertListToText")))
     });
     assert!(found, "Type › Bullets and Numbering › Convert to Text");
 }
@@ -763,9 +766,10 @@ fn reset_panel_resets_the_mojikumi_set_and_tab_stops_in_one_step() {
     // Type over the second paragraph's text: the typing session is still open.
     select_range(&mut app, 6, 12);
     let before = steps(&app);
-    let ctx = egui::Context::default();
-    let raw = egui::RawInput { events: vec![egui::Event::Text("X".into())], ..Default::default() };
-    ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+    let ctx = crate::testing::ui_context();
+    // The keymap builds in the first pass.
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![egui::Event::Text("X".into())]);
     assert_eq!(app.session.tool_options()["typing"], json!(true));
     reset_panel(&mut app);
     assert_eq!(paras(&app), [custom, reset], "only the paragraph at the caret");

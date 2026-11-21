@@ -18,13 +18,16 @@
 // `set_presets`, `set_message`, `set_sheet(Option<_>)`, `set_field`, `sheet_index`); export-w7 writes them.
 use std::sync::{Arc, LazyLock, mpsc};
 
-use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
-use craft::ui::pickers::Anchor9;
 use craft::behavior::{EditEvent, EditEvents, Mixed};
+use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
+use craft::ui::contract::{Bind, Show as _};
+use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::patterns::presets::{NamedPresetEvent, PresetRow};
-use craft::ui::runtime::env::units::{LengthUnits, UnitKind};
-use craft::ui::runtime::egui::widgets::{LinkMode, LinkedFields, ReferencePoint, ReferencePointLook};
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::shell::WindowDialogs;
+use craft::ui::text::{LinkMode, LinkedFields};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
@@ -35,7 +38,7 @@ use vectorcraft_pdf::{
 };
 
 use super::form;
-use crate::{VectorcraftApp, widgets};
+use crate::{VectorcraftApp, graphics};
 
 pub(crate) const SECTIONS: [&str; 7] = ["General", "Marks and Bleed", "Output", "Graphics", "Color Management", "Advanced", "Summary"];
 
@@ -87,7 +90,7 @@ pub(crate) struct PrintDialogs {
 /// What the pump keeps of the open dialog: what the answer needs after the framework has answered, and the
 /// texture and preview the dialog shows until the document or the settings change.
 struct Open {
-    id: craft::ui::dialogs::DialogId,
+    id: DialogId,
     mode: PrintMode,
     /// The preset the settings were loaded from last (the Print Preset row's selection).
     preset: String,
@@ -139,8 +142,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let saved: PrintSettings = st.doc.print_setup.clone().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
     let preset = app.session.prefs.print_presets.iter().find(|p| p.settings == saved).map_or(DEFAULT_PRESET, |p| p.name.as_str()).to_string();
-    let map = fields_of(&saved)?;
-    start(app, PrintMode::Print, map, preset, String::new())
+    let fields = fields_of(&saved)?;
+    start(app, PrintMode::Print, fields, preset, String::new())
 }
 
 /// Open the preset editor on the saved preset `name`, or on a new preset starting from `preset`
@@ -156,23 +159,19 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         None => (s("preset").unwrap_or(DEFAULT_PRESET).to_string(), app.session.new_print_preset_name(), String::new()),
     };
     let set = app.session.print_preset_settings(&base).ok_or_else(|| format!("no print preset named `{base}`"))?;
-    let mut map = fields_of(&set)?;
-    map.insert("name".into(), json!(name));
-    start(app, PrintMode::PresetEditor, map, base, editing)
+    let mut fields = fields_of(&set)?;
+    fields.set("name", name);
+    start(app, PrintMode::PresetEditor, fields, base, editing)
 }
 
-/// Host the dialog over the settings `map`.
-fn start(app: &mut VectorcraftApp, mode: PrintMode, map: Map<String, Value>, preset: String, editing: String) -> Result<Value, String> {
+/// Host the dialog over the settings `fields`.
+fn start(app: &mut VectorcraftApp, mode: PrintMode, fields: DialogFields, preset: String, editing: String) -> Result<Value, String> {
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
     let (printers, service) = destinations(app);
     let mut state = State::default();
-    state.settings.printer = printers
-        .iter()
-        .find(|p| p.default)
-        .or(printers.first().filter(|_| service))
-        .map_or_else(|| PDF_FILE.to_string(), |p| p.name.clone());
+    state.settings.printer =
+        printers.iter().find(|p| p.default).or(printers.first().filter(|_| service)).map_or_else(|| PDF_FILE.to_string(), |p| p.name.clone());
     state.printers = printers;
-    let fields = form::fields_of(&KEYS, &map);
     let header = if service && cfg!(windows) {
         vec![
             Param::new("directPdf", tl!("Send PDF directly (bypass driver)"), ParamKind::bool(false))
@@ -196,9 +195,9 @@ fn start(app: &mut VectorcraftApp, mode: PrintMode, map: Map<String, Value>, pre
 }
 
 /// The settings as dialog fields.
-fn fields_of(set: &PrintSettings) -> Result<Map<String, Value>, String> {
+pub(super) fn fields_of(set: &PrintSettings) -> Result<DialogFields, String> {
     match serde_json::to_value(set).map_err(|e| e.to_string())? {
-        Value::Object(fields) => Ok(fields),
+        Value::Object(map) => Ok(form::fields_of(&KEYS, &map)),
         _ => Err("print settings are not an object".into()),
     }
 }
@@ -249,12 +248,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 }
 
 /// Run `f` on the open dialog.
-fn on<R>(dialogs: &craft::ui::dialogs::WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Option<R> {
+fn on<R>(dialogs: &WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Option<R> {
     dialogs.with(|h| h.get_mut::<HostedPrint>().map(f))
 }
 
 /// One pass of the pump over the open dialog; false once it has closed.
-fn serve(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, open: &mut Open) -> bool {
+fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> bool {
     let Some(mut d) = on(dialogs, |p| Drained {
         refresh: p.take_refresh(),
         setup: p.take_setup(),
@@ -323,7 +322,9 @@ fn serve(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, 
         });
     }
     if open.mode == PrintMode::Print {
-        let same = serde_json::from_value::<PrintSettings>(d.settings.clone()).ok().is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
+        let same = serde_json::from_value::<PrintSettings>(d.settings.clone())
+            .ok()
+            .is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
         let held = same.then(|| open.preset.clone());
         let rows: Vec<PresetRow<String>> = std::iter::once(PresetRow::item(DEFAULT_PRESET.to_string(), tl!(DEFAULT_PRESET), 0))
             .chain(app.session.prefs.print_presets.iter().map(|p| PresetRow::item(p.name.clone(), p.name.clone(), 0)))
@@ -338,17 +339,13 @@ fn serve(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, 
 }
 
 /// A preset the Print Preset row picked or named.
-fn apply_preset_event(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, open: &mut Open, settings: &mut Value, event: NamedPresetEvent<String>) {
+fn apply_preset_event(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open, settings: &mut Value, event: NamedPresetEvent<String>) {
     match event {
         NamedPresetEvent::Apply(key) => {
-            let loaded = app
-                .session
-                .print_preset_settings(&key)
-                .ok_or_else(|| format!("no print preset named `{key}`"))
-                .and_then(|set| fields_of(&set));
+            let loaded =
+                app.session.print_preset_settings(&key).ok_or_else(|| format!("no print preset named `{key}`")).and_then(|set| fields_of(&set));
             match loaded {
-                Ok(map) => {
-                    let new = form::fields_of(&KEYS, &map);
+                Ok(new) => {
                     if let Some(s) = on(dialogs, |p| {
                         for (k, v) in new.iter() {
                             p.fields_mut().set(k.to_string(), v.clone());
@@ -362,10 +359,12 @@ fn apply_preset_event(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::Wi
                 Err(e) => app.status(e),
             }
         }
-        NamedPresetEvent::Create { name, .. } => match app.run("print.presets.save", json!({ "name": name, "preset": DEFAULT_PRESET, "settings": settings })) {
-            Ok(r) => open.preset = r["name"].as_str().unwrap_or(&name).to_string(),
-            Err(e) => app.status(e),
-        },
+        NamedPresetEvent::Create { name, .. } => {
+            match app.run("print.presets.save", json!({ "name": name, "preset": DEFAULT_PRESET, "settings": settings })) {
+                Ok(r) => open.preset = r["name"].as_str().unwrap_or(&name).to_string(),
+                Err(e) => app.status(e),
+            }
+        }
         // Rename and Delete are the Print Presets dialog's.
         _ => {}
     }
@@ -451,7 +450,8 @@ fn print_sheet(app: &mut VectorcraftApp, open: &mut Open, pv: &Value, index: usi
     let layers = serde_json::from_value::<PrintLayers>(settings["printLayers"].clone()).unwrap_or(PrintLayers::VisiblePrintable);
     let texture = art_texture(app, open, layers, area)?;
     // With copies per sheet, `copies` holds each copy's artboard on the page.
-    let copies: Vec<egui::Rect> = sheet["copies"].as_array().map(|a| a.iter().filter_map(rect_of).map(|r| egui_rect(&r)).collect()).unwrap_or_default();
+    let copies: Vec<egui::Rect> =
+        sheet["copies"].as_array().map(|a| a.iter().filter_map(rect_of).map(|r| egui_rect(&r)).collect()).unwrap_or_default();
     let count = copies.len().max(1);
     let outlines = if copies.is_empty() { rect_of(&sheet["trim"]).map(|r| egui_rect(&r)).into_iter().collect() } else { copies };
     let mut what = vec![];
@@ -474,7 +474,9 @@ fn print_sheet(app: &mut VectorcraftApp, open: &mut Open, pv: &Value, index: usi
     };
     let size = format!("{} × {}", unit.number(f64::from(paper.x)), unit.format(f64::from(paper.y)));
     let readout = format!("{}\n{size} · {scale}", what.join(" · "));
-    let mut out = PrintSheet::new(paper, image, egui::load::SizedTexture::new(texture.id(), texture.size_vec2()), readout.into()).count(count).outlines(outlines);
+    let mut out = PrintSheet::new(paper, image, egui::load::SizedTexture::new(texture.id(), texture.size_vec2()), readout.into())
+        .count(count)
+        .outlines(outlines);
     // The imageable area inside the device's margin.
     let margin = settings["margin"].as_f64().unwrap_or(0.0) as f32;
     if margin > 0.5 {
@@ -527,10 +529,9 @@ fn art_texture(app: &mut VectorcraftApp, open: &mut Open, layers: PrintLayers, a
     // The artboards' background colors print behind the art.
     let mut doc = st.doc.with_artboard_fills(0..st.doc.artboards.len()).unwrap_or_else(|| (*st.doc).clone());
     vectorcraft_pdf::keep_layers(&mut doc.layers, layers);
-    // PLAN: assumed `widgets::region_image(renderer, doc, area, px) -> impl Into<egui::ColorImage>` (widgets-w13).
-    let image = widgets::region_image(&mut app.canvas.renderer, &doc, area, ART_PX);
+    let image = graphics::region_image(&doc, area, ART_PX as u32);
     let ctx = app.ui_ctx.clone()?;
-    let tex = ctx.load_texture("print-preview-art", egui::ColorImage::from(image), egui::TextureOptions::LINEAR);
+    let tex = ctx.load_texture("print-preview-art", image, egui::TextureOptions::LINEAR);
     open.art = Some((key, tex.clone()));
     Some(tex)
 }
@@ -599,11 +600,10 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         pick::<PrintLayers>("printLayers", tl!("Print Layers:")),
         Param::custom("placement.origin", tl!("Placement:"), |ui, fields, _| {
             let at = fields.text("placement.origin").and_then(|id| Origin::ALL.iter().position(|o| o.id() == id)).unwrap_or(4);
-            let mut anchor = ANCHORS[at.min(ANCHORS.len() - 1)];
-            // PLAN: assumed builder and show call of `ReferencePoint` (Bind from `&mut`).
-            let out = ReferencePoint::new(&mut anchor).look(ReferencePointLook::Squares).show(ui);
-            if let Some(o) = ANCHORS.iter().position(|a| *a == anchor).and_then(|i| Origin::ALL.get(i))
-                && ANCHORS.get(at) != Some(&anchor)
+            let mut anchor = ANCHORS.get(at).copied();
+            let out = ReferencePoint::new(tl!("Placement"), Bind::bound(&mut anchor)).look(ReferencePointLook::Squares).show(ui);
+            if let Some(i) = anchor.and_then(|a| ANCHORS.iter().position(|x| *x == a)).filter(|i| *i != at)
+                && let Some(o) = Origin::ALL.get(i)
             {
                 fields.set("placement.origin", o.id().to_string());
             }
@@ -617,22 +617,31 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         length("tileOrigin.y", "Y:").visible_when(PLACED, true),
         pick::<PrintScaling>("scaling", tl!("Scaling:")),
         Param::custom("scale", tl!("Scale:"), |ui, fields, _| {
-            let mut parts = [fields.number("scale.width"), fields.number("scale.height")];
+            let mut parts = [Mixed::Same(fields.number("scale.width")), Mixed::Same(fields.number("scale.height"))];
             let mut linked = fields.bool("scale.linked").unwrap_or(false);
-            // PLAN: assumed `LinkedFields::new(&mut parts, &mut linked)` and `.show(ui)`; the link's name is the framework's.
-            let out = LinkedFields::<2>::new(&mut parts, &mut linked).mode(LinkMode::Equal).ranges([1.0..=1000.0, 1.0..=1000.0]).show(ui);
+            let out = LinkedFields::<2>::new(tl!("Scale"), Bind::bound(&mut parts), Bind::bound(&mut linked))
+                .mode(LinkMode::Equal)
+                .range(1.0..=1000.0)
+                .show(ui);
             for (key, part) in ["scale.width", "scale.height"].into_iter().zip(parts) {
-                if let Some(v) = part.filter(|v| fields.number(key) != Some(*v)) {
+                if let Mixed::Same(Some(v)) = part
+                    && fields.number(key) != Some(v)
+                {
                     fields.set(key, v);
                 }
             }
             if fields.bool("scale.linked").unwrap_or(false) != linked {
                 fields.set("scale.linked", linked);
             }
-            out.response
+            out.edit.response
         })
-        // PLAN: assumed `Param::on_set(|fields, incoming: &Map<String, Value>|)` on custom rows (forms-w1, q336): a value set from outside.
-        .on_set(|fields: &mut DialogFields, incoming: &Map<String, Value>| {
+        // A value set from outside: `scale` as `{width?, height?, linked?}`, or one of its parts.
+        .on_set(|fields: &mut DialogFields, key: &str, value: Value| {
+            let incoming = match (key.strip_prefix("scale."), value) {
+                (None, Value::Object(parts)) => parts,
+                (Some(part), value) => Map::from_iter([(part.to_string(), value)]),
+                (None, _) => return Err("Scale takes {width, height, linked}".to_string()),
+            };
             let current: Map<String, Value> = ["width", "height", "linked"]
                 .into_iter()
                 .filter_map(|k| {
@@ -641,13 +650,14 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
                     v.map(|v| (k.to_string(), v))
                 })
                 .collect();
-            for (k, v) in merge_scale(&current, incoming) {
+            for (k, v) in merge_scale(&current, &incoming) {
                 match v {
                     Value::Bool(b) => fields.set(format!("scale.{k}"), b),
                     Value::Number(n) => fields.set(format!("scale.{k}"), n.as_f64().unwrap_or(100.0)),
                     _ => {}
                 }
             }
+            Ok(())
         })
         .enabled_when_in("scaling", scaling_on),
         length("overlap", tl!("Overlap:")).enabled_when_in("scaling", tiles.clone()),
@@ -678,7 +688,10 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
     ];
     let profiles: Vec<(String, _)> =
         std::iter::once((String::new(), tl!(SAME_AS_SOURCE).into())).chain(lists.profiles.iter().map(|p| (p.clone(), p.as_str().into()))).collect();
-    let intents = Intent::ALL.iter().map(|i| (serde_json::to_value(i).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), tl!(i.label()).into())).collect();
+    let intents = Intent::ALL
+        .iter()
+        .map(|i| (serde_json::to_value(i).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), tl!(i.label()).into()))
+        .collect();
     let color = vec![
         Param::new("color.profile", tl!("Printer profile:"), ParamKind::choice(profiles, None)),
         note("profileNote", tl!("Composite colours are converted to it; separations separate with it when it is a CMYK profile.")),
@@ -687,8 +700,9 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         flag("color.preserveNumbers", tl!("Preserve CMYK Numbers")),
         note("preserveNote", tl!("CMYK colours print with their own values; off, they go through the colour settings too.")),
     ];
-    let flatteners: Vec<(String, _)> =
-        std::iter::once((String::new(), tl!(KEEP_TRANSPARENCY).into())).chain(lists.flatteners.iter().map(|p| (p.clone(), p.as_str().into()))).collect();
+    let flatteners: Vec<(String, _)> = std::iter::once((String::new(), tl!(KEEP_TRANSPARENCY).into()))
+        .chain(lists.flatteners.iter().map(|p| (p.clone(), p.as_str().into())))
+        .collect();
     let advanced = vec![
         Param::section(tl!("Printer")),
         length("margin", tl!("Unprintable margin:")),
@@ -713,7 +727,11 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         Param::section(tl!("Warnings")),
         shown("__summary.warnings"),
     ];
-    [general, marks, output, graphics, color, advanced, summary].into_iter().zip(SECTIONS).map(|(params, title)| PrintSection::new(tl!(title), params)).collect()
+    [general, marks, output, graphics, color, advanced, summary]
+        .into_iter()
+        .zip(SECTIONS)
+        .map(|(params, title)| PrintSection::new(tl!(title), params))
+        .collect()
 }
 
 /// The Marks and Bleed rows: no link between the bleed sides.

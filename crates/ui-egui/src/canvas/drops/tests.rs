@@ -10,9 +10,8 @@ use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
 use super::{CarriedArt, Dropped, Payload, apply_drop};
-use crate::panels::graphic_styles::StyleKey;
-use crate::panels::symbols::SymbolKey;
 use crate::panel_drag::PanelDrag;
+use crate::panels::symbols::SymbolKey;
 use crate::{VectorcraftApp, canvas};
 
 /// One frame of the canvas inside a central panel. → nothing; the app's view is set by it.
@@ -29,8 +28,7 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) {
 fn app_with_canvas() -> (VectorcraftApp, egui::Context) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     (app, ctx)
 }
@@ -63,7 +61,7 @@ fn a_drop_runs_the_effect_of_its_payload() {
     assert_eq!(app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint(), red);
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "the selection stays");
     let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
-    apply_drop(&mut app, &dropped(&app, Payload::Style(StyleKey(name.clone())), on_b, Copy)).unwrap();
+    apply_drop(&mut app, &dropped(&app, Payload::Style(name.clone()), on_b, Copy)).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
     let n = undo_len(&app);
@@ -82,8 +80,7 @@ fn a_symbol_from_another_document_is_added_and_placed_in_one_step() {
     app.run("edit.clear", json!({})).unwrap();
     let source = app.session.active().unwrap().uid;
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let key = |doc| Payload::Symbol(SymbolKey { doc, name: "Leaf".into() });
     let at = Point::new(250.0, 180.0);
@@ -143,8 +140,7 @@ fn carried_art_dropped_in_another_document_is_copied_and_the_source_stays() {
     let art = CarriedArt { document: st.uid, ids: vec![id], grab: Point::new(100.0, 100.0), revision: st.revision };
     let source = st.doc.clone();
     app.run("file.new", json!({"width": 400, "height": 300, "name": "Target"})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let n = undo_len(&app);
     apply_drop(&mut app, &dropped(&app, Payload::Art(art), Point::new(170.0, 120.0), DropOperation::Move)).unwrap();

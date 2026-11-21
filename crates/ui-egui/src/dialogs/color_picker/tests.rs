@@ -4,8 +4,7 @@ use vectorcraft_engine::Session;
 use super::*;
 
 fn app() -> (VectorcraftApp, egui::Context) {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.ui_ctx = Some(ctx.clone());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();

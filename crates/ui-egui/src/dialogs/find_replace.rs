@@ -19,7 +19,6 @@
 //! other than the active one, or reached with other Find text or switches, is not used: the search
 //! starts again. [`pump`] runs the dialog's requests once per frame.
 
-// PLAN: assumed paths of the framework crates in this app's dependencies.
 use craft::text::find::FindOptions;
 use craft::text::ui::find::{FindCheck, FindReplaceDialog, FindRequest, FindTab, ReplaceButtons};
 use craft::ui::dialog::StackDialog;

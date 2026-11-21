@@ -27,8 +27,7 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx
 }
 
@@ -350,11 +349,12 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
     let key = crate::dialogs::new_swatch::KIND;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     new_swatch(&mut app, &["Bright Red".into()], cmd());
+    assert_eq!((dialog_field(&mut app, key, "name"), dialog_field(&mut app, key, "group")), (json!("R=255 G=128 B=0"), json!("Brights")));
     assert_eq!(
-        (dialog_field(&mut app, key, "name"), dialog_field(&mut app, key, "group")),
-        (json!("R=255 G=128 B=0"), json!("Brights"))
+        (dialog_field(&mut app, key, "spot"), dialog_field(&mut app, key, "global")),
+        (json!(true), json!(true)),
+        "Cmd/Ctrl-click makes a spot colour"
     );
-    assert_eq!((dialog_field(&mut app, key, "spot"), dialog_field(&mut app, key, "global")), (json!(true), json!(true)), "Cmd/Ctrl-click makes a spot colour");
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
     let d = doc(&app);

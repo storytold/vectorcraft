@@ -9,8 +9,9 @@
 //! ([`Open::opened`]): an edit keeps every other stored value, and a new effect takes the
 //! effect's defaults for the rest.
 
-// PLAN: assumed the facade re-exports craft_host as `craft::host`
-use craft::host::files::PickRequest;
+use std::path::PathBuf;
+
+use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
 use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, ParamDialog, ParamResult};
@@ -18,11 +19,11 @@ use craft::ui::runtime::memory::{Lifetime, SaveKey};
 use serde_json::{Map, Value, json};
 
 use super::effect_params::{EffectCx, effect_params, heading, label};
-use super::form::{self, LivePreview};
+use super::form;
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-// PLAN: assumed path of the files area's asks (fl.A1, fl.A3)
-use crate::file_asks::{self, Owner, Picked};
+use crate::file_asks::{self, Owner};
 
 /// The reply while the Edit or Add New question is open.
 const EXISTS: &str = "effectExists";
@@ -210,12 +211,13 @@ fn normalized(app: &VectorcraftApp, id: &str, values: Map<String, Value>, fresh:
 /// Asks whether to edit the applied effect or add another one; [`pump`] reads the answer.
 fn ask(app: &mut VectorcraftApp, mut open: Open) -> Result<Value, String> {
     let name = label(&open.cx.id);
-    let prompt = StandardPrompt::custom(tl!("Edit the applied effect, or add another one?").to_string())
-        .title(crate::i18n::fmt(tl!("{effect} is already applied"), &[("effect", &name)]))
+    let prompt = StandardPrompt::custom(crate::i18n::fmt(tl!("{effect} is already applied"), &[("effect", &name)]))
+        .paragraph(tl!("Edit the applied effect, or add another one?").to_string())
         .button(PromptChoice::Proceed, tl!("Edit").to_string())
         .button(PromptChoice::Alternate, tl!("Add New").to_string())
         .button(PromptChoice::Cancel, tl!("Cancel").to_string());
-    open.id = app.dialogs().open(prompt);
+    let Some(dialogs) = app.dialogs() else { return Err("no window".into()) };
+    open.id = dialogs.with(|h| h.open(prompt));
     open.asking = true;
     app.effect_dialogs.effect = Some(open);
     Ok(json!({ "pending": EXISTS }))
@@ -224,8 +226,7 @@ fn ask(app: &mut VectorcraftApp, mut open: Open) -> Result<Value, String> {
 /// Opens the dialog of `open`: `baseline` is what the command's absent keys stand for, `seed`
 /// the values shown over it.
 fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>, seed: Map<String, Value>) -> Result<Value, String> {
-    // PLAN: assumed `VectorcraftApp::egui_context(&self) -> Option<egui::Context>`
-    let ctx = app.egui_context().ok_or("no window")?;
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     if let Some(old) = app.effect_dialogs.effect.take() {
         old.preview.cancel(app);
     }
@@ -294,25 +295,40 @@ fn command(open: &Open, fields: &DialogFields) -> (&'static str, Value) {
     let style = (fields.bool("styleChosen") == Some(true)).then(|| fields.text("warpStyle").map(str::to_string)).flatten();
     params.remove("warpStyle");
     params.remove("styleChosen");
-    if let Some(index) = open.index {
-        let mut p = if open.edit_target.is_object() { open.edit_target.clone() } else { json!({}) };
+    command_for(&open.cx.id, open.item.as_ref(), open.index, &open.edit_target, open.aligned, params, style)
+}
+
+/// The command an effect dialog's OK runs with `params`: `effect.setParams` on the applied effect `index` (found by
+/// `edit_target`; `aligned` edits each object's own copy of a shared row), else `effect.apply` of `effect` to `item`.
+/// `style` is the Warp style the user chose.
+pub(super) fn command_for(
+    effect: &str,
+    item: Option<&Value>,
+    index: Option<usize>,
+    edit_target: &Value,
+    aligned: bool,
+    params: Map<String, Value>,
+    style: Option<String>,
+) -> (&'static str, Value) {
+    if let Some(index) = index {
+        let mut p = if edit_target.is_object() { edit_target.clone() } else { json!({}) };
         p["index"] = json!(index);
-        p["item"] = open.item.clone().unwrap_or(Value::Null);
+        p["item"] = item.cloned().unwrap_or(Value::Null);
         p["params"] = Value::Object(params);
         if let Some(style) = style {
             p["warpStyle"] = json!(style);
         }
-        if open.aligned {
+        if aligned {
             p["aligned"] = json!(true);
         }
         return ("effect.setParams", p);
     }
     let effect = match style {
-        Some(style) if super::warp_effect::is_warp(&open.cx.id) => format!("warp.{style}"),
-        _ => open.cx.id.clone(),
+        Some(style) if super::warp_effect::is_warp(effect) => format!("warp.{style}"),
+        _ => effect.to_string(),
     };
     let mut p = json!({"effect": effect, "params": params});
-    if let Some(item) = &open.item {
+    if let Some(item) = item {
         p["item"] = item.clone();
     }
     ("effect.apply", p)
@@ -336,7 +352,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// The answer of the Edit or Add New question; `open` back while it is still asked.
 fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
-    let result = app.dialogs().take_by_id::<StandardPrompt>(open.id)?;
+    let result = app.dialogs()?.with(|h| h.take_by_id::<StandardPrompt>(open.id))?;
     let choice = match result {
         DialogResult::Ok(answer) => answer.choice,
         DialogResult::Cancel => PromptChoice::Cancel,
@@ -364,71 +380,66 @@ fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
 
 /// One frame of the open dialog: the preview of its values, and the requests its rows filed.
 fn drive(app: &mut VectorcraftApp, mut open: Open) {
-    let Some(dialog) = app.dialogs().get_mut_by_id::<HostedParamDialog>(open.id) else {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some((fields, previewing, path)) =
+        dialogs.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.fields().clone(), d.is_previewing(), d.pick_path())))
+    else {
         app.effect_dialogs.effect = Some(open);
         return;
     };
-    let (fields, previewing) = (dialog.fields().clone(), dialog.is_previewing());
-    let (color, path) = (dialog.pick_color(), dialog.pick_path());
     let (cmd, params) = command(&open, &fields);
     let english = vectorcraft_effects::effect_info(&open.cx.id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_default();
     // `run` reports a failed preview itself.
     let _ = open.preview.run(app, previewing, &english, cmd, &params);
-    if let Some(request) = color {
-        // PLAN: assumed `color_picker::open_child(app, parent, request)`, which answers through `DialogHost::answer_color` (color-w12)
-        super::color_picker::open_child(app, open.id, request);
-    }
     if let Some(request) = path {
-        ask_texture(app, open.id, request.key);
+        let (id, key) = (open.id, request.key);
+        pick_texture(app, Owner::Document, move |app, path, fields| {
+            let Some(dialogs) = app.dialogs() else { return };
+            dialogs.with(|h| {
+                if let Some(d) = h.get_mut_by_id::<HostedParamDialog>(id) {
+                    for (k, v) in fields {
+                        d.set_field(k, v);
+                    }
+                    d.answer_path(key, path);
+                }
+            });
+        });
     }
     app.effect_dialogs.effect = Some(open);
 }
 
-/// The files area's open pick for Load Texture…: the image goes into the dialog's `key` row and its
-/// `textureImage`.
-fn ask_texture(app: &mut VectorcraftApp, dialog: DialogId, key: String) {
+/// Load Texture…: asks for a raster image, then gives `then` its path and the fields it sets. A file
+/// that can't be read or isn't an image is reported in the status bar.
+pub(super) fn pick_texture(
+    app: &mut VectorcraftApp,
+    owner: Owner,
+    then: impl FnOnce(&mut VectorcraftApp, PathBuf, [(&'static str, FieldValue); 2]) + 'static,
+) {
     use vectorcraft_engine::cmd::fileio;
-    let mut request = PickRequest::open("texture");
-    for f in fileio::FORMATS.iter().filter(|f| f.read && f.raster) {
-        request = request.filter(f.label, fileio::read_extensions(f));
-    }
-    file_asks::ask(app, request, Owner::Document, move |app: &mut VectorcraftApp, picked: Picked| {
-        match texture_fields(app, &picked) {
-            Ok(Some(pairs)) => {
-                if let Some(d) = app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog) {
-                    for (k, v) in pairs {
-                        d.set_field(k, v);
-                    }
-                    if let Some(path) = picked.first_path() {
-                        d.answer_path(key, path);
-                    }
-                }
+    let rasters = fileio::FORMATS.iter().filter(|f| f.read && f.raster);
+    let request = rasters.fold(PickRequest::open("texture"), |r, f| r.filter(f.label, fileio::read_extensions(f)));
+    file_asks::ask(app, request, owner, move |app: &mut VectorcraftApp, picked: Picked| {
+        let Some(path) = picked.first_path() else { return Ok(Value::Null) };
+        let bytes = match picked {
+            Picked::Contents(mut files) if !files.is_empty() => files.swap_remove(0).1,
+            _ => {
+                let read = app.services.read.as_ref().ok_or("files can't be read here")?;
+                read(&path.to_string_lossy())?
             }
-            Ok(None) => {}
-            Err(e) => app.status(e),
-        }
+        };
+        then(app, path, texture_fields(&bytes)?);
+        Ok(Value::Null)
     });
 }
 
-/// The fields a picked texture image sets: `textureImage` as the effect stores it and `texture`
-/// at Loaded Texture. `None` when the pick was cancelled.
-pub(super) fn texture_fields(app: &VectorcraftApp, picked: &Picked) -> Result<Option<[(&'static str, FieldValue); 2]>, String> {
-    use vectorcraft_engine::cmd::fileio;
-    // PLAN: assumed `Picked::{Paths, Contents, Cancelled, Unavailable}` and `app.files().read(path)` (files area, fl.A1)
-    let bytes = match picked {
-        Picked::Cancelled => return Ok(None),
-        Picked::Unavailable(cause) => return Err(cause.to_string()),
-        Picked::Paths(paths) => {
-            let path = paths.first().ok_or("no file picked")?;
-            app.files().read(path).map_err(|e| e.to_string())?
-        }
-        Picked::Contents(files) => files.first().ok_or("no file picked")?.bytes.clone(),
-    };
-    let stored = fileio::texture_image(&bytes).map_err(|e| e.to_string())?;
-    Ok(Some([
+/// The fields a texture image sets: `textureImage` as the effect stores it and `texture` at Loaded
+/// Texture.
+pub(super) fn texture_fields(bytes: &[u8]) -> Result<[(&'static str, FieldValue); 2], String> {
+    let stored = vectorcraft_engine::cmd::fileio::texture_image(bytes).map_err(|e| e.to_string())?;
+    Ok([
         (vectorcraft_effects::pixel::TEXTURE_IMAGE, FieldValue::Text(stored)),
         ("texture", FieldValue::Text(vectorcraft_effects::pixel::LOADED.to_string())),
-    ]))
+    ])
 }
 
 #[cfg(test)]
@@ -436,9 +447,9 @@ mod tests {
     use super::super::effect_params::{DROP_SHADOW, GLASS, RADIAL_BLUR, ROUGH_PASTELS, TEXTURIZER, choices, own_choices, shown_choices};
     use super::*;
 
-    // PLAN: assumed test harness: an app with a window (`egui_context`) and `dialogs::host::pump`
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app
     }
@@ -452,19 +463,24 @@ mod tests {
     }
 
     fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
-        let (ctx, id) = (app.egui_context().unwrap(), id(app));
-        app.dialogs().set_json_field(&ctx, id, key, value).unwrap();
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id(app));
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
     }
 
     fn number(app: &mut VectorcraftApp, key: &str) -> Option<f64> {
         let id = id(app);
-        app.dialogs().get_mut_by_id::<HostedParamDialog>(id).unwrap().fields().number(key)
+        fields(app, id).number(key)
     }
 
     fn ok(app: &mut VectorcraftApp) {
-        let (ctx, id) = (app.egui_context().unwrap(), id(app));
-        assert!(app.dialogs().confirm_by_id(&ctx, id));
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id(app));
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
         super::super::host::pump(app, &ctx);
+    }
+
+    /// The values of the open dialog `id`.
+    fn fields(app: &VectorcraftApp, id: DialogId) -> DialogFields {
+        app.dialogs().unwrap().with(|h| h.get_mut_by_id::<HostedParamDialog>(id).unwrap().fields().clone())
     }
 
     fn params(app: &VectorcraftApp, node: u64) -> Value {
@@ -482,7 +498,8 @@ mod tests {
         let mut app = app();
         let (a, b) = (rect(&mut app, 10), rect(&mut app, 80));
         for (node, detail) in [(a, 3), (b, 8)] {
-            app.run("effect.apply", json!({"ids": [node], "effect": "distort.roughen", "item": null, "params": {"size": 5, "detail": detail}})).unwrap();
+            app.run("effect.apply", json!({"ids": [node], "effect": "distort.roughen", "item": null, "params": {"size": 5, "detail": detail}}))
+                .unwrap();
         }
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
         app.run("effect.dialog", json!({"effect": "distort.roughen", "index": 0, "item": null, "aligned": true})).unwrap();
@@ -547,16 +564,16 @@ mod tests {
             let node = rect(&mut app, 10);
             app.run("select.all", json!({})).unwrap();
             app.run("effect.dialog", json!({"effect": effect})).unwrap();
-            // PLAN: assumed constructor of a pick answered with the file's bytes
-            let picked = Picked::contents_of(vec![("texture.png".to_string(), png.clone())]);
-            let pairs = texture_fields(&app, &picked).unwrap().unwrap();
+            let pairs = texture_fields(&png).unwrap();
             let dialog = id(&app);
-            let d = app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog).unwrap();
-            for (k, v) in pairs {
-                d.set_field(k, v);
-            }
-            let stored = d.fields().text(vectorcraft_effects::pixel::TEXTURE_IMAGE).unwrap().to_string();
-            assert_eq!(d.fields().text("texture"), Some("loaded"), "{effect}");
+            let stored = app.dialogs().unwrap().with(|h| {
+                let d = h.get_mut_by_id::<HostedParamDialog>(dialog).unwrap();
+                for (k, v) in pairs {
+                    d.set_field(k, v);
+                }
+                assert_eq!(d.fields().text("texture"), Some("loaded"), "{effect}");
+                d.fields().text(vectorcraft_effects::pixel::TEXTURE_IMAGE).unwrap().to_string()
+            });
             let mut values = Map::new();
             values.insert(vectorcraft_effects::pixel::TEXTURE_IMAGE.into(), json!(stored));
             let shown = shown_choices(effect, "texture", &values, false).unwrap();
@@ -580,7 +597,7 @@ mod tests {
         let open = |app: &mut VectorcraftApp| app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
         open(&mut app);
         let dialog = id(&app);
-        let fields = app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog).unwrap().fields().clone();
+        let fields = fields(&app, dialog);
         assert!(fields.contains("removeRedundantPoints") && fields.contains("removeUnpainted"));
         assert_eq!(fields.number("precision"), Some(0.5));
         let before = steps(&app);
@@ -600,13 +617,16 @@ mod tests {
             .unwrap();
         open(&mut app);
         let dialog = id(&app);
-        let fields = app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog).unwrap().fields().clone();
-        assert_eq!((fields.number("precision"), fields.bool("removeRedundantPoints"), fields.bool("removeUnpainted")), (Some(0.01), Some(false), Some(false)));
+        let fields = fields(&app, dialog);
+        assert_eq!(
+            (fields.number("precision"), fields.bool("removeRedundantPoints"), fields.bool("removeUnpainted")),
+            (Some(0.01), Some(false), Some(false))
+        );
         // A new Soft Mix takes the panel's options and shows Mixing Rate beside them.
         app.run("object.pathfinder.options", json!({"removeUnpainted": true})).unwrap();
         app.run("effect.dialog", json!({"effect": "pathfinder.softMix"})).unwrap();
         let dialog = id(&app);
-        let fields = app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog).unwrap().fields().clone();
+        let fields = fields(&app, dialog);
         assert!(fields.contains("mixingRate") || fields.contains("rate"), "Mixing Rate beside the options");
         assert_eq!(fields.bool("removeUnpainted"), Some(true));
     }

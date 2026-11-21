@@ -14,7 +14,6 @@ use vectorcraft_engine::cmd::recovery::{self, RecoveryStore};
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
 
-
 /// The timer's state.
 #[derive(Default)]
 pub struct Timer {
@@ -281,7 +280,7 @@ fn finish(app: &mut VectorcraftApp) {
     let notes: Vec<String> = opened
         .into_iter()
         .flat_map(|(title, notes)| {
-            notes.into_iter().map(move |n| if titled { crate::i18n::fill_once("{path}: {e}", &[("path", &title), ("e", &n)]) } else { n })
+            notes.into_iter().map(move |n| if titled { crate::i18n::fmt("{path}: {e}", &[("path", &title), ("e", &n)]) } else { n })
         })
         .collect();
     if errors.is_empty() {
@@ -314,7 +313,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
 /// Enqueues the dialog for the first copy still to ask about → whether there was one and a window to show it.
 fn ask(app: &VectorcraftApp) -> bool {
     let (Some(copy), Some(dialogs)) = (app.recovery.offered.first(), app.dialogs()) else { return false };
-    let now = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let now = u64::try_from(chrono::Utc::now().timestamp()).unwrap_or(0);
     let age = copy["saved"].as_u64().map_or(Duration::ZERO, |saved| Duration::from_secs(now.saturating_sub(saved)));
     let document = RecoveredDocument::new(copy["file"].as_str().unwrap_or_default(), copy["title"].as_str().unwrap_or_default(), age);
     dialogs.with(|h| h.enqueue(StartupStage::Recovery, RecoveryDialog::new(document)));

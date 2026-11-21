@@ -14,8 +14,7 @@ fn app() -> VectorcraftApp {
 
 /// A context whose frames report their accessibility tree, so rows are found by their names.
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     ctx
 }
@@ -317,7 +316,6 @@ fn each_library_opens_in_a_panel_of_its_own() {
     assert!(app.run("ui.libraryPanel", json!({"panel": styles, "view": "huge"})).is_err());
 }
 
-
 /// One frame of `draw` with `events`, after the frames `ctx` ran.
 fn draw_frame(app: &mut VectorcraftApp, ctx: &egui::Context, draw: &dyn Fn(&mut VectorcraftApp, &mut Ui), events: Vec<Event>) -> egui::FullOutput {
     let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)));
@@ -608,7 +606,6 @@ fn a_panel_closes_when_its_library_is_gone() {
     assert!(text.contains("Missing: user/Kept.gpl"), "{text}");
     let _ = std::fs::remove_dir_all(dir);
 }
-
 
 /// A built-in swatch library lists its swatches and color groups in the UI language, a numbered
 /// swatch with its number as it is, and Find matches the name shown and the swatch's own name. A

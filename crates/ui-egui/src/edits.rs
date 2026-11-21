@@ -4,7 +4,7 @@ use craft::behavior::{CancelReason, EditEvent};
 use craft::ui::contract::EditResponse;
 
 use crate::VectorcraftApp;
-use crate::widgets::Live;
+use crate::panels::Live;
 
 /// How a gesture reaches the document.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

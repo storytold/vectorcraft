@@ -9,15 +9,14 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
 
-use super::preset_manager::ManagerAction; // PLAN: assumed path of ex.A14's `ManagerAction`
-use super::print_presets;
+use super::preset_manager::{ManagerAction, ManagerEvent, PresetManager};
 use super::tests_print::{call, confirm, fields, is_open, pump, set, try_set};
 use crate::{Services, VectorcraftApp};
 
-/// A manager button, as the manager files it.
+/// A manager button, as the manager files it; the pump carries it out.
 fn press(app: &mut VectorcraftApp, act: ManagerAction) {
-    // PLAN: assumed `print_presets::run(app, ManagerAction) -> Result<_, String>`.
-    print_presets::run(app, act).unwrap();
+    let dialogs = app.dialogs().expect("the test app has a window");
+    dialogs.with(|h| h.get_mut::<PresetManager>().expect("the manager is open").queue(ManagerEvent::Action(act)));
     pump(app);
 }
 
@@ -124,17 +123,16 @@ fn presets_files_import_and_export() {
     let dir = std::env::temp_dir().join(format!("vc-printpresets-ui-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("mine.vcprintpresets").to_string_lossy().to_string();
-    let picked = file.clone();
-    let services = crate::Services {
-        pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
-        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-        ..Default::default()
-    };
-    let mut app = new_app(services);
+    let mut app = new_app(Default::default());
+    let picker = crate::tests_picks::scripted(&mut app);
+    app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
     app.run("print.presets.save", json!({"name": "Mine", "settings": {"copies": 2}})).unwrap();
     app.run("ui.printPresetsDialog", json!({"selected": "Mine"})).unwrap();
     pump(&mut app);
     press(&mut app, ManagerAction::Export);
+    picker.answer_saved(&file, None);
+    let ctx = app.ui_ctx.clone().expect("the test app has a window");
+    crate::tests_picks::poll(&mut app, &ctx);
     // Opening the file imports it (also how the web's picked file arrives).
     let bytes = std::fs::read(&file).unwrap();
     crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();

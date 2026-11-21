@@ -49,6 +49,7 @@ fn app(format: &str, kind: ErrorKind) -> (VectorcraftApp, Arc<Mutex<Files>>) {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 40, "height": 40})).unwrap();
     app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 10, "height": 10})).unwrap();
     let st = app.session.doc_mut().unwrap();
@@ -71,14 +72,15 @@ fn state(app: &VectorcraftApp) -> (Option<String>, bool, &'static str, Value) {
 }
 
 fn poll(app: &mut VectorcraftApp) {
-    picks::poll(app, &crate::testing::ui_context());
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    picks::poll(app, &ctx);
 }
 
 fn normal_error(app: &VectorcraftApp) {
     let (_, detail) = confirm::open_message(app).expect("a persistent error dialog");
     assert!(detail.contains("injected refusal"));
     assert!(!detail.contains(READ_ONLY_LOCATION));
-    assert!(app.ui.told.is_empty(), "no duplicate error dialog");
+    assert_eq!(app.told.0.len(), 1, "no duplicate error dialog");
 }
 
 /// The fields of the open dialog with `key`, as automation lists them.
@@ -205,7 +207,7 @@ fn readonly_control_returns_the_prefix_and_never_opens_a_panel_even_after_comple
             assert!(app.ui.status.contains("READ_ONLY_LOCATION: "));
         }
         assert_eq!(state(&app), before);
-        assert!(!app.any_dialog_open() && app.ui.told.is_empty() && !app.file_dialog_open());
+        assert!(!app.any_dialog_open() && app.told.0.is_empty() && !app.file_dialog_open());
         assert!(picker.requests().is_empty(), "automation never picks");
     }
 }
@@ -223,7 +225,7 @@ fn readonly_automation_continuation_keeps_the_prefix_and_never_opens_a_panel() {
     assert!(r.unwrap_err().starts_with("READ_ONLY_LOCATION: "));
     assert_eq!(state(&app), before);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
-    assert!(!app.any_dialog_open() && app.ui.told.is_empty() && !app.file_dialog_open());
+    assert!(!app.any_dialog_open() && app.told.0.is_empty() && !app.file_dialog_open());
     assert!(picker.requests().is_empty(), "automation never picks");
 }
 

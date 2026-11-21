@@ -8,9 +8,12 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection};
+use craft::host::PickKind;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{
+    Bind, CollectionEvent, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked,
+};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Stack;
@@ -24,7 +27,7 @@ use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 use crate::caches::{FindFontCache, FontsKey};
-use crate::file_asks::{self, PickKind}; // PLAN: `PickKind` is fl.A6's; its module path is files-w5's to confirm
+use crate::file_asks;
 
 /// The key automation names the dialog by.
 const KEY: &str = "findFont";
@@ -494,9 +497,8 @@ impl StackDialog for FindFontDialog {
         let mut row_selection = chosen.map_or_else(Selection::default, Selection::single);
         let source = SOURCES.iter().position(|s| *s == self.replace_from).unwrap_or(2);
         let find_in = FIND_IN.iter().position(|s| *s == self.find_in).unwrap_or(0);
-        let entries = |labels: &[&str]| -> Vec<Entry<usize>> {
-            labels.iter().enumerate().map(|(i, l)| Entry::new(i, crate::i18n::t(l).to_string())).collect()
-        };
+        let entries =
+            |labels: &[&str]| -> Vec<Entry<usize>> { labels.iter().enumerate().map(|(i, l)| Entry::new(i, crate::i18n::t(l).to_string())).collect() };
         let (source_entries, find_in_entries) = (entries(&SOURCE_LABELS), entries(&FIND_IN_LABELS));
         let heading = crate::i18n::fmt(tl!("Fonts in Document: {count}"), &[("count", &count.to_string())]);
         let buttons = [
@@ -517,7 +519,8 @@ impl StackDialog for FindFontDialog {
         let used = self.used.clone();
         let (rows, offer_folder) = (&self.rows, self.offer_folder);
         let doc_text = |at: usize| {
-            used.get(at).map_or_else(String::new, |f| format!("{} {} ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]))
+            used.get(at)
+                .map_or_else(String::new, |f| format!("{} {} ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]))
         };
         let row_text = |at: usize| shown.get(at).and_then(|&i| rows.get(i)).map_or_else(String::new, |r| row_label(&r.family, &r.style));
         let out = Dialog::new(tl!("Find Font").to_string()).buttons(buttons).show(ui, |ui, _| {

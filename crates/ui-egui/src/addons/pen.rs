@@ -4,6 +4,7 @@
 //! acts through `addon.pen.*` and the `addon.pathtools.*` anchor edits.
 
 use craft::behavior::IconId;
+use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
@@ -14,18 +15,15 @@ use serde_json::{Value, json};
 use vectorcraft_tools::addons::smart_pen;
 
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::cp;
 use crate::panels::empty_state;
 
 /// The Smart Pen panel's id (`window.panel {panel: "smartPen"}`).
 pub const ID: &str = "smartPen";
 
 /// Object › Plug-ins › Smart Pen.
-pub fn menu() -> Vec<Item> {
-    vec![
-        Item::Cmd("Smart Pen Tool", "tool.select", json!({ "tool": smart_pen::ID })),
-        Item::Cmd("Smart Pen Panel", "window.panel", json!({ "panel": ID })),
-    ]
+pub fn menu() -> Vec<Node> {
+    vec![cp("Smart Pen Tool", "tool.select", json!({ "tool": smart_pen::ID })), cp("Smart Pen Panel", "window.panel", json!({ "panel": ID }))]
 }
 
 /// The panel's point and path edits: (label, command, params).

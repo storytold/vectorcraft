@@ -2,7 +2,7 @@
 //! different schema.
 use std::sync::LazyLock;
 
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, MemoProps, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{Glyph, IconSpec};
@@ -36,6 +36,7 @@ pub(super) fn percent_param(key: &str, label: Label, default: f64) -> Param {
 }
 
 /// An original three-by-three grid, bent by VectorCraft's own warp map. No reference icon artwork.
+#[derive(MemoProps)]
 pub(super) struct WarpGlyph(&'static str);
 
 impl Glyph for WarpGlyph {

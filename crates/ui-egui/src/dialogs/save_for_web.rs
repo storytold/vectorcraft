@@ -17,19 +17,21 @@ use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::webexport::{self, Optimized, WebOutput, WebRender, WebSettings};
 use vectorcraft_render::encode::quantize::Reduction;
 
-// PLAN: assumed `craft_ui` re-exports the framework items of the sheet under these names.
-use craft::ui::patterns::form_dialogs::{BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart, SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant};
-use craft::ui::runtime::requests::{ColorRequest, PathRequest};
+use craft::host::PickRequest;
 use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
-use craft::ui::{Revision, SizedTexture};
-use craft::ui::primitives::{TextureStore, TextureStoreOptions};
-use craft::ui::host::files::PickRequest;
+use craft::ui::patterns::form_dialogs::{
+    BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart,
+    SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant,
+};
+use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
+use craft::ui::runtime::requests::{ColorRequest, PathRequest};
+use egui::load::SizedTexture;
 
 use super::preview_folders;
-use crate::dialogs::file_asks::{self, Owner};
+use crate::file_asks::{self, Owner};
 use crate::{VectorcraftApp, io};
 
-mod color_table;
+pub(super) mod color_table;
 
 pub const KIND: &str = "saveForWeb";
 
@@ -82,7 +84,7 @@ fn table_of(reduction: Reduction) -> ColorTable {
 /// The dialog's options for the engine's settings. The engine's `colorTable` is the host's edited
 /// table ([`WebExport::table`]); the dialog's colour-table choice is the engine's reduction.
 // PLAN: assumed every other field of `SaveForWebOptions` serializes as the engine's `WebSettings` does (ex.W2).
-fn options_of(s: &WebSettings) -> SaveForWebOptions {
+pub(super) fn options_of(s: &WebSettings) -> SaveForWebOptions {
     let mut v = s.to_json();
     if let Some(o) = v.as_object_mut() {
         o.remove("reduction");
@@ -596,9 +598,9 @@ fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id
         let extensions: Vec<&str> = f.extensions.iter().map(String::as_str).collect();
         pick = pick.filter(f.name.clone(), &extensions);
     }
-    // PLAN: assumed `Picked::path(&self) -> Option<PathBuf>` (fl.A3); a cancelled panel has none.
+    // A cancelled panel has no path.
     file_asks::ask(app, pick, Owner::Free, move |app, picked| {
-        match picked.path() {
+        match picked.first_path() {
             Some(path) => answer_path(app, id, &key, path),
             None => {
                 if let Some(host) = app.dialogs() {

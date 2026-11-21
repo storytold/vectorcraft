@@ -18,7 +18,7 @@
 use craft::behavior::Mixed;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogId, DialogHost};
+use craft::ui::dialog::{DialogHost, DialogId};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
@@ -32,8 +32,8 @@ use egui::{Response, Ui};
 use serde_json::{Value, json};
 use std::ops::RangeInclusive;
 
-use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use super::transform::{add_object_options, add_scale_options, with_scale_options}; // PLAN: assumed (app, &DialogFields, ..) forms of od.OS6
 use crate::VectorcraftApp;
 
@@ -87,7 +87,8 @@ pub fn fields() -> DialogFields {
 /// The fields kept from the last OK or Copy: all but Copy, Preview (it opens on), Transform
 /// Patterns (the preference it starts from), the scale options (preferences too) and the Absolute
 /// targets (`absH`, `absV`), which the dialog sets from the selection every time it opens.
-const REMEMBERED: [&str; 12] = ["scaleH", "scaleV", "relative", "moveH", "moveV", "rotate", "reflectX", "reflectY", "random", "reference", "objects", LINK];
+const REMEMBERED: [&str; 12] =
+    ["scaleH", "scaleV", "relative", "moveH", "moveV", "rotate", "reflectX", "reflectY", "random", "reference", "objects", LINK];
 
 /// Whether a kept value has the kind of the field it would replace (a hand-edited file may not).
 fn same_kind(current: Option<&FieldValue>, kept: &FieldValue) -> bool {
@@ -103,7 +104,9 @@ fn same_kind(current: Option<&FieldValue>, kept: &FieldValue) -> bool {
 fn opening_fields(app: &VectorcraftApp, ctx: &egui::Context) -> DialogFields {
     let mut f = fields();
     let prefs = &app.session.prefs;
-    for (key, on) in [("objects", true), ("patterns", prefs.transform_pattern_tiles), ("strokes", prefs.scale_strokes), ("corners", prefs.scale_corners)] {
+    for (key, on) in
+        [("objects", true), ("patterns", prefs.transform_pattern_tiles), ("strokes", prefs.scale_strokes), ("corners", prefs.scale_corners)]
+    {
         f.set(key, on);
     }
     if let Some(saved) = saved_value::<Option<DialogFields>>(ctx, &EACH_KEY) {
@@ -265,7 +268,15 @@ enum Measure {
 
 /// One captioned side: a slider over `rail` and a number field in ±`limit`, `value` being none
 /// while the objects differ (the field reads Mixed). Returns the value the user set this pass.
-fn side(ui: &mut Ui, key: &'static str, label: impl Into<Label>, value: Option<f64>, measure: Measure, rail: &RangeInclusive<f64>, limit: f64) -> Option<f64> {
+fn side(
+    ui: &mut Ui,
+    key: &'static str,
+    label: impl Into<Label>,
+    value: Option<f64>,
+    measure: Measure,
+    rail: &RangeInclusive<f64>,
+    limit: f64,
+) -> Option<f64> {
     let label: Label = label.into();
     let mut edit = None;
     Field::new(label.clone()).id_salt(key).show(ui, |ui, _| {
@@ -305,7 +316,8 @@ fn rotate_row(ui: &mut Ui, angle: f64) -> Option<f64> {
     Field::new(tl!("Angle:")).id_salt("rotate").show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let dialed = AngleDial::new(Bind::given(angle)).label(tl!("Angle:")).range(-360.0..=360.0).show(ui).value().copied();
-            let typed = NumberField::new(tl!("Angle:"), Bind::given(Some(angle))).unit_kind(UnitKind::Degrees).show(ui).edit.value().cloned().flatten();
+            let typed =
+                NumberField::new(tl!("Angle:"), Bind::given(Some(angle))).unit_kind(UnitKind::Degrees).show(ui).edit.value().cloned().flatten();
             edit = typed.or(dialed);
         });
     });
@@ -319,7 +331,8 @@ fn rotate_row(ui: &mut Ui, angle: f64) -> Option<f64> {
 pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits, link: ScaleLink) -> Response {
     let absolute = link == ScaleLink::Toggle && !relative(fields);
     let (hk, vk) = if absolute { ("absH", "absV") } else { ("scaleH", "scaleV") };
-    let (measure, rail, limit) = if absolute { (Measure::Length(lengths), ABSOLUTE_RAIL, MAX_ABSOLUTE) } else { (Measure::Percent, SCALE_RAIL, MAX_SCALE) };
+    let (measure, rail, limit) =
+        if absolute { (Measure::Length(lengths), ABSOLUTE_RAIL, MAX_ABSOLUTE) } else { (Measure::Percent, SCALE_RAIL, MAX_SCALE) };
     let linked = flag(fields, LINK);
     let (mut scales, mut moves) = ([None; 2], [None; 2]);
     let (mut angle, mut toggled, mut mode) = (None, None, None);
@@ -471,9 +484,9 @@ fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Re
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(id) = app.object_dialogs.each.as_ref().map(|o| o.id) else { return };
     let Some(dialogs) = app.dialogs() else { return };
-    let Some((previewing, fields, action)) = dialogs.with(|host| {
-        host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_footer_action()))
-    }) else {
+    let Some((previewing, fields, action)) =
+        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_footer_action())))
+    else {
         return;
     };
     let mut p = command_params(app, &fields);
@@ -586,7 +599,7 @@ mod tests {
         let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
             move |ui, app: &mut VectorcraftApp| {
                 if !std::mem::replace(&mut ready, true) {
-                    crate::theme::install_fonts(ui.ctx());
+                    crate::testing::install(ui.ctx());
                     app.adopt_context(ui.ctx());
                     return;
                 }
@@ -658,11 +671,8 @@ mod tests {
     fn a_link_that_opens_on_keeps_the_proportions_it_opens_on() {
         let (app, _) = square_app();
         let mut h = start(app);
-        let kept = DialogFields::from_pairs([
-            ("scaleH", FieldValue::Number(100.0)),
-            ("scaleV", FieldValue::Number(200.0)),
-            (LINK, FieldValue::Bool(true)),
-        ]);
+        let kept =
+            DialogFields::from_pairs([("scaleH", FieldValue::Number(100.0)), ("scaleV", FieldValue::Number(200.0)), (LINK, FieldValue::Bool(true))]);
         set_saved_value(&h.ctx, &EACH_KEY, Some(kept));
         open(h.state_mut());
         set(&mut h, "scaleH", json!(50));

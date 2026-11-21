@@ -15,24 +15,30 @@
 
 use std::sync::Arc;
 
+use craft::behavior::Mixed;
+use craft::color_ui::display::DisplayTransform;
+use craft::theme::{Rgba, Srgba};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Swatch;
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::dialog::dialog_id;
+use craft::ui::display::Picture;
+use craft::ui::list::ThumbAspect;
+use craft::ui::patterns::form_dialogs::{
+    CustomContext, DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow,
+};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::Checker;
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::style::DataColor;
+use craft::ui::text::{HexField, LinkMode, LinkedFields, LinkedLayout};
 use serde_json::{Map, Value, json};
-use vectorcraft_color::cms::ProfileKind;
-use vectorcraft_color::cms::display::DisplayTransform;
 use vectorcraft_color::Color;
+use vectorcraft_color::cms::ProfileKind;
 use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES, MAX_BLEED, bleed_in_range, language_quotes};
 use vectorcraft_doc::{ColorMode, DocSetup, GridSize, Quotes, Unit};
 use vectorcraft_engine::cmd::colormgmt::doc_profiles;
 use vectorcraft_engine::cmd::fileio::pdf;
-
-// PLAN: the `craft_ui` re-export paths below are assumed; the framework crates are not in this tree.
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow};
-use craft::ui::dialog::dialog_id;
-use craft::ui::patterns::form_dialogs::CustomContext;
-use craft::ui::primitives::Checker;
-use craft::ui::style::DataColor;
-use craft::ui::runtime::env::{LengthUnits, UnitKind};
-use craft::ui::layout_components::theme::{Rgba, Srgba};
-use craft::ui::runtime::egui::widgets::{Bind, Button, Entry, HexField, LinkMode, LinkedFields, LinkedLayout, Mixed, Picture, Select, Swatch, ThumbAspect};
 
 use crate::VectorcraftApp;
 
@@ -104,7 +110,8 @@ fn flatten(mut fields: Map<String, Value>) -> Map<String, Value> {
 /// The inverse of [`flatten`].
 fn nest(mut fields: Map<String, Value>) -> Map<String, Value> {
     for (key, parts) in PARTS {
-        let object: Map<String, Value> = parts.iter().filter_map(|part| fields.remove(&format!("{key}.{part}")).map(|v| ((*part).to_string(), v))).collect();
+        let object: Map<String, Value> =
+            parts.iter().filter_map(|part| fields.remove(&format!("{key}.{part}")).map(|v| ((*part).to_string(), v))).collect();
         if !object.is_empty() {
             fields.insert(key.into(), Value::Object(object));
         }
@@ -377,12 +384,16 @@ fn grid_preset_name(pair: [Color; 2]) -> &'static str {
 fn grid_colors_row(setup: DocSetup) -> Param {
     Param::custom("gridColors", tl!("Grid Colors:"), move |ui, fields, cx| {
         fold_picked(fields, &setup);
-        let preset = json_map(fields).get("gridColors").and_then(Value::as_str).and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| p.eq_ignore_ascii_case(n)).map(|(_, pair)| *pair));
+        let preset = json_map(fields)
+            .get("gridColors")
+            .and_then(Value::as_str)
+            .and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| p.eq_ignore_ascii_case(n)).map(|(_, pair)| *pair));
         if let Some(pair) = preset {
             fields.set("gridColors", entries_value(pair));
         }
         let resolved = grid_colors(&json_map(fields), &setup);
-        let menu: Vec<Entry<String>> = GRID_COLOR_PRESETS.iter().map(|(n, _)| *n).chain(["Custom"]).map(|n| Entry::new(n.to_string(), n.to_string())).collect();
+        let menu: Vec<Entry<String>> =
+            GRID_COLOR_PRESETS.iter().map(|(n, _)| *n).chain(["Custom"]).map(|n| Entry::new(n.to_string(), n.to_string())).collect();
         ui.vertical(|ui| {
             let picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
             if let Some((_, pair)) = picked.and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| *p == n)) {
@@ -444,7 +455,8 @@ fn grid_preview_row(setup: DocSetup, display: Display) -> Param {
         let [light, dark] = colors.map(|c| DataColor(crate::display_profile::color32(display.as_deref(), crate::panels::c32(&c))));
         let checker = Checker::new().size(size.cell()).colors(light, dark);
         // PLAN: the picture takes the default extent; the 112 × 72 pt size wants a sample extent in the framework.
-        Picture::painter(tl!("Transparency Grid"), ThumbAspect::new(14, 9), move |cx, rect| cx.checker_with(&checker, rect, egui::CornerRadius::ZERO)).show(ui)
+        Picture::painter(tl!("Transparency Grid"), ThumbAspect::new(14, 9), move |cx, rect| cx.checker_with(&checker, rect, egui::CornerRadius::ZERO))
+            .show(ui)
     })
     .beside()
 }
@@ -486,7 +498,8 @@ fn grid_color_entry(c: &Color) -> Value {
 
 /// The Type tab: language and quotes, the script sizes and the text export.
 fn typography() -> Vec<PropertyRow> {
-    let quotes = |choices: &[[char; 2]]| -> Vec<(String, String)> { choices.iter().map(|p| p.iter().collect::<String>()).map(|s| (s.clone(), s)).collect() };
+    let quotes =
+        |choices: &[[char; 2]]| -> Vec<(String, String)> { choices.iter().map(|p| p.iter().collect::<String>()).map(|s| (s.clone(), s)).collect() };
     vec![
         PropertyRow::field(Param::custom("language", tl!("Language:"), language_row).companions(["quotes.double", "quotes.single"])),
         choice("quotes.double", tl!("Double Quotes:"), quotes(&Quotes::DOUBLE_CHOICES)),
@@ -501,7 +514,8 @@ fn typography() -> Vec<PropertyRow> {
         choice(
             "exportText",
             tl!("Export:"),
-            [("editable", tl!("Preserve Text Editability")), ("appearance", tl!("Preserve Text Appearance"))].map(|(id, l)| (id.to_string(), l.to_string())),
+            [("editable", tl!("Preserve Text Editability")), ("appearance", tl!("Preserve Text Appearance"))]
+                .map(|(id, l)| (id.to_string(), l.to_string())),
         ),
     ]
 }
@@ -542,9 +556,9 @@ fn color(mode: ColorMode) -> Vec<PropertyRow> {
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::patterns::form_dialogs::{DialogFields, HostedPropertiesDialog};
+    use craft::theme::Srgba;
     use craft::ui::dialog::{DialogId, HeldOk, dialog_id};
-    use craft::ui::layout_components::theme::Srgba;
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedPropertiesDialog};
     use egui::{Pos2, Rect, vec2};
     use serde_json::{Value, json};
     use vectorcraft_color::{Color, Paint, cms};
@@ -560,11 +574,8 @@ mod tests {
 
     /// An app with a 200 × 200 document and a window to show dialogs in.
     fn new_app() -> (VectorcraftApp, egui::Context) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        crate::theme::apply(&ctx, Default::default());
+        let ctx = crate::testing::ui_context();
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        // PLAN: assumed the host window's context is the app's `ui_ctx` (lib.rs:203).
         app.ui_ctx = Some(ctx.clone());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         (app, ctx)
@@ -1033,9 +1044,15 @@ mod tests {
         set(&app, &ctx, "gridSize", json!("small"));
         set(&app, &ctx, "gridColors", json!(["#ff0000", "#0000ff"]));
         set(&app, &ctx, "simulatePaper", json!(true));
-        assert_eq!(super::preview_grid(&super::json_map(&fields(&app)), &setup), (vectorcraft_doc::GridSize::Small, [hex("#ff0000"), hex("#0000ff")]));
+        assert_eq!(
+            super::preview_grid(&super::json_map(&fields(&app)), &setup),
+            (vectorcraft_doc::GridSize::Small, [hex("#ff0000"), hex("#0000ff")])
+        );
         let st = app.session.active().unwrap();
-        assert_eq!((st.doc.setup.grid_size, st.doc.setup.grid_colors, st.doc.setup.simulate_paper), (vectorcraft_doc::GridSize::Medium, LIGHT.map(hex), false));
+        assert_eq!(
+            (st.doc.setup.grid_size, st.doc.setup.grid_colors, st.doc.setup.simulate_paper),
+            (vectorcraft_doc::GridSize::Medium, LIGHT.map(hex), false)
+        );
         assert_eq!(undo_steps(&app), 0);
         app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id()));
         assert!(!is_open(&app));

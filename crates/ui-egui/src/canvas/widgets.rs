@@ -6,8 +6,8 @@ use craft::behavior::geometry::quad::BoxState;
 use craft::behavior::kurbo::{Point, Rect};
 use craft::behavior::{Input, Metrics};
 use craft::draw::ui::corner::{CornerPoint, CornerTarget};
-use craft::draw::ui::{CornerKind, CornerWidgets, TransformBox};
 use craft::draw::ui::transform::TransformReach;
+use craft::draw::ui::{CornerKind, CornerWidgets, TransformBox};
 use craft::ui::canvas::canvas_space;
 use craft::ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintUi, Props as _, Role, Show as _};
 use craft::ui::primitives::{PaintShape, StrokeColor, StrokeWidth};
@@ -17,10 +17,10 @@ use vectorcraft_doc::{Document, LiveCorners, LiveShape, NodeId, NodeKind, Orient
 use vectorcraft_geom::shapes::CornerKind as DocCornerKind;
 use vectorcraft_tools::{blendwidget, objects_on_path, pie, sidewidget, typewidget};
 
+use super::BodyKind;
 use crate::VectorcraftApp;
-// PLAN: assumed `Win` and `BodyKind` (canvas-w10) are in scope of `canvas`, with `BodyKind::Live`, and
-// `revolve_editing(app) -> bool` is `canvas`'s (contract cv.S2).
-use super::{BodyKind, Win, revolve_editing};
+use crate::dialogs::three_d::gizmo_shown;
+use crate::doc_windows::Win;
 
 /// The bounding box on show: the box and the layer colour it is drawn in.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -126,7 +126,8 @@ pub(super) fn corners(app: &VectorcraftApp, zoom: f64) -> Option<Vec<(DataColor,
     }
     let st = app.session.active()?;
     let on = app.ui.view.corner_widgets && (direct || app.ui.view.shape_widgets);
-    let shown = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)?;
+    let shown =
+        vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)?;
     // `visible_on` and `corners` list the same corners in the same order: path after path.
     let mut per_path: Vec<(NodeId, Vec<usize>)> = vec![];
     for ((id, _), index) in shown.visible_on().zip(shown.corners()) {
@@ -347,7 +348,7 @@ impl Component for ShapeWidgets {
 /// Nothing here is shown while a revolve is edited.
 // PLAN: `win` is unused: assumed it names the canvas window of the pass, and only a `Live` body shows these.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::ui::canvas::CanvasSpace, _win: Win, kind: BodyKind) {
-    if kind != BodyKind::Live || revolve_editing(app) {
+    if kind != BodyKind::Live || gizmo_shown(app) {
         return;
     }
     // PLAN: assumed the body's rect is the canvas rect the controls are shown at.

@@ -1,14 +1,15 @@
 //! Help searches the tools, menu commands, and built-in tutorials.
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
-use craft::i18n::Folder;
+use craft::i18n::{Folder, Words};
 use craft::keymap::{Chord, CommandRef};
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Kbd, Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
-use craft::ui::menu::search::{HelpEntry, SearchIndex, Synonyms, rank};
+use craft::ui::menu::search::{HelpEntry, SearchIndex, SearchWords, Synonyms, rank};
+use craft::ui::runtime::commands;
 use craft::ui::runtime::focus::{self, FocusTarget};
 use craft::ui::style::TypeRole;
 use craft::ui::text::TextField;
@@ -51,10 +52,12 @@ pub struct View {
     current_for: Option<u64>,
 }
 
-/// The text of a tool's shortcut, empty when it has none.
-fn tool_shortcut(id: &str) -> String {
-    // PLAN: assumed crate::commands::chord(command: &str) -> Option<String>, the `Chord::display` text of the command's chord
-    crate::commands::chord(&format!("tool:{id}")).unwrap_or_default()
+/// The text of a tool's shortcut in the window's keymap, empty when it has none.
+fn tool_shortcut(app: &VectorcraftApp, id: &str) -> String {
+    app.ui_ctx
+        .as_ref()
+        .and_then(|ctx| commands::chord(ctx, &CommandRef::new(format!("tool:{id}"))))
+        .map_or_else(String::new, |chord| chord.display(crate::keymap::platform()))
 }
 
 /// Updates the retained results' labels, menu paths and shortcuts after the menu state changes (a
@@ -81,7 +84,7 @@ fn refresh(app: &mut VectorcraftApp) {
         match hit.kind {
             "tool" => {
                 hit.label = crate::i18n::tr(lang, &hit.english_label).into();
-                hit.shortcut = tool_shortcut(&hit.id);
+                hit.shortcut = tool_shortcut(app, &hit.id);
             }
             "command" => {
                 let same = by_command.get(&(hit.id.as_str(), hit.params.to_string())).map_or(&[][..], Vec::as_slice);
@@ -106,7 +109,7 @@ fn refresh(app: &mut VectorcraftApp) {
 }
 
 /// The tools, each with the entry the search ranks it by.
-fn tool_hits() -> Vec<(HelpEntry, Hit)> {
+fn tool_hits(app: &VectorcraftApp) -> Vec<(HelpEntry, Hit)> {
     let lang = crate::i18n::current();
     vectorcraft_tools::catalog::all_tools()
         .into_iter()
@@ -120,7 +123,7 @@ fn tool_hits() -> Vec<(HelpEntry, Hit)> {
                 id: tool.id.into(),
                 label,
                 path: vec![],
-                shortcut: tool_shortcut(tool.id),
+                shortcut: tool_shortcut(app, tool.id),
                 english_label: tool.label.into(),
                 english_path: vec![],
                 params: Value::Null,
@@ -190,10 +193,9 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
     }
     // PLAN: assumed SearchIndex::new(&Folder, &[HelpEntry], &Synonyms) (the contract's takes an `EnvView`, which a command has no `Ui` for)
     let folder = Folder::new(crate::i18n::current().code());
-    // PLAN: assumed crate::i18n::search_words() -> SearchWords, the interface language's `Words::set::<SearchWords>()`
-    let synonyms = Synonyms::of(&crate::i18n::search_words());
+    let synonyms = Synonyms::of(&Words::from_i18n(crate::i18n::shared(), crate::i18n::current()).set::<SearchWords>());
     let mut hits = Vec::new();
-    for section in [tool_hits(), command_hits(app), tutorial_hits()] {
+    for section in [tool_hits(app), command_hits(app), tutorial_hits()] {
         let (entries, candidates): (Vec<HelpEntry>, Vec<Hit>) = section.into_iter().unzip();
         let index = SearchIndex::new(&folder, &entries, &synonyms);
         hits.extend(rank(&index, query, &[], &|_| 0).into_iter().filter_map(|at| candidates.get(at).cloned()));

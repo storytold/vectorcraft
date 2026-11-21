@@ -16,9 +16,8 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-// PLAN: assumed `canvas::task_bar::{Offer, offered}` (cv.S10) with `Offer { actions: Vec<(label, ..)>, listed:
-// Vec<(label, Option<id>, bool)>, chips: Vec<Chip>, fonts: bool, anchor: Vec<Point>, .. }` and `Chip::id()`.
-use crate::canvas::task_bar::{Offer, offered};
+use crate::canvas::task_bar::{Offer, chip_paints, images_with_other_art, offered};
+use crate::dialogs::simplify_slider::StripKind;
 use crate::{VectorcraftApp, canvas};
 
 /// The bar's access name, as the framework's `TaskBar` gives it.
@@ -110,7 +109,7 @@ pub(super) fn driven<R>(app: &mut VectorcraftApp, room: Vec2, show: fn(&mut Vect
     let shown = Rc::clone(&held);
     let mut fx = Fixture::new(move |ui| show(&mut shown.borrow_mut(), ui));
     fx.room(room);
-    crate::theme::install_fonts(fx.ctx());
+    crate::testing::install(fx.ctx());
     let mut rig = Rig { app: held, fx };
     let out = f(&mut rig);
     let Rig { app: held, fx } = rig;
@@ -272,11 +271,8 @@ fn clipping_group(app: &mut VectorcraftApp) -> u64 {
 
 /// Type on a path, along an open line or around a closed circle.
 fn path_type(app: &mut VectorcraftApp, closed: bool) -> u64 {
-    let (d, at) = if closed {
-        ("M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z", json!([90, 300]))
-    } else {
-        ("M60 150 L340 150", json!([60, 150]))
-    };
+    let (d, at) =
+        if closed { ("M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z", json!([90, 300])) } else { ("M60 150 L340 150", json!([60, 150])) };
     let path = id(app.run("path.create", json!({ "d": d })).unwrap());
     id(app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": at})).unwrap())
 }
@@ -419,97 +415,203 @@ fn selection_kinds_offer_their_actions() {
         select(app, &[l]);
     };
     check(vec![
-        row("an open path", |app| {
-            let l = id(app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 200, "y2": 120})).unwrap());
-            select(app, &[l]);
-        }, &["Join", "Edit Path", "Offset Path", "Simplify", "Duplicate"], &[]),
-        row("a closed path", |app| {
-            let p = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}], "closed": true})).unwrap());
-            select(app, &[p]);
-        }, &["Edit Path", "Offset Path"], &["Join"]),
-        row("a compound path", |app| {
-            compound(app);
-        }, &["Edit Path", "Release Compound Path"], &["Offset Path"]),
-        row("a clipping mask", |app| {
-            clipping_group(app);
-        }, &["Edit Clipping Path", "Release Clipping Mask"], &["Ungroup"]),
+        row(
+            "an open path",
+            |app| {
+                let l = id(app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 200, "y2": 120})).unwrap());
+                select(app, &[l]);
+            },
+            &["Join", "Edit Path", "Offset Path", "Simplify", "Duplicate"],
+            &[],
+        ),
+        row(
+            "a closed path",
+            |app| {
+                let p = id(app
+                    .run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}], "closed": true}))
+                    .unwrap());
+                select(app, &[p]);
+            },
+            &["Edit Path", "Offset Path"],
+            &["Join"],
+        ),
+        row(
+            "a compound path",
+            |app| {
+                compound(app);
+            },
+            &["Edit Path", "Release Compound Path"],
+            &["Offset Path"],
+        ),
+        row(
+            "a clipping mask",
+            |app| {
+                clipping_group(app);
+            },
+            &["Edit Clipping Path", "Release Clipping Mask"],
+            &["Ungroup"],
+        ),
         row("an image with vector art", image_with_art, &["Make Clipping Mask", "Group"], &["Unite"]),
-        row("vector art alone", |app| {
-            let ids = two_shapes(app);
-            select(app, &ids);
-        }, &["Unite", "Group"], &["Make Clipping Mask"]),
-        row("a compound path under Direct Selection", |app| {
-            let c = compound(app);
-            app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
-            select(app, &[c]);
-        }, &["Release Compound Path"], &["Edit Path"]),
-        row("a path selected whole under Direct Selection", direct_whole, &["Connect", "convertToCorner", "convertToSmooth", "Simplify", "Smooth", "Duplicate"], &["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"]),
-        row("anchors picked out", |app| {
-            let l = open_line(app);
-            app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
-            app.run("select.anchors", json!({"id": l, "anchors": [[0, 1]]})).unwrap();
-        }, &["Remove Anchor Points", "Connect", "Cut Path", "convertToCorner", "convertToSmooth"], &["Edit Path"]),
+        row(
+            "vector art alone",
+            |app| {
+                let ids = two_shapes(app);
+                select(app, &ids);
+            },
+            &["Unite", "Group"],
+            &["Make Clipping Mask"],
+        ),
+        row(
+            "a compound path under Direct Selection",
+            |app| {
+                let c = compound(app);
+                app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+                select(app, &[c]);
+            },
+            &["Release Compound Path"],
+            &["Edit Path"],
+        ),
+        row(
+            "a path selected whole under Direct Selection",
+            direct_whole,
+            &["Connect", "convertToCorner", "convertToSmooth", "Simplify", "Smooth", "Duplicate"],
+            &["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"],
+        ),
+        row(
+            "anchors picked out",
+            |app| {
+                let l = open_line(app);
+                app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+                app.run("select.anchors", json!({"id": l, "anchors": [[0, 1]]})).unwrap();
+            },
+            &["Remove Anchor Points", "Connect", "Cut Path", "convertToCorner", "convertToSmooth"],
+            &["Edit Path"],
+        ),
         row("a rectangle", basic("shape.rectangle", shape()), &["shapeProperties"], &["lock"]),
-        row("a rounded rectangle", basic("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})), &["shapeProperties"], &["lock"]),
+        row(
+            "a rounded rectangle",
+            basic("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60, "radius": 10})),
+            &["shapeProperties"],
+            &["lock"],
+        ),
         row("an ellipse", basic("shape.ellipse", shape()), &["shapeProperties"], &["lock"]),
         row("a polygon", basic("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 40, "sides": 6})), &["shapeProperties"], &["lock"]),
-        row("a closed path keeps Lock", |app| {
-            let p = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}], "closed": true})).unwrap());
-            select(app, &[p]);
-        }, &["lock"], &["shapeProperties"]),
+        row(
+            "a closed path keeps Lock",
+            |app| {
+                let p = id(app
+                    .run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}], "closed": true}))
+                    .unwrap());
+                select(app, &[p]);
+            },
+            &["lock"],
+            &["shapeProperties"],
+        ),
         row("a star keeps Lock", basic("shape.star", json!({"cx": 200, "cy": 150, "radius1": 40})), &["lock"], &["shapeProperties"]),
-        row("a star with live corners keeps Lock", |app| {
-            let s = id(app.run("shape.star", json!({"cx": 300, "cy": 150, "radius1": 40})).unwrap());
-            select(app, &[s]);
-            app.run("object.setLiveShape", json!({"radius": 4})).unwrap();
-            assert!(matches!(live(app, s), vectorcraft_doc::LiveShape::Path { .. }));
-        }, &["lock"], &["shapeProperties"]),
-        row("a group keeps Lock", |app| {
-            rects(app);
-            app.run("object.group", json!({})).unwrap();
-        }, &["lock"], &["shapeProperties"]),
+        row(
+            "a star with live corners keeps Lock",
+            |app| {
+                let s = id(app.run("shape.star", json!({"cx": 300, "cy": 150, "radius1": 40})).unwrap());
+                select(app, &[s]);
+                app.run("object.setLiveShape", json!({"radius": 4})).unwrap();
+                assert!(matches!(live(app, s), vectorcraft_doc::LiveShape::Path { .. }));
+            },
+            &["lock"],
+            &["shapeProperties"],
+        ),
+        row(
+            "a group keeps Lock",
+            |app| {
+                rects(app);
+                app.run("object.group", json!({})).unwrap();
+            },
+            &["lock"],
+            &["shapeProperties"],
+        ),
         row("several objects keep Lock", rects, &["lock"], &["shapeProperties"]),
-        row("a rectangle under Direct Selection keeps Lock", |app| {
-            let s = id(app.run("shape.rectangle", json!({"x": 300, "y": 40, "width": 30, "height": 30})).unwrap());
-            app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
-            select(app, &[s]);
-        }, &["lock"], &["shapeProperties"]),
-        row("a rectangle under Group Selection keeps Lock", |app| {
-            let s = id(app.run("shape.rectangle", json!({"x": 300, "y": 40, "width": 30, "height": 30})).unwrap());
-            app.run("tool.select", json!({"tool": "groupSelection"})).unwrap();
-            select(app, &[s]);
-        }, &["lock"], &["shapeProperties"]),
+        row(
+            "a rectangle under Direct Selection keeps Lock",
+            |app| {
+                let s = id(app.run("shape.rectangle", json!({"x": 300, "y": 40, "width": 30, "height": 30})).unwrap());
+                app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+                select(app, &[s]);
+            },
+            &["lock"],
+            &["shapeProperties"],
+        ),
+        row(
+            "a rectangle under Group Selection keeps Lock",
+            |app| {
+                let s = id(app.run("shape.rectangle", json!({"x": 300, "y": 40, "width": 30, "height": 30})).unwrap());
+                app.run("tool.select", json!({"tool": "groupSelection"})).unwrap();
+                select(app, &[s]);
+            },
+            &["lock"],
+            &["shapeProperties"],
+        ),
     ]);
 }
 
 #[test]
 fn type_offers_its_actions_and_font_controls() {
-    let text = |app: &mut VectorcraftApp, y: u32, content: &str| id(app.run("text.create", json!({"x": 60, "y": y, "text": content, "size": 20})).unwrap());
+    let text =
+        |app: &mut VectorcraftApp, y: u32, content: &str| id(app.run("text.create", json!({"x": 60, "y": y, "text": content, "size": 20})).unwrap());
     let mut rows = vec![
-        row("point type", |app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
-            select(app, &[t]);
-        }, &["Create Outlines", "Convert To Area Type", "Dynamic Text", "Duplicate"], &["Convert To Point Type"]).fonts(true),
-        row("area type", |app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
-            select(app, &[t]);
-        }, &["Convert To Point Type", "Dynamic Text"], &["Convert To Area Type"]),
-        row("area type in a thread", |app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
-            thread(app, t);
-        }, &["Convert To Point Type"], &["Dynamic Text"]),
-        row("type on an open path", |app| {
-            let t = path_type(app, false);
-            select(app, &[t]);
-        }, &["Create Outlines", "Type on a Path Options", "Dynamic Text"], &["Convert To Area Type", "Convert To Point Type", "Center on Top", "Center on Bottom"]),
-        row("type on a closed path", |app| {
-            let t = path_type(app, true);
-            select(app, &[t]);
-        }, &["Type on a Path Options", "Center on Top", "Center on Bottom", "Dynamic Text"], &[]),
-        row("type on a path in a thread", |app| {
-            let t = path_type(app, false);
-            thread(app, t);
-        }, &["Create Outlines"], &["Dynamic Text"]),
+        row(
+            "point type",
+            |app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+                select(app, &[t]);
+            },
+            &["Create Outlines", "Convert To Area Type", "Dynamic Text", "Duplicate"],
+            &["Convert To Point Type"],
+        )
+        .fonts(true),
+        row(
+            "area type",
+            |app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
+                select(app, &[t]);
+            },
+            &["Convert To Point Type", "Dynamic Text"],
+            &["Convert To Area Type"],
+        ),
+        row(
+            "area type in a thread",
+            |app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
+                thread(app, t);
+            },
+            &["Convert To Point Type"],
+            &["Dynamic Text"],
+        ),
+        row(
+            "type on an open path",
+            |app| {
+                let t = path_type(app, false);
+                select(app, &[t]);
+            },
+            &["Create Outlines", "Type on a Path Options", "Dynamic Text"],
+            &["Convert To Area Type", "Convert To Point Type", "Center on Top", "Center on Bottom"],
+        ),
+        row(
+            "type on a closed path",
+            |app| {
+                let t = path_type(app, true);
+                select(app, &[t]);
+            },
+            &["Type on a Path Options", "Center on Top", "Center on Bottom", "Dynamic Text"],
+            &[],
+        ),
+        row(
+            "type on a path in a thread",
+            |app| {
+                let t = path_type(app, false);
+                thread(app, t);
+            },
+            &["Create Outlines"],
+            &["Dynamic Text"],
+        ),
         without("a Type tool before it adds type", |app| {
             app.run("tool.select", json!({"tool": "type"})).unwrap();
         }),
@@ -524,24 +626,56 @@ fn type_offers_its_actions_and_font_controls() {
             select(app, &[t]);
         }),
     ];
-    rows.push(row("several type objects", move |app| {
-        let (a, b) = (id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap()), id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap()));
-        select(app, &[a, b]);
-    }, &["Duplicate"], &[]).fonts(true));
-    rows.push(row("type with other art", |app| {
-        let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
-        let r = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
-        select(app, &[a, r]);
-    }, &["Group"], &[]).fonts(false));
-    rows.push(row("a rectangle", |app| {
-        let r = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
-        select(app, &[r]);
-    }, &["Duplicate"], &[]).fonts(false));
+    rows.push(
+        row(
+            "several type objects",
+            move |app| {
+                let (a, b) = (
+                    id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap()),
+                    id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap()),
+                );
+                select(app, &[a, b]);
+            },
+            &["Duplicate"],
+            &[],
+        )
+        .fonts(true),
+    );
+    rows.push(
+        row(
+            "type with other art",
+            |app| {
+                let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+                let r = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
+                select(app, &[a, r]);
+            },
+            &["Group"],
+            &[],
+        )
+        .fonts(false),
+    );
+    rows.push(
+        row(
+            "a rectangle",
+            |app| {
+                let r = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
+                select(app, &[r]);
+            },
+            &["Duplicate"],
+            &[],
+        )
+        .fonts(false),
+    );
     for tool in TYPE_TOOLS {
         rows.push(
-            row(format!("the {tool} tool editing type"), move |app| {
-                edited_type(app, tool);
-            }, &["fill"], &["createOutlines", "convertToAreaType", "dynamicText", "duplicate", "stroke", "recolor", "lock"])
+            row(
+                format!("the {tool} tool editing type"),
+                move |app| {
+                    edited_type(app, tool);
+                },
+                &["fill"],
+                &["createOutlines", "convertToAreaType", "dynamicText", "duplicate", "stroke", "recolor", "lock"],
+            )
             .fonts(true),
         );
     }
@@ -594,11 +728,16 @@ fn tools_offer_their_bar_or_none() {
             app.run("tool.select", json!({ "tool": tool })).unwrap();
             app.run("select.anchors", json!({"id": s.rect, "anchors": [[0, 1]]})).unwrap();
         }));
-        rows.push(row(format!("{tool} with the rectangle"), move |app| {
-            let s = scene(app);
-            app.run("tool.select", json!({ "tool": tool })).unwrap();
-            select(app, &[s.rect]);
-        }, &["editPath", "fill", "stroke"], &["duplicate", "offsetPath", "simplify", "recolor", "lock"]));
+        rows.push(row(
+            format!("{tool} with the rectangle"),
+            move |app| {
+                let s = scene(app);
+                app.run("tool.select", json!({ "tool": tool })).unwrap();
+                select(app, &[s.rect]);
+            },
+            &["editPath", "fill", "stroke"],
+            &["duplicate", "offsetPath", "simplify", "recolor", "lock"],
+        ));
     }
     rows.push(without("the Line Segment tool with a rectangle", |app| {
         let s = scene(app);
@@ -618,13 +757,23 @@ fn tools_offer_their_bar_or_none() {
     rows.push(without("the Smooth tool with nothing", smooth(|_, _, _| vec![])));
     rows.push(without("the Smooth tool with a straight line", smooth(|_, l, _| vec![l])));
     rows.push(without("the Smooth tool with type", smooth(|_, _, t| vec![t])));
-    rows.push(row("the Smooth tool with a path", smooth(|p, _, _| vec![p]), &["fidelity", "smoothToolOptions"], &["fill", "stroke", "recolor", "lock", "duplicate", "editPath", "offsetPath", "simplify", "smooth"]));
+    rows.push(row(
+        "the Smooth tool with a path",
+        smooth(|p, _, _| vec![p]),
+        &["fidelity", "smoothToolOptions"],
+        &["fill", "stroke", "recolor", "lock", "duplicate", "editPath", "offsetPath", "simplify", "smooth"],
+    ));
     rows.push(row("the Smooth tool with a path and a line", smooth(|p, l, _| vec![p, l]), &["fidelity"], &[]));
     // A blank canvas offers Draw and Place Image under a selection tool; ruler guides are not artwork.
     for tool in ["selection", "directSelection", "groupSelection"] {
-        rows.push(row(format!("a blank canvas with {tool}"), move |app| {
-            app.run("tool.select", json!({ "tool": tool })).unwrap();
-        }, &["Draw (Pencil)", "Place Image"], &["fill", "stroke", "recolor", "lock", "duplicate"]));
+        rows.push(row(
+            format!("a blank canvas with {tool}"),
+            move |app| {
+                app.run("tool.select", json!({ "tool": tool })).unwrap();
+            },
+            &["Draw (Pencil)", "Place Image"],
+            &["fill", "stroke", "recolor", "lock", "duplicate"],
+        ));
     }
     for tool in ["pen", "rectangle", "type"] {
         rows.push(without(format!("a blank canvas with {tool}"), move |app| {
@@ -636,12 +785,17 @@ fn tools_offer_their_bar_or_none() {
         select(app, &[r]);
         select(app, &[]);
     }));
-    rows.push(row("a ruler guide is not artwork", |app| {
-        let r = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
-        select(app, &[r]);
-        app.run("edit.clear", json!({})).unwrap();
-        app.run("guide.add", json!({"pos": 50})).unwrap();
-    }, &["Draw (Pencil)"], &[]));
+    rows.push(row(
+        "a ruler guide is not artwork",
+        |app| {
+            let r = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+            select(app, &[r]);
+            app.run("edit.clear", json!({})).unwrap();
+            app.run("guide.add", json!({"pos": 50})).unwrap();
+        },
+        &["Draw (Pencil)"],
+        &[],
+    ));
     check(rows);
 
     // The blank canvas bar hangs under the active artboard.
@@ -649,7 +803,12 @@ fn tools_offer_their_bar_or_none() {
     app.run("tool.select", json!({"tool": "selection"})).unwrap();
     let board = app.session.active().unwrap().doc.artboards[0].rect;
     let o = offer(&mut app).expect("the blank canvas offers actions");
-    assert!(!o.anchor.is_empty() && o.anchor.iter().all(|p| p.x >= board.x0 - 1.0 && p.x <= board.x1 + 1.0 && p.y >= board.y0 - 1.0 && p.y <= board.y1 + 1.0), "{:?} under {board:?}", o.anchor);
+    assert!(
+        !o.anchor.is_empty()
+            && o.anchor.iter().all(|p| p.x >= board.x0 - 1.0 && p.x <= board.x1 + 1.0 && p.y >= board.y0 - 1.0 && p.y <= board.y1 + 1.0),
+        "{:?} under {board:?}",
+        o.anchor
+    );
 
     // The Artboard tool offers the artboards' actions under the selected one, the Selection tool the object's.
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -660,7 +819,11 @@ fn tools_offer_their_bar_or_none() {
     assert_eq!(labels(&mut app), ["Resize", "Duplicate", "Rearrange All", "Export"]);
     let b = app.session.active().unwrap().doc.artboards[1].rect;
     let o = offer(&mut app).unwrap();
-    assert!(!o.anchor.is_empty() && o.anchor.iter().all(|p| p.x >= b.x0 - 1.0 && p.x <= b.x1 + 1.0 && p.y >= b.y0 - 1.0 && p.y <= b.y1 + 1.0), "{:?} on artboard 2 {b:?}", o.anchor);
+    assert!(
+        !o.anchor.is_empty() && o.anchor.iter().all(|p| p.x >= b.x0 - 1.0 && p.x <= b.x1 + 1.0 && p.y >= b.y0 - 1.0 && p.y <= b.y1 + 1.0),
+        "{:?} on artboard 2 {b:?}",
+        o.anchor
+    );
     app.select_tool("selection");
     app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
     assert_eq!(labels(&mut app), ["Edit Path", "Offset Path", "Simplify", "Duplicate"]);
@@ -738,7 +901,7 @@ fn images_with_other_art_matches_the_image_count() {
         set_selection(&mut app, ids, anchors);
         let st = app.session.active().unwrap();
         assert_eq!(mixed_by_count(st), mixed, "{ids:?} with anchors on {anchors:?}: the count");
-        assert_eq!(canvas::images_with_other_art(st, &mut None), mixed, "{ids:?} with anchors on {anchors:?}");
+        assert_eq!(images_with_other_art(st, &mut None), mixed, "{ids:?} with anchors on {anchors:?}");
     }
 }
 
@@ -752,14 +915,14 @@ fn images_with_other_art_is_kept_for_the_revision() {
     let b = id(app.run("shape.rectangle", json!({"x": 30, "y": 210, "width": 40, "height": 40})).unwrap());
     select(&mut app, &[img, a]);
     let mut memo = None;
-    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &mut memo));
+    assert!(images_with_other_art(app.session.active().unwrap(), &mut memo));
     // Changing the objects behind the revision's back shows the kept answer is used.
     app.session.active_mut().unwrap().selection.objects = vec![NodeId(a), NodeId(b)];
-    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &mut memo), "the revision's answer is kept");
+    assert!(images_with_other_art(app.session.active().unwrap(), &mut memo), "the revision's answer is kept");
     select(&mut app, &[a, b]);
-    assert!(!canvas::images_with_other_art(app.session.active().unwrap(), &mut memo), "a new revision works it out again");
+    assert!(!images_with_other_art(app.session.active().unwrap(), &mut memo), "a new revision works it out again");
     select(&mut app, &[b, img]);
-    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &mut memo));
+    assert!(images_with_other_art(app.session.active().unwrap(), &mut memo));
 }
 
 #[test]
@@ -783,10 +946,8 @@ fn type_converts_between_point_and_area_type() {
 /// nothing until the slider is confirmed (#6784).
 #[test]
 fn direct_selection_smooth_opens_the_smooth_slider() {
-    // PLAN: assumed hosted dialog types `dialogs::smooth_slider::SmoothSlider` and
-    // `dialogs::simplify_slider::SimplifySlider` (hub-w2 M1).
-    use crate::dialogs::{simplify_slider::SimplifySlider, smooth_slider::SmoothSlider};
-    let is_open = |app: &mut VectorcraftApp, name: &str| if name == "Smooth" { app.dialogs().is_open::<SmoothSlider>() } else { app.dialogs().is_open::<SimplifySlider>() };
+    let kind = |name: &str| if name == "Smooth" { StripKind::Smooth } else { StripKind::Simplify };
+    let is_open = |app: &VectorcraftApp, name: &str| app.object_dialogs.strip.as_ref().is_some_and(|s| s.kind == kind(name));
     for name in ["Smooth", "Simplify"] {
         let mut app = app();
         // A jagged line of 40 anchor points, which Smooth changes at its opening level.
@@ -798,11 +959,11 @@ fn direct_selection_smooth_opens_the_smooth_slider() {
         let undo = app.session.active().unwrap().history.undo.len();
         on_canvas(&mut app, |rig| {
             rig.click(name);
-            assert!(is_open(&mut rig.app(), name), "{name} opens its slider");
+            assert!(is_open(&rig.app(), name), "{name} opens its slider");
             assert_eq!(rig.app().session.active().unwrap().history.undo.len(), undo, "{name} adds no undo step before it is confirmed");
-            let ctx = rig.fx.ctx().clone();
-            let cancelled = if name == "Smooth" { rig.app().dialogs().cancel::<SmoothSlider>(&ctx) } else { rig.app().dialogs().cancel::<SimplifySlider>(&ctx) };
-            assert!(cancelled);
+            rig.fx.key(Key::Escape, Modifiers::NONE);
+            rig.fx.settle();
+            assert!(!is_open(&rig.app(), name), "Escape cancels the {name} slider");
         });
         assert_eq!(anchors(&app, line), before, "{name}: canceling leaves the path as it was");
         if name != "Smooth" {
@@ -811,8 +972,9 @@ fn direct_selection_smooth_opens_the_smooth_slider() {
         // Confirmed, the slider smooths the path as one undo step, which is not the anchor convert.
         on_canvas(&mut app, |rig| {
             rig.click(name);
-            let ctx = rig.fx.ctx().clone();
-            assert!(rig.app().dialogs().confirm::<SmoothSlider>(&ctx));
+            rig.fx.key(Key::Enter, Modifiers::NONE);
+            rig.fx.settle();
+            assert!(!is_open(&rig.app(), name), "Enter keeps the {name} slider's result");
         });
         let history = &app.session.active().unwrap().history.undo;
         assert_eq!(history.len(), undo + 1, "one undo step");
@@ -1111,8 +1273,6 @@ fn shape_tool_bar_retargets_after_another_shape_and_undo() {
 /// options.
 #[test]
 fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
-    // PLAN: assumed hosted dialog type `dialogs::freehand::FreehandOptions` (hub-w2 M1).
-    use crate::dialogs::freehand::FreehandOptions;
     let mut app = app();
     let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
     select(&mut app, &[path]);
@@ -1127,7 +1287,8 @@ fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
     assert_eq!(app.session.active().unwrap().selection.objects, [NodeId(path)], "the selection is kept");
     on_canvas(&mut app, |rig| {
         rig.click("Tool Options…");
-        assert!(rig.app().dialogs().is_open::<FreehandOptions>(), "the Smooth tool's options");
+        let open = rig.app().dialogs().map(|d| d.with(|host| host.open_dialogs())).unwrap_or_default();
+        assert!(open.iter().any(|d| d.key.as_deref() == Some(crate::dialogs::freehand::KIND)), "the Smooth tool's options");
     });
 }
 
@@ -1254,17 +1415,17 @@ fn the_task_bar_chips_follow_the_proxies_and_show_swatches_anywhere() {
     let ctx = egui::Context::default();
     // Two strokes that differ: "?", as the proxy shows them.
     select(&mut app, &[first, second]);
-    let (_, _, _, stroke_mixed) = canvas::chip_paints(&app, &ctx);
+    let (_, _, _, stroke_mixed) = chip_paints(&app, &ctx);
     assert!(stroke_mixed, "the Stroke chip shows the strokes differ");
     // A group shows its painted art's stroke, as the proxy does.
     select(&mut app, &[first]);
-    let (_, blue, _, _) = canvas::chip_paints(&app, &ctx);
+    let (_, blue, _, _) = chip_paints(&app, &ctx);
     select(&mut app, &[second]);
-    let (_, green, _, _) = canvas::chip_paints(&app, &ctx);
+    let (_, green, _, _) = chip_paints(&app, &ctx);
     app.run("paint.setStroke", json!({"ids": [second], "color": "#2244cc"})).unwrap();
     select(&mut app, &[first, second]);
     app.run("object.group", json!({})).unwrap();
-    let (_, group, mixed, stroke_mixed) = canvas::chip_paints(&app, &ctx);
+    let (_, group, mixed, stroke_mixed) = chip_paints(&app, &ctx);
     assert!(group == blue && group != green && !mixed && !stroke_mixed, "the Stroke chip shows the group's art's stroke");
     // Swatches closed: a click on the Stroke chip shows it.
     app.run("window.panel.close", json!({"panel": "swatches"})).unwrap();
@@ -1290,13 +1451,13 @@ fn the_type_tools_fill_chip_shows_the_edited_characters_fill() {
     assert_eq!((he.as_str(), llo.as_str()), ("He", "llo"));
     assert_ne!(he_fill, llo_fill);
     let ctx = egui::Context::default();
-    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    let (fill, _, mixed, _) = chip_paints(&app, &ctx);
     assert!(fill == *llo_fill && !mixed, "{fill:?} {mixed}");
     app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
-    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    let (fill, _, mixed, _) = chip_paints(&app, &ctx);
     assert!(fill == *he_fill && !mixed, "{fill:?} {mixed}");
     app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
-    let (_, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    let (_, _, mixed, _) = chip_paints(&app, &ctx);
     assert!(mixed, "the fills differ");
 }
 
@@ -1487,82 +1648,154 @@ fn every_action_the_bar_offers_can_be_turned_off() {
     let dir = crate::tests_folder::Folder::new("ui-taskbar-actions");
     type Setup<'a> = Box<dyn Fn(&mut VectorcraftApp) + 'a>;
     let cases: Vec<(&str, Setup, &[&str])> = vec![
-        ("an open path", Box::new(|app| {
-            let l = open_line(app);
-            select(app, &[l]);
-        }), &["join", "editPath", "offsetPath", "simplify", "duplicate"]),
-        ("a path the Direct Selection tool selects whole", Box::new(|app| {
-            let l = open_line(app);
-            select(app, &[l]);
-            app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
-        }), &["join", "convertToCorner", "convertToSmooth", "simplify", "smooth", "duplicate"]),
-        ("anchors picked out", Box::new(|app| {
-            let l = open_line(app);
-            app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
-            app.run("select.anchors", json!({"id": l, "anchors": [[0, 1]]})).unwrap();
-        }), &["removeAnchorPoints", "join", "cutPath", "convertToCorner", "convertToSmooth"]),
-        ("two paths", Box::new(|app| {
-            let ids = two_shapes(app);
-            select(app, &ids);
-        }), &["group", "unite", "duplicate"]),
-        ("a group", Box::new(|app| {
-            let ids = two_shapes(app);
-            select(app, &ids);
-            app.run("object.group", json!({})).unwrap();
-        }), &["ungroup", "isolate", "duplicate"]),
-        ("a compound path", Box::new(|app| {
-            compound(app);
-        }), &["editPath", "releaseCompoundPath", "duplicate"]),
-        ("a clipping group", Box::new(|app| {
-            clipping_group(app);
-        }), &["editClippingPath", "releaseClippingMask", "duplicate"]),
-        ("point type", Box::new(|app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
-            select(app, &[t]);
-        }), &["createOutlines", "convertToAreaType", "dynamicText", "fill", "stroke", "lock"]),
-        ("the Type tool with type selected", Box::new(|app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
-            select(app, &[t]);
-            app.run("tool.select", json!({"tool": "type"})).unwrap();
-        }), &["fill"]),
-        ("the Type tool editing type", Box::new(|app| {
-            edited_type(app, "type");
-        }), &["fill"]),
-        ("area type", Box::new(|app| {
-            let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
-            select(app, &[t]);
-            app.run("type.convertToAreaType", json!({})).unwrap();
-            select(app, &[t]);
-        }), &["createOutlines", "convertToPointType", "dynamicText"]),
-        ("type on a closed path", Box::new(|app| {
-            let t = path_type(app, true);
-            select(app, &[t]);
-        }), &["createOutlines", "typeOnPathOptions", "centerOnTop", "centerOnBottom", "dynamicText"]),
-        ("an Image Trace object", Box::new(|app| {
-            place_image(app, &dir);
-            app.run("imageTrace.make", json!({"params": {}})).unwrap();
-        }), &["expand", "duplicate"]),
-        ("an image", Box::new(|app| {
-            place_image(app, &dir);
-        }), &["imageTrace", "cropImage", "removeBackground", "duplicate"]),
-        ("an image with a path", Box::new(|app| {
-            let img = place_image(app, &dir);
-            let r = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
-            select(app, &[img, r]);
-        }), &["group", "makeClippingMask", "duplicate"]),
+        (
+            "an open path",
+            Box::new(|app| {
+                let l = open_line(app);
+                select(app, &[l]);
+            }),
+            &["join", "editPath", "offsetPath", "simplify", "duplicate"],
+        ),
+        (
+            "a path the Direct Selection tool selects whole",
+            Box::new(|app| {
+                let l = open_line(app);
+                select(app, &[l]);
+                app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+            }),
+            &["join", "convertToCorner", "convertToSmooth", "simplify", "smooth", "duplicate"],
+        ),
+        (
+            "anchors picked out",
+            Box::new(|app| {
+                let l = open_line(app);
+                app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+                app.run("select.anchors", json!({"id": l, "anchors": [[0, 1]]})).unwrap();
+            }),
+            &["removeAnchorPoints", "join", "cutPath", "convertToCorner", "convertToSmooth"],
+        ),
+        (
+            "two paths",
+            Box::new(|app| {
+                let ids = two_shapes(app);
+                select(app, &ids);
+            }),
+            &["group", "unite", "duplicate"],
+        ),
+        (
+            "a group",
+            Box::new(|app| {
+                let ids = two_shapes(app);
+                select(app, &ids);
+                app.run("object.group", json!({})).unwrap();
+            }),
+            &["ungroup", "isolate", "duplicate"],
+        ),
+        (
+            "a compound path",
+            Box::new(|app| {
+                compound(app);
+            }),
+            &["editPath", "releaseCompoundPath", "duplicate"],
+        ),
+        (
+            "a clipping group",
+            Box::new(|app| {
+                clipping_group(app);
+            }),
+            &["editClippingPath", "releaseClippingMask", "duplicate"],
+        ),
+        (
+            "point type",
+            Box::new(|app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+                select(app, &[t]);
+            }),
+            &["createOutlines", "convertToAreaType", "dynamicText", "fill", "stroke", "lock"],
+        ),
+        (
+            "the Type tool with type selected",
+            Box::new(|app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+                select(app, &[t]);
+                app.run("tool.select", json!({"tool": "type"})).unwrap();
+            }),
+            &["fill"],
+        ),
+        (
+            "the Type tool editing type",
+            Box::new(|app| {
+                edited_type(app, "type");
+            }),
+            &["fill"],
+        ),
+        (
+            "area type",
+            Box::new(|app| {
+                let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+                select(app, &[t]);
+                app.run("type.convertToAreaType", json!({})).unwrap();
+                select(app, &[t]);
+            }),
+            &["createOutlines", "convertToPointType", "dynamicText"],
+        ),
+        (
+            "type on a closed path",
+            Box::new(|app| {
+                let t = path_type(app, true);
+                select(app, &[t]);
+            }),
+            &["createOutlines", "typeOnPathOptions", "centerOnTop", "centerOnBottom", "dynamicText"],
+        ),
+        (
+            "an Image Trace object",
+            Box::new(|app| {
+                place_image(app, &dir);
+                app.run("imageTrace.make", json!({"params": {}})).unwrap();
+            }),
+            &["expand", "duplicate"],
+        ),
+        (
+            "an image",
+            Box::new(|app| {
+                place_image(app, &dir);
+            }),
+            &["imageTrace", "cropImage", "removeBackground", "duplicate"],
+        ),
+        (
+            "an image with a path",
+            Box::new(|app| {
+                let img = place_image(app, &dir);
+                let r = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+                select(app, &[img, r]);
+            }),
+            &["group", "makeClippingMask", "duplicate"],
+        ),
         ("a blank canvas", Box::new(|_| {}), &["drawPencil", "placeImage"]),
-        ("a shape tool after drawing", Box::new(|app| {
-            drag_with(app, "rectangle", (60.0, 60.0), (120.0, 120.0));
-        }), &["editPath"]),
-        ("the Smooth tool", Box::new(|app| {
-            let e = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
-            select(app, &[e]);
-            app.run("tool.select", json!({"tool": "smooth"})).unwrap();
-        }), &["fidelity", "smoothToolOptions"]),
-        ("the Artboard tool", Box::new(|app| {
-            app.run("artboard.new", json!({"x": 420, "y": 0, "width": 200, "height": 200})).unwrap();
-            app.run("tool.select", json!({"tool": "artboard"})).unwrap();
-        }), &["resizeArtboard", "duplicateArtboards", "rearrangeArtboards", "exportArtboards"]),
+        (
+            "a shape tool after drawing",
+            Box::new(|app| {
+                drag_with(app, "rectangle", (60.0, 60.0), (120.0, 120.0));
+            }),
+            &["editPath"],
+        ),
+        (
+            "the Smooth tool",
+            Box::new(|app| {
+                let e = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+                select(app, &[e]);
+                app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+            }),
+            &["fidelity", "smoothToolOptions"],
+        ),
+        (
+            "the Artboard tool",
+            Box::new(|app| {
+                app.run("artboard.new", json!({"x": 420, "y": 0, "width": 200, "height": 200})).unwrap();
+                app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+            }),
+            &["resizeArtboard", "duplicateArtboards", "rearrangeArtboards", "exportArtboards"],
+        ),
     ];
     for (case, setup, expected) in cases {
         let mut app = app();

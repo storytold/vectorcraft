@@ -1,4 +1,4 @@
-use craft::ui::dialog::DialogHost;
+use craft::ui::dialog::{DialogHost, StackDialog};
 use vectorcraft_engine::Session;
 
 use super::*;
@@ -324,7 +324,10 @@ fn a_paste_question_about_both_models_has_a_choice_for_each() {
     assert_eq!((rgb(&app), cmyk(&app)), (json!("preserveNumbers"), json!("preserveNumbers")));
     set_field(&app, id, "rgb", json!("convert")).unwrap();
     assert_eq!((rgb(&app), cmyk(&app)), (json!("convert"), json!("preserveNumbers")), "the other model keeps its choice");
-    assert_eq!(chosen(&DialogFields::from_pairs([("rgb", "convert"), ("cmyk", "preserveNumbers")]), &both), json!({"rgb": "convert", "cmyk": "preserveNumbers"}));
+    assert_eq!(
+        chosen(&DialogFields::from_pairs([("rgb", "convert"), ("cmyk", "preserveNumbers")]), &both),
+        json!({"rgb": "convert", "cmyk": "preserveNumbers"})
+    );
 }
 
 /// With Color Settings' Ask boxes on, File › Open asks about a document whose profile is not the

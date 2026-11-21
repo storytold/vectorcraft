@@ -3,9 +3,9 @@
 //! rows ([Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
 //! describes Block and its spacing between words and between lines).
 
+use craft::behavior::Mixed; // PLAN: assumed `Mixed` re-export
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft::behavior::Mixed; // PLAN: assumed `Mixed` re-export
 use craft::ui::form::Field;
 use craft::ui::text::{NumberField, StepArrows};
 use egui::Ui;
@@ -84,8 +84,7 @@ pub(crate) fn rows(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         }
     });
     let (lo, hi) = AreaOptions::LINE_GAP;
-    // PLAN: assumed `crate::panels::length_units(app) -> LengthUnits` (the general unit over points, as object-panels-w7's Keyboard Increment field builds it)
-    let lengths = crate::panels::length_units(app);
+    let lengths = crate::canvas::general_lengths(app);
     Field::new(tl!("Line Gap")).show(ui, |ui, _| {
         let out = NumberField::length(tl!("Line Gap"), Bind::given(s.line_gap), lengths).range(lo..=hi).show(ui);
         if let Some(Some(v)) = out.edit.events.committed() {

@@ -11,7 +11,7 @@ use crate::VectorcraftApp;
 /// One whole app frame, then the pump of the dialogs, which takes the answers the dialogs filed.
 fn frame(app: &mut VectorcraftApp) {
     let ctx = window(app);
-    crate::shortcuts::key_frame(app, &ctx, vec![]);
+    crate::tests::synthetic::key_frame(app, &ctx, vec![]);
     super::host::pump(app, &ctx);
 }
 
@@ -246,11 +246,11 @@ fn digit_keys_switch_planes_and_the_widget_follows_the_window() {
     app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
     let ctx = window(&app);
     // The keymap builds in the first pass.
-    crate::shortcuts::key_frame(&mut app, &ctx, vec![]);
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
     let key = |app: &mut VectorcraftApp, k: egui::Key| {
         let press = |pressed| egui::Event::Key { key: k, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
-        crate::shortcuts::key_frame(app, &ctx, vec![press(true)]);
-        crate::shortcuts::key_frame(app, &ctx, vec![press(false)]);
+        crate::tests::synthetic::key_frame(app, &ctx, vec![press(true)]);
+        crate::tests::synthetic::key_frame(app, &ctx, vec![press(false)]);
     };
     key(&mut app, egui::Key::Num3);
     assert_eq!(grid(&app).plane.id(), "right");

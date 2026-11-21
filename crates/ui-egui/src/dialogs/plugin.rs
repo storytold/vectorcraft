@@ -30,10 +30,11 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use craft::menu::Node;
 use craft::ui::contract::{Props as _, Show as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, Prompt, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
-use craft::ui::patterns::form_dialogs::{BelowRows, DialogFields, HostedParamDialog, Param, ParamDialog};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::Ui;
 use serde_json::{Map, Value, json};
@@ -41,8 +42,9 @@ use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry};
 
 use super::form;
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp, heading, sub};
 
 /// The key of the hosted dialog of plug-in filters.
 pub const KIND: &str = "plugin";
@@ -62,35 +64,31 @@ fn label(name: &str, has_params: bool) -> &'static str {
 /// with commands of its own, a submenu named after it holding `own` and then its commands. Each
 /// command runs its command id (`plugin.<id>.<command>`), with an ellipsis when it has parameters,
 /// whose dialog [`open_command`] opens.
-fn with_commands(plugin: &Plugin, own: Item) -> Item {
+fn with_commands(plugin: &Plugin, own: Node) -> Node {
     let m = plugin.manifest();
     if m.commands.is_empty() {
         return own;
     }
-    let mut items = vec![own, Item::Sep];
-    items.extend(m.commands.iter().map(|c| {
-        let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &c.id));
-        Item::Cmd(label(&c.shown_label(), !c.params.is_empty()), id, Value::Null)
+    let mut items = vec![own, Sep];
+    items.extend(m.commands.iter().map(|command| {
+        let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
+        c(label(&command.shown_label(), !command.params.is_empty()), id)
     }));
-    Item::Sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
+    sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
 }
 
 /// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
 /// Install Plug-in… and Reload Plug-ins.
-pub fn object_menu() -> Vec<Item> {
-    let mut items: Vec<Item> = registry::list()
+pub fn object_menu() -> Vec<Node> {
+    let mut items: Vec<Node> = registry::list()
         .iter()
         .filter(|p| p.manifest().kind == Kind::Filter)
-        .map(|p| with_commands(p, Item::Cmd(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
+        .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
-        items.push(Item::Header(NO_FILTERS));
+        items.push(heading(NO_FILTERS));
     }
-    items.extend([
-        Item::Sep,
-        Item::Cmd("Install Plug-in…", "ui.installPlugin", Value::Null),
-        Item::Cmd("Reload Plug-ins", "plugin.reload", Value::Null),
-    ]);
+    items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
     items
 }
 
@@ -98,23 +96,23 @@ pub fn object_menu() -> Vec<Item> {
 pub const NO_IMPORTERS: &str = "No importer plug-ins installed";
 
 /// File › Open With: the installed importers (`file.openWith {importer}`), each by its name.
-pub fn open_with_menu() -> Vec<Item> {
-    let items: Vec<Item> = vectorcraft_plugins::import::installed()
+pub fn open_with_menu() -> Vec<Node> {
+    let items: Vec<Node> = vectorcraft_plugins::import::installed()
         .iter()
-        .map(|p| Item::Cmd(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
+        .map(|p| cp(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
         .collect();
-    if items.is_empty() { vec![Item::Header(NO_IMPORTERS)] } else { items }
+    if items.is_empty() { vec![heading(NO_IMPORTERS)] } else { items }
 }
 
 /// Effect › Plug-ins: the live-effect plug-ins, each with its commands if it has any (`None`
 /// while none is installed). Effects without options apply at once, as built-in ones do.
-pub fn effect_menu() -> Option<Item> {
-    let items: Vec<Item> = vectorcraft_effects::plugin_effects()
+pub fn effect_menu() -> Option<Node> {
+    let items: Vec<Node> = vectorcraft_effects::plugin_effects()
         .into_iter()
         .map(|e| {
             let own = match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
-                true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
-                false => Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })),
+                true => cp(e.label, "effect.apply", json!({ "effect": e.id })),
+                false => cp(e.label, "effect.dialog", json!({ "effect": e.id })),
             };
             match vectorcraft_plugins::effect::plugin_id(e.id).and_then(registry::get) {
                 Some(plugin) => with_commands(&plugin, own),
@@ -122,7 +120,7 @@ pub fn effect_menu() -> Option<Item> {
             }
         })
         .collect();
-    (!items.is_empty()).then_some(Item::Sub("Plug-ins", items))
+    (!items.is_empty()).then_some(sub("Plug-ins", items))
 }
 
 /// The open filter, export or import dialog: its id on the host and what the app keeps beside it.
@@ -140,7 +138,7 @@ pub(crate) enum Opened {
         command: Option<String>,
         /// The undo step's name, as the preview and the commit report it.
         label: String,
-        preview: form::LivePreview,
+        preview: LivePreview,
         /// Whether the dialog has a Preview.
         light: bool,
         /// Whether the Preview check box was on at the last pass.
@@ -203,13 +201,13 @@ fn build(key: &'static str, m: Manifest, all: Arc<[Param]>, look: Look) -> impl 
         rows.extend(all.iter().filter(|p| shown.contains(p.key.as_str())).cloned());
         let mut dialog = ParamDialog::new(key, look.title.clone(), Cow::Owned(rows)).previews(look.previews);
         if let Some(ok) = look.ok {
-            dialog = dialog.ok_label(ok);
+            dialog = dialog.ok_label(ok.into());
         }
         if look.note {
             let note = tl!("It may take minutes, so it runs in the background, where you can cancel it.");
-            dialog = dialog.below(BelowRows::new(move |ui, _| {
+            dialog = dialog.below(move |ui, _| {
                 Text::new(note).shade(Shade::Muted).show(ui);
-            }));
+            });
         }
         dialog
     }
@@ -330,7 +328,13 @@ pub const IMPORT_KIND: &str = "pluginImport";
 /// `export`, the export's own parameters (`format`, `path`, …), kept for Export.
 pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
     let m = plugin.manifest();
-    let look = Look { title: m.name.trim_end_matches('…').to_string(), description: m.description.clone(), previews: false, note: false, ok: Some(tl!("Export")) };
+    let look = Look {
+        title: m.name.trim_end_matches('…').to_string(),
+        description: m.description.clone(),
+        previews: false,
+        note: false,
+        ok: Some(tl!("Export")),
+    };
     match open_hosted(app, EXPORT_KIND, plugin.id(), m.clone(), look) {
         Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, params } }),
         Err(e) => app.status(e),
@@ -342,7 +346,13 @@ pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
 /// picker, which is read off the UI thread), kept for Open.
 pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
     let m = plugin.manifest();
-    let look = Look { title: m.name.trim_end_matches('…').to_string(), description: m.description.clone(), previews: false, note: false, ok: Some(tl!("Open")) };
+    let look = Look {
+        title: m.name.trim_end_matches('…').to_string(),
+        description: m.description.clone(),
+        previews: false,
+        note: false,
+        ok: Some(tl!("Open")),
+    };
     match open_hosted(app, IMPORT_KIND, plugin.id(), m.clone(), look) {
         Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Import { plugin: plugin.id().to_string(), open, params } }),
         Err(e) => app.status(e),

@@ -15,21 +15,24 @@
 
 use craft::behavior::Mixed;
 use craft::color_ui::ui::{
-    ColorPanel, ColorPanelAction, ColorPanelCommand, ColorPanelLayout, ColorPanelMenu, ColorPanelMode, ColorPanelOutput, ColorPanelShown, ColorPanelState, Gamut,
-    PairWell, PanelTarget, PickedColor, TintRow, Well,
+    ColorPanel, ColorPanelAction, ColorPanelCommand, ColorPanelLayout, ColorPanelMenu, ColorPanelMode, ColorPanelOutput, ColorPanelShown,
+    ColorPanelState, Gamut, PairWell, PanelTarget, PickedColor, TintRow, Well,
 };
 use craft::color_ui::web_safe;
+use craft::keymap::CommandRef;
 use craft::theme::{ModelValues, Srgba};
-use craft::ui::contract::Bind;
-use craft::ui::menu::PanelMenu;
+use craft::ui::contract::{Bind, CommandSet};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::CommandStates;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms;
 use vectorcraft_color::{Color, GradientKind, Paint};
 
-// PLAN: assumed crate::panels::{Live, EditPath, apply_event, proxy_events} (hub-w2, wg.A16, co.A2)
-use super::{EditPath, Live, active_paint, apply_event, color_json, live_run, proxy_events};
+// PLAN: assumed `crate::panels::proxy_events(app, &SwatchPairOutput)` (co.A2, hub-w2).
+use super::{Live, active_paint, color_json, live_run, proxy_events};
 use crate::VectorcraftApp;
+use crate::edits::{EditPath, apply_event};
 
 /// The layout the app's panel and its menu use.
 const LAYOUT: ColorPanelLayout = ColorPanelLayout::FillStroke;
@@ -408,8 +411,8 @@ pub(crate) fn apply_output(app: &mut VectorcraftApp, out: &ColorPanelOutput) {
     apply_with(app, &tgt, out);
 }
 
-/// [`target`] with the session's "?" state.
-fn target_now(app: &VectorcraftApp) -> Target {
+/// [`target`] with the session's "?" state, for callers without the panel's pass.
+pub(crate) fn target_now(app: &VectorcraftApp) -> Target {
     target_with(app, mixed_now(app))
 }
 
@@ -546,10 +549,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// Carry out what the panel menu asked of the app.
-fn carry_out(app: &mut VectorcraftApp, ctx: &egui::Context, tgt: &Target, action: ColorPanelAction) {
+fn carry_out(app: &mut VectorcraftApp, tgt: &Target, action: ColorPanelAction) {
     match action {
         ColorPanelAction::Mode(m) => set_mode(app, tgt, m),
-        ColorPanelAction::Copy(text) => ctx.copy_text(text),
+        ColorPanelAction::Copy(text) => {
+            if let Some(ctx) = &app.ui_ctx {
+                ctx.copy_text(text);
+            }
+        }
         ColorPanelAction::Invert => recolor(app, tgt, true, false),
         ColorPanelAction::Complement => recolor(app, tgt, false, false),
         ColorPanelAction::NewSwatch => {
@@ -566,24 +573,31 @@ fn carry_out(app: &mut VectorcraftApp, ctx: &egui::Context, tgt: &Target, action
     }
 }
 
-/// The panel menu's rows: they run through the framework's commands, and the app carries out the
-/// actions it is asked for.
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let tgt = target(app, ui);
-    let color = tgt.color();
-    let rows = shown(app, &tgt);
-    let has_color = color.is_some() || mixed_now(app);
-    // PLAN: assumed craft::ui::runtime::commands::{publish(ui, command, state), take_fired::<C>(ui) -> Vec<C>} (the menu host's command mechanism)
-    for (command, state) in ColorPanelMenu::states(LAYOUT, &app.ui.color_panel, &rows, has_color) {
-        craft::ui::runtime::commands::publish(ui, command, state);
+/// The panel menu: Hide Options and Show Recent Colors, the five modes, Invert, Complement, Create
+/// New Swatch and Copy Color Value.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    ColorPanelMenu::rows(LAYOUT)
+}
+
+/// The checks, titles and enabled states of [`menu_rows`]: the mode the panel shows is checked, and
+/// the rows that need a colour are off without one.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let tgt = target_now(app);
+    let has_color = tgt.color().is_some() || mixed_now(app);
+    for (command, state) in ColorPanelMenu::states(LAYOUT, &app.ui.color_panel, &shown(app, &tgt), has_color) {
+        states.set(command, state);
     }
-    PanelMenu::new(ColorPanelMenu::rows(LAYOUT), Vec::new()).show(ui);
-    let edited = srgba(&color.unwrap_or(Color::BLACK));
-    for command in craft::ui::runtime::commands::take_fired::<ColorPanelCommand>(ui) {
-        if let Some(action) = ColorPanelMenu::run_command(&mut app.ui.color_panel, command, edited) {
-            carry_out(app, ui.ctx(), &tgt, action);
-        }
+}
+
+/// Run the menu row `id` (a `colorPanel.*` command); `None` when it is not one of this panel's.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let command = ColorPanelCommand::from_ref(&CommandRef::new(id))?;
+    let tgt = target_now(app);
+    let edited = srgba(&tgt.color().unwrap_or(Color::BLACK));
+    if let Some(action) = ColorPanelMenu::run_command(&mut app.ui.color_panel, command, edited) {
+        carry_out(app, &tgt, action);
     }
+    Some(Ok(Value::Null))
 }
 
 #[cfg(test)]

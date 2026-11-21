@@ -2,9 +2,9 @@
 //! controls that draw them.
 
 use super::*;
-use crate::canvas::{PointerEvent, PointerKind};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 const NONE: egui::Modifiers = egui::Modifiers::NONE;
 

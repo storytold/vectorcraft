@@ -18,8 +18,7 @@ use craft::ui::contract::{Bind, DropAt, DropPlace, SelectMode};
 use craft::ui::contract::{Entry, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
-use craft::ui::menu::search::icon::{Glyph, IconSpec};
-use craft::ui::primitives::ContentPainterCx;
+use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec};
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::style::UiTokens;
 use egui::{Color32, Painter, Rect, Response, Stroke, StrokeKind, Ui, pos2, vec2};
@@ -31,7 +30,7 @@ use vectorcraft_doc::Document;
 use super::library_panel::{self, LibraryKind};
 use super::{active_paint, apply_click, color_json};
 use crate::VectorcraftApp;
-use crate::widgets::{self, PanelDrag};
+use crate::panel_drag::PanelDrag;
 
 mod actions;
 mod dnd;
@@ -41,8 +40,8 @@ mod libraries;
 use actions::{deletable, delete, mergeable, new_swatch, selected_group};
 pub(crate) use actions::{menu_rows, menu_states, run};
 pub(crate) use libraries::{
-    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_label, library_list, limit_key, limit_name, load_library, open_library,
-    other_library, user_library, window_menu,
+    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_entries, library_label, library_list, limit_key, limit_name,
+    load_library, open_library, other_library, user_library, window_menu,
 };
 
 /// View modes of the swatch list (and of the library panels: `ui.libraryPanel {view}`).

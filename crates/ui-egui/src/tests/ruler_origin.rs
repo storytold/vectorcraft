@@ -17,8 +17,7 @@ fn app() -> VectorcraftApp {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx
 }
 

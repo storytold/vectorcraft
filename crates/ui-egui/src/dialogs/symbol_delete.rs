@@ -36,7 +36,7 @@ struct Ask {
 /// area's prompt; the [`Ask`] tag tells them apart.
 pub(crate) struct SymbolQuestion(pub(crate) StandardPrompt);
 
-crate::dialogs::confirm::wrapped_dialog!(SymbolQuestion, KIND);
+crate::dialogs::confirm::wrapped_dialog!(SymbolQuestion, StandardPrompt, KIND);
 
 /// Delete Symbol for symbol `name` of the active document. A symbol with instances always asks
 /// what becomes of them; an unused one is deleted at once with `now` (Alt-click on the panel's

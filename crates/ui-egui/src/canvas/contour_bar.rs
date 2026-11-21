@@ -15,10 +15,11 @@ use craft::ui::popover::Popover;
 use craft::ui::runtime::env::Env;
 use craft::ui::style::SurfaceKind;
 use craft::ui::text::NumberField;
+use egui::vec2;
 use serde_json::Value;
 use vectorcraft_doc::{Node, NodeKind};
 
-use super::{Ui, VectorcraftApp, json, vec2};
+use super::{Ui, VectorcraftApp, json};
 
 /// The live effect a Contour is made of.
 const EFFECT: &str = "path.offsetPath";
@@ -81,10 +82,7 @@ pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasS
     let _ = Popover::new("Contour", Bind::given(true))
         .content_surface()
         .overlay(|_| {
-            Overlay::floating()
-                .modeless()
-                .bounds(area)
-                .place(Place::anchored(Anchor::Rect(hung), Side::Above, Align::Center).flipping_across())
+            Overlay::floating().modeless().bounds(area).place(Place::anchored(Anchor::Rect(hung), Side::Above, Align::Center).flipping_across())
         })
         .dismiss(Dismiss::new().outside(Outside::Keep))
         .escape(false)

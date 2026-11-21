@@ -11,14 +11,14 @@
 
 // PLAN: assumed the app depends on craft-behavior, craft-ui-widgets and craft-ui-patterns (hub-w2 owns Cargo.toml).
 use craft::behavior::{CursorIcon, HitLevel, HitPriority, HitShape, Metrics, NavMove, PartKey, PointerButton, PressPhase, Sense};
+use craft::ui::buttons::Button;
 use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, DisabledLook, Edit as _, EditResponse, Focus as _, Input, MeasureCx, Name, Outcome, PaintUi,
     PartsCx, Pointer as _, Props as _, Remember as _, Role, Show as _,
 };
-use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
-use craft::ui::style::{ComponentStyle, FocusLook, StyleCx};
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields};
-use craft::ui::buttons::Button;
+use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
+use craft::ui::style::{ComponentStyle, FocusLook, StyleColor, StyleCx};
 use egui::{Pos2, Rect, Response, Stroke, Vec2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -26,7 +26,6 @@ use vectorcraft_three_d::{DEFAULT_LIGHT, Revolve};
 
 use super::revolve::{c3, explicit_lights, light_record, set_light_value};
 use super::revolve_gizmo::{snap_height, wrap};
-use crate::theme::Tokens;
 
 /// The sphere's largest radius, in points.
 pub(crate) const RADIUS: f32 = 56.0;
@@ -156,7 +155,8 @@ pub(super) fn write_moved(fields: &mut DialogFields, from: &[Light], to: &[Light
     }
 }
 
-/// The style of a part-based dialog row control: nothing beyond the metrics and the focus look.
+/// The style of a part-based dialog row control (the light sphere, the track cube): the well it is drawn in and the
+/// colours of its marks.
 #[derive(Clone, Debug, PartialEq, ComponentStyle)]
 #[non_exhaustive]
 pub(super) struct RowStyle {
@@ -164,12 +164,40 @@ pub(super) struct RowStyle {
     metrics: Metrics,
     #[style(focus)]
     focus: FocusLook,
+    /// The well the control is drawn in, and its edge.
+    pub(super) well: StyleColor,
+    pub(super) edge: StyleColor,
+    /// A light behind the object, and the centre mark.
+    pub(super) panel: StyleColor,
+    /// Guides and the cube's edges at rest.
+    pub(super) muted: StyleColor,
+    /// The lights' rims and rays.
+    pub(super) light: StyleColor,
+    /// What has the keyboard focus.
+    pub(super) accent: StyleColor,
+    /// The X, Y and Z axes.
+    pub(super) axis_x: StyleColor,
+    pub(super) axis_y: StyleColor,
+    pub(super) axis_z: StyleColor,
 }
 
 impl RowStyle {
     /// The style from the theme.
     pub(super) fn of(cx: &StyleCx<'_>) -> Self {
-        RowStyle { metrics: Metrics::new(), focus: cx.focus_look() }
+        let colors = &cx.tokens.color;
+        RowStyle {
+            metrics: Metrics::new(),
+            focus: cx.focus_look(),
+            well: cx.color(colors.surface.sunken),
+            edge: cx.color(colors.line.control_edge),
+            panel: cx.color(colors.surface.panel),
+            muted: cx.color(colors.text.muted),
+            light: cx.color(colors.status.warn.solid),
+            accent: cx.color(colors.accent.solid),
+            axis_x: cx.color(colors.data.red),
+            axis_y: cx.color(colors.data.green),
+            axis_z: cx.color(colors.data.blue),
+        }
     }
 }
 
@@ -361,21 +389,22 @@ impl Component for LightSphere<'_> {
         let (center, radius) = geometry(cx.rect);
         let content = ui.content_painter(cx);
         let painter = &content.painter;
-        let t = Tokens::get(painter.ctx());
+        let s = cx.style;
+        let edge = s.edge.egui();
         // The sphere: its rim is Height 0, its center Height 90°, and the ring between them 45°.
-        painter.circle(center, radius, t.input, Stroke::new(1.0, t.input_border));
-        painter.circle_stroke(center, radius * std::f32::consts::FRAC_1_SQRT_2, Stroke::new(1.0, t.input_border.gamma_multiply(0.5)));
+        painter.circle(center, radius, s.well.egui(), Stroke::new(1.0, edge));
+        painter.circle_stroke(center, radius * std::f32::consts::FRAC_1_SQRT_2, Stroke::new(1.0, edge.gamma_multiply(0.5)));
         for axis in [vec2(radius, 0.0), vec2(0.0, radius)] {
-            painter.line_segment([center - axis, center + axis], Stroke::new(1.0, t.input_border.gamma_multiply(0.5)));
+            painter.line_segment([center - axis, center + axis], Stroke::new(1.0, edge.gamma_multiply(0.5)));
         }
-        painter.circle(center, 4.0, t.panel, Stroke::new(1.0, t.text_dim));
+        painter.circle(center, 4.0, s.panel.egui(), Stroke::new(1.0, s.muted.egui()));
         let lights: &[Light] = cx.value().map(Vec::as_slice).unwrap_or_default();
         // The selected light last, so it is drawn above the others.
         let order = (0..lights.len()).filter(|&i| i != self.selected).chain([self.selected]);
         for index in order {
             let Some(&light) = lights.get(index) else { continue };
             let focused = cx.is_focused() && cx.active_part() == Some(LIGHT.at(index as u64));
-            paint_light(painter, &t, center + light.offset() * radius, light, index == self.selected, focused, self.hot == Some(index));
+            paint_light(painter, s, center + light.offset() * radius, light, index == self.selected, focused, self.hot == Some(index));
         }
     }
 
@@ -412,11 +441,12 @@ pub(crate) fn sphere(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut Cust
 
 /// A light's sun: filled with its color in front of the object, hollow behind it, larger and
 /// ringed when it is the selected light, with a second ring while it has the keyboard focus.
-fn paint_light(painter: &egui::Painter, t: &Tokens, at: Pos2, light: Light, selected: bool, focused: bool, hot: bool) {
+fn paint_light(painter: &egui::Painter, s: &RowStyle, at: Pos2, light: Light, selected: bool, focused: bool, hot: bool) {
     let r = if selected { SUN } else { SUN - 2.0 };
-    let outline = Stroke::new(if hot { 2.5 } else { 1.5 }, if selected { t.warning } else { t.warning.gamma_multiply(0.7) });
+    let rim = s.light.egui();
+    let outline = Stroke::new(if hot { 2.5 } else { 1.5 }, if selected { rim } else { rim.gamma_multiply(0.7) });
     if light.behind {
-        painter.circle(at, r, t.panel, outline);
+        painter.circle(at, r, s.panel.egui(), outline);
         painter.circle_stroke(at, r * 0.5, Stroke::new(1.5, light.color));
     } else {
         painter.circle(at, r, light.color, outline);
@@ -425,10 +455,10 @@ fn paint_light(painter: &egui::Painter, t: &Tokens, at: Pos2, light: Light, sele
         for i in 0..8 {
             let angle = i as f32 * std::f32::consts::TAU / 8.0;
             let direction = vec2(angle.cos(), angle.sin());
-            painter.line_segment([at + direction * (r + 2.0), at + direction * (r + 4.0)], Stroke::new(1.25, t.warning));
+            painter.line_segment([at + direction * (r + 2.0), at + direction * (r + 4.0)], Stroke::new(1.25, rim));
         }
     }
     if focused {
-        painter.circle_stroke(at, r + 6.0, Stroke::new(1.0, t.accent));
+        painter.circle_stroke(at, r + 6.0, Stroke::new(1.0, s.accent.egui()));
     }
 }

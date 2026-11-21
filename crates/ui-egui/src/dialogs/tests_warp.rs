@@ -7,6 +7,7 @@ use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::VectorcraftApp;
 
 /// `app` with a window, so its dialogs open on the host.
 pub(super) fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {

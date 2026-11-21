@@ -12,6 +12,7 @@ use super::tests_export::{confirm, frame, kind, set};
 use super::tests_plugin_export::fields;
 use super::*;
 use crate::Services;
+use crate::VectorcraftApp;
 use crate::tests::picks::{poll, scripted};
 
 /// Sends `app.open` with `params` through the control channel and returns the reply.
@@ -23,7 +24,7 @@ fn control(app: &mut VectorcraftApp, params: serde_json::Value) -> serde_json::V
 }
 
 /// The extensions of the filter named `name` in the last request `requests` holds.
-fn filter_exts(requests: &[vectorcraft_host::PickRequest], name: &str) -> Option<Vec<String>> {
+fn filter_exts(requests: &[craft::host::PickRequest], name: &str) -> Option<Vec<String>> {
     requests.last()?.filters.iter().find(|f| f.name == name).map(|f| f.extensions.clone())
 }
 
@@ -69,9 +70,9 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     install(&mut app, &tpl::returning(&tpl::importer("test.ui.svgreader", r#"["svg","tui"]"#, "{}"), RECT));
     let menu = plugin::open_with_menu();
     // PLAN: assumed menus-w9's `craft::menu::Node` rows expose `command`, `params` and `label`.
-    let listed = menu.iter().any(|n| {
-        n.command == "file.openWith" && n.label == "Test test.ui.svgreader…" && n.params["importer"] == "plugin.test.ui.svgreader"
-    });
+    let listed = menu
+        .iter()
+        .any(|n| n.command == "file.openWith" && n.label == "Test test.ui.svgreader…" && n.params["importer"] == "plugin.test.ui.svgreader");
     assert!(listed, "{menu:?}");
 
     let svg = dir.join("a.svg");
@@ -178,7 +179,8 @@ fn only_file_open_s_dialog_lists_an_importer_s_files() {
         let _ = app.run(cmd, json!({}));
         let requests = picker.requests();
         assert!(requests.len() > before, "{cmd} showed no open dialog");
-        let filters: Vec<(String, Vec<String>)> = requests.last().map(|r| r.filters.iter().map(|f| (f.name.clone(), f.extensions.clone())).collect()).unwrap_or_default();
+        let filters: Vec<(String, Vec<String>)> =
+            requests.last().map(|r| r.filters.iter().map(|f| (f.name.clone(), f.extensions.clone())).collect()).unwrap_or_default();
         lists(&filters)
     };
     assert!(shown(&mut app, "file.open"), "File › Open");
@@ -186,7 +188,10 @@ fn only_file_open_s_dialog_lists_an_importer_s_files() {
         assert!(!shown(&mut app, cmd), "{cmd}");
     }
     for kind in ["swatches", "graphicStyles", "symbols"] {
-        let filters = crate::FilePick::filters(crate::panels::library_panel::library_pick_filters(kind));
+        let filters: Vec<(String, Vec<String>)> = crate::panels::library_panel::library_pick_filters(kind)
+            .into_iter()
+            .map(|(name, exts)| (name.to_owned(), exts.iter().map(|e| (*e).to_owned()).collect()))
+            .collect();
         assert!(!lists(&filters), "{kind}");
     }
     app.run("plugin.remove", json!({"id": "test.ui.filters"})).unwrap();

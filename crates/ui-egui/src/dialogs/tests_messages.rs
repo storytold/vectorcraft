@@ -9,9 +9,8 @@ use crate::tests_svg::app;
 
 /// Gives `app` a window to host dialogs in.
 fn host(app: &mut VectorcraftApp) {
-    // PLAN: assumed `ui_ctx: Option<egui::Context>` on the app (lib.rs:203).
     let ctx = app.ui_ctx.get_or_insert_with(egui::Context::default).clone();
-    crate::theme::install_fonts(&ctx);
+    crate::testing::install(&ctx);
 }
 
 /// One frame of the host, then the pump.

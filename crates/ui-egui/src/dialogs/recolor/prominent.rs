@@ -12,8 +12,10 @@ use craft::ui::runtime::env::Label;
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, CornerRadius, Rect, Vec2, pos2, vec2};
 
-use super::MIN_PART;
 use super::edit_tab::color_name;
+
+/// The smallest share of the bar a drag leaves a part.
+const MIN_PART: f64 = 0.01;
 
 /// Part `n` of the bar: `PART.at(n)`.
 pub(super) const PART: PartKey = PartKey::new("part");

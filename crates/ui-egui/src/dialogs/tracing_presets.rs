@@ -18,16 +18,16 @@ use std::sync::Arc;
 use craft::behavior::{DisplayOrder, ItemSource, Selection, SelectionChange};
 use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
+use craft::ui::contract::SelectMode;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::display::Text;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
-use craft::ui::contract::SelectMode;
 // PLAN: assumed `craft::ui::patterns::form_dialogs::FieldValue` and `craft::ui::runtime::env::Label` paths.
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
-use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
 
@@ -170,7 +170,8 @@ impl StackDialog for Manager {
 
 /// Open the presets manager on `selected` (default: the first preset, Default).
 pub(crate) fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
-    let manager = Manager { list: image_trace::presets(app), selected: selected.unwrap_or("Default").to_string(), data: RowsData::of(app), action: None };
+    let manager =
+        Manager { list: image_trace::presets(app), selected: selected.unwrap_or("Default").to_string(), data: RowsData::of(app), action: None };
     match app.dialogs() {
         Some(dialogs) => {
             dialogs.with(|host| host.open(manager));
@@ -287,7 +288,7 @@ struct ReplaceFile {
 /// The Replace question. Its own type, so the host keeps its answer apart from every other prompt's.
 pub(crate) struct ReplacePresets(pub(crate) StandardPrompt);
 
-crate::dialogs::confirm::wrapped_dialog!(ReplacePresets, REPLACE_KIND);
+crate::dialogs::confirm::wrapped_dialog!(ReplacePresets, StandardPrompt, REPLACE_KIND);
 
 /// Asks whether the import of `file` replaces the saved presets `skipped` kept, over the manager
 /// when it is open.

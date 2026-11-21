@@ -4,11 +4,11 @@ use vectorcraft_engine::Session;
 use super::*;
 use crate::i18n::LangExt;
 // PLAN: assumed paths for the framework and keymap types the table tests build events from.
+use craft::behavior::SelectionChange;
 use craft::keymap::{Chord, Mods};
-use craft::layers::ui::tree::LayerTree;
 use craft::layers::ui::panel::{LayerColumn, LayerSelect, LayersEvent};
 use craft::layers::ui::tree::LayerRowKey;
-use craft::behavior::SelectionChange;
+use craft::layers::ui::tree::LayerTree;
 
 /// A generated `<Kind>` name is translated where painted; an unnamed text object's text never
 /// is, even when it reads like one.
@@ -23,7 +23,7 @@ fn only_generated_names_are_translated() {
     let doc = &app.session.active().unwrap().doc;
     let names = |id: u64| {
         let n = doc.node(NodeId(id)).unwrap();
-        (n.display_name(), painted_name(n, &n.display_name(), zh))
+        (n.display_name(), model::painted_name(n, &n.display_name(), zh))
     };
     assert_eq!(names(text), ("<Path>".to_string(), "<Path>".to_string()));
     let (stored, painted) = names(rect);
@@ -75,16 +75,20 @@ fn answer(app: &mut VectorcraftApp, ctx: &egui::Context, ok: bool) {
 }
 
 /// The target-mark rule: each of the four looks (neither, targeted, an appearance, both) differs,
-/// and the dot sits clear of the inner ring when both show.
+/// and the dot sits clear of the inner ring, drawn in the theme's thin stroke, when both show.
 #[test]
 fn target_circle_marks_follow_targeted_and_styled() {
-    use rows::{target_marks, TARGET_DOT, TARGET_DOT_IN_RING, TARGET_RING};
+    use rows::{TARGET_DOT, TARGET_DOT_IN_RING, TARGET_RING, target_marks};
     assert_eq!(target_marks(false, false), (None, None));
     assert_eq!(target_marks(true, false), (Some(TARGET_RING), None));
     assert_eq!(target_marks(false, true), (None, Some(TARGET_DOT)));
     let (ring, dot) = target_marks(true, true);
     assert_eq!((ring, dot), (Some(TARGET_RING), Some(TARGET_DOT_IN_RING)));
-    assert!(TARGET_DOT_IN_RING + 0.5 < TARGET_RING - rows::TARGET_STROKE / 2.0, "the dot covers the ring");
+    let thin = std::rc::Rc::new(std::cell::Cell::new(f32::INFINITY));
+    let seen = std::rc::Rc::clone(&thin);
+    let mut fixture = craft::ui::testing::Fixture::new(move |ui| seen.set(craft::ui::runtime::env::Env::of(ui).tokens.stroke.thin));
+    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)).frame(vec![]);
+    assert!(TARGET_DOT_IN_RING + 0.5 < TARGET_RING - thin.get() / 2.0, "the dot covers the ring");
 }
 
 /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
@@ -271,7 +275,6 @@ fn mask_editing_lists_only_the_mask() {
 
 /// The object rows the panel lists for the active document, top down, with their depths.
 pub(super) fn listed_ids(app: &VectorcraftApp) -> Vec<(NodeId, usize)> {
-    // PLAN: assumed `DocLayers::new(&DocState)` (document-panels-w7 model.rs).
     fn walk(tree: &DocLayers, parent: Option<&RowId>, depth: usize, out: &mut Vec<(NodeId, usize)>) {
         for id in tree.children(parent) {
             if let RowId::Node(n) = &id
@@ -284,7 +287,7 @@ pub(super) fn listed_ids(app: &VectorcraftApp) -> Vec<(NodeId, usize)> {
             }
         }
     }
-    let tree = DocLayers::new(app.session.active().unwrap());
+    let tree = DocLayers::new(app, app.session.active().unwrap());
     let mut out = Vec::new();
     walk(&tree, None, 0, &mut out);
     out

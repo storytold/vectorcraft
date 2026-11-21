@@ -160,7 +160,7 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
         delete_raster: b("deleteRaster"),
     };
     let dialogs = app.dialogs().ok_or("no window")?;
-    let lengths = crate::units::general_lengths(app); // PLAN: assumed `crate::units::general_lengths(&VectorcraftApp) -> LengthUnits` (cv.B5b)
+    let lengths = crate::canvas::general_lengths(app);
     dialogs.with(|host| host.open(ObjectMosaicDialog::new(values, (w, h), lengths)));
     Ok(json!({ "dialog": KIND }))
 }
@@ -170,7 +170,7 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
 pub(crate) fn sync(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
     let size = image_size(app);
-    let lengths = crate::units::general_lengths(app); // PLAN: assumed `crate::units::general_lengths(&VectorcraftApp) -> LengthUnits` (cv.B5b)
+    let lengths = crate::canvas::general_lengths(app);
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
             dialog.sync(size, lengths);
@@ -232,16 +232,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
 
 impl ObjectMosaicDialog {
     fn new(values: Mosaic, image: (f64, f64), lengths: LengthUnits) -> Self {
-        ObjectMosaicDialog {
-            id: dialog_id(KIND),
-            values,
-            image,
-            selected: true,
-            lengths,
-            note: None,
-            use_ratio: false,
-            held: HeldAnswer::new(),
-        }
+        ObjectMosaicDialog { id: dialog_id(KIND), values, image, selected: true, lengths, note: None, use_ratio: false, held: HeldAnswer::new() }
     }
 
     /// `size` is the selected image's size, `None` while none is selected: the last size stays and a
@@ -444,7 +435,9 @@ impl StackDialog for ObjectMosaicDialog {
                     });
                 });
                 GroupBox::new(label(tl!("Options:")), None).show(ui, |ui, _| {
-                    if let Some(on) = Checkbox::new(Bind::given(m.percentages)).label(label(tl!("Resize Using Percentages"))).show(ui).value().copied() {
+                    if let Some(on) =
+                        Checkbox::new(Bind::given(m.percentages)).label(label(tl!("Resize Using Percentages"))).show(ui).value().copied()
+                    {
                         *note = switch_percentages(m, selected.then_some(image), on).err().map(Label::from);
                     }
                     Checkbox::new(Bind::bound(&mut m.delete_raster)).label(label(tl!("Delete Raster"))).show(ui);
@@ -688,7 +681,10 @@ mod tests {
         let params = json!({"columns": 4, "rows": 2, "width": 200, "percentages": true, "constrain": "width", "gray": true});
         app.run("ui.paramDialog", json!({"command": COMMAND, "label": "Create Object Mosaic", "params": params})).unwrap();
         let f = fields(&mut app);
-        assert_eq!((&f["width"], &f["percentages"], &f["lock"], &f["constrain"], &f["gray"]), (&json!(200.0), &json!(true), &json!(true), &json!("width"), &json!(true)));
+        assert_eq!(
+            (&f["width"], &f["percentages"], &f["lock"], &f["constrain"], &f["gray"]),
+            (&json!(200.0), &json!(true), &json!(true), &json!("width"), &json!(true))
+        );
         ok(&mut app);
         assert_eq!(mosaic(&app), Some((200.0, 100.0, 8)));
         // Use Ratio given applies to the counts shown: 10 columns over 100 × 50 pt are 5 rows.

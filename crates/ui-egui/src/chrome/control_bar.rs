@@ -188,7 +188,8 @@ fn command_rows(ui: &mut Ui, rows: &[CommandRow]) -> Option<(&'static str, Value
 /// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let toggle = |label, id, on| CommandRow { label, check: Some(on), id, params: json!({}) };
-    let preference = |label, key: &'static str, on: bool| CommandRow { label, check: Some(on), id: "prefs.set", params: json!({"key": key, "value": !on}) };
+    let preference =
+        |label, key: &'static str, on: bool| CommandRow { label, check: Some(on), id: "prefs.set", params: json!({"key": key, "value": !on}) };
     let view = &app.ui.view;
     let prefs = &app.session.prefs;
     let sections = [
@@ -243,7 +244,8 @@ fn isolation_action(app: &VectorcraftApp) -> Option<(&'static str, &'static str,
         });
     }
     let [one] = st.selection.objects[..] else { return None };
-    let isolates = st.doc.node(one).is_some_and(|n| vectorcraft_tools::select::isolates(&n.kind)) && vectorcraft_doc::live::envelope_of(&st.doc, one).is_none();
+    let isolates =
+        st.doc.node(one).is_some_and(|n| vectorcraft_tools::select::isolates(&n.kind)) && vectorcraft_doc::live::envelope_of(&st.doc, one).is_none();
     isolates.then_some(("square-dashed", tl!("Isolate Selected Object"), "object.isolate"))
 }
 
@@ -278,8 +280,6 @@ fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// the width profile. A narrow bar leaves out the width profile first, then the Stroke link with the weight,
 /// then the two chips.
 fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
-    // PLAN: assumed unchanged signatures of `current_stroke`, `stroke_mixed`, `shown_weight` and
-    // `profile_dropdown` (appearance-w8's `stroke::link_field` takes the weight as `Option<f64>`).
     let shown_stroke = crate::panels::current_stroke(app);
     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
     let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
@@ -288,11 +288,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::paint_chip(app, ui, true);
     });
     ranked(ui, rank::GROUP, |ui| stroke_panel::link_field(app, ui, tl!("Stroke:"), weight));
-    let mut profile = None;
-    ranked(ui, rank::DETAIL, |ui| profile = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref()).or(profile.take()));
-    if let Some(id) = profile {
-        app.run("stroke.set", json!({"profile": id})).ok();
-    }
+    ranked(ui, rank::DETAIL, |ui| stroke_panel::profile_select(app, ui));
 }
 
 /// The Control bar's Opacity group: its link, which opens the Transparency panel and scrubs the field, and the
@@ -302,7 +298,8 @@ fn opacity_field(app: &mut VectorcraftApp, ui: &mut Ui, opacity: f32, selected: 
     let (mut link, mut typed) = (false, None);
     group(ui, rank::GROUP, |ui| {
         Field::new(label).side(SideLabel::new().link().scrub(true)).show(ui, |ui, _| {
-            let number = NumberField::new(label, Bind::given(Some(f64::from(opacity) * 100.0))).range(0.0..=100.0).unit("%").scrub_by_label().show(ui);
+            let number =
+                NumberField::new(label, Bind::given(Some(f64::from(opacity) * 100.0))).range(0.0..=100.0).unit("%").scrub_by_label().show(ui);
             link |= number.link;
             typed = number.edit.events.committed().copied().flatten().or(typed);
         });
@@ -475,7 +472,12 @@ pub fn read_hidden_groups<'de, D: serde::Deserializer<'de>>(d: D) -> Result<std:
 fn panel_menu_rows(app: &VectorcraftApp) -> [Vec<CommandRow>; 2] {
     let groups = CONTROL_BAR_GROUPS
         .iter()
-        .map(|&group| CommandRow { label: group_label(group), check: Some(group_on(app, group)), id: "window.control.options", params: json!({ "group": group }) })
+        .map(|&group| CommandRow {
+            label: group_label(group),
+            check: Some(group_on(app, group)),
+            id: "window.control.options",
+            params: json!({ "group": group }),
+        })
         .collect();
     let placed = control_bar_placement(&app.ui);
     let docks = [tl!("Dock to Top"), tl!("Dock to Bottom")]

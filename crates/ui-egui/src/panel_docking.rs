@@ -487,7 +487,9 @@ fn take_legacy(id: &str, fields: &mut serde_json::Map<String, Value>) -> Result<
         Some(_) => return Err("collapsed must be true or false".into()),
     };
     let mut joins = Vec::new();
-    for (key, placement) in [("onto", DockPlacement::tab(None)), ("above", DockPlacement::group(false, None)), ("below", DockPlacement::group(true, None))] {
+    for (key, placement) in
+        [("onto", DockPlacement::tab(None)), ("above", DockPlacement::group(false, None)), ("below", DockPlacement::group(true, None))]
+    {
         if let Some(value) = fields.remove(key) {
             let anchor = value.as_str().and_then(panel_id).ok_or_else(|| format!("{key} must name a registered panel"))?;
             joins.push(Legacy::Join { anchor, placement, key, floats: !dock && key == "onto" });
@@ -971,7 +973,9 @@ impl Panels<'_> {
             owner = Some(*parent);
         }
         match owner {
-            Some(Owner::Toolbar(id)) => self.app.ui.custom_toolbars.iter().find(|bar| bar.id == id).map_or_else(|| panel.to_owned(), |bar| bar.name.clone()),
+            Some(Owner::Toolbar(id)) => {
+                self.app.ui.custom_toolbars.iter().find(|bar| bar.id == id).map_or_else(|| panel.to_owned(), |bar| bar.name.clone())
+            }
             Some(_) => tl!("Tools").to_string(),
             None => crate::panels::library_panel::tab_label(self.app, panel)
                 .or_else(|| crate::state::all_panels().find(|p| p.0 == panel).map(|p| tl!(p.1).to_string()))
@@ -999,10 +1003,6 @@ impl DockPanels<String> for Panels<'_> {
     }
 
     fn body(&mut self, panel: &String, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
-        // Art dragged out of the canvas and released over a floating panel's own window drops there.
-        if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
-            crate::canvas::release_art_in_window(self.app, ui.ctx());
-        }
         crate::dock::panel_body(self.app, ui, panel);
     }
 
@@ -1037,11 +1037,16 @@ impl DockPanels<String> for Panels<'_> {
     }
 }
 
+/// The OS window the floating window holding `panel` showed in last pass.
+fn window_viewport(app: &VectorcraftApp, panel: &str) -> Option<egui::ViewportId> {
+    let first = floating_window(layout_of(&app.ui), panel)?.panels().next()?;
+    app.dock_rt.windows.iter().find(|(p, _)| p == first).map(|(_, viewport)| *viewport)
+}
+
 /// Brings the OS window of the floating window holding `panel` forward, as it was last drawn.
 fn raise(app: &VectorcraftApp, ctx: &egui::Context, panel: &str) {
-    let Some(first) = floating_window(layout_of(&app.ui), panel).and_then(|window| window.panels().next()) else { return };
-    if let Some((_, viewport)) = app.dock_rt.windows.iter().find(|(p, _)| p == first) {
-        ctx.send_viewport_cmd_to(*viewport, egui::ViewportCommand::Focus);
+    if let Some(viewport) = window_viewport(app, panel) {
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Focus);
     }
 }
 
@@ -1122,17 +1127,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     settle(app);
 }
 
-/// Whether a modal is open: a dialog, the command palette, a native file dialog, or a window
-/// behind the modal backdrop last frame (export progress, plug-in runs). Floating panels in OS
-/// windows of their own take no input meanwhile, as the main window behind it takes none.
-pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open() || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
+/// Whether a modal is open: a dialog, the command palette or a native file dialog. Floating panels
+/// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
+pub(crate) fn modal_open(app: &VectorcraftApp) -> bool {
+    app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open()
 }
 
-/// Is a modal window open in this pass: a dialog, a file dialog, or a window such as a progress
-/// window drawn over the modal backdrop in this pass?
-pub(crate) fn modal_window_up(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
-    app.any_dialog_open() || app.file_dialog_open() || crate::dialogs::modal::drawn_this_pass(ctx)
+/// Is a modal window open in this pass: a dialog or a file dialog?
+pub(crate) fn modal_window_up(app: &VectorcraftApp) -> bool {
+    app.any_dialog_open() || app.file_dialog_open()
 }
 
 /// The key of whether a modal window was up in the last pass ([`close_overlays_for_modal`]).
@@ -1147,7 +1150,7 @@ fn modal_window_up_id() -> egui::Id {
 /// pick in the macOS menu bar, an automation command or a run that ends in a dialog. Popups the
 /// window itself opens later stay open. Called after every window of the pass has drawn.
 pub(crate) fn close_overlays_for_modal(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let up = modal_window_up(app, ctx);
+    let up = modal_window_up(app);
     let was = ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default::<bool>(modal_window_up_id()), up));
     if up {
         app.ui.palette_open = false;

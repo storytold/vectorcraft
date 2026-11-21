@@ -11,8 +11,8 @@ use std::sync::Arc;
 use craft::ui::patterns::form_dialogs::{PdfExportWords, differences};
 use craft::ui::runtime::env::Env;
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::fileio::pdf;
 use vectorcraft_engine::cmd::pdfcmds::{PRESET_EXTS, PRESET_FORMAT};
+use vectorcraft_pdf::{APP, builtin_preset, builtin_presets, default_preset_name};
 
 use super::preset_manager::{self, Detail, ManagerAction, ManagerEvent, ManagerRow, Source};
 use super::save_pdf::open_preset;
@@ -36,7 +36,7 @@ pub(super) static SOURCE: Source = Source {
 
 /// Open the presets manager on `selected` (default: the app default).
 pub fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
-    preset_manager::open(app, &SOURCE, selected.unwrap_or(pdf::DEFAULT_PRESET));
+    preset_manager::open(app, &SOURCE, selected.unwrap_or(&default_preset_name(APP)));
 }
 
 /// The presets, the built-in ones first.
@@ -74,8 +74,9 @@ fn detail(app: &VectorcraftApp, name: &str) -> Vec<Detail> {
 /// words, then what is wrong with them.
 fn differences_of(env: &Env, settings: &vectorcraft_pdf::PdfSettings) -> Vec<Detail> {
     let words = env.words::<PdfExportWords>();
-    let base = vectorcraft_pdf::builtin_preset(pdf::DEFAULT_PRESET).map(|p| p.settings).unwrap_or_default();
-    let mut out = vec![Detail::Note(crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", pdf::DEFAULT_PRESET)]).to_string())];
+    let default = default_preset_name(APP);
+    let base = builtin_preset(&default, APP).map(|p| p.settings).unwrap_or_default();
+    let mut out = vec![Detail::Note(crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", default.as_str())]).to_string())];
     let lines = differences(&words, settings, &base);
     if lines.is_empty() {
         out.push(Detail::Note(tl!("None.").to_string()));
@@ -100,7 +101,7 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
         ManagerAction::Delete => {
             let i = app.session.prefs.pdf_presets.iter().position(|p| p.name == current);
             app.run("pdf.preset.delete", json!({ "name": current }))?;
-            let above = preset_manager::above(i, vectorcraft_pdf::builtin_presets().len());
+            let above = preset_manager::above(i, builtin_presets(APP).len());
             Ok(app.session.pdf_presets().get(above).map(|p| p.name.clone()))
         }
         ManagerAction::Import => preset_manager::import(app, KEY, "pdf.preset.import", "PDF presets", PRESET_EXTS),
@@ -114,49 +115,68 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft::ui::dialog::{StackDialog as _, dialog_id};
+    use craft::ui::dialog::{DialogHost, StackDialog as _, dialog_id};
     use craft::ui::patterns::form_dialogs::HostedPdfExport;
     use vectorcraft_engine::Session;
 
     use super::super::preset_manager::PresetManager;
 
-    // PLAN: assumed `VectorcraftApp::new` gives an app whose `dialogs()` host works without a window (wg.S1).
     fn app() -> VectorcraftApp {
-        VectorcraftApp::new(Session::new(), Default::default())
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
+        app
+    }
+
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("the test app has a window")
+    }
+
+    /// Runs `f` on the window's dialog host.
+    fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
+        app.dialogs().expect("the test app has a window").with(f)
     }
 
     /// One frame: the host's pump carries out what the manager queued.
     fn frame(app: &mut VectorcraftApp) {
-        // PLAN: assumed `dialogs::host::pump(app, ctx)` (hub-w2).
-        super::super::host::pump(app, &egui::Context::default());
+        let ctx = ctx(app);
+        super::super::host::pump(app, &ctx);
     }
 
     /// Press a manager button as the user does: the manager queues it and the pump carries it out.
     fn press(app: &mut VectorcraftApp, action: ManagerAction) {
-        let manager = app.dialogs().get_mut_by_id::<PresetManager>(dialog_id(KEY));
-        manager.expect("manager is open").queue(ManagerEvent::Action(action));
+        host(app, |h| h.get_mut_by_id::<PresetManager>(dialog_id(KEY)).expect("manager is open").queue(ManagerEvent::Action(action)));
         frame(app);
     }
 
     fn manager_fields(app: &mut VectorcraftApp) -> Value {
-        app.dialogs().get_by_id::<PresetManager>(dialog_id(KEY)).and_then(|m| m.json_fields()).expect("manager is open")
+        host(app, |h| h.get_by_id::<PresetManager>(dialog_id(KEY)).and_then(|m| m.json_fields())).expect("manager is open")
+    }
+
+    fn manager_open(app: &VectorcraftApp) -> bool {
+        host(app, |h| h.get_by_id::<PresetManager>(dialog_id(KEY)).is_some())
+    }
+
+    fn editor_open(app: &VectorcraftApp) -> bool {
+        host(app, |h| h.get::<HostedPdfExport>().is_some())
     }
 
     fn editor_fields(app: &mut VectorcraftApp) -> Value {
-        app.dialogs().get::<HostedPdfExport>().and_then(|e| e.json_fields()).expect("editor is open")
+        host(app, |h| h.get::<HostedPdfExport>().and_then(|e| e.json_fields())).expect("editor is open")
     }
 
     fn set_editor(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
-        let id = app.dialogs().get::<HostedPdfExport>().map(|e| e.id()).expect("editor is open");
-        app.dialogs().set_json_field(&egui::Context::default(), id, field, value)
+        let ctx = ctx(app);
+        host(app, |h| {
+            let id = h.get::<HostedPdfExport>().map(|e| e.id()).expect("editor is open");
+            h.set_json_field(&ctx, id, field, value)
+        })
     }
 
     /// OK in the editor, then the pump that saves it and reopens the manager.
     fn confirm_editor(app: &mut VectorcraftApp) -> bool {
-        let ctx = egui::Context::default();
-        let confirmed = app.dialogs().confirm::<HostedPdfExport>(&ctx);
-        // PLAN: assumed `save_pdf::pump(app, ctx)` (export-w17).
-        super::super::save_pdf::pump(app, &ctx);
+        let ctx = ctx(app);
+        let confirmed = host(app, |h| h.confirm::<HostedPdfExport>(&ctx));
+        super::super::host::pump(app, &ctx);
         confirmed
     }
 
@@ -167,7 +187,7 @@ mod tests {
         assert_eq!(manager_fields(&mut app)["selected"], "Press Quality");
         // New… opens the editor on a copy of the selected preset; its OK saves it and comes back.
         press(&mut app, ManagerAction::New);
-        assert!(app.dialogs().get_by_id::<PresetManager>(dialog_id(KEY)).is_none(), "the manager makes room for the editor");
+        assert!(!manager_open(&app), "the manager makes room for the editor");
         let fields = editor_fields(&mut app);
         assert_eq!((fields["name"].clone(), fields["compatibility"].clone()), (json!("PDF Preset 1"), json!("1.6")));
         set_editor(&mut app, "name", json!("Press 1.5")).unwrap();
@@ -186,16 +206,16 @@ mod tests {
         press(&mut app, ManagerAction::New);
         set_editor(&mut app, "name", json!("press")).unwrap();
         assert!(!confirm_editor(&mut app));
-        assert!(app.dialogs().get::<HostedPdfExport>().is_some(), "stays open on a taken name");
+        assert!(editor_open(&app), "stays open on a taken name");
         // Built-in presets can't be edited; Delete selects the preset above.
         assert!(open_preset(&mut app, &json!({"name": "Press Quality"})).is_err());
         open(&mut app, Some("Press"));
         press(&mut app, ManagerAction::Delete);
         assert!(app.session.prefs.pdf_presets.is_empty());
         assert_eq!(manager_fields(&mut app)["selected"], "PDF/X-4:2010");
-        let (id, ctx) = (dialog_id(KEY), egui::Context::default());
-        app.dialogs().confirm_by_id(&ctx, id);
-        assert!(app.dialogs().get_by_id::<PresetManager>(id).is_none(), "Close");
+        let ctx = ctx(&app);
+        host(&app, |h| h.confirm_by_id(&ctx, dialog_id(KEY)));
+        assert!(!manager_open(&app), "Close");
     }
 
     #[test]
@@ -203,17 +223,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("vc-pdfpresets-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("mine.vcpdfpresets").to_string_lossy().to_string();
-        let services = crate::Services {
-            write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-            ..Default::default()
-        };
-        let mut app = VectorcraftApp::new(Session::new(), services);
+        let mut app = app();
+        let picker = crate::tests_picks::scripted(&mut app);
+        app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
         app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
         open(&mut app, Some("Mine"));
-        // PLAN: assumed files-w7's `tests::picks::scripted(app) -> Picker` and `Picker::answer_saved(app, path)`.
-        let picker = crate::tests::picks::scripted(&mut app);
         press(&mut app, ManagerAction::Export);
-        picker.answer_saved(&mut app, &file);
+        picker.answer_saved(&file, None);
+        let ctx = ctx(&app);
+        crate::tests_picks::poll(&mut app, &ctx);
         // Opening the file imports it (also how the web's picked file arrives).
         let bytes = std::fs::read(&file).unwrap();
         crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();

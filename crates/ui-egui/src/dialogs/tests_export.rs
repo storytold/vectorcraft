@@ -3,28 +3,48 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use craft::ui::dialog::{DialogHost, DialogId};
+use craft::host::PickRequest;
+use craft::ui::dialog::{DialogHost, DialogId, HeldOk};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use super::*;
-use crate::Services;
-use crate::theme;
+use crate::tests_picks::Picker;
+use crate::{Services, VectorcraftApp};
 
 pub(super) type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
-/// An app with `artboards` 60×40 pt artboards whose save dialog answers `/out/<suggested>` and
-/// whose writer records what it is given.
-pub(super) fn app(artboards: usize) -> (VectorcraftApp, Written) {
-    app_saving(artboards, |p| format!("/out/{}", p.name))
+/// How the save panel answers a pick: the path chosen, `None` for Cancel.
+type Answer = Box<dyn Fn(&PickRequest) -> Option<String>>;
+
+/// The save panel of this test's app: its scripted picks, how many of them [`frame`] has answered, and how it
+/// answers.
+struct Panel {
+    picker: Picker,
+    answered: usize,
+    answer: Answer,
 }
 
-/// [`app`], with a save dialog that answers `pick`.
-pub(super) fn app_saving(artboards: usize, pick: fn(&crate::FilePick) -> String) -> (VectorcraftApp, Written) {
+thread_local! {
+    static PANEL: RefCell<Option<Panel>> = const { RefCell::new(None) };
+}
+
+/// The suggested name of a pick in `/out`.
+fn in_out(p: &PickRequest) -> String {
+    format!("/out/{}", p.file_name.as_deref().unwrap_or_default())
+}
+
+/// An app with `artboards` 60×40 pt artboards whose save panel answers `/out/<suggested>` and
+/// whose writer records what it is given.
+pub(super) fn app(artboards: usize) -> (VectorcraftApp, Written) {
+    app_saving(artboards, in_out)
+}
+
+/// [`app`], with a save panel that answers `pick`.
+pub(super) fn app_saving(artboards: usize, pick: impl Fn(&PickRequest) -> String + 'static) -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let services = Services {
-        pick_save: Some(Box::new(move |p: &crate::FilePick| Some(pick(p)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -32,21 +52,62 @@ pub(super) fn app_saving(artboards: usize, pick: fn(&crate::FilePick) -> String)
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    app.ui_ctx = Some(ctx);
+    app.ui_ctx = Some(crate::testing::ui_context());
+    save_panel(&mut app, move |p| Some(pick(p)));
     app.run("file.new", json!({"width": 60, "height": 40, "artboards": artboards})).unwrap();
     app.run("paint.setStroke", json!({"none": true})).unwrap();
     app.run("shape.ellipse", json!({"x": 5, "y": 4, "width": 30, "height": 20})).unwrap();
     (app, written)
 }
 
-/// One headless frame: the app's pass, then the dialog layer's pump.
+/// Gives `app`, which has a window, a save panel that answers each pick with `answer` (`None`: Cancel) once a frame
+/// has passed ([`answer_saves`]). The app keeps its own reader and writer.
+pub(super) fn save_panel(app: &mut VectorcraftApp, answer: impl Fn(&PickRequest) -> Option<String> + 'static) {
+    let (read, write) = (app.services.read.take(), app.services.write.take());
+    let picker = crate::tests_picks::scripted(app);
+    (app.services.read, app.services.write) = (read, write);
+    PANEL.set(Some(Panel { picker, answered: 0, answer: Box::new(answer) }));
+}
+
+/// From now on the save panel answers picks with `answer` (`None`: Cancel).
+pub(super) fn on_save(answer: impl Fn(&PickRequest) -> Option<String> + 'static) {
+    PANEL.with_borrow_mut(|panel| {
+        if let Some(panel) = panel {
+            panel.answer = Box::new(answer);
+        }
+    });
+}
+
+/// One headless frame: the app's pass, the dialog layer's pump, then the save panels asked for meanwhile answer and
+/// what waited on them runs.
 pub(super) fn frame(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().expect("a test app has a window");
     let mut out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
     out.textures_delta.clear();
     super::host::pump(app, &ctx);
+    answer_saves(app);
+}
+
+/// The save panels asked for since the last call answer, and what waited on them runs.
+pub(super) fn answer_saves(app: &mut VectorcraftApp) {
+    let asked = PANEL.with_borrow_mut(|panel| {
+        let Some(panel) = panel else { return false };
+        let requests = panel.picker.requests();
+        // The newest open pick is answered first.
+        for request in requests[panel.answered..].iter().rev() {
+            match (panel.answer)(request) {
+                Some(path) => panel.picker.answer_saved(&path, None),
+                None => panel.picker.cancel(),
+            }
+        }
+        let asked = requests.len() > panel.answered;
+        panel.answered = requests.len();
+        asked
+    });
+    if asked {
+        let ctx = app.ui_ctx.clone().expect("a test app has a window");
+        crate::tests_picks::poll(app, &ctx);
+    }
 }
 
 /// Runs `f` on the host with the top dialog's id; `None` when no dialog is open.
@@ -75,13 +136,28 @@ pub(super) fn set(app: &mut VectorcraftApp, field: &str, value: Value) {
 
 /// Presses OK on the top dialog: the first frame runs its confirmation, the second closes it and runs what follows.
 pub(super) fn confirm(app: &mut VectorcraftApp) {
-    on_top(app, |host, ctx, id| host.confirm_by_id(ctx, id)).expect("a dialog is open");
+    // A refusal is read from the dialog staying open.
+    let _ = try_confirm(app);
+}
+
+/// [`confirm`], with the reason when the dialog refused OK and stays open.
+pub(super) fn try_confirm(app: &mut VectorcraftApp) -> Result<(), String> {
+    // A held OK files its answer here (`confirm_by_id` reports `false`) and is answered in the first frame.
+    let id = on_top(app, |host, ctx, id| {
+        host.confirm_by_id(ctx, id);
+        id
+    })
+    .expect("a dialog is open");
     frame(app);
+    if let Some(HeldOk::Refused(reason)) = app.dialogs().and_then(|d| d.with(|host| host.held_state(id))) {
+        return Err(reason.as_str().to_string());
+    }
     frame(app);
+    Ok(())
 }
 
 /// Cancels the top dialog.
-fn cancel(app: &mut VectorcraftApp) {
+pub(super) fn cancel(app: &mut VectorcraftApp) {
     on_top(app, |host, ctx, id| host.cancel_by_id(ctx, id)).expect("a dialog is open");
     frame(app);
     frame(app);
@@ -263,7 +339,7 @@ fn old_ids_and_agents_export_directly_with_a_path() {
 #[test]
 fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     let (mut app, written) = app(1);
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art")));
+    on_save(|_| panic!("no save dialog without art"));
     app.run("select.all", json!({})).unwrap();
     app.run("edit.clear", json!({})).unwrap();
     app.run("file.exportAs", json!({})).unwrap();
@@ -271,7 +347,7 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     // With Use Artboards the empty artboard is exported.
     set(&mut app, "useArtboards", json!(true));
-    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
+    on_save(|p| Some(in_out(p)));
     confirm(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
     assert!(written.borrow().is_empty());
@@ -282,13 +358,13 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
 #[test]
 fn art_a_plot_leaves_out_keeps_hpgl_export_as_open_before_the_save_dialog() {
     let (mut app, _) = app(1);
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art the plot draws")));
+    on_save(|_| panic!("no save dialog without art the plot draws"));
     app.run("select.all", json!({})).unwrap();
     app.run("transparency.set", json!({"opacity": 0})).unwrap();
     app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
     confirm(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("exportAs"));
-    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
+    on_save(|p| Some(in_out(p)));
     set(&mut app, "format", json!("png"));
     confirm(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("pngOptions"));

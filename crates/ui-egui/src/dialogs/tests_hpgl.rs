@@ -8,8 +8,11 @@ use vectorcraft_engine::cmd::fileio;
 
 // PLAN: assumed `fields(&app)` (values of the top hosted dialog) and `press(&mut app, name)` (the control channel's
 // click on a control by name, export-w23) in export-w9's helpers.
-use super::tests_export::{app, fields, frame, kind, names, press, set};
+use super::tests_export::{app, cancel, confirm, frame, kind, names, on_save, set, try_confirm};
+use super::tests_print::press;
+use super::tests_raster_formats::fields;
 use super::*;
+use crate::VectorcraftApp;
 
 /// The pen table a dialog holds: null for One Pen per Color.
 fn pens(d: &DialogFields) -> serde_json::Value {
@@ -24,11 +27,11 @@ fn text(d: &DialogFields, key: &str) -> String {
 fn export_as_hpgl_shows_hpgl_options_then_writes_and_remembers_them() {
     let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
-    assert_eq!(kind(&app), Some("exportAs"));
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     assert_eq!(text(&fields(&app), "format"), "hpgl");
     frame(&mut app);
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("hpglOptions"), "HP-GL Options follow");
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"), "HP-GL Options follow");
     let d = fields(&app);
     assert_eq!((text(&d, "path"), text(&d, "hpglVersion"), text(&d, "origin")), ("/out/Untitled-1.plt".into(), "hpgl".into(), "bottomLeft".into()));
     assert_eq!(
@@ -42,16 +45,16 @@ fn export_as_hpgl_shows_hpgl_options_then_writes_and_remembers_them() {
         .filter(|(k, _)| ["useArtboards", "range", "artboard", "artboards"].contains(&k.as_str()))
         .collect();
     let plain = fileio::encode(&app.session.active().unwrap().doc, "hpgl", &serde_json::Value::Object(choice)).unwrap();
-    let r = confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(kind(&app).is_none());
-    assert_eq!(r["path"], "/out/Untitled-1.plt");
+    assert_eq!(names(&written), ["/out/Untitled-1.plt"]);
     assert_eq!(written.borrow()[0].1, plain);
     assert!(plain.starts_with(b"IN;") && plain.ends_with(b"PU;SP0;"));
 
     // Every control draws, the pen table with a row per pen; OK writes the options given.
     app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     set(&mut app, "hpglVersion", json!("hpgl2"));
     set(&mut app, "origin", json!("center"));
     set(&mut app, "curveTolerance", json!(0.5));
@@ -59,7 +62,7 @@ fn export_as_hpgl_shows_hpgl_options_then_writes_and_remembers_them() {
     set(&mut app, "sortPaths", json!(true));
     set(&mut app, "insideFirst", json!(true));
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     // HP-GL/2 with the pen table as its palette (the encoded polylines that follow are binary).
     let plot = String::from_utf8_lossy(&written.borrow()[1].1).into_owned();
     assert!(plot.starts_with("IN;NP4;PC1,255,0,0;PC2,0,0,0;"), "{plot}");
@@ -76,9 +79,9 @@ fn export_as_hpgl_shows_hpgl_options_then_writes_and_remembers_them() {
     app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
     set(&mut app, "useArtboards", json!(true));
     frame(&mut app);
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("hpglOptions"));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
+    confirm(&mut app);
     let n = names(&written);
     assert_eq!(&n[2..], ["/out/Untitled-1-Artboard-1.plt", "/out/Untitled-1-Artboard-2.plt"]);
 }
@@ -104,14 +107,14 @@ fn bad_hpgl_options_keep_the_dialog_open() {
         let before = fields(&app).get(field).and_then(|v| serde_json::to_value(v).ok());
         set(&mut app, field, value.clone());
         frame(&mut app);
-        let e = confirm(&mut app).unwrap_err();
+        let e = try_confirm(&mut app).unwrap_err();
         assert!(e.contains(want), "{field} {value}: {e}");
-        assert_eq!(kind(&app), Some("hpglOptions"));
+        assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
         set(&mut app, field, before.unwrap_or_default());
     }
     assert!(written.borrow().is_empty());
     assert!(app.ui.hpgl_options.is_null(), "nothing is remembered from a refused OK");
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/a.plt"]);
 }
 
@@ -179,16 +182,16 @@ fn export_selection_to_hpgl_uses_the_selection_and_is_not_remembered() {
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
     app.run("paint.setFill", json!({"none": true})).unwrap();
     app.run("paint.setStroke", json!({"color": "#0000ff"})).unwrap();
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| Some("/out/sel.plt".to_string())));
+    on_save(|_| Some("/out/sel.plt".to_string()));
     app.run("document.exportSelection", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("hpglOptions"));
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
     let d = fields(&app);
     assert!(!d.contains(crate::io::EXPORT_SELECTION));
     assert_eq!(hpgl_options::automatic_pens(&app, &d, true).unwrap(), ["#0000ff"], "the selection's pen only");
     // An artboard choice the whole document would refuse is not this export's.
     set(&mut app, "artboard", json!(5));
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(kind(&app).is_none());
     assert_eq!(names(&written), ["/out/sel.plt"]);
     let plot = String::from_utf8_lossy(&written.borrow()[0].1).into_owned();
@@ -196,53 +199,57 @@ fn export_selection_to_hpgl_uses_the_selection_and_is_not_remembered() {
     assert!(app.ui.hpgl_options.get(crate::io::EXPORT_SELECTION).is_none());
     // A selection export asked for by its param is not remembered either.
     app.run("ui.hpglOptionsDialog", json!({"path": "/out/b.plt", "exportSelection": true})).unwrap();
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(app.ui.hpgl_options.get(crate::io::EXPORT_SELECTION).is_none());
     app.run("select.none", json!({})).unwrap();
     app.run("ui.hpglOptionsDialog", json!({"path": "/out/c.plt"})).unwrap();
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written).last().map(String::as_str), Some("/out/c.plt"), "the whole document, with nothing selected");
 }
 
-/// A save panel that is canceled keeps HP-GL Options open, with the options remembered before.
+/// A save panel that is canceled opens HP-GL Options again, with the options remembered before.
 #[test]
 fn a_canceled_save_panel_keeps_hpgl_options_open() {
     let (mut app, written) = app(1);
     app.ui.hpgl_options = json!({"origin": "center"});
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
+    on_save(|_| None);
     app.run("ui.hpglOptionsDialog", json!({})).unwrap();
     set(&mut app, "origin", json!("bottomLeft"));
     frame(&mut app);
-    assert!(confirm(&mut app).is_err());
-    assert_eq!(kind(&app), Some("hpglOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
     assert_eq!(text(&fields(&app), "origin"), "bottomLeft");
     assert_eq!(app.ui.hpgl_options, json!({"origin": "center"}));
     assert!(written.borrow().is_empty());
-    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| Some("/out/d.plt".to_string())));
-    confirm(&mut app).unwrap();
+    on_save(|_| Some("/out/d.plt".to_string()));
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/d.plt"]);
     assert_eq!(app.ui.hpgl_options["origin"], "bottomLeft");
 }
 
-/// A save panel shown off the UI thread leaves the options remembered before until it answers:
+/// A save panel that answers later leaves the options remembered before until it answers:
 /// canceled, they stay; answered, the export remembers the dialog's.
 #[test]
 fn an_off_thread_save_panel_remembers_hpgl_options_when_it_answers() {
     let (mut app, _) = app(1);
-    let (shown, written) = crate::tests_picks::off_the_ui_thread(&mut app.services);
-    let poll = |app: &mut VectorcraftApp| crate::picks::poll(app, &egui::Context::default());
+    // A panel this test answers itself, while the frames run.
+    let shown = crate::tests_picks::scripted(&mut app);
+    let ctx = app.ui_ctx.clone().expect("a test app has a window");
     app.ui.hpgl_options = json!({"origin": "center"});
-    for answer in [&[][..], &["/out/e.plt"][..]] {
+    for (asked, answer) in [None, Some("/out/e.plt")].into_iter().enumerate() {
         app.run("ui.hpglOptionsDialog", json!({})).unwrap();
         set(&mut app, "origin", json!("bottomLeft"));
         frame(&mut app);
-        let _ = confirm(&mut app);
-        assert_eq!(shown.requests().len(), 1, "the save panel is showing");
+        confirm(&mut app);
+        assert_eq!(shown.requests().len(), asked + 1, "the save panel is showing");
         assert_eq!(app.ui.hpgl_options, json!({"origin": "center"}), "not remembered while the panel is open");
-        shown.answer(answer);
-        poll(&mut app);
+        match answer {
+            Some(path) => shown.answer_saved(path, None),
+            None => shown.cancel(),
+        }
+        crate::tests_picks::poll(&mut app, &ctx);
     }
-    assert_eq!(*written.borrow(), ["/out/e.plt"], "the canceled panel wrote nothing");
+    assert_eq!(shown.written(), ["/out/e.plt"], "the canceled panel wrote nothing");
     assert_eq!(app.ui.hpgl_options["origin"], "bottomLeft");
 }
 
@@ -261,8 +268,8 @@ fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
     set(&mut app, "useArtboards", json!(false));
     frame(&mut app);
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("hpglOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
     let seed = |app: &VectorcraftApp| hpgl_options::automatic_pens(app, &fields(app), false).unwrap();
     assert_eq!(seed(&app), [on_board[0].as_str(), "#0000ff"], "the art's bounds");
     // The rectangle is the selection.
@@ -280,13 +287,13 @@ fn hpgl_options_write_nothing_after_another_document_became_active() {
     let (mut app, written) = app(1);
     app.run("ui.hpglOptionsDialog", json!({"path": "/out/first.plt"})).unwrap();
     app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
-    assert_eq!(kind(&app), Some("hpglOptions"));
-    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
+    confirm(&mut app);
     assert!(kind(&app).is_none());
     assert!(written.borrow().is_empty(), "nothing is written over the first document's path");
     // Opened for the document that is active, OK writes it.
     app.run("window.nextDocument", json!({})).unwrap();
     app.run("ui.hpglOptionsDialog", json!({"path": "/out/first.plt"})).unwrap();
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/first.plt"]);
 }

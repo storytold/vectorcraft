@@ -76,7 +76,7 @@ fn png(w: u32, h: u32) -> Vec<u8> {
 fn app(dir: &Folder) -> (VectorcraftApp, u64, u64, u64) {
     let mut app = new_app();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let place =|app: &mut VectorcraftApp, path: &str, at: [u32; 2], link: bool| {
+    let place = |app: &mut VectorcraftApp, path: &str, at: [u32; 2], link: bool| {
         app.run("file.place", json!({"path": path, "at": at, "link": link})).unwrap()["ids"][0].as_u64().unwrap()
     };
     let (a, b, c) = (dir.file("river.png", &png(40, 30)), dir.file("harbour.png", &png(30, 20)), dir.file("stamp.png", &png(20, 20)));

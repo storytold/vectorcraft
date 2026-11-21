@@ -30,8 +30,8 @@ use craft::ui::text::TextField;
 use serde_json::Value;
 
 use super::{flattener_presets, pdf_presets, print_presets};
-use crate::file_asks::{self, Owner};
 use crate::VectorcraftApp;
+use crate::file_asks::{self, Owner};
 
 /// The most presets the list shows before it scrolls (about ten rows).
 const LIST_ROWS: u16 = 10;
@@ -159,17 +159,21 @@ pub(crate) fn above(saved: Option<usize>, built_ins: usize) -> usize {
 
 /// Ask for a preset file and run `command` on it, then select the first preset it imported in the open manager
 /// `key`. Returns at once: the answer arrives later.
-pub(crate) fn import(app: &mut VectorcraftApp, key: &'static str, command: &'static str, filter: &str, exts: &[&str]) -> Result<Option<String>, String> {
+pub(crate) fn import(
+    app: &mut VectorcraftApp,
+    key: &'static str,
+    command: &'static str,
+    filter: &str,
+    exts: &[&str],
+) -> Result<Option<String>, String> {
     // PLAN: assumed `file_asks::open_params(&Picked) -> Option<Map<String, Value>>` (fl.A23) also names a picked file
     // of the web, which the import commands may not read yet.
     let request = PickRequest::open(key).filter(filter, exts);
     file_asks::ask(app, request, Owner::Free, move |app, picked| {
         let params = file_asks::open_params(&picked).ok_or("cancelled")?;
         let imported = app.run(command, Value::Object(params))?;
-        if let Some(first) = imported["imported"].get(0).and_then(Value::as_str)
-            && let Some(manager) = app.dialogs().get_mut_by_id::<PresetManager>(dialog_id(key))
-        {
-            manager.selected = first.to_owned();
+        if let Some(first) = imported["imported"].get(0).and_then(Value::as_str) {
+            with_manager(app, dialog_id(key), |manager| manager.selected = first.to_owned());
         }
         Ok(imported)
     });
@@ -183,7 +187,14 @@ pub(crate) fn open(app: &mut VectorcraftApp, source: &'static Source, selected: 
     let stored = (source.stored)(app, &selected);
     let detail = (source.detail)(app, &selected);
     let manager = PresetManager::new(source, rows, selected, stored, detail);
-    app.dialogs().open(manager);
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|h| h.open(manager));
+    }
+}
+
+/// Runs `f` on the open manager `id`; `None` when it is not open.
+fn with_manager<R>(app: &VectorcraftApp, id: DialogId, f: impl FnOnce(&mut PresetManager) -> R) -> Option<R> {
+    app.dialogs()?.with(|h| h.get_mut_by_id::<PresetManager>(id).map(f))
 }
 
 /// A preset manager dialog: draws the rows and the detail it holds and queues the user's events.
@@ -461,7 +472,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 fn pump_source(app: &mut VectorcraftApp, ctx: &egui::Context, source: &'static Source) {
     let id = dialog_id(source.key);
-    let Some((events, mut selected)) = app.dialogs().get_mut_by_id::<PresetManager>(id).map(|m| (m.take_events(), m.selected.clone())) else {
+    let Some((events, mut selected)) = with_manager(app, id, |m| (m.take_events(), m.selected.clone())) else {
         return;
     };
     // A refused event leaves the details as typed; rebuilding puts the stored values back.
@@ -474,8 +485,11 @@ fn pump_source(app: &mut VectorcraftApp, ctx: &egui::Context, source: &'static S
         match (source.run)(app, &event, &selected) {
             Ok(next) => {
                 selected = next.unwrap_or(selected);
-                if source.editor && matches!(event, ManagerEvent::Action(ManagerAction::New | ManagerAction::Edit)) {
-                    app.dialogs().cancel_by_id(ctx, id);
+                if source.editor
+                    && matches!(event, ManagerEvent::Action(ManagerAction::New | ManagerAction::Edit))
+                    && let Some(dialogs) = app.dialogs()
+                {
+                    dialogs.with(|h| h.cancel_by_id(ctx, id));
                 }
             }
             Err(e) => {
@@ -487,9 +501,7 @@ fn pump_source(app: &mut VectorcraftApp, ctx: &egui::Context, source: &'static S
     let rows = (source.rows)(app);
     let selected = find(&rows, &selected).or(rows.first()).map(|row| row.name.clone()).unwrap_or_default();
     let stored = (source.stored)(app, &selected);
-    let stale = refused || app.dialogs().get_by_id::<PresetManager>(id).is_some_and(|m| m.is_stale(&rows, &selected, &stored));
+    let stale = refused || with_manager(app, id, |m| m.is_stale(&rows, &selected, &stored)).unwrap_or(false);
     let detail = stale.then(|| (source.detail)(app, &selected));
-    if let Some(manager) = app.dialogs().get_mut_by_id::<PresetManager>(id) {
-        manager.update(rows, selected, stored, detail);
-    }
+    with_manager(app, id, |manager| manager.update(rows, selected, stored, detail));
 }

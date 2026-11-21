@@ -1,29 +1,22 @@
-use craft::ui::canvas::{AppPaint, CanvasSpace, RasterDisplay};
 use craft::behavior::{CanvasView, PixelSize};
+use craft::platform::clock::monotonic_ms;
+use craft::theme::Tokens;
+use craft::ui::canvas::{AppPaint, CanvasSpace, RasterDisplay};
 use craft::ui::contract::{Props as _, Show as _};
 use craft::ui::primitives::ContentPainterCx;
+use craft::ui::runtime::env::Env;
+use craft::ui::runtime::frame;
 use egui::{Color32, Ui, pos2, vec2};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 use super::artboards::{artboard_paper, paper_color, shows_artboards, shows_transparency_grid};
 use super::cursor::{STILL_SECS, still_wait};
 use super::fill::fill_uncovered;
-// PLAN: assumed `pref_color` stays reachable from `canvas::grid` after canvas-w16 deletes `LineLook`.
-use super::grid::{pref_color, textured_quad};
-use super::{Drag, drag_id};
+use super::grid::textured_quad;
+use super::guides::guide_color;
+use super::{BodyKind, in_gesture};
 use crate::doc_windows::Win;
-use crate::theme::Tokens;
-use crate::{CacheKey, VectorcraftApp, now_ms};
-// PLAN: assumed `craft::ui::canvas` re-exports `CanvasSpace`, `CanvasView`, `PixelSize` and `AppPaint`.
-
-/// Which picture [`picture`] shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PictureKind {
-    /// The current document's canvas, rendered at the canvas's own size.
-    Live,
-    /// A pane of a window other than the current one ([`super::panes`]).
-    Pane,
-}
+use crate::{CacheKey, VectorcraftApp};
 
 /// The rendered raster `img` as an egui image. Both are premultiplied RGBA8, so its bytes are copied
 /// over whole instead of pixel by pixel, which costs milliseconds for a canvas on a large screen.
@@ -297,13 +290,13 @@ pub(super) fn pixel_region(view: &CanvasView, max_side: usize) -> Option<[i64; 4
 /// The canvas's artwork picture in `space`: `Live` renders the current document through the render
 /// worker (or this thread) and draws the frame shown, reprojected while the next one is on its
 /// way; `Pane` hands over to the pane's own picture.
-pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win, kind: PictureKind) {
-    if kind == PictureKind::Pane {
+pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win, kind: BodyKind) {
+    if kind == BodyKind::Pane {
         return super::panes::pane_picture(app, ui, space, win);
     }
     let view = space.view;
     let rect = view.rect;
-    let t = Tokens::get(ui.ctx());
+    let env = Env::of(ui);
     let Some(st) = app.session.active() else { return };
     let (doc, effects, mask_view) = (st.doc.clone(), st.plugin_effects.clone(), st.shown_mask());
     let device_ppp = ui.ctx().pixels_per_point();
@@ -322,7 +315,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
     let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
-    let key = cache_key(app, ui, st, &t, &view, (w, h, ppp), (pixel, smooth_images, plugins, placed));
+    let key = cache_key(app, ui, st, env.tokens.tokens(), &view, (w, h, ppp), (pixel, smooth_images, plugins, placed));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -335,7 +328,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
     let wait = if app.canvas.waits_for_still {
         edit_in_frame_shown(app, &key, &doc, &effects, &view, (mask_view, smooth_images));
         let slow = app.canvas.last_ms > 8.0 && app.canvas.texture.is_some();
-        still_wait(&mut app.canvas.still, app.canvas.key.as_ref(), &key, slow, ui.input(|i| i.time))
+        still_wait(&mut app.canvas.still, app.canvas.key.as_ref(), &key, slow, frame::clock(ui.ctx()))
     } else {
         None
     };
@@ -345,7 +338,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
     // A frame with copied pixels renders whole once it has been shown for STILL_SECS with the view unmoved.
     let same_frame = app.canvas.key.as_ref() == Some(&key);
     let settle = app.canvas.reused.filter(|_| same_frame).is_some_and(|at| {
-        let waited = ui.input(|i| i.time) - at;
+        let waited = frame::clock(ui.ctx()) - at;
         // The clock went back (a new egui context): don't wait for it to catch up.
         let waiting = (0.0..STILL_SECS).contains(&waited);
         if waiting {
@@ -380,7 +373,6 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
         fill_uncovered(app, &ctx, &cx.painter, &key, &doc, at.rect, &at);
         reproject_frame(app, &cx.painter, &at, at.rect, (key.doc, at.rotation));
     });
-    // PLAN: assumed `Props::picture` and `Show::show` as `RasterDisplay` is shown elsewhere.
     RasterDisplay::painted(tl!("Artwork"), size, paint).picture().show(ui);
 }
 
@@ -395,9 +387,9 @@ pub(super) fn cache_key(
     (pixel, smooth_images, plugins, placed): (Option<[i64; 4]>, bool, u64, u64),
 ) -> CacheKey {
     // Paths made into guides are drawn as the ruler guides are (Preferences › Guides & Grid).
-    let guide = pref_color(&app.session.prefs.guide_color, t.guide);
+    let [r, g, b, _] = guide_color(&app.session.prefs, t).0;
     CacheKey {
-        guide: ([guide.r(), guide.g(), guide.b()], app.session.prefs.guide_style == "dots"),
+        guide: ([r, g, b], app.session.prefs.guide_style == "dots"),
         doc: st.uid as usize,
         revision: st.revision,
         interacting: st.interaction.is_some(),
@@ -424,7 +416,7 @@ pub(super) fn cache_key(
         // Appearance of Black › On Screen: Display All Blacks as Rich Black.
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
-        dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
+        dragging: app.session.in_interaction() && in_gesture(app, ui.ctx()),
         trace_source: app.ui.trace_hold_source.clone(),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
@@ -575,7 +567,7 @@ fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate:
     if !done.reused {
         app.canvas.last_ms = done.ms;
     }
-    app.canvas.reused = done.reused.then(|| ctx.input(|i| i.time));
+    app.canvas.reused = done.reused.then(|| frame::clock(ctx));
     app.canvas.moved = done.moved > 0;
     app.canvas.from_worker = true;
 }
@@ -667,7 +659,7 @@ pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::f
 /// ([`changed_pixels`]). `None`: nothing in view changed. `last_ms` stays the whole frame's.
 fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]>) {
     let Frame { key, doc, effects, view, opts, pixel, .. } = frame;
-    let t0 = now_ms();
+    let t0 = monotonic_ms();
     if region.is_none() {
         // Nothing in view to draw again: what was made to measure the edit isn't drawn.
         app.canvas.renderer.let_go_of_measured();
@@ -686,7 +678,7 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
     }
     app.canvas.key = Some((*key).clone());
     app.canvas.shown = Some(((*doc).clone(), opts.clone()));
-    app.perf.render_ms = now_ms() - t0;
+    app.perf.render_ms = monotonic_ms() - t0;
 }
 
 /// With `waits_for_still` set (the web build) and the last render slow, an edit while the view
@@ -776,7 +768,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             }
         }
         _ => {
-            let t0 = now_ms();
+            let t0 = monotonic_ms();
             let renderer = &mut app.canvas.renderer;
             let mut img = effects.view(|| renderer.render(doc, w, h, view, &opts));
             effects.first_view_done();
@@ -785,7 +777,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
-            app.perf.render_ms = now_ms() - t0;
+            app.perf.render_ms = monotonic_ms() - t0;
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             app.canvas.from_worker = false;

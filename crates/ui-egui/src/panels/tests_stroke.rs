@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use super::panel_harness::Panel;
+use crate::tests::panel_harness::Panel;
 // PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
 use super::tests_appearance::{app_with_rect, run};
 use super::*;

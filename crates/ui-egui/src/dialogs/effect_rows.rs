@@ -17,9 +17,9 @@ use craft::ui::value_drag::{PointPicker, SliderScale};
 use egui::{Rect, Stroke, pos2};
 use serde_json::{Map, Value};
 
-use super::effect_params::{FILM_GRAIN_FIELDS, GLASS, SHADES, choices, generic, glass_textures, texturizer_textures};
+use super::effect_params::{EffectCx, FILM_GRAIN_FIELDS, GLASS, SHADES, choices, generic, glass_textures, texturizer_textures};
+use super::form;
 use super::transform_each::{self, ScaleLink};
-use super::{EffectCx, form};
 
 /// A translated label; the literal stays visible to the string catalog.
 macro_rules! lbl {
@@ -72,8 +72,7 @@ pub(super) fn transform(cx: &EffectCx, _fields: &DialogFields) -> Vec<Param> {
         Param::new("copies", lbl!("Copies:"), ParamKind::int(Some(0), Some(1000), 0)),
         Param::custom("__reflect", lbl!("Reflect"), |ui, fields, _| transform_each::reflect_checks(ui, fields))
             .companions(["reflectX", "reflectY", "random"]),
-        Param::custom("__reference", lbl!("Reference Point"), |ui, fields, _| transform_each::reference_point(ui, fields))
-            .companions(["reference"]),
+        Param::custom("__reference", lbl!("Reference Point"), |ui, fields, _| transform_each::reference_point(ui, fields)).companions(["reference"]),
     ]
 }
 
@@ -92,7 +91,11 @@ pub(super) fn distort(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         sized_row("size", lbl!("Size:"), if roughen { 5.0 } else { 10.0 }, is_relative(fields), cx.lengths),
         second,
         relative_radio(),
-        Param::new("points", Label::from(crate::i18n::tr_ctx(crate::i18n::current(), "effect", "Points").to_string()), ParamKind::radio(points, None)),
+        Param::new(
+            "points",
+            Label::from(crate::i18n::tr_ctx(crate::i18n::current(), "effect", "Points").to_string()),
+            ParamKind::radio(points, None),
+        ),
     ]
 }
 
@@ -153,9 +156,10 @@ pub(super) fn scribble(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
 /// Drop Shadow: the generic rows with step arrows, then the Color/Darkness choice and its two fields.
 pub(super) fn drop_shadow(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     let shades = SHADES.iter().map(|(label, value)| ((*value).to_owned(), data_label(label))).collect();
-    let rows = generic(cx, fields).into_iter().filter(|p| !matches!(p.key.as_str(), "shade" | "color" | "darkness")).map(|p| {
-        if matches!(p.key.as_str(), "opacity" | "x" | "y" | "blur") { p.step_arrows(StepArrows::Leading) } else { p }
-    });
+    let rows = generic(cx, fields)
+        .into_iter()
+        .filter(|p| !matches!(p.key.as_str(), "shade" | "color" | "darkness"))
+        .map(|p| if matches!(p.key.as_str(), "opacity" | "x" | "y" | "blur") { p.step_arrows(StepArrows::Leading) } else { p });
     rows.chain([
         Param::new("shade", Label::Empty, ParamKind::radio(shades, None)),
         Param::new("color", lbl!("Color"), ParamKind::color(None)).enabled_when("shade", "color"),
@@ -275,8 +279,12 @@ pub(super) fn radial_blur(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
             }
             ui.vertical(|ui| {
                 for (axis, label) in [lbl!("Horizontal"), lbl!("Vertical")].into_iter().enumerate() {
-                    let shown =
-                        NumberField::new(label, Bind::given(Some(c[axis] * 100.0))).unit("%").range(0.0..=100.0).commit_decimals(1).id_salt(axis).show(ui);
+                    let shown = NumberField::new(label, Bind::given(Some(c[axis] * 100.0)))
+                        .unit("%")
+                        .range(0.0..=100.0)
+                        .commit_decimals(1)
+                        .id_salt(axis)
+                        .show(ui);
                     if let Some(v) = shown.edit.value().cloned().flatten() {
                         next[axis] = v / 100.0;
                     }

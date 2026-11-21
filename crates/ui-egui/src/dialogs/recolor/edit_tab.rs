@@ -31,10 +31,9 @@ use vectorcraft_color::harmony::Harmony;
 
 use super::prominent::{ProminentBar, ProminentPart, weights};
 use super::{
-    COMPS, DRAG, Feed, Fields, MAX_PICKS, MENU_AT, MenuChoice, RecolorDialog, SAVE_GROUP, SHADE_COLS, SHADE_ROWS, SliderTarget, THEME_PICKER,
-    THEME_PICKS, WEIGHTS, WHEEL_AXES, WHEEL_TOOL, active_rows, add_color, added_color, apply_rule, base_row, can_set_base, choose,
-    edit_slider_row, from_colors, in_group, keeps_rows, mode_menu, move_bar, move_color, prominent_parts, remove_color, removed, set_base,
-    shade_at, sliders, to_color, wheel_axes,
+    COMPS, DRAG, Feed, Fields, MAX_PICKS, MenuChoice, RecolorDialog, SAVE_GROUP, SHADE_COLS, SHADE_ROWS, SliderTarget, THEME_PICKER, THEME_PICKS,
+    WEIGHTS, WHEEL_AXES, WHEEL_TOOL, active_rows, add_color, added_color, apply_rule, base_row, can_set_base, choose, edit_slider_row, from_colors,
+    in_group, keeps_rows, mode_menu, move_bar, move_color, prominent_parts, remove_color, removed, set_base, shade_at, sliders, to_color, wheel_axes,
 };
 use crate::VectorcraftApp;
 use crate::panels::c32;
@@ -44,11 +43,8 @@ const SMOOTH: &str = "smooth";
 const SEGMENTED: &str = "segmented";
 const BARS: &str = "bars";
 /// The display buttons: id, icon and name.
-const DISPLAYS: [(&str, &str, &str); 3] = [
-    (SMOOTH, "circle", "Show smooth color wheel"),
-    (SEGMENTED, "target", "Show segmented color wheel"),
-    (BARS, "list", "Show color bars"),
-];
+const DISPLAYS: [(&str, &str, &str); 3] =
+    [(SMOOTH, "circle", "Show smooth color wheel"), (SEGMENTED, "target", "Show segmented color wheel"), (BARS, "list", "Show color bars")];
 /// The `wheelTool` ids of the Add Color and Remove Color tools.
 const ADD: &str = "add";
 const REMOVE: &str = "remove";
@@ -56,6 +52,9 @@ const REMOVE: &str = "remove";
 const TOOLS: [(&str, &str, &str); 2] = [(ADD, "plus", "Add Color Tool"), (REMOVE, "minus", "Remove Color Tool")];
 /// A colour bar is this many times as wide as it is high.
 const BAR_ASPECT: u16 = 6;
+/// The target of the wheel's right-click menu: `{marker, line, hs}` (row indexes and the hue and
+/// saturation clicked).
+const MENU_AT: &str = "__wheelMenu";
 
 /// What the Edit tab reads from the app, gathered by the dialog's pump each frame, so the tab itself reads no app.
 pub(super) struct EditData {
@@ -602,9 +601,8 @@ impl CanvasTool for ThemePickTool {
 // PLAN: color-w19 — `RecolorDialog` holds `theme_tool: ThemePickTool` (`Default`) and declares `pub(crate) mod edit_tab;` so canvas-w20's `tool_adapter::run` reaches this.
 pub(crate) fn with_theme_pick(app: &mut VectorcraftApp, run: impl FnOnce(&mut VectorcraftApp, &mut ThemePickTool)) -> bool {
     let Some(dialogs) = app.dialogs() else { return false };
-    let taken = dialogs.with(|host| {
-        host.get_mut::<RecolorDialog>().filter(|d| d.fields.bool(THEME_PICKER)).map(|d| std::mem::take(&mut d.theme_tool))
-    });
+    let taken =
+        dialogs.with(|host| host.get_mut::<RecolorDialog>().filter(|d| d.fields.bool(THEME_PICKER)).map(|d| std::mem::take(&mut d.theme_tool)));
     let Some(mut tool) = taken else { return false };
     run(app, &mut tool);
     let picked = std::mem::take(&mut tool.picked);

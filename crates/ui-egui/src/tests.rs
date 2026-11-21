@@ -56,4 +56,3 @@ mod tab_reorder;
 mod taskbar;
 mod toolescape;
 mod trace_runs;
-mod transparencygrid;

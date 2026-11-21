@@ -72,7 +72,10 @@ fn zoom_to_selection_fits_the_selection_in_the_view() {
     host::frame(&mut app);
     let (canvas, view) = (app.view().unwrap().rect, app.canvas_view().unwrap());
     let selected = bounds(&app, b);
-    let (min, max) = (view.to_screen(vectorcraft_geom::Point::new(selected.x0, selected.y0)), view.to_screen(vectorcraft_geom::Point::new(selected.x1, selected.y1)));
+    let (min, max) = (
+        view.to_screen(vectorcraft_geom::Point::new(selected.x0, selected.y0)),
+        view.to_screen(vectorcraft_geom::Point::new(selected.x1, selected.y1)),
+    );
     assert!(canvas.contains(min) && canvas.contains(max), "the selection lies in the canvas");
     assert!((view.to_screen(selected.center()) - canvas.center()).length() < 1.0, "and is centred");
     app.run("select.none", json!({})).unwrap();

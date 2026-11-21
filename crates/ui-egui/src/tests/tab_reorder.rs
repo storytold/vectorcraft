@@ -47,8 +47,7 @@ fn app() -> (VectorcraftApp, egui::Context) {
         app.run("file.new", json!({"width": 100, "height": 100, "name": name})).unwrap();
     }
     app.sync_views();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     frame(&mut app, &ctx, 0.0, vec![]);
     (app, ctx)
@@ -119,7 +118,6 @@ fn a_document_keeps_its_own_zoom_after_its_tab_moves() {
     assert_eq!(zooms, [1.0, 3.0, 4.0, 2.0], "each view went with its document");
     assert_eq!(app.view().map(|v| v.zoom), Some(4.0), "the current document's view is still Delta's");
 }
-
 
 /// One batch that closes documents and moves others (a script, a recording) leaves every view with
 /// its own document; the views are put right once, after the whole batch.

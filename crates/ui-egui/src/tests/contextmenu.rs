@@ -167,10 +167,10 @@ fn cmd_alt_shift_u_switches_to_the_next_unit() {
     assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
     fn press(app: &mut VectorcraftApp) {
         let ctx = egui::Context::default();
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
         let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
         let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
-        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-        out.textures_delta.clear();
+        crate::tests_synthetic::key_frame(app, &ctx, vec![ev]);
     }
     let guides = app.ui.view.smart_guides;
     press(&mut app);

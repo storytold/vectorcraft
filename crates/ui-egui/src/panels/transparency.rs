@@ -8,30 +8,34 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use craft::behavior::IconId;
 use craft::behavior::Mixed;
+use craft::behavior::dock::Column;
 use craft::behavior::item_source::keyed;
-use craft::ui::menu::PanelRow;
-use craft::ui::contract::{Bind, CollectionEvent, SelectMode};
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::behavior::dock::Column;
-use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft::ui::primitives::{ContentPainterCx, ContentPainterCx as _, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource, Thumbnails, ThumbnailOptions};
+use craft::ui::contract::{Bind, CollectionEvent, SelectMode};
 use craft::ui::display::{Divider, Shade, Text};
-use craft::behavior::IconId;
+use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
-use craft::ui::text::NumberField;
-use craft::ui::{Revision, Row, ThumbPaint};
+use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
+use craft::ui::primitives::{
+    ContentPainterCx, ContentPainterCx as _, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource,
+    ThumbnailOptions, Thumbnails,
+};
+use craft::ui::primitives::{Revision, ThumbPaint};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
 use egui::{Color32, Stroke, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask};
 use vectorcraft_engine::cmd::TransparencyInfo;
 
-use super::edits::{EditPath, apply_edits};
 use super::{current_paints, current_transparency, live_run, selection_len};
 use crate::VectorcraftApp;
+use crate::edits::{EditPath, apply_edits};
 use crate::fields::blend_entries; // PLAN: assumed path of wg.S8's `blend_entries`
 
 /// The side of the mask row's thumbnails, in points.
@@ -134,9 +138,7 @@ impl ThumbSource<MaskKey> for MaskThumbs<'_> {
     fn render(&self, key: &MaskKey, request: &ThumbRequest) -> ThumbRender {
         let Some(obj) = super::layers::node_arc(self.doc, key.node) else { return ThumbRender::Blank };
         let (doc, px, bg, own_mask) = (self.doc.clone(), request.side, key.bg, key.own_mask);
-        let job: ThumbJob = Box::new(move |_| {
-            Ok(thumb_image(&doc, &obj, own_mask, px, bg).map_or(LoadedPicture::Blank, LoadedPicture::Image))
-        });
+        let job: ThumbJob = Box::new(move |_| Ok(thumb_image(&doc, &obj, own_mask, px, bg).map_or(LoadedPicture::Blank, LoadedPicture::Image)));
         let _: Option<LoadFailure> = None;
         ThumbRender::Later(job)
     }
@@ -177,7 +179,8 @@ fn mask_row(
     let object_state = n.map(|n| state_of(ui, n.id, None, false));
     let mask_state = n.zip(mask).map(|(n, _)| state_of(ui, n.id, bg, true));
     let fill = n.and_then(|_| current_paints(app).0.color()).map(|c| super::c32(&c));
-    let paper = ThumbPaint::default().paper(craft::ui::style::DataColor::new(if bg == Some([0, 0, 0, 255]) { Color32::BLACK } else { Color32::WHITE }));
+    let paper =
+        ThumbPaint::default().paper(craft::ui::style::DataColor::new(if bg == Some([0, 0, 0, 255]) { Color32::BLACK } else { Color32::WHITE }));
     let plain = ThumbPaint::default();
     let (has_mask, disabled) = (mask.is_some(), mask.is_some_and(|m| m.disabled));
     let (store, object_state, mask_state) = (&store, &object_state, &mask_state);
@@ -424,8 +427,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
-    // PLAN: assumed path of op.A15's `Panel` harness.
-    use crate::panels::tests_panel::Panel;
+    use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
 
     fn run_cmd(app: &mut VectorcraftApp, id: &str, p: serde_json::Value) -> serde_json::Value {

@@ -5,16 +5,18 @@
 
 // PLAN: assumed import paths of the framework items below through the `craft_ui` facade (it re-exports the dialog
 // host, the standard prompt, the colour picker dialog, `Bind`, `SaveKey` and the preferences pattern).
+use craft::color_ui::ui::ColorPickerDialog;
+use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
 use craft::ui::dialog::{DialogHost, DialogId, PromptChoice, StandardPrompt};
 use craft::ui::patterns::preferences::{PreferencesModel, PreferencesState, PreferencesWindow, SettingsDraft};
-use craft::color_ui::ui::ColorPickerDialog;
 use craft::ui::runtime::memory::SaveKey;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, spec};
 
 use crate::VectorcraftApp;
+use crate::file_asks::{self, Owner};
 
 mod descriptions;
 mod model;
@@ -287,17 +289,18 @@ fn export_preferences(app: &mut VectorcraftApp) {
 }
 
 /// Import Preferences…: the preferences in a file picked in an open dialog are applied (`prefs.import`), and the
-/// window shows them. On an error nothing changes and the status bar says why.
-fn import_preferences(app: &mut VectorcraftApp, w: &mut PrefsWindow) {
-    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Preferences", &["json"])], ..Default::default() };
-    let Some(path) = crate::picks::open(app, &pick) else { return };
-    match app.run("prefs.import", json!({ "path": path })) {
-        Ok(_) => {
-            w.refresh(&app.session.prefs.to_json());
-            app.status("Preferences imported.");
+/// window shows them ([`imported`]). On an error nothing changes and the status bar says why.
+fn import_preferences(app: &mut VectorcraftApp) {
+    let request = PickRequest::open("preferences").filter("Preferences", &["json"]);
+    file_asks::ask(app, request, Owner::Free, |app, picked| {
+        let Picked::Paths(paths) = picked else { return Ok(Value::Null) };
+        let Some(path) = paths.first() else { return Ok(Value::Null) };
+        match app.run("prefs.import", json!({ "path": path.to_string_lossy() })) {
+            Ok(_) => app.status("Preferences imported."),
+            Err(e) => app.status(e),
         }
-        Err(e) => app.status(e),
-    }
+        Ok(Value::Null)
+    });
 }
 
 /// After `prefs.import`: the preferences are saved with the UI state, Enable Touch Workspace takes

@@ -19,9 +19,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use craft::behavior::IconId;
+use craft::behavior::SelectionModel;
 use craft::theme::variant::Tone;
 use craft::ui::contract::{Bind, SelectMode, Selection, Trigger};
-use craft::behavior::SelectionModel;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
 use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetView};
@@ -129,9 +129,9 @@ pub(crate) trait LibraryKind {
     fn find(app: &VectorcraftApp, key: &str) -> Found;
     /// The file library `id` was read from, if any.
     fn path(app: &VectorcraftApp, id: &str) -> Option<String>;
-    /// The rows of library `id` matching `query` (lower case; empty: all). The panel asks for all
-    /// of them: the browser's search filters what it shows.
-    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, Self::Item>>;
+    /// The rows of library `id`; the browser's search filters what it shows (by the shown name and
+    /// [`PresetRow::search_name`]).
+    fn rows<'a>(lib: &'a Self::Lib, id: &str) -> Vec<Row<'a, Self::Item>>;
     /// Row `name` of library `id` as its list row and tooltips show it (by default as it is). The
     /// row keeps `name` for its tile, selection, clicks, drags and the commands they run.
     fn label<'a>(_id: &str, name: &'a str) -> Cow<'a, str> {
@@ -631,7 +631,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     };
     let panel = panel_id(K::KIND, id);
     let (view, hide_find) = settings(&app.ui, K::KIND, id).map_or((K::VIEW, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find));
-    let flat = K::rows(&lib, id, "");
+    let flat = K::rows(&lib, id);
     let rows = browser_rows::<K>(&panel, id, &flat);
     let items: HashMap<&str, &K::Item> = flat.iter().filter_map(|r| r.item.map(|i| (r.name, i))).collect();
     let selection = selected(app, &panel);

@@ -8,7 +8,7 @@ use egui::{Key, Modifiers};
 use serde_json::json;
 use vectorcraft_doc::WidthProfile;
 
-use super::panel_harness::Panel;
+use crate::tests::panel_harness::Panel;
 // PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
 use super::tests_appearance::run;
 use super::*;

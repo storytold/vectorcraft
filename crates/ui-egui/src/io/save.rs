@@ -9,8 +9,8 @@ use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 use super::export::file_url;
 use super::open::note_recent;
 use super::{
-    EngineError, Format, Progress, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer, background,
-    dialogs, fileio, json, progress, svg_options,
+    EngineError, Format, Progress, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer,
+    background, dialogs, fileio, json, progress, svg_options,
 };
 use crate::file_asks::{self, Owner};
 
@@ -49,7 +49,13 @@ pub(crate) struct Saves {
 impl Saves {
     /// No save in progress; `wake` runs a frame when the watcher has news.
     pub(crate) fn new(wake: Wake) -> Self {
-        Self { flows: HashMap::new(), watch: FileWatch::new(wake), written_beside: HashMap::new(), replace_files_ok: Vec::new(), done: HashMap::new() }
+        Self {
+            flows: HashMap::new(),
+            watch: FileWatch::new(wake),
+            written_beside: HashMap::new(),
+            replace_files_ok: Vec::new(),
+            done: HashMap::new(),
+        }
     }
 
     fn start(&mut self, files: &dyn Files, document: SaveDocument<u64>, target: SaveTarget) -> SaveStep<u64> {
@@ -144,7 +150,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let busy: Vec<u64> = app.saves.flows.iter().filter(|(_, f)| f.is_busy()).map(|(uid, _)| *uid).collect();
     for uid in busy {
         if !app.session.documents().iter().any(|d| d.uid == uid) {
-            terminate(app, uid, Err(file_asks::CLOSED.into()));
+            terminate(app, uid, Err(file_asks::closed().into()));
             if let Some(mut flow) = app.saves.flows.remove(&uid) {
                 flow.cancel(app.host.files());
             }
@@ -164,7 +170,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// pick.
 fn next_step(app: &mut VectorcraftApp, uid: u64) -> Option<SaveStep<u64>> {
     if let Some(id) = app.saves.done.get(&uid).and_then(|d| d.question) {
-        let answer = app.dialogs().take_by_id::<StandardPrompt>(id)?;
+        let answer = app.dialogs()?.with(|host| host.take_by_id::<StandardPrompt>(id))?;
         if let Some(done) = app.saves.done.get_mut(&uid) {
             done.question = None;
         }
@@ -194,8 +200,8 @@ fn proceed(app: &mut VectorcraftApp, step: SaveStep<u64>) -> Result<Value, Strin
         SaveStep::Picking => Ok(json!({ "pending": "fileDialog" })),
         SaveStep::AskChangedOnDisk { key, path } => {
             let name = fileio::file_name(&path.to_string_lossy());
-            // PLAN: assumed `app.dialogs() -> &mut DialogHost` (hub-w1).
-            let id = app.dialogs().open(StandardPrompt::changed_on_disk(name).instance(("changed-on-disk", key)));
+            let prompt = StandardPrompt::changed_on_disk(name).instance(("changed-on-disk", key));
+            let id = app.dialogs().ok_or("no window to ask in")?.with(|host| host.open(prompt));
             if let Some(done) = app.saves.done.get_mut(&key) {
                 done.question = Some(id);
             }
@@ -214,12 +220,12 @@ fn proceed(app: &mut VectorcraftApp, step: SaveStep<u64>) -> Result<Value, Strin
 /// made into the file the picked type names, asking before it replaces a file the panel did not
 /// ask about.
 fn write_step(app: &mut VectorcraftApp, uid: u64, path: &str, target: SaveTarget, file_type: Option<usize>) -> Result<Value, String> {
-    let index = app.session.documents().iter().position(|d| d.uid == uid).ok_or(file_asks::CLOSED)?;
+    let index = app.session.documents().iter().position(|d| d.uid == uid).ok_or(file_asks::closed())?;
     if app.session.active_index() != Some(index) {
         app.run("document.activate", json!({ "index": index }))?;
     }
     let (mode, params, ask, suggested, retrying, retry, picked_ext) = {
-        let done = app.saves.done.get_mut(&uid).ok_or(file_asks::CLOSED)?;
+        let done = app.saves.done.get_mut(&uid).ok_or(file_asks::closed())?;
         // `None` without a picked type: the typed or suggested extension decides (macOS has no type menu).
         let picked_ext = file_type.and_then(|i| done.filters.get(i)).and_then(|f| f.extensions.first().cloned());
         (done.mode, done.params.clone(), done.ask_options, done.suggested.clone(), done.retrying, done.retry.take(), picked_ext)
@@ -366,10 +372,19 @@ pub(crate) fn write_named(
     let ext = fileio::extension(name);
     let (_, folder) = suggested(app, "");
     let filters = file_types(&ext);
-    ask_path(app, path, name.to_string(), folder, filters, ext, |_| false, move |app, path| {
-        write_reporting(app, &path, &bytes)?;
-        then(app, path)
-    })
+    ask_path(
+        app,
+        path,
+        name.to_string(),
+        folder,
+        filters,
+        ext,
+        |_| false,
+        move |app, path| {
+            write_reporting(app, &path, &bytes)?;
+            then(app, path)
+        },
+    )
 }
 
 /// Where a file goes when no path was given: the suggested name on the web (a download), else the
@@ -486,7 +501,6 @@ fn file_types(ext: &str) -> Vec<FileFilter> {
     }
     let ext = ext.trim_start_matches('.').to_ascii_lowercase();
     let row = FILE_TYPES.iter().find(|(_, exts)| exts.contains(&ext.as_str())).copied();
-    // PLAN: assumed `file_asks::filters(&[(&str, &[&str])]) -> Vec<FileFilter>` (files-w5), which translates the names.
     file_asks::filters(&row.into_iter().collect::<Vec<_>>())
 }
 
@@ -717,9 +731,7 @@ fn finish_picked(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_option
     }
     if (ask || changed_retry_format) && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
-        let r = ask_format_options(app, mode, chosen.format, &path);
-        crate::dialogs::opened_by_panel(app);
-        return r;
+        return ask_format_options(app, mode, chosen.format, &path);
     }
     let chosen = plan(app, mode, &q)?;
     write_plan(app, chosen, (save_command(mode), q), None)
@@ -839,7 +851,6 @@ pub fn ask_format_options(app: &mut VectorcraftApp, mode: SaveMode, f: &Format, 
 pub fn ask_pdf_options(app: &mut VectorcraftApp, mode: SaveMode, path: &str) -> Result<Value, String> {
     let mut p = Value::Object(plan(app, mode, &json!({ "path": path, "format": "pdf" }))?.options);
     p["path"] = json!(path);
-    // PLAN: assumed `dialogs::save_pdf::open_for_save(app, &Value, SaveMode) -> Result<Value, String>` (export-w17, ex.A12).
     dialogs::save_pdf::open_for_save(app, &p, mode)
 }
 

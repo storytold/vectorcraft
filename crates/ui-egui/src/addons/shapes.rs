@@ -7,6 +7,7 @@ use std::ops::RangeInclusive;
 
 use craft::behavior::{IconId, NumberCodec};
 use craft::keymap::CommandRef;
+use craft::menu::Node;
 use craft::ui::buttons::{Button, ToggleButton};
 use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, EditResponse, Entry, Props as _, Show as _, ShowContainer as _, SideLabel};
@@ -23,15 +24,15 @@ use vectorcraft_tools::addons::box3d::{self, CustomShape};
 use crate::canvas::rulers::general_lengths;
 use crate::chrome::rank;
 // PLAN: assumed `crate::edits::{apply_edits, EditPath}` (wg.A16, widgets-w13).
-use crate::edits::{self, EditPath};
-use crate::menus::Item;
 use crate::VectorcraftApp;
+use crate::edits::{self, EditPath};
+use crate::menus::cp;
 
 /// A choice's value, its label and its icon name.
 type Choice = (&'static str, &'static str, &'static str);
 
-pub fn menu() -> Vec<Item> {
-    vec![Item::Cmd("3D Box Tool", "tool.select", json!({"tool": box3d::ID}))]
+pub fn menu() -> Vec<Node> {
+    vec![cp("3D Box Tool", "tool.select", json!({"tool": box3d::ID}))]
 }
 
 /// Draw context-sensitive shape customization controls in the top Control bar when a shape tool is
@@ -103,7 +104,8 @@ fn tr(text: &str) -> String {
 
 /// A member with one icon segment per choice over the current `current`; the value picked, if any.
 fn choice(ui: &mut Ui, caption: &'static str, current: &str, choices: &[Choice]) -> Option<&'static str> {
-    let entries: Vec<Entry<&'static str>> = choices.iter().map(|&(value, label, icon)| Entry::new(value, tr(label)).icon(IconId::new(icon))).collect();
+    let entries: Vec<Entry<&'static str>> =
+        choices.iter().map(|&(value, label, icon)| Entry::new(value, tr(label)).icon(IconId::new(icon))).collect();
     let current = choices.iter().map(|c| c.0).find(|&value| value == current).unwrap_or("");
     let mut picked = None;
     member(ui, |ui| {
@@ -202,7 +204,8 @@ fn draw_arc_controls(app: &mut VectorcraftApp, ui: &mut Ui, start_deg: f64, end_
     number(app, ui, "arc-end", "End:", end, |app, v| {
         apply_shape(app, &[("arcEnd", json!(v)), ("arcMode", json!(next_mode))], json!({ "endAngle": v, "arcMode": next_mode }));
     });
-    const MODES: [Choice; 4] = [("pie", "Slice", "target"), ("chord", "Closed", "circle-off"), ("arc", "Arc", "dc-arc"), ("whole", "Open", "dc-ellipse")];
+    const MODES: [Choice; 4] =
+        [("pie", "Slice", "target"), ("chord", "Closed", "circle-off"), ("arc", "Arc", "dc-arc"), ("whole", "Open", "dc-ellipse")];
     if let Some(m_id) = choice(ui, "Arc", mode, &MODES) {
         let (s0, e0) = if m_id == "whole" {
             (0.0, 0.0)

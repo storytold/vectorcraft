@@ -1,7 +1,9 @@
+use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
+use craft::color_ui::ui::PaintChip;
+use craft::theme::Srgba;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
-use craft::behavior::CanvasView;
 use craft::ui::canvas_controls::TaskBar;
 use craft::ui::contract::{Bind, Props as _, Show as _};
 use craft::ui::menu::PanelRow;
@@ -10,9 +12,11 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
 use craft::ui::style::Variant;
-use vectorcraft_geom::Point;
+use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::text::TextKind;
+use vectorcraft_geom::{Point, Rect};
 
-use super::{NodeKind, Rect, TextKind, Ui, VectorcraftApp, json};
+use super::{Ui, VectorcraftApp, json};
 
 /// A memo of a check on the selection, kept for the document's `(uid, revision)`.
 type Memo = Option<((u64, u64), bool)>;
@@ -482,8 +486,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         let stroke = *chip == Chip::Stroke;
                         let (paint, mixed) = if stroke { (&paints.1, paints.3) } else { (&paints.0, paints.2) };
                         let value = if mixed { Mixed::Mixed } else { Mixed::Same(crate::paint_preview::well_paint(paint, &|_| None)) };
-                        // PLAN: assumed `Srgba: Default` for the chip's fallback colour, which a click never switches to.
-                        let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Default::default())
+                        // The fallback is unused: without the popover a click never switches the paint to Solid.
+                        let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Srgba::BLACK)
                             .popover(false)
                             .ring(stroke)
                             .selected(app.session.fill_active != stroke)
@@ -508,9 +512,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             if props.clicked() {
                                 shape_open = !shape_open;
                             }
-                            let _ = Popover::new(tl!("Shape Properties"), Bind::bound(&mut shape_open)).opened_by(&props.response).show(ui, |ui, _| {
-                                crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
-                            });
+                            let _ =
+                                Popover::new(tl!("Shape Properties"), Bind::bound(&mut shape_open)).opened_by(&props.response).show(ui, |ui, _| {
+                                    crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
+                                });
                         } else {
                             // The Lock button is off in isolation mode, as Object › Lock › Selection is.
                             let lock = IconButton::new(IconSpec::svg(IconId::new("lock")))

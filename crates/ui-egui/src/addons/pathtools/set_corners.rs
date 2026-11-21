@@ -79,11 +79,13 @@ mod tests {
     // PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog.id` (host.rs:385)
     fn set(app: &VectorcraftApp, key: &str, value: Value) {
         let ctx = app.ui_ctx.clone();
-        app.dialogs().expect("window host").with(|host| {
-            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-            host.set_json_field(&ctx, id, key, value)
-        })
-        .unwrap();
+        app.dialogs()
+            .expect("window host")
+            .with(|host| {
+                let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
+                host.set_json_field(&ctx, id, key, value)
+            })
+            .unwrap();
     }
 
     fn pump(app: &mut VectorcraftApp) {

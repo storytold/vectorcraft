@@ -63,7 +63,10 @@ fn samples_show_the_text_in_the_family_or_a_generic_sample() {
         let env = Env::of(ui);
         let cx = ContentPainterCx::new(ui.painter().clone(), &env, SurfaceKind::Panel.ink());
         let at = ui.max_rect();
-        let (top, bottom) = (egui::Rect::from_min_size(at.min, egui::vec2(160.0, 24.0)), egui::Rect::from_min_size(at.min + egui::vec2(0.0, 40.0), egui::vec2(160.0, 24.0)));
+        let (top, bottom) = (
+            egui::Rect::from_min_size(at.min, egui::vec2(160.0, 24.0)),
+            egui::Rect::from_min_size(at.min + egui::vec2(0.0, 40.0), egui::vec2(160.0, 24.0)),
+        );
         // Japanese text in a Latin font, and the generic sample itself.
         crate::font_menu::paint_family_sample(&cx, top, "Source Serif 4", "Regular", Some("雅楽"), false);
         crate::font_menu::paint_family_sample(&cx, bottom, "Source Serif 4", "Regular", None, false);
@@ -192,9 +195,7 @@ fn pick_only(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 /// history stay as they are, and a star is still toggled.
 #[test]
 fn menus_that_only_pick_a_font_leave_the_document_alone() {
-    // PLAN: assumed `crate::testing::Panel` (op.A15): `new(app, draw)`, `type_into(field, text)` (picks by Enter),
-    // `click(accessible name)`, `app()` and `ctx()`.
-    use crate::testing::Panel;
+    use super::panel_harness::Panel;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();

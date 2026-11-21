@@ -1,15 +1,19 @@
 //! The Layers panel's rename, isolation, reveal and thumbnail behaviour, driven through commands, the panel's events
 //! and one pass of `show`; nothing here reads painted text.
 
+use craft::behavior::{EditEvent, Mixed, SelectionChange};
+use craft::keymap::{CommandRef, Mods};
+use craft::layers::ui::filter::FilterObject;
+use craft::layers::ui::panel::{LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayersEvent};
+use craft::layers::ui::tree::{LayerRowKey, LayerTree};
+use craft::ui::contract::ReorderMove;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use egui::vec2;
 use serde_json::json;
 use vectorcraft_engine::{LayersReveal, Session};
 
 use super::tests::{listed_ids, nested, rows_of, two_rects, undo_len};
 use super::*;
-
-// PLAN: assumed `super::*` brings `RowId`, `DocLayers`, `LayerFilter`, `FilterObject`, `LayersEvent`, `LayerRowKey`,
-// `LayerSelect`, `LayerDrop`, `LayerMove`, `LayerPosition`, `LayerColumn`, `Mods`, `EditEvent`, `Mixed`,
-// `SelectionChange`, `CommandState` and `LayersFooterAction` into `layers` (document-panels-w7, document-panels-w8).
 
 /// One pass of the panel in a 300 × 800 window, one second after the previous one.
 fn pass(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -26,7 +30,7 @@ fn reveal_of(app: &VectorcraftApp) -> Option<LayersReveal> {
 
 /// The panel options of the app.
 fn options(app: &mut VectorcraftApp) -> &mut PanelOptions {
-    &mut app.ui.layers_ui.options // PLAN: assumed `LayersUi::options: PanelOptions` (document-panels-w7)
+    &mut app.ui.layers_panel
 }
 
 fn is_open(app: &VectorcraftApp, id: NodeId) -> bool {
@@ -55,7 +59,7 @@ fn key(id: NodeId) -> LayerRowKey<RowId> {
 
 /// Applies a panel event as the panel's output stage does.
 fn apply(app: &mut VectorcraftApp, event: LayersEvent<RowId>) {
-    rows::apply(app, event); // PLAN: assumed `rows::apply(app: &mut VectorcraftApp, event: LayersEvent<RowId>)`
+    rows::apply(app, vec![event]);
 }
 
 fn select_rows(app: &mut VectorcraftApp, ids: &[NodeId]) {
@@ -67,14 +71,21 @@ fn mv(layers: &[NodeId], target: NodeId, position: LayerPosition, copy: bool) ->
     LayerMove::new(layers.iter().map(|id| row(*id)).collect(), row(target), position, copy)
 }
 
-fn doc_layers(app: &VectorcraftApp, opts: &PanelOptions) -> DocLayers {
-    // PLAN: assumed `DocLayers::new(st: &DocState, opts: &PanelOptions, filter: &LayerFilter) -> DocLayers`
-    DocLayers::new(app.session.active().expect("a document"), opts, &app.ui.layers_ui.filter)
+/// The rows of the active document under the app's Panel Options.
+fn doc_layers(app: &VectorcraftApp) -> DocLayers<'_> {
+    DocLayers::new(app, app.session.active().expect("a document"))
 }
 
-/// Whether the panel takes the drop `m`.
+/// Whether the panel takes the drop `m`: its rows landing in the group `m` puts them in, as the list reports it.
 fn accepts(app: &VectorcraftApp, m: &LayerMove<RowId>) -> bool {
-    doc_layers(app, &PanelOptions::default()).accepts_drop(m) // PLAN: assumed `DocLayers::accepts_drop(&self, &LayerMove<RowId>) -> bool`
+    let tree = doc_layers(app);
+    let parent = match m.position {
+        LayerPosition::Into => Some(m.target),
+        _ => tree.parent(&m.target),
+    };
+    let keys: Vec<LayerRowKey<RowId>> = m.layers.iter().map(|id| LayerRowKey::Layer(*id)).collect();
+    let reorder = ReorderMove { key: keys[0].clone(), keys, to: 0, copy: m.copy, parent: parent.map(LayerRowKey::Layer) };
+    tree.accepts_drop(&reorder, Mods::NONE)
 }
 
 fn drop_event(m: LayerMove<RowId>) -> LayersEvent<RowId> {
@@ -82,37 +93,50 @@ fn drop_event(m: LayerMove<RowId>) -> LayersEvent<RowId> {
     LayersEvent::Drop(EditEvent::set(Mixed::Same(drop.clone()), drop, "Move".into(), None))
 }
 
-/// Every row the panel lists under the options `opts`, top down, depth first.
-fn listed_with(app: &VectorcraftApp, opts: &PanelOptions) -> Vec<NodeId> {
-    fn walk(layers: &DocLayers, parent: Option<RowId>, out: &mut Vec<NodeId>) {
-        // PLAN: assumed `DocLayers::children(&self, parent: Option<RowId>) -> Vec<RowId>`
+/// Every row the panel lists under the app's Panel Options, top down, depth first.
+fn listed(app: &VectorcraftApp) -> Vec<NodeId> {
+    fn walk(layers: &DocLayers, parent: Option<&RowId>, out: &mut Vec<NodeId>) {
         for child in layers.children(parent) {
             if let RowId::Node(id) = child {
                 out.push(id);
             }
-            walk(layers, Some(child), out);
+            walk(layers, Some(&child), out);
         }
     }
     let mut out = vec![];
-    walk(&doc_layers(app, opts), None, &mut out);
+    walk(&doc_layers(app), None, &mut out);
     out
 }
 
 /// Whether the command's state in the panel menu is enabled.
 fn enabled(app: &VectorcraftApp, command: &str) -> bool {
-    // PLAN: assumed `controls::menu_states(app: &VectorcraftApp) -> CommandStates`
-    controls::menu_states(app).get(&command.into()).is_some_and(|s| s.is_enabled())
+    menu_states(app).get(&CommandRef::new(command)).is_some_and(CommandState::is_enabled)
+}
+
+/// The panel menu's command states.
+fn menu_states(app: &VectorcraftApp) -> CommandStates {
+    let mut states = CommandStates::default();
+    controls::menu_states(app, &mut states);
+    states
 }
 
 /// Whether the panel menu titles Locate `title`.
 fn locate_titled(app: &VectorcraftApp, title: &str) -> bool {
-    let states = controls::menu_states(app);
-    states.get(&"layer.locate".into()).is_some_and(|s| *s == CommandState::new().enabled(s.is_enabled()).title(title))
+    menu_states(app).get(&CommandRef::new("layer.locate")).is_some_and(|s| *s == CommandState::new().enabled(s.is_enabled()).title(title))
 }
 
-/// A menu command run as the panel menu runs it, on the rows it lists.
+/// A menu command run as the panel menu runs it: the panel's own commands, else the app's.
 fn menu_run(app: &mut VectorcraftApp, command: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
-    controls::run(app, command, params) // PLAN: assumed `controls::run(app, command: &str, params: Value) -> Result<Value, String>`
+    match controls::run(app, command, &params) {
+        Some(answer) => answer,
+        None => app.run(command, params),
+    }
+}
+
+/// Presses the footer's Locate: runs the command its pick gives.
+fn footer_locate(app: &mut VectorcraftApp) {
+    let (id, params) = controls::footer_pick(&doc_layers(app), controls::LOCATE, Mods::NONE).expect("Locate runs a command");
+    app.run(&id, params).unwrap();
 }
 
 /// What a document's Layers thumbnail store holds and what it uploaded in the last frame: `(entries, uploads)`. It
@@ -299,9 +323,8 @@ fn isolation_keeps_rename_and_locate_to_the_rows_listed() {
     assert!(err.contains("the object is outside the isolated group"), "{err}");
     assert_eq!(app.run("ui.rename", json!({"id": b.0})).unwrap()["id"], json!(b.0));
     {
-        let st = app.session.active().unwrap();
-        // PLAN: assumed `listed_when_opened` keeps its argument order with `&LayerFilter` for the filter
-        let listed = |id| listed_when_opened(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &LayerFilter::default(), id);
+        let tree = doc_layers(&app);
+        let listed = |id| listed_when_opened(&tree, &LayerFilter::default(), id);
         assert_eq!([layer, sub, g, b, c].map(listed), [false, true, true, true, false]);
     }
     let st = app.session.active_mut().unwrap();
@@ -367,15 +390,14 @@ fn isolation_keeps_new_layers_to_the_rows_listed() {
 #[test]
 fn isolation_with_show_layers_only_lists_the_isolated_group_or_object() {
     let (mut app, [_, sub, g, _, a, _]) = nested();
-    let opts = PanelOptions { layers_only: true, ..Default::default() };
+    options(&mut app).layers_only = true;
     app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
-    assert_eq!(listed_with(&app, &opts), [g], "the group's row, without its art");
-    let st = app.session.active().unwrap();
-    assert!(listed_when_opened(&st.doc, st.isolation, &st.layers_open, &opts, "", &LayerFilter::default(), g));
+    assert_eq!(listed(&app), [g], "the group's row, without its art");
+    assert!(listed_when_opened(&doc_layers(&app), &LayerFilter::default(), g));
     app.session.execute("object.isolate", &json!({"id": a.0})).unwrap();
-    assert_eq!(listed_with(&app, &opts), [a]);
+    assert_eq!(listed(&app), [a]);
     app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
-    assert_eq!(listed_with(&app, &opts), [sub], "a sublayer with no sublayers inside lists itself alone");
+    assert_eq!(listed(&app), [sub], "a sublayer with no sublayers inside lists itself alone");
 }
 
 /// In isolation mode the panel menu's Duplicate Selection copies only the rows the panel lists, Hide Others is off, and
@@ -455,7 +477,6 @@ fn isolation_opens_the_isolated_row_of_each_document() {
 fn isolation_keeps_drops_on_the_isolated_row_inside_it() {
     let (mut app, [layer, sub, g, ..]) = nested();
     app.session.execute("guide.add", &json!({"vertical": true, "pos": 50, "layer": layer.0})).unwrap();
-    let guide = app.session.active().unwrap().doc.ruler_guides()[0].id.unwrap();
     app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
     let before = node_count(&app);
     let onto_itself = mv(&[sub], sub, LayerPosition::Into, true);
@@ -463,8 +484,7 @@ fn isolation_keeps_drops_on_the_isolated_row_inside_it() {
     apply(&mut app, drop_event(onto_itself));
     assert_eq!(node_count(&app), before, "nothing was copied");
     app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
-    // PLAN: assumed a guide's row is `RowId::Node(its node id)`
-    let guide_onto_group = mv(&[guide], g, LayerPosition::Into, false);
+    let guide_onto_group = LayerMove::new(vec![RowId::Guide(0)], row(g), LayerPosition::Into, false);
     assert!(accepts(&app, &guide_onto_group), "the guide would go to the sublayer holding it");
     app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
     assert!(!accepts(&app, &guide_onto_group), "not onto the isolated group's row, outside which its sublayer is");
@@ -496,14 +516,14 @@ fn with_show_layers_only_locate_object_becomes_locate_layer() {
     let ctx = egui::Context::default();
     app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
     assert!(locate_titled(&app, "Locate Object"));
-    controls::footer(&mut app, LayersFooterAction::Locate); // PLAN: assumed `controls::footer(app, LayersFooterAction)` and its `Locate` variant
+    footer_locate(&mut app);
     assert_eq!(rows_of(&app), vec![b], "off: the art's own row");
 
     options(&mut app).layers_only = true;
     assert!(locate_titled(&app, "Locate Layer"));
     app.session.active_mut().unwrap().layers_open.set(layer, false);
     pass(&mut app, &ctx);
-    controls::footer(&mut app, LayersFooterAction::Locate);
+    footer_locate(&mut app);
     assert_eq!(rows_of(&app), vec![sub], "on: the sublayer holding the art");
     pass(&mut app, &ctx);
     assert!(is_open(&app, layer), "the layer around the sublayer opens");

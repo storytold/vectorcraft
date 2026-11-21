@@ -18,6 +18,7 @@ use craft::behavior::{Metrics, NavMove, PointerButton, PressPhase, Sense};
 use craft::egui::{ColorImage, Key, Pos2, Rect, Response, Ui, Vec2, pos2};
 use craft::host::queue::{JobQueue, Priority, QueueOptions};
 use craft::host::{Wake, default_jobs};
+use craft::platform::clock::monotonic_ms;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{
@@ -331,9 +332,9 @@ impl View {
         {
             return Some((f.clone(), *ms));
         }
-        let t0 = crate::now_ms();
+        let t0 = monotonic_ms();
         let f = Arc::new(fold(blank, Some(panel), amount, TOLERANCE)?);
-        let ms = crate::now_ms() - t0;
+        let ms = monotonic_ms() - t0;
         self.folded = Some((key, f.clone(), ms));
         Some((f, ms))
     }
@@ -401,8 +402,7 @@ impl View {
             return;
         }
         let have = shown.is_some_and(|k| k.uid == key.uid);
-        // PLAN: needs the `platform` feature of the `craft` facade in the app's Cargo.toml (not in this set's files).
-        if have && !self.settle.settled(ui.ctx(), key.uid, key.revision, craft::platform::clock::monotonic_ms() / 1000.0) {
+        if have && !self.settle.settled(ui.ctx(), key.uid, key.revision, monotonic_ms() / 1000.0) {
             return;
         }
         let opts = vectorcraft_render::RenderOptions {
@@ -862,13 +862,13 @@ impl Component for FoldView {
         let key = DrawKey { fold: folding.key, camera, inside, print: print.map(|(k, _)| *k) };
         let mut fresh = None;
         let texture = store(ctx).get_or_put(ctx, 0, key.revision(), || {
-            let t0 = crate::now_ms();
+            let t0 = monotonic_ms();
             let scene = raster::Scene { blank, folded: &folding.folded, print: print.map(|(_, p)| &**p), inside, outside: [255; 4], camera };
             let Some(img) = raster::render(&scene) else {
                 return ColorImage::from_rgba_premultiplied([1, 1], &[0; 4]);
             };
             let color = ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
-            let frame = Frame { width: img.width, height: img.height, fold_ms: folding.fold_ms, draw_ms: crate::now_ms() - t0 };
+            let frame = Frame { width: img.width, height: img.height, fold_ms: folding.fold_ms, draw_ms: monotonic_ms() - t0 };
             fresh = Some((Arc::new(img), frame));
             color
         });

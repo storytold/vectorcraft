@@ -132,7 +132,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     if s.kind.rounds() {
-        let radius = |ui: &mut Ui| typed(NumberField::length(tl!("Corner Radius"), Bind::given(Some(s.radius)), lengths).range(0.0..=MAX_SIZE).show(ui).value());
+        let radius = |ui: &mut Ui| {
+            typed(NumberField::length(tl!("Corner Radius"), Bind::given(Some(s.radius)), lengths).range(0.0..=MAX_SIZE).show(ui).value())
+        };
         if let Some(v) = row(ui, "Corner Radius", "parametric-shape-radius", radius) {
             change = Some(json!({ "radius": v }));
         }

@@ -11,8 +11,8 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::{Access, AutomationRoots};
 
 use super::*;
-use crate::background;
 use crate::tests_background::{Files, Gate, written};
+use crate::{VectorcraftApp, background};
 
 /// A fresh folder for one test (removed when dropped).
 struct Folder(std::path::PathBuf);
@@ -38,7 +38,7 @@ impl Drop for Folder {
 /// An app with a window, so its dialogs have a host.
 fn windowed() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    // PLAN: files-w7's `scripted` gives the app its window context (`ui_ctx`) and a held file service.
+    // A window context and a held file service.
     let _ = crate::tests::picks::scripted(&mut app);
     app
 }
@@ -169,9 +169,10 @@ fn package_writes_the_folder_then_offers_to_show_it() {
     let dir = Folder::new("folder");
     let mut app = saved(&dir);
     app.run("ui.packageDialog", json!({})).unwrap();
-    let (name, copy_fonts, folder) =
-        with_package(&app, |d| (d.fields().text("name").map(str::to_string), d.fields().bool("copyFonts"), d.fields().text("folder").map(str::to_string)))
-            .unwrap();
+    let (name, copy_fonts, folder) = with_package(&app, |d| {
+        (d.fields().text("name").map(str::to_string), d.fields().bool("copyFonts"), d.fields().text("folder").map(str::to_string))
+    })
+    .unwrap();
     assert_eq!((name.as_deref(), copy_fonts), (Some("card Folder"), Some(true)));
     assert_eq!(folder.as_deref().map(std::path::Path::new), Some(dir.0.as_path()), "next to the document");
     let out = dir.path("out");

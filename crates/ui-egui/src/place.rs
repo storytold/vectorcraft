@@ -4,10 +4,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use craft::host::PickRequest;
 use craft::behavior::CanvasView;
-use craft::ui::contract::DropOperation;
+use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::{Button, Link};
+use craft::ui::contract::DropOperation;
 use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, Trigger, clicked};
 use craft::ui::display::{Badge, Picture, PictureSize, Shade, Text};
 use craft::ui::layout_components::Row;
@@ -20,9 +20,8 @@ use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_geom::Point;
 
-use crate::file_asks::{Owner, Picked};
+use crate::file_asks::Owner;
 use crate::{VectorcraftApp, io};
-// PLAN: assumed paths for the craft_ui re-exports above and `craft_host` as a dependency of this crate; `Picked::{Paths(Vec<PathBuf>), Contents(Vec<(String, Vec<u8>)>)}` per fl.A3 (files-w5).
 
 /// The loaded place cursor's thumbnail size (px on the longer side).
 const THUMB: u32 = 64;
@@ -343,12 +342,8 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>, show: Option<bool>) 
     let info = lines(app, &files, units);
     let one_object = app.session.active().is_some_and(|d| d.selection.objects.len() == 1);
     let linked: Vec<bool> = files.iter().map(|f| is_vectorcraft_file(app, f)).collect();
-    let options = PlaceOptions {
-        link: app.ui.place_link,
-        template: false,
-        replace: false,
-        show_import_options: show.unwrap_or(app.ui.place_import_options),
-    };
+    let options =
+        PlaceOptions { link: app.ui.place_link, template: false, replace: false, show_import_options: show.unwrap_or(app.ui.place_import_options) };
     let replace_enabled = files.len() == 1 && one_object;
     let dialog = crate::dialogs::place::PlaceDialog::new(files, info, options, replace_enabled, linked.contains(&true), linked.contains(&false));
     dialogs.with(|host| host.open(dialog));
@@ -496,7 +491,7 @@ fn line(i: Result<Value, String>, units: vectorcraft_doc::Unit) -> String {
     match (i["pixelWidth"].as_u64(), i["pixelHeight"].as_u64()) {
         (Some(w), Some(h)) => {
             let ppi = i["ppi"][0].as_f64().unwrap_or(72.0);
-            let ppi = crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &fmt_ppi(ppi))]);
+            let ppi = crate::i18n::fmt(tl!("{n} ppi"), &[("n", &fmt_ppi(ppi))]);
             format!("{w} × {h} px, {ppi}, {} ({size})", i["colorMode"].as_str().unwrap_or("RGB"))
         }
         _ => format!("{} ({size})", i["format"].as_str().unwrap_or_default().to_uppercase()),
@@ -1004,11 +999,9 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
         });
     }
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| crate::panels::image_trace::trace_button(app, ui));
-    for (label, cmd) in [
-        (tl!("Mask"), "object.maskImage"),
-        (tl!("Crop Image"), "ui.cropImage"),
-        (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND),
-    ] {
+    for (label, cmd) in
+        [(tl!("Mask"), "object.maskImage"), (tl!("Crop Image"), "ui.cropImage"), (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND)]
+    {
         Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| {
             if clicked(&Button::new(label.to_string()).show(ui)) {
                 crate::menus::invoke(app, cmd, json!({}));

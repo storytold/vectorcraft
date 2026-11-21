@@ -36,13 +36,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
+use craft::behavior::CanvasView;
+use craft::ui::canvas::ViewTurn;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::ParamsPlace;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::VectorcraftApp;
-use crate::canvas::Xf;
 
 /// Synthetic pointer input advances one event per frame: keep gestures and backlog modest.
 pub(crate) const MAX_DRAG_STEPS: u64 = 256;
@@ -1750,17 +1751,16 @@ pub(crate) fn save_screenshot_with_limit(
 #[cfg(test)]
 mod tests;
 
-/// The window and coordinate mapping where a control-channel Rotate View drag began.
+/// The window and view where a control-channel Rotate View drag began, and its turn.
 #[derive(Clone, Copy)]
 pub(crate) struct RotateViewPress {
     window: (u64, u32),
     document_resets: u64,
-    xf: Xf,
-    start_angle: f64,
-    start_rotation: f64,
+    view: CanvasView,
+    turn: ViewTurn,
 }
 
-/// Rotate View belongs to the canvas, not the engine's placeholder tool. Keep its press mapping
+/// Rotate View belongs to the canvas, not the engine's placeholder tool. Keep its press view
 /// across requests so document-coordinate drags do not move again as the view turns underneath.
 fn rotate_view_pointer(
     app: &mut VectorcraftApp,
@@ -1775,35 +1775,23 @@ fn rotate_view_pointer(
     if kind == PointerKind::Drag && stored.is_none() {
         return Err("Rotate View needs a down event before a drag".into());
     }
-    let mut press = match stored {
-        Some(press) => press,
-        None => {
-            let rect = app.canvas_rect.ok_or("no canvas yet")?;
-            let view = app.view().ok_or("no document")?;
-            RotateViewPress { window, document_resets, xf: Xf::at(rect, view, app.canvas_ui_zoom), start_angle: 0.0, start_rotation: view.rotation }
-        }
+    let view = match stored {
+        Some(press) => press.view,
+        None => app.canvas_view().ok_or("no canvas yet")?,
     };
+    let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { view.to_screen(position) };
+    if !point.is_finite() || !view.rect.center().is_finite() {
+        return Err("Rotate View needs finite canvas coordinates".into());
+    }
+    let press = stored.unwrap_or_else(|| RotateViewPress { window, document_resets, view, turn: ViewTurn::begin(&view, point) });
     // A gesture cannot turn a different document/view or resume after its document was reset.
     if (press.window, press.document_resets) != (window, document_resets) {
         return Err("the Rotate View gesture's window or document changed".into());
     }
-    let point = if screen { egui::pos2(position.x as f32, position.y as f32) } else { press.xf.to_screen(position) };
-    let center = press.xf.rect.center();
-    if !point.is_finite() || !center.is_finite() {
-        return Err("Rotate View needs finite canvas coordinates".into());
-    }
     match kind {
-        PointerKind::Down => {
-            press.start_angle = (point.y - center.y).atan2(point.x - center.x) as f64;
-            app.control_rotate_press = Some(press);
-        }
-        PointerKind::Drag => {
-            app.view_mut().ok_or("no document")?.rotation =
-                crate::canvas::drag_rotation(center, point, press.start_angle, press.start_rotation, shift);
-        }
-        PointerKind::Up => {
-            app.control_rotate_press = None;
-        }
+        PointerKind::Down => app.control_rotate_press = Some(press),
+        PointerKind::Drag => app.view_mut().ok_or("no document")?.rotation = press.turn.drag(point, shift, view.flip_x),
+        PointerKind::Up => app.control_rotate_press = None,
         PointerKind::Move | PointerKind::DoubleClick | PointerKind::TripleClick => {}
     }
     Ok(())

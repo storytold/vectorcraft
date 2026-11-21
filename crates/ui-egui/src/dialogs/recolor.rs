@@ -129,7 +129,9 @@ use craft::theme::{ModelValues, Rgba, Srgba};
 use craft::ui::buttons::{IconButton, ToggleButton};
 use craft::ui::choice::{Checkbox, Swatch};
 use craft::ui::contract::overlay::Anchor;
-use craft::ui::contract::{Bind, CollectionEvent, ColumnSpec, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{
+    Bind, CollectionEvent, ColumnSpec, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Trigger,
+};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
@@ -158,6 +160,7 @@ use super::preview::LivePreview;
 use crate::VectorcraftApp;
 use crate::panels::c32;
 use crate::panels::color::{color_of_values, working_rgb};
+use crate::panels::library_panel;
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries, limit_key};
 
 /// The dialog kind of Recolor Artwork.
@@ -181,7 +184,8 @@ const CMD: &str = "recolor.apply";
 const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job", "Color Library"];
 /// The color modes of the sliders under the rows; a row whose new color is a spot color of the
 /// library also has Tint.
-const SLIDER_MODES: [ColorPanelMode; 4] = [ColorPanelMode::HsbSliders, ColorPanelMode::RgbSliders, ColorPanelMode::CmykSliders, ColorPanelMode::LabSliders];
+const SLIDER_MODES: [ColorPanelMode; 4] =
+    [ColorPanelMode::HsbSliders, ColorPanelMode::RgbSliders, ColorPanelMode::CmykSliders, ColorPanelMode::LabSliders];
 /// Colours a slider's track shows from its start to its end.
 const TRACK_STOPS: usize = 7;
 /// The `sliderMode` of the Edit tab's Global Adjust sliders, and the menu's name for it.
@@ -890,7 +894,9 @@ fn check_group_action(d: &Fields, action: &Value, other_paints: impl Fn(&str) ->
     let group = d.fields.get("group").and_then(Value::as_str);
     match (action.as_str(), group) {
         (Some("new"), _) => Ok(()),
-        (Some("save"), Some(g)) if other_paints(g) => Err(format!("color group `{g}` holds swatches that are not colors, which Save Changes can't keep")),
+        (Some("save"), Some(g)) if other_paints(g) => {
+            Err(format!("color group `{g}` holds swatches that are not colors, which Save Changes can't keep"))
+        }
         (Some("save" | "delete"), Some(_)) => Ok(()),
         (Some("save" | "delete"), None) => Err("missing `group`".into()),
         _ => Err(format!("`{GROUP_ACTION}` must be \"save\", \"new\" or \"delete\", not {action}")),
@@ -1415,14 +1421,12 @@ struct Feed {
 
 impl Feed {
     fn of(app: &VectorcraftApp, d: &Fields) -> Feed {
-        // None, the document's swatches, then the colour libraries: the built-in ones (at the top
-        // level of the library menu) translated, those the user saved or loaded by their names.
+        // None, the document's swatches, then the colour libraries: the built-in ones translated,
+        // those the user saved or loaded by their names.
         let libs = colour_libraries(app);
-        let keys: Vec<&str> = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
-        let names: Vec<&str> = ["None", DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
-        let builtin = |k: usize| k.checked_sub(2).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
-        let shown = super::shown_names(crate::i18n::current(), &names, builtin);
-        let libraries = keys.iter().zip(&shown).map(|(k, n)| ((*k).to_owned(), (*n).to_owned())).collect();
+        let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
+        let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
+        let libraries = fixed.into_iter().chain(named).collect();
         let rs = rows(d);
         Feed {
             libraries,
@@ -2001,7 +2005,9 @@ fn chips(rect: egui::Rect, colors: &[egui::Color32]) -> Vec<egui::Shape> {
     colors
         .iter()
         .enumerate()
-        .map(|(i, c)| egui::Shape::rect_filled(egui::Rect::from_min_size(rect.min + egui::vec2(i as f32 * w, 0.0), egui::vec2(w, rect.height())), 0.0, *c))
+        .map(|(i, c)| {
+            egui::Shape::rect_filled(egui::Rect::from_min_size(rect.min + egui::vec2(i as f32 * w, 0.0), egui::vec2(w, rect.height())), 0.0, *c)
+        })
         .collect()
 }
 
@@ -2032,8 +2038,9 @@ fn assign_tab(
     // Reduction and the preserve rules apply to art (a colour group alone has a row per colour).
     if art {
         Row::new().show(ui, |ui, _| {
-            let counts: Vec<Entry<usize>> =
-                std::iter::once(Entry::new(0, Label::from(tl!("Auto")))).chain((1..=total).map(|n| Entry::new(n, Label::from(n.to_string())))).collect();
+            let counts: Vec<Entry<usize>> = std::iter::once(Entry::new(0, Label::from(tl!("Auto"))))
+                .chain((1..=total).map(|n| Entry::new(n, Label::from(n.to_string()))))
+                .collect();
             let current = d.fields.get("colors").and_then(Value::as_u64).map_or(0, |n| n as usize);
             if let Some(&n) = Select::new(tl!("Colors:"), Bind::given(current), &counts).show(ui).value() {
                 d.fields.insert("colors".into(), if n == 0 { Value::Null } else { json!(n) });
@@ -2052,7 +2059,11 @@ fn assign_tab(
         Text::new(tl!("No colors to recolor (preserved colors are left out).")).shade(Shade::Muted).show(ui);
     }
     let columns = vec![
-        ColumnSpec::new(CURRENT, Label::from(crate::i18n::fmt(tl!("Current Colors ({total})"), &[("total", &total.to_string())])), ColumnWidth::fill(1.0)),
+        ColumnSpec::new(
+            CURRENT,
+            Label::from(crate::i18n::fmt(tl!("Current Colors ({total})"), &[("total", &total.to_string())])),
+            ColumnWidth::fill(1.0),
+        ),
         ColumnSpec::new(ARROW, Label::from(""), ColumnWidth::Content),
         ColumnSpec::new(NEW, Label::from(tl!("New")), ColumnWidth::Content),
         ColumnSpec::new(HEX, Label::from(tl!("Hex")), ColumnWidth::Content),
@@ -2082,15 +2093,14 @@ fn assign_tab(
             let edits = &edits;
             let row = shown_rows.get(i).cloned().unwrap_or_default();
             let off = excluded(&row);
-            let from: Vec<egui::Color32> = from_colors(&row)
-                .iter()
-                .map(|c| if off { c32(c).gamma_multiply(0.35) } else { c32(c) })
-                .collect();
+            let from: Vec<egui::Color32> = from_colors(&row).iter().map(|c| if off { c32(c).gamma_multiply(0.35) } else { c32(c) }).collect();
             let to = to_color(&row);
             let fill = to.map(|c| srgba(&feed.rows.get(i).map_or(c, |f| f.shown)));
-            let arrow = ToggleButton::new(tl!("Recolor this row"), Bind::given(!off)).icon(IconId::new(ARROW_OFF)).on_icon(IconId::new(ARROW_ON)).icon_only();
+            let arrow =
+                ToggleButton::new(tl!("Recolor this row"), Bind::given(!off)).icon(IconId::new(ARROW_OFF)).on_icon(IconId::new(ARROW_ON)).icon_only();
             let swatch = Swatch::new(format!("{} {}", tl!("New"), i + 1), fill.map_or(Mixed::Mixed, Mixed::Same)).enabled(!off);
-            let hex = HexField::hex(format!("{} {}", tl!("Color"), i + 1), Bind::given(to.map_or(Rgba::rgb(0, 0, 0), |c| hex_rgba(&c)))).enabled(to.is_some());
+            let hex = HexField::hex(format!("{} {}", tl!("Color"), i + 1), Bind::given(to.map_or(Rgba::rgb(0, 0, 0), |c| hex_rgba(&c))))
+                .enabled(to.is_some());
             // PLAN: the current colors are the row's thumbnail strip, not a `SwatchTable` cell: a cell field takes its
             // own presses, so a click on them would not select the row as it does in production.
             ListRow::new(names.get(i).cloned().unwrap_or_default())
@@ -2150,18 +2160,21 @@ fn assign_tab(
         let mut open = true;
         let mut limit_to = None;
         let current = d.str("limitTo");
-        let menu = Menu::new(tl!("Colors")).opened_by(&out.response, Trigger::Manual).anchor(Anchor::Point(at)).open(Bind::bound(&mut open)).show(ui, |ui, _| {
-            if MenuItem::new(tl!("Pick from Swatches")).show(ui).ran {
-                filed.picker = Some((i, true));
-            }
-            Menu::submenu_row(ui, tl!("Limit to Library"), |ui, _| {
-                for (key, name) in &feed.libraries {
-                    if MenuItem::new(name.clone()).check(*key == current).show(ui).ran {
-                        limit_to = Some(key.clone());
-                    }
+        let menu = Menu::new(tl!("Colors")).opened_by(&out.response, Trigger::Manual).anchor(Anchor::Point(at)).open(Bind::bound(&mut open)).show(
+            ui,
+            |ui, _| {
+                if MenuItem::new(tl!("Pick from Swatches")).show(ui).ran {
+                    filed.picker = Some((i, true));
                 }
-            });
-        });
+                Menu::submenu_row(ui, tl!("Limit to Library"), |ui, _| {
+                    for (key, name) in &feed.libraries {
+                        if MenuItem::new(name.clone()).check(*key == current).show(ui).ran {
+                            limit_to = Some(key.clone());
+                        }
+                    }
+                });
+            },
+        );
         if menu.output.closed.is_some() || !open {
             *row_menu = None;
         }
@@ -2254,11 +2267,12 @@ fn group_list(ui: &mut Ui, d: &mut Fields, feed: &Feed) {
     let mut picked: Option<Value> = None;
     Stack::new().show(ui, |ui, _| {
         let source = keyed(&keys, |k| *k).with_text(|k| Cow::Owned(names.get(*k).cloned().unwrap_or_default()));
-        let out = List::new(tl!("Color Groups")).select(SelectMode::Single).selection(Bind::bound(&mut chosen)).show_items(ui, &source, &mut |key, _| {
-            let colors: Vec<egui::Color32> = feed.groups.get(*key).map(|(_, cs)| cs.iter().map(c32).collect()).unwrap_or_default();
-            ListRow::new(names.get(*key).cloned().unwrap_or_default())
-                .thumb_aspect(ThumbSize::Small, ThumbAspect::new(4, 1), move |cx, rect| cx.data_shapes(chips(rect, &colors)))
-        });
+        let out =
+            List::new(tl!("Color Groups")).select(SelectMode::Single).selection(Bind::bound(&mut chosen)).show_items(ui, &source, &mut |key, _| {
+                let colors: Vec<egui::Color32> = feed.groups.get(*key).map(|(_, cs)| cs.iter().map(c32).collect()).unwrap_or_default();
+                ListRow::new(names.get(*key).cloned().unwrap_or_default())
+                    .thumb_aspect(ThumbSize::Small, ThumbAspect::new(4, 1), move |cx, rect| cx.data_shapes(chips(rect, &colors)))
+            });
         for event in out.events {
             if let CollectionEvent::Selection { change, .. } = event {
                 picked = match change {
@@ -2339,14 +2353,18 @@ fn mode_label(m: ColorPanelMode) -> &'static str {
 /// The channels the sliders show in `mode`: label, least and greatest value, unit.
 fn channels(mode: ColorPanelMode) -> &'static [(&'static str, f64, f64, ChannelUnit)] {
     match mode {
-        ColorPanelMode::RgbSliders => &[("R", 0.0, 255.0, ChannelUnit::None), ("G", 0.0, 255.0, ChannelUnit::None), ("B", 0.0, 255.0, ChannelUnit::None)],
+        ColorPanelMode::RgbSliders => {
+            &[("R", 0.0, 255.0, ChannelUnit::None), ("G", 0.0, 255.0, ChannelUnit::None), ("B", 0.0, 255.0, ChannelUnit::None)]
+        }
         ColorPanelMode::CmykSliders => &[
             ("C", 0.0, 100.0, ChannelUnit::Percent),
             ("M", 0.0, 100.0, ChannelUnit::Percent),
             ("Y", 0.0, 100.0, ChannelUnit::Percent),
             ("K", 0.0, 100.0, ChannelUnit::Percent),
         ],
-        ColorPanelMode::LabSliders => &[("L", 0.0, 100.0, ChannelUnit::None), ("a", -128.0, 127.0, ChannelUnit::None), ("b", -128.0, 127.0, ChannelUnit::None)],
+        ColorPanelMode::LabSliders => {
+            &[("L", 0.0, 100.0, ChannelUnit::None), ("a", -128.0, 127.0, ChannelUnit::None), ("b", -128.0, 127.0, ChannelUnit::None)]
+        }
         _ => &[("H", 0.0, 360.0, ChannelUnit::Degrees), ("S", 0.0, 100.0, ChannelUnit::Percent), ("B", 0.0, 100.0, ChannelUnit::Percent)],
     }
 }
@@ -2512,7 +2530,8 @@ fn global_sliders(ui: &mut Ui, d: &mut Fields, sample: Color) {
                     })
                     .collect();
                 let value = values.get(n).copied().unwrap_or(0.0);
-                let Some(out) = ChannelRow::new(*label, Bind::given(value), rule(-100.0, 100.0)).unit(ChannelUnit::Percent).track(stops).show(ui) else {
+                let Some(out) = ChannelRow::new(*label, Bind::given(value), rule(-100.0, 100.0)).unit(ChannelUnit::Percent).track(stops).show(ui)
+                else {
                     continue;
                 };
                 if let Some(&v) = out.events.value().filter(|v| v.is_finite()) {
@@ -2557,7 +2576,11 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
             let tint = f64::from(row_tint(&rows[i])) * 100.0;
             let stops: Vec<Srgba> = (0..TRACK_STOPS).map(|k| srgba(&target.linked.tinted(k as f32 / (TRACK_STOPS - 1) as f32))).collect();
             Row::new().show(ui, |ui, _| {
-                if let Some(out) = ChannelRow::new(tl!("Tint"), Bind::given(tint), rule(0.0, 100.0)).short("T").unit(ChannelUnit::Percent).track(stops.clone()).show(ui)
+                if let Some(out) = ChannelRow::new(tl!("Tint"), Bind::given(tint), rule(0.0, 100.0))
+                    .short("T")
+                    .unit(ChannelUnit::Percent)
+                    .track(stops.clone())
+                    .show(ui)
                     && let Some(&v) = out.events.value().filter(|v| v.is_finite())
                 {
                     rows[i]["tint"] = json!(v.round());
@@ -2574,7 +2597,8 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
                 for (k, &(name, lo, hi, unit)) in pair.iter().enumerate() {
                     let n = line * 2 + k;
                     let value = f64::from(comps.get(n).copied().unwrap_or(0.0));
-                    let Some(out) = ChannelRow::new(name, Bind::given(value), rule(lo, hi)).short(name).unit(unit).track(track(mode, &comps, n, lo, hi)).show(ui)
+                    let Some(out) =
+                        ChannelRow::new(name, Bind::given(value), rule(lo, hi)).short(name).unit(unit).track(track(mode, &comps, n, lo, hi)).show(ui)
                     else {
                         continue;
                     };
@@ -3615,7 +3639,7 @@ mod tests {
         let row_of = |rc: &Recolor, key: &str| rc.rows().iter().position(|r| r["from"][0] == key).unwrap();
         let (r, b) = (row_of(&rc, "rgb 255 0 0"), row_of(&rc, "rgb 0 0 255"));
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc,red), fill_hex(&rc,blue));
+        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
         rc.set(THEME_PICKS, json!([{"at": [107, 17]}])).unwrap();
         rc.frame();
         assert_eq!(new_colors(&rc), [json!("rgb 0 255 0"), json!("rgb 0 255 0")], "one color for both rows");
@@ -3661,7 +3685,7 @@ mod tests {
     fn colors_merged_into_a_new_row_take_its_new_color() {
         let (mut rc, [red, blue]) = theme_setup();
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc,red), fill_hex(&rc,blue));
+        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
         let mut rs = rc.rows();
         let at = new_row(&mut rs, &[]);
         rs[at]["to"] = json!("rgb 0 255 0");
@@ -3674,7 +3698,7 @@ mod tests {
         new_row(&mut rs, &[]);
         rc.set("rows", Value::Array(rs)).unwrap();
         rc.frame();
-        assert_eq!(fill_hex(&rc,blue), "#00ff00", "the art previews the merge");
+        assert_eq!(fill_hex(&rc, blue), "#00ff00", "the art previews the merge");
         rc.confirm().unwrap();
         assert_eq!(fills(&rc), ("#ff0000".into(), "#00ff00".into()));
         assert_eq!(undo_len(&rc.app()), undo + 1, "one undo step");
@@ -3689,7 +3713,12 @@ mod tests {
     /// to green (the purple's square id last).
     fn prominent_setup() -> (Recolor, u64) {
         let mut app = app(300);
-        let ids = [square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#ff0000"), square(&mut app, 70.0, "#8000cc"), square(&mut app, 100.0, "#0000ff")];
+        let ids = [
+            square(&mut app, 10.0, "#ff0000"),
+            square(&mut app, 40.0, "#ff0000"),
+            square(&mut app, 70.0, "#8000cc"),
+            square(&mut app, 100.0, "#0000ff"),
+        ];
         app.run("select.set", json!({"ids": ids})).unwrap();
         let mut rc = opened(app, json!({}));
         rc.set("method", json!(Method::Exact.id())).unwrap();
@@ -3712,13 +3741,13 @@ mod tests {
         let (mut rc, purple) = prominent_setup();
         assert_eq!(rc.field(SHARES), Some(json!([25.0, 75.0])));
         assert_eq!(prominent_parts(&rc.fields(), &rc.rows()), [(1, 75.0), (0, 25.0)], "the largest share first");
-        assert_eq!(fill_hex(&rc,purple), "#00ff00", "the art previews the rows");
+        assert_eq!(fill_hex(&rc, purple), "#00ff00", "the art previews the rows");
         let undo = undo_len(&rc.app());
         rc.set(WEIGHTS, json!([50, 50])).unwrap();
         rc.frame();
         assert_eq!(froms(&rc), [json!([BLUE, PURPLE]), json!([RED])]);
         assert_eq!(rc.field(SHARES), Some(json!([50.0, 50.0])));
-        assert_eq!(fill_hex(&rc,purple), "#ffff00", "the moved color previews its new row's color");
+        assert_eq!(fill_hex(&rc, purple), "#ffff00", "the moved color previews its new row's color");
         assert_eq!(undo_len(&rc.app()), undo, "nothing is committed before OK");
         // A new count of Colors reduces the rows again and drops the weights.
         rc.set("colors", json!(2)).unwrap();
@@ -3726,7 +3755,7 @@ mod tests {
         assert_eq!(rc.field(WEIGHTS), Some(Value::Null));
         rc.set("rows", json!([{"from": [BLUE, PURPLE], "to": "rgb 255 255 0"}, {"from": [RED], "to": "rgb 0 255 0"}])).unwrap();
         rc.confirm().unwrap();
-        assert_eq!(fill_hex(&rc,purple), "#ffff00");
+        assert_eq!(fill_hex(&rc, purple), "#ffff00");
         assert_eq!(undo_len(&rc.app()), undo + 1, "one undo step");
     }
 
@@ -3765,7 +3794,7 @@ mod tests {
         assert!(w.len() == 2 && (w[0] - 50.0).abs() < 2.0 && (w[1] - 50.0).abs() < 2.0, "{w:?}");
         rc.frame();
         assert_eq!(froms(&rc), [json!([BLUE, PURPLE]), json!([RED])]);
-        assert_eq!(fill_hex(&rc,purple), "#ffff00");
+        assert_eq!(fill_hex(&rc, purple), "#ffff00");
     }
 
     /// The colors of the last color group, as hex.
@@ -3786,7 +3815,7 @@ mod tests {
             rc.set(SAVE_GROUP, json!(which)).unwrap();
             rc.frame().frame();
             assert_eq!(last_group(&rc.app()), colors, "{which}");
-            assert_eq!(fill_hex(&rc,purple), "#00ff00", "{which}: the art still previews the rows");
+            assert_eq!(fill_hex(&rc, purple), "#00ff00", "{which}: the art still previews the rows");
         }
         assert_eq!(groups(&rc), n + 2);
         assert_eq!(undo_len(&rc.app()), undo + 2, "a step for each group");
@@ -3852,7 +3881,7 @@ mod tests {
         rc.set(THEME_PICKS, json!([{"at": [107, 17]}])).unwrap();
         rc.frame();
         assert_eq!(new_colors(&rc), [json!("rgb 0 255 0"), json!("rgb 0 255 0")]);
-        assert_eq!(fill_hex(&rc,red), "#00ff00", "the art previews the picked color");
+        assert_eq!(fill_hex(&rc, red), "#00ff00", "the art previews the picked color");
         rc.set(THEME_PICKS, json!([{"at": [107, 17]}, {"rect": [125, 5, 150, 30]}])).unwrap();
         rc.frame();
         assert_eq!(new_colors(&rc), [json!("rgb 0 255 0"), json!("rgb 255 255 0")], "a Shift pick adds to the picks");
@@ -3864,8 +3893,9 @@ mod tests {
     /// alone, without rewriting the color group.
     #[test]
     fn find_dims_the_colors_of_the_rows_not_selected() {
-        let mut d =
-            Fields::new(json!({"rows": rows(), "__art": true, "preview": true, "method": "exact", "limitTo": "", "group": "G", "groupName": "H", "__sel": [0]}));
+        let mut d = Fields::new(
+            json!({"rows": rows(), "__art": true, "preview": true, "method": "exact", "limitTo": "", "group": "G", "groupName": "H", "__sel": [0]}),
+        );
         assert_eq!(find_params(&d), None, "off");
         d.fields.insert(FIND.into(), json!(true));
         let dim = |k: &str| key(&color_value(&json!(k)).unwrap().tinted(FIND_DIM));
@@ -3973,7 +4003,7 @@ mod tests {
     fn find_shows_the_selected_rows_art_and_dims_the_rest() {
         let (mut rc, [red, blue]) = theme_setup();
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc,red), fill_hex(&rc,blue));
+        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
         let rs = json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}, {"from": ["rgb 0 0 255"], "to": "rgb 255 255 0"}]);
         rc.set("rows", rs.clone()).unwrap();
         rc.set("__sel", json!([0])).unwrap();
@@ -4010,10 +4040,10 @@ mod tests {
         rc.set(FIND, json!(true)).unwrap();
         rc.frame();
         assert_eq!(fills(&rc), ("#00ff00".into(), "#bfbfff".into()));
-        assert_eq!(fill_hex(&rc,black), "#bfbfbf", "the preserved black dims too");
+        assert_eq!(fill_hex(&rc, black), "#bfbfbf", "the preserved black dims too");
         rc.confirm().unwrap();
         assert_eq!(fills(&rc), ("#00ff00".into(), "#ffff00".into()), "OK applies the rows to all the art");
-        assert_eq!(fill_hex(&rc,black), "#000000", "and keeps the preserved black");
+        assert_eq!(fill_hex(&rc, black), "#000000", "and keeps the preserved black");
         assert_eq!(undo_len(&rc.app()), undo + 1, "one undo step");
     }
 
@@ -4134,20 +4164,20 @@ mod tests {
         rc.frame();
         edit_first(&mut rc, "rgb 0 0 0");
         rc.frame();
-        assert!(can(&rc,true), "the edit is a step");
+        assert!(can(&rc, true), "the edit is a step");
 
         rc.set("group", json!("B")).unwrap();
         rc.frame();
-        assert!(!can(&rc,true) && !can(&rc,false), "another group leaves no step");
+        assert!(!can(&rc, true) && !can(&rc, false), "another group leaves no step");
         assert_eq!(step(&mut rc.app(), true).unwrap()["changed"], json!(false));
         assert_eq!(new_colors(&rc).len(), 3, "the rows of B");
 
         edit_first(&mut rc, "rgb 0 128 0");
         rc.frame();
-        assert!(can(&rc,true), "the edit is a step");
+        assert!(can(&rc, true), "the edit is a step");
         rc.act("save").unwrap();
         assert_eq!(group_hex(&rc.app(), "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]));
-        assert!(!can(&rc,true) && !can(&rc,false), "Save Changes leaves no step");
+        assert!(!can(&rc, true) && !can(&rc, false), "Save Changes leaves no step");
         assert_eq!(step(&mut rc.app(), true).unwrap()["changed"], json!(false));
 
         rc.confirm().unwrap();
@@ -4163,10 +4193,10 @@ mod tests {
         rc.frame();
         rc.set("group", json!("B")).unwrap();
         rc.frame();
-        assert!(!can(&rc,true) && !can(&rc,false), "another group leaves no step");
+        assert!(!can(&rc, true) && !can(&rc, false), "another group leaves no step");
         let b = new_colors(&rc);
         edit_first(&mut rc, "rgb 0 0 0");
-        assert!(can(&rc,true), "the edit is a step");
+        assert!(can(&rc, true), "the edit is a step");
         assert_eq!(step(&mut rc.app(), true).unwrap()["changed"], json!(true));
         assert_eq!(new_colors(&rc), b, "Undo Changes gives back the rows read for B");
         assert_eq!(step(&mut rc.app(), false).unwrap()["changed"], json!(true));
@@ -4191,9 +4221,9 @@ mod tests {
         rc.frame();
         assert_eq!(step(&mut rc.app(), true).unwrap()["changed"], json!(true));
         assert!(unchanged_since_save(&rc.fields()), "the rows are as saved");
-        assert!(can(&rc,false), "the edit can be redone");
+        assert!(can(&rc, false), "the edit can be redone");
         rc.act("save").unwrap();
-        assert!(!can(&rc,true) && !can(&rc,false), "Save Changes leaves no step");
+        assert!(!can(&rc, true) && !can(&rc, false), "Save Changes leaves no step");
     }
 
     /// Without art: after a group is picked in the list, the same Color Theme Picker picks that gave
@@ -4332,7 +4362,7 @@ mod tests {
         assert!(saved.len() == 2 && saved.contains(&"#008000".to_string()), "{saved:?}");
         let mut want = saved.clone();
         want.sort();
-        assert_eq!(fill_hex(&rc,red), "#008000", "the red square keeps the new color its row gave it");
+        assert_eq!(fill_hex(&rc, red), "#008000", "the red square keeps the new color its row gave it");
         for r in rc.rows() {
             if !from_colors(&r).iter().any(|c| ["#ff0000", "#0000ff"].contains(&c.to_hex().as_str())) {
                 assert!(excluded(&r) && r["to"] == r["from"][0], "a color the save gave the art stays: {r}");
@@ -4349,7 +4379,7 @@ mod tests {
         rc.confirm().unwrap();
         assert_eq!(group_hex(&rc.app(), "Renamed"), Some(saved));
         assert_eq!(group_hex(&rc.app(), "Linked"), None);
-        assert_eq!(fill_hex(&rc,red), "#008000");
+        assert_eq!(fill_hex(&rc, red), "#008000");
         assert_eq!(undo_len(&rc.app()), undo + 1);
     }
 
@@ -4402,7 +4432,7 @@ mod tests {
         rc.frame();
         let mut group = group_hex(&rc.app(), "Linked").unwrap();
         group.sort();
-        let mut fills = vec![fill_hex(&rc,ids[0]), fill_hex(&rc,ids[1])];
+        let mut fills = vec![fill_hex(&rc, ids[0]), fill_hex(&rc, ids[1])];
         fills.sort();
         assert_eq!(fills, group, "the art shows the saved group's colors, not a second recolor");
         assert!(apply_params(&rc.fields()).get("group").is_none());
@@ -4438,7 +4468,7 @@ mod tests {
         rc.act("save").unwrap();
         let want: Vec<String> = order.iter().map(|h| if h == "#0000ff" { "#008000".into() } else { h.clone() }).collect();
         assert_eq!(group_hex(&rc.app(), "Linked"), Some(want), "the swatches keep their order and the red one its color");
-        assert_eq!(fill_hex(&rc,red), "#ff0000", "art linked to a swatch no row lists is left as it is");
+        assert_eq!(fill_hex(&rc, red), "#ff0000", "art linked to a swatch no row lists is left as it is");
     }
 
     /// Save Changes with art in colors of the group keeps the Edit tab's changes: a removed color's
@@ -4461,7 +4491,7 @@ mod tests {
         let mut want: Vec<String> = order.into_iter().filter(|h| h != "#0000ff").collect();
         want.push("#008000".into());
         assert_eq!(group_hex(&rc.app(), "Linked"), Some(want.clone()), "the removed swatch goes and the added color follows the others");
-        assert_eq!(fill_hex(&rc,ids[1]), "#0000ff", "art linked to a removed swatch keeps its color");
+        assert_eq!(fill_hex(&rc, ids[1]), "#0000ff", "art linked to a removed swatch keeps its color");
         let rs = rc.rows();
         assert!(rs.iter().all(|r| !r["to"].is_null() && !is_added(r)), "the rows follow the saved group: {rs:?}");
         let assign = rc.field("__assign").unwrap_or_default();
@@ -4509,8 +4539,8 @@ mod tests {
         rs.push(json!({"from": [], "to": "rgb 255 255 0", "added": true}));
         rc.set("rows", Value::Array(rs)).unwrap();
         rc.act("save").unwrap();
-        assert_eq!(fill_hex(&rc,ids[0]), "#008000", "the save recolored the linked art");
-        assert_eq!(fill_hex(&rc,ids[2]), "#00ff00", "art linked to the removed swatch keeps its color");
+        assert_eq!(fill_hex(&rc, ids[0]), "#008000", "the save recolored the linked art");
+        assert_eq!(fill_hex(&rc, ids[2]), "#00ff00", "art linked to the removed swatch keeps its color");
         let group = group_hex(&rc.app(), "Linked").unwrap();
         assert!(group.contains(&"#ffff00".to_string()) && !group.contains(&"#00ff00".to_string()), "{group:?}");
         let mut d = rc.fields();
@@ -4556,7 +4586,7 @@ mod tests {
         rc.act("save").unwrap();
         let want: Vec<String> = order.iter().map(|h| if h == "#0000ff" { "#008000".into() } else { h.clone() }).collect();
         assert_eq!(group_hex(&rc.app(), "Linked"), Some(want), "the blue swatch takes the green, the red one keeps its color");
-        assert_eq!((fill_hex(&rc,red), fill_hex(&rc,blue)), ("#ff0000".into(), "#008000".into()));
+        assert_eq!((fill_hex(&rc, red), fill_hex(&rc, blue)), ("#ff0000".into(), "#008000".into()));
         let rs = rc.rows();
         let o = rs.iter().find(|r| from_colors(r).iter().any(|c| c.to_hex() == "#ff8000")).unwrap();
         assert!(!excluded(o) && o["to"] == json!("rgb 128 0 128"), "the orange row keeps its new color: {o}");
@@ -4592,7 +4622,7 @@ mod tests {
         rc.act("save").unwrap();
         assert_eq!(group_hex(&rc.app(), "Plain"), Some(vec!["#ff0000".into(), "#008000".into()]));
         rc.frame();
-        assert_eq!(fill_hex(&rc,ids[1]), "#008000", "the art previews its row's new color");
+        assert_eq!(fill_hex(&rc, ids[1]), "#008000", "the art previews its row's new color");
         assert!(apply_params(&rc.fields()).get("group").is_none(), "OK leaves the saved group as it is");
     }
 
@@ -4803,7 +4833,7 @@ mod tests {
         let mut rc = opened(app, json!({}));
         rc.set("method", json!(Method::Exact.id())).unwrap();
         rc.frame();
-        assert_eq!(fill_hex(&rc,red), "#ff0000");
+        assert_eq!(fill_hex(&rc, red), "#ff0000");
         // A button set with the group, before a frame, saves the rows the group gives the art.
         let n = rc.app().session.doc().unwrap().doc.swatch_groups.len();
         rc.set("group", json!("Warm")).unwrap();
@@ -4814,7 +4844,7 @@ mod tests {
         rc.frame();
         assert_eq!(rc.rows().len(), 2);
         assert_eq!(rc.fields().str("groupName"), "Warm");
-        let mut shown = [fill_hex(&rc,red), fill_hex(&rc,blue)];
+        let mut shown = [fill_hex(&rc, red), fill_hex(&rc, blue)];
         shown.sort();
         assert_eq!(shown, ["#00ff00", "#ffff00"], "the art previews the group's colors");
         // The name the preview gives the group being edited picks that group in the list.

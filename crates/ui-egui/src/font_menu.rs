@@ -30,9 +30,8 @@ use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
 use crate::caches::FontsKey;
-// PLAN: assumed the edits module is `crate::edits` (widgets-w13), with `apply_event` and `EditPath` public to the crate
 use crate::edits::{self, EditPath};
-use crate::widgets::Live;
+use crate::panels::Live;
 
 /// The sample a row shows when its family lacks the characters of the text.
 const FALLBACK_SAMPLE: &str = "Sample";
@@ -162,7 +161,13 @@ fn added_clock() -> SystemTime {
 }
 
 /// The families the picker for `family` shows: its field, filters and sets drawn in `ui`.
-fn show_picker(app: &mut VectorcraftApp, ui: &mut Ui, label: impl Into<Label>, family: &str, sample: Option<&str>) -> craft::font_manager::picker::FontPickerOutput {
+fn show_picker(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    label: impl Into<Label>,
+    family: &str,
+    sample: Option<&str>,
+) -> craft::font_manager::picker::FontPickerOutput {
     let mut hold = hold(app);
     let before = hold.settings.clone();
     let out = {

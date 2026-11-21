@@ -5,8 +5,8 @@ use serde_json::Value;
 use vectorcraft_engine::Session;
 
 use super::*;
-use crate::shortcuts::key_frame;
 use crate::tests::panel_harness::Panel;
+use crate::tests::synthetic::key_frame;
 
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,
 /// above the Transform section and before every other section, and they select its clipping path
@@ -271,7 +271,8 @@ fn edit_artboards_fill_sets_every_selected_artboard() {
     let commands = panel.app().run_count;
     panel.click("Black");
     assert_eq!(panel.app().run_count.wrapping_sub(commands), 1, "one command");
-    assert_eq!(colors(&panel), [Some(Color::BLACK), None, Some(Color::BLACK)]);
+    let black = vectorcraft_color::Color::BLACK;
+    assert_eq!(colors(&panel), [Some(black), None, Some(black)]);
     assert_eq!(undo_depth(&panel.app()), undo + 1, "one undo step");
 }
 
@@ -835,7 +836,8 @@ fn quick_actions_follow_the_selection() {
             |app| {
                 let g = group_at(app, 20.0);
                 app.run("object.isolate", json!({"id": g})).unwrap();
-                let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(g.as_u64().unwrap())).unwrap().children().unwrap()[0].id.0;
+                let member =
+                    app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(g.as_u64().unwrap())).unwrap().children().unwrap()[0].id.0;
                 app.run("select.set", json!({"ids": [member]})).unwrap();
             },
             &["object.lock", "object.path.offsetPath"],
@@ -997,7 +999,7 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     assert!(panel.shows("Corner") && panel.shows("Corner Radius"));
     let corners = |panel: &Panel| {
         let n = panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(star)).unwrap().clone();
-        let lc = LiveCorners::of(&n).unwrap();
+        let lc = vectorcraft_doc::LiveCorners::of(&n).unwrap();
         (lc.radius(0), lc.radius(2), lc.kind(0), lc.kind(2))
     };
     let depth = undo_depth(&panel.app());

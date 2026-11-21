@@ -8,6 +8,7 @@ use vectorcraft_plugins::wat::{self as tpl, Echo};
 
 use super::tests_export::{app, app_saving, confirm, frame, kind, names, set};
 use super::*;
+use crate::VectorcraftApp;
 
 /// The id of the hosted dialog on top.
 pub(super) fn top(app: &VectorcraftApp) -> Option<egui::Id> {
@@ -75,7 +76,6 @@ fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     assert_eq!(sent, json!({"density": 7.0, "_context": {"mode": "export", "extension": "tup", "name": "Untitled-1"}}));
     app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
 }
-
 
 /// A plug-in that declines keeps nothing written and says why.
 #[test]

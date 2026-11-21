@@ -4,10 +4,8 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 
+use crate::tests_synthetic::key_frame;
 use crate::{VectorcraftApp, menus};
-
-// PLAN: assumed `crate::shortcuts::key_frame` (kb.C26, path not given)
-use crate::shortcuts::key_frame;
 
 /// Clicks the Object › Plug-ins › `group` item `label`.
 pub(crate) fn open_item(app: &mut VectorcraftApp, group: &str, label: &str) {
@@ -15,6 +13,11 @@ pub(crate) fn open_item(app: &mut VectorcraftApp, group: &str, label: &str) {
     let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", group] && e.label == label).expect(label);
     let (id, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
     menus::invoke(app, &id, p);
+}
+
+/// The window context of `app`, which its dialogs live on.
+pub(crate) fn ctx(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().expect("the test window's context")
 }
 
 /// The id of the one dialog open.
@@ -29,25 +32,25 @@ pub(crate) fn read<R>(app: &VectorcraftApp, id: DialogId, f: impl FnOnce(&Dialog
 
 /// Sets a value of dialog `id` as automation does.
 pub(crate) fn set(app: &VectorcraftApp, id: DialogId, key: &str, value: Value) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
 }
 
 /// Presses OK of dialog `id`; whether it was enabled.
 pub(crate) fn confirm(app: &VectorcraftApp, id: DialogId) -> bool {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id))
 }
 
 /// Presses Cancel of dialog `id`.
 pub(crate) fn cancel(app: &VectorcraftApp, id: DialogId) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id));
 }
 
 /// One frame, then the pump that answers what the dialogs filed.
 pub(crate) fn frame(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = ctx(app);
     key_frame(app, &ctx, vec![]);
     crate::dialogs::host::pump(app, &ctx);
 }
@@ -66,6 +69,7 @@ fn x0(app: &VectorcraftApp, i: usize) -> f64 {
 
 fn new_app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
     app
 }

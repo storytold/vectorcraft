@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use serde_json::json;
 use craft::ui::dialog::{RecoveryDialog, StackDialog};
+use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::recovery::{MemoryStore, RecoveryStore};
 
@@ -26,7 +26,7 @@ fn copies(store: &MemoryStore) -> usize {
 /// An app launched over `store` with a window to show dialogs in.
 fn launch(store: &Arc<MemoryStore>) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
-    crate::testing::attach_window(&mut app); // PLAN: assumed hub-w2 helper giving a bare app a window host
+    app.adopt_context(&crate::testing::ui_context());
     app
 }
 

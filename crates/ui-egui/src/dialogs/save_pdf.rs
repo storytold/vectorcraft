@@ -18,8 +18,8 @@
 use std::sync::Arc;
 
 use craft::ui::dialog::DialogId;
-use craft::ui::patterns::presets::PresetError;
 use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent, PresetDraft};
+use craft::ui::patterns::presets::PresetError;
 use craft::ui::runtime::env::{Label, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
@@ -136,11 +136,8 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         .chain(app.session.prefs.pdf_presets.iter().map(|p| p.name.clone()))
         .filter(|n| editing.is_empty() || !n.eq_ignore_ascii_case(editing.trim()))
         .collect();
-    let dialog = base_dialog(app, settings)
-        .preset(base)
-        .mode(PdfExportMode::PresetEditor)
-        .draft(PresetDraft { name, description })
-        .check_name(move |n| {
+    let dialog =
+        base_dialog(app, settings).preset(base).mode(PdfExportMode::PresetEditor).draft(PresetDraft { name, description }).check_name(move |n| {
             let n = n.trim();
             if n.is_empty() {
                 Some(PresetError::EmptyName)
@@ -158,10 +155,10 @@ fn base_dialog(app: &VectorcraftApp, settings: PdfSettings) -> HostedPdfExport {
     let session = &app.session;
     let prefs = &session.prefs;
     let doc = session.active().map(|s| &s.doc);
-    // PLAN: assumed `vectorcraft_pdf::ColorMode` is the framework's, and `UnitKind` the dialog's unit kind.
+    // `vectorcraft_pdf` leaves the framework's `ColorMode` out: the app names its own colour modes so.
     let color_mode = match doc.map(|d| d.color_mode) {
-        Some(vectorcraft_doc::ColorMode::Cmyk) => vectorcraft_pdf::ColorMode::Cmyk,
-        _ => vectorcraft_pdf::ColorMode::Rgb,
+        Some(vectorcraft_doc::ColorMode::Cmyk) => craft::pdf::settings::ColorMode::Cmyk,
+        _ => craft::pdf::settings::ColorMode::Rgb,
     };
     HostedPdfExport::new(APP, settings)
         .saved_presets(prefs.pdf_presets.clone())
@@ -392,9 +389,8 @@ fn check<'a>(app: &mut VectorcraftApp, open: &'a mut SavePdfOpen, settings: &Val
     &open
         .checked
         .get_or_insert_with(|| {
-            let warnings = summary_settings(app, settings).map(|v| {
-                v["warnings"].as_array().map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
-            });
+            let warnings = summary_settings(app, settings)
+                .map(|v| v["warnings"].as_array().map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default());
             (key, warnings)
         })
         .1
@@ -464,9 +460,8 @@ fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String
     let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return Err(NOT_OPEN.into()) };
     let id = open.id;
     let not_open = || NOT_OPEN.to_string();
-    let settings = dialogs
-        .with(|host| host.get_mut_by_id::<HostedPdfExport>(id).map(|d| Value::Object(settings_json(d.settings()))))
-        .ok_or_else(not_open)?;
+    let settings =
+        dialogs.with(|host| host.get_mut_by_id::<HostedPdfExport>(id).map(|d| Value::Object(settings_json(d.settings())))).ok_or_else(not_open)?;
     let checked = check(app, open, &settings);
     if let Err(e) = checked {
         return Err(e.clone());

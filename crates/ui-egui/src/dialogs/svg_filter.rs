@@ -16,10 +16,10 @@
 //! `__list` (the filters listed, pushed by [`pump`]), and with an applied effect `__index`,
 //! `__item` and `missing` (the name of a deleted filter the effect names).
 
+use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, SelectMode, Selection, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::behavior::{DisplayOrder, ItemSource};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::dialog::dialog_id;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, RowInk};
@@ -30,9 +30,9 @@ use serde_json::{Value, json};
 use vectorcraft_effects::svg_filter::defaults::{DEFAULT_FILTERS, Listed, default_filter, listed};
 use vectorcraft_engine::doc::SvgFilter;
 
+use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 use crate::menus::Node;
-use crate::VectorcraftApp;
 // PLAN: assumed the framework paths above (`craft::ui::contract` re-exporting the behavior types, `craft::ui::patterns::form_dialogs`) and `crate::menus::Node`.
 
 /// The dialog kind of Apply SVG Filter.
@@ -159,7 +159,11 @@ fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::p
     let selected = text(fields, SELECTED);
     let editing = text(fields, EDITING);
     let idle = editing.is_empty();
-    let mut selection = if selected.is_empty() { Selection::new(vec![], None, None) } else { Selection::new(vec![selected.clone()], Some(selected.clone()), Some(selected.clone())) };
+    let mut selection = if selected.is_empty() {
+        Selection::new(vec![], None, None)
+    } else {
+        Selection::new(vec![selected.clone()], Some(selected.clone()), Some(selected.clone()))
+    };
     let mut action = None;
     let mut edit = None;
     let shown = Stack::new().show(ui, |ui, _| {
@@ -467,8 +471,13 @@ mod tests {
         let id = rect(&mut app);
         crate::menus::invoke(&mut app, "ui.svgFilterDialog", json!({}));
         let dialog = dialog_id(KIND);
-        let names: Vec<String> = fields(&app)[LISTING]["filters"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap().to_string()).collect();
-        assert_eq!((names.len(), names.last().map(String::as_str)), (DEFAULT_FILTERS.len() + 1, Some("Shift")), "the document's own after the defaults");
+        let names: Vec<String> =
+            fields(&app)[LISTING]["filters"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap().to_string()).collect();
+        assert_eq!(
+            (names.len(), names.last().map(String::as_str)),
+            (DEFAULT_FILTERS.len() + 1, Some("Shift")),
+            "the document's own after the defaults"
+        );
         // Nothing selected: OK is off and the dialog stays.
         answer_dialog(&mut app, dialog, &[], true);
         assert!(effects(&app, id).is_empty());

@@ -2,13 +2,14 @@
 //! dialog, which picks an attribute, its start and end values and a shape, previews on the canvas
 //! and runs `addon.type.textTweaker` on OK.
 
+use craft::menu::Node;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 use crate::addons::dialogs::{self, Confirm, Spec};
-use crate::menus::Item;
+use crate::menus::{c, cp};
 
 /// The command the dialog runs.
 pub const COMMAND: &str = "addon.type.textTweaker";
@@ -37,12 +38,8 @@ pub const RELEASE: &str = "addon.type.releasePath";
 pub const RELEASE_MODES: &[(&str, &str)] = &[("Text and Path", "both"), ("Path Only", "path"), ("Text Only", "text")];
 
 /// Object › Plug-ins › Type Tools.
-pub fn menu() -> Vec<Item> {
-    // PLAN: assumed menus-w8's `menus::cp` builders replace these `Item::Cmd` calls
-    vec![
-        Item::Cmd("Text Tweaker…", COMMAND, Value::Null),
-        Item::Cmd("Release Type on a Path…", RELEASE, json!({"mode": "both", "keepOriginal": false})),
-    ]
+pub fn menu() -> Vec<Node> {
+    vec![c("Text Tweaker…", COMMAND), cp("Release Type on a Path…", RELEASE, json!({"mode": "both", "keepOriginal": false}))]
 }
 
 /// The attribute row of param `key` (the first, Font Size, for an unknown one).

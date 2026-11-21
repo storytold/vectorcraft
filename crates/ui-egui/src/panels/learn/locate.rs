@@ -203,19 +203,19 @@ pub(crate) fn find(app: &VectorcraftApp, tool: &'static str, shown_first: bool) 
         return Ok(main);
     }
     let active = app.session.tool_id();
-    let custom = app.ui.custom_toolbars.iter().filter(|b| crate::panel_docking::visible(&app.ui, &crate::custom_toolbars::panel_id(b.id))).find_map(|bar| {
-        let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
-        let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
-        let first = *tools.first()?;
-        let target = Target::Custom(bar.name.clone());
-        if tools.len() > 1 && crate::toolbar::is_floating(app, Some(&bar.name), first) {
-            let panel = crate::toolbar::strip_id(&Owner::Toolbar(bar.id), first);
-            return Some(Found { target, location: "strip", shown: None, panel: Some(panel) });
-        }
-        let shown = crate::custom_toolbars::shown_tool(bar, active, &tools);
-        let panel = Some(crate::custom_toolbars::panel_id(bar.id));
-        Some(Found { target, location: if shown == Some(tool) { "toolbar" } else { "flyout" }, shown, panel })
-    });
+    let custom =
+        app.ui.custom_toolbars.iter().filter(|b| crate::panel_docking::visible(&app.ui, &crate::custom_toolbars::panel_id(b.id))).find_map(|bar| {
+            let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
+            let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
+            let first = *tools.first()?;
+            let target = Target::Custom(bar.name.clone());
+            if tools.len() > 1 && crate::toolbar::is_floating(app, Some(&bar.name), first) {
+                let panel = crate::toolbar::strip_id(&Owner::Toolbar(bar.id), first);
+                return Some(Found { target, location: "strip", shown: None, panel: Some(panel) });
+            }
+            let shown = crate::custom_toolbars::shown_tool(bar, active, &tools);
+            let panel = Some(crate::custom_toolbars::panel_id(bar.id));
+            Some(Found { target, location: if shown == Some(tool) { "toolbar" } else { "flyout" }, shown, panel })
+        });
     Ok(custom.or(main).unwrap_or(Found { target: Target::AllTools, location: "allTools", shown: None, panel: None }))
 }
-

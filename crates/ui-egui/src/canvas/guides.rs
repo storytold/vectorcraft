@@ -2,19 +2,17 @@
 //! only draws them. Moving and deleting them stays with the tools
 //! ([`vectorcraft_tools::rulerguide`]), so the pointer reaches the tool.
 
-use super::grid::pref_color;
-use super::{Color32, Ui, VectorcraftApp};
-use crate::doc_windows::Win;
-use crate::theme::Tokens;
-// PLAN: assumed crate paths `craft::ui::{canvas, canvas_controls::Guides}`, `contract::Bind`,
-// `Show`; `super::{BodyKind, canvas_id}` (canvas-w10).
-use super::BodyKind;
 use craft::behavior::Axis;
-use craft::theme::Rgba;
-use craft::ui::canvas::{CanvasSpace, GuideDrag, GuideKey, GuideLine};
-use craft::color_ui::harmony::Guide;
+use craft::theme::{Rgba, Tokens};
+use craft::ui::canvas::{CanvasSpace, Guide, GuideKey, GuideLine};
 use craft::ui::canvas_controls::Guides;
 use craft::ui::contract::{Bind, Show as _};
+use craft::ui::runtime::env::Env;
+use egui::{Color32, Ui};
+
+use super::BodyKind;
+use crate::VectorcraftApp;
+use crate::doc_windows::Win;
 
 /// The guides of one document as shown: the guides, the selected keys and the key guide (Align to
 /// Key Object). `None` while guides are hidden (Hide Guides, Trim View) or presenting.
@@ -31,7 +29,7 @@ pub(super) fn shown(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, t: 
     let doc = &st.doc;
     let prefs = &app.session.prefs;
     let rgb = |c: Color32| Rgba::rgb(c.r(), c.g(), c.b());
-    let color = rgb(pref_color(&prefs.guide_color, t.guide));
+    let color = guide_color(prefs, t);
     let line = if prefs.guide_style == "dots" { GuideLine::Dots } else { GuideLine::Solid };
     let labels = guide_labels(doc);
     let guides = doc
@@ -52,22 +50,28 @@ pub(super) fn shown(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, t: 
     Some((guides, selected, st.selection.key_guide.map(|id| GuideKey::new(id.0))))
 }
 
-/// Shows the guides of window `win`'s document over the canvas. `pending` is the guide a ruler
-/// drag places in this pass (`rulers::show` returns it, so it is shown before this). The control
-/// is display-only in every body: guide editing is the tools' one mechanism, so it reports no edit.
-pub(super) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win, _kind: BodyKind, pending: Option<GuideDrag>) {
+/// The ruler guides' colour (Preferences › Guides & Grid), the theme's guide colour when the
+/// preference does not parse.
+pub(super) fn guide_color(prefs: &vectorcraft_engine::Prefs, t: &Tokens) -> Rgba {
+    vectorcraft_color::Color::from_hex(&prefs.guide_color).map_or(t.color.overlay.guide, |c| {
+        let c = crate::panels::c32(&c);
+        Rgba::rgb(c.r(), c.g(), c.b())
+    })
+}
+
+/// Shows the guides of window `win`'s document over the canvas, with the guide a ruler drag places
+/// in this pass, which the control reads from the canvas. The control is display-only in every
+/// body: guide editing is the tools' one mechanism, so it reports no edit.
+pub(super) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win, _kind: BodyKind) {
     let Some(st) = app.session.documents().get(win.0) else { return };
-    let t = Tokens::get(ui.ctx());
-    let Some((mut guides, selected, key)) = shown(app, st, &t) else { return };
-    let mut control = Guides::new("Ruler guides", super::canvas_id(win), Bind::bound(&mut guides))
+    let env = Env::of(ui);
+    let Some((mut guides, selected, key)) = shown(app, st, env.tokens.tokens()) else { return };
+    // The edits of a display-only control are none: the local copy is dropped.
+    Guides::new("Ruler guides", super::canvas_id(win), Bind::bound(&mut guides))
         .selected_guides(&selected)
         .key_guide(key)
-        .interactive(false);
-    if let Some(drag) = pending {
-        control = control.pending(drag);
-    }
-    // The edits of a display-only control are none: the local copy is dropped.
-    control.show_at(ui, space.view.screen_rect());
+        .interactive(false)
+        .show_at(ui, space.view.rect);
 }
 
 /// The guide label colors of `doc`'s artboards that have one, by artboard id.

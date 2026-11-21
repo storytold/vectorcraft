@@ -3,10 +3,11 @@
 use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::json;
 
-// PLAN: assumed `fields(&app)` (values of the top hosted dialog) and `press(&mut app, name)` (the control channel's
-// click on a control by name, export-w23) in export-w9's helpers.
-use super::tests_export::{app, fields, frame, kind, names, press, set};
+use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm};
+use super::tests_print::press;
+use super::tests_raster_formats::fields;
 use super::*;
+use crate::VectorcraftApp;
 
 /// The PostScript of an EPS file.
 fn ps(bytes: &[u8]) -> String {
@@ -32,11 +33,11 @@ fn as_json(d: &DialogFields) -> serde_json::Value {
 fn export_as_eps_shows_eps_options_then_writes_and_remembers_them() {
     let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "eps"})).unwrap();
-    assert_eq!(kind(&app), Some("exportAs"));
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     frame(&mut app);
     set(&mut app, "useArtboards", json!(true));
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("epsOptions"), "EPS Options follow");
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("epsOptions"), "EPS Options follow");
     let d = fields(&app);
     assert_eq!(
         (text(&d, "path"), text(&d, "previewFormat"), text(&d, "flattenerPreset")),
@@ -50,11 +51,10 @@ fn export_as_eps_shows_eps_options_then_writes_and_remembers_them() {
     frame(&mut app);
     assert_eq!(text(&fields(&app), "level"), "2", "a number reads as the level");
     set(&mut app, "flattenerPreset", json!("High Resolution"));
-    let r = confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(kind(&app).is_none());
     // The central file, then one file per artboard, named with an underscore.
     assert_eq!(names(&written), ["/out/Untitled-1.eps", "/out/Untitled-1_Artboard-1.eps", "/out/Untitled-1_Artboard-2.eps"]);
-    assert_eq!(r["files"].as_array().map(Vec::len), Some(3));
     let bytes = &written.borrow()[0].1;
     let (text_part, tiff) = vectorcraft_eps::sections(bytes).unwrap();
     assert!(tiff.is_some() && String::from_utf8_lossy(text_part).contains("%%LanguageLevel: 2"));
@@ -75,12 +75,12 @@ fn eps_options_take_saved_flattener_presets_and_refuse_bad_ones() {
     assert_eq!(text(&fields(&app), "flattenerPreset"), "Medium Resolution", "an id shows as its name");
     frame(&mut app);
     set(&mut app, "flattenerPreset", json!("Nope"));
-    let e = confirm(&mut app).unwrap_err();
+    let e = try_confirm(&mut app).unwrap_err();
     assert!(e.contains("preset"), "{e}");
-    assert_eq!(kind(&app), Some("epsOptions"));
+    assert_eq!(kind(&app).as_deref(), Some("epsOptions"));
     set(&mut app, "flattenerPreset", json!("Mine"));
     set(&mut app, "previewFormat", json!("none"));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert_eq!(names(&written), ["/out/a.eps"]);
     assert!(written.borrow()[0].1.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"), "{:?}", &written.borrow()[0].1[..8]);
 }
@@ -108,13 +108,17 @@ fn custom_flattener_options_start_from_the_preset_and_cancel_goes_back_unchanged
     frame(&mut app);
     let before = as_json(&fields(&app));
     open_custom(&mut app);
-    assert_eq!(kind(&app), Some(eps_options::CUSTOM_KIND));
+    assert_eq!(kind(&app).as_deref(), Some(eps_options::CUSTOM_KIND));
     let d = fields(&app);
-    assert_eq!((d.number("balance"), d.number("lineArtPpi"), d.bool("clipComplexRegions")), (Some(100.0), Some(1200.0), Some(true)), "High Resolution's");
+    assert_eq!(
+        (d.number("balance"), d.number("lineArtPpi"), d.bool("clipComplexRegions")),
+        (Some(100.0), Some(1200.0), Some(true)),
+        "High Resolution's"
+    );
     assert_ne!(d.bool("preserveAlpha"), Some(true), "EPS has no alpha");
     set(&mut app, "balance", json!(10));
     cancel(&mut app);
-    assert_eq!(kind(&app), Some("epsOptions"));
+    assert_eq!(kind(&app).as_deref(), Some("epsOptions"));
     assert_eq!(as_json(&fields(&app)), before, "Cancel leaves EPS Options as they were");
 }
 
@@ -129,16 +133,16 @@ fn custom_flattener_options_are_exported_and_remembered_until_a_preset_is_chosen
     open_custom(&mut app);
     assert_eq!(fields(&app).number("balance"), Some(100.0), "the saved preset's");
     set(&mut app, "balance", json!(0));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     frame(&mut app);
-    assert_eq!(kind(&app), Some("epsOptions"), "OK goes back to EPS Options");
+    assert_eq!(kind(&app).as_deref(), Some("epsOptions"), "OK goes back to EPS Options");
     let d = fields(&app);
     let custom = flattener(&d);
     assert_eq!((custom["balance"].as_f64(), custom["preserveAlpha"].as_bool()), (Some(0.0), Some(false)));
     assert_eq!(text(&d, "flattenerPreset"), "Medium Resolution", "a built-in preset under options that set everything");
     // The custom options don't need the saved preset they started from.
     app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(ps(&written.borrow()[0].1).contains("image"), "balance 0 rasterizes the flattened art");
     // The next EPS Options start from them; a preset asked for without options drops them.
     crate::menus::invoke(&mut app, "ui.epsOptionsDialog", json!({}));
@@ -146,7 +150,7 @@ fn custom_flattener_options_are_exported_and_remembered_until_a_preset_is_chosen
     cancel(&mut app);
     app.run("ui.epsOptionsDialog", json!({"path": "/out/b.eps", "flattenerPreset": "medium"})).unwrap();
     assert!(!fields(&app).contains("flattener"));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     assert!(!ps(&written.borrow()[1].1).contains("image"), "Medium Resolution keeps the squares vector");
 }
 
@@ -157,7 +161,7 @@ fn a_flattener_preset_set_from_outside_drops_the_custom_options() {
     frame(&mut app);
     open_custom(&mut app);
     set(&mut app, "balance", json!(20));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     frame(&mut app);
     assert!(fields(&app).contains("flattener"));
     // `ui.dialog.set {flattenerPreset: "low"}`, as the control channel sets it.
@@ -176,13 +180,13 @@ fn bad_custom_flattener_options_keep_the_dialog_open() {
     open_custom(&mut app);
     set(&mut app, "gradientPpi", json!(9000));
     frame(&mut app);
-    let e = confirm(&mut app).unwrap_err();
+    let e = try_confirm(&mut app).unwrap_err();
     assert!(e.contains("resolutions"), "{e}");
-    assert_eq!(kind(&app), Some(eps_options::CUSTOM_KIND));
+    assert_eq!(kind(&app).as_deref(), Some(eps_options::CUSTOM_KIND));
     // Overprints decides whether overprints are kept, so OK keeps the option as it was.
     set(&mut app, "gradientPpi", json!(150));
     set(&mut app, "preserveAlpha", json!(true));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     frame(&mut app);
     let custom = flattener(&fields(&app));
     assert_eq!((custom["preserveOverprints"].as_bool(), custom["preserveAlpha"].as_bool()), (Some(true), Some(false)));
@@ -196,9 +200,8 @@ pub(super) struct Frames {
 
 impl Frames {
     pub(super) fn new() -> Self {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.enable_accesskit();
-        crate::theme::install_fonts(&ctx);
         Self { ctx, time: 0.0 }
     }
 
@@ -206,8 +209,9 @@ impl Frames {
         self.time += 0.1;
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
         let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
-        let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
+        let mut out = self.ctx.run_ui(input, |ui| app.ui(ui));
         out.textures_delta.clear();
+        crate::dialogs::host::pump(app, &self.ctx);
         out
     }
 

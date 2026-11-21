@@ -16,9 +16,9 @@ use serde_json::{Map, Value};
 use vectorcraft_effects::{GRAPHICS, GraphicFrame, MappedGraphic, PlanarFace};
 use vectorcraft_geom::{Point, Vec2 as DocVec};
 
-use super::{Target, find, moved_to, send, set_selected_graphic};
+use super::{Target, find, send, set_selected_graphic};
 use crate::VectorcraftApp;
-use crate::widgets::Live;
+use crate::panels::Live;
 
 /// What the cached frame was built for: the document's uid and revision, the object's id, and the
 /// fill or stroke and index of its 3D effect.
@@ -48,7 +48,7 @@ fn drag_owner(app: &VectorcraftApp) -> Owner {
 /// open: each graphic's index, its face and where its center lands on the page, for the graphics
 /// whose face the viewer sees, and none while a geometry effect follows a selected object's 3D
 /// effect. The frame is built once for each revision of the document ([`super::Model::frames`]).
-fn graphic_handles(app: &mut VectorcraftApp) -> Option<Handles> {
+pub(super) fn graphic_handles(app: &mut VectorcraftApp) -> Option<Handles> {
     if app.three_d.page != "materials" || !crate::panel_docking::visible(&app.ui, super::ID) {
         return None;
     }
@@ -188,11 +188,7 @@ impl Component for GraphicHandles<'_> {
     type Output = GraphicHandlesOutput;
 
     fn style(cx: &StyleCx<'_>, _: GraphicHandlesStyleKey) -> GraphicHandlesStyle {
-        GraphicHandlesStyle {
-            metrics: Metrics::new(),
-            ink: cx.color(cx.tokens.color.accent.solid),
-            edge: cx.color(cx.tokens.color.surface.panel),
-        }
+        GraphicHandlesStyle { metrics: Metrics::new(), ink: cx.color(cx.tokens.color.accent.solid), edge: cx.color(cx.tokens.color.surface.panel) }
     }
 
     fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {

@@ -303,7 +303,12 @@ fn each_addon_dialog_opens_on_its_items_values_and_runs_its_command() {
             set: || json!({}),
             check: |app, start| {
                 let on_path = |doc: &Document| {
-                    doc.layers[0].children().unwrap().iter().filter(|n| matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, TextKind::OnPath { .. }))).count()
+                    doc.layers[0]
+                        .children()
+                        .unwrap()
+                        .iter()
+                        .filter(|n| matches!(&n.kind, NodeKind::Text(t) if matches!(t.kind, TextKind::OnPath { .. })))
+                        .count()
                 };
                 assert_eq!(on_path(start), 1, "the fixture has type on a path");
                 assert_eq!(on_path(&app.session.doc().unwrap().doc), 0, "the type is released");

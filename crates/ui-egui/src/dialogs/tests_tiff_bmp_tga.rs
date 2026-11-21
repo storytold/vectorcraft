@@ -4,7 +4,7 @@
 use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::json;
 
-use super::tests_export::{app, frame, kind, set};
+use super::tests_export::{app, confirm, frame, kind, set};
 use super::tests_raster_formats::fields;
 use super::*;
 
@@ -12,8 +12,8 @@ use super::*;
 fn bmp_options_keep_their_choices_writable() {
     let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "bmp"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("bmpOptions"));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("bmpOptions"));
     let f = fields(&app);
     assert_eq!(
         (f.text("colorModel"), f.text("fileFormat"), f.text("depth"), f.bool("rle"), f.bool("flipRows")),
@@ -32,7 +32,7 @@ fn bmp_options_keep_their_choices_writable() {
     set(&mut app, "rle", json!(true));
     frame(&mut app);
     assert_eq!(fields(&app).bool("flipRows"), Some(false));
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
     let (path, bmp) = written.borrow()[0].clone();
     assert_eq!(path, "/out/Untitled-1.bmp");
     assert_eq!((&bmp[..2], bmp[28], bmp[30]), (&b"BM"[..], 8, 1), "8-bit RLE8");

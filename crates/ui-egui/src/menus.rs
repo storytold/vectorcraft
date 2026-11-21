@@ -14,7 +14,6 @@ use crate::io;
 use crate::panels::character::Face;
 use crate::state::next_zoom;
 use crate::theme::Brightness;
-use crate::widgets;
 
 use craft::keymap::CommandRef;
 

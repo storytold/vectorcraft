@@ -900,7 +900,6 @@ fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Ev
         ..Default::default()
     };
     let mut out = ctx.run_ui(raw, |ui| {
-        crate::canvas::release_over_panel(app, ui.ctx());
         app.canvas_area(ui);
         show(app, ui);
     });
@@ -1171,5 +1170,3 @@ fn a_tab_transfer_whose_target_is_no_longer_current_drops_nothing_in_a_floating_
     assert_eq!(app.session.documents()[1].history.undo.len(), target_undo);
     assert_eq!(app.session.active_index(), Some(0), "the window does not become current");
 }
-
-

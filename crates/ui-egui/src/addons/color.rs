@@ -10,6 +10,7 @@ pub mod legend;
 pub mod nearest;
 
 use craft::imaging::ui::adjust::{AdjustContext, AdjustField, AdjustSliders};
+use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::form::{Field, FieldGroup};
@@ -19,18 +20,18 @@ use egui::Ui;
 use serde_json::{Map, Value, json};
 
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp, sub};
 use crate::panels::empty_state;
 
 /// The panel's id (`window.panel {panel: "colorEffects"}`).
 pub const ID: &str = "colorEffects";
 
 /// A value of an adjustment: (parameter, label, range, decimals, default).
-type Field = (&'static str, &'static str, (f64, f64), usize, f64);
+type AdjustValue = (&'static str, &'static str, (f64, f64), usize, f64);
 
 /// The adjustments the panel offers: (effect, label, values). Curves and Shift to Color, which take
 /// a curve or a colour, keep to their dialogs (Effect › Color Adjustments).
-const ADJUSTMENTS: [(&str, &str, &[Field]); 7] = [
+const ADJUSTMENTS: [(&str, &str, &[AdjustValue]); 7] = [
     (
         "adjust.brightnessContrast",
         "Brightness/Contrast",
@@ -86,31 +87,31 @@ fn duotone() -> (&'static str, &'static str, Value) {
 }
 
 /// Adjustment `i` of [`ADJUSTMENTS`] (the first past the end).
-fn adjustment(i: usize) -> (&'static str, &'static str, &'static [Field]) {
+fn adjustment(i: usize) -> (&'static str, &'static str, &'static [AdjustValue]) {
     ADJUSTMENTS.get(i).copied().unwrap_or(ADJUSTMENTS[0])
 }
 
 /// Object › Plug-ins › Color Effects.
-pub fn menu() -> Vec<Item> {
-    let cmd = |(label, id, p): (&'static str, &'static str, Value)| Item::Cmd(label, id, p);
+pub fn menu() -> Vec<Node> {
+    let cmd = |(label, id, p): (&'static str, &'static str, Value)| cp(label, id, p);
     vec![
-        Item::Cmd("Color Effects Panel", "window.panel", json!({ "panel": ID })),
-        Item::Sep,
-        Item::Cmd("Exposure…", "effect.dialog", json!({ "effect": "addon.color.exposure" })),
-        Item::Cmd("Desaturate", "effect.apply", json!({ "effect": "addon.color.desaturate" })),
+        cp("Color Effects Panel", "window.panel", json!({ "panel": ID })),
+        Sep,
+        cp("Exposure…", "effect.dialog", json!({ "effect": "addon.color.exposure" })),
+        cp("Desaturate", "effect.apply", json!({ "effect": "addon.color.desaturate" })),
         cmd(duotone()),
-        Item::Cmd("Invert Colors", "effect.apply", json!({ "effect": "addon.color.invert" })),
-        Item::Cmd("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
-        Item::Sep,
+        cp("Invert Colors", "effect.apply", json!({ "effect": "addon.color.invert" })),
+        cp("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
+        Sep,
         cmd(print_fixes()),
-        Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
-        Item::Cmd("Create Swatch Legend…", legend::COMMAND, Value::Null),
-        Item::Sep,
+        c("Find Nearest Swatch…", nearest::COMMAND),
+        c("Create Swatch Legend…", legend::COMMAND),
+        Sep,
         // Each selected object's stroke takes its own fill, or the other way (#5530).
-        Item::Cmd("Apply Fill to Stroke", "addon.color.fillToStroke", json!({})),
-        Item::Cmd("Apply Stroke to Fill", "addon.color.strokeToFill", json!({})),
-        Item::Sep,
-        Item::Sub(
+        cp("Apply Fill to Stroke", "addon.color.fillToStroke", json!({})),
+        cp("Apply Stroke to Fill", "addon.color.strokeToFill", json!({})),
+        Sep,
+        sub(
             "Select by Color Kind",
             [
                 ("Objects with Spot Colors", "spotColors"),
@@ -120,7 +121,7 @@ pub fn menu() -> Vec<Item> {
                 ("Grayscale Images", "grayImages"),
             ]
             .into_iter()
-            .map(|(label, kind)| Item::Cmd(label, "addon.color.select", json!({ "kind": kind })))
+            .map(|(label, kind)| cp(label, "addon.color.select", json!({ "kind": kind })))
             .collect(),
         ),
     ]

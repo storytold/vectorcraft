@@ -7,11 +7,9 @@
 
 // PLAN: assumed `craft = { workspace = true }` in this crate's Cargo.toml (owner: hub-w1); `craft_ui` does not re-export
 // the editor input types, so they come through the `craft::behavior` facade.
-use craft::behavior::{
-    EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos,
-};
+use craft::behavior::{EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos};
 use craft::ui::contract::{
-    Commands as _, CommandSet, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Role, Show as _,
+    CommandSet, Commands as _, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Role, Show as _,
 };
 use craft::ui::primitives::{EditorPurpose, EditorState};
 use craft::ui::runtime::focus::KeyUse;
@@ -318,10 +316,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let view = app.view_info();
     let Some((a, b)) = app.session.tool_ime_caret(view) else { return };
     let Some(target) = app.session.tool_ime_target(view) else { return };
-    // PLAN: hub-w1 names `canvas_view()` (cv.S4) for this pair; its signature is not in the bundle.
-    let (Some(rect), Some(canvas_view)) = (app.canvas_rect, app.view()) else { return };
-    let xf = crate::canvas::Xf::new(rect, canvas_view);
-    let caret = Rect::from_two_pos(xf.to_screen(a), xf.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
+    let Some(canvas_view) = app.canvas_view() else { return };
+    let caret = Rect::from_two_pos(canvas_view.to_screen(a), canvas_view.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
     ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| {
         TypeEditor::new(app, caret).id_salt(target).show(ui);
     });

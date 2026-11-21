@@ -2,8 +2,10 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::sync::Arc;
 
+use craft::behavior::IconId;
+use craft::behavior::fit::{FitItem, FitKeep, fit_items};
+use craft::menu::MenuBarUi;
 use craft::ui::bars::BarHome;
 use craft::ui::buttons::{Button, ButtonChord, IconButton, PopupMark};
 use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer, Trigger};
@@ -14,17 +16,12 @@ use craft::ui::primitives::{HAlign, IconSpec};
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::{Frame, Title, TitleBar};
 use craft::ui::style::Variant;
-use craft::behavior::fit::{FitItem, FitKeep, fit_items};
-use craft::behavior::IconId;
-use egui::{Sense, Stroke, Ui, vec2};
+use egui::Ui;
 use serde_json::json;
-use vectorcraft_doc::NodeKind;
 
-use crate::panels::stroke as stroke_panel;
-use crate::state::{ROTATE_VIEW_ANGLES, ZOOM_STOPS, zoom_label};
-use crate::theme::{self, Tokens};
-use crate::widgets;
-use crate::{VectorcraftApp, brand, icons, menus};
+use crate::menus::Node;
+use crate::state::{ROTATE_VIEW_ANGLES, zoom_label};
+use crate::{VectorcraftApp, brand, menus};
 
 mod control_bar;
 mod hints;
@@ -32,21 +29,17 @@ mod status_bar;
 mod tabs;
 
 pub use control_bar::{
-    AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_moving, control_bar_placement,
-    read_hidden_groups,
+    AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_placement, read_hidden_groups,
 };
-#[cfg(test)]
-use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
-pub(crate) use control_bar::{Fit, group_separator, left_out, link_reserve};
 #[cfg(test)]
 use hints::hint_segments;
 pub(crate) use hints::tool_hint;
 pub use hints::{hint_bar, hint_strings};
 pub use status_bar::{StatusBarShow, deserialize_status_bar_show, set_status_bar_show, status_bar};
 #[cfg(test)]
-use status_bar::{StatusReadoutWidths, color_profile_name, date_time_label, status_readouts};
+use status_bar::{color_profile_name, date_time_label};
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, leading_tab, shortened_title, tab_drop, tab_groups, tab_room, tab_title};
+use tabs::tab_title;
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
@@ -117,19 +110,21 @@ impl Trailing {
 
 /// Arrange Documents: Consolidate All Windows and the Tile layouts, each item as the Window menu shows it.
 fn arrange_documents(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let opener = IconButton::new(IconId::new("layout_grid")).label(tl!("Arrange Documents")).selected(app.ui.tiled).popup_mark(PopupMark::Menu).show(ui);
+    let opener =
+        IconButton::new(IconId::new("layout_grid")).label(tl!("Arrange Documents")).selected(app.ui.tiled).popup_mark(PopupMark::Menu).show(ui);
     let mut chosen = None;
     let state = &*app;
     // PLAN: the sheet names `Trigger::Manual`; `Trigger::Press` is the pop-up menu button's trigger and needs no open binding.
     Menu::new(tl!("Arrange Documents")).opened_by(&opener.response, Trigger::Press).show(ui, |ui, _| {
         for item in menus::arrange_documents_items() {
             match item {
-                menus::Item::Sep => {
+                Node::Separator => {
                     Divider::horizontal().show(ui);
                 }
-                menus::Item::Cmd(label, id, params) => {
-                    let Some((enabled, checked)) = menus::shown_state(state, id, &params) else { continue };
-                    let row = MenuItem::new(crate::i18n::t_id(id, label)).enabled(enabled).check(checked).show(ui);
+                Node::Item(item) => {
+                    let (id, params) = (item.command.id, item.command.params);
+                    let Some((enabled, checked)) = menus::shown_state(state, &id, &params) else { continue };
+                    let row = MenuItem::new(crate::i18n::t_id(&id, &item.label)).enabled(enabled).check(checked).show(ui);
                     if row.ran {
                         chosen = Some((id, if params.is_null() { json!({}) } else { params }));
                     }
@@ -139,7 +134,7 @@ fn arrange_documents(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     if let Some((id, params)) = chosen {
-        menus::invoke(app, id, params);
+        menus::invoke(app, &id, params);
     }
 }
 
@@ -156,9 +151,9 @@ fn leading(ui: &mut Ui, app: &mut VectorcraftApp) {
         app.run("app.home", json!({})).ok();
     }
     // With the macOS menu bar the menus are at the top of the screen instead.
-    if app.services.native_menu.is_none() {
-        // PLAN: assumed menus-w3's `menus::menu_bar(app, ui)` shows `MenuBarUi` and returns its `MenuBarOutput`; `opened` refreshes the scripts menu (menus-w6).
-        let _ = menus::menu_bar(app, ui);
+    if app.services.native_menu.is_none() && MenuBarUi::new(&app.menus.laid).show(ui).opened {
+        // A menu opened: File › Scripts lists the Scripts folder as it is now.
+        crate::scripts_menu::refresh(app, ui.ctx());
     }
 }
 

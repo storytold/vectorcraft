@@ -4,6 +4,9 @@ use crate::Services;
 use craft::ui::dialog::PromptChoice;
 use craft::ui::patterns::preferences::{PageSpec, PreferencesModel};
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::prefscmds::PREF_SPECS;
+
+use crate::theme::Brightness;
 
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
@@ -11,9 +14,7 @@ fn app() -> VectorcraftApp {
 
 /// A context with the fonts installed, for the passes the nested reset question needs.
 fn ctx() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
+    crate::testing::ui_context()
 }
 
 /// One headless pass of the open window.
@@ -146,10 +147,10 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     }
 }
 
-/// A Render Threads change made after the preferences were applied, and before the first UI pass
-/// applies them again, still restarts the canvas renderer.
+/// A Render Threads change made after the preferences were applied restarts the canvas renderer at
+/// the next push.
 #[test]
-fn reapply_restarts_the_renderer_after_a_render_threads_change() {
+fn a_render_threads_change_restarts_the_renderer_at_the_next_push() {
     let mut app = app();
     let ctx = egui::Context::default();
     apply_runtime(&mut app, &ctx);
@@ -158,7 +159,7 @@ fn reapply_restarts_the_renderer_after_a_render_threads_change() {
     // `VECTORCRAFT_RENDER_THREADS` can give more than the 64 the preference accepts.
     let threads = vectorcraft_render::default_threads().min(64);
     app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
-    reapply(&mut app, &ctx);
+    apply_runtime(&mut app, &ctx);
     let restarted = !app.canvas.worker_started;
     app.run("prefs.set", json!({"key": "renderThreads", "value": -1})).unwrap();
     assert!(restarted, "the canvas renderer kept its old thread count");
@@ -440,12 +441,9 @@ fn temp_folder(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// An app whose save and open dialogs answer `path`, and that writes and reads real files.
-fn app_with_file_dialogs(path: &str) -> VectorcraftApp {
+/// An app that writes and reads real files.
+fn app_with_files() -> VectorcraftApp {
     let mut a = app();
-    let (save, open) = (path.to_string(), path.to_string());
-    a.services.pick_save = Some(Box::new(move |_: &crate::FilePick| Some(save.clone())));
-    a.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(open.clone())));
     a.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
     a.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     a
@@ -457,14 +455,14 @@ fn app_with_file_dialogs(path: &str) -> VectorcraftApp {
 fn export_and_import_preferences_buttons_round_trip() {
     let dir = temp_folder("prefs-file");
     let path = dir.join("VectorCraft Preferences.json").to_string_lossy().into_owned();
-    let mut a = app_with_file_dialogs(&path);
+    let mut a = app_with_files();
     a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
     let values = json!({"keyboardIncrement": 5, "uiAccent": "green", "unitsGeneral": "inches"});
     a.run("prefs.set", json!({"values": values, "documentUnits": false})).unwrap();
     let saved = a.session.prefs.to_json();
     open(&mut a, Some("General"));
-    a.run("prefs.export", json!({})).unwrap();
+    a.run("prefs.export", json!({"path": path})).unwrap();
     let file: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(file["format"], "vectorcraft-preferences");
     assert_eq!(file["prefs"]["uiAccent"], "green");
@@ -495,7 +493,7 @@ fn import_preferences_of_a_bad_file_changes_nothing() {
     let path = dir.join("newer.json");
     std::fs::write(&path, r#"{"format": "vectorcraft-preferences", "version": 2, "prefs": {"uiAccent": "pink"}}"#).unwrap();
     let path = path.to_string_lossy().into_owned();
-    let mut a = app_with_file_dialogs(&path);
+    let mut a = app_with_files();
     let before = a.session.prefs.to_json();
     open(&mut a, Some("General"));
     set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
@@ -683,7 +681,8 @@ fn every_setting_from_general_to_devices_has_one_description() {
 fn every_description_names_a_setting_and_fits_in_every_language() {
     let mut a = app();
     open(&mut a, None);
-    let row_keys = with_pages(&mut a, |pages| pages.iter().flat_map(|p| &p.groups).flat_map(|g| &g.rows).map(|r| r.key.to_string()).collect::<Vec<_>>());
+    let row_keys =
+        with_pages(&mut a, |pages| pages.iter().flat_map(|p| &p.groups).flat_map(|g| &g.rows).map(|r| r.key.to_string()).collect::<Vec<_>>());
     let mut bad = vec![];
     for (key, sentence) in descriptions::DESCRIPTIONS {
         let tail = format!(".{key}");

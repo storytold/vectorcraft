@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use craft::ui::contract::Entry;
 use craft::ui::patterns::presets::PresetRow;
-use egui::{Rect, Ui};
 use craft::ui::primitives::ContentPainterCx;
+use egui::{Rect, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES};
 use vectorcraft_color::{Swatch, SwatchLibrary};
@@ -42,6 +43,26 @@ pub(crate) fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> 
     let document = item(ui, DOCUMENT_SWATCHES, true, Some(current == swatchlib::DOCUMENT_SWATCHES)).then(|| swatchlib::DOCUMENT_SWATCHES.to_string());
     ui.separator();
     library_panel::library_items(ui, &colour_libraries(app), &|id| id == current).or(document)
+}
+
+/// The library choices of a `Select`: the document's swatches, a separator, the colour libraries at
+/// the top level of the library menu, then each submenu's libraries under its heading.
+pub(crate) fn library_entries(app: &VectorcraftApp) -> Vec<Entry<String>> {
+    let libs = colour_libraries(app);
+    let entry = |l: &LibraryRef| Entry::new(l.id.clone(), library_panel::library_name(&l.id, &l.name).to_string());
+    let mut entries = vec![Entry::new(swatchlib::DOCUMENT_SWATCHES.to_string(), tl!(DOCUMENT_SWATCHES)), Entry::separator()];
+    entries.extend(libs.iter().filter(|l| l.submenu.is_none()).map(entry));
+    let mut submenus: Vec<&'static str> = Vec::new();
+    for submenu in libs.iter().filter_map(|l| l.submenu) {
+        if !submenus.contains(&submenu) {
+            submenus.push(submenu);
+        }
+    }
+    for submenu in submenus {
+        entries.push(Entry::heading(tl!(submenu)));
+        entries.extend(libs.iter().filter(|l| l.submenu == Some(submenu)).map(entry));
+    }
+    entries
 }
 
 /// What Limit to Library menus call the document's own swatches ([`swatchlib::DOCUMENT_SWATCHES`]).

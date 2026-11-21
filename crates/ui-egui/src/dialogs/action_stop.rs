@@ -9,9 +9,9 @@
 //! the playback keeps waiting for Play Current Selection or Stop Playing/Recording. With
 //! `allowContinue`, Continue plays on.
 
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::choice::Checkbox;
-use craft::ui::dialog::{DialogId, DialogResult, DialogStack, HeldOk, PromptChoice, StandardPrompt, StackDialog, dialog_id};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, HeldOk, PromptChoice, StackDialog, StandardPrompt, dialog_id};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::runtime::env::Label;
 use craft::ui::text::TextField;
@@ -33,8 +33,7 @@ const KEY: &str = "actionStopRecord";
 /// prompts, which take the bare [`StandardPrompt`]'s.
 pub(crate) struct StopMessage(pub(crate) StandardPrompt);
 
-// PLAN: assumed `wrapped_dialog!(Type, KEY)` makes `Type` a `StackDialog` over its inner prompt with the prompt's `Result` (`PromptAnswer`).
-crate::dialogs::confirm::wrapped_dialog!(StopMessage, MESSAGE_KIND);
+crate::dialogs::confirm::wrapped_dialog!(StopMessage, StandardPrompt, MESSAGE_KIND);
 
 /// What Record Stop edits.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -55,7 +54,6 @@ fn check(_: &RecordStopFields) -> Option<Label> {
 pub struct RecordStopDialog {
     id: DialogId,
     /// Where the stop goes.
-    // PLAN: menus-w18 reads the place as `d.set`, `d.action`, `d.step` (usize); the dialog keeps it as a `Target` (options) because no place means the recording.
     pub target: Target,
     form: Form<RecordStopFields>,
 }

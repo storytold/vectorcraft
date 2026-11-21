@@ -6,18 +6,18 @@
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::keymap::Mods;
+use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::ui::display::Text;
+use craft::ui::display::{Divider, Text};
 use craft::ui::list::{List, ListRow};
 use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp, sub};
 use crate::panels::empty_state;
-use crate::widgets;
 
 /// The panel's id (`window.panel {panel: "artworkCleanup"}`).
 pub const ID: &str = "artworkCleanup";
@@ -93,32 +93,32 @@ fn modified(id: &str, mut p: Value, held: Mods) -> Value {
 }
 
 /// Object › Plug-ins › Artwork Cleanup.
-pub fn menu() -> Vec<Item> {
-    let mut items = vec![Item::Cmd("Document Health Check", "window.panel", json!({ "panel": ID })), Item::Sep];
-    items.extend(tools().into_iter().map(|(label, id, p)| Item::Cmd(label, id, p)));
-    items.extend([Item::Sep, Item::Cmd("Fix All Issues", "addon.cleanup.fix", Value::Null), Item::Sep]);
+pub fn menu() -> Vec<Node> {
+    let mut items = vec![cp("Document Health Check", "window.panel", json!({ "panel": ID })), Sep];
+    items.extend(tools().into_iter().map(|(label, id, p)| cp(label, id, p)));
+    items.extend([Sep, c("Fix All Issues", "addon.cleanup.fix"), Sep]);
     let by = |b: &str| json!({ "by": b });
     let align = |a: &str| json!({ "align": a });
     items.extend([
-        Item::Cmd("Combine Point Text", "addon.cleanup.combineText", json!({})),
-        Item::Cmd("Join Point Text", "addon.cleanup.joinText", json!({})),
-        Item::Cmd("Break Text into Lines", "addon.cleanup.breakText", by("lines")),
-        Item::Cmd("Break Text into Paragraphs", "addon.cleanup.breakText", by("paragraphs")),
-        Item::Cmd("Break Text into Words", "addon.cleanup.breakText", by("words")),
-        Item::Cmd("Break Text into Glyphs", "addon.cleanup.breakText", by("glyphs")),
-        Item::Cmd("Split Text at Cursor", "addon.cleanup.splitText", json!({})),
-        Item::Sub(
+        cp("Combine Point Text", "addon.cleanup.combineText", json!({})),
+        cp("Join Point Text", "addon.cleanup.joinText", json!({})),
+        cp("Break Text into Lines", "addon.cleanup.breakText", by("lines")),
+        cp("Break Text into Paragraphs", "addon.cleanup.breakText", by("paragraphs")),
+        cp("Break Text into Words", "addon.cleanup.breakText", by("words")),
+        cp("Break Text into Glyphs", "addon.cleanup.breakText", by("glyphs")),
+        cp("Split Text at Cursor", "addon.cleanup.splitText", json!({})),
+        sub(
             "Set Alignment, Keep Position",
             vec![
-                Item::Cmd("Left", "addon.cleanup.alignInPlace", align("left")),
-                Item::Cmd("Center", "addon.cleanup.alignInPlace", align("center")),
-                Item::Cmd("Right", "addon.cleanup.alignInPlace", align("right")),
+                cp("Left", "addon.cleanup.alignInPlace", align("left")),
+                cp("Center", "addon.cleanup.alignInPlace", align("center")),
+                cp("Right", "addon.cleanup.alignInPlace", align("right")),
             ],
         ),
-        Item::Cmd("Reset Text Transform", "addon.cleanup.resetTextTransform", json!({})),
-        Item::Cmd("Reset Text Transform and Scale", "addon.cleanup.resetTextTransform", json!({ "scale": true })),
+        cp("Reset Text Transform", "addon.cleanup.resetTextTransform", json!({})),
+        cp("Reset Text Transform and Scale", "addon.cleanup.resetTextTransform", json!({ "scale": true })),
     ]);
-    items.extend(text_singles().into_iter().map(|(label, id, p)| Item::Cmd(label, id, p)));
+    items.extend(text_singles().into_iter().map(|(label, id, p)| cp(label, id, p)));
     items
 }
 
@@ -258,7 +258,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Text::new(tl!("Changed since the last check.").to_string()).show(ui);
         }
     }
-    widgets::divider(ui);
+    Divider::horizontal().show(ui);
     for (label, id, p) in tools() {
         if push(ui, tl!(label), selected, None).is_some() {
             action = Some(Action::Run(label, id, p));

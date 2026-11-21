@@ -3,10 +3,12 @@
 use egui::{Event, PointerButton, Pos2, Rect, ViewportId, pos2, vec2};
 use vectorcraft_engine::Session;
 
-// PLAN: assumed path of the chrome toggle request (ch.K3, ch.K4); the framework's `runtime::frame` module.
+use craft::keymap::Trigger;
+use craft::ui::runtime::commands;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 
 use super::*;
+use crate::tests_synthetic::key_frame;
 
 const SCREEN: Rect = Rect::from_min_max(Pos2::ZERO, pos2(1600.0, 1000.0));
 
@@ -72,9 +74,8 @@ impl Harness {
     }
 
     /// The canvas rect as the last frame drew it.
-    // PLAN: assumed `app.canvas_view()` returns the `View` with a `canvas: Rect` field (hub-w1 M12).
     fn canvas(&self) -> Rect {
-        self.app.canvas_view().canvas
+        self.app.canvas_view().expect("the canvas was drawn").rect
     }
 
     fn click(&mut self, at: Pos2) {
@@ -130,6 +131,45 @@ fn button(pos: Pos2, pressed: bool) -> Event {
 
 fn main_panels(layout: &Layout<String>) -> Vec<String> {
     dock_columns(layout).first().map(|c| c.groups.iter().flat_map(|g| g.panels.clone()).collect()).unwrap_or_default()
+}
+
+/// The columns of the dock at the window's end edge, from the edge inwards.
+fn end_columns(layout: &Layout<String>) -> &[Column<String>] {
+    edge_columns(layout, DockEdge::End)
+}
+
+/// The panels of the group holding `panel`, docked or floating.
+fn group_of(layout: &Layout<String>, panel: &String) -> Vec<String> {
+    layout.place(panel).and_then(|place| layout.group(&place)).map(|group| group.panels.clone()).unwrap_or_default()
+}
+
+/// Is `panel` in a column collapsed to icons?
+fn in_iconic_column(layout: &Layout<String>, panel: &str) -> bool {
+    layout.opens_in_flyout(&panel.to_owned())
+}
+
+/// The icon column among `columns`: the iconic column holding the most panels of the icon groups.
+fn icon_column(columns: &[Column<String>]) -> Option<usize> {
+    let in_rows = |p: &&String| ICON_PANEL_GROUPS.iter().any(|row| row.contains(&p.as_str()));
+    columns
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.iconic)
+        .map(|(k, c)| (c.groups.iter().flat_map(|g| &g.panels).filter(in_rows).count(), k))
+        .filter(|(count, _)| *count > 0)
+        .max()
+        .map(|(_, k)| k)
+}
+
+/// Answers the topmost open dialog with OK or Cancel, then runs the frame's dialog pump.
+fn answer(app: &mut VectorcraftApp, ok: bool) {
+    let ctx = app.ui_ctx.clone().expect("a frame ran");
+    let answered = app.dialogs().expect("a window").with(|host| {
+        let id = host.open_dialogs().last().map(|d| d.id).expect("a dialog is open");
+        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
+    });
+    assert!(answered, "the dialog took the answer");
+    crate::dialogs::host::pump(app, &ctx);
 }
 
 fn first_column_iconic(h: &Harness) -> bool {
@@ -193,7 +233,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
             h.app.run("window.panel", json!({"panel": "properties"})).unwrap();
             h.frames(1);
-            apply(&mut h.app, &h.ctx, vec![Action::activate("layers".into())]).unwrap();
+            apply(&mut h.app, Some(&h.ctx), vec![Action::activate("layers".into())]).unwrap();
             h.frames(1);
             assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "the flyout is still named for its opening icon");
             assert_eq!(flyout_tab(&h.layout(), "properties").as_deref(), Some("layers"), "Layers is in front");
@@ -227,13 +267,13 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             h.hide_panels(ChromeToggle::Panels);
             h.app.run("type.highlightKerning", json!({})).unwrap();
             h.frames(2);
-            assert!(panels_shown(&h.app) && visible(&h.app.ui, "character"), "the panel shows");
+            assert!(panels_shown(&h.app) && visible(&h.app, "character"), "the panel shows");
             assert_eq!(floating_window(&h.layout(), "character").map(|w| w.rect), rect, "where it was");
             // In Presentation Mode the shortcut still focuses the field, and the panel shows when the mode ends.
             h.app.ui.screen_mode = 3;
             assert_eq!(h.app.run("type.highlightTracking", json!({})).unwrap(), json!({"field": "tracking"}));
             h.app.ui.screen_mode = 0;
-            assert!(visible(&h.app.ui, "character"), "the panel stays in place");
+            assert!(visible(&h.app, "character"), "the panel stays in place");
         }),
         ("the dock collapses to icons and back", |h| {
             assert!(!first_column_iconic(h));
@@ -318,12 +358,8 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             {
                 let libraries = columns[0].groups[0].panels.pop().unwrap();
                 assert_eq!(libraries, "libraries");
-                columns.insert(1, Column { groups: vec![Group::new(vec![libraries], 0)], width: 200.0, iconic: true, iconic_width: Some(ICON_WIDTH) });
+                columns.insert(1, Column::new(vec![Group::new(vec![libraries], 0)]).with_iconic(true));
                 columns[0].iconic = true;
-            }
-            let width: f32 = end_columns(&layout).iter().map(|c| c.iconic_width.unwrap_or(ICON_WIDTH)).sum();
-            if let Some(Node::Split { size, .. }) = layout.root.as_mut() {
-                *size = craft::ui::layout::SplitSize::FixedSecond(width);
             }
             assert!(layout.validate().is_ok());
             h.app.ui.dock_workspace.layout = layout;
@@ -402,13 +438,13 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
                 for n in 1..=2 {
                     crate::canvas::apply_requests(&mut h.app, Ok(vec![vectorcraft_engine::UiRequest::Panel("transform".into())]));
                     h.frames(2);
-                    assert!(visible(&h.app.ui, "transform"), "{case}: request {n}");
+                    assert!(visible(&h.app, "transform"), "{case}: request {n}");
                 }
             };
             if h.layout().contains(&"transform".to_string()) {
                 h.app.run("window.panel.close", json!({"panel": "transform"})).unwrap();
             }
-            assert!(!visible(&h.app.ui, "transform"));
+            assert!(!visible(&h.app, "transform"));
             ask_twice(h, "closed");
             h.app.run("window.panel.float", json!({"panel": "transform"})).unwrap();
             h.frames(1);
@@ -416,7 +452,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             h.app.run("window.panel.move", json!({"panel": "transform", "anchor": "properties"})).unwrap();
             h.app.run("window.panel.activate", json!({"panel": "properties"})).unwrap();
             h.frames(1);
-            assert!(!visible(&h.app.ui, "transform"));
+            assert!(!visible(&h.app, "transform"));
             ask_twice(h, "behind another tab");
             h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
             h.frames(1);
@@ -482,7 +518,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             assert_eq!(checked(h, &item), Some(false), "no check mark while Tab hides the panels");
             h.app.run("window.panel", item.clone()).unwrap();
             h.frames(2);
-            assert!(panels_shown(&h.app) && visible(&h.app.ui, "layers"), "Layers shows");
+            assert!(panels_shown(&h.app) && visible(&h.app, "layers"), "Layers shows");
             assert_eq!(h.layout(), before, "in its place");
             assert_eq!(checked(h, &item), Some(true));
             h.app.run("window.panel", item.clone()).unwrap();
@@ -501,7 +537,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
                 assert_eq!(checked(h, &item), Some(false), "{params}: no check mark while Shift+Tab hides the panels");
                 h.app.run("window.panel", params.clone()).unwrap();
                 h.frames(2);
-                assert!(panels_shown(&h.app) && visible(&h.app.ui, "layers"), "{params}: Layers shows");
+                assert!(panels_shown(&h.app) && visible(&h.app, "layers"), "{params}: Layers shows");
                 assert_eq!(floating_window(&h.layout(), "layers").map(|w| w.rect), rect, "{params}: where it was");
             }
         }),
@@ -529,19 +565,19 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             assert_eq!((checked(h, &libraries), checked(h, &item)), (Some(false), Some(false)));
             h.app.run("window.panel", libraries.clone()).unwrap();
             h.frames(2);
-            assert!(panels_shown(&h.app) && visible(&h.app.ui, "libraries"), "a closed panel comes back");
+            assert!(panels_shown(&h.app) && visible(&h.app, "libraries"), "a closed panel comes back");
             h.app.run("window.panel", item.clone()).unwrap();
-            assert!(visible(&h.app.ui, "layers") && !visible(&h.app.ui, "properties"), "a background tab comes to the front");
+            assert!(visible(&h.app, "layers") && !visible(&h.app, "properties"), "a background tab comes to the front");
             assert_eq!((checked(h, &libraries), checked(h, &item)), (Some(false), Some(true)), "the tab in front is checked");
         }),
         ("F7 from a Tab-hidden dock reveals the named group", |h| {
             h.f7();
-            assert!(visible(&h.app.ui, "layers"));
+            assert!(visible(&h.app, "layers"));
             let before = h.layout();
             h.hide_panels(ChromeToggle::Panels);
             h.f7();
             h.frames(2);
-            assert!(panels_shown(&h.app) && visible(&h.app.ui, "layers"), "F7 shows the hidden group");
+            assert!(panels_shown(&h.app) && visible(&h.app, "layers"), "F7 shows the hidden group");
             assert_eq!(h.layout(), before);
             h.f7();
             assert!(group_hidden_all(h), "the next press hides the group");
@@ -581,8 +617,8 @@ fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
     assert!(peek::edge_panels(&layout, peek::Edge::Left).is_empty());
     let mirrored = Layout::new(
         Some(Node::Split {
-            axis: craft::ui::layout::SplitAxis::Horizontal,
-            size: craft::behavior::dock::SplitSize::FixedFirst(310.0),
+            axis: Axis::X,
+            size: SplitSize::FixedFirst(310.0),
             first: Box::new(Node::Tabs { panels: vec!["layers".to_string()], active: 0 }),
             second: Box::new(Node::Tabs { panels: vec![CANVAS.to_string()], active: 0 }),
         }),
@@ -742,9 +778,9 @@ fn presentation_panel_command_reports_unavailable_without_mutating_layout() {
         h.app.run("view.screenMode", json!({"mode": mode})).unwrap();
         assert_eq!(checked(&h, &item), Some(true), "mode {mode}");
         h.app.run("window.panel", item.clone()).unwrap();
-        assert!(!visible(&h.app.ui, "layers"), "mode {mode}: the checked item hides the panel");
+        assert!(!visible(&h.app, "layers"), "mode {mode}: the checked item hides the panel");
         h.app.run("window.panel", item.clone()).unwrap();
-        assert!(visible(&h.app.ui, "layers"), "mode {mode}: and shows it again");
+        assert!(visible(&h.app, "layers"), "mode {mode}: and shows it again");
     }
 }
 
@@ -752,22 +788,22 @@ fn presentation_panel_command_reports_unavailable_without_mutating_layout() {
 fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     let mut h = Harness::new();
     h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
-    let keymap = crate::shortcut_editor::current();
+    let platform = crate::keymap::platform();
+    let keymap = commands::keymap(&h.ctx).expect("a frame ran");
     for (chord, command) in [("F8", "ui.symbolOptions"), ("F12", "file.revert")] {
-        let bound = crate::keymap::vc_chord(chord).and_then(|c| crate::keymap::lookup(&keymap.keymap, &c)).unwrap();
-        assert_eq!(bound.id, command);
+        let want = Trigger::parse(chord).expect("a trigger").effective(platform);
+        assert!(keymap.bindings(&CommandRef::new(command)).iter().any(|b| b.trigger.effective(platform) == want), "{chord} runs {command}");
     }
     h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     h.press(egui::Key::F8, egui::Modifiers::NONE);
-    assert!(h.app.dialogs().any_dialog_open(), "F8 opens the Symbol Options dialog");
-    crate::dialogs::confirm(&mut h.app).unwrap();
+    assert!(h.app.any_dialog_open(), "F8 opens the Symbol Options dialog");
+    answer(&mut h.app, true);
     assert_eq!(h.app.session.doc().unwrap().doc.symbols.len(), 1);
     crate::menus::invoke(&mut h.app, "view.rotate", json!({}));
-    assert!(h.app.dialogs().any_dialog_open());
+    assert!(h.app.any_dialog_open());
     h.f7();
     assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a dialog is open");
-    // PLAN: assumed `Dialogs::close_all` (hub-w1 M10) closes whatever dialog is up.
-    h.app.dialogs().close_all();
+    answer(&mut h.app, false);
 
     let field = egui::Id::unique("panel-shortcut-text-focus");
     h.ctx.memory_mut(|m| m.request_focus(field));
@@ -790,13 +826,13 @@ fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     saved.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
     saved.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap();
     assert_eq!(saved.session.doc().unwrap().doc.node_count(), 3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let key = Event::Key { key: egui::Key::F12, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| crate::shortcuts::handle(&mut saved, ui.ctx()))
-        .textures_delta
-        .clear();
-    assert!(saved.dialogs().any_dialog_open(), "F12 asks before reverting");
-    crate::dialogs::confirm(&mut saved).unwrap();
+    // The first frame builds the keymap the press goes through.
+    key_frame(&mut saved, &ctx, vec![]);
+    key_frame(&mut saved, &ctx, vec![key]);
+    assert!(saved.any_dialog_open(), "F12 asks before reverting");
+    answer(&mut saved, true);
     assert_eq!(saved.session.doc().unwrap().doc.node_count(), 2, "F12 reloads the saved document");
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -823,11 +859,10 @@ fn cycle_options_steps_through_the_sizes_and_returns_to_the_largest() {
         let r = h.app.run("window.panel.cycleOptions", json!({"panel": "transparency"})).unwrap();
         assert_eq!((r["size"].clone(), r["sizes"].clone()), (json!(size), json!(3)));
     }
-    // PLAN: assumed `panels::{part_hidden, set_part_hidden}(ctx, key[, hidden])` (hub-w2, op.A3).
     // Thumbnails hidden with the options shown matches no size, so the next step is the largest.
-    crate::panels::set_part_hidden(&h.ctx, "tr-hide-thumbs", true);
+    crate::panels::set_part_hidden(&mut h.app, "tr-hide-thumbs", true);
     assert_eq!(h.app.run("window.panel.cycleOptions", json!({"panel": "transparency"})).unwrap()["size"], 0);
-    assert!(!crate::panels::part_hidden(&h.ctx, "tr-hide-thumbs"), "the largest size shows the thumbnails");
+    assert!(!crate::panels::part_hidden(&h.app, "tr-hide-thumbs"), "the largest size shows the thumbnails");
 }
 
 /// An unknown panel, a panel without display sizes or a missing `panel` is an error, and the

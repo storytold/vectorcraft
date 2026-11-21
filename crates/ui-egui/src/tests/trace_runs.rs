@@ -282,8 +282,7 @@ fn a_trace_started_before_a_revert_does_not_apply() {
 #[test]
 fn the_progress_window_shows_a_trace() {
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
     assert!(!progress(&mut app, &ctx, 0.0).contains("Tracing the image"), "not before the delay");
     progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first

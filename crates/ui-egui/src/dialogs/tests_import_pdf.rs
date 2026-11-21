@@ -9,10 +9,11 @@ use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf, pdf_with};
 
 use super::import_pdf::ImportPdfDialog;
 use super::*;
-use crate::io;
+use crate::{VectorcraftApp, io};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app
 }

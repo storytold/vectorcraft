@@ -14,7 +14,9 @@ use std::sync::mpsc::channel;
 // PLAN: crates/ui-egui/Cargo.toml needs craft-platform with its `clipboard` feature (hub-w1).
 use craft::platform::clipboard::{Clipboard, Flavor, RGBA8, Written};
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, ImageRead, PASTE_ORDER, PDF, PNG, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{
+    AI, BITMAP, EMF, EPS, Flavour, ImageRead, PASTE_ORDER, PDF, PNG, SVG, TEXT, looks_like_svg, names_a_picture,
+};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -297,7 +299,8 @@ impl VectorcraftApp {
             || match cb.read(&[TEXT]).ok().flatten() {
                 Some(now) => text.as_deref().is_some_and(|ours| now.data == ours.as_bytes()),
                 None => {
-                    !cb.has(&PASTE_ORDER) || formats.iter().any(|ours| cb.read(&[&*ours.mime]).ok().flatten().is_some_and(|now| now.data == ours.data))
+                    !cb.has(&PASTE_ORDER)
+                        || formats.iter().any(|ours| cb.read(&[&*ours.mime]).ok().flatten().is_some_and(|now| now.data == ours.data))
                 }
             };
         // A clipboard with no text can't show a later copy of a picture, or tell an empty clipboard
@@ -429,7 +432,12 @@ impl VectorcraftApp {
             return;
         }
         self.clipboard_in = Some(f);
-        crate::menus::invoke(self, crate::shortcuts::paste_command(held), json!({}));
+        // The paste command the V chord held belongs to (Paste in Place for Cmd+Shift+V by default), else Paste.
+        let command = crate::keymap::chord_of_press(egui::Key::V, held, crate::keymap::platform())
+            .and_then(|chord| craft::ui::runtime::commands::holder(ctx, &chord))
+            .map(|c| c.id)
+            .filter(|id| id.starts_with("edit.paste"));
+        crate::menus::invoke(self, command.as_deref().unwrap_or("edit.paste"), json!({}));
     }
 
     /// Before a paste: what another app put on the system clipboard replaces the internal

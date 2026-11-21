@@ -45,7 +45,7 @@ use super::memo::Memo;
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
 use crate::graphics::doc_image;
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp, sub};
 use crate::panel_drag::PanelDrag;
 
 const KINDS: [(&str, &str); 5] =
@@ -321,8 +321,7 @@ fn rows(doc: u64, shown: &[Shown], hidden: &[String]) -> Vec<PresetRow<BrushKey>
     let first = by_name(shown);
     let mut rows = Vec::new();
     for (ty, label) in KINDS.iter().filter(|(ty, _)| !hidden.iter().any(|h| h == ty)) {
-        let of_type: Vec<&Shown> =
-            shown.iter().filter(|b| b.ty == *ty && first.get(b.name.as_str()).is_some_and(|f| std::ptr::eq(*f, *b))).collect();
+        let of_type: Vec<&Shown> = shown.iter().filter(|b| b.ty == *ty && first.get(b.name.as_str()).is_some_and(|f| std::ptr::eq(*f, *b))).collect();
         if of_type.is_empty() {
             continue;
         }
@@ -577,9 +576,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut footed = None;
     let shown = Stack::new().label(tl!("Brushes")).fill().footer(|ui, _| footed = Some(footer(app, ui, on))).show(ui, |ui, _| {
         let library = DropAction::<ListDrag<LibraryKey>>::new(|drag| library_brush(drag).is_some()).sizing(Sizing::Fill).show(ui, |ui, _| {
-            let art = DropAction::<PanelDrag>::new(move |payload| art_of(payload, uid).is_some())
-                .sizing(Sizing::Fill)
-                .show(ui, |ui, _| browser(ui));
+            let art = DropAction::<PanelDrag>::new(move |payload| art_of(payload, uid).is_some()).sizing(Sizing::Fill).show(ui, |ui, _| browser(ui));
             (art.output.dropped, art.inner.unwrap_or_default())
         });
         (library.output.dropped, library.inner.unwrap_or_default())
@@ -923,7 +920,7 @@ pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<LibraryInfo
 }
 
 /// Window → Brush Libraries.
-pub(crate) fn window_menu() -> Vec<Item> {
+pub(crate) fn window_menu() -> Vec<crate::menus::Node> {
     const SLOTS: [&str; 10] = [
         "window.userBrushLibrary1",
         "window.userBrushLibrary2",
@@ -936,14 +933,14 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userBrushLibrary9",
         "window.userBrushLibrary10",
     ];
-    let open = |b: &'static brushlib::BuiltinBrushLibrary| Item::Cmd(b.name, BrushLibraries::OPEN, json!({ "library": b.id }));
-    let mut items: Vec<Item> = brushlib::BUILTIN.iter().map(open).collect();
+    let open = |b: &'static brushlib::BuiltinBrushLibrary| cp(b.name, BrushLibraries::OPEN, json!({ "library": b.id }));
+    let mut items: Vec<crate::menus::Node> = brushlib::BUILTIN.iter().map(open).collect();
     items.extend([
-        Item::Sep,
-        Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
-        Item::Sep,
-        Item::Cmd("Other Library…", "window.brushLibrary.other", Value::Null),
-        Item::Cmd("Save Brushes…", "ui.saveBrushLibrary", Value::Null),
+        Sep,
+        sub("User Defined", SLOTS.iter().map(|&id| c("User Library", id)).collect()),
+        Sep,
+        c("Other Library…", "window.brushLibrary.other"),
+        c("Save Brushes…", "ui.saveBrushLibrary"),
     ]);
     items
 }

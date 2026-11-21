@@ -245,9 +245,8 @@ fn rotate_view_without_an_angle_asks_for_one() {
     app.run("view.rotate", json!({"angle": 30})).unwrap();
     menus::invoke(&mut app, "view.rotate", json!({}));
     assert!(app.any_dialog_open(), "Rotate View dialog");
-    // PLAN: assumed hosted-dialog helpers (`set_json_field`, `confirm_by_id`) of the dialogs host.
-    crate::dialogs::set_json_field(&mut app, "angle", json!(-45));
-    crate::dialogs::confirm_by_id(&mut app, "command").unwrap();
+    let dialog = super::picks::open_dialogs(&app).pop().expect("the Rotate View dialog").id;
+    super::picks::answer_dialog(&mut app, dialog, &[("angle", json!(-45))], true);
     assert!(!app.any_dialog_open());
     assert_eq!(app.view().unwrap().rotation, -45.0);
     // Without a document no dialog opens, and the status bar shows "no document".
@@ -256,7 +255,6 @@ fn rotate_view_without_an_angle_asks_for_one() {
     assert!(!empty.any_dialog_open());
     assert_eq!(empty.ui.status, "no document");
 }
-
 
 /// Selects the object `id` alone and turns it by `angle` degrees.
 fn turn(app: &mut VectorcraftApp, id: &Value, angle: f64) {
@@ -319,7 +317,6 @@ fn rotate_view_to_selection_squares_the_view_to_the_selected_object() {
     assert_eq!(rotate_to_selection(&mut app), 0.0);
     assert!(square_on_screen(&app));
 }
-
 
 /// The window, with a 400 × 300 document whose view is turned to 30°, and the Selection tool. Each
 /// frame comes the given number of seconds, zero or more, after the one before it.
@@ -590,5 +587,3 @@ fn escape_in_a_dialog_or_a_full_screen_mode_keeps_the_rotation() {
     w.escape(0.5);
     assert_eq!(w.rotation(), 0.0, "the next Escape after Presentation Mode");
 }
-
-

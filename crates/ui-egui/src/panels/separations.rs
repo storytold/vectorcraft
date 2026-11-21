@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 
 use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, IconId, ItemSource};
-use craft::host::files::{PickRequest, Picked};
+use craft::host::{PickRequest, Picked};
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
@@ -153,21 +153,20 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         ColumnSpec::new(NAME, Label::Empty, ColumnWidth::fill(1.0)),
     ];
     // Disabled while the preview is off: the eyes then take no press and the rows read dim.
-    let out = List::new(tl!("Plates"))
-        .id_salt("plates")
-        .select(SelectMode::None)
-        .sizing(Sizing::Content)
-        .enabled(on)
-        .columns(columns)
-        .show_items(ui, &rows, &mut |key, item| {
+    let out = List::new(tl!("Plates")).id_salt("plates").select(SelectMode::None).sizing(Sizing::Content).enabled(on).columns(columns).show_items(
+        ui,
+        &rows,
+        &mut |key, item| {
             let Some(row) = rows.0.get(*key) else { return ListRow::new(Label::Empty) };
-            let tooltip = if *key == 0 { tl!("Show all plates") } else { tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)") };
+            let tooltip =
+                if *key == 0 { tl!("Show all plates") } else { tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)") };
             let mut list_row = ListRow::new(row.shown.clone()).toggle(ToggleCell::eye(EYE, row.visible).tooltip(tooltip));
             if let Some(ink) = row.chip {
                 list_row = list_row.thumb(ThumbSize::Small, move |painter, rect| painter.painter.rect_filled(rect, 2.0, ink));
             }
             list_row.cells(item.cells()).state(item.row.clone())
-        });
+        },
+    );
     for event in out.events {
         // The event carries the Alt that was held at the press.
         let CollectionEvent::Toggle(edit) = event else { continue };

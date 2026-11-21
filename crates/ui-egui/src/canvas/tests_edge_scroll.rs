@@ -3,7 +3,9 @@
 //! the view stops once the pointer leaves the edge. The Hand tool's drag pans and scrolls no further.
 
 use super::*;
+use egui::{Pos2, pos2, vec2};
 use vectorcraft_engine::Session;
+use vectorcraft_geom::Point;
 
 /// One headless canvas frame on an 800 × 600 window.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {

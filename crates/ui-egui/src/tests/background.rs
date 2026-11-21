@@ -9,6 +9,7 @@ use vectorcraft_doc::{Appearance, Document, Node};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Rect, shapes};
 
+use super::nativeoptions::{answer, host, pass, replace_files};
 use crate::control::ControlRequest;
 use crate::{Services, VectorcraftApp, background, io};
 
@@ -162,9 +163,10 @@ fn a_background_export_asks_before_replacing_an_artboard_file() {
     gate.open();
     background::wait_all(&mut app);
     assert!(files.lock().unwrap().is_empty(), "nothing is written while it asks");
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("message").as_str()), (crate::dialogs::confirm::REPLACE_FILES, "“a-B.png” already exists. Replace it?"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    host(&mut app);
+    pass(&mut app);
+    assert_eq!(replace_files(&app), Some(vec!["/out/a-B.png".to_string()]), "the question names the artboard file that is there");
+    answer(&mut app, &[], true);
     background::wait_all(&mut app);
     let names: Vec<String> = files.lock().unwrap().iter().map(|(p, _)| p.clone()).collect();
     assert_eq!(names, ["/out/a-Artboard-1.png", "/out/a-B.png"]);
@@ -272,7 +274,7 @@ fn a_canceled_save_writes_nothing_and_keeps_the_document_modified() {
     assert_eq!(st.format, "vectorcraft");
     assert!(io::recent_files(&app).iter().any(|p| p == "/docs/first.vectorcraft"));
     assert!(!io::recent_files(&app).iter().any(|p| p == "/docs/second.svg"));
-    assert!(app.ui.dialog.is_none(), "no error is shown");
+    assert!(app.told.0.is_empty(), "no error is shown");
     // The export's line came after the Cancel: the canceled save leaves it.
     assert_eq!(app.ui.status, "Exported /out/c.svg");
 }
@@ -341,7 +343,7 @@ fn a_cancel_after_a_streamed_save_is_filled_cancels_it() {
     assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
     gate.open();
     background::wait_all(&mut app);
-    assert!(app.ui.dialog.is_none(), "no error is shown");
+    assert!(app.told.0.is_empty(), "no error is shown");
     assert_eq!(app.ui.status, io::SAVE_CANCELED);
     let st = app.session.active().unwrap();
     assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
@@ -375,8 +377,7 @@ pub(super) fn status_bar_texts(app: &mut VectorcraftApp) -> Vec<String> {
             _ => {}
         }
     }
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::chrome::status_bar(app, ui));
     out.textures_delta.clear();
     let mut v = vec![];
@@ -445,12 +446,12 @@ fn a_background_save_keeps_a_newer_status_on_failure() {
     gate.open();
     background::wait_all(&mut app);
     assert_eq!(app.ui.status, "Newer");
-    // Not saved, and the write error's dialog still says so.
+    // Not saved, and the write error's message still says so.
     let st = app.session.doc().unwrap();
     assert!(st.is_dirty() && st.path.is_none(), "not saved");
-    let d = app.ui.dialog.as_ref().expect("the write error's dialog");
-    assert_eq!((d.kind.as_str(), d.str("message").as_str()), (crate::dialogs::confirm::MESSAGE, "Can't save “f.vectorcraft”."));
-    assert!(d.str("detail").contains("disk full"), "{}", d.str("detail"));
+    let (message, detail) = app.told.0.last().expect("the write error's message");
+    assert_eq!(message, "Can't save “f.vectorcraft”.");
+    assert!(detail.contains("disk full"), "{detail}");
 }
 
 #[test]
@@ -661,7 +662,6 @@ fn control_saves_and_exports_with_wait_reply_with_the_error() {
     background::wait_all(&mut app);
     assert!(written(&files).is_empty());
 }
-
 
 #[test]
 fn bad_options_fail_before_going_to_the_background() {

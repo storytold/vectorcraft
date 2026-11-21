@@ -342,7 +342,15 @@ impl VcGlyphs<'static> {
 
     /// The source of `face` alone: it draws glyphs and describes nothing about the selection.
     fn bare(face: Arc<FontFace>) -> Self {
-        VcGlyphs { db: FontDb::global(), family: face.family.clone(), style: face.style.clone(), face: Some(face), fit: None, listing: None, empty: None }
+        VcGlyphs {
+            db: FontDb::global(),
+            family: face.family.clone(),
+            style: face.style.clone(),
+            face: Some(face),
+            fit: None,
+            listing: None,
+            empty: None,
+        }
     }
 }
 
@@ -354,10 +362,6 @@ impl VcGlyphs<'_> {
 }
 
 impl GlyphSource for VcGlyphs<'_> {
-    fn charmap(&self, _family: &str, _style: &str) -> Vec<char> {
-        self.face.as_ref().map(|f| f.mapped_chars().iter().map(|x| x.0).collect()).unwrap_or_default()
-    }
-
     fn cells(&self, _family: &str, _style: &str, category: &str) -> Vec<GlyphCell> {
         let Some(face) = &self.face else { return vec![] };
         if category == ALTERNATES {
@@ -372,8 +376,12 @@ impl GlyphSource for VcGlyphs<'_> {
             // A glyph several characters map is listed once, by the first of them; a glyph only a
             // space or control character maps is listed by glyph id, as no character it can insert.
             let mut mapped: HashSet<u32> = HashSet::new();
-            let mut cells: Vec<GlyphCell> =
-                all.iter().copied().filter(|(c, g)| listable(*c) && wanted.contains(g) && mapped.insert(*g)).map(|(c, _)| GlyphCell::Char(c)).collect();
+            let mut cells: Vec<GlyphCell> = all
+                .iter()
+                .copied()
+                .filter(|(c, g)| listable(*c) && wanted.contains(g) && mapped.insert(*g))
+                .map(|(c, _)| GlyphCell::Char(c))
+                .collect();
             cells.extend(found.glyphs.iter().copied().filter(|g| !mapped.contains(g)).map(GlyphCell::Glyph));
             return cells;
         }
@@ -390,10 +398,6 @@ impl GlyphSource for VcGlyphs<'_> {
     fn glyph(&self, _family: &str, _style: &str, cell: GlyphCell, px: u32) -> Option<ColorImage> {
         let face = self.face.as_ref()?;
         Some(glyph_image(face, gid_of_cell(face, cell)?, px))
-    }
-
-    fn in_category(&self, c: char, category: &str) -> bool {
-        in_block(c, category)
     }
 
     fn revision(&self) -> u64 {
@@ -467,20 +471,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let (families, styles) = (db.families(), db.styles(&family));
     let can_insert = can_insert(app);
-    let out = GlyphsPanel::new(
-        tl!("Glyphs"),
-        &source,
-        Bind::bound(&mut family),
-        Bind::bound(&mut style),
-        Bind::bound(&mut app.ui.glyphs_panel),
-    )
-    .families(&families)
-    .styles(&styles)
-    .can_insert(can_insert)
-    .marked(marked)
-    .reveal(reveal)
-    .empty(source.empty.clone().map(Label::from))
-    .show(ui);
+    let out = GlyphsPanel::new(tl!("Glyphs"), &source, Bind::bound(&mut family), Bind::bound(&mut style), Bind::bound(&mut app.ui.glyphs_panel))
+        .families(&families)
+        .styles(&styles)
+        .can_insert(can_insert)
+        .marked(marked)
+        .reveal(reveal)
+        .empty(source.empty.clone().map(Label::from))
+        .show(ui);
     if out.font_changed {
         app.ui.glyphs_font = Some((family, style));
     }
@@ -1403,7 +1401,9 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
         // A width form may be drawn with other widths for the same glyphs (`GPOS`) instead of
         // other glyphs.
         let enabled = match (form.feature(), &faces) {
-            (Some(tag), Some(faces)) => faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag))),
+            (Some(tag), Some(faces)) => {
+                faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag)))
+            }
             (Some(_), None) => true,
             (None, _) => has,
         };

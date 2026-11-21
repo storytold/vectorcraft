@@ -2,6 +2,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 use crate::Services;
+use crate::tests::picks::{cancel_dialog, close_shown, draw_dialogs, open_dialogs, show_question};
 
 #[test]
 fn long_operation_busy_while_a_file_opens_or_a_background_save_runs() {
@@ -45,6 +46,13 @@ fn wait_read(app: &mut VectorcraftApp) {
 }
 
 /// Wait until every file being opened has been read, then open the files that may open now.
+/// Whether the missing-fonts question is open once a frame has drawn the dialogs.
+fn asks_fonts(app: &mut VectorcraftApp) -> bool {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    draw_dialogs(app, &ctx);
+    open_dialogs(app).iter().any(|d| d.key.as_deref() == Some(crate::dialogs::missing_fonts::KIND))
+}
+
 fn open_ready(app: &mut VectorcraftApp) {
     wait_read(app);
     poll(app);
@@ -71,6 +79,7 @@ fn open_with_runs_the_importer_off_the_ui_thread() {
     let rect = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":true,"anchors":[{"p":[10,20]},{"p":[110,20]},{"p":[110,70]},{"p":[10,70]}]}]}}]}"#;
     let (_dir, file) = importer_file("with");
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
     install_importer(&mut app, &tpl::when_given(&tpl::importer("test.opening.with", r#"["tob"]"#, params), Given::Params, r#""density":7"#, rect));
@@ -90,7 +99,7 @@ fn open_with_runs_the_importer_off_the_ui_thread() {
     open_ready(&mut app);
     assert_eq!(app.session.documents().len(), 1);
     assert!(!app.ui.status.is_empty(), "the failure reaches the status bar");
-    assert!(app.ui.dialog.is_some(), "the failure is reported in a dialog");
+    assert!(crate::dialogs::confirm::open_message(&app).is_some(), "the failure is reported in a dialog");
     assert!(app.ui.recent_files.is_empty());
     app.run("plugin.remove", json!({"id": "test.opening.with"})).unwrap();
 }
@@ -121,12 +130,12 @@ fn a_file_ready_while_a_dialog_is_open_waits_for_it_to_close() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     let (first, before) = (app.session.doc().unwrap().uid, app.session.documents().len());
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({"path": "/art/First.vectorcraft"})));
+    let question = show_question(&mut app);
     start(&mut app, "/art/Second.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false));
     open_ready(&mut app);
     assert_eq!((app.session.documents().len(), app.session.doc().unwrap().uid), (before, first), "still the dialog's document");
     assert_eq!(app.opening.pending.len(), 1);
-    app.ui.dialog = None;
+    close_shown(&mut app, question);
     poll(&mut app);
     assert!(app.opening.pending.is_empty());
     assert_eq!(app.session.documents().len(), before + 1);
@@ -362,6 +371,7 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
         out
     };
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     for (name, format) in [("a.tif", Tiff), ("b.bmp", Bmp), ("c.jpg", Jpeg), ("gone.png", Png), ("changed.png", Png)] {
         std::fs::write(file(&before, name), picture(format, [200, 40, 40])).unwrap();
@@ -382,15 +392,16 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
     std::fs::rename(&before, &after).unwrap();
     let path = file(&after, "poster.vectorcraft");
     let bytes = std::fs::read(&path).unwrap();
-    let asked = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone()));
+    let asked = |app: &VectorcraftApp| open_dialogs(app).pop().map(|d| (d.key, d.fields));
     for update in ["askWhenModified", "automatically"] {
         app.session.prefs.update_links = update.into();
         let r = crate::io::open_bytes(&mut app, &path, &bytes, Some(path.clone())).unwrap();
         let rows = if update == "automatically" { &r["updatedLinks"] } else { &r["modifiedLinks"] };
         assert_eq!(rows[0]["name"], "changed.png", "{update}: {r}");
         let (at_once, question) = (app.session.doc().unwrap().doc.clone(), asked(&app));
-        assert!(question.as_ref().is_some_and(|(_, f)| f["missing"][0]["name"] == "gone.png"), "{update}: {question:?}");
-        app.ui.dialog = None;
+        assert!(question.as_ref().and_then(|(_, f)| f.as_ref()).is_some_and(|f| f["missing"][0]["name"] == "gone.png"), "{update}: {question:?}");
+        let open = open_dialogs(&app).pop().map(|d| d.id).expect("the links question is open");
+        cancel_dialog(&mut app, open);
         start(&mut app, &path, bytes.clone());
         open_ready(&mut app);
         let st = app.session.doc().unwrap();
@@ -443,7 +454,7 @@ fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
     app.run("file.new", json!({})).unwrap();
     app.run("document.save", json!({"path": other})).unwrap();
     app.run("file.new", json!({})).unwrap();
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let question = show_question(&mut app);
     crate::io::open_reporting(&mut app, &doc).unwrap();
     crate::io::open_reporting(&mut app, &other).unwrap();
     assert_eq!(app.opening.activate.len(), 2);
@@ -453,9 +464,9 @@ fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
     // The other file is read; it waits for the dialog meanwhile.
     open_ready(&mut app);
     assert_eq!(app.opening.pending.len(), 1);
-    app.ui.dialog = None;
+    close_shown(&mut app, question);
     poll(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
+    assert!(asks_fonts(&mut app));
     assert_eq!(app.session.doc().unwrap().path.as_deref(), Some(&*doc), "the dialog's document stays active");
     assert_eq!(app.opening.activate.first().map(|(p, _)| p), Some(&other), "the later activation waits");
     assert_eq!(app.opening.pending.len(), 1, "the other file waits");
@@ -470,15 +481,15 @@ fn a_file_that_opens_and_asks_holds_back_the_next_one_ready() {
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font Family"})).unwrap();
     let asks = vectorcraft_format::save(&app.session.doc().unwrap().doc, false);
     app.session.execute("file.close", &json!({})).unwrap();
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let question = show_question(&mut app);
     start(&mut app, "/art/Asks.vectorcraft", asks);
     start(&mut app, "/art/Plain.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false));
     // Both files are read; they wait for the dialog meanwhile.
     open_ready(&mut app);
     assert_eq!(app.opening.pending.len(), 2);
-    app.ui.dialog = None;
+    close_shown(&mut app, question);
     poll(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
+    assert!(asks_fonts(&mut app));
     assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/art/Asks.vectorcraft"), "the dialog's document stays active");
     assert_eq!(app.opening.pending.len(), 1, "the next file waits");
 }
@@ -517,8 +528,7 @@ fn bytes(title: &str) -> Vec<u8> {
 #[test]
 fn a_file_that_takes_a_while_to_open_shows_a_progress_window() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     assert_eq!(progress(&mut app, &ctx), "", "nothing opening");
     start(&mut app, "/art/Big.vectorcraft", bytes("Big"));
     assert_eq!(progress(&mut app, &ctx), "", "not at once");
@@ -560,5 +570,3 @@ fn cancelling_an_open_opens_nothing() {
     assert_eq!(app.session.documents().len(), before);
     assert_ne!(app.ui.recent_files.first().map(String::as_str), Some("/art/Big.vectorcraft"));
 }
-
-

@@ -2,18 +2,19 @@
 //! Everything drawn on or over the document is a seam of its own module; this file builds the
 //! canvas, runs the seams in order and copies the view back to the document's `View`.
 
-// PLAN: assumed import paths for the framework types below (`craft::ui::canvas::*`, `craft::ui::Bind`,
-// `craft::ui::runtime::frame`); seam signatures of the children are assumed `(app, ui, &space[, win, kind])`.
-use craft::ui::contract::Bind;
-use craft::ui::canvas::{Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass};
-use craft::behavior::CanvasView;
+use craft::behavior::{CanvasView, PressPhase};
+use craft::ui::canvas::{
+    Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
+};
+use craft::ui::contract::{Bind, Show as _};
+use craft::ui::runtime::env::Env;
+use craft::ui::style::StyleCx;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_geom::{Rect, Size};
 
 use crate::doc_windows::{self, Win};
 use crate::state::ViewMove;
-use crate::theme::Tokens;
 use crate::{VectorcraftApp, tl};
 
 mod alternates_bar;
@@ -42,16 +43,16 @@ mod widgets;
 
 pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 pub use fill::Fill;
+#[cfg(test)]
+pub(crate) use grid::ruler_label;
 use home::home;
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
-pub(crate) use drops::panel_drop;
-pub(crate) use rulers::{RulerScale, general_lengths, ruler_label, ruler_origin_dragging, type_lengths};
-pub(crate) use grid::{checker_texture, checker_tile};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
+pub(crate) use rulers::{general_lengths, type_lengths};
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
-pub(crate) use tool_adapter::{in_gesture, pose_on_page, view_tool_held};
+pub(crate) use tool_adapter::{in_gesture, pose_on_page};
 
 /// Which body a document's canvas runs: the current window's interactive one, or a display-only
 /// pane of a tiled or floating window.
@@ -69,7 +70,6 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 }
 
 /// The id `Canvas::new("Document")` gets for a body of `win`.
-// PLAN: assumed: the framework derives the id from the label and the window's id scope.
 pub(crate) fn canvas_id(win: Win) -> egui::Id {
     egui::Id::new("Document").with(win)
 }
@@ -91,10 +91,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         home(app, ui, full);
         return;
     }
-    // PLAN: assumed `doc_windows::views::current(app) -> Option<Win>` is visible here.
-    let Some(win) = doc_windows::views::current(app).filter(|_| app.session.active().is_some()) else {
+    let Some(win) = doc_windows::current(app).filter(|_| app.session.active().is_some()) else {
         // No document and Show The Home Screen When No Documents Are Open off: an empty window.
-        ui.painter().rect_filled(full, 0.0, Tokens::get(ui.ctx()).panel_darker);
+        let env = Env::of(ui);
+        let fill = StyleCx::of_env(ui.ctx(), &env).color(env.tokens.color.surface.canvas);
+        ui.painter().rect_filled(full, 0.0, fill.egui());
         return;
     };
     show_document(app, ui, win, BodyKind::Live);
@@ -109,13 +110,14 @@ struct Body {
     edited: Option<CanvasView>,
 }
 
-/// Window `win`'s document in the framework canvas, filling the rest of `ui`.
-pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKind) {
+/// Window `win`'s document in the framework canvas, filling the rest of `ui`. True when the canvas
+/// background got a press this pass, which asks for a pane's window to become the current one.
+pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKind) -> bool {
     let area = ui.available_rect_before_wrap();
     let presenting = app.ui.screen_mode == 3;
     let scaling = app.ui_scaling();
     let target = view_target(app, win);
-    let Some(view) = doc_windows::view_mut(app, win) else { return };
+    let Some(view) = doc_windows::view_mut(app, win) else { return false };
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
     let refit = !view.fitted || (presenting && view.rect != area);
     view.rect = area;
@@ -128,18 +130,19 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     }
     let moved = view.moved.take();
     let mut cv = view.canvas(scaling, area);
-    let (x, y, zero) = rulers::texts(app, win);
-    let pasteboard = doc_windows::state(app, win).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
+    // The rulers' zero point reaches the canvas through the strips `rulers::show` shows in the body.
+    let (x, y, _zero) = rulers::texts(app, win);
+    let pasteboard = app.session.documents().get(win.0).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
     let layers = move || bounds;
     let prefs = &app.session.prefs;
     let mut canvas = Canvas::new("Document")
+        .id(canvas_id(win))
         .view(Bind::bound(&mut cv))
         .document(target)
         .layer_bounds(&layers)
         .queued(&queued)
         .navigation(crate::app::view::navigation(prefs))
-        .rulers(x, y, zero)
-        .show_rulers(app.ui.view.rulers && !presenting)
+        .rulers(x, y)
         .precise_cursors(prefs.use_precise_cursors);
     if let Some(pasteboard) = pasteboard {
         canvas = canvas.pasteboard(pasteboard);
@@ -156,8 +159,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         }
     });
     let output = shown.output;
+    let pressed = matches!(output.press.phase, PressPhase::Down { .. });
     let Body { reply, context_at, edited } = body;
-    let request = reply.as_ref().and_then(|r| r.context.at).or(context_at);
+    let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
     let jumped = edited.is_some();
     let view_now = edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv);
     if let Some(view) = doc_windows::view_mut(app, win) {
@@ -166,7 +170,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         view.moved = jumped.then_some(ViewMove::Jump);
     }
     if kind == BodyKind::Pane || presenting {
-        return;
+        return pressed;
     }
     if let Some(space) = output.space.as_ref() {
         context_menu::show(app, ui, space, &output.response, request);
@@ -177,6 +181,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     {
         crate::menus::invoke(app, cmd, json!({}));
     }
+    pressed
 }
 
 /// The body of the canvas in order: controls that take presses first, the tool host, the picture last.
@@ -184,48 +189,56 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     let live = kind == BodyKind::Live;
     let presenting = app.ui.screen_mode == 3;
     let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
-    grid::show(app, ui, space, win);
-    marks::show(app, ui, space);
+    grids(app, ui, space, win);
+    marks::show(app, ui, space, win, kind);
     if !presenting {
         crate::panels::tabs::stop_guide(app, ui, space);
         crate::dialogs::simplify_slider::show(app, ui, &space.view);
     }
-    let guide = if app.ui.view.rulers && !presenting {
-        rulers::show(app, ui, space, kind)
+    if app.ui.view.rulers && !presenting {
+        rulers::show(app, ui, space, win, kind);
     } else {
         rulers::hidden(app);
-        None
-    };
-    guides::show(app, ui, space, guide);
-    selection::show(app, ui, space);
-    widgets::show(app, ui, space);
+    }
+    guides::show(app, ui, space, win, kind);
+    selection::show(app, ui, space, win, kind);
+    widgets::show(app, ui, space, win, kind);
     let gizmo = crate::dialogs::three_d::gizmo_shown(app);
     if !presenting && !gizmo {
         crate::panels::three_d::handles::show(app, ui, space);
     }
     if live {
-        selection_widgets::show(app, ui, space);
+        selection_widgets::show(app, ui, space, win, kind);
         out.edited = compass(app, ui, space).or_else(|| scroll_bars(app, ui, space));
         if app.ui.screen_mode < 3 {
             let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
             // The bars give way to a drag, not to a click.
-            if app.ui.task_bar && !gizmo && !strip && !in_gesture(app, ui.ctx()) {
-                task_bar::task_bar(app, ui, space);
-            }
+            let task_bar = (app.ui.task_bar && !gizmo && !strip && !in_gesture(app, ui.ctx())).then(|| task_bar::task_bar(app, ui, space)).flatten();
             quick_pen_bar::quick_pen_bar(app, ui, space);
             contour_bar::contour_bar(app, ui, space);
             // After the task bar, which the row of character alternates keeps clear of.
-            alternates_bar::alternates_bar(app, ui, space);
+            alternates_bar::alternates_bar(app, ui, space, task_bar);
             crate::free_transform::show(app, ui, space);
             crate::dialogs::dimension::floating(app, ui, space.view.rect);
         }
         crate::type_editing::show(app, ui);
         out.reply = pass.map(|pass| tool_adapter::run(app, ui, pass));
         crate::place::canvas_drop(app, ui, space);
-        drops::show(app, ui, space);
+        drops::show(app, ui, space, win, kind);
     }
     raster::picture(app, ui, space, win, kind);
     out
+}
+
+/// The document grid, in the picture slot under the art when Grids In Back is on and over it
+/// otherwise, and the pixel grid over the art.
+fn grids(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win) {
+    if let Some((grid, in_back)) = app.session.documents().get(win.0).and_then(|st| grid::document_grid(app, st)) {
+        let _ = if in_back { grid.picture() } else { grid }.show_at(ui, space.view.rect);
+    }
+    if let Some(grid) = grid::pixel_grid(app) {
+        let _ = grid.show_at(ui, space.view.rect);
+    }
 }
 
 /// The Rotate View compass while the view is turned: the view with the angle the user set.
@@ -258,7 +271,7 @@ fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, space: &CanvasSpace) -> Option
 /// The size of the art and the artboards together, and the artboard Fit Artboard shows (the view's,
 /// the first when it has gone).
 fn view_target(app: &VectorcraftApp, win: Win) -> ViewTarget {
-    let (Some(st), Some(view)) = (doc_windows::state(app, win), doc_windows::view(app, win)) else {
+    let (Some(st), Some(view)) = (app.session.documents().get(win.0), doc_windows::view(app, win)) else {
         return ViewTarget::new(Size::new(1.0, 1.0));
     };
     let boards = st.doc.artboards.iter().map(|a| a.rect).reduce(|r, a| r.union(a));

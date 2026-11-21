@@ -808,8 +808,7 @@ pub struct UiState {
     pub gradient_panel: crate::panels::gradient::GradientUi,
     /// The Swatches panel's selection, kept swatch and focus. Not saved.
     #[serde(skip)]
-    // PLAN: assumed `crate::panels::swatches::SwatchesPanel` (co.A3 names the model but not its type; color-w10).
-    pub swatches_panel: crate::panels::swatches::SwatchesPanel,
+    pub swatches_panel: crate::panels::swatches::Model,
     /// The open Swatch Options dialog's record. Not saved.
     #[serde(skip)]
     pub swatch_options: Option<crate::dialogs::swatch_options::Open>,

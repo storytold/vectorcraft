@@ -32,8 +32,10 @@ use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _};
+use craft::ui::dialog::{
+    DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
+};
 use craft::ui::display::Text;
-use craft::ui::dialog::{DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id};
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
@@ -45,8 +47,6 @@ use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
 
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
-
-// PLAN: assumed the craft_ui paths above for Button, Text, TextField, DialogRole and FooterButton, and craft::host for PickRequest and Picked.
 
 /// The dialog kind of the warning before a script runs.
 pub const KIND: &str = "scriptRun";
@@ -68,15 +68,15 @@ const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files 
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
 pub(crate) struct RunQuestion(pub(crate) StandardPrompt);
-crate::dialogs::confirm::wrapped_dialog!(RunQuestion, KIND);
+crate::dialogs::confirm::wrapped_dialog!(RunQuestion, StandardPrompt, KIND);
 
 /// The question a run asks when it has added a great deal.
 pub(crate) struct GrowthQuestion(pub(crate) StandardPrompt);
-crate::dialogs::confirm::wrapped_dialog!(GrowthQuestion, GROWTH_KIND);
+crate::dialogs::confirm::wrapped_dialog!(GrowthQuestion, StandardPrompt, GROWTH_KIND);
 
 /// The question quitting asks while a script runs.
 pub(crate) struct CloseQuestion(pub(crate) StandardPrompt);
-crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, CLOSE_KIND);
+crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KIND);
 
 /// The tag of the warning: the params `script.run` takes once the warning is answered.
 struct RunWarning {
@@ -278,7 +278,16 @@ pub(crate) struct ScriptFiles {
 
 impl ScriptFiles {
     fn new(p: ScriptPicker) -> Self {
-        Self { kind: p.kind, prompt: p.prompt, can_always: p.can_always, paths: Vec::new(), left_out: false, automated: false, choose: false, answer: None }
+        Self {
+            kind: p.kind,
+            prompt: p.prompt,
+            can_always: p.can_always,
+            paths: Vec::new(),
+            left_out: false,
+            automated: false,
+            choose: false,
+            answer: None,
+        }
     }
 
     /// The paths Choose… picked.
@@ -341,7 +350,8 @@ impl StackDialog for ScriptFiles {
         answers.push(("deny", FooterButton::new(tl!("Deny"), DialogRole::Cancel)));
         answers.push(("stop", FooterButton::new(tl!("Stop"), DialogRole::Other)));
         let (names, buttons): (Vec<&'static str>, Vec<FooterButton>) = answers.into_iter().unzip();
-        let mut prompt = Prompt::new(tl!("Script File Access"), shown_text(&self.prompt, true)).paragraph(picker_request(&self.kind)).answers(buttons);
+        let mut prompt =
+            Prompt::new(tl!("Script File Access"), shown_text(&self.prompt, true)).paragraph(picker_request(&self.kind)).answers(buttons);
         if self.left_out {
             prompt = prompt.tone(Tone::Bad, crate::i18n::msg(PICKED_LEFT_OUT).to_string());
         }
@@ -534,7 +544,13 @@ pub(crate) fn settle_close(app: &mut VectorcraftApp) {
 /// Takes the answers of the script's dialogs, once per frame, and gives them to the run.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some((notice, files, run, growth, close)) = with_host(app, |host, _| {
-        (host.take::<ScriptNotice>(), host.take::<ScriptFiles>(), host.take::<RunQuestion>(), host.take::<GrowthQuestion>(), host.take::<CloseQuestion>())
+        (
+            host.take::<ScriptNotice>(),
+            host.take::<ScriptFiles>(),
+            host.take::<RunQuestion>(),
+            host.take::<GrowthQuestion>(),
+            host.take::<CloseQuestion>(),
+        )
     }) else {
         return;
     };
@@ -691,7 +707,6 @@ fn choose(app: &mut VectorcraftApp) {
             }
         }
     }
-    // PLAN: assumed `app.file_asks.automated()` is fl.A6's `automated`.
     file_asks::ask(app, request, Owner::Free, move |app, picked| {
         let chosen = picked.paths().iter().map(|path| path.to_string_lossy().into_owned()).collect();
         let automated = app.file_asks.automated();

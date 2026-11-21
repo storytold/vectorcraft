@@ -9,13 +9,15 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use craft::ui::canvas::{AppPaint, NavigatorPreview, ProxyColor};
 use craft::behavior::CanvasView;
+use craft::ui::canvas::{AppPaint, NavigatorPreview, ProxyColor};
 use craft::ui::contract::Bind;
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::canvas::NavigatorPanel;
 use craft::ui::primitives::{LoadedPicture, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Env;
+use craft::ui::style::StyleCx;
 use egui::{Color32, Rect, Shape, Ui, pos2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -23,7 +25,6 @@ use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 use vectorcraft_geom::Rect as DRect;
 
-use crate::theme::Tokens;
 use crate::{CanvasCache, VectorcraftApp};
 
 /// The view box's color by default (Light Red, the first of [`view_box_colors`]).
@@ -249,14 +250,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let key = nav_key(uid, &options);
     let region = region(&doc, uid, revision, key.artboard_only, busy, &mut app.canvas);
     let given = shifted(view, region);
-    let pasteboard = Tokens::get(ui.ctx()).pasteboard;
+    let env = Env::of(ui);
+    let pasteboard = StyleCx::of_env(ui.ctx(), &env).color(env.tokens.color.surface.canvas).egui();
     let paint = AppPaint::new(|cx, fitted: Rect| {
         let ctx = cx.painter.ctx();
         // Artboards (white) over the pasteboard, under the art, like the canvas.
         let scale = fitted.width() / region.width() as f32;
         let at = |x: f64, y: f64| pos2(fitted.min.x + (x - region.x0) as f32 * scale, fitted.min.y + (y - region.y0) as f32 * scale);
         let mut shapes = vec![Shape::rect_filled(fitted, 0.0, pasteboard)];
-        shapes.extend(doc.artboards.iter().map(|a| Shape::rect_filled(Rect::from_two_pos(at(a.rect.x0, a.rect.y0), at(a.rect.x1, a.rect.y1)), 0.0, Color32::WHITE)));
+        shapes.extend(
+            doc.artboards
+                .iter()
+                .map(|a| Shape::rect_filled(Rect::from_two_pos(at(a.rect.x0, a.rect.y0), at(a.rect.x1, a.rect.y1)), 0.0, Color32::WHITE)),
+        );
         cx.data_shapes(shapes);
         let thumbs = Thumbnails::<NavKey>::in_context(ctx, "navigator", ThumbnailOptions::new());
         thumbs.hold(busy);
@@ -318,7 +324,11 @@ mod tests {
         app.run(&toggle.id, toggle.params.clone()).unwrap();
         assert!(!app.ui.navigator_panel.view_artboard_contents_only, "the row turns the option off");
         let off = states(&app);
-        assert_eq!(off.get(&contents_only_row(false)).map(|s| s == &CommandState::new().title(tl!("View Artboard Contents Only")).checked(false).enabled(true)), Some(true));
+        assert_eq!(
+            off.get(&contents_only_row(false))
+                .map(|s| s == &CommandState::new().title(tl!("View Artboard Contents Only")).checked(false).enabled(true)),
+            Some(true)
+        );
         let again = contents_only_row(false);
         app.run(&again.id, again.params.clone()).unwrap();
         assert!(app.ui.navigator_panel.view_artboard_contents_only, "the row turns it on again");

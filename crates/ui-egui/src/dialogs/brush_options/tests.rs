@@ -5,10 +5,7 @@ use vectorcraft_engine::Session;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::theme::apply(&ctx, Default::default());
-    app.ui_ctx = Some(ctx);
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     app
 }
@@ -136,10 +133,17 @@ fn dialog_fields_become_brush_options_params() {
         vec![
             (
                 vec![json!({"angleMode": "random", "angleVariation": 500, "roundness": 140, "sizeMode": "pressure", "sizeVariation": 4})],
-                vec![("/modes", modes("random", "fixed", "pressure")), ("/variation", Is(json!([180.0, 0.0, 4.0]))), ("/roundness", Is(json!(100.0)))],
+                vec![
+                    ("/modes", modes("random", "fixed", "pressure")),
+                    ("/variation", Is(json!([180.0, 0.0, 4.0]))),
+                    ("/roundness", Is(json!(100.0))),
+                ],
             ),
             // #764: Tilt, Bearing and Rotation.
-            (vec![json!({"angleMode": "bearing", "roundnessMode": "tilt", "sizeMode": "rotation"})], vec![("/modes", modes("bearing", "tilt", "rotation"))]),
+            (
+                vec![json!({"angleMode": "bearing", "roundnessMode": "tilt", "sizeMode": "rotation"})],
+                vec![("/modes", modes("bearing", "tilt", "rotation"))],
+            ),
         ],
     );
     run_steps(
@@ -170,7 +174,9 @@ fn dialog_fields_become_brush_options_params() {
         "Arrow",
         vec![
             (
-                vec![json!({"width": 250, "guideStart": 10, "guideEnd": 140, "direction": "bottomToTop", "flipAcross": true, "colorization": "none"})],
+                vec![
+                    json!({"width": 250, "guideStart": 10, "guideEnd": 140, "direction": "bottomToTop", "flipAcross": true, "colorization": "none"}),
+                ],
                 vec![
                     ("/width", Is(json!(250.0))),
                     ("/scale", Is(json!({"mode": "betweenGuides", "start": 0.1, "end": 1.0}))),
@@ -193,7 +199,13 @@ fn dialog_fields_become_brush_options_params() {
     run_steps(
         &mut app,
         "Tapered Stroke",
-        vec![pen("pressure"), pen("tilt"), pen("bearing"), pen("rotation"), (vec![json!({"widthMode": "fixed"})], vec![("/width_mode", Absent), ("/width_max", Absent)])],
+        vec![
+            pen("pressure"),
+            pen("tilt"),
+            pen("bearing"),
+            pen("rotation"),
+            (vec![json!({"widthMode": "fixed"})], vec![("/width_mode", Absent), ("/width_max", Absent)]),
+        ],
     );
     run_steps(
         &mut app,
@@ -201,7 +213,12 @@ fn dialog_fields_become_brush_options_params() {
         vec![
             (
                 vec![json!({"scale": 200, "spacing": 30, "fit": "approximate", "flipAlong": true})],
-                vec![("/scale", Is(json!(200.0))), ("/spacing", Is(json!(30.0))), ("/fit", Is(json!("approximate"))), ("/flip_along", Is(json!(true)))],
+                vec![
+                    ("/scale", Is(json!(200.0))),
+                    ("/spacing", Is(json!(30.0))),
+                    ("/fit", Is(json!("approximate"))),
+                    ("/flip_along", Is(json!(true))),
+                ],
             ),
             (
                 vec![json!({"outerCornerTile": "autoBetween", "innerCornerTile": "autoOverlap"})],

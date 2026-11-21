@@ -17,7 +17,7 @@ use vectorcraft_geom::shapes::CornerKind;
 
 use super::host::open_held;
 use crate::VectorcraftApp;
-use crate::units::general_lengths; // PLAN: assumed path of cv.B5b's `general_lengths`
+use crate::canvas::general_lengths;
 
 /// The dialog kind of Corners (the corner widgets' double-click).
 pub const KIND: &str = vectorcraft_tools::corners::DIALOG;
@@ -50,9 +50,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (radius, kind) = live.style(&corners);
     let relative = st.doc.node(id).and_then(|n| n.live_shape()).map(|l| l.radii_relative()).unwrap_or(false);
     // A relative radius is the first corner's fraction, as a percentage.
-    let radius = radius.and_then(|r| {
-        if relative { corners.iter().find_map(|k| live.corner(*k).map(|_| live.radius(*k) * 100.0)) } else { Some(r) }
-    });
+    let radius = radius.and_then(|r| if relative { corners.iter().find_map(|k| live.corner(*k).map(|_| live.radius(*k) * 100.0)) } else { Some(r) });
     let mut fields = DialogFields::new();
     fields.set("id", FieldValue::Json(json!(id.0)));
     fields.set("corners", FieldValue::Json(json!(corners)));
@@ -86,11 +84,8 @@ fn dialog(relative: bool, lengths: LengthUnits) -> ParamDialog<'static> {
         Param::number("radius", tl!("Radius:"), 0.0, 1.0, 3).length(lengths).bounds(Some(0.0), None)
     };
     let radii = vec![("relative".to_owned(), tl!("Relative").into()), ("absolute".to_owned(), tl!("Absolute").into())];
-    let params = vec![
-        Param::new("kind", tl!("Corner:"), ParamKind::radio(kinds, None)),
-        Param::new("radii", "", ParamKind::radio(radii, None)),
-        radius,
-    ];
+    let params =
+        vec![Param::new("kind", tl!("Corner:"), ParamKind::radio(kinds, None)), Param::new("radii", "", ParamKind::radio(radii, None)), radius];
     ParamDialog::new(KIND, tl!("Corners"), params)
 }
 

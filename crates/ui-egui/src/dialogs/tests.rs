@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::VectorcraftApp;
 
 /// The window the tests draw in.
 pub(super) const SCREEN: egui::Vec2 = egui::vec2(1600.0, 1100.0);
@@ -12,7 +13,6 @@ pub(super) const SCREEN: egui::Vec2 = egui::vec2(1600.0, 1100.0);
 /// `app` shown in a window of its own: its context is the one every frame of the test runs on, so focus and drags last
 /// from frame to frame, and the access tree is on for the tests that find a control by its role.
 pub(super) fn window(mut app: VectorcraftApp) -> VectorcraftApp {
-    // PLAN: assumed `crate::testing::ui_context() -> egui::Context` (hub-w1's test window context).
     let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     app.ui_ctx = Some(ctx);
@@ -292,14 +292,16 @@ fn raster_filter_dialogs_preview_and_apply() {
     }
     // Fields follow the effect's documented order (its dialog's), not the alphabet.
     let doc = vectorcraft_effects::effect_info("blur.smart").unwrap().params;
-    let ranks: Vec<usize> = ["radius", "threshold", "quality", "blurMode"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    let ranks: Vec<usize> = ["radius", "threshold", "quality", "blurMode"].iter().map(|k| super::effect_params::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[3] < usize::MAX, "{ranks:?}");
-    assert_eq!(super::effect::doc_rank(doc, "nope"), usize::MAX);
+    assert_eq!(super::effect_params::doc_rank(doc, "nope"), usize::MAX);
     let doc = vectorcraft_effects::effect_info("pixelate.colorHalftone").unwrap().params;
-    let ranks: Vec<usize> = ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    let ranks: Vec<usize> =
+        ["maxRadius", "channel1", "channel2", "channel3", "channel4"].iter().map(|k| super::effect_params::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
     let doc = vectorcraft_effects::effect_info("texture.texturizer").unwrap().params;
-    let ranks: Vec<usize> = ["texture", "scaling", "relief", "lightDirection", "invert"].iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    let ranks: Vec<usize> =
+        ["texture", "scaling", "relief", "lightDirection", "invert"].iter().map(|k| super::effect_params::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[4] < usize::MAX, "{ranks:?}");
 }
 
@@ -347,7 +349,7 @@ fn scribble_dialog_shows_the_angle_as_stored_and_each_variation() {
     // Each variation follows the option it varies, as in the reference app's Scribble Options.
     let doc = vectorcraft_effects::effect_info("stylize.scribble").unwrap().params;
     let order = ["angle", "overlap", "overlapVariation", "strokeWidth", "curviness", "curvinessVariation", "spacing", "spacingVariation", "seed"];
-    let ranks: Vec<usize> = order.iter().map(|k| super::effect::doc_rank(doc, k)).collect();
+    let ranks: Vec<usize> = order.iter().map(|k| super::effect_params::doc_rank(doc, k)).collect();
     assert!(ranks.windows(2).all(|w| w[0] < w[1]) && ranks[8] < usize::MAX, "{ranks:?}");
 }
 
@@ -415,8 +417,9 @@ fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_aga
 fn open_each(app: &mut VectorcraftApp, absolute: bool) {
     if absolute {
         let ctx = app.ui_ctx.clone().expect("a window app");
-        // PLAN: assumed `craft::ui::runtime::memory::set_saved_value(&Context, &SaveKey, V)` and `transform_each::EACH_KEY` (od.OS1).
-        craft::ui::runtime::memory::set_saved_value(&ctx, &super::transform_each::EACH_KEY, json!({"relative": false}));
+        let mut kept = craft::ui::patterns::form_dialogs::DialogFields::new();
+        kept.set("relative", false);
+        craft::ui::runtime::memory::set_saved_value(&ctx, &super::transform_each::EACH_KEY, Some(kept));
     }
     crate::menus::invoke(app, "object.transformEach", json!({}));
 }
@@ -444,9 +447,17 @@ fn transform_each_switches_between_relative_and_absolute_scale() {
     // The dialog opens on Absolute again, with the size the objects have now; Relative keeps its own percentages.
     open_each(&mut app, false);
     settle(&mut app);
-    assert_eq!((fields(&app)["relative"].clone(), num(&app, "absH"), num(&app, "absV")), (json!(false), 40.0, 30.0), "Absolute is kept, at the size they have");
+    assert_eq!(
+        (fields(&app)["relative"].clone(), num(&app, "absH"), num(&app, "absV")),
+        (json!(false), 40.0, 30.0),
+        "Absolute is kept, at the size they have"
+    );
     set(&mut app, "relative", json!(true));
-    assert_eq!((fields(&app)["relative"].clone(), num(&app, "scaleH"), num(&app, "scaleV")), (json!(true), 100.0, 100.0), "the percentages are the dialog's own");
+    assert_eq!(
+        (fields(&app)["relative"].clone(), num(&app, "scaleH"), num(&app, "scaleV")),
+        (json!(true), 100.0, 100.0),
+        "the percentages are the dialog's own"
+    );
 }
 
 /// Switching to Absolute with Preview on shows the size the objects have without the preview, not the size it has scaled
@@ -797,8 +808,7 @@ fn a_failed_tool_choice_restores_the_brush_key_color_initiator() {
     app.run("select.none", json!({})).unwrap();
     app.select_tool("paintbrush");
     app.ui.task_bar = false;
-    // PLAN: `View::rulers` after cv.S4 (the view left `app.ui`).
-    app.view_mut().unwrap().rulers = false;
+    app.ui.view.rulers = false;
     app.canvas.worker_started = true;
     app.session.prefs.interface_language = "en".into();
     crate::i18n::set_current(crate::i18n::Lang::EN);

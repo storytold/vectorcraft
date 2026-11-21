@@ -62,7 +62,8 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     dialogs::open(app, &SPEC, fields, move |fields| {
         // The command lists at most 64 circles; the choice never holds more.
         let listed = u64::try_from(fields.int("found").unwrap_or(0)).unwrap_or(0).min(MAX_CIRCLES).max(circle(fields).min(MAX_CIRCLES));
-        let options = std::iter::once(("0".to_string(), tl!("All").into())).chain((1..=listed).map(|n| (n.to_string(), n.to_string().into()))).collect();
+        let options =
+            std::iter::once(("0".to_string(), tl!("All").into())).chain((1..=listed).map(|n| (n.to_string(), n.to_string().into()))).collect();
         let rows = vec![
             Param::number("radius", tl!("Radius:"), RADIUS, 1.0, 2)
                 .length(lengths)

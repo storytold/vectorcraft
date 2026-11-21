@@ -1,13 +1,15 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
+use craft::behavior::CanvasView;
 use craft::ui::primitives::textures::{CachedTexture, TextureState};
-use egui::{Color32, Pos2, Shape};
+use egui::{Color32, Pos2, Shape, pos2, vec2};
+use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::*;
-use crate::menus::enabled;
+use crate::menus::{Node, enabled};
 
 /// An app with `n` new 400 × 300 pt documents, the last one current.
 fn app_with(n: usize) -> VectorcraftApp {
@@ -16,6 +18,17 @@ fn app_with(n: usize) -> VectorcraftApp {
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     }
     app
+}
+
+/// The command items of `nodes`, in order: each one's label, command id and params.
+fn commands(nodes: &[Node]) -> Vec<(&str, &str, &serde_json::Value)> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Item(i) => Some((i.label.as_str(), i.command.id.as_str(), &i.command.params)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// One headless frame of the canvas panel's body (the tabs and the canvas or panes) on a
@@ -44,7 +57,6 @@ fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Eve
 fn button(pos: Pos2, pressed: bool) -> egui::Event {
     egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
 }
-
 
 /// The documents' indices in the panes the last frame drew, and the panes.
 fn panes(app: &VectorcraftApp) -> (Vec<usize>, Vec<egui::Rect>) {
@@ -90,9 +102,10 @@ fn pane_source(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win) -> PaneSou
 fn picture_of(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, uid: u64) -> TextureState {
     let view = pane_view(app, w);
     let source = pane_source(app, ctx, w);
-    let thumbs = app.canvas.panes.thumbnails(ctx);
+    let thumbs = thumbnails(ctx);
     thumbs.hold(true);
-    let state = thumbs.state(ctx, &source, &PaneKey { uid, view: w.1 }, &request(&view, ctx.pixels_per_point()), Priority::VISIBLE);
+    let request = ThumbRequest::for_cell(view.rect.width().max(view.rect.height()), ctx.pixels_per_point());
+    let state = thumbs.state(ctx, &source, &PaneKey { slot: (uid, w.1) }, &request, Priority::VISIBLE);
     thumbs.hold(false);
     state
 }
@@ -143,7 +156,7 @@ fn uploaded(uploads: &[egui::TexturesDelta], id: egui::TextureId) -> (Vec<Color3
 /// Drop every picture and pane the panes hold, so the next frames make them again.
 fn forget(app: &mut VectorcraftApp, ctx: &egui::Context) {
     app.canvas.panes.clear();
-    app.canvas.panes.thumbnails(ctx).retain(ctx, |_| false);
+    thumbnails(ctx).retain(ctx, |_| false);
 }
 
 /// The RGB of the middle pixel of the picture window `(i, 1)`'s pane shows once it has arrived;
@@ -167,7 +180,6 @@ fn columns_and_rows(c: &[egui::Rect]) -> (usize, usize) {
     let tops: BTreeSet<u32> = c.iter().map(|r| r.top().to_bits()).collect();
     (lefts.len(), tops.len())
 }
-
 
 #[test]
 fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
@@ -311,17 +323,11 @@ fn the_tile_items_check_the_layout_the_panes_show() {
     let arrange = window
         .into_iter()
         .find_map(|i| match i {
-            crate::menus::Item::Sub("Arrange", items) => Some(items),
+            Node::Submenu { label, children, .. } if label == "Arrange" => Some(children),
             _ => None,
         })
         .unwrap();
-    let labels: Vec<&str> = arrange
-        .iter()
-        .filter_map(|i| match i {
-            crate::menus::Item::Cmd(l, ..) => Some(*l),
-            _ => None,
-        })
-        .collect();
+    let labels: Vec<&str> = commands(&arrange).into_iter().map(|(l, ..)| l).collect();
     assert_eq!(
         labels,
         [
@@ -339,10 +345,10 @@ fn the_tile_items_check_the_layout_the_panes_show() {
         ]
     );
     // Each item's params run, as the menu sends them.
-    for item in &arrange {
-        if let crate::menus::Item::Cmd(_, "window.arrange.tile", p) = item {
+    for (_, id, p) in commands(&arrange) {
+        if id == "window.arrange.tile" {
             let p = if p.is_null() { json!({}) } else { p.clone() };
-            assert!(app.run("window.arrange.tile", p.clone()).is_ok(), "{p}");
+            assert!(app.run(id, p.clone()).is_ok(), "{p}");
         }
     }
 }
@@ -351,15 +357,9 @@ fn the_tile_items_check_the_layout_the_panes_show() {
 #[test]
 fn the_arrange_documents_items_tile_and_consolidate() {
     let mut app = app_with(3);
-    // PLAN: assumed `menus::arrange_documents_items() -> Vec<menus::Item>` (shell-w9's request).
     let items = crate::menus::arrange_documents_items();
-    let labels: Vec<&str> = items
-        .iter()
-        .filter_map(|i| match i {
-            crate::menus::Item::Cmd(l, ..) => Some(*l),
-            _ => None,
-        })
-        .collect();
+    let items = commands(&items);
+    let labels: Vec<&str> = items.iter().map(|(l, ..)| *l).collect();
     for item in [
         "Consolidate All Windows",
         "Tile",
@@ -373,12 +373,8 @@ fn the_arrange_documents_items_tile_and_consolidate() {
         assert!(labels.contains(&item), "the items list {item}");
     }
     let choose = |app: &mut VectorcraftApp, label: &str| {
-        let found = items.iter().find_map(|i| match i {
-            crate::menus::Item::Cmd(l, id, p) if *l == label => Some((*id, p.clone())),
-            _ => None,
-        });
-        let (id, p) = found.unwrap_or_else(|| panic!("{label} is listed"));
-        app.run(id, if p.is_null() { json!({}) } else { p }).unwrap();
+        let (_, id, p) = items.iter().find(|(l, ..)| *l == label).unwrap_or_else(|| panic!("{label} is listed"));
+        app.run(id, if p.is_null() { json!({}) } else { (*p).clone() }).unwrap();
     };
     choose(&mut app, "Tile All Vertically");
     assert!(app.ui.tiled && app.ui.tile_layout == Layout::Vertical, "{}", app.ui.status);
@@ -420,9 +416,7 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     assert_eq!(active, [false, false, true]);
 }
 
-
-/// One headless frame at `time` seconds as the app runs it: a Selection move released off the
-/// canvas ends first ([`crate::canvas::release_over_panel`]), then the tabs and the panes draw.
+/// One headless frame at `time` seconds as the app runs it: the tabs and the panes draw.
 fn timed_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: Option<f64>, events: Vec<egui::Event>) -> egui::FullOutput {
     let raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
@@ -431,10 +425,7 @@ fn timed_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: Option<f64>,
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| {
-        crate::canvas::release_over_panel(app, ui.ctx());
-        app.canvas_area(ui);
-    });
+    let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
     out.textures_delta.clear();
     out
 }
@@ -874,7 +865,6 @@ fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     assert_eq!(app.views[1].zoom, zoomed.zoom, "the zoomed document keeps its zoom");
 }
 
-
 #[test]
 fn other_panes_draw_through_their_documents_profiles() {
     const CHILD: &str = "VECTORCRAFT_TEST_PANE_PROFILES";
@@ -1067,5 +1057,3 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     assert!(differs(want, blend(s, front_paper)), "the front document's paper blends to another color");
     assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
 }
-
-

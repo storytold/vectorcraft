@@ -124,9 +124,7 @@ fn begin_typing(app: &mut VectorcraftApp, ctx: &egui::Context, id: u64) -> egui:
     app.select_tool("type");
     ime_frame(app, ctx, vec![], |_| {});
     let center = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().center();
-    // PLAN: hub-w1 asks for `app.canvas_view()` (cv.S4) in place of this pair; its signature is not in the bundle.
-    let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
-    let at = xf.to_screen(center);
+    let at = app.canvas_view().unwrap().to_screen(center);
     click(app, ctx, at);
     assert!(app.session.tool_wants_text(), "the click starts editing the text");
     at

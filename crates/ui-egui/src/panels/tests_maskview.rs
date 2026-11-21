@@ -9,7 +9,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 // PLAN: assumed path of op.A15's `Panel` harness.
-use crate::panels::tests_panel::Panel;
+use crate::tests::panel_harness::Panel;
 
 /// The name of the mask row, which holds the two thumbnails.
 const ROW: &str = "Opacity Mask";

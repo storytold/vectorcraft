@@ -116,9 +116,11 @@ impl Trial {
     fn drags<P: Clone + Send + Sync + 'static>(&mut self, payload: P) {
         *self.source.borrow_mut() = Some(Box::new(move |ui: &mut Ui| {
             let payload = payload.clone();
-            let _ = List::<u32>::new("Drag source")
-                .drag_payload(move |_: &ListDrag<u32>| Some(payload.clone()))
-                .show_items(ui, &keyed_rows(&[0u32], |key: &u32| *key), &mut |_, _| ListRow::new(DRAGGED));
+            let _ = List::<u32>::new("Drag source").drag_payload(move |_: &ListDrag<u32>| Some(payload.clone())).show_items(
+                ui,
+                &keyed_rows(&[0u32], |key: &u32| *key),
+                &mut |_, _| ListRow::new(DRAGGED),
+            );
         }));
         self.fixture.settle();
     }
@@ -182,9 +184,15 @@ fn panel_events_run_their_commands() {
     let unchanged: Check = |t, what, before, _| assert_eq!(names(&t.app()), before, "{what}: no brush made or removed");
     // (what, setup, act, the dialog it opens, what else it did); the undo steps are counted after the setup.
     let cases: [(&str, Act, Act, Option<&str>, Check); 5] = [
-        ("a click", nothing, |t, first| t.click(first, Modifiers::NONE), None, |t, what, before, _| {
-            assert_eq!(brushes(&t.app()).1.as_deref(), Some(before[0].as_str()), "{what}: the brush is current");
-        }),
+        (
+            "a click",
+            nothing,
+            |t, first| t.click(first, Modifiers::NONE),
+            None,
+            |t, what, before, _| {
+                assert_eq!(brushes(&t.app()).1.as_deref(), Some(before[0].as_str()), "{what}: the brush is current");
+            },
+        ),
         (
             "a double click",
             nothing,

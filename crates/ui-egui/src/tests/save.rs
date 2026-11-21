@@ -8,7 +8,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-use super::picks::{self, answer_dialog, answer_replace, open_dialogs, scripted};
+use super::picks::{self, answer_dialog, answer_replace, cancel_dialog, open_dialogs, scripted};
 use crate::dialogs::confirm;
 use crate::{Services, VectorcraftApp, io, menus};
 
@@ -19,7 +19,9 @@ fn app() -> VectorcraftApp {
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
         ..Default::default()
     };
-    VectorcraftApp::new(Session::new(), services)
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.ui_ctx = Some(crate::testing::ui_context());
+    app
 }
 
 /// A fresh folder for one test.
@@ -41,11 +43,12 @@ fn objects(app: &VectorcraftApp) -> usize {
 /// Press OK (or Cancel) on the dialog or question open on top.
 fn answer_top(app: &mut VectorcraftApp, ok: bool) {
     let id = open_dialogs(app).pop().map(|d| d.id).expect("a dialog is open");
-    answer_dialog(app, id, &[], ok);
+    if ok { answer_dialog(app, id, &[], true) } else { cancel_dialog(app, id) }
 }
 
 fn poll(app: &mut VectorcraftApp) {
-    picks::poll(app, &crate::testing::ui_context());
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    picks::poll(app, &ctx);
 }
 
 #[test]

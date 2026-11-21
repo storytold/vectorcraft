@@ -857,18 +857,17 @@ fn app_menu() -> Vec<Node> {
         .iter()
         .enumerate()
         .map(|(i, page)| {
-            let mut item = Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
+            let mut item =
+                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
             // Only the first page carries Preferences' shortcut.
             if i == 0 {
-                item.shortcut = super::shortcut_of("edit.preferences").and_then(crate::keymap::vc_chord);
+                item.shortcut = super::shortcut_of("edit.preferences").and_then(crate::keymap::stored::parse_vc);
             }
             Node::Item(item)
         })
         .collect();
     let mut language = vec![cp("Automatic", "app.language", json!({ "lang": "auto" })), Sep];
-    language.extend(
-        crate::i18n::Lang::for_picker().into_iter().map(|l| super::named(l.name(), "app.language", json!({ "lang": l.code() }))),
-    );
+    language.extend(crate::i18n::Lang::for_picker().into_iter().map(|l| super::named(l.name(), "app.language", json!({ "lang": l.code() }))));
     let appearance: Vec<Node> =
         crate::theme::Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({ "brightness": b.id() }))).collect();
     let mac = Platforms::MAC;

@@ -11,11 +11,11 @@ use craft::behavior::{IconId, Mixed};
 use craft::keymap::CommandRef;
 use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, TextAlign};
 use craft::ui::buttons::{IconButton, Link, PopupMark, ToggleButton};
-use craft::ui::pickers::Select;
-use craft::ui::contract::{Bind, Entry, Trigger};
-use craft::ui::form::Field;
 use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, MemoProps, Trigger};
+use craft::ui::form::Field;
 use craft::ui::menu::{Menu, PanelRow};
+use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::{Glyph, IconSpec};
 use craft::ui::runtime::access::PopupKind;
@@ -25,8 +25,8 @@ use egui::{Color32, Painter, Rect, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::text::{Bullet, Kashida, NumberStyle};
 use vectorcraft_doc::{
-    Burasagari, Composer, HyphenationOptions, JustificationOptions, Justify, KinsokuShoriType, LeadingModel, Mojikumi, NodeKind, ParaDirection, ParaStyle,
-    SingleWordJustify,
+    Burasagari, Composer, HyphenationOptions, JustificationOptions, Justify, KinsokuShoriType, LeadingModel, Mojikumi, NodeKind, ParaDirection,
+    ParaStyle, SingleWordJustify,
 };
 
 use super::character::{Metric, Shared, doc_unit, text_style};
@@ -503,7 +503,8 @@ pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, St
 
 /// A bullet preset drawn as a value glyph: the shapes the Bullets presets show (a slash for None).
 /// [`BulletGlyph::of`] hands out the shared `'static` glyph, as icon specs in menu entries need.
-pub(crate) struct BulletGlyph(pub Option<Bullet>);
+#[derive(MemoProps)]
+pub(crate) struct BulletGlyph(#[memo_props(hash = "a fieldless enum: its derived `Hash` is its variant")] pub Option<Bullet>);
 
 impl BulletGlyph {
     /// The glyph of `bullet`.
@@ -632,7 +633,9 @@ fn bullet_entries(shown: Option<Option<Bullet>>) -> Vec<Entry<u32>> {
 /// None and the number styles, each shown by its first three numbers, the one every paragraph has checked.
 fn number_entries(shown: Option<Option<NumberStyle>>) -> Vec<Entry<u32>> {
     let mut entries = vec![Entry::new(0, tl!("None")).icon(IconSpec::glyph(BulletGlyph::of(None))).checked(shown == Some(None))];
-    entries.extend(NumberStyle::ALL.iter().enumerate().map(|(i, &style)| Entry::new(i as u32 + 1, number_sample(style, 3)).checked(shown == Some(Some(style)))));
+    entries.extend(
+        NumberStyle::ALL.iter().enumerate().map(|(i, &style)| Entry::new(i as u32 + 1, number_sample(style, 3)).checked(shown == Some(Some(style)))),
+    );
     more_entries(&mut entries);
     entries
 }
@@ -641,7 +644,12 @@ fn number_entries(shown: Option<Option<NumberStyle>>) -> Vec<Entry<u32>> {
 fn list_control(ui: &mut Ui, kind: ListKind, pressed: bool, entries: &[Entry<u32>]) -> Option<ListEvent> {
     let name = kind.name();
     let toggle = ToggleButton::new(name, pressed).icon(IconId::new(kind.icon())).icon_only().id_salt(kind.icon()).show(ui);
-    let arrow = IconButton::new(IconId::new("chevron-down")).label(name).popup(PopupKind::Menu).popup_mark(PopupMark::Menu).id_salt(kind.menu_salt()).show(ui);
+    let arrow = IconButton::new(IconId::new("chevron-down"))
+        .label(name)
+        .popup(PopupKind::Menu)
+        .popup_mark(PopupMark::Menu)
+        .id_salt(kind.menu_salt())
+        .show(ui);
     let pick = Menu::new(name).values().opened_by(&arrow.response, Trigger::Press).pick(ui, entries);
     if toggle.value().is_some() { Some(ListEvent::Toggle) } else { pick.picked.map(ListEvent::Pick) }
 }
@@ -702,8 +710,8 @@ pub(crate) fn values(app: &VectorcraftApp) -> ParagraphValues {
     let Some((_, para)) = text_style(app) else { return values };
     let points = |field: fn(&ParaStyle) -> f64| shared_para_field(app, field).map(|v| v as f32);
     values.align = selected_alignment(app, &para).and_then(|j| ALIGNMENTS.iter().position(|a| a.0 == j)).and_then(|i| TEXT_ALIGNS.get(i).copied());
-    values.direction = selected_paragraph_direction(app, &para)
-        .map(|rtl| if rtl { ParagraphDirection::RightToLeft } else { ParagraphDirection::LeftToRight });
+    values.direction =
+        selected_paragraph_direction(app, &para).map(|rtl| if rtl { ParagraphDirection::RightToLeft } else { ParagraphDirection::LeftToRight });
     // The framework's start and end indents are the app's absolute left and right ones.
     values.start_indent = points(|p| p.left_indent);
     values.end_indent = points(|p| p.right_indent);

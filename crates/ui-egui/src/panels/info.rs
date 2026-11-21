@@ -5,21 +5,21 @@
 
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::display::{Divider, Picture, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::ThumbAspect;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::style::TypeRole;
-use egui::{Sense, Ui, vec2};
+use egui::Ui;
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{NodeKind, Unit};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::Readout;
 
-use super::{current_paints, mixed_paints};
+use super::{current_paints, mixed_paints, swatches};
 use crate::VectorcraftApp;
-use crate::widgets;
 
 /// Color values in the color's own model, for the Info panel.
 pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
@@ -64,7 +64,9 @@ impl PaintLines {
             return PaintLines { paint, mixed, values: Vec::new(), note: None };
         }
         let (values, note) = match &paint {
-            Paint::Solid { color, .. } => (color_values(color).into_iter().map(|(k, v)| format!("{k}: {v}")).collect(), paint_name(&paint).filter(|_| options)),
+            Paint::Solid { color, .. } => {
+                (color_values(color).into_iter().map(|(k, v)| format!("{k}: {v}")).collect(), paint_name(&paint).filter(|_| options))
+            }
             other => (Vec::new(), Some(paint_name(other).filter(|_| options).unwrap_or_else(|| other.label()))),
         };
         PaintLines { paint, mixed, values, note }
@@ -87,15 +89,15 @@ fn mono(ui: &mut Ui, s: &str) {
     Text::new(s.to_string()).role(TypeRole::Mono).show(ui);
 }
 
-/// One paint's row: its tile, its values and its note.
+/// One paint's row: its tile, its values and its note. A mixed paint keeps the tile's room empty.
 fn paint_block(ui: &mut Ui, p: &PaintLines) {
     Row::new().show(ui, |ui, _| {
-        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-        if p.mixed {
-            return;
-        }
-        // PLAN: the swatches sets' framework tile replaces `widgets::swatch_tile` when it exists.
-        widgets::swatch_tile(ui, r, &p.paint, false, false);
+        Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
+            if !p.mixed {
+                swatches::paint_swatch(&cx.painter, rect, &p.paint, (false, false), (false, false), None);
+            }
+        })
+        .show(ui);
         for v in &p.values {
             mono(ui, v);
         }

@@ -8,7 +8,7 @@
 //! The dock draws the rail ([`rail_view`]) for the Tools panel, for each toolbar made with New
 //! Toolbar and for each group torn off either of them (a `strip:` panel).
 
-use craft::behavior::dock::DockEdge;
+use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::overlay::Side;
 use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
 use craft::ui::contract::{BodyCx, ThemeScope};
@@ -210,8 +210,8 @@ pub(crate) fn is_floating(app: &VectorcraftApp, toolbar: Option<&str>, key: &str
 
 /// Float the group `first` of `owner` as a strip at `at` (none: the canvas's corner).
 fn place_strip(app: &mut VectorcraftApp, owner: &Owner, first: &str, at: Option<Pos2>) -> Result<(), String> {
-    let at = at.unwrap_or_else(|| app.canvas_rect.map_or(Pos2::ZERO, |r| r.min));
-    // PLAN: assumed place_floating(app, panel, pos, width) -> Result<(), String>; width 0 leaves it to the panel's grid.
+    let at = at.unwrap_or_else(|| app.canvas_view().map_or(Pos2::ZERO, |v| v.rect.min));
+    // A width of 0 leaves the window's width to the panel's grid.
     crate::panel_docking::place_floating(app, &strip_id(owner, first), at, 0.0)
 }
 
@@ -230,8 +230,8 @@ pub fn float_group(app: &mut VectorcraftApp, tool: &str, floating: Option<bool>,
     if on && !was {
         place_strip(app, &owner, first, None)?;
     } else if !on && was {
-        // PLAN: assumed panel_docking::close(app, panel: &str) -> Result<(), String>; `apply` needs a Context this command has none of.
-        crate::panel_docking::close(app, &strip_id(&owner, first))?;
+        let ctx = app.ui_ctx.clone();
+        crate::panel_docking::apply(app, ctx.as_ref(), vec![Action::close(strip_id(&owner, first))])?;
     }
     Ok(on)
 }
@@ -242,7 +242,9 @@ fn editing(app: &VectorcraftApp, owner: &Owner) -> bool {
     app.ui.tools_drawer
         && match owner {
             Owner::Tools => target.is_none(),
-            Owner::Toolbar(id) => target.zip(bar_of(&app.ui, *id)).is_some_and(|(t, bar)| crate::custom_toolbars::key(t) == crate::custom_toolbars::key(&bar.name)),
+            Owner::Toolbar(id) => {
+                target.zip(bar_of(&app.ui, *id)).is_some_and(|(t, bar)| crate::custom_toolbars::key(t) == crate::custom_toolbars::key(&bar.name))
+            }
             Owner::Strip(..) => false,
         }
 }
@@ -250,7 +252,6 @@ fn editing(app: &VectorcraftApp, owner: &Owner) -> bool {
 /// The side flyouts and the drawer open on: toward the canvas.
 fn opens(app: &VectorcraftApp, owner: &Owner) -> Side {
     let layout = crate::panel_docking::layout_of(&app.ui);
-    // PLAN: assumed DockEdge::End is the dock's trailing edge.
     match crate::panel_docking::column_of(&layout, &owner.panel()) {
         Some((Some((DockEdge::End, _)), _)) => Side::Start,
         _ => Side::End,

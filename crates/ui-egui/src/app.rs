@@ -18,9 +18,9 @@ use super::i18n::LangExt;
 use super::services::{Services, browsable_url};
 use super::state::SYSTEM_CLIPBOARD_POLL;
 use super::{
-    Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits,
-    dialogs, export_progress, file_access, file_asks, fileio, font_menu, i18n, io, json, menus, opening, palette, panel_docking, panels,
-    place, placing, plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
+    Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits, dialogs,
+    export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
+    plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
 };
 
 mod commands;
@@ -154,6 +154,7 @@ impl VectorcraftApp {
             run_count: 0,
             channel: None,
             captures: Default::default(),
+            control_rotate_press: None,
             context: 0,
             ui_ctx: None,
             updates_rt: Default::default(),
@@ -169,7 +170,6 @@ impl VectorcraftApp {
             beacon: &crate::hang_beacon::BEACON,
             place: Default::default(),
             system_paste: false,
-            clipboard_image_request: None,
             system_paste_at: f64::NEG_INFINITY,
             file_asks: Default::default(),
             saves: Default::default(),
@@ -203,7 +203,6 @@ impl VectorcraftApp {
             flatten_dialog: Default::default(),
             print_dialog: Default::default(),
             object_dialogs: Default::default(),
-            tool_dialogs: Default::default(),
             color_dialogs: Default::default(),
             plugin_dialog: None,
             addon_panels: Default::default(),
@@ -340,7 +339,7 @@ impl VectorcraftApp {
             return CloseDecision::Hold;
         }
         if self.file_sheet_open() {
-            self.status(file_asks::BUSY);
+            self.status(file_asks::busy());
             return CloseDecision::Hold;
         }
         if unsaved::any_dirty(self) {
@@ -448,16 +447,8 @@ impl VectorcraftApp {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
         crate::keymap::note_os(ctx);
-        crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
-        // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
-        // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
-        // the request) to read the formats and then pastes them. A text paste in the same UI pass
-        // never sets the request, so the two cannot both paste.
-        if let Some(held) = self.clipboard_image_request.take() {
-            crate::menus::invoke(self, crate::shortcuts::paste_command(held), json!({}));
-        }
         if let Some(u) = self.pending_url.take() {
             ctx.open_url(egui::OpenUrl::new_tab(u));
         }

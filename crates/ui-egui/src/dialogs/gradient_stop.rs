@@ -208,7 +208,10 @@ impl StackDialog for GradientStopPopover {
     fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<PopoverFields>> {
         let Self { feed: Some(feed), tab, panel, filed, at, set, .. } = self else { return None };
         let mut open = true;
-        let shown = Popover::new("Gradient stop", Bind::bound(&mut open)).at_point(*at).close_on_enter(true).show(ui, |ui, _| body(ui, feed, tab, panel, filed));
+        let shown = Popover::new("Gradient stop", Bind::bound(&mut open))
+            .at_point(*at)
+            .close_on_enter(true)
+            .show(ui, |ui, _| body(ui, feed, tab, panel, filed));
         match shown.output.closed {
             Some(CloseReason::Enter) => Some(DialogResult::Ok(set.clone())),
             Some(_) => Some(DialogResult::Cancel),
@@ -274,7 +277,12 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
         match *tab {
             // The Color panel edits the selected stop (or point) of the active gradient.
             Tab::Color => {
-                filed.panels.push(ColorPanel::new(Bind::bound(&mut *panel), [feed.current; 2]).layout(ColorPanelLayout::FillStroke).shown(feed.shown.clone()).show(ui));
+                filed.panels.push(
+                    ColorPanel::new(Bind::bound(&mut *panel), [feed.current; 2])
+                        .layout(ColorPanelLayout::FillStroke)
+                        .shown(feed.shown.clone())
+                        .show(ui),
+                );
             }
             Tab::Swatches => swatches(ui, feed, filed),
         }
@@ -354,8 +362,7 @@ fn place(app: &VectorcraftApp, ctx: &egui::Context, anchor: Anchor) -> Pos2 {
 fn refresh(app: &VectorcraftApp, ctx: &egui::Context, id: DialogId, target: &Target) {
     let Some(dialogs) = app.dialogs() else { return };
     let Some(anchor) = dialogs.with(|host| host.get_by_id::<GradientStopPopover>(id).map(|popover| popover.anchor)) else { return };
-    // PLAN: co.A1 gives no signatures; assumed `panels::color::target(app) -> Target` and `shown(app, &Target) -> ColorPanelShown`.
-    let shown = crate::panels::color::shown(app, &crate::panels::color::target(app));
+    let shown = crate::panels::color::shown(app, &crate::panels::color::target_now(app));
     let swatches = swatch_colors(app);
     let feed = Feed {
         point: matches!(target, Target::Point(..)),
