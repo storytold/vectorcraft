@@ -358,6 +358,15 @@ pub(crate) fn refresh_with_leading(t: &mut TextObject, at: usize, leading: Optio
     }
 }
 
+/// The first character a style change over `a..b` of `t` reaches, with both ends on character
+/// boundaries as [`vectorcraft_text::edit::style_range`] sets them; None when the range styles no
+/// character (empty, or inside one character, in text that is not empty).
+pub(crate) fn styled_start(t: &TextObject, a: usize, b: usize) -> Option<usize> {
+    let plain = t.plain_text();
+    let (a, b) = (vectorcraft_text::edit::floor_char(&plain, a), vectorcraft_text::edit::floor_char(&plain, b));
+    (a != b || plain.is_empty()).then_some(a.min(b))
+}
+
 /// [`refresh_with_leading`] with the leading the character at `at` was just given (a character
 /// style, Text Tweaker).
 pub(crate) fn refresh_with_given_leading(t: &mut TextObject, at: usize) {
@@ -1060,9 +1069,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 t.edit_paras(span, |pa| pa.justify = j);
             }
             // With Block on, the leading goes to the frame's line gap; an empty range styles nothing.
-            let changed = leading
-                .filter(|_| !keep_line_gap)
-                .and_then(|l| range.map_or(Some(0), |r| Some(r.bytes(t)).filter(|(a, b)| a < b).map(|(a, _)| a)).map(|at| (at, l)));
+            let changed = leading.filter(|_| !keep_line_gap).and_then(|l| {
+                range.map_or(Some(0), |r| Some(r.bytes(t)).filter(|(a, b)| a < b).and_then(|(a, b)| styled_start(t, a, b))).map(|at| (at, l))
+            });
             match changed {
                 Some((at, l)) => refresh_with_leading(t, at, l),
                 None => refresh_bounds(t),

@@ -1252,8 +1252,8 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
                 set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             // With Block on, the leading goes to the frame's line gap.
-            match change.leading.filter(|_| !keep_line_gap) {
-                Some(l) => super::typecmd::refresh_with_leading(t, a, l),
+            match change.leading.filter(|_| !keep_line_gap).and_then(|l| super::typecmd::styled_start(t, a, b).map(|at| (at, l))) {
+                Some((at, l)) => super::typecmd::refresh_with_leading(t, at, l),
                 None => refresh_bounds(t),
             }
             n = if *f == id { t.runs.len() } else { n };

@@ -1043,7 +1043,7 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                     if let Some(e) = err {
                         return Err(e);
                     }
-                    leading_at = (sets_leading && (a != b || len == 0)).then_some(a.min(b));
+                    leading_at = sets_leading.then(|| super::typecmd::styled_start(t, a.min(b), a.max(b))).flatten();
                 }
                 Kind::Para => {
                     let mut v = t.paragraph_styles();

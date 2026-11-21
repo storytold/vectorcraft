@@ -836,6 +836,27 @@ fn a_range_leading_change_with_block_on_moves_the_line_gap() {
     assert!(s.execute("text.setStyle", &json!({"ids": [id], "leading": 30, "keepLineGap": 1})).is_err(), "keepLineGap takes a bool");
 }
 
+/// A range inside one character styles nothing, so it leaves the line gap.
+#[test]
+fn a_leading_on_a_range_inside_one_character_leaves_the_line_gap() {
+    let mut s = session();
+    let id = area(&mut s, 300.0, 400.0, "\u{e9}t\u{e9}\nsecond line");
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Loose", "attrs": {"leading": 50}})).unwrap();
+    let gap = text(&s, id).area.line_gap;
+    let range = json!({"start": 0, "end": 1});
+    let mut setstyle = json!({"ids": [id], "leading": 50});
+    let mut setrange = json!({"id": id, "leading": 50});
+    let mut apply = json!({"name": "Loose", "id": id});
+    for p in [&mut setstyle, &mut setrange, &mut apply] {
+        p.as_object_mut().unwrap().extend(range.as_object().unwrap().clone());
+    }
+    for (c, p) in [("text.setStyle", setstyle), ("text.setRangeStyle", setrange), ("charStyle.apply", apply)] {
+        s.execute(c, &p).unwrap_or_else(|e| panic!("{c}: {e}"));
+        assert_eq!(text(&s, id).area.line_gap, gap, "{c}");
+    }
+}
+
 /// `type.step {attribute: "leading"}` (Alt+Up/Down) on Block text moves the line gap by the step.
 #[test]
 fn a_leading_step_with_block_on_moves_the_line_gap() {
