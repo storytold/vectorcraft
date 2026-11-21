@@ -27,7 +27,7 @@
 //! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
 //! are read from, and the places its `File` and `Folder` objects read and write, inside the roots.
 //! [`ScriptGate`] holds the same places for the commands the script runs with `vc.run`, with the
-//! files of the open documents.
+//! files of the open documents: each to read, and to write when the person gave the document it.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -276,14 +276,18 @@ impl ScopeHandle {
 
 /// What a command a running script runs (`vc.run`) may read and write: the places the script's
 /// `File` and `Folder` objects may ([`ScriptScope`]), and the files the documents open in the app
-/// were opened from or saved to. The automation roots apply as well. A path refused by its name
-/// alone ([`ScriptScope::refused_by_name`]) is refused here too.
+/// were opened from or saved to, which it may read, and write when the person gave the document
+/// its file. The automation roots apply as well. A path refused by its name alone
+/// ([`ScriptScope::refused_by_name`]) is refused here too.
 #[derive(Clone, Debug)]
 pub(crate) struct ScriptGate {
     pub(crate) read: ScriptScope,
     pub(crate) write: ScriptScope,
-    /// The paths of the open documents' files, as the documents hold them.
+    /// The paths of the open documents' files, as the documents hold them: the command may read them.
     pub(crate) documents: Vec<String>,
+    /// The paths of the files that the person, not a script's command, gave the open documents: the
+    /// command may write them too.
+    pub(crate) writable: Vec<String>,
     /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
     pub(crate) also: Option<Arc<ScriptGate>>,
 }
@@ -306,11 +310,11 @@ impl ScriptGate {
         }
         let real = if ScriptScope::refused_by_name(Path::new(path)) { None } else { resolve(path).ok() };
         let allowed = real.is_some_and(|real| {
-            let scoped = match access {
-                Access::Read => self.read.allows(&real) || self.write.allows(&real),
-                Access::Write => self.write.allows(&real),
+            let (scoped, documents) = match access {
+                Access::Read => (self.read.allows(&real) || self.write.allows(&real), &self.documents),
+                Access::Write => (self.write.allows(&real), &self.writable),
             };
-            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real))
+            scoped || documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real))
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -352,6 +356,16 @@ fn check_gate(path: &str, access: Access) -> Result<(), String> {
         return Ok(());
     }
     GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
+}
+
+/// Whether the paths `a` and `b` name the same file: the same text, or the same real path.
+pub(crate) fn same_file(a: &str, b: &str) -> bool {
+    a == b || resolve(a).is_ok_and(|a| resolve(b).is_ok_and(|b| a == b))
+}
+
+/// Whether this thread runs a command a script runs ([`with_script_gate`]).
+pub(crate) fn in_script_command() -> bool {
+    GATE.with(|g| g.borrow().is_some())
 }
 
 /// The roots in force on this thread, if any.
@@ -918,8 +932,13 @@ mod tests {
     #[test]
     fn a_narrowed_scope_keeps_the_script_gates_of_both() {
         let (base, _) = folders("narrowed-gate");
-        let gate =
-            |dir: &str| ScriptGate { read: ScriptScope::of_folder(&base.join(dir)), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate = |dir: &str| ScriptGate {
+            read: ScriptScope::of_folder(&base.join(dir)),
+            write: ScriptScope::default(),
+            documents: vec![],
+            writable: vec![],
+            also: None,
+        };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
             let narrowed = match gate_here {
@@ -942,7 +961,13 @@ mod tests {
     #[test]
     fn a_scope_narrowed_several_times_keeps_every_gate() {
         let (base, _) = folders("narrowed-thrice");
-        let gate = |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate = |dir: &Path| ScriptGate {
+            read: ScriptScope::of_folder(dir),
+            write: ScriptScope::default(),
+            documents: vec![],
+            writable: vec![],
+            also: None,
+        };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
         let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
@@ -954,6 +979,30 @@ mod tests {
         assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
         let fourth = narrow(third, gate(&base));
         assert_eq!(reads(&fourth), (true, false), "and after a fourth");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// An open document's file is read through the gate; it is written only when the gate lists it
+    /// as writable, or the write scope takes it.
+    #[test]
+    fn an_open_documents_file_is_written_only_when_listed_as_writable() {
+        let (base, _) = folders("gate-documents");
+        let file = s(base.join("outside/secret.svg"));
+        let gate = |writable: Vec<String>| ScriptGate {
+            read: ScriptScope::default(),
+            write: ScriptScope::default(),
+            documents: vec![file.clone()],
+            writable,
+            also: None,
+        };
+        let read_only = gate(vec![]);
+        assert!(read_only.check(&file, Access::Read).is_ok());
+        assert!(read_only.check(&file, Access::Write).is_err(), "a file open for reading only");
+        let writable = gate(vec![file.clone()]);
+        assert!(writable.check(&file, Access::Read).is_ok());
+        assert!(writable.check(&file, Access::Write).is_ok());
+        let in_scope = ScriptGate { write: ScriptScope::of_folder(&base.join("outside")), ..gate(vec![]) };
+        assert!(in_scope.check(&file, Access::Write).is_ok(), "the write scope takes it");
         let _ = std::fs::remove_dir_all(base);
     }
 

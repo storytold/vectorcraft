@@ -402,6 +402,9 @@ impl Session {
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // A file a script's command gave the document stays one scripts only read.
+        st.path_from_script = old.path_from_script;
+        st.person_path = old.person_path.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a

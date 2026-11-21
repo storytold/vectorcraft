@@ -128,6 +128,16 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// A command a script ran gave the document its file (`path`): opened it from there or saved it
+    /// there. The commands scripts run may read that file as the document's own but write it only
+    /// where the script itself may ([`file_access::ScriptGate`]), until the person saves the
+    /// document. Not saved.
+    pub(crate) path_from_script: bool,
+    /// The path of the file the person gave the document, when a command a script ran has since
+    /// saved it to another spelling of that file's path (`path`): the commands scripts run write the
+    /// document's file through this path only ([`file_access::ScriptGate`]), until the person saves
+    /// the document. Not saved.
+    pub(crate) person_path: Option<String>,
     /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
     /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
     pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
@@ -360,6 +370,8 @@ impl DocState {
             links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
+            path_from_script: false,
+            person_path: None,
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
