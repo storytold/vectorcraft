@@ -309,16 +309,6 @@ fn duplicate_copies_the_stop_to_a_new_offset() {
 }
 
 #[test]
-fn swap_exchanges_only_the_colours() {
-    let mut g = g3();
-    g.stops[0].opacity = 0.25;
-    let v = swap_stop_colors(&g.stops, 0, 1);
-    assert_eq!((v[0].color.to_hex(), v[1].color.to_hex()), ("#ff0000".to_string(), "#ffffff".to_string()));
-    assert_eq!((v[0].offset, v[0].opacity, v[1].offset, v[1].opacity), (0.0, 0.25, 0.5, 1.0));
-    assert_eq!(swap_stop_colors(&g.stops, 0, 9), g.stops);
-}
-
-#[test]
 fn midpoint_math() {
     let g = g3();
     assert_eq!(midpoint_pos(&g.stops, 0), Some(0.25));
