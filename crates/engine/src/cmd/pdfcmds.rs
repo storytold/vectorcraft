@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_pdf::{PdfPreset, builtin_preset, builtin_presets};
+use vectorcraft_pdf::{APP, ActiveProfiles, PdfPreset, builtin_preset, builtin_presets};
 
 use super::fileio::pdf::{find_preset, resolve};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param};
@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
 impl Session {
     /// Every PDF preset: the built-in ones, then the saved ones.
     pub fn pdf_presets(&self) -> Vec<PdfPreset> {
-        let mut v = builtin_presets();
+        let mut v = builtin_presets(APP);
         v.extend(self.prefs.pdf_presets.iter().cloned());
         v
     }
@@ -93,16 +93,16 @@ impl Session {
     /// Whether `name` is taken by a built-in PDF preset or a saved one other than the one at
     /// `except`.
     fn pdf_preset_taken(&self, name: &str, except: Option<usize>) -> bool {
-        builtin_preset(name).is_some() || self.pdf_saved_index(name).is_some_and(|i| Some(i) != except)
+        builtin_preset(name, APP).is_some() || self.pdf_saved_index(name).is_some_and(|i| Some(i) != except)
     }
 }
 
 fn row(p: PdfPreset, built_in: bool) -> Value {
-    json!({ "name": p.name, "builtIn": built_in, "supported": p.settings.check().is_ok(), "description": p.description, "settings": p.settings })
+    json!({ "name": p.name, "builtIn": built_in, "supported": p.settings.check(&ActiveProfiles::default()).is_ok(), "description": p.description, "settings": p.settings })
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
-    let rows = builtin_presets().into_iter().map(|p| row(p, true)).chain(s.prefs.pdf_presets.iter().cloned().map(|p| row(p, false)));
+    let rows = builtin_presets(APP).into_iter().map(|p| row(p, true)).chain(s.prefs.pdf_presets.iter().cloned().map(|p| row(p, false)));
     Ok(json!({ "presets": rows.collect::<Vec<_>>() }))
 }
 
@@ -113,7 +113,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         Some(n) => n.to_string(),
         None => s.new_pdf_preset_name(),
     };
-    if builtin_preset(&name).is_some() {
+    if builtin_preset(&name, APP).is_some() {
         return Err(bad(C, format!("`{name}` is a built-in preset and is read-only: save it under another name")));
     }
     let at = s.pdf_saved_index(&name);
@@ -145,7 +145,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
 fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pdf.preset.delete";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
-    if builtin_preset(name).is_some() {
+    if builtin_preset(name, APP).is_some() {
         return Err(bad(C, format!("`{name}` is a built-in preset and stays")));
     }
     let i = s.pdf_saved_index(name).ok_or_else(|| bad(C, format!("no saved PDF preset named `{name}`")))?;

@@ -2,7 +2,8 @@
 
 use serde_json::{Value, json};
 
-use super::pdf::DEFAULT_PRESET;
+use vectorcraft_pdf::{APP, default_preset_name};
+
 use super::*;
 
 fn session(artboards: usize) -> Session {
@@ -310,7 +311,7 @@ fn bad_options_are_refused() {
 #[test]
 fn options_apply_over_the_preset() {
     let mut s = session(1);
-    let a = b64(&export(&mut s, json!({"preset": DEFAULT_PRESET, "compression": {"compressText": false}})));
+    let a = b64(&export(&mut s, json!({"preset": default_preset_name(APP), "compression": {"compressText": false}})));
     let b = b64(&export(&mut s, json!({"preset": "default"})));
     assert!(a.len() > b.len(), "content streams left uncompressed");
     assert!(String::from_utf8_lossy(&a).contains(" re") || String::from_utf8_lossy(&a).contains(" l"));
@@ -499,7 +500,7 @@ fn pdf_settings_summarise_changes_and_warnings() {
     let mut s = Session::new();
     let v = s.execute("document.pdfSettings", &json!({})).unwrap();
     assert_eq!(v["settings"]["compatibility"], "1.7");
-    assert_eq!(v["presets"][0], DEFAULT_PRESET);
+    assert_eq!(v["presets"][0], default_preset_name(APP));
     assert_eq!(v["changed"], json!([]));
     assert_eq!(v["warnings"], json!([]));
     let p = json!({"compatibility": "1.5", "compression": {"compressText": false}, "createLayers": true, "security": {"copy": false, "openPassword": ""}});
@@ -544,5 +545,5 @@ fn formats_list_the_pdf_options() {
         assert!(pdf["options"].get(k).is_some(), "{k}");
     }
     assert_eq!(pdf["options"]["compatibility"]["default"], "1.7");
-    assert_eq!(pdf["options"]["preset"]["default"], DEFAULT_PRESET);
+    assert_eq!(pdf["options"]["preset"]["default"], default_preset_name(APP));
 }
