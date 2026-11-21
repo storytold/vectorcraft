@@ -47,6 +47,16 @@ pub(crate) fn wheel(at: Pos2, dy: f32) -> Vec<Event> {
 }
 
 #[test]
+fn basic_ellipse_and_polygon_slots_offer_shape_alternatives() {
+    for tool in ["ellipse", "polygon"] {
+        let slot = BASIC.iter().flat_map(|(_, slots)| slots.iter()).find(|slot| slot.contains(&tool)).unwrap();
+        assert!(has_flyout(slot), "{tool} should show a corner marker and offer a flyout");
+        assert!(flyout_tools(slot).contains(&"rectangle"));
+        assert!(flyout_tools(slot).contains(&"lineSegment"));
+    }
+}
+
+#[test]
 fn the_toolbar_scrolls_in_a_short_window() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
