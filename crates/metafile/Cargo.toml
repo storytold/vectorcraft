@@ -9,6 +9,7 @@ description = "VectorCraft metafiles: hand-written EMF and WMF writers, EMF, EMF
 workspace = true
 
 [dependencies]
+craft-codepage = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
