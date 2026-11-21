@@ -9,7 +9,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::addons::parametric_shape::{self as tool, MAX_COUNT, MAX_SIZE, MIN_COUNT, ParametricShape, ShapeKind, apply, read};
 
 use crate::VectorcraftApp;
-use crate::panels::empty_state;
+use crate::panels::{empty_state, transform};
 use crate::widgets::{self, dim_label};
 
 /// The panel's id (`window.panel {panel: "parametricShape"}`).
@@ -121,6 +121,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match (change, selected) {
         (Some(mut p), Some((id, _))) => {
             p["id"] = json!(id.0);
+            // The Transform panel and the Control bar share one reference point locator. W and H
+            // keep the point of the shape's bounding box chosen there in place.
+            if p.get("width").or_else(|| p.get("height")).is_some() {
+                p["reference"] = json!(transform::reference_index(ui));
+            }
             run(app, "addon.pathtools.shape.set", p);
         }
         (Some(values), None) => run(app, "tool.setOption", json!({ "tool": tool::ID, "values": values })),
