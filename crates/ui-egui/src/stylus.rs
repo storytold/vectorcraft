@@ -12,8 +12,9 @@
 //! each pointer message of a pen before winit handles it. The canvas uses the pressure when a
 //! frame's events carry no touch force, and the tilt and rotation for each press, drag and release.
 //! An airbrush pen's finger wheel comes with the tilt and rotation ([`PenPose::wheel`]) where the
-//! host reads it: from XInput2 on X11 and from AppKit on macOS. The app does not read it on
-//! Windows, whose pointer messages have no field for it, or in the web build.
+//! host reads it: from XInput2 on X11, from AppKit on macOS, and on Windows, whose pointer messages
+//! have no field for it, from the tablet driver's Wintab interface when the driver has one. The app
+//! does not read it in the web build.
 //!
 //! The feed also says which end of the pen moved. Turning the pen to its eraser end selects the
 //! Eraser tool, and turning it back to the tip selects the tool used before
