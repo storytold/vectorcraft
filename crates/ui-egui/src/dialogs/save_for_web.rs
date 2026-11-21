@@ -941,7 +941,7 @@ fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art
             form::choice(ui, d, "__optimizeUse", tl!("Use:"), (LABEL_W, FIELD_W), &SIZE_USE);
         }
         widgets::label_row(ui, "", LABEL_W, |ui| {
-            if widgets::flat_button(ui, tl!("OK"), 64.0).clicked() {
+            if optimize_ok(ui) {
                 d.fields.insert("__optimizeGo".into(), json!(true));
             }
             if widgets::flat_button(ui, tl!("Cancel"), 64.0).clicked() {
@@ -969,6 +969,32 @@ fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art
             widgets::dim_label(ui, &text);
         });
     }
+}
+
+/// The OK of the Optimize to File Size rows ([`optimize_rows`]). Whether it was pressed: a click, or
+/// Enter or Space while it has the keyboard focus. A click whose press took the focus from a field
+/// that then refused its text (Desired File Size left empty or not a number) does not count, as such
+/// a click on the dialog's OK does not; a later click counts again.
+pub(super) fn optimize_ok(ui: &mut egui::Ui) -> bool {
+    let resp = widgets::flat_button(ui, tl!("OK"), 64.0);
+    let press = resp.id.with("press-pass");
+    if resp.contains_pointer() && ui.input(|i| i.pointer.any_pressed()) {
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.data_mut(|m| m.insert_temp(press, pass));
+    }
+    if !resp.clicked() {
+        // A press let go without a click (dragged off the button) leaves no press behind.
+        if ui.input(|i| i.pointer.any_released()) {
+            ui.data_mut(|m| m.remove::<u64>(press));
+        }
+        return false;
+    }
+    let (pressed_at, refused_at, refused_now) = ui.data_mut(|m| {
+        let pressed_at = m.get_temp::<u64>(press);
+        m.remove::<u64>(press);
+        (pressed_at, m.get_temp::<u64>(widgets::dialog_reject_pass()), m.get_temp::<bool>(widgets::dialog_reject_commit_flag()))
+    });
+    !(refused_now == Some(true) || matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p))
 }
 
 /// An Enter while the Optimize to File Size rows ([`optimize_rows`]) are open is their OK: it does
