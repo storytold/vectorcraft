@@ -533,11 +533,11 @@ pub const FORMATS: &[Format] = &[
     // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
     reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
     // `.cdr` drawings of versions 1 to 27 (`WL` files, RIFF files from version 3, and the ZIP packages of 14 on), read by
-    // `vectorcraft-cdr`; a `.cdt` template opens as a new untitled document. Exports don't write
+    // `craft-cdr`; a `.cdt` template opens as a new untitled document. Exports don't write
     // them.
     reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
     reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
-    // `.cmx` exchange files with 32-bit coordinates, read by `vectorcraft-cdr`; exports don't write
+    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
     // them.
     reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
