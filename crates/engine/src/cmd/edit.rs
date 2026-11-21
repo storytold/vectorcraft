@@ -1552,7 +1552,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let (ids, imported, artboards, into) = s.edit(mode.label(), |d, sel| {
         // Converted colors are compared with the document's resources, as another document's are
         // (`Clipboard::import_into`); its images are still the document's own.
-        let imported = clip.import_into(d, choices, same_doc)?;
+        let mut imported = clip.import_into(d, choices, same_doc)?;
         // Draw Inside: the clip group of the object drawn into, made on the first paste.
         let into = inside.map(|t| super::create::draw_inside_group(d, t)).transpose()?;
         let artboards: Vec<usize> = boards
@@ -1570,7 +1570,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 let mut c = d.reid(n);
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
-                imported.apply(&mut c);
+                imported.apply(&mut c, d);
                 let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
@@ -1698,6 +1698,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         "added": imported.added,
         "merged": imported.merged,
         "renamed": imported.renamed,
+        "warnings": imported.warnings,
     }))
 }
 

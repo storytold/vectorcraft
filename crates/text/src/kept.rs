@@ -160,10 +160,11 @@ fn text_hash(t: &TextObject) -> u64 {
 }
 
 /// Does [`text_bytes`] and [`layout_bytes`] count everything `t` and `layout` hold? They do not count
-/// a gradient's stops, or a glyph's bitmap or color art.
+/// owned file-font resources, a gradient's stops, or a glyph's bitmap or color art.
 fn counts_its_memory(t: &TextObject, layout: &TextLayout) -> bool {
     let gradient = |p: &Paint| matches!(p, Paint::Gradient(_));
-    !t.runs.iter().any(|r| gradient(&r.style.fill) || gradient(&r.style.stroke))
+    t.file_fonts.is_none()
+        && !t.runs.iter().any(|r| gradient(&r.style.fill) || gradient(&r.style.stroke))
         && !layout.glyphs.iter().chain(&layout.ruby).any(|g| g.image.is_some() || g.colour.is_some())
 }
 
