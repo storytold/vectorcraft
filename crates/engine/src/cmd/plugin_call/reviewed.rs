@@ -480,6 +480,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "pattern.delete",
     "pattern.list",
     "pattern.options",
+    "pattern.placeArt",
     "pattern.transform",
     "perspective.attach",
     "perspective.draw",

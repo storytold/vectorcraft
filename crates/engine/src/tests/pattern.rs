@@ -222,8 +222,9 @@ fn blue_rect(s: &mut Session) -> NodeId {
 }
 
 /// Replace Pattern Art gives the pattern copies of the selected art as its tile art in one undo
-/// step: the pattern keeps its name, swatch, place, tile and options, art painted with it keeps the
-/// paint, and the selected art stays on the canvas, selected. Undo and Redo swap the two tiles.
+/// step: the pattern keeps its name, swatch, place and options, the tile keeps its size and moves as
+/// far as the art's bounds moved, art painted with it keeps the paint, and the selected art stays on
+/// the canvas, selected. Undo and Redo swap the two tiles.
 #[test]
 fn replace_art_gives_a_pattern_new_tile_art() {
     let mut s = session();
@@ -243,7 +244,9 @@ fn replace_art_gives_a_pattern_new_tile_art() {
     assert_eq!(def.art[0].kind, node(&s, blue).kind, "the tile art is the blue rectangle");
     assert_eq!(def.art[0].appearance, node(&s, blue).appearance);
     assert_ne!(def.art[0].id, blue, "a copy with an id of its own");
-    assert_eq!((def.tile, def.tile_type, &def.name), (old.tile, old.tile_type, &old.name), "the tile and options stay");
+    // The red square's bounds start at (0, 0) and the blue rectangle's at (100, 100).
+    assert_eq!(def.tile, old.tile + vectorcraft_geom::Vec2::new(100.0, 100.0), "the tile moves with the art");
+    assert_eq!((def.tile_type, &def.name), (old.tile_type, &old.name), "the options stay");
     assert_eq!((d.patterns.len(), place(&s), d.swatches_iter().count()), (1, at, swatches), "no new pattern or swatch");
     assert!(is_pattern(&node(&s, filled).appearance.fill_paint(), "Dots"), "the filled art keeps the pattern");
     assert!(d.node(blue).is_some() && d.node(red).is_some(), "the art stays");
@@ -280,6 +283,164 @@ fn replace_art_that_matches_the_tile_art_records_nothing() {
     s.execute("object.pattern.replaceArt", &json!({"name": "Dots"})).unwrap();
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
     assert_eq!(doc(&s), &before);
+}
+
+/// The geometric bounds of object `id`.
+fn bounds_of(s: &Session, id: NodeId) -> Rect {
+    node(s, id).geometric_bounds().unwrap()
+}
+
+/// Place Pattern Art places a copy of the tile art in a group with an unpainted rectangle of the
+/// tile at its back, centered where it is asked for (by default the first artboard's center), in
+/// the current layer, selected, as one undo step; the pattern does not change.
+#[test]
+fn place_art_places_the_tile_art_with_its_tile() {
+    let mut s = session();
+    let red = make_dots(&mut s);
+    s.execute("select.none", &json!({})).unwrap();
+    let def = doc(&s).pattern("Dots").unwrap().clone();
+    assert_eq!(def.tile, Rect::new(-5.0, -5.0, 15.0, 15.0));
+    let steps = s.doc().unwrap().history.undo.len();
+    let id = id_of(&s.execute("pattern.placeArt", &json!({"name": "Dots", "x": 200, "y": 150})).unwrap());
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Place Pattern Art")));
+    assert_eq!(st.selection.objects.to_vec(), vec![id], "the copy is selected");
+    assert_eq!(st.doc.parent_of(id), Some(st.doc.layers[0].id), "in the current layer");
+    assert_eq!(doc(&s).pattern("Dots").unwrap(), &def, "the pattern stays as it was");
+    let group = node(&s, id);
+    let NodeKind::Group { children, clip: false } = &group.kind else { panic!("a group: {:?}", group.kind) };
+    let [marker, art] = children.as_slice() else { panic!("the tile and the art: {children:?}") };
+    // The tile, centered on (200, 150), is unpainted; the art keeps its place in the tile.
+    assert_eq!(marker.geometric_bounds(), Some(Rect::new(190.0, 140.0, 210.0, 160.0)));
+    assert!(marker.appearance.fill_paint().is_none() && marker.appearance.stroke().is_none_or(|k| k.paint.is_none()));
+    assert_eq!(art.geometric_bounds(), Some(Rect::new(195.0, 145.0, 205.0, 155.0)));
+    assert_eq!(art.appearance, def.art[0].appearance);
+    assert!(art.id != red && art.id != def.art[0].id, "a copy with an id of its own");
+    // Without a position: the first artboard's center (the document is 400 × 400).
+    let centered = id_of(&s.execute("pattern.placeArt", &json!({"name": "Dots"})).unwrap());
+    assert_eq!(bounds_of(&s, centered).center(), Point::new(200.0, 200.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(doc(&s).node(id).is_none() && doc(&s).node(centered).is_none(), "Undo removes the copies");
+}
+
+/// The placed copy, edited and given back with Replace Pattern Art, becomes the tile art, and its
+/// rectangle becomes the tile: the art keeps its place in the tile, so the pattern draws the same
+/// arrangement with the new art. Given back unchanged, nothing is recorded.
+#[test]
+fn placed_art_given_back_keeps_its_place_in_the_tile() {
+    let mut s = session();
+    make_dots(&mut s);
+    s.execute("select.none", &json!({})).unwrap();
+    let id = id_of(&s.execute("pattern.placeArt", &json!({"name": "Dots", "x": 200, "y": 150})).unwrap());
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [id.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let def = doc(&s).pattern("Dots").unwrap().clone();
+    assert_eq!(def.tile, Rect::new(190.0, 140.0, 210.0, 160.0), "the rectangle is the tile");
+    assert_eq!(def.art.len(), 1, "the rectangle is not part of the art: {:?}", def.art);
+    assert_eq!(def.art[0].geometric_bounds(), Some(Rect::new(195.0, 145.0, 205.0, 155.0)));
+    let old = before.pattern("Dots").unwrap();
+    let place = |tile: Rect, art: &[Arc<Node>]| vectorcraft_doc::live::nodes_bounds(art).unwrap().origin() - tile.origin();
+    assert_eq!(place(def.tile, &def.art), place(old.tile, &old.art), "the art keeps its place in the tile");
+    // Given back again without a change: nothing to record.
+    let (again, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [id.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(doc(&s), &again);
+    // Edited (the art recolored and the rectangle widened, ungrouped): the new art and tile.
+    let NodeKind::Group { children, .. } = &node(&s, id).kind else { panic!("a group") };
+    let (marker, art) = (children[0].id, children[1].id);
+    s.execute("paint.setFill", &json!({"ids": [art.0], "color": "#0000ff"})).unwrap();
+    sel(&mut s, &[id]);
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert!(doc(&s).node(id).is_none() && doc(&s).node(marker).is_some() && doc(&s).node(art).is_some(), "ungrouped");
+    s.execute("object.transform", &json!({"ids": [marker.0], "matrix": [2, 0, 0, 1, -190, 0]})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [marker.0, art.0]})).unwrap();
+    let def = doc(&s).pattern("Dots").unwrap();
+    assert_eq!(def.tile, Rect::new(190.0, 140.0, 230.0, 160.0), "the widened rectangle is the tile");
+    assert_eq!(def.art.len(), 1);
+    assert_eq!(def.art[0].appearance, node(&s, art).appearance, "the recolored art");
+}
+
+/// Only an unpainted rectangle at the back of the art is the tile: a painted one, or an unpainted
+/// one in front of other art, is tile art like any other, and a rectangle alone leaves no art.
+#[test]
+fn only_an_unpainted_rectangle_at_the_back_is_the_tile() {
+    let mut s = session();
+    make_dots(&mut s);
+    let back = rect(&mut s, 100.0, 100.0, 40.0, 40.0);
+    let front = rect(&mut s, 110.0, 110.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [front.0], "color": "#00ff00"})).unwrap();
+    // Painted: art.
+    s.execute("paint.setFill", &json!({"ids": [back.0], "color": "#ffffff"})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [back.0, front.0]})).unwrap();
+    assert_eq!(doc(&s).pattern("Dots").unwrap().art.len(), 2);
+    // Unpainted, but in front of the other art: art.
+    s.execute("paint.setFill", &json!({"ids": [back.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [back.0], "none": true})).unwrap();
+    sel(&mut s, &[back]);
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [back.0, front.0]})).unwrap();
+    assert_eq!(doc(&s).pattern("Dots").unwrap().art.len(), 2);
+    // Unpainted and at the back: the tile.
+    s.execute("object.arrange.sendToBack", &json!({})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [back.0, front.0]})).unwrap();
+    let def = doc(&s).pattern("Dots").unwrap();
+    assert_eq!((def.art.len(), def.tile), (1, Rect::new(100.0, 100.0, 140.0, 140.0)));
+    // A rectangle alone is a tile with no art.
+    let err = s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [back.0]})).unwrap_err();
+    assert!(err.to_string().contains("select the art for the pattern tile"), "{err}");
+    // An unpainted path through the four corners of its bounds in a crossing order is not a
+    // rectangle: art.
+    let corners = [(200, 200), (240, 240), (240, 200), (200, 240)];
+    let anchors: Vec<_> = corners.iter().map(|(x, y)| json!({"x": x, "y": y})).collect();
+    let bowtie = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [bowtie.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [bowtie.0], "none": true})).unwrap();
+    sel(&mut s, &[bowtie]);
+    s.execute("object.arrange.sendToBack", &json!({})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [bowtie.0, front.0]})).unwrap();
+    let def = doc(&s).pattern("Dots").unwrap();
+    assert_eq!(def.art.len(), 2, "the crossing path is art: {:?}", def.art);
+    assert_ne!(def.tile, Rect::new(200.0, 200.0, 240.0, 240.0), "the crossing path is not the tile");
+}
+
+/// Place Pattern Art is refused, changing nothing, for a missing or unknown name, a position that
+/// is not a number, a pattern with no art, while a pattern is edited and on a locked layer.
+#[test]
+fn place_art_is_refused_without_changing_anything() {
+    let mut s = session();
+    make_dots(&mut s);
+    doc_mut(&mut s).patterns.push(vectorcraft_doc::pattern::PatternDef::new("Empty", vec![]));
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    let unchanged = |s: &Session, case: &str| {
+        assert_eq!(doc(s), &before, "{case}: the document stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{case}: no undo step");
+    };
+    for (case, p, why) in [
+        ("no name", json!({}), "missing name"),
+        ("no pattern", json!({"name": "Stripes"}), "no pattern `Stripes`"),
+        ("x not a number", json!({"name": "Dots", "x": "100"}), "`x` must be a number"),
+        ("y not a number", json!({"name": "Dots", "y": true}), "`y` must be a number"),
+        ("no art", json!({"name": "Empty"}), "no artwork"),
+    ] {
+        let err = s.execute("pattern.placeArt", &p).unwrap_err();
+        assert!(err.to_string().contains(why), "{case}: {err}");
+        unchanged(&s, case);
+    }
+    let layer = doc(&s).layers[0].id;
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "locked": true})).unwrap();
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("pattern.placeArt", &json!({"name": "Dots"})).unwrap_err();
+    assert_eq!(err.to_string(), "the target layer is locked or hidden");
+    assert_eq!((doc(&s), s.doc().unwrap().history.undo.len()), (&before, steps), "locked: unchanged");
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "locked": false})).unwrap();
+    s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    let err = s.execute("pattern.placeArt", &json!({"name": "Dots"})).unwrap_err();
+    assert!(matches!(&err, EngineError::Disabled(_, w) if w == "finish editing the pattern first"), "while editing: {err}");
+    assert_eq!((doc(&s), s.doc().unwrap().history.undo.len()), (&before, steps), "while editing: unchanged");
 }
 
 /// Replace Pattern Art is refused, changing nothing, for a missing name or pattern, with no art,
