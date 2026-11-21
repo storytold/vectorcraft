@@ -320,12 +320,12 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
                     }
                     // The path whose own box reaches furthest towards the corner holds it: in a
                     // compound path, the member that puts that corner where it is. A hidden or
-                    // locked member gives no corner.
+                    // locked member, or one made into a guide, gives no corner.
                     let mut holder: Option<(f64, NodeId, bool)> = None;
                     for m in members() {
                         let Some(b) = *w.cache.geometric.entry(m.id).or_insert_with(|| m.geometric_bounds()) else { continue };
                         let gap = corners(b).get(k).map_or(f64::INFINITY, |c| c.distance(q));
-                        let editable = m.visible && !m.locked;
+                        let editable = m.visible && !m.locked && !m.is_guide();
                         if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
                             holder = Some((gap, m.id, editable));
                         }
@@ -1837,6 +1837,23 @@ mod tests {
             let (q, _) = t.snap_linear(&c, Point::new(81.0, 81.0));
             assert!(!near(q, Point::new(80.0, 80.0)) && t.corner.is_none(), "{kind}: {q:?}");
         }
+        // A visible, unlocked member of a stroked compound path made into a guide does not hold
+        // the corner its box puts there.
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, hole, part, whole) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut guide = Node::path(part, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Default::default());
+        if let NodeKind::Path { guide, .. } = &mut guide.kind {
+            *guide = true;
+        }
+        let small = Node::path(hole, vectorcraft_geom::shapes::rectangle(Rect::new(140.0, 140.0, 160.0, 160.0)), Default::default());
+        let mut n =
+            Node::new(whole, NodeKind::Compound { children: vec![std::sync::Arc::new(small), std::sync::Arc::new(guide)], rule: Default::default() });
+        n.appearance = vectorcraft_doc::Appearance::default_art().into();
+        d.insert(Some(l), 0, n).expect("the compound path");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, _) = t.snap_linear(&c, Point::new(99.6, 99.6));
+        assert!(t.corner.is_none() && !near(q, Point::new(99.5, 99.5)), "{q:?} {:?}", t.corner);
         // Two stroked rectangles sharing the edge x = 200; the right one is on top.
         let (mut d, left) = doc_with_rect();
         let (l, right) = (d.layers[0].id, d.alloc_id());

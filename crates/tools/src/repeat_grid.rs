@@ -369,6 +369,17 @@ mod tests {
         assert!(GridDrag::hit(&c, g.rows_at, Mods { alt: true, ..Mods::default() }).is_none());
     }
 
+    /// With the Selection tool, a handle drag reads where it is released, and a tool switch cancels
+    /// it.
+    #[test]
+    fn a_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (doc, selection) = grid();
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
+        crate::testutil::check_widget_release_and_tool_switch(&c, g.rows_at, g.rows_at + Vec2::new(0.0, 240.0), g.rows_at + Vec2::new(0.0, 360.0));
+    }
+
     #[test]
     fn a_bounding_box_handle_wins_where_they_overlap() {
         let (doc, selection) = grid();
