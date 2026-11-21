@@ -2713,8 +2713,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   through these objects: an edit before it moves it, an edit over it shrinks it, and an insertion at one of its ends
   joins it. When a member finds the frame's text different from the text these objects last saw, because `vc.run`
   or an undo changed it, a range made before throws `Stale text range`; a change that was reversed before that read
-  leaves the text as the range knew it, and the range keeps working. A range made before the frame's last 100,000
-  edits through these objects throws `Stale text range` too. A character attribute
+  leaves the text as the range knew it, and the range keeps working. These objects keep a record of up to 100,000 of the
+  frame's edits; when it grows past that, they drop the older half of it, and a range made before the newest dropped
+  edit throws `Stale text range` too. A character attribute
   read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
   `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
   own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
