@@ -876,6 +876,11 @@ antiAlias	Sharp	Nítido
 	Distribute Spacing	Distribuir Espaçamento
 	Distribute Spacing:	Distribuir Espaçamento:
 	Dither:	Dither:
+	Transparency Dither	Dither de transparência
+	No Transparency Dither	Sem dither de transparência
+	Diffusion Transparency Dither	Dither de transparência por difusão
+	Pattern Transparency Dither	Dither de transparência por padrão
+	Noise Transparency Dither	Dither de transparência por ruído
 	Divide	Dividir
 	Divide Horizontally Into	Dividir Horizontalmente Em
 	Divide Objects Below	Dividir Objetos Abaixo

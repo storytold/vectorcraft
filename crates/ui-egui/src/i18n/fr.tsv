@@ -953,6 +953,11 @@ font-technology	Variable	Variables
 	Distribute Spacing	Répartir l’espacement
 	Distribute Spacing:	Répartition de l’espacement :
 	Dither:	Simulation :
+	Transparency Dither	Simulation de transparence
+	No Transparency Dither	Sans simulation de transparence
+	Diffusion Transparency Dither	Simulation de transparence par diffusion
+	Pattern Transparency Dither	Simulation de transparence par motif
+	Noise Transparency Dither	Simulation de transparence par bruit
 	Divide	Division
 	Divide Horizontally Into	Diviser horizontalement en
 	Divide Objects Below	Diviser les objets inférieurs

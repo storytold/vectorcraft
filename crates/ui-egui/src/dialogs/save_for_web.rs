@@ -1,7 +1,7 @@
 //! File → Export → Save for Web (Legacy) (`saveForWeb`, Ctrl/Cmd+Alt+Shift+S): the art previewed
 //! as the web image Save writes, beside the original (Original, Optimized, 2-Up and 4-Up views,
 //! each with its file size and download time), and the settings: format (GIF, JPEG, PNG-8,
-//! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
+//! PNG-24), color reduction, colors, dither, transparency and its dither, matte, interlacing, web snap,
 //! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color,
 //! Restore Generated Table, a double-click that shifts a color to one picked in the Color Picker,
 //! and Unshift All Colors), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
@@ -823,6 +823,7 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
                     slider_row(ui, d, "ditherAmount", tl!("Amount:"), "%");
                 }
                 check_pair(ui, d, ("transparency", tl!("Transparency")), ("interlaced", tl!("Interlaced")));
+                transparency_dither_rows(ui, d);
                 matte_row(ui, d);
                 slider_row(ui, d, "webSnap", tl!("Web Snap:"), "%");
                 if format == WebFormat::Gif {
@@ -1079,6 +1080,25 @@ fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix:
         ui.spacing_mut().slider_width = FIELD_W - 60.0;
         if widgets::slider(ui, egui::Slider::new(&mut v, 0..=100).suffix(suffix)).changed() {
             d.fields.insert(key.into(), json!(v));
+        }
+    });
+}
+
+/// The Transparency Dither choices of GIF and PNG-8, as (`transparencyDither` value, label).
+pub(crate) const TRANSPARENCY_DITHERS: [(&str, &str); 4] = [
+    ("none", "No Transparency Dither"),
+    ("diffusion", "Diffusion Transparency Dither"),
+    ("pattern", "Pattern Transparency Dither"),
+    ("noise", "Noise Transparency Dither"),
+];
+
+/// Transparency Dither and, for Diffusion, its Amount; both are disabled while Transparency is off
+/// and keep their values.
+fn transparency_dither_rows(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.add_enabled_ui(d.bool("transparency"), |ui| {
+        form::choice(ui, d, "transparencyDither", &crate::i18n::colon(tl!("Transparency Dither")), (LABEL_W, FIELD_W), &TRANSPARENCY_DITHERS);
+        if Dither::from_id(&d.str("transparencyDither")) == Some(Dither::Diffusion) {
+            slider_row(ui, d, "transparencyDitherAmount", tl!("Amount:"), "%");
         }
     });
 }

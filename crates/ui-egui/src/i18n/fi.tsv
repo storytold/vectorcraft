@@ -3199,6 +3199,11 @@ antiAlias	Sharp	Terävä
 	Convert to sRGB	Muunna sRGB:ksi
 	Delete this saved preset	Poista tämä tallennettu esiasetus
 	Dither:	Rasterointi:
+	Transparency Dither	Läpinäkyvyyden rasterointi
+	No Transparency Dither	Ei läpinäkyvyyden rasterointia
+	Diffusion Transparency Dither	Läpinäkyvyyden diffuusiorasterointi
+	Pattern Transparency Dither	Läpinäkyvyyden kuviorasterointi
+	Noise Transparency Dither	Läpinäkyvyyden kohinarasterointi
 	Fit in View	Sovita näkymään
 	Format:	Muoto:
 	WebP	WebP

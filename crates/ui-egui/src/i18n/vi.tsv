@@ -1122,6 +1122,11 @@ font-technology	Variable	Biến thiên
 	Distribute Spacing	Phân bố khoảng cách
 	Distribute Spacing:	Phân bố khoảng cách:
 	Dither:	Dither:
+	Transparency Dither	Dither độ trong suốt
+	No Transparency Dither	Không dither độ trong suốt
+	Diffusion Transparency Dither	Dither độ trong suốt khuếch tán
+	Pattern Transparency Dither	Dither độ trong suốt họa tiết
+	Noise Transparency Dither	Dither độ trong suốt nhiễu
 	Divide	Chia
 	Divide Horizontally Into	Chia ngang thành
 	Divide Objects Below	Chia đối tượng bên dưới

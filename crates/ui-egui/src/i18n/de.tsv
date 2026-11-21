@@ -940,6 +940,11 @@ font-technology	Variable	Variabel
 	Distribute Spacing	Abstand verteilen
 	Distribute Spacing:	Abstand verteilen:
 	Dither:	Dithering:
+	Transparency Dither	Transparenz-Dithering
+	No Transparency Dither	Kein Transparenz-Dithering
+	Diffusion Transparency Dither	Diffusion-Transparenz-Dithering
+	Pattern Transparency Dither	Muster-Transparenz-Dithering
+	Noise Transparency Dither	Rauschen-Transparenz-Dithering
 	Divide	Fläche aufteilen
 	Divide Horizontally Into	Horizontal teilen in
 	Divide Objects Below	Darunterliegende Objekte aufteilen

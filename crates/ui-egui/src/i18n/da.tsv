@@ -5786,6 +5786,11 @@ antiAlias	Sharp	Skarp
 	Convert to sRGB	Konvertér til sRGB
 	Delete this saved preset	Slet denne gemte forudindstilling
 	Dither:	Dither:
+	Transparency Dither	Gennemsigtighedsdithering
+	No Transparency Dither	Ingen gennemsigtighedsdithering
+	Diffusion Transparency Dither	Diffusionsdithering af gennemsigtighed
+	Pattern Transparency Dither	Mønsterdithering af gennemsigtighed
+	Noise Transparency Dither	Støjdithering af gennemsigtighed
 	Fit in View	Tilpas i visning
 	Format:	Format:
 	WebP	WebP

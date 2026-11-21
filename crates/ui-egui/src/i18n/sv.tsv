@@ -933,6 +933,11 @@ font-technology	Variable	Variabla
 	Distribute Spacing	Fördela avstånd
 	Distribute Spacing:	Fördela avstånd:
 	Dither:	Dithering:
+	Transparency Dither	Transparensdithering
+	No Transparency Dither	Ingen transparensdithering
+	Diffusion Transparency Dither	Transparensdithering med diffusion
+	Pattern Transparency Dither	Transparensdithering med mönster
+	Noise Transparency Dither	Transparensdithering med brus
 	Divide	Dela upp
 	Divide Horizontally Into	Dela horisontellt i
 	Divide Objects Below	Dela objekt nedanför

@@ -5137,6 +5137,11 @@ antiAlias	Sharp	მკვეთრი
 	Convert to sRGB	sRGB-ად გარდაქმნა
 	Delete this saved preset	ამ შენახული პრესეტის წაშლა
 	Dither:	დიზერინგი:
+	Transparency Dither	გამჭვირვალობის დიზერინგი
+	No Transparency Dither	გამჭვირვალობის დიზერინგის გარეშე
+	Diffusion Transparency Dither	გამჭვირვალობის დიფუზიური დიზერინგი
+	Pattern Transparency Dither	გამჭვირვალობის პატერნული დიზერინგი
+	Noise Transparency Dither	გამჭვირვალობის ხმაურის დიზერინგი
 	Fit in View	ხედში ჩატევა
 	Format:	ფორმატი:
 	High	მაღალი

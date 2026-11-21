@@ -893,6 +893,11 @@ antiAlias	Sharp	锐利
 	Distribute Spacing	按间距分布
 	Distribute Spacing:	分布间距：
 	Dither:	仿色：
+	Transparency Dither	透明度仿色
+	No Transparency Dither	无透明度仿色
+	Diffusion Transparency Dither	扩散透明度仿色
+	Pattern Transparency Dither	图案透明度仿色
+	Noise Transparency Dither	杂色透明度仿色
 	Divide	分割
 	Divide Horizontally Into	水平分割为
 	Divide Objects Below	分割下方对象

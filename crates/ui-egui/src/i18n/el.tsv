@@ -903,6 +903,11 @@ font-technology	Variable	Μεταβλητές
 	Distribute Spacing	Κατανομή αποστάσεων
 	Distribute Spacing:	Κατανομή αποστάσεων:
 	Dither:	Πρόσθεση θορύβου:
+	Transparency Dither	Πρόσμειξη θορύβου διαφάνειας
+	No Transparency Dither	Χωρίς πρόσμειξη θορύβου διαφάνειας
+	Diffusion Transparency Dither	Πρόσμειξη θορύβου διαφάνειας με διάχυση
+	Pattern Transparency Dither	Πρόσμειξη θορύβου διαφάνειας με μοτίβο
+	Noise Transparency Dither	Πρόσμειξη θορύβου διαφάνειας με θόρυβο
 	Divide	Διαίρεση
 	Divide Horizontally Into	Οριζόντια διαίρεση σε
 	Divide Objects Below	Διαίρεση αντικειμένων από κάτω

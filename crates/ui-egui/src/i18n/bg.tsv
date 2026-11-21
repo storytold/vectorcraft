@@ -919,6 +919,11 @@ font-technology	Variable	Променливи
 	Distribute Spacing	Разпределение на разстоянията
 	Distribute Spacing:	Разпределение на разстоянията:
 	Dither:	Дитъринг:
+	Transparency Dither	Дитъринг на прозрачността
+	No Transparency Dither	Без дитъринг на прозрачността
+	Diffusion Transparency Dither	Дифузен дитъринг на прозрачността
+	Pattern Transparency Dither	Дитъринг на прозрачността с мостра
+	Noise Transparency Dither	Шумов дитъринг на прозрачността
 	Divide	Разделяне
 	Divide Horizontally Into	Разделяне хоризонтално на
 	Divide Objects Below	Разделяне на обектите отдолу

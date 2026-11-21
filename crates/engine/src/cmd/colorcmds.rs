@@ -701,8 +701,15 @@ impl Indexing {
                 v.as_f64().filter(|x| (0.0..=100.0).contains(x)).ok_or_else(|| bad(C, "`ditherAmount` must be a number from 0 to 100"))?.round() as u8
             }
         };
-        let options =
-            |r: Reduction| PaletteOptions { colors: colors.unwrap_or(256), reduction: r, dither, dither_amount, transparency: true, matte: None };
+        let options = |r: Reduction| PaletteOptions {
+            colors: colors.unwrap_or(256),
+            reduction: r,
+            dither,
+            dither_amount,
+            transparency: true,
+            matte: None,
+            ..PaletteOptions::default()
+        };
         let refuse_colors = |name: &str| match colors {
             Some(_) => Err(bad(C, format!("`colors` does not apply to the {name} reduction"))),
             None => Ok(()),

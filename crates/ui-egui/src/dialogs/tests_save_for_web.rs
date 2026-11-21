@@ -255,6 +255,61 @@ fn every_view_and_format_draws() {
     assert_eq!(kind(&app), Some(save_for_web::KIND));
 }
 
+/// GIF and PNG-8 show Transparency Dither under Transparency, with an Amount slider for Diffusion;
+/// both are disabled while Transparency is off and keep their values, PNG-24 does not show them, and
+/// Done remembers them.
+#[test]
+fn transparency_dither_rows_follow_transparency_and_the_method() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{By, NodeT, Queryable};
+    type H<'a> = egui_kittest::Harness<'a, VectorcraftApp>;
+    let dir = vectorcraft_testkit::temp_dir("sfw-transparency-dither");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 1200.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    let disabled = |h: &H, value: &'static str| h.query(By::new().role(Role::ComboBox).value(value)).map(|n| n.accesskit_node().is_disabled());
+    let sliders = |h: &H| h.query_all(By::new().role(Role::Slider)).count();
+    let field = |h: &H, key: &str| h.state().ui.dialog.as_ref().unwrap().fields[key].clone();
+    assert_eq!(disabled(&h, "No Transparency Dither"), Some(false));
+    let before = sliders(&h);
+    h.get(By::new().role(Role::ComboBox).value("No Transparency Dither")).click();
+    h.run();
+    h.get_by_label("Diffusion Transparency Dither").click();
+    h.run();
+    assert_eq!(field(&h, "transparencyDither"), json!("diffusion"));
+    assert_eq!(sliders(&h), before + 1, "Diffusion has an Amount");
+    // Transparency off: the rows are disabled and keep their values.
+    set(h.state_mut(), "transparency", json!(false));
+    h.run();
+    assert_eq!(disabled(&h, "Diffusion Transparency Dither"), Some(true));
+    assert_eq!(field(&h, "transparencyDither"), json!("diffusion"));
+    // PNG-24 has no transparency dither; PNG-8 has it again.
+    set(h.state_mut(), "format", json!("png24"));
+    h.run();
+    assert_eq!(disabled(&h, "Diffusion Transparency Dither"), None);
+    set(h.state_mut(), "format", json!("png8"));
+    set(h.state_mut(), "transparency", json!(true));
+    set(h.state_mut(), "transparencyDitherAmount", json!(35));
+    h.run();
+    assert_eq!(disabled(&h, "Diffusion Transparency Dither"), Some(false));
+    // Done remembers them.
+    set(h.state_mut(), "discard", json!(true));
+    confirm(h.state_mut()).unwrap();
+    let s = h.state().session.last_web_settings();
+    assert_eq!((s.transparency_dither, s.transparency_dither_amount), (vectorcraft_render::encode::quantize::Dither::Diffusion, 35));
+}
+
 #[test]
 fn save_remembers_and_writes_and_done_only_remembers() {
     let dir = vectorcraft_testkit::temp_dir("sfw-save");

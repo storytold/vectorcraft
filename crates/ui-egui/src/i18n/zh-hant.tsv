@@ -923,6 +923,11 @@ font-technology	Variable	可變
 	Distribute Spacing	均分間距
 	Distribute Spacing:	均分間距：
 	Dither:	仿色：
+	Transparency Dither	透明度仿色
+	No Transparency Dither	無透明度仿色
+	Diffusion Transparency Dither	擴散透明度仿色
+	Pattern Transparency Dither	圖樣透明度仿色
+	Noise Transparency Dither	雜訊透明度仿色
 	Divide	分割
 	Divide Horizontally Into	水平分割為
 	Divide Objects Below	分割下方物件

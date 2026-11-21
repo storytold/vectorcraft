@@ -961,6 +961,11 @@ font-technology	Variable	Variabili
 	Distribute Spacing	Distribuisci spaziatura
 	Distribute Spacing:	Distribuisci spaziatura:
 	Dither:	Dithering:
+	Transparency Dither	Dithering trasparenza
+	No Transparency Dither	Nessun dithering trasparenza
+	Diffusion Transparency Dither	Dithering trasparenza a diffusione
+	Pattern Transparency Dither	Dithering trasparenza a motivo
+	Noise Transparency Dither	Dithering trasparenza a disturbo
 	Divide	Dividi
 	Divide Horizontally Into	Dividi orizzontalmente in
 	Divide Objects Below	Dividi oggetti sottostanti

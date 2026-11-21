@@ -3257,6 +3257,11 @@ antiAlias	Sharp	Ostré
 	Convert to sRGB	Převést na sRGB
 	Delete this saved preset	Odstranit toto uložené přednastavení
 	Dither:	Rozptýlení:
+	Transparency Dither	Rozptýlení průhlednosti
+	No Transparency Dither	Bez rozptylu průhlednosti
+	Diffusion Transparency Dither	Difuzní rozptýlení průhlednosti
+	Pattern Transparency Dither	Rozptýlení průhlednosti vzorkem
+	Noise Transparency Dither	Rozptýlení průhlednosti šumem
 	Fit in View	Přizpůsobit zobrazení
 	Format:	Formát:
 	WebP	WebP

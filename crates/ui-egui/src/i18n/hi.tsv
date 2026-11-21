@@ -1776,6 +1776,11 @@ arrowhead	Feather	पंख
 	Distribute Spacing:	स्पेसिंग वितरित करें:
 	Dither	डिथर
 	Dither:	डिथर:
+	Transparency Dither	पारदर्शिता डिथर
+	No Transparency Dither	कोई पारदर्शिता डिथर नहीं
+	Diffusion Transparency Dither	डिफ़्यूज़न पारदर्शिता डिथर
+	Pattern Transparency Dither	पैटर्न पारदर्शिता डिथर
+	Noise Transparency Dither	नॉइज़ पारदर्शिता डिथर
 	Divide	विभाजित करें
 	Divide and Outline Will Remove Unpainted Artwork	डिवाइड और आउटलाइन अनपेंटेड आर्टवर्क को हटा देगा
 	Divide Horizontally Into	क्षैतिज रूप से विभाजित करें

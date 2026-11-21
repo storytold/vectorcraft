@@ -1222,6 +1222,11 @@ arrowhead	Target	Céltábla
 	Distribute Spacing	Térköz elosztása
 	Distribute Spacing:	Térköz elosztása:
 	Dither:	Árnyalatkeverés:
+	Transparency Dither	Átlátszóság-árnyalatkeverés
+	No Transparency Dither	Nincs átlátszóság-árnyalatkeverés
+	Diffusion Transparency Dither	Diffúziós átlátszóság-árnyalatkeverés
+	Pattern Transparency Dither	Mintázatos átlátszóság-árnyalatkeverés
+	Noise Transparency Dither	Zajos átlátszóság-árnyalatkeverés
 	Divide	Felosztás
 	Divide Horizontally Into	Vízszintes felosztás
 	Divide Objects Below	Alatta lévő objektumok felosztása

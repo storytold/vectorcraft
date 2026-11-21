@@ -929,6 +929,11 @@ font-technology	Variable	Değişken
 	Distribute Spacing	Aralığı Dağıt
 	Distribute Spacing:	Aralığı Dağıt:
 	Dither:	Titreme:
+	Transparency Dither	Saydamlık titremesi
+	No Transparency Dither	Saydamlık titremesi yok
+	Diffusion Transparency Dither	Difüzyon saydamlık titremesi
+	Pattern Transparency Dither	Desen saydamlık titremesi
+	Noise Transparency Dither	Gürültü saydamlık titremesi
 	Divide	Böl
 	Divide Horizontally Into	Yatay Olarak Böl
 	Divide Objects Below	Aşağıdaki Nesneleri Böl
