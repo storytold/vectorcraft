@@ -648,11 +648,14 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// 1,000.
 pub(crate) const SIDES_SLIDER: std::ops::RangeInclusive<f64> = 3.0..=20.0;
 
-/// A drag on a Sides slider in progress: the rows it is in, whether Escape canceled it (the rest
-/// of it is ignored until the button is up), and the main window's pass the rail was last drawn in.
+/// A drag on a Sides slider in progress: the rows it is in, the document it edits (its `uid`),
+/// whether it ended early (Escape canceled it, its rows went undrawn or another document came to
+/// the front; the rest of it is ignored until the button is up), and the main window's pass the
+/// rail was last drawn in.
 #[derive(Clone, Debug, PartialEq)]
 struct SidesDrag {
     rows: String,
+    doc: Option<u64>,
     canceled: bool,
     pass: u64,
 }
@@ -665,22 +668,38 @@ fn root_pass(ctx: &egui::Context) -> u64 {
     ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT)
 }
 
+/// Is a Sides slider drag in progress, or one that ended early with its button still down? The
+/// shortcuts then leave Escape to the slider.
+pub(crate) fn sides_drag_held(ctx: &egui::Context) -> bool {
+    pstate::<Option<SidesDrag>>(ctx, SIDES_DRAG).is_some()
+}
+
 /// Keeps the count a Sides slider drag previewed as one undo step when its rail was not drawn in
 /// this pass (the task bar's popover or the panel closed during the drag), so no preview stays open
-/// into a later pass; a drag Escape canceled only ends. The app runs this at the end of every
-/// pass, after the panels.
+/// into a later pass; with an Escape in this pass it puts the count back instead, and a drag that
+/// already ended early only ends. While the button stays down, the
+/// rest of the drag is ignored, also when its rows are drawn again. The app runs this at the end
+/// of every pass, after the panels.
 pub(crate) fn end_stale_sides_drag(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(drag) = pstate::<Option<SidesDrag>>(ctx, SIDES_DRAG) else { return };
     if drag.pass == root_pass(ctx) {
         return;
     }
-    if !drag.canceled && app.session.in_interaction() {
-        if let Err(e) = app.session.commit_interaction() {
+    let front = app.session.active().map(|d| d.uid);
+    if !drag.canceled && drag.doc == front && app.session.in_interaction() {
+        // An Escape in this pass (one that closed the task bar's popover) cancels the drag, as it
+        // does on a drawn rail; the shortcuts leave it to the slider.
+        let escaped = ctx.input(|i| {
+            i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::Escape, pressed: true, modifiers, .. } if modifiers.is_none()))
+        });
+        let ended = if escaped { app.session.cancel_interaction() } else { app.session.commit_interaction() };
+        if let Err(e) = ended {
             app.ui.status = e.to_string();
         }
         app.sync_views();
     }
-    set_pstate(ctx, SIDES_DRAG, None::<SidesDrag>);
+    let down = ctx.input(|i| i.pointer.any_down());
+    set_pstate(ctx, SIDES_DRAG, down.then_some(SidesDrag { canceled: true, ..drag }));
 }
 
 /// The Sides slider of Polygon Properties (rows `id`), `width` wide, for a polygon of `sides`
@@ -699,20 +718,23 @@ fn sides_slider(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, sides: u32, wid
     let held = pstate::<Option<SidesDrag>>(&ctx, SIDES_DRAG).filter(|d| d.rows == id);
     let down = ui.input(|i| i.pointer.any_down());
     let pass = root_pass(&ctx);
+    let doc = app.session.active().map(|d| d.uid);
     // `None` leaves another rows' drag as it is.
     let mut next = None;
-    if let Some(d) = held.as_ref().filter(|d| d.canceled) {
-        next = Some(down.then(|| SidesDrag { pass, ..d.clone() }));
+    // A switch to another document canceled the drag's preview there; the rest of the drag is
+    // ignored, as after Escape.
+    if let Some(d) = held.as_ref().filter(|d| d.canceled || d.doc != doc) {
+        next = Some(down.then(|| SidesDrag { canceled: true, pass, ..d.clone() }));
     } else if held.is_some() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         if let Err(e) = app.session.cancel_interaction() {
             app.ui.status = e.to_string();
         }
         app.sync_views();
-        next = Some(down.then(|| SidesDrag { rows: id.to_string(), canceled: true, pass }));
+        next = Some(down.then(|| SidesDrag { rows: id.to_string(), doc, canceled: true, pass }));
     } else if let Some(x) = dragged {
         let count = (lo + f64::from(x) * (hi - lo)).round();
         super::live_run(app, "Live Shape Properties", "object.setLiveShape", json!({ "sides": count as u64 }), phase);
-        next = Some((phase == widgets::Live::Dragging).then(|| SidesDrag { rows: id.to_string(), canceled: false, pass }));
+        next = Some((phase == widgets::Live::Dragging).then(|| SidesDrag { rows: id.to_string(), doc, canceled: false, pass }));
     } else if let Some(k) = keyed.map(f64::round).filter(|k| *k != n) {
         app.run("object.setLiveShape", json!({ "sides": k as u64 })).ok();
     } else if let Some(d) = held {

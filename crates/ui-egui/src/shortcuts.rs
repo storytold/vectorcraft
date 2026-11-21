@@ -279,7 +279,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions,
     // and so do its repeats while it is held.
     let escape_ended_gesture = escape_ended_gesture(ctx);
-    let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
+    // Escape during a drag on Polygon Properties' Sides slider is the slider's (it cancels the
+    // drag), so neither the tool nor the later Escape actions take it.
+    let sides_drag = crate::panels::transform::sides_drag_held(ctx);
+    let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture || sides_drag;
     let typing = ctx.egui_wants_keyboard_input();
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
     if app.ui.tools_drawer && !typing && !escape_held_by_drag && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
@@ -302,7 +305,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if (text || !busy) && ctx.input(|i| runs_a_command(i, k, text)) {
                 continue;
             }
-            if k == Key::Escape && escape_ended_gesture {
+            if k == Key::Escape && (escape_ended_gesture || sides_drag) {
                 continue;
             }
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
@@ -400,8 +403,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let row_key = |chord: &craft_keymap::Chord| {
         rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
     };
-    // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
-    let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
+    // An Escape that ended a ruler-origin drag or floating Tools move, or that a Sides slider drag
+    // takes, runs no command bound to it.
+    let gesture_escape =
+        |chord: &craft_keymap::Chord| (escape_ended_gesture || sides_drag) && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
     // A Copy or Cut left to the labels runs neither command from the keymap.
     let labels_clip = |hit: &Hit| to_labels && matches!(hit.command.id.as_str(), "edit.copy" | "edit.cut");
     let hits = dispatch(app, ctx, |hit| {

@@ -1513,6 +1513,115 @@ fn polygon_sides_slider_drag_released_unseen_is_kept() {
     h.run_steps(2);
     assert_eq!(polygon_sides(h.state()), 15);
     assert_eq!(undo(h.state()), depth + 1);
+    // Rows drawn again while the button is still down: the rest of that drag changes nothing.
+    let (fifteen, ten) = (sides_rail_at(&h, 15.0), sides_rail_at(&h, 10.0));
+    sides_press_and_move(&mut h, fifteen, ten);
+    assert_eq!(polygon_sides(h.state()), 10);
+    shown.set(false);
+    h.run_steps(1);
+    assert_eq!(undo(h.state()), depth + 2, "the drag ends with the pass that did not draw it");
+    shown.set(true);
+    h.run_steps(1);
+    sides_press_and_move_back(&mut h, ten, fifteen);
+    sides_release(&mut h, fifteen);
+    assert!(!h.state().session.in_interaction());
+    assert_eq!(polygon_sides(h.state()), 10, "the rows drawn again before the release take no more of the drag");
+    assert_eq!(undo(h.state()), depth + 2);
+}
+
+/// An Escape in the pass whose rows are not drawn (an Escape that closes the task bar's popover)
+/// puts the count a Sides drag previewed back instead of keeping it, and adds no undo step.
+#[test]
+fn polygon_sides_slider_drag_escaped_unseen_is_canceled() {
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 50, "sides": 6})).unwrap();
+    let depth = undo(&app);
+    let shown = std::rc::Rc::new(std::cell::Cell::new(true));
+    let drawn = shown.clone();
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            if drawn.get() {
+                show(app, ui);
+            }
+            end_stale_sides_drag(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    let (six, fifteen) = (sides_rail_at(&h, 6.0), sides_rail_at(&h, 15.0));
+    sides_press_and_move(&mut h, six, fifteen);
+    assert_eq!(polygon_sides(h.state()), 15);
+    shown.set(false);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(1);
+    assert!(!h.state().session.in_interaction());
+    assert_eq!(polygon_sides(h.state()), 6, "Escape puts the count back");
+    assert_eq!(undo(h.state()), depth, "and records no undo step");
+    shown.set(true);
+    h.run_steps(1);
+    sides_release(&mut h, fifteen);
+    assert_eq!(polygon_sides(h.state()), 6);
+    assert_eq!(undo(h.state()), depth);
+}
+
+/// A Sides drag in progress when another document comes to the front (which cancels the drag's
+/// preview) changes neither document with the rest of the drag.
+#[test]
+fn polygon_sides_slider_drag_ends_with_a_document_switch() {
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let mut h = polygon_harness(6, show);
+    h.state_mut().run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    h.state_mut().run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 50, "sides": 6})).unwrap();
+    h.run_steps(2);
+    let depths = (undo(h.state()), {
+        crate::chrome::show_document(h.state_mut(), 0);
+        let d = undo(h.state());
+        crate::chrome::show_document(h.state_mut(), 1);
+        d
+    });
+    h.run_steps(2);
+    let (six, fifteen, ten) = (sides_rail_at(&h, 6.0), sides_rail_at(&h, 15.0), sides_rail_at(&h, 10.0));
+    sides_press_and_move(&mut h, six, fifteen);
+    assert_eq!(polygon_sides(h.state()), 15);
+    crate::chrome::show_document(h.state_mut(), 0);
+    h.run_steps(1);
+    sides_press_and_move_back(&mut h, fifteen, ten);
+    sides_release(&mut h, ten);
+    assert!(!h.state().session.in_interaction());
+    assert_eq!((polygon_sides(h.state()), undo(h.state())), (6, depths.1), "the document now in front stays as it was");
+    crate::chrome::show_document(h.state_mut(), 1);
+    assert_eq!((polygon_sides(h.state()), undo(h.state())), (6, depths.0), "the switch put the other document back");
+}
+
+/// An Escape that cancels a Sides drag in isolation mode ends only the drag: isolation mode stays.
+#[test]
+fn polygon_sides_slider_escape_keeps_isolation_mode() {
+    let mut h = polygon_harness(6, |app, ui| {
+        crate::shortcuts::handle(app, ui.ctx());
+        show(app, ui);
+    });
+    for (cmd, p) in [("object.group", json!({})), ("object.isolate", json!({})), ("select.all", json!({}))] {
+        h.state_mut().run(cmd, p).unwrap();
+    }
+    h.run_steps(2);
+    let isolated = |app: &VectorcraftApp| app.session.active().unwrap().isolation.is_some();
+    assert!(isolated(h.state()));
+    let (six, fifteen) = (sides_rail_at(&h, 6.0), sides_rail_at(&h, 15.0));
+    sides_press_and_move(&mut h, six, fifteen);
+    assert_eq!(polygon_sides(h.state()), 15);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(1);
+    assert_eq!(polygon_sides(h.state()), 6, "Escape cancels the drag");
+    assert!(isolated(h.state()), "and isolation mode stays");
+    sides_release(&mut h, fifteen);
+    assert!(isolated(h.state()));
 }
 
 /// Move from `from` to `to` in four frames with the primary button still down.
