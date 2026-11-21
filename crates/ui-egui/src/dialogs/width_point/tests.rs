@@ -1047,3 +1047,70 @@ fn one_point_refuses_a_change_since_the_dialog_opened() {
         assert_eq!(app.session.doc().unwrap().doc, paired, "{field}");
     }
 }
+
+#[test]
+fn several_points_refuse_a_change_in_which_points_pair() {
+    // A point added at a selected point's place, after it, pairs with it; a third point at a
+    // discontinuous point's place unpairs its halves. The selected points keep their index, place
+    // and widths.
+    let cases = [
+        (
+            three_app as fn() -> (VectorcraftApp, u64),
+            json!([1, 3]),
+            json!([[0, 1, 1], [0.25, 0.8, 0.4], [0.5, 0.8, 0.8], [0.75, 0.4, 1.2], [0.75, 0.3, 0.3], [1, 1, 1]]),
+        ),
+        (pair_app, json!([0, 1]), json!([[0, 1, 1], [0.5, 0.8, 0.8], [0.5, 0.4, 1.2], [0.5, 0.3, 0.3], [1, 1, 1]])),
+    ];
+    for (make, indices, points) in cases {
+        for field in ["side2", "discard"] {
+            let (mut app, id) = make();
+            app.run("ui.widthPointEdit", json!({"id": id, "indices": indices})).unwrap();
+            assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key(OPEN), "{indices}");
+            app.run("stroke.widthProfile.set", json!({"ids": [id], "points": points})).unwrap();
+            let changed = app.session.doc().unwrap().doc.clone();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert(field.into(), if field == "discard" { json!(true) } else { json!(5) });
+            assert!(super::super::confirm(&mut app).is_err(), "{indices} {field}");
+            assert_eq!(app.session.doc().unwrap().doc, changed, "{indices} {field}");
+        }
+    }
+}
+
+#[test]
+fn ok_and_delete_refuse_another_stroke_or_point_set_into_the_dialog() {
+    let set = |app: &mut VectorcraftApp, field: &str, value: Value| {
+        let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+        let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else {
+            panic!("expected an immediate reply")
+        };
+        assert_eq!(r["ok"], json!(true), "{field}: {r}");
+    };
+    // `field` set to `value` on the dialog opened with `opened`, then `action` and OK.
+    let cases = [
+        (json!({"indices": [1, 3]}), "id", None, "side1"),
+        (json!({"indices": [1, 3]}), "id", None, "discard"),
+        (json!({"indices": [1, 3]}), "indices", Some(json!([1, 2])), "side1"),
+        (json!({"index": 2}), "id", None, "side1"),
+        (json!({"index": 2}), "id", None, "discard"),
+        (json!({"index": 2}), "index", Some(json!(1)), "discard"),
+        (json!({"t": 0.4}), "id", None, "side1"),
+    ];
+    for (opened, field, value, action) in cases {
+        let (mut app, id) = three_app();
+        // Another stroke in the document with the same weight and width points.
+        let other = app.run("shape.line", json!({"x1": 100, "y1": 250, "x2": 300, "y2": 250})).unwrap()["id"].as_u64().unwrap();
+        app.run("stroke.set", json!({"ids": [other], "weight": 10})).unwrap();
+        let profile = json!([[0, 1, 1], [0.25, 0.8, 0.4], [0.5, 0.8, 0.8], [0.75, 0.4, 1.2], [1, 1, 1]]);
+        app.run("stroke.widthProfile.set", json!({"ids": [other], "points": profile})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let mut p = opened.clone();
+        p["id"] = json!(id);
+        app.run("ui.widthPointEdit", p).unwrap();
+        set(&mut app, field, value.unwrap_or(json!(other)));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert(action.into(), if action == "discard" { json!(true) } else { json!(5) });
+        assert!(super::super::confirm(&mut app).is_err(), "{opened} {field} {action}");
+        assert_eq!(app.session.doc().unwrap().doc, before, "{opened} {field} {action}");
+        assert!(app.ui.dialog.is_some(), "{opened} {field} {action}");
+    }
+}

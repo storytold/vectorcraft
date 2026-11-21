@@ -32,7 +32,9 @@
 //! `outSide2`, `outTotalWidth` and `outLinked`.
 //!
 //! OK and Delete on existing points, one or several, are refused when those points changed since
-//! the dialog opened or another document is active.
+//! the dialog opened (their place, their widths, or which of them pair as a discontinuous point) or
+//! another document is active. OK and Delete are also refused when `id`, `index`, `outIndex` or
+//! `indices` no longer holds the value it had when the dialog opened.
 
 use egui::vec2;
 use serde_json::{Value, json};
@@ -65,6 +67,10 @@ const DOC: &str = "__doc";
 /// The place and side widths `[t, left, right]` (points) of the existing point the one-point dialog
 /// opened on, and of the outgoing half of a discontinuous point.
 const AT: &str = "__at";
+/// The values of [`TARGET_KEYS`] when the dialog opened.
+const TARGET: &str = "__target";
+/// The fields that name the stroke and the points OK and Delete act on.
+const TARGET_KEYS: [&str; 4] = ["id", "index", "outIndex", "indices"];
 
 /// The fields of each set of side widths of several points: Side 1, Side 2, Total Width and the
 /// link, for the incoming set and the outgoing set.
@@ -296,6 +302,14 @@ fn pairs(points: &[(f64, f64, f64)]) -> Vec<Option<usize>> {
         .collect()
 }
 
+/// The sets of side widths that edit width point `i`, `[incoming, outgoing]`, with the points
+/// paired as `pairs` pairs them: an outgoing half is not edited by the incoming set, and an
+/// incoming half not by the outgoing set.
+fn sets(pairs: &[Option<usize>], i: usize) -> [bool; 2] {
+    let outgoing = i.checked_sub(1).is_some_and(|a| pairs[a] == Some(i));
+    [!outgoing, pairs[i].is_none()]
+}
+
 /// The width points `indices` of `id` names, each discontinuous point's two halves together.
 fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Target, String> {
     const NONE: &str = "no such width point";
@@ -326,7 +340,7 @@ fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Target, Stri
     let half = st.width / 2.0;
     let entry = |i: usize| {
         let (t, l, r) = points[i];
-        Entry { index: i, t, left: l * half, right: r * half, sets: [!outgoing(i), pairs[i].is_none()] }
+        Entry { index: i, t, left: l * half, right: r * half, sets: sets(&pairs, i) }
     };
     Ok(Target::Several(picked.into_iter().map(entry).collect()))
 }
@@ -345,7 +359,13 @@ fn open_several(app: &mut VectorcraftApp, id: u64, es: &[Entry], adjust: bool) {
         d.fields.insert(keys[3].into(), json!(linked));
     }
     store(&mut d, es, None);
+    d.fields.insert(TARGET.into(), targets(&d));
     app.ui.dialog = Some(d);
+}
+
+/// The values of `d`'s [`TARGET_KEYS`] (null for one it does not hold).
+fn targets(d: &Dialog) -> Value {
+    json!(TARGET_KEYS.map(|key| d.fields.get(key).cloned().unwrap_or(Value::Null)))
 }
 
 /// Open Width Point Edit for `index`, or a prospective point at fraction `t` without an index
@@ -409,7 +429,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             fields[key] = value;
         }
     }
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let mut d = Dialog::new(KIND, fields);
+    d.fields.insert(TARGET.into(), targets(&d));
+    app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
 
@@ -547,6 +569,12 @@ fn same_document(app: &VectorcraftApp, d: &Dialog) -> Result<(), String> {
     }
 }
 
+/// Whether the dialog still names the stroke and points it opened on: `ui.dialog.set` can set
+/// `id`, `index`, `outIndex` and `indices`, and OK and Delete refuse any other value.
+fn same_target(d: &Dialog) -> Result<(), String> {
+    if d.fields.get(TARGET) == Some(&targets(d)) { Ok(()) } else { Err("no such width point".into()) }
+}
+
 /// `id`'s width profile and the stroke's half weight, when the points `open` are still where and as
 /// wide as when the dialog opened, exactly.
 fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(WidthProfile, f64), String> {
@@ -566,6 +594,12 @@ fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(Widt
         if t != o.t || l * half != o.left || r * half != o.right {
             return Err(NONE.into());
         }
+    }
+    // Each point is still a continuous point or the same half of a discontinuous one: a point added
+    // at the place of one would leave it changing only one half.
+    let pairs = pairs(&profile.points);
+    if open.iter().any(|o| o.sets != sets(&pairs, o.index)) {
+        return Err(NONE.into());
     }
     Ok((profile, half))
 }
@@ -636,6 +670,7 @@ fn confirm_several(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String
     let id = d.fields.get("id").and_then(Value::as_u64).ok_or("no such width point")?;
     let open = entries(d, OPEN);
     same_document(app, d)?;
+    same_target(d)?;
     opened_profile(app, id, &open)?;
     if d.bool("discard") {
         let indices: Vec<usize> = open.iter().map(|e| e.index).collect();
@@ -677,8 +712,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = None;
         return Ok(Value::Null);
     }
-    // OK and Delete act only on the document and the points the dialog opened on.
+    // OK and Delete act only on the document, the stroke and the points the dialog opened on.
     same_document(app, d)?;
+    same_target(d)?;
     if let Some(index) = index.as_u64().and_then(|i| usize::try_from(i).ok()) {
         unchanged_point(app, d, index, out.as_ref().and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()))?;
     }
