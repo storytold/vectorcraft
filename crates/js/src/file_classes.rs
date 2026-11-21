@@ -1133,6 +1133,20 @@ pub(crate) fn reset_current(i: &mut Interp) -> JsResult<()> {
     Ok(())
 }
 
+/// The [`crate::Data`] that stands for a `File` of `path` ([`FILE_REF_KEY`]), in the platform's
+/// form. A member of a host class ([`crate::HostClass`]) gives one to hand the script a new `File`.
+pub fn file_ref(path: &str) -> crate::Data {
+    crate::Data::Object(vec![(FILE_REF_KEY.to_string(), crate::Data::String(path.to_string()))])
+}
+
+impl Interp {
+    /// A new `File` for `path`, which a member of a host class gave ([`file_ref`]).
+    pub(crate) fn write_file_ref(&mut self, path: &str) -> JsResult<Value> {
+        let proto = classes(self)?.file_proto;
+        instance(self, proto, Value::str(path))
+    }
+}
+
 /// Adds `File` and `Folder` to the global object, their work done by the host functions in
 /// `items` ([`crate::Realm::define_file_classes`]).
 pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResult<()> {

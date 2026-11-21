@@ -38,6 +38,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod images;
 mod save_open;
 
 /// The error for a member read or called with no document open.
@@ -97,6 +98,8 @@ pub(super) struct State {
     /// `app.userInteractionLevel` ([`save_open`]).
     save_options: save_open::State,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// What the placed and raster items keep ([`images::State`]).
+    images: images::State,
 }
 
 impl State {
@@ -287,15 +290,22 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
-/// The page item `d` names, which must still be in its document.
+/// The page item `d` names, which must still be in its document and still be of its class (an
+/// embedded `PlacedItem` is a `RasterItem` after, and its old object is stale).
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
-    let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let Some((class, handle)) = host_ref_parts(d).filter(|(c, _)| ITEM_CLASSES.contains(c)) else {
+        return Err(HostError::Type("this is not a page item".into()));
+    };
+    let (run, uid, id) = match handle.as_slice() {
+        [run, uid, high, low] => (*run, *uid, id_of(*high, *low)),
+        [run, uid, _, _, slot] => (*run, *uid, Some(images::pending_id(h, *run, *uid, *slot)?)),
+        _ => return Err(HostError::Type("this is not a page item".into())),
+    };
+    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let id = id.ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
-    if st.doc.node(id).is_none_or(|n| typename(n).is_none()) {
+    if st.doc.node(id).is_none_or(|n| typename(n) != Some(class)) {
         return Err(HostError::Error(STALE_ITEM.into()));
     }
     Ok(Item { doc, id })
@@ -1593,7 +1603,8 @@ struct Destination {
 fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> std::result::Result<Destination, HostError> {
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
-    let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
+    let pending = images::pending_as_item(h, target)?.map(|p| p.to_vec());
+    let handle = pending.or_else(|| handle_of(target, "PageItem")).or_else(|| handle_of(target, "Layer"));
     let Some(&[run, uid, high, low]) = handle.as_deref() else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
@@ -1807,7 +1818,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS.iter().chain(save_open::ENUMS) {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(images::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -1870,6 +1881,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .map(|m| later(l, "Document", m)),
     );
     document.extend(save_open::document_members(l));
+    document.extend(images::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -1933,7 +1945,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(ITEM_CLASSES.iter().filter(|c| !images::CLASSES.contains(c)).map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(images::classes(l));
     classes.extend(save_open::classes(l));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])

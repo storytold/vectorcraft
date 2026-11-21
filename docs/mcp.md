@@ -2726,6 +2726,30 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
   pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.placedItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItems/) lists the document's linked
+  images and `Document.rasterItems` (https://ai-scripting.docsforadobe.dev/jsobjref/RasterItems/) its embedded ones,
+  in paint order, each with `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`. `placedItems.add()`
+  gives a `PlacedItem` with no file; assigning a `File` to its `file` runs `file.place` with `link: true`, and every
+  other member of it throws `PlacedItem.file is required` until then. A `PlacedItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/) has `file`, `relink(file)` (`links.relink`), `embed()`
+  (`links.embed`), `matrix` and `boundingBox`. A `RasterItem` (https://ai-scripting.docsforadobe.dev/jsobjref/RasterItem/)
+  has `bitsPerChannel`, `channels`, `imageColorSpace` and `transparent`, read from the header of its encoded pixels,
+  and `colorizedGrayscale`, `embedded`, `file`, `status`, `matrix` and `boundingBox`. The enumeration values are
+  strings such as `"ImageColorSpace.Grayscale"` and `"RasterLinkState.NODATA"`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/). VectorCraft's own rules: `file` is assigned
+  once, on a `placedItems.add()` result, and is read-only after (`PlacedItem.file is read-only: use relink`). A file
+  to place or relink must be a `File` the script may read, checked as `app.open` checks its file, of at most
+  256 MiB, holding an image; its size is read before its contents, and anything else throws an error with nothing
+  changed (`Script file access denied` names no path). Reading `file` of an image whose file the script may not read
+  throws `Script file access denied`. After `embed()` the object is stale and `rasterItems` has the image under the
+  same id; an image whose file is missing throws `Linked image is missing` and stays linked. `RasterItem.file` is
+  `null`, `embedded` is `true` and takes only `true`, and `status` is `RasterLinkState.NODATA`. `transparent` is true
+  for an image with an alpha channel or a transparent palette entry. `matrix` is a record of `mValueA` to `mValueTY`
+  that maps the image's pixels, row 0 at the top, to script coordinates, and a distorted image has none. Assigning
+  `matrix` runs `object.transform`; a value that is not finite, a matrix with no area and one that puts a corner of
+  the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
+  a pixel. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
+  end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
