@@ -123,7 +123,7 @@ pub(crate) fn problem_label(code: &str) -> Option<&'static str> {
 }
 
 /// Where something is: `line 12`, or `lib/a.jsxinc, line 3` in an included file.
-fn place(item: &Value) -> String {
+pub(super) fn place(item: &Value) -> String {
     let line = item["line"].as_u64().map(|l| l.to_string());
     match (item["file"].as_str(), line) {
         (Some(file), Some(line)) => crate::i18n::fmt(tl!("{file}, line {line}"), &[("file", file), ("line", &line)]),
@@ -164,7 +164,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// A row of a section: `text` (user data in `mono`), then a count and lines, dimmed.
-fn row(ui: &mut egui::Ui, t: &Tokens, text: &str, mono: bool, note: &str) {
+pub(super) fn row(ui: &mut egui::Ui, t: &Tokens, text: &str, mono: bool, note: &str) {
     ui.horizontal_wrapped(|ui| {
         let text = egui::RichText::new(text).color(t.text_strong);
         ui.label(if mono { text.monospace() } else { text.size(12.5) });
@@ -175,7 +175,7 @@ fn row(ui: &mut egui::Ui, t: &Tokens, text: &str, mono: bool, note: &str) {
 }
 
 /// `count` and `lines` of an entry as a note: `3 · lines 4, 9, 12`.
-fn tally(item: &Value) -> String {
+pub(super) fn tally(item: &Value) -> String {
     let count = item["count"].as_u64().unwrap_or_default();
     match lines(item) {
         l if l.is_empty() => count.to_string(),
@@ -183,13 +183,13 @@ fn tally(item: &Value) -> String {
     }
 }
 
-fn section(ui: &mut egui::Ui, heading: &str, rows: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn section(ui: &mut egui::Ui, heading: &str, rows: impl FnOnce(&mut egui::Ui)) {
     ui.add_space(8.0);
     widgets::section_header(ui, heading);
     rows(ui);
 }
 
-fn list<'r>(r: &'r Value, key: &str) -> &'r [Value] {
+pub(super) fn list<'r>(r: &'r Value, key: &str) -> &'r [Value] {
     r[key].as_array().map_or(&[][..], Vec::as_slice)
 }
 
