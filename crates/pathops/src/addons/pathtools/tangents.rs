@@ -613,8 +613,10 @@ fn roots(at: &[f64], f: &dyn Fn(f64, usize) -> f64, tol: f64) -> Result<Vec<Root
                 // neighboring marks: one where the sign changes, a dip where it does not. A run
                 // that never leaves the tolerance (outlines that meet at a corner) is one double
                 // root at its middle.
+                // The run's sample angles, in increasing order, looked up by binary search.
+                let edges: Vec<f64> = (1..=len + 1).map(|j| ang(k, j)).collect();
                 let piece = |t: f64| {
-                    let j = (1..=len + 1).take_while(|j| ang(k, *j) <= t).count();
+                    let j = edges.partition_point(|a| *a <= t);
                     f(t, (k + j) % n)
                 };
                 let mut marks = vec![(theta, val(k))];
