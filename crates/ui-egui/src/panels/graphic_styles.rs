@@ -904,7 +904,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.run("ui.graphicStyleOptions", json!({ "name": n })).ok();
     }
-    ui.menu_button(crate::widgets::check_row_text(ui, "", tl!("Open Graphic Style Library"), None), |ui| {
+    ui.menu_button(widgets::check_row_text(ui, "", tl!("Open Graphic Style Library"), None), |ui| {
         library_panel::library_menu::<GraphicStyleLibraries>(app, ui)
     });
     if menu_item(ui, tl!("Save Graphic Style Library…"), has_doc, false) {

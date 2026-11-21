@@ -2615,7 +2615,7 @@ fn color_menu(ui: &mut Ui, rows: &[Value], i: usize, base: Option<usize>) -> Opt
     }
     if let Some(c) = rows.get(i).and_then(to_color) {
         // Indented like the items beside it (their check column).
-        ui.menu_button(crate::widgets::check_row_text(ui, "   ", tl!("Select Shade"), None), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Select Shade"), None), |ui| {
             if let Some(sv) = shade_grid(ui, &c) {
                 choice = Some(MenuChoice::Shade(i, sv));
             }

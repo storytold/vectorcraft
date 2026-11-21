@@ -860,7 +860,7 @@ fn story_has_tabs(app: &VectorcraftApp) -> bool {
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((_, para, _)) = current_para(app) else {
-        let text = crate::widgets::check_row_text(ui, "", tl!("Select text"), Some(12.5));
+        let text = widgets::check_row_text(ui, "", tl!("Select text"), Some(12.5));
         ui.add_enabled(false, egui::Button::new(text).frame_when_inactive(false));
         snap_to_unit_item(ui);
         return;

@@ -455,7 +455,7 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                     // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
                     let label = crate::menus::display_label(app, id, label);
                     let mark = if crate::menus::checked(app, id, &p) == Some(true) { "✓  " } else { "     " };
-                    let text = crate::widgets::check_row_text(ui, mark, &label, None);
+                    let text = widgets::check_row_text(ui, mark, &label, None);
                     if ui.add(egui::Button::new(text).min_size(egui::vec2(220.0, 0.0))).clicked() {
                         clicked = Some((id, if p.is_null() { json!({}) } else { p }));
                         ui.close();

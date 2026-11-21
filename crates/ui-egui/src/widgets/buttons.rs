@@ -243,11 +243,34 @@ pub fn menu_item_hint(ui: &mut Ui, label: &str, enabled: bool, checked: bool, hi
 /// without the check mark cannot draw one, so only the spaces count then.
 fn check_column_width(ui: &Ui) -> f32 {
     let font = egui::TextStyle::Button.resolve(ui.style());
-    ui.ctx().fonts_mut(|f| {
-        let mark = if f.has_glyph(&font, '✓') { "✓  " } else { "     " };
-        let mut width = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::PLACEHOLDER).size().x;
-        width(mark).max(width("     "))
+    once_per_pass(ui, egui::Id::unique(("menu-check-column-width", &font)), || {
+        ui.ctx().fonts_mut(|f| {
+            let mark = if f.has_glyph(&font, '✓') { "✓  " } else { "     " };
+            let mut width = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::PLACEHOLDER).size().x;
+            width(mark).max(width("     "))
+        })
     })
+}
+
+/// The width of a row's `mark` in `font`.
+fn mark_width(ui: &Ui, mark: &str, font: &egui::FontId) -> f32 {
+    once_per_pass(ui, egui::Id::unique(("menu-check-mark-width", mark, font)), || {
+        ui.ctx().fonts_mut(|f| f.layout_no_wrap(mark.to_string(), font.clone(), Color32::PLACEHOLDER).size().x)
+    })
+}
+
+/// `measure()`, worked out on the first call of a pass and kept under `id` for the rest of it:
+/// every row of a menu (one per font family in Type › Font) asks for the same widths.
+fn once_per_pass(ui: &Ui, id: egui::Id, measure: impl FnOnce() -> f32) -> f32 {
+    let pass = ui.ctx().cumulative_pass_nr();
+    if let Some((at, width)) = ui.data(|d| d.get_temp::<(u64, f32)>(id))
+        && at == pass
+    {
+        return width;
+    }
+    let width = measure();
+    ui.data_mut(|d| d.insert_temp(id, (pass, width)));
+    width
 }
 
 /// Starts the text of a menu row for `label` with `mark` (a check mark, blank room for one, or
@@ -263,11 +286,7 @@ pub(crate) fn check_column_job(ui: &Ui, mark: &str, label: &str, format: &egui::
     if label.split(is_paragraph_separator).any(|line| vectorcraft_text::paragraph_is_rtl(line, None)) {
         return (job, 0.0);
     }
-    let mark_width = if mark.is_empty() {
-        0.0
-    } else {
-        ui.ctx().fonts_mut(|f| f.layout_no_wrap(mark.to_string(), format.font_id.clone(), Color32::PLACEHOLDER).size().x)
-    };
+    let mark_width = if mark.is_empty() { 0.0 } else { mark_width(ui, mark, &format.font_id) };
     (job, (check_column_width(ui) - mark_width).max(0.0))
 }
 

@@ -1646,13 +1646,16 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         let before = ui.cursor().min;
         // A panel can draw no rows, as Layers does with no document open.
         let drew = crate::panels::panel_menu_items(self.app, ui, id) && ui.cursor().min != before;
-        ui.data_mut(|d| d.insert_temp(check_column_key(ui), drew));
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.data_mut(|d| d.insert_temp(check_column_key(ui), (pass, drew)));
     }
 
     /// The stock tab-menu items (Float Panel, Move Panel To, the group items) after a panel's own
-    /// menu items start their labels at the same check column. Other docking menus keep plain text.
+    /// menu items start their labels at the same check column. Other docking menus keep plain text,
+    /// and so does a menu whose panel items were not drawn in this pass.
     fn action_label(&mut self, ui: &egui::Ui, logical: &str, _font: &egui::FontId, _color: egui::Color32) -> egui::WidgetText {
-        if ui.data(|d| d.get_temp::<bool>(check_column_key(ui))).unwrap_or(false) {
+        let pass = ui.ctx().cumulative_pass_nr();
+        if ui.data(|d| d.get_temp::<(u64, bool)>(check_column_key(ui))) == Some((pass, true)) {
             crate::widgets::check_row_text(ui, "", logical, None)
         } else {
             logical.into()

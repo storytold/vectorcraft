@@ -2096,3 +2096,35 @@ fn a_tab_menus_stock_items_start_at_the_panel_items_check_column() {
     let within = find(&shown, "Float Panel").1;
     assert!(within < 0.5, "\"Float Panel\" starts {within} into its text with no rows before it");
 }
+
+/// A docking menu drawn in a later pass without the panel's rows, in the same place as a tab menu
+/// that had them, starts its labels at the edge.
+#[test]
+fn a_later_docking_menu_without_panel_rows_is_not_indented() {
+    use craft_ui::docking::DockContent;
+    let mut h = Harness::new();
+    crate::theme::install_fonts(&h.ctx);
+    h.frame(vec![]);
+    let layout = layout_of(&h.app.ui);
+    // Where "Float Panel" starts within its text, after the panel's rows (`with_rows`) or alone.
+    let mut starts = |with_rows: bool| {
+        let mut start = None;
+        let app = &mut h.app;
+        let mut out = h.ctx.run_ui(egui::RawInput { screen_rect: Some(SCREEN), ..Default::default() }, |ui| {
+            let mut content = PanelContent { app, layout: &layout };
+            if with_rows {
+                content.panel_menu(ui, &"layers".to_string());
+            }
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let text = content.action_label(ui, "Float Panel", &font, egui::Color32::PLACEHOLDER);
+            let galley = text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+            start = galley.rows.first().and_then(|r| r.row.glyphs.first()).map(|g| g.pos.x);
+        });
+        out.textures_delta.clear();
+        start.expect("\"Float Panel\" is laid out")
+    };
+    let after_rows = starts(true);
+    assert!(after_rows > 0.5, "after the panel's rows \"Float Panel\" starts at the check column, not at {after_rows}");
+    let alone = starts(false);
+    assert!(alone < 0.5, "a later menu without the panel's rows indents \"Float Panel\" by {alone}");
+}

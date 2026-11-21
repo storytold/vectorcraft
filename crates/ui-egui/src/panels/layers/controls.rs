@@ -276,7 +276,7 @@ pub(super) fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl 
 /// Save Selection › Save Selection…, Update Selection and Edit Selection…, enabled and run as in
 /// the Select menu, then the active document's saved selections: choosing one recalls it.
 fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.menu_button(crate::widgets::check_row_text(ui, "   ", tl!("Save Selection"), None), |ui| {
+    ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Save Selection"), None), |ui| {
         widgets::menu_scroll(ui, |ui| {
             for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")]
             {
