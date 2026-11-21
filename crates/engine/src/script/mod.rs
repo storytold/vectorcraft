@@ -1246,8 +1246,11 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let gate = host.disk.borrow().gate(documents, writable);
     let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
     // A document the command opened from a file, or gave another file, has that file from the script.
+    // Another spelling of the path of the file it had is the same file.
     for st in &mut s.docs {
-        if st.path.is_some() && !paths.iter().any(|(uid, path)| *uid == st.uid && *path == st.path) {
+        let Some(now) = st.path.as_deref() else { continue };
+        let kept = paths.iter().any(|(uid, was)| *uid == st.uid && was.as_deref().is_some_and(|was| crate::file_access::same_file(was, now)));
+        if !kept {
             st.path_from_script = true;
         }
     }

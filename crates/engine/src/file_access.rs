@@ -358,6 +358,11 @@ fn check_gate(path: &str, access: Access) -> Result<(), String> {
     GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
 }
 
+/// Whether the paths `a` and `b` name the same file: the same text, or the same real path.
+pub(crate) fn same_file(a: &str, b: &str) -> bool {
+    a == b || resolve(a).is_ok_and(|a| resolve(b).is_ok_and(|b| a == b))
+}
+
 /// Whether this thread runs a command a script runs ([`with_script_gate`]).
 pub(crate) fn in_script_command() -> bool {
     GATE.with(|g| g.borrow().is_some())

@@ -530,6 +530,27 @@ fn a_read_only_document_stays_read_only_for_scripts_after_a_revert_or_a_recovery
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A document the person saved stays writable for scripts after a script's command saves it to
+/// another spelling of the same file's path.
+#[test]
+fn a_persons_document_saved_by_a_script_under_another_spelling_of_its_path_stays_writable() {
+    let dir = fresh_folder("gate-same-file");
+    let file = dir.join("a.svg");
+    let mut s = two_docs();
+    s.execute("document.save", &json!({"path": file.to_string_lossy(), "format": "svg"})).unwrap();
+    let tried = |what: String| {
+        format!(
+            "try {{ {what}; vc.log('ok'); }} catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let spelled = dir.join(".").join("a.svg").to_string_lossy().into_owned();
+    let r = run(&mut s, &tried(format!("vc.run('document.save', {{path: {spelled:?}}})"))).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "{r}");
+    let r = run(&mut s, &tried("vc.run('document.save', {})".into())).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "a later run saves it as before: {r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A command a script runs does not save into the app's own libraries; the same command run
 /// outside a script does.
 #[test]
