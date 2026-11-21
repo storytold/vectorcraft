@@ -1,7 +1,8 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
 //! ordinals, fractions, figure style, position, stylistic sets from the panel or its menu, and with
-//! the East Asian options the menu's H or V Style and Roman Italics) for the selected text (every
-//! frame of each selected threaded story) or the Type tool's selected characters.
+//! the East Asian options the menu's Proportional Metrics, H or V Style and Roman Italics) for the
+//! selected text (every frame of each selected threaded story) or the Type tool's selected
+//! characters.
 
 use egui::Ui;
 use serde_json::json;
@@ -121,21 +122,33 @@ fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
 /// Whether `flag` is on for every character a toggle changes (`Some(true)`), for none of them
 /// (`Some(false)`), or only for some (`None`). At a Type tool caret, and after Select All in a
 /// threaded story, the command styles all the text ([`run_features`]), so every character of it
-/// counts, as in [`edit`].
+/// counts, as in [`edit`]. There, and with the Selection tool, a run with no text (an empty
+/// frame's) counts only when no run has text.
 fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
-    let on = |s: &CharStyle| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str)));
-    if let Some(mut runs) = whole_text_runs(app) {
+    shown(app, |s| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
+}
+
+/// Whether `on` holds for every character a menu item changes (`Some(true)`), for none of them
+/// (`Some(false)`), or only for some (`None`), read as [`shown_flag`] reads a feature.
+fn shown(app: &VectorcraftApp, on: impl Fn(&CharStyle) -> bool) -> Option<bool> {
+    let runs = match whole_text_runs(app) {
+        Some(runs) => Some(runs),
+        // With the Selection tool: every run of every frame of the selected stories.
+        None if text_editing(app).is_none() => Some(super::character::selected_story_texts(app).into_iter().flat_map(|t| t.runs.iter()).collect()),
+        None => None,
+    };
+    if let Some(mut runs) = runs {
         // A run with no text, such as an empty frame's, counts only when no run has text.
         if runs.iter().any(|r| !r.text.is_empty()) {
             runs.retain(|r| !r.text.is_empty());
         }
         let Some(first) = runs.first() else {
-            return shared(app, on);
+            return shared(app, &on);
         };
         let v = on(&first.style);
         return runs.iter().all(|r| on(&r.style) == v).then_some(v);
     }
-    shared(app, on)
+    shared(app, &on)
 }
 
 /// The runs the panel's commands style as a whole while the Type tool edits text: those of every
@@ -378,6 +391,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_east_asian_options {
         ui.separator();
         // Checked when every character it changes has it; chosen then, it turns it off.
+        // Proportional Metrics: full-width glyphs on the font's proportional widths (`palt`, `vpal`),
+        // the character attribute the Character panel menu's item sets.
+        let proportional = shown(app, |s| s.proportional_metrics) == Some(true);
+        if menu_item(ui, tl!("Proportional Metrics"), has, proportional)
+            && let Err(e) = super::character::run_format(app, json!({"proportionalMetrics": !proportional}))
+        {
+            app.ui.status = e;
+        }
         for (label, flag) in east_asian_items() {
             let on = shown_flag(app, flag) == Some(true);
             if menu_item(ui, label, has, on) {
@@ -955,6 +976,152 @@ mod tests {
             super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
             let runs = run_features(&mut app, &json!(c), story.len());
             assert!(runs.iter().all(|(_, f)| !f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
+        }
+    }
+
+    /// The text, Proportional Metrics and features of each run of `id`.
+    fn metrics_runs(app: &VectorcraftApp, id: &Value) -> Vec<(String, bool, Vec<String>)> {
+        let Some(id) = id.as_u64() else { panic!("no id: {id}") };
+        match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.proportional_metrics, r.style.features.clone())).collect(),
+            _ => panic!("not text"),
+        }
+    }
+
+    /// The drawn text and rect of the panel menu's `label` item.
+    fn menu_row(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) -> (String, egui::Rect) {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+        texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{label} missing"))
+    }
+
+    /// Proportional Metrics is in the panel menu with the East Asian options only, before H or V
+    /// Style, and with no type selected it is disabled: a click changes nothing.
+    #[test]
+    fn proportional_metrics_shows_with_the_east_asian_options() {
+        let mut app = selected_text();
+        assert!(!crate::tests_labels::painted_text(&mut app, menu).contains("Proportional Metrics"));
+        app.session.prefs.show_east_asian_options = true;
+        let text = crate::tests_labels::painted_text(&mut app, menu);
+        let (Some(metrics), Some(kana)) = (text.find("Proportional Metrics"), text.find("H or V Style")) else { panic!("{text}") };
+        assert!(metrics < kana, "{text}");
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        let ctx = egui::Context::default();
+        let (text, at) = menu_row(&ctx, &mut app, "Proportional Metrics");
+        assert!(!text.starts_with('✓'), "{text:?}");
+        let undo = undo_steps(&app);
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert_eq!(undo_steps(&app), undo, "no text: nothing changes");
+    }
+
+    /// With the Type tool's characters only partly set, Proportional Metrics shows unchecked;
+    /// chosen, it turns on for every selected character in one undo step, each run keeping its
+    /// features, and shows checked; chosen again, it turns off in one undo step.
+    #[test]
+    fn proportional_metrics_turns_on_and_off_for_a_mixed_range() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.prefs.show_east_asian_options = true;
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+        let first = json!({"id": id, "start": 0, "end": 3, "features": ["smcp"], "proportionalMetrics": true});
+        app.session.execute("text.setRangeStyle", &first).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        // "かなAB" is 8 bytes.
+        app.session.set_tool_option("select", &json!({"start": 0, "end": 8}));
+        let ctx = egui::Context::default();
+        let (text, at) = menu_row(&ctx, &mut app, "Proportional Metrics");
+        assert!(!text.starts_with('✓'), "{text:?}");
+        let undo = undo_steps(&app);
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert_eq!(undo_steps(&app), undo + 1);
+        let runs = metrics_runs(&app, &id);
+        assert!(runs.iter().all(|(_, on, _)| *on), "{runs:?}");
+        assert_eq!(runs.iter().map(|(t, _, f)| (t.as_str(), f.clone())).collect::<Vec<_>>(), [("か", vec!["smcp".to_string()]), ("なAB", vec![])]);
+        let (text, at) = menu_row(&ctx, &mut app, "Proportional Metrics");
+        assert!(text.starts_with('✓'), "{text:?}");
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert_eq!(undo_steps(&app), undo + 2);
+        let runs = metrics_runs(&app, &id);
+        assert!(runs.iter().all(|(_, on, f)| !*on && (f.is_empty() || *f == ["smcp"])), "{runs:?}");
+    }
+
+    /// With the Selection tool, Proportional Metrics turns on for the whole selected object. At a
+    /// Type tool caret after a character that has it while the rest of the text does not, the item
+    /// reads every character the command styles at a caret (all of them): it shows unchecked, and
+    /// choosing it turns it on for the whole text.
+    #[test]
+    fn proportional_metrics_reaches_a_selected_object_and_the_text_at_a_caret() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.prefs.show_east_asian_options = true;
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let ctx = egui::Context::default();
+        let at = menu_row(&ctx, &mut app, "Proportional Metrics").1;
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        assert!(metrics_runs(&app, &id).iter().all(|(_, on, _)| *on), "{:?}", metrics_runs(&app, &id));
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.prefs.show_east_asian_options = true;
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+        app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "proportionalMetrics": true})).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        // The caret after "か", whose style the next typed character takes.
+        app.session.set_tool_option("select", &json!({"start": 3, "end": 3}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((3, 3)));
+        let ctx = egui::Context::default();
+        let (text, at) = menu_row(&ctx, &mut app, "Proportional Metrics");
+        assert!(!text.starts_with('✓'), "{text:?}");
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        let runs = metrics_runs(&app, &id);
+        assert!(runs.iter().all(|(_, on, _)| *on), "{runs:?}");
+    }
+
+    /// With the Selection tool on a threaded story whose second frame is empty, the East Asian
+    /// items read only the characters: with the text set and the empty frame's run not, each item
+    /// shows checked, and choosing it turns the setting off for the text.
+    #[test]
+    fn east_asian_items_skip_an_empty_frame_of_a_selected_story() {
+        type Set = fn(&mut CharStyle, bool);
+        type Get = fn(&CharStyle) -> bool;
+        let items: [(&str, Set, Get); 3] = [
+            ("Proportional Metrics", |s, on| s.proportional_metrics = on, |s| s.proportional_metrics),
+            ("H or V Style", |s, on| s.features = if on { vec!["hkna".into()] } else { vec![] }, |s| s.features.iter().any(|f| f == "hkna")),
+            ("Roman Italics", |s, on| s.features = if on { vec!["ital".into()] } else { vec![] }, |s| s.features.iter().any(|f| f == "ital")),
+        ];
+        for (label, set, get) in items {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+            let area = json!({"x": 10, "y": 10, "text": "かなAB", "size": 12, "area": {"width": 150, "height": 60}});
+            let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+            let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            app.run("text.thread.create", json!({})).unwrap();
+            app.run("select.set", json!({"ids": [a]})).unwrap();
+            assert_eq!(super::super::character::selected_story_texts(&app).len(), 2, "{label}");
+            for (id, on) in [(a, true), (b, false)] {
+                let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("no frame {id}") };
+                for r in &mut t.runs {
+                    set(&mut r.style, on);
+                }
+            }
+            let empty = match &app.session.active().unwrap().doc.node(NodeId(b)).unwrap().kind {
+                NodeKind::Text(t) => t.runs.iter().filter(|r| r.text.is_empty()).count(),
+                _ => panic!("{label}: not text"),
+            };
+            assert!(empty > 0, "{label}: the empty frame has no run");
+            let ctx = egui::Context::default();
+            let (text, at) = menu_row(&ctx, &mut app, label);
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            match &app.session.active().unwrap().doc.node(NodeId(a)).unwrap().kind {
+                NodeKind::Text(t) => assert!(t.runs.iter().all(|r| !get(&r.style)), "{label}"),
+                _ => panic!("{label}: not text"),
+            }
         }
     }
 }
