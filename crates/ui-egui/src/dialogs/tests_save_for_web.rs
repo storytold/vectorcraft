@@ -161,6 +161,39 @@ fn choosing_the_second_artboard_in_the_dropdown_exports_its_pixels() {
     assert_eq!(image.get_pixel(8, 8).0, [0, 0, 255, 255]);
 }
 
+/// The JPEG Quality slider under the named-step dropdown is named "Quality:" too, and its value is
+/// the `quality` field.
+#[test]
+fn the_jpeg_quality_slider_is_named_quality() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{By, NodeT, Queryable};
+    let dir = vectorcraft_testkit::temp_dir("sfw-quality-slider-name");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(73));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1200.0, 1200.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    let value = |h: &egui_kittest::Harness<'_, VectorcraftApp>| {
+        h.query(By::new().role(Role::Slider).label("Quality:")).and_then(|n| n.accesskit_node().numeric_value())
+    };
+    assert_eq!(value(&h), Some(73.0));
+    assert_eq!(h.query_all(By::new().role(Role::ComboBox).label("Quality:")).count(), 1, "the dropdown keeps its name");
+    set(h.state_mut(), "quality", json!(20));
+    h.run();
+    assert_eq!(value(&h), Some(20.0));
+}
+
 #[test]
 fn opening_uses_the_active_artboard_in_a_multiselection_and_preserves_other_settings() {
     let dir = vectorcraft_testkit::temp_dir("sfw-settings-artboard");
