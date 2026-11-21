@@ -1535,6 +1535,46 @@ fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
     assert_eq!(profile, None);
 }
 
+/// Two selected strokes, the shown one uniform and the other with a variable width: the Width
+/// Profile row still shows, and its Uniform removes the other stroke's profile. With brushes on both
+/// strokes the list holds only Uniform. Once both are uniform the row is hidden again.
+#[test]
+fn the_width_profile_shows_while_another_selected_stroke_has_a_variable_width() {
+    for brushed in [false, true] {
+        let mut app = new_app();
+        let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+        let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+        if brushed {
+            app.run("brush.apply", json!({"ids": [a, b], "name": "3 pt. Round"})).unwrap();
+        }
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(super::super::current_stroke(&app).and_then(|s| s.profile), None, "the shown stroke is uniform");
+        let ctx = egui::Context::default();
+        let texts = tall(&mut app, &ctx, vec![]);
+        assert!(shows(&texts, "Profile:"), "brushed {brushed}: {texts:?}");
+        let spacing = ctx.global_style().spacing.item_spacing.x;
+        let texts = press(&mut app, &ctx, text_at(&texts, "Profile:").right_center() + vec2(spacing + 50.0, 0.0));
+        assert_eq!(shows(&texts, "Taper Start"), !brushed, "{texts:?}");
+        press(&mut app, &ctx, text_at(&texts, "Uniform").center());
+        let profile = app
+            .session
+            .active()
+            .unwrap()
+            .doc
+            .node(vectorcraft_doc::NodeId(b.as_u64().unwrap()))
+            .unwrap()
+            .appearance
+            .stroke()
+            .unwrap()
+            .profile
+            .clone();
+        assert_eq!(profile, None, "brushed {brushed}");
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Profile:"), "brushed {brushed}: every stroke is uniform");
+    }
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.

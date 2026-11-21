@@ -999,13 +999,35 @@ fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: vectorcraft_doc::Nod
     }
 }
 
+/// Whether a stroke that `stroke.set` edits has a width profile
+/// ([`vectorcraft_engine::Session::edited_strokes_profiled`]), cached per document revision and
+/// active Appearance row. False while the Type tool edits text or the Live Paint Bucket is active,
+/// when the list edits the stroke the panel shows.
+fn edited_strokes_profiled(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    if super::character::text_editing(app).is_some() || app.session.bucket_paints() {
+        return false;
+    }
+    let Some(st) = app.session.active() else { return false };
+    let key = (st.uid, st.revision, app.session.appearance_item());
+    match pstate::<Option<((u64, u64, Option<usize>), bool)>>(ctx, "props-edited-profiled") {
+        Some((k, v)) if k == key => v,
+        _ => {
+            let v = app.session.edited_strokes_profiled();
+            set_pstate(ctx, "props-edited-profiled", Some((key, v)));
+            v
+        }
+    }
+}
+
 /// The stroke's Variable Width Profile (the Control bar's list), shown while the Width tool is in
 /// use or the stroke has a variable width, as the Properties panel overview places it
 /// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+/// The row also shows when the shown stroke is uniform and another stroke the list edits has a
+/// variable width ([`edited_strokes_profiled`]), so that Uniform can remove it.
 fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let stroke = super::current_stroke(app);
     let profile = stroke.as_ref().and_then(|s| s.profile.as_ref());
-    if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" {
+    if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" && !edited_strokes_profiled(app, ui.ctx()) {
         return;
     }
     ui.horizontal(|ui| {
