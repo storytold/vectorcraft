@@ -66,15 +66,27 @@ pub struct Targets {
 /// How many anchors, and how many segments, the targets gather at most.
 pub(super) const BUDGET: usize = 20_000;
 
+/// How many objects give their edges and centre as targets at most: every object of the 50,000
+/// path performance document, while on a document of millions gathering them stays bounded
+/// (about 35 MB and some tens of milliseconds at the cap) (#8531).
+pub(super) const BOUNDS_BUDGET: usize = 100_000;
+
 /// What [`Targets::collect_inner`] gathers from each path besides its anchors and bounds.
 #[derive(Clone, Copy, PartialEq)]
-enum Gather {
+pub(super) enum Gather {
     /// Nothing more: a moved or resized selection lines up with bounds.
     Bounds,
     /// Its segments, which a dragged anchor lands on.
     Segments,
     /// Its segments, and its anchors as lines too: a drawn point lines up with them.
     Drawing,
+}
+
+/// The anchor, segment and bounds budgets a walk starts with. A walk that gathers no segments
+/// starts with none to spend, so it stops once its anchors and bounds run out.
+pub(super) fn start_budgets(gather: Gather, bounds_budget: usize) -> (usize, usize, usize) {
+    let segment_budget = if gather == Gather::Bounds { 0 } else { BUDGET };
+    (BUDGET, segment_budget, bounds_budget)
 }
 
 /// The entries of `sorted` (ascending by `key`) whose key is within `tol` of `v`, found by
@@ -608,6 +620,24 @@ impl Targets {
     }
 
     fn collect_inner(doc: &Document, exclude: &[NodeId], skip_artboard: Option<usize>, visible: Option<Rect>, gather: Gather) -> Self {
+        Self::collect_capped(doc, exclude, skip_artboard, visible, gather, BOUNDS_BUDGET)
+    }
+
+    /// [`Self::collect`] with at most `bounds_budget` objects giving their edges and centre, so a
+    /// test can spend that budget without a document of [`BOUNDS_BUDGET`] objects.
+    #[cfg(test)]
+    pub(super) fn collect_bounds_capped(doc: &Document, bounds_budget: usize) -> Self {
+        Self::collect_capped(doc, &[], None, None, Gather::Bounds, bounds_budget)
+    }
+
+    fn collect_capped(
+        doc: &Document,
+        exclude: &[NodeId],
+        skip_artboard: Option<usize>,
+        visible: Option<Rect>,
+        gather: Gather,
+        bounds_budget: usize,
+    ) -> Self {
         let mut t = Targets::default();
         let add_rect = |t: &mut Targets, r: Rect, kind: Kind| {
             let c = r.center();
@@ -628,9 +658,13 @@ impl Targets {
                 add_rect(&mut t, doc.setup.bleed_rect(ab.rect), Kind::Bleed);
             }
         }
-        let (mut budget, mut segment_budget) = (BUDGET, BUDGET);
+        let (mut budget, mut segment_budget, mut bounds_budget) = start_budgets(gather, bounds_budget);
         walk_but(&doc.layers, &exclude.iter().copied().collect(), &mut |n| {
-            if budget == 0 || n.is_container() || !n.visible {
+            // Each budget caps only its own targets: the anchors and segments running out leave
+            // the objects visited after that (the topmost, newest ones) their edges and centre
+            // (#8531), and the bounds running out leaves later paths their anchors and segments.
+            let spent = budget == 0 && segment_budget == 0 && bounds_budget == 0;
+            if spent || n.is_container() || !n.visible {
                 return;
             }
             let Some(b) = n.geometric_bounds() else { return };
@@ -641,13 +675,16 @@ impl Targets {
                 return;
             }
             if let NodeKind::Path { path, .. } = &n.kind {
-                for (_, _, a) in path.anchors() {
-                    if gather == Gather::Drawing {
-                        t.push_anchor(a.p);
-                    } else {
-                        t.points.push((a.p, Kind::Anchor));
+                // A path begun within the budget gives all its anchors.
+                if budget > 0 {
+                    for (_, _, a) in path.anchors() {
+                        if gather == Gather::Drawing {
+                            t.push_anchor(a.p);
+                        } else {
+                            t.points.push((a.p, Kind::Anchor));
+                        }
+                        budget = budget.saturating_sub(1);
                     }
-                    budget = budget.saturating_sub(1);
                 }
                 if gather != Gather::Bounds {
                     for sp in &path.subpaths {
@@ -655,7 +692,10 @@ impl Targets {
                     }
                 }
             }
-            add_rect(&mut t, b, Kind::Edge);
+            if bounds_budget > 0 {
+                add_rect(&mut t, b, Kind::Edge);
+                bounds_budget -= 1;
+            }
         });
         t.index()
     }

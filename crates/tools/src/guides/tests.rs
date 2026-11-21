@@ -11,6 +11,43 @@ fn artboard_bleed_is_a_target() {
     assert_eq!(t.snap_point(Point::new(512.0, 300.0), 4.0).0.x, 510.0);
 }
 
+/// #8531: once the anchors gathered reach their budget, the objects after them still give their
+/// edges and centres, for a ruler guide, a moved selection and a drawn point. Their anchors stay
+/// capped.
+#[test]
+fn objects_past_the_anchor_budget_keep_their_edges_and_centre() {
+    let (d, rect) = doc_with_rect_over_many_anchors();
+    let t = Targets::collect(&d, &[], None);
+    assert_eq!(t.points.iter().filter(|(_, k)| *k == Kind::Anchor).count(), targets::BUDGET);
+    assert_eq!(t.snap_guide(false, 301.0, 4.0).0, 300.0, "the bottom edge");
+    assert_eq!(t.snap_guide(true, 398.0, 4.0).0, 400.0, "the right edge");
+    let (p, ov) = t.snap_point(Point::new(302.0, 201.0), 4.0);
+    assert_eq!(p, Point::new(300.0, 200.0));
+    assert!(matches!(&ov[0], Overlay::Label { text, .. } if text == "center"), "{ov:?}");
+    // A box moved next to it lines up with its top edge.
+    let other = Targets::collect(&d, &[rect], None);
+    let (s, pt) = (Selection::default(), paint());
+    let moving = Targets::for_move(&cx(&d, &s, &pt), &[]);
+    assert_eq!(moving.snap_rect(Rect::new(420.0, 102.0, 450.0, 130.0), 4.0).0.y, -2.0);
+    assert_eq!(other.snap_rect(Rect::new(420.0, 102.0, 450.0, 130.0), 4.0).0.y, 0.0, "without the rectangle, nothing near");
+    let drawn = Targets::for_drawing(&d, &[], None, None);
+    assert_eq!(drawn.snap_point(Point::new(450.0, 298.0), 4.0).0.y, 300.0);
+}
+
+#[test]
+fn a_bounds_walk_has_no_segment_budget_to_keep_it_going() {
+    assert_eq!(super::targets::start_budgets(super::targets::Gather::Bounds, 7), (super::targets::BUDGET, 0, 7));
+    assert_eq!(super::targets::start_budgets(super::targets::Gather::Segments, 7).1, super::targets::BUDGET);
+}
+
+#[test]
+fn objects_past_the_bounds_budget_keep_their_anchors() {
+    let (d, _) = doc_with_rect();
+    let t = Targets::collect_bounds_capped(&d, 0);
+    assert_eq!(t.snap_point(Point::new(102.0, 99.0), 4.0).0, Point::new(100.0, 100.0), "the corner anchor");
+    assert_eq!(t.snap_guide(false, 101.0, 4.0).0, 100.0, "the anchors line up a guide");
+}
+
 #[test]
 fn snaps_to_anchor_and_alignment() {
     let (d, _) = doc_with_rect();
