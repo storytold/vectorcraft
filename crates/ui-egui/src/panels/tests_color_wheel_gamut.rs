@@ -158,7 +158,10 @@ fn ui_color_wheel_sets_gamut() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let with = |v: serde_json::Value| {
         let mut v = v;
-        let rest = json!({"sliders": "none", "harmony": false, "harmonyRule": "complementary", "vision": false, "documentColors": false});
+        let rest = json!({
+            "opacity": false, "hexField": false, "sliders": "none", "harmony": false, "harmonyRule": "complementary", "vision": false,
+            "documentColors": false
+        });
         v.as_object_mut().unwrap().extend(rest.as_object().unwrap().clone());
         v
     };
@@ -214,9 +217,11 @@ fn the_panel_menu_switches_the_shading() {
         app,
     );
     h.run_steps(3);
+    let commands = h.state().run_count;
     h.get_by_label("   Show Out-of-Gamut Colors").click();
     h.run_steps(2);
     assert!(h.state().ui.color_wheel.gamut);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "the item runs one ui.colorWheel command");
     assert!(h.query_by_label("✓ Show Out-of-Gamut Colors").is_some());
     h.get_by_label("✓ Show Out-of-Gamut Colors").click();
     h.run_steps(2);

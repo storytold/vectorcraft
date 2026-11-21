@@ -855,8 +855,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
-    /// out-of-gamut shading and the color vision row
+    /// Color Wheel panel: the wheel or the box, the box's channel, the color vision row, the slider rows, the out-of-gamut shading, Show
+    /// Opacity and Show Hex Field
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,

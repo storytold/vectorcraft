@@ -573,6 +573,30 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The Color Wheel panel's Show Opacity and the errors of `paint.setFill {opacity}`,
+/// `paint.setStroke {opacity}` and `ui.colorWheel {opacity}`.
+#[test]
+fn color_wheel_opacity_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain("Show Opacity").is_some(), "{} is missing Show Opacity", lang.code);
+    }
+    let messages = [
+        "`opacity` must be a number from 0 to 100",
+        "`opacity` must be true or false",
+        "type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke",
+        "an object selected in a symbol instance has no fill or stroke opacity of its own",
+        "no target has that fill or stroke to take the opacity",
+    ];
+    let literals = message_literals();
+    for m in messages {
+        assert!(literals.contains(m), "{m}");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, m), m, "{code}");
+        }
+    }
+}
+
 /// The Nature Icons library and its symbols display in each complete UI language.
 #[test]
 fn nature_symbol_library_names_are_in_complete_catalogs() {
@@ -600,6 +624,27 @@ fn distorted_image_messages_are_in_complete_catalogs() {
             let lang = Lang::from_code(code).expect("registered");
             assert_ne!(message(lang, &shown), shown, "{code}: {msg}");
         }
+    }
+}
+
+/// The Color Wheel panel's Copy Color As, its status message and the error of `color.format`.
+#[test]
+fn copy_color_as_strings_are_in_complete_catalogs() {
+    let labels = ["Copy Color As", "Hex", "Hex with Alpha", "CSS rgb()", "CSS hsl()", "CSS oklch()", "CMYK Values", "Format Color"];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let literals = message_literals();
+    let notation = "`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk";
+    assert!(literals.contains(notation), "{notation}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, notation), notation, "{code}");
+        let copied = "Copied the color as rgb(51 102 153 / 50%)";
+        let shown = message(lang, copied);
+        assert!(shown != copied && shown.contains("rgb(51 102 153 / 50%)"), "{code}: {shown}");
     }
 }
 

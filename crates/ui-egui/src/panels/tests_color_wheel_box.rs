@@ -167,11 +167,13 @@ fn the_strip_takes_the_arrow_keys_and_screen_readers_actions() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let harmony =
-        json!({"sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false, "documentColors": false});
+    let others = json!({
+        "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false, "opacity": false,
+        "hexField": false, "documentColors": false
+    });
     let with = |v: serde_json::Value| {
         let mut v = v;
-        v.as_object_mut().unwrap().extend(harmony.as_object().unwrap().clone());
+        v.as_object_mut().unwrap().extend(others.as_object().unwrap().clone());
         v
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), with(json!({"view": "wheel", "channel": "hue"})));
@@ -218,9 +220,15 @@ fn ui_color_wheel_rejects_other_params() {
     let e = app.run("ui.colorWheel", json!([1])).unwrap_err();
     assert_eq!(e, "the params must be an object, not [1]");
     let e = app.run("ui.colorWheel", json!({"veiw": "wheel"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `veiw`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors");
+    assert_eq!(
+        e,
+        "unknown parameter `veiw`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors"
+    );
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "chanel": "blue"})).unwrap_err();
-    assert_eq!(e, "unknown parameter `chanel`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors");
+    assert_eq!(
+        e,
+        "unknown parameter `chanel`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, vision, opacity, hexField, documentColors"
+    );
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Red, ..Default::default() }, "an error changes nothing");
 }
 
@@ -307,7 +315,7 @@ fn the_settings_are_kept_and_read_leniently() {
 }
 
 /// The panel menu lists Wheel View and Box View with the shown one checked, and Box Channel; its
-/// items set the view and the channel.
+/// items set the view and the channel through the app's command entry point.
 #[test]
 fn the_panel_menu_switches_the_view_and_the_channel() {
     let mut app = app(json!("#ff0000"), "hue");
@@ -327,10 +335,17 @@ fn the_panel_menu_switches_the_view_and_the_channel() {
     );
     h.run_steps(3);
     assert!(h.query_by_label("✓ Wheel View").is_some());
+    let commands = h.state().run_count;
     h.get_by_label("   Box View").click();
     h.run_steps(2);
     assert_eq!(h.state().ui.color_wheel.view, View::Box);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "Box View runs one ui.colorWheel command");
     assert!(h.query_by_label("✓ Box View").is_some());
+    // The checked item runs nothing.
+    h.get_by_label("✓ Box View").click();
+    h.run_steps(2);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "the checked Box View runs no command");
+    assert_eq!(h.state().ui.color_wheel.view, View::Box);
 }
 
 /// Every channel's box puts each color back where it reads it, and the strip's value is the

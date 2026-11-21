@@ -12,6 +12,21 @@
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes.
 //!
+//! The panel menu's Show Opacity adds a row under the wheel or the box that sets the opacity of
+//! what the panel edits: the fill item (`paint.setFill {opacity}`), the stroke item
+//! (`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the
+//! first stop or point when none is selected, as for a color pick). The row is gray with nothing
+//! selected, for an object selected in a symbol instance, and when the fill or stroke item it
+//! would set is on type characters or missing. The setting is kept with the preferences
+//! (`ui.colorWheel`).
+//!
+//! Panel menu › Show Hex Field adds a field under the wheel or the box that shows the color's six
+//! hex digits, and two more when the opacity that Show Opacity sets rounds to less than `ff`. It
+//! takes a hex color of 3, 4, 6 or 8 digits and a CSS `rgb()`, `hsl()` or `oklch()` color
+//! (`color.parse`). A typed color is applied in the same way as a pick, and an alpha sets the
+//! opacity that Show Opacity sets, whether or not that row shows. Where that row is gray, only the
+//! color is applied.
+//!
 //! Show Out-of-Gamut Colors grays out the cells of the wheel's square and the box's field whose
 //! colors the CMYK space cannot print, by the out-of-gamut warning's test ([`Cms::out_of_gamut`]),
 //! on a [`GAMUT_CELLS`] by [`GAMUT_CELLS`] grid kept until the channel, its value, the color
@@ -42,8 +57,8 @@
 //! preferences too.
 //!
 //! The view, the channel, the slider rows, Show Out-of-Gamut Colors, Show Harmony, Harmony Rule,
-//! Show Color Vision Preview and Show Document Colors are kept with the preferences
-//! (`ui.colorWheel`).
+//! Show Color Vision Preview, Show Opacity, Show Hex Field and Show Document Colors are kept with
+//! the preferences (`ui.colorWheel`).
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -58,7 +73,7 @@ use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to
 use vectorcraft_doc::{ColorMode, NodeId};
 
 use super::color::{Target, apply, wheel_target};
-use super::{pstate, set_pstate};
+use super::{color_json, live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::color_picker::Channel;
 use crate::theme::Tokens;
@@ -71,6 +86,8 @@ const MAX_WHEEL: f32 = 200.0;
 const STRIP: f32 = 22.0;
 /// The space between the box's field and its channel strip.
 const STRIP_GAP: f32 = 6.0;
+/// The width of the opacity row's percent field.
+const OPACITY_FIELD: f32 = 46.0;
 
 /// What the panel shows right of the proxy: the wheel, or the box (a color field and a channel
 /// strip).
@@ -121,6 +138,12 @@ pub struct Settings {
     /// `true` shows the row and any other value hides it.
     #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub vision: bool,
+    /// Show Opacity: the opacity row under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub opacity: bool,
+    /// Show Hex Field: the field for a hex or CSS color under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub hex_field: bool,
     /// Show Document Colors: the row of the colors the art uses, under the wheel or the box.
     #[serde(deserialize_with = "deserialize_flag")]
     pub document_colors: bool,
@@ -170,6 +193,8 @@ impl Default for Settings {
             harmony: false,
             harmony_rule: Harmony::Complementary,
             vision: false,
+            opacity: false,
+            hex_field: false,
             document_colors: false,
         }
     }
@@ -184,11 +209,6 @@ pub fn harmony_rules() -> impl Iterator<Item = Harmony> {
 /// The wheel's harmony rule named by `s`, its id or its label.
 fn parse_rule(s: &str) -> Option<Harmony> {
     Harmony::parse(s).filter(|h| h.hues_differ())
-}
-
-fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
-    let v = <Value as Deserialize>::deserialize(d)?;
-    Ok(v.as_bool().unwrap_or_default())
 }
 
 fn serialize_rule<S: serde::Serializer>(h: &Harmony, s: S) -> Result<S::Ok, S::Error> {
@@ -214,6 +234,11 @@ fn deserialize_channel<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Channel
     Ok(v.as_str().and_then(Channel::parse).unwrap_or_default())
 }
 
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
+}
+
 /// Serde reader for the saved settings ([`crate::UiState::color_wheel`]): a value that is not an
 /// object reads as the defaults, so it doesn't lose the rest of the preferences.
 pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Settings, D::Error> {
@@ -221,12 +246,13 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?, harmonyRule?, vision?,
-/// documentColors?}`: show the wheel or the box, pick the box's channel, show OKLCH Sliders, HSL
-/// Sliders or neither, show or hide the out-of-gamut shading, show the colors of a harmony rule on
-/// the wheel, and show or hide the color vision row and the Show Document Colors row. Keys left
-/// out or null keep their values; params that are not an object, another key or a value off the
-/// list are an error and change nothing.
+/// `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?, harmonyRule?, vision?, opacity?,
+/// hexField?, documentColors?}`: show the wheel or the box, pick the box's channel, show OKLCH
+/// Sliders, HSL Sliders or neither, show or hide the out-of-gamut shading, show the colors of a
+/// harmony rule on the wheel, show or hide the color vision row, check or uncheck Show Opacity and
+/// Show Hex Field, and show or hide the Show Document Colors row. Keys left out or null keep their
+/// values; params that are not an object, another key or a value off the list are an error and
+/// change nothing.
 /// `sliders: "oklch"` is an error while the active document's RGB space (its assigned profile,
 /// else the working RGB space) is not sRGB. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -237,7 +263,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// Set the keys of `ui.colorWheel` params `p` in `settings`, with the color settings `cms`; on an
 /// error `settings` stay as they were.
 pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), String> {
-    const KEYS: [&str; 8] = ["view", "channel", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"];
+    const KEYS: [&str; 10] = ["view", "channel", "sliders", "gamut", "harmony", "harmonyRule", "vision", "opacity", "hexField", "documentColors"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -286,8 +312,20 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
             })?
         }
     }
+    match p.get("opacity") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.opacity = v.as_bool().ok_or("`opacity` must be true or false")?,
+    }
     if let Some(on) = crate::menus::opt_bool(p, "vision")? {
         set.vision = on;
+    }
+    match p.get("opacity") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.opacity = v.as_bool().ok_or("`opacity` must be true or false")?,
+    }
+    match p.get("hexField") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.hex_field = v.as_bool().ok_or("`hexField` must be true or false")?,
     }
     if let Some(on) = crate::menus::opt_bool(p, "documentColors")? {
         set.document_colors = on;
@@ -298,60 +336,120 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
 
 /// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Out-of-Gamut
 /// Colors; HSL Sliders and OKLCH Sliders; Show Harmony and Harmony Rule while the wheel shows; Show
-/// Color Vision Preview; and Show Document Colors.
+/// Color Vision Preview; Show Document Colors; Show Opacity, Show Hex Field and Copy Color As. Each
+/// item but Copy Color As runs `ui.colorWheel` through the app's command entry point; a checked view
+/// or channel runs nothing.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
-        if menu_item(ui, label, true, set.view == view) {
-            command(app, &json!({ "view": view.id() })).ok();
+        if menu_item(ui, label, true, set.view == view) && set.view != view {
+            run(app, json!({ "view": view.id() }));
         }
     }
     ui.add_enabled_ui(set.view == View::Box, |ui| {
         ui.menu_button(format!("   {}", tl!("Box Channel")), |ui| {
             for ch in Channel::ALL {
-                if menu_item(ui, ch.name(), true, ch == set.channel) {
-                    command(app, &json!({ "channel": ch.id() })).ok();
+                if menu_item(ui, ch.name(), true, ch == set.channel) && ch != set.channel {
+                    run(app, json!({ "channel": ch.id() }));
                 }
             }
         });
     });
     ui.separator();
     if menu_item(ui, tl!("Show Out-of-Gamut Colors"), true, set.gamut) {
-        command(app, &json!({ "gamut": !set.gamut })).ok();
+        run(app, json!({ "gamut": !set.gamut }));
     }
     let on = set.sliders == Sliders::Hsl;
     if menu_item(ui, tl!("HSL Sliders"), true, on) {
         let sliders = if on { Sliders::None } else { Sliders::Hsl };
-        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
-            app.status(e);
-        }
+        run(app, json!({ "sliders": sliders.id() }));
     }
     let on = set.sliders == Sliders::Oklch;
     // While the rows show, the item stays enabled so that they can be hidden.
     let enabled = on || cms::active().rgb_is_srgb();
     if widgets::menu_item_hint(ui, tl!("OKLCH Sliders"), enabled, on, tl!("OKLCH needs sRGB as the working RGB space")) {
         let sliders = if on { Sliders::None } else { Sliders::Oklch };
-        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
-            app.status(e);
-        }
+        run(app, json!({ "sliders": sliders.id() }));
     }
     if menu_item(ui, tl!("Show Harmony"), set.view == View::Wheel, set.harmony) {
-        command(app, &json!({ "harmony": !set.harmony })).ok();
+        run(app, json!({ "harmony": !set.harmony }));
     }
     ui.add_enabled_ui(set.view == View::Wheel, |ui| {
         ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
             for rule in harmony_rules() {
-                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
-                    command(app, &json!({ "harmonyRule": rule.id() })).ok();
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) && rule != set.harmony_rule {
+                    run(app, json!({ "harmonyRule": rule.id() }));
                 }
             }
         });
     });
     if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
-        command(app, &json!({ "vision": !set.vision })).ok();
+        run(app, json!({ "vision": !set.vision }));
     }
     if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
-        command(app, &json!({ "documentColors": !set.document_colors })).ok();
+        run(app, json!({ "documentColors": !set.document_colors }));
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Show Opacity"), true, set.opacity) {
+        run(app, json!({ "opacity": !set.opacity }));
+    }
+    if menu_item(ui, tl!("Show Hex Field"), true, set.hex_field) {
+        run(app, json!({ "hexField": !set.hex_field }));
+    }
+    ui.separator();
+    let has_color = wheel_target(app, ui).color().is_some();
+    ui.add_enabled_ui(has_color, |ui| {
+        ui.menu_button(format!("   {}", tl!("Copy Color As")), |ui| copy_menu(app, ui));
+    });
+}
+
+/// Run `ui.colorWheel` with `p` from the panel menu, and show an error in the status bar.
+fn run(app: &mut VectorcraftApp, p: Value) {
+    if let Err(e) = app.run("ui.colorWheel", p) {
+        app.status(e);
+    }
+}
+
+/// The items of Copy Color As.
+pub(crate) fn copy_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let notations = [
+        (tl!("Hex"), "hex"),
+        (tl!("Hex with Alpha"), "hexAlpha"),
+        (tl!("CSS rgb()"), "rgb"),
+        (tl!("CSS hsl()"), "hsl"),
+        (tl!("CSS oklch()"), "oklch"),
+        (tl!("CMYK Values"), "cmyk"),
+    ];
+    for (label, notation) in notations {
+        let clicked = if notation == "oklch" {
+            widgets::menu_item_hint(ui, label, cms::active().rgb_is_srgb(), false, tl!("OKLCH needs sRGB as the working RGB space"))
+        } else {
+            menu_item(ui, label, true, false)
+        };
+        if clicked {
+            copy_color_as(app, ui, notation);
+        }
+    }
+}
+
+/// Copy Color As: put `color.format`'s text in `notation` of the color the panel shows on the
+/// clipboard, with the opacity of what the row of Show Opacity edits when it has one, and say in
+/// the status bar what was copied. Does nothing without a solid color.
+pub(crate) fn copy_color_as(app: &mut VectorcraftApp, ui: &Ui, notation: &str) {
+    let tgt = wheel_target(app, ui);
+    let Some(color) = tgt.color() else { return };
+    let (o, live) = shown_opacity(app, &tgt);
+    let mut p = json!({ "color": color_json(&color), "notation": notation });
+    if live {
+        p["opacity"] = json!(f64::from(o.clamp(0.0, 1.0)) * 100.0);
+    }
+    match app.run("color.format", p) {
+        Ok(r) => {
+            let text = r["text"].as_str().unwrap_or_default().to_string();
+            ui.ctx().copy_text(text.clone());
+            app.status(format!("Copied the color as {text}"));
+        }
+        Err(e) => app.status(e),
     }
 }
 
@@ -605,9 +703,9 @@ fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
 }
 
 /// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
-/// markers when `marked` and the field's out-of-gamut cells grayed out when `gamut`. Returns the
-/// HSB a click, a drag, a key or a screen reader's action picks, and its phase.
-fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, gamut: Option<&Cms>) -> Option<([f32; 3], Live)> {
+/// markers when `marked` and the field's out-of-gamut cells grayed out when `gamut`. Returns what a
+/// click, a drag, a key or a screen reader's action picks, and its phase.
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, gamut: Option<&Cms>) -> Option<(Picked, Live)> {
     let (z, x, y) = box_pos(ch, hsb);
     let mut pick = None;
     let grid = gamut.map(|cms| gamut_shade(ui, cms, ch, z));
@@ -618,19 +716,249 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, ga
         let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
         let labels = (tl!("Color box"), ch.field_axes());
         if let (Some((x, y)), phase) = widgets::color_field_shaded(ui, "color-wheel-box", labels, field, (x, y), marked, (&at, shade)) {
-            pick = Some((box_pick(ch, z, x, y, hsb), phase));
+            pick = Some((Picked::Field(ch, x, y), phase));
         }
         // The hue strip shows the whole spectrum; the others change only their own component.
         let track = |z: f32| widgets::hsb32(if ch == Channel::Hue { [z * 360.0, 1.0, 1.0] } else { box_pick(ch, z, x, y, hsb) });
         let (v, suffix, max) = strip_number(ch, hsb);
         let shown = SliderValue::field(v, 0.0..=max, suffix, 0);
         match widgets::channel_slider_stepped(ui, "color-wheel-strip", ch.name(), Some(shown), z, marked, vec2(STRIP, size), &track) {
-            (Some(z), phase, _) => pick = Some((box_pick(ch, z, x, y, hsb), phase)),
-            (None, _, Some(v)) => pick = Some((box_pick(ch, (v / max) as f32, x, y, hsb), Live::Released)),
+            (Some(z), phase, _) => pick = Some((Picked::Strip(ch, z), phase)),
+            (None, _, Some(v)) => pick = Some((Picked::Strip(ch, (v / max) as f32), Live::Released)),
             _ => {}
         }
     });
     pick
+}
+
+/// What a press, a drag, a key or a screen reader's action sets on the wheel or the box: the
+/// components it gives, the others coming from the HSB it is applied to ([`Picked::hsb`]).
+#[derive(Clone, Copy)]
+enum Picked {
+    /// The hue ring's hue.
+    Hue(f32),
+    /// The square's saturation and brightness.
+    Square(f32, f32),
+    /// The box's field point (x across, y down) in channel `ch`.
+    Field(Channel, f32, f32),
+    /// The box's strip value in channel `ch`.
+    Strip(Channel, f32),
+    /// A whole HSB, such as a harmony marker's color.
+    Whole([f32; 3]),
+}
+
+impl Picked {
+    /// The HSB this pick gives on a color showing HSB `was`.
+    fn hsb(self, was: [f32; 3]) -> [f32; 3] {
+        match self {
+            Picked::Hue(h) => [h, was[1], was[2]],
+            Picked::Whole(hsb) => hsb,
+            Picked::Square(s, b) => [was[0], s, b],
+            Picked::Field(ch, x, y) => box_pick(ch, box_pos(ch, was).0, x, y, was),
+            Picked::Strip(ch, z) => {
+                let (_, x, y) = box_pos(ch, was);
+                box_pick(ch, z, x, y, was)
+            }
+        }
+    }
+}
+
+/// The opacity (0 to 1) the row shows for `tgt` and whether the row can set it: the selected
+/// gradient stop's or freeform point's (the first when none is selected, as [`wheel_target`]
+/// picks it), else that of the fill or stroke item
+/// ([`vectorcraft_engine::Session::proxy_opacity`]), which nothing selected and type characters
+/// do not have. A stop or point of a gradient on type characters belongs to the gradient, so the
+/// row sets it. With nothing selected, or while the Live Paint Bucket paints
+/// ([`vectorcraft_engine::Session::bucket_paints`]), the stop or point belongs to the defaults for
+/// new art, which the row leaves alone, and an object selected in a symbol instance has no opacity
+/// the row can set.
+fn shown_opacity(app: &VectorcraftApp, tgt: &Target) -> (f32, bool) {
+    let stroke = !app.session.fill_active;
+    let selected = !app.session.bucket_paints() && app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
+    let point = |index: usize| match super::active_paint(app) {
+        Paint::Gradient(g) => super::gradient::shown_points(&g).points.get(index).map(|p| p.opacity),
+        _ => None,
+    };
+    let found = match tgt {
+        _ if !selected => None,
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => g.gradient.stops.get(*index).map(|s| s.opacity),
+        Target::Point { index, .. } => point(*index),
+        _ => app.session.proxy_opacity(stroke),
+    };
+    (found.unwrap_or(1.0), found.is_some())
+}
+
+/// Set the opacity (0 to 1) of what the row edits for `tgt`: a stop through the Gradient panel's
+/// edit, a freeform point through `paint.freeform.setPoint`, else the fill or stroke item through
+/// `paint.setFill` or `paint.setStroke`. A drag previews and commits as one undo step.
+fn apply_opacity(app: &mut VectorcraftApp, tgt: &Target, o: f32, phase: Live) {
+    let o = o.clamp(0.0, 1.0);
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.opacity = o;
+            }
+            super::gradient::set_stops_keeping_models(app, &stops, None, phase);
+        }
+        Target::Point { index, .. } => {
+            let p = json!({"index": index, "opacity": o, "stroke": !app.session.fill_active});
+            live_run(app, "Opacity", "paint.freeform.setPoint", p, phase);
+        }
+        _ => {
+            let cmd = super::proxy_cmd(app, false);
+            live_run(app, "Opacity", cmd, json!({"opacity": f64::from(o) * 100.0}), phase);
+        }
+    }
+}
+
+/// Panel state: whether a drag of the Show Opacity row has previewed on an open interaction and not
+/// been released.
+const OPACITY_LIVE: &str = "color-wheel-opacity-live";
+
+/// End the drag of the Show Opacity row when its row is hidden (`ui.colorWheel {opacity: false}`) or
+/// turned gray before the release: the preview is kept as one undo step and the interaction ends.
+fn end_opacity_drag(app: &mut VectorcraftApp, ui: &Ui) {
+    if !pstate::<bool>(ui.ctx(), OPACITY_LIVE) {
+        return;
+    }
+    if app.session.in_interaction()
+        && let Err(e) = app.session.commit_interaction()
+    {
+        app.status(e.to_string());
+    }
+    app.sync_views();
+    set_pstate(ui.ctx(), OPACITY_LIVE, false);
+}
+
+/// The Show Opacity row: the Transparency panel's icon, a slider whose track shows `color` from
+/// clear to solid, and a percent field. Gray when [`shown_opacity`] finds nothing to set. True when
+/// it set the opacity.
+fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Color) -> bool {
+    let (o, live) = shown_opacity(app, tgt);
+    let percent = f64::from(o) * 100.0;
+    let mut edit: Option<(f32, Live)> = None;
+    ui.add_enabled_ui(live, |ui| {
+        ui.horizontal(|ui| {
+            let t = Tokens::get(ui.ctx());
+            crate::icons::icon(ui, "dc-transparency", 16.0, if live { t.icon } else { t.text_disabled }).on_hover_text(tl!("Opacity"));
+            let width = (ui.available_width() - OPACITY_FIELD - ui.spacing().item_spacing.x).max(40.0);
+            let shown = SliderValue::field(percent, 0.0..=100.0, "%", 0);
+            match widgets::opacity_slider(ui, "color-wheel-opacity", tl!("Opacity"), Some(shown), o, width, super::c32(color)) {
+                (Some(v), phase, _) => edit = Some((v, phase)),
+                (None, _, Some(v)) => edit = Some(((v / 100.0) as f32, Live::Released)),
+                _ => {}
+            }
+            if let Some(v) = widgets::plain_field_named(ui, "color-wheel-opacity-field", Some(tl!("Opacity")), percent, "%", 0, OPACITY_FIELD) {
+                edit = Some(((v.clamp(0.0, 100.0) / 100.0) as f32, Live::Released));
+            }
+        });
+    });
+    let set = edit.filter(|_| live);
+    if let Some((v, phase)) = set {
+        apply_opacity(app, tgt, v, phase);
+        set_pstate(ui.ctx(), OPACITY_LIVE, phase == Live::Dragging);
+    }
+    // A drag whose row turned gray reports no release.
+    if !live {
+        end_opacity_drag(app, ui);
+    }
+    set.is_some()
+}
+
+/// The text the hex field shows for `color` and the opacity `o` the row of Show Opacity edits
+/// (`None` when it has nothing to edit): six hex digits of the document's RGB numbers, and two more
+/// when the opacity rounds to less than `ff`. Empty without a solid color.
+pub(crate) fn hex_text(color: Option<&Color>, o: Option<f32>) -> String {
+    let Some(c) = color else { return String::new() };
+    let mut text = super::color::hex_digits(c);
+    let alpha = o.map(|o| (o.clamp(0.0, 1.0) * 255.0).round() as u8).filter(|a| *a < 255);
+    if let Some(a) = alpha {
+        text.push_str(&format!("{a:02X}"));
+    }
+    text
+}
+
+/// Apply `c`, typed into the hex field, to `tgt` in one undo step, as a pick applies a color; the
+/// alpha `alpha` (0 to 1) also sets the opacity of what the row of Show Opacity edits, when it has
+/// something to edit.
+fn apply_typed(app: &mut VectorcraftApp, tgt: &Target, c: Color, alpha: Option<f32>) {
+    let alpha = alpha.filter(|_| shown_opacity(app, tgt).1).map(|a| a.clamp(0.0, 1.0));
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.set_color(c, None);
+                if let Some(a) = alpha {
+                    s.opacity = a;
+                }
+            }
+            super::gradient::set_stops_keeping_models(app, &stops, None, Live::Released);
+        }
+        Target::Point { index, .. } => {
+            let mut p = json!({"index": index, "color": color_json(&c), "stroke": !app.session.fill_active, "keepModel": true});
+            if let Some(a) = alpha {
+                p["opacity"] = json!(a);
+            }
+            live_run(app, "Color", "paint.freeform.setPoint", p, Live::Released);
+        }
+        _ => {
+            let cmd = super::proxy_cmd(app, false);
+            let mut p = json!({"color": color_json(&c), "focus": true, "keepModel": true});
+            if let Some(a) = alpha {
+                p["opacity"] = json!(f64::from(a) * 100.0);
+            }
+            live_run(app, "Color", cmd, p, Live::Released);
+        }
+    }
+}
+
+/// The text the hex field shows for `tgt` and its color, as [`hex_text`] gives it.
+fn hex_shown(app: &VectorcraftApp, tgt: &Target, color: Option<&Color>) -> String {
+    let (o, live) = shown_opacity(app, tgt);
+    hex_text(color, live.then_some(o))
+}
+
+/// The hex field's id for `tgt`: it names the document, the selected objects or text characters,
+/// the object selected in a symbol instance, the appearance item, the proxy and the gradient stop or
+/// freeform point, but not the color, so a text typed for one of them is dropped when another one is
+/// targeted, even one showing the same hex.
+fn hex_field_id(app: &VectorcraftApp, tgt: &Target) -> impl std::hash::Hash + use<> {
+    let o = Owner::of(app, tgt, Color::rgb8(0, 0, 0));
+    let part = app.session.active().and_then(|d| d.selection.symbol_part.as_ref().map(|p| (p.instance, p.path.clone())));
+    ("color-wheel-hex", o.doc, o.selection, part, o.text_selection, o.appearance_item, o.fill, o.slot)
+}
+
+/// The Show Hex Field row for `tgt`: a `#` and a field as wide as the row, showing `shown`. A
+/// committed text goes through `color.parse` as typed; a text it refuses shows its error in the
+/// status bar and changes nothing. The text's alpha is not applied when `opacity_set` (the opacity
+/// row set the opacity in this frame), so a press on that row that commits the text keeps the
+/// opacity it set. True when a text was committed.
+fn hex_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, shown: &str, opacity_set: bool) -> bool {
+    let mut typed = None;
+    let id = hex_field_id(app, tgt);
+    ui.horizontal(|ui| {
+        let t = Tokens::get(ui.ctx());
+        ui.label(egui::RichText::new("#").size(15.0).color(t.text));
+        let width = ui.available_width();
+        typed = widgets::exact_text_field_named(ui, id, Some(tl!("Hex or CSS color")), shown, width);
+    });
+    let Some(text) = typed else { return false };
+    match app.run("color.parse", json!({ "text": text })) {
+        Ok(r) => {
+            let Ok(rgb) = serde_json::from_value::<Color>(r["color"].clone()) else { return true };
+            // The target is read again, so a text committed when a press on the opacity row takes
+            // the focus keeps the opacity that press set.
+            let tgt = &wheel_target(app, ui);
+            // The document's RGB numbers, in the model a pick would store them in.
+            let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
+            let c = stored_rgb(&cms::active(), rgb, replaced(app, tgt, false).as_ref(), cmyk_doc);
+            let alpha = r["opacity"].as_f64().map(|o| (o / 100.0) as f32).filter(|_| !opacity_set);
+            apply_typed(app, tgt, c, alpha);
+        }
+        Err(e) => app.status(e),
+    }
+    true
 }
 
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
@@ -706,11 +1034,15 @@ fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
 }
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
-/// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
-/// the pick stored. The wheel shows that HSB only while all of them are unchanged.
+/// the appearance item, the proxy, the gradient stop or freeform point, its paint, the color the
+/// pick stored, and the document's undo step. The wheel shows that HSB only while all of them are
+/// unchanged.
 #[derive(Clone, Debug, PartialEq)]
 struct Owner {
     doc: Option<u64>,
+    /// The document's [`History::step`](vectorcraft_engine::History::step): another edit, an Undo
+    /// or a Redo changes it, also when the same color comes back.
+    step: Option<(u64, u64)>,
     selection: Vec<NodeId>,
     /// The Type tool's selected characters, when it edits the paint.
     text_selection: Option<(NodeId, usize, usize)>,
@@ -734,6 +1066,7 @@ impl Owner {
         };
         Self {
             doc: st.map(|d| d.uid),
+            step: st.map(|d| d.history.step()),
             selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
             text_selection: super::character::text_editing(app),
             appearance_item: app.session.appearance_item(),
@@ -790,7 +1123,11 @@ pub(crate) fn stored(cms: &Cms, hsb: [f32; 3], was: Option<&Color>, cmyk_doc: bo
 /// [`stored`] for a pick of display sRGB `srgb`.
 pub(crate) fn stored_srgb(cms: &Cms, srgb: [f32; 3], was: Option<&Color>, cmyk_doc: bool) -> Color {
     let [r, g, b] = cms.srgb_to_rgb(srgb);
-    let rgb = Color::rgb(r, g, b);
+    stored_rgb(cms, Color::rgb(r, g, b), was, cmyk_doc)
+}
+
+/// [`stored`] for the RGB color `rgb` in the working RGB space.
+fn stored_rgb(cms: &Cms, rgb: Color, was: Option<&Color>, cmyk_doc: bool) -> Color {
     let cmyk = || {
         let [c, m, y, k] = cms.to_cmyk(&rgb, cms.settings().intent);
         Color::cmyk(c, m, y, k)
@@ -862,13 +1199,32 @@ pub(crate) fn chroma_tick(max_chroma: f64) -> f32 {
     (max_chroma / CHROMA_FULL).clamp(0.0, 1.0) as f32
 }
 
+/// The OKLCH rows' edits of one frame with row `i`'s edit added: row `i` takes its value from
+/// `asked`, on top of `out` (the other rows' edits so far, or none on top of `lch`). A drag on one
+/// row stays in progress when another row's field commits in the same frame.
+pub(crate) fn oklch_row_edit(
+    out: Option<([f64; 3], [bool; 3], Live)>,
+    lch: [f64; 3],
+    asked: [f64; 3],
+    i: usize,
+    phase: Live,
+) -> ([f64; 3], [bool; 3], Live) {
+    let (mut base, mut rows, was) = out.unwrap_or((lch, [false; 3], phase));
+    base[i] = asked[i];
+    rows[i] = true;
+    let phase = if matches!(was, Live::Dragging) { Live::Dragging } else { phase };
+    (base, rows, phase)
+}
+
 /// The L, C and H rows of OKLCH Sliders for the target's `color` through `cms`: lightness from 0 to
 /// 100 %, chroma from 0 to 100 % of 0.4 (as CSS reads a chroma percentage) and hue from 0 to 360°.
 /// Each track shows the colors its slider reaches and dims the part outside sRGB, and a tick on the
 /// C track marks the largest chroma sRGB holds at the row's L and H. The rows are gray with no
 /// color to edit and while the working RGB space is not sRGB. Returns the OKLCH a drag, an arrow
-/// key, a screen reader or a field asks for, and its phase.
-pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], Live)> {
+/// key, a screen reader or a field asks for, which rows set it (L, C and H in that order) and the
+/// phase of the last edit. A field that commits when a click on another row takes its focus keeps
+/// its value along with the click's.
+pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f64; 3], [bool; 3], Live)> {
     let t = Tokens::get(ui.ctx());
     let enabled = color.is_some() && cms.rgb_is_srgb();
     let lch = match (color, recall::<[f64; 3]>(app, ui, OKLCH_MEMORY, tgt, color, cms)) {
@@ -889,7 +1245,8 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
         }
         out
     };
-    let mut out = None;
+    let mut out: Option<([f64; 3], [bool; 3], Live)> = None;
+    let mut set = |asked: [f64; 3], i: usize, phase: Live| out = Some(oklch_row_edit(out, lch, asked, i, phase));
     // The L and H tracks search the gamut for each color outside sRGB, so their colors are kept
     // until the other two components change.
     let mut tracks = pstate::<[Option<([u64; 3], Vec<Color32>)>; 3]>(ui.ctx(), OKLCH_TRACKS);
@@ -934,13 +1291,13 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
                         .on_hover_text(tl!("The largest chroma sRGB holds at this lightness and hue"));
                 }
                 if let Some(x) = dragged {
-                    out = Some((at(x), phase));
+                    set(at(x), i, phase);
                 }
                 if let Some(k) = keyed {
-                    out = Some((with(i, k), Live::Released));
+                    set(with(i, k), i, Live::Released);
                 }
                 if let Some(f) = widgets::plain_field_named(ui, ("color-wheel-oklch-field", i), Some(name), v, suffix, 0, field_w) {
-                    out = Some((with(i, f), Live::Released));
+                    set(with(i, f), i, Live::Released);
                 }
             });
         }
@@ -971,8 +1328,10 @@ fn hsl32(hsl: [f32; 3]) -> Color32 {
 /// The H, S and L rows of HSL Sliders for the target's `color` through `cms`: hue from 0 to 360°,
 /// saturation and lightness from 0 to 100 %, CSS Color 4's HSL of the display sRGB. Each track
 /// shows the colors its slider reaches. The rows are gray with no color to edit. Returns the HSL a
-/// drag, an arrow key, a screen reader or a field asks for, and its phase.
-pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f32; 3], Live)> {
+/// drag, an arrow key, a screen reader or a field asks for, which rows set it (H, S and L in that
+/// order) and the phase of the last edit. A drag on one row stays in progress when another row's
+/// field commits in the same frame.
+pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: Option<Color>, cms: &Cms) -> Option<([f32; 3], [bool; 3], Live)> {
     let t = Tokens::get(ui.ctx());
     let enabled = color.is_some();
     let hsl = match (color, recall::<[f32; 3]>(app, ui, HSL_MEMORY, tgt, color, cms)) {
@@ -996,7 +1355,14 @@ pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: O
         }
         out
     };
-    let mut out = None;
+    let mut out: Option<([f32; 3], [bool; 3], Live)> = None;
+    let mut set = |asked: [f32; 3], i: usize, phase: Live| {
+        let (mut base, mut edited, was) = out.unwrap_or((hsl, [false; 3], phase));
+        base[i] = asked[i];
+        edited[i] = true;
+        let phase = if matches!(was, Live::Dragging) { Live::Dragging } else { phase };
+        out = Some((base, edited, phase));
+    };
     ui.add_enabled_ui(enabled, |ui| {
         let field_w = 48.0;
         let slider_w = (ui.available_width() - field_w - 12.0 - 3.0 * ui.spacing().item_spacing.x).max(60.0);
@@ -1010,13 +1376,13 @@ pub(crate) fn hsl_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color: O
                 let (dragged, phase, keyed) =
                     widgets::color_slider_stepped(ui, ("color-wheel-hsl", i), &name, Some(value), (v / max) as f32, slider_w, &track);
                 if let Some(x) = dragged {
-                    out = Some((at(x), phase));
+                    set(at(x), i, phase);
                 }
                 if let Some(k) = keyed {
-                    out = Some((with(i, k), Live::Released));
+                    set(with(i, k), i, Live::Released);
                 }
                 if let Some(f) = widgets::plain_field_named(ui, ("color-wheel-hsl-field", i), Some(&name), v, suffix, 0, field_w) {
-                    out = Some((with(i, f), Live::Released));
+                    set(with(i, f), i, Live::Released);
                 }
             });
         }
@@ -1036,7 +1402,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let marked = color.is_some();
     let gamut = app.ui.color_wheel.gamut.then_some(&*cms);
-    let mut pick: Option<([f32; 3], Live)> = None;
+    let mut pick: Option<(Picked, Live)> = None;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(44.0);
@@ -1070,14 +1436,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(i) = markers.picked
                 && let Some(&c) = others.get(i)
             {
-                pick = Some((c, Live::Released));
+                pick = Some((Picked::Whole(c), Live::Released));
             }
         }
         if let Some((h, phase)) = ring.hue
             && !held
             && pick.is_none()
         {
-            pick = Some(([h, hsb[1], hsb[2]], phase));
+            pick = Some((Picked::Hue(h), phase));
         }
         // A press between the square and the ring picks the closest point of the square, which
         // takes the keyboard focus.
@@ -1085,10 +1451,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let field_id = widgets::id_with(field_ui.scope_id(), "field");
             field_ui.memory_mut(|m| m.request_focus(field_id));
             let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
-            pick = Some(([hsb[0], f(p.x, square.left(), square.width()), 1.0 - f(p.y, square.top(), square.height())], phase));
+            pick = Some((Picked::Square(f(p.x, square.left(), square.width()), 1.0 - f(p.y, square.top(), square.height())), phase));
         }
         if let Some((x, y)) = field {
-            pick = Some(([hsb[0], x, 1.0 - y], field_phase));
+            pick = Some((Picked::Square(x, 1.0 - y), field_phase));
         }
     });
     let (mut picked_lch, mut picked_hsl) = (None, None);
@@ -1120,6 +1486,55 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(4.0);
         vision_row(ui, &cms, color.as_ref());
     }
+    // The hex field compares its text with what it showed before an opacity edit of this frame, so
+    // a text committed when a press on the opacity row takes the focus is not dropped.
+    let hex = app.ui.color_wheel.hex_field.then(|| hex_shown(app, &tgt, color.as_ref()));
+    let mut opacity_set = false;
+    if app.ui.color_wheel.opacity {
+        let shown = color.unwrap_or(app.session.last_solid);
+        let owner = color.map(|c| Owner::of(app, &tgt, c));
+        opacity_set = opacity_row(app, ui, &tgt, &shown);
+        // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
+        // HSB, the HSL and the OKLCH picked last stay with the new gradient.
+        if let (Some(c), Some(was)) = (color, owner) {
+            let now = Owner::of(app, &tgt, c);
+            if now != was {
+                if let Some((remembered, rgb, hsb)) = pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), MEMORY)
+                    && remembered == was
+                {
+                    set_pstate(ui.ctx(), MEMORY, Some((now.clone(), rgb, hsb)));
+                }
+                if let Some((remembered, rgb, hsl)) = pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), HSL_MEMORY)
+                    && remembered == was
+                {
+                    set_pstate(ui.ctx(), HSL_MEMORY, Some((now.clone(), rgb, hsl)));
+                }
+                if let Some((remembered, rgb, lch)) = pstate::<Option<(Owner, [f32; 3], [f64; 3])>>(ui.ctx(), OKLCH_MEMORY)
+                    && remembered == was
+                {
+                    set_pstate(ui.ctx(), OKLCH_MEMORY, Some((now.clone(), rgb, lch)));
+                }
+                if let Some((remembered, rgb, hsl)) = pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), HSL_MEMORY)
+                    && remembered == was
+                {
+                    set_pstate(ui.ctx(), HSL_MEMORY, Some((now, rgb, hsl)));
+                }
+            }
+        }
+    } else {
+        end_opacity_drag(app, ui);
+    }
+    let mut committed = false;
+    if let Some(hex) = hex {
+        ui.add_space(4.0);
+        committed = hex_row(app, ui, &tgt, &hex, opacity_set);
+    }
+    // A pick or a slider row edit read in the frame of an opacity edit or of a text commit goes to
+    // the target as that edit or text left it, so a stop keeps both. After a text commit that
+    // changed the color, the components the pick or the row does not set come from the color the
+    // text applied; a text that left the color as it was keeps the remembered hue.
+    let tgt = if opacity_set || committed { wheel_target(app, ui) } else { tgt };
+    let now = tgt.color().filter(|c| committed && Some(*c) != color);
     let behind = super::alt_held(ui);
     if app.ui.color_wheel.document_colors
         && let Some(u) = document_colors_row(app, ui)
@@ -1129,8 +1544,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let rows = match (picked_hsl, picked_lch) {
-        (Some((hsl, phase)), _) => Some((hsl_to_rgb(hsl), phase, HSL_MEMORY, Remembered::Hsl(hsl))),
-        (_, Some((lch, phase))) => Some((oklab::from_oklch(lch[0], lch[1], lch[2]).0, phase, OKLCH_MEMORY, Remembered::Oklch(lch))),
+        (Some((asked, edited, phase)), _) => {
+            let hsl = match now {
+                Some(c) => {
+                    let mut hsl = rgb_to_hsl(clipped_rgb(&cms, &c));
+                    for row in (0..3).filter(|r| edited[*r]) {
+                        hsl[row] = asked[row];
+                    }
+                    hsl
+                }
+                None => asked,
+            };
+            Some((hsl_to_rgb(hsl), phase, HSL_MEMORY, Remembered::Hsl(hsl)))
+        }
+        (_, Some((asked, edited, phase))) => {
+            let lch = match now {
+                Some(c) => {
+                    let mut lch = oklab::to_oklch(clipped_rgb(&cms, &c));
+                    for row in (0..3).filter(|r| edited[*r]) {
+                        lch[row] = asked[row];
+                    }
+                    lch
+                }
+                None => asked,
+            };
+            Some((oklab::from_oklch(lch[0], lch[1], lch[2]).0, phase, OKLCH_MEMORY, Remembered::Oklch(lch)))
+        }
         _ => None,
     };
     if let Some((srgb, phase, key, asked)) = rows {
@@ -1138,7 +1577,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // the rows keep what they were given, and the paint (a Gray color too) stays unchanged.
         let current = color.filter(|c| {
             let d = cms.display_rgb(c);
-            !behind && live.is_none() && (0..3).all(|i| (d[i] - srgb[i]).abs() <= 1e-5)
+            !behind && live.is_none() && now.is_none() && (0..3).all(|i| (d[i] - srgb[i]).abs() <= 1e-5)
         });
         if let Some(c) = current {
             asked.remember(ui, key, Owner::of(app, &tgt, c), cms.display_rgb(&c));
@@ -1152,7 +1591,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     }
-    let Some((hsb, phase)) = pick else { return };
+    let Some((picked, phase)) = pick else { return };
+    let hsb = picked.hsb(now.map_or(hsb, |c| display_hsb(&cms, &c)));
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
     apply(app, &tgt, c, phase, behind);
     if !behind {

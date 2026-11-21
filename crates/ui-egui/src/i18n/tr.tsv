@@ -2396,6 +2396,18 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
+	Show Hex Field	Hex Alanını Göster
+	Hex or CSS color	Hex veya CSS rengi
+	Parse Color	Rengi Ayrıştır
+	Format Color	Rengi Biçimlendir
+	Copy Color As	Rengi Farklı Biçimde Kopyala
+	Hex	Hex
+	Hex with Alpha	Alfalı Hex
+	CSS rgb()	CSS rgb()
+	CSS hsl()	CSS hsl()
+	CSS oklch()	CSS oklch()
+	CMYK Values	CMYK Değerleri
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -4958,6 +4970,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
 @msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch veya hsl olmalıdır
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
+@msg	`notation` must be hex, hexAlpha, rgb, hsl, oklch or cmyk	`notation` hex, hexAlpha, rgb, hsl, oklch veya cmyk olmalıdır
+@msg	Copied the color as {text}	Renk şu biçimde kopyalandı: {text}
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` bir hex rengi (#rgb, #rgba, #rrggbb veya #rrggbbaa) ya da en fazla 48 karakterlik bir CSS rgb(), hsl() veya oklch() rengi olmalıdır
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç
@@ -7425,6 +7440,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir
