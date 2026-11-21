@@ -14553,8 +14553,8 @@ Tools:
   outside it with a point on it (within a millionth of its radius); it never crosses the first segment, and it
   touches the two segments at different points. The circle is a new ellipse with the current paint, drawn through
   three of its points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one
-  undo step. A circle too small or too large for its three points to give it back in floating point counts as no
-  circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
+  undo step. A circle too small or too large for its three points to give it back in floating point, or one that
+  would reach past the canvas (4,000,000 pt from the origin), counts as no circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
   segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, another document, or a
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
