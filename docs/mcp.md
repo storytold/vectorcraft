@@ -2620,6 +2620,74 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
+  describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
+  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
+  and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
+  which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
+  columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
+  with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
+  `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
+  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
+  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  the preset it is given holds one of them with a value other than `null`, and makes no document.
+  `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
+  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
+  entry `[i]` gives. Each page item
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected`, `opacity` (0 to
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
+  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
+  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
+  the undo history as they were before the call. `duplicate` on a path inside a compound path throws
+  `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
+  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
+  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
+  objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
+  are points with Y up from the bottom-left corner of the first artboard, or, with
+  `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
+  is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
+  for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
+  changed document. A value that changes nothing runs no command, and a change to another document leaves the active
+  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
+  `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
+  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
+  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
+  those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
+  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
+  with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
+  `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
+  item) and `remove()`; they run the `object.tag.*` commands. VectorCraft's own rules: a collection lists the tags in
+  their order on the object, and `Document.tags` lists every page item's tags in `pageItems` order and throws an error
+  on `add()`; `add()` gives a tag with an empty name and value; `getByName` gives the first tag with the name;
+  `name` and `value` take strings of at most 65,536 bytes, and an object has at most 64 tags. A tag that was deleted
+  throws `Stale tag`, and one whose page item was deleted throws `Stale page item`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -6750,8 +6818,20 @@ range is an error and changes nothing. The help page
 [Create image maps for web graphics](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/create-image-maps-for-web-graphics.html)
 describes the same 1 to 30 range; the default of 10 is VectorCraft's own value.
 
+An object's tags are name and value pairs that scripts keep on it (`PageItem.tags`). `object.tags {id}` lists them in
+order → `{tags: [{tag, name, value}]}`, where `tag` tells each one apart from the object's other tags.
+`object.tag.add {id, name?, value?}` adds one after the others → `{tag}`, `object.tag.set {id, tag, name?, value?}`
+changes its name or value → `{changed}`, `object.tag.remove {id, tag}` deletes it, and `object.tag.removeAll {ids?}`
+deletes every tag of the objects in `ids` or the selection → `{changed: objects}`; each edit is one undo step, and an
+edit that changes nothing adds none. Names may be empty or repeated. An object has at most 64 tags, each name and
+value at most 65,536 bytes; a layer or a ruler guide has none, and a bad value is an error that changes nothing, as is
+an add in a document whose ids have reached the top of their range (a damaged or hand-made file). The
+native file keeps the tags and their `tag` ids, and opening one keeps the first 64 tags of each object whose name and
+value are within the limit, giving a new id to a tag whose id is missing, out of range or repeated. Copies keep their source's tags. Other file formats do not write them.
+
 ```json
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
+{"name":"run_command","arguments":{"command":"object.tag.add","params":{"id":12,"name":"size","value":"XL"}}}
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
 {"name":"invoke_menu","arguments":{"command":"ui.attributesPanelOptions","params":{"count":20}}}
 ```
@@ -8796,7 +8876,11 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
+rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
+fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
+the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),
+`bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
