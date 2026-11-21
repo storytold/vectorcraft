@@ -15,15 +15,19 @@
 //! - A word is a run of characters that are not white space. A paragraph ends after its break, and
 //!   a range's `words` and `paragraphs` are the whole words and paragraphs it touches.
 //! - A range keeps its place while the script edits the frame through the object model: an edit
-//!   before it moves it, an edit over it shrinks it to the edit, and an insertion at one of its
-//!   ends joins it. When the frame's text changes in any other way (`vc.run`, an undo), every
-//!   range made before is stale and throws `Stale text range`.
+//!   before it moves it, an edit over one of its ends takes that end to the edge of the edit's new
+//!   text, so a range the edit covers holds the new text, and an insertion at one of its ends joins
+//!   it. When a member finds the frame's text different from the text the model last saw, because
+//!   `vc.run` or an undo changed it, every range made before is stale and throws
+//!   `Stale text range`; a change reversed before that read leaves the ranges as they were.
+//! - The model keeps the frame's last [`MAX_EDITS`] edits; a range made before an edit that is no
+//!   longer kept is stale.
 //! - A character attribute read on a range whose characters differ gives the first character's
 //!   value; set on an empty range it changes nothing. A paragraph attribute reads the first
 //!   paragraph the range touches and sets every one of them.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
@@ -148,7 +152,21 @@ struct Log {
     index: Rc<Index>,
     stamp: u64,
     floor: u64,
-    edits: Vec<Edit>,
+    edits: VecDeque<Edit>,
+}
+
+impl Log {
+    /// Records an edit the model made: `removed` units at `at` replaced by `inserted` units. Past
+    /// [`MAX_EDITS`] the oldest edit is dropped, and ranges made before it go stale.
+    fn push(&mut self, at: usize, removed: usize, inserted: usize) {
+        self.stamp += 1;
+        self.edits.push_back(Edit { stamp: self.stamp, at, removed, inserted });
+        if self.edits.len() > MAX_EDITS
+            && let Some(dropped) = self.edits.pop_front()
+        {
+            self.floor = dropped.stamp;
+        }
+    }
 }
 
 /// A document's uid, the document, and the ids of its type objects then.
@@ -204,7 +222,7 @@ fn observe(h: &Host, st: &DocState, id: NodeId) -> std::result::Result<(Rc<Index
             l.doc = Arc::downgrade(&st.doc);
         }
         None => {
-            let l = Log { doc: Arc::downgrade(&st.doc), index: Rc::new(Index::new(t.plain_text())), stamp: 0, floor: 0, edits: Vec::new() };
+            let l = Log { doc: Arc::downgrade(&st.doc), index: Rc::new(Index::new(t.plain_text())), stamp: 0, floor: 0, edits: VecDeque::new() };
             frames.insert(key, l);
         }
     }
@@ -232,7 +250,7 @@ fn resolve(h: &Host, r: Span) -> std::result::Result<(Rc<Index>, usize, usize, u
         }
         let (mut s, mut e) = (r.start, r.end);
         let from = l.edits.partition_point(|x| x.stamp <= r.stamp);
-        for x in &l.edits[from..] {
+        for x in l.edits.range(from..) {
             let moved = |v: usize| v - x.removed + x.inserted;
             s = if s <= x.at {
                 s
@@ -241,12 +259,13 @@ fn resolve(h: &Host, r: Span) -> std::result::Result<(Rc<Index>, usize, usize, u
             } else {
                 x.at
             };
-            e = if e < x.at {
+            // An end inside the removed text goes to the end of the new text.
+            e = if e < x.at || (e == x.at && x.removed > 0) {
                 e
             } else if e >= x.at + x.removed {
                 moved(e)
             } else {
-                x.at
+                x.at + x.inserted
             };
         }
         let len = index.len();
@@ -268,15 +287,10 @@ fn record(h: &Host, item: Item, before: &Index, at: usize, removed: usize, inser
             && now.get(a..a + inserted.len()) == Some(inserted);
         let mut frames = h.dom.text.frames.borrow_mut();
         let l = frames.get_mut(&(st.uid, item.id.0)).ok_or_else(|| HostError::Error(STALE_RANGE.into()))?;
-        l.stamp += 1;
         if expected {
-            l.edits.push(Edit { stamp: l.stamp, at, removed, inserted: inserted.encode_utf16().count() });
-            if l.edits.len() > MAX_EDITS {
-                let keep = l.edits.split_off(MAX_EDITS / 2);
-                l.floor = keep.first().map_or(l.stamp, |x| x.stamp - 1);
-                l.edits = keep;
-            }
+            l.push(at, removed, inserted.encode_utf16().count());
         } else {
+            l.stamp += 1;
             l.floor = l.stamp;
             l.edits.clear();
         }
@@ -460,17 +474,10 @@ fn paragraph_attributes(h: &Host, a: &[Data]) -> Answer {
     sub(h, a, "ParagraphAttributes")
 }
 
-/// The id a command's result gives under `ids` (the first) or `id`.
-fn result_id(d: &Data) -> Option<NodeId> {
-    let Data::Object(o) = d else { return None };
-    let n = |v: &Data| if let Data::Number(n) = v { whole(*n) } else { None };
-    o.iter()
-        .find_map(|(k, v)| match (k.as_str(), v) {
-            ("ids", Data::Array(ids)) => ids.first().and_then(n),
-            ("id", v) => n(v),
-            _ => None,
-        })
-        .map(NodeId)
+/// The id a command's result, as the command gave it, holds under `ids` (the first) or `id`. It is
+/// read from the JSON, where an id above 2^53 is still exact.
+fn result_id(v: &Value) -> Option<NodeId> {
+    v.get("ids").and_then(|ids| ids.get(0)).or_else(|| v.get("id")).and_then(Value::as_u64).map(NodeId)
 }
 
 fn new_ref(h: &Host, doc: Doc, id: Option<NodeId>) -> Answer {
@@ -480,14 +487,18 @@ fn new_ref(h: &Host, doc: Doc, id: Option<NodeId>) -> Answer {
     Ok(item_ref(h, st, id))
 }
 
-/// `createOutline()`: Type › Create Outlines for the frame alone. → the group of outlines.
+/// `createOutline()`: Type › Create Outlines for the frame alone. → the group of outlines, or
+/// `null` when the type has nothing to outline and the command removed it.
 fn frame_outline(h: &Host, a: &[Data]) -> Answer {
     let item = this_frame(h, a)?;
-    let r = on_doc(h, item.doc.uid, true, |h| {
+    let (_, r) = on_doc(h, item.doc.uid, true, |h| {
         command(h, "select.set", &json!({"ids": [item.id.0]}))?;
-        command(h, "type.createOutlines", &json!({}))
+        super::command_value(h, "type.createOutlines", &json!({}))
     })?;
-    new_ref(h, item.doc, result_id(&r))
+    match result_id(&r) {
+        Some(id) => new_ref(h, item.doc, Some(id)),
+        None => Ok(Data::Null),
+    }
 }
 
 /// Converts area type to point type (`area` false) or point type to area type.
@@ -502,7 +513,7 @@ fn convert(h: &Host, a: &[Data], to_area: bool) -> Answer {
         Some(true) => {}
     }
     let id = if to_area { "type.convertToAreaType" } else { "type.convertToPointType" };
-    let r = edit_item(h, item, id, &json!({"ids": [item.id.0]}))?;
+    let (_, r) = on_doc(h, item.doc.uid, true, |h| super::command_value(h, id, &json!({"ids": [item.id.0]})))?;
     new_ref(h, item.doc, result_id(&r).or(Some(item.id)))
 }
 
@@ -658,8 +669,9 @@ const ATTRS: [(&str, Attr); 11] = [
 
 /// The styles of the characters in bytes `a..b`, effective as the Character panel shows them, with
 /// the paragraph they are in: one entry for each run and paragraph the range covers. For an empty
-/// range, the style of the character before it, or of the first one.
-fn styles_in(t: &TextObject, a: usize, b: usize) -> std::result::Result<Vec<(CharStyle, usize)>, HostError> {
+/// range, the style of the character before it, or of the first one. With `first`, only the first
+/// entry.
+fn styles_in(t: &TextObject, a: usize, b: usize, first: bool) -> std::result::Result<Vec<(CharStyle, usize)>, HostError> {
     let mut out = Vec::new();
     let (mut at, mut para) = (0, 0);
     let effective = |s: &CharStyle| t.effective_char_style(s).ok_or_else(|| HostError::Error("the text's transform cannot be measured".into()));
@@ -677,6 +689,9 @@ fn styles_in(t: &TextObject, a: usize, b: usize) -> std::result::Result<Vec<(Cha
             let style = effective(&run.style)?;
             let mut p = para + breaks(at, lo);
             out.push((style.clone(), p));
+            if first {
+                return Ok(out);
+            }
             for (k, _) in bytes.get(lo - at..hi - at).unwrap_or_default().iter().enumerate().filter(|&(_, &c)| c == b'\n') {
                 p += 1;
                 if lo + k + 1 < hi {
@@ -841,7 +856,7 @@ fn read_attr(h: &Host, a: &[Data], attr: Attr) -> Answer {
     let (ba, bb) = (index.byte(s, false), index.byte(e, true));
     with_doc(h, r.item.doc, |_, st| {
         let t = text_of(st, r.item.id).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-        Ok(styles_in(t, ba, bb)?.first().map_or(Data::Undefined, |(st, p)| attr_value(h, attr, t, st, *p)))
+        Ok(styles_in(t, ba, bb, true)?.first().map_or(Data::Undefined, |(st, p)| attr_value(h, attr, t, st, *p)))
     })
 }
 
@@ -851,10 +866,12 @@ fn write_attr(h: &Host, a: &[Data], attr: Attr, name: &str) -> Answer {
     let (ba, bb) = (index.byte(s, false), index.byte(e, true));
     let (param, unchanged, fixed) = with_doc(h, r.item.doc, |_, st| {
         let t = text_of(st, r.item.id).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-        let styles = styles_in(t, ba, bb)?;
+        let styles = styles_in(t, ba, bb, false)?;
         let first = styles.first().map(|(s, p)| (s.clone(), *p)).unwrap_or_else(|| (CharStyle::default(), 0));
         let (param, wants) = attr_param(h, attr, name, arg(a, 1), (t, &first.0, first.1))?;
-        let unchanged = ba == bb || styles.iter().all(|(st, p)| same(&attr_value(h, attr, t, st, *p), &wants));
+        // A leading set on characters with auto leading fixes it even where auto gives that value.
+        let has = |st: &CharStyle, p: usize| (!matches!(attr, Attr::Leading) || st.leading.is_some()) && same(&attr_value(h, attr, t, st, p), &wants);
+        let unchanged = ba == bb || styles.iter().all(|(st, p)| has(st, *p));
         let fixed = match (attr, &wants) {
             (Attr::AutoLeading, Data::Bool(false)) if !unchanged => Some(auto_leading_spans(t, ba, bb)?),
             _ => None,
@@ -1132,7 +1149,8 @@ fn vertical_of(d: &Data) -> std::result::Result<bool, HostError> {
 /// Makes point type at `anchor` (script coordinates; `None`: the origin) with `text.create`.
 fn point_text(h: &Host, doc: Doc, anchor: Option<[f64; 2]>, vertical: bool) -> Answer {
     let at = with_doc(h, doc, |_, st| Ok::<_, HostError>(frame(st)?.to_document(h.dom.coords.get(), anchor.unwrap_or([0.0, 0.0]))))?;
-    let r = on_doc(h, doc.uid, true, |h| command(h, "text.create", &json!({"x": at.x, "y": at.y, "text": "", "vertical": vertical})))?;
+    let (_, r) =
+        on_doc(h, doc.uid, true, |h| super::command_value(h, "text.create", &json!({"x": at.x, "y": at.y, "text": "", "vertical": vertical})))?;
     new_ref(h, doc, result_id(&r))
 }
 
@@ -1164,8 +1182,8 @@ fn in_path(h: &Host, a: &[Data], on_path: bool, rest: &[usize]) -> Answer {
     let orientation = if on_path { 4 } else { 2 };
     let vertical = vertical_of(arg(a, orientation))?;
     let mode = if on_path { "onPath" } else { "area" };
-    let r =
-        on_doc(h, doc.uid, true, |h| command(h, "text.createInPath", &json!({"path": path.id.0, "mode": mode, "text": "", "vertical": vertical})))?;
+    let params = json!({"path": path.id.0, "mode": mode, "text": "", "vertical": vertical});
+    let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.createInPath", &params))?;
     new_ref(h, doc, result_id(&r))
 }
 
@@ -1311,6 +1329,37 @@ fn font_parent(h: &Host, a: &[Data]) -> Answer {
 
 // ---- classes ----
 
+fn range_typename(h: &Host, a: &[Data]) -> Answer {
+    resolve(h, this_range(h, a)?)?;
+    Ok(text("TextRange"))
+}
+
+fn part_typename(h: &Host, a: &[Data]) -> Answer {
+    let (r, part) = this_part(h, a)?;
+    resolve(h, r)?;
+    Ok(text(PARTS.iter().find(|(_, p)| *p == part).map_or("Characters", |(c, _)| c)))
+}
+
+fn char_attrs_typename(h: &Host, a: &[Data]) -> Answer {
+    resolve(h, span_of(h, arg(a, 0), &["CharacterAttributes"])?)?;
+    Ok(text("CharacterAttributes"))
+}
+
+fn para_attrs_typename(h: &Host, a: &[Data]) -> Answer {
+    resolve(h, span_of(h, arg(a, 0), &["ParagraphAttributes"])?)?;
+    Ok(text("ParagraphAttributes"))
+}
+
+fn frames_typename(h: &Host, a: &[Data]) -> Answer {
+    frames_doc(h, a)?;
+    Ok(text("TextFrames"))
+}
+
+fn font_typename(h: &Host, a: &[Data]) -> Answer {
+    font_of(h, arg(a, 0))?;
+    Ok(text("TextFont"))
+}
+
 /// A member listed on the help pages that a script cannot set yet. Assigning it throws, after the
 /// read's own checks of `this`.
 fn read_only(link: &Link, g: super::Member, class: &'static str, name: &'static str) -> HostMember {
@@ -1424,7 +1473,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         .map(|m| super::later(l, "TextFrame", m)),
     );
     let mut range = named(vec![
-        ("typename", typename_of("TextRange")),
+        ("typename", get(l, range_typename)),
         ("parent", get(l, range_parent)),
         ("contents", property(l, range_contents, range_set_contents)),
         ("start", read_only(l, range_start, "TextRange", "start")),
@@ -1466,13 +1515,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         class(
             name,
             None,
-            named(vec![("typename", typename_of(name)), ("length", get(l, part_length)), ("parent", get(l, part_parent))]),
+            named(vec![("typename", get(l, part_typename)), ("length", get(l, part_length)), ("parent", get(l, part_parent))]),
             Some(function(l, part_at)),
         )
     };
-    let mut chars = named(vec![("typename", typename_of("CharacterAttributes"))]);
+    let mut chars = named(vec![("typename", get(l, char_attrs_typename))]);
     chars.extend(attr_members(l));
-    let mut paras = named(vec![("typename", typename_of("ParagraphAttributes"))]);
+    let mut paras = named(vec![("typename", get(l, para_attrs_typename))]);
     paras.extend(para_members(l));
     vec![
         class("TextFrame", Some("PageItem"), frame, None),
@@ -1486,7 +1535,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "TextFrames",
             None,
             named(vec![
-                ("typename", typename_of("TextFrames")),
+                ("typename", get(l, frames_typename)),
                 ("length", get(l, frames_length)),
                 ("parent", get(l, frames_parent)),
                 ("index", method(l, frames_index)),
@@ -1515,7 +1564,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "TextFont",
             None,
             named(vec![
-                ("typename", typename_of("TextFont")),
+                ("typename", get(l, font_typename)),
                 ("name", get(l, font_name)),
                 ("family", get(l, font_family)),
                 ("style", get(l, font_style)),
@@ -1528,7 +1577,24 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Index, touched};
+    use std::collections::VecDeque;
+    use std::rc::Rc;
+    use std::sync::Weak;
+
+    use super::{Index, Log, MAX_EDITS, touched};
+
+    #[test]
+    fn the_edit_log_keeps_the_last_edits_and_drops_only_older_ones() {
+        let mut l = Log { doc: Weak::new(), index: Rc::new(Index::new(String::new())), stamp: 0, floor: 0, edits: VecDeque::new() };
+        for _ in 0..MAX_EDITS {
+            l.push(0, 0, 1);
+        }
+        assert_eq!((l.edits.len(), l.floor), (MAX_EDITS, 0));
+        l.push(0, 0, 1);
+        // Only the first edit is dropped: a range made after it still moves through every later edit.
+        assert_eq!((l.edits.len(), l.floor), (MAX_EDITS, 1));
+        assert_eq!(l.edits.front().map(|x| x.stamp), Some(2));
+    }
 
     #[test]
     fn index_counts_utf16_units_and_splits_words_and_paragraphs() {

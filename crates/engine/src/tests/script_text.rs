@@ -144,6 +144,19 @@ fn ranges_follow_model_edits_and_go_stale_after_other_edits() {
 }
 
 #[test]
+fn a_range_an_edit_covers_holds_the_edits_new_text() {
+    let (mut s, _) = doc_with("abc");
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], first = t.characters[0], r = t.characters[1];\
+         t.characters[2].contents = 'ZZ'; vc.log([first.contents, r.contents]);\
+         t.contents = 'XY'; vc.log([r.contents, r.start, r.length, first.contents]);",
+    );
+    // A range that ends where an edit starts keeps its end; one inside the edit takes the new text.
+    assert_eq!(out, vec![json!(["a", "b"]), json!(["XY", 0, 2, "XY"])]);
+}
+
+#[test]
 fn bad_attribute_values_are_refused_without_a_change() {
     let (mut s, id) = doc_with("abc");
     let before = undo_steps(&s);
@@ -176,6 +189,23 @@ fn setting_the_value_a_range_has_records_no_undo_step() {
          t.contents = t.contents; r.paragraphAttributes.leftIndent = 0; r.characters[0].characterAttributes.size = 12;",
     );
     assert_eq!(undo_steps(&s), before);
+}
+
+#[test]
+fn a_leading_equal_to_the_auto_leading_turns_auto_leading_off() {
+    let (mut s, id) = doc_with("abc");
+    let before = undo_steps(&s);
+    let out = log(&mut s, "var r = app.activeDocument.textFrames[0].textRange; r.leading = r.leading; vc.log([r.autoLeading, r.leading]);");
+    assert_eq!(out, vec![json!([false, 14.4])]);
+    assert_eq!(undo_steps(&s), before + 1);
+    match &s.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => assert!(t.runs.iter().all(|r| r.style.leading.is_some_and(|l| (l - 14.4).abs() < 1e-9)), "{:?}", t.runs),
+        _ => panic!("not text"),
+    }
+    // A fixed leading set to its own value is still no change.
+    let out = log(&mut s, "var r = app.activeDocument.textFrames[0].textRange; r.leading = 14.4; vc.log(r.autoLeading);");
+    assert_eq!(out, vec![json!(false)]);
+    assert_eq!(undo_steps(&s), before + 1);
 }
 
 #[test]
@@ -322,6 +352,21 @@ fn a_stale_range_has_no_parent() {
 }
 
 #[test]
+fn a_stale_range_and_its_collections_have_no_typename() {
+    let (mut s, id) = doc_with("abc");
+    let source = format!(
+        "var r = app.activeDocument.textFrames[0].textRange, all = [r, r.characters, r.words, r.paragraphs, r.characterAttributes, r.paragraphAttributes];\
+         var names = []; for (var i = 0; i < all.length; i++) names.push(all[i].typename); vc.log(names);\
+         vc.run('text.setText', {{id: {}, text: 'other'}}); var m = [];\
+         for (var i = 0; i < all.length; i++) {{ try {{ m.push(all[i].typename); }} catch (e) {{ m.push(e.message); }} }} vc.log(m);",
+        id.0
+    );
+    let out = log(&mut s, &source);
+    assert_eq!(out[0], json!(["TextRange", "Characters", "Words", "Paragraphs", "CharacterAttributes", "ParagraphAttributes"]));
+    assert_eq!(out[1], json!(vec!["Stale text range"; 6]));
+}
+
+#[test]
 fn members_not_built_yet_throw_after_the_stale_check() {
     let (mut s, id) = doc_with("abc");
     let e = failure(&mut s, "app.activeDocument.textFrames[0].lines;");
@@ -340,23 +385,31 @@ fn members_not_built_yet_throw_after_the_stale_check() {
 
 #[test]
 fn text_fonts_list_and_assign_fonts_by_name() {
+    // The last font in the menu that draws "abc", so Missing Glyph Protection keeps no character.
+    let db = vectorcraft_text::FontDb::global();
+    let listed: Vec<(String, String)> = db.menu_family_list().iter().flat_map(|f| db.styles(f).into_iter().map(move |st| (f.clone(), st))).collect();
+    let covers = |(f, st): &&(String, String)| db.face(f, st).is_some_and(|face| "abc".chars().all(|c| face.covers(c)));
+    let Some((pos, (family, style))) = listed.iter().enumerate().rev().find(|(_, fs)| covers(fs)) else {
+        return; // No installed font draws "abc".
+    };
     let (mut s, id) = doc_with("abc");
     let out = log(
         &mut s,
-        "var f = app.textFonts, m = '';\
-         try { f.getByName('No Such Font Anywhere'); } catch (e) { m = e.message; } vc.log(m);\
-         try { f.index('No Such Font Anywhere'); } catch (e) { m = e.message; } vc.log(m);\
-         vc.log(f.length > 0); var r = app.activeDocument.textFrames[0].textRange, k = f[f.length - 1];\
-         r.textFont = k; vc.log(r.textFont.family === k.family && r.textFont.style === k.style);\
-         vc.log(f.getByName(k.family + ' ' + k.style).family === k.family); vc.log(f[f.length] === undefined);",
+        &format!(
+            "var f = app.textFonts, m = '';\
+             try {{ f.getByName('No Such Font Anywhere'); }} catch (e) {{ m = e.message; }} vc.log(m);\
+             try {{ f.index('No Such Font Anywhere'); }} catch (e) {{ m = e.message; }} vc.log(m);\
+             vc.log(f.length > 0); var r = app.activeDocument.textFrames[0].textRange, k = f[{pos}];\
+             vc.log([k.family, k.style]); r.textFont = k; vc.log(r.textFont.family === k.family && r.textFont.style === k.style);\
+             vc.log(f.getByName(k.family + ' ' + k.style).family === k.family); vc.log(f[f.length] === undefined);"
+        ),
     );
-    assert_eq!(out, vec![json!("Not found"), json!("Not found"), json!(true), json!(true), json!(true), json!(true)]);
-    let family = match &s.active().unwrap().doc.node(id).unwrap().kind {
-        NodeKind::Text(t) => t.runs[0].style.font_family.clone(),
+    assert_eq!(out, vec![json!("Not found"), json!("Not found"), json!(true), json!([family, style]), json!(true), json!(true), json!(true)]);
+    let set = match &s.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (t.runs[0].style.font_family.clone(), t.runs[0].style.font_style.clone()),
         _ => panic!("not text"),
     };
-    let listed = log(&mut s, "var f = app.textFonts; vc.log(f[f.length - 1].family);");
-    assert_eq!(listed, vec![json!(family)]);
+    assert_eq!(&set, &(family.clone(), style.clone()));
 }
 
 #[test]
@@ -373,6 +426,31 @@ fn create_outline_and_conversions_return_the_new_objects() {
     assert_eq!(out[0], json!("the text frame is not area type"));
     assert_eq!(out[1..], [json!("TextType.AREATEXT"), json!("TextType.POINTTEXT"), json!("Hi"), json!("GroupItem"), json!(0)]);
     assert!(s.active().unwrap().doc.node(id).is_none());
+}
+
+#[test]
+fn outlining_type_with_nothing_to_outline_gives_null() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let out =
+        log(&mut s, "var d = app.activeDocument, t = d.textFrames.add(); var g = t.createOutline(); vc.log([g === null, d.textFrames.length]);");
+    assert_eq!(out, vec![json!([true, 0])]);
+}
+
+#[test]
+fn type_made_with_a_large_id_is_the_new_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    // The second frame's id, 2^53 + 1, is not exact as a number.
+    let big = 1u64 << 53;
+    s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, a = d.textFrames.add(), b = d.textFrames.pointText([5, 5]); b.contents = 'second';\
+         vc.log([a === b, a.contents, b.createOutline().typename]);",
+    );
+    assert_eq!(out, vec![json!([false, "", "GroupItem"])]);
+    assert_eq!(plain(&s, NodeId(big)), "");
 }
 
 #[test]

@@ -2689,7 +2689,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   available yet. A `TextFrame`
   (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
   `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
-  `createOutline()` (Type › Create Outlines, giving the group of outlines), `convertPointObjectToAreaObject()` and
+  `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
+  outline and the command removes it), `convertPointObjectToAreaObject()` and
   `convertAreaObjectToPointObject()`. A `TextRange` (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) has
   `contents`, `start`, `end`, `characterOffset` (the same as `start`), `length`, `parent` (its frame), `characters`,
   `words`, `paragraphs`, `characterAttributes`, `paragraphAttributes`, `getParagraphLength()`, `getTextRunLength()` and
@@ -2710,18 +2711,20 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   word is a run of characters that are not white space; a range's `words` and `paragraphs` are the whole words and
   paragraphs it touches, a paragraph's break belonging to it; the empty paragraph after a break at the end of the text
   belongs only to an empty range there. A range keeps its place while the script edits the frame
-  through these objects: an edit before it moves it, an edit over it shrinks it, and an insertion at one of its ends
-  joins it. When a member finds the frame's text different from the text these objects last saw, because `vc.run`
-  or an undo changed it, a range made before throws `Stale text range`; a change that was reversed before that read
-  leaves the text as the range knew it, and the range keeps working. These objects keep a record of up to 100,000 of the
-  frame's edits; when it grows past that, they drop the older half of it, and a range made before the newest dropped
-  edit throws `Stale text range` too. A character attribute
+  through these objects: an edit before it moves it, an edit over one of its ends takes that end to the edge of the
+  edit's new text, so a range the edit covers holds the new text, and an insertion at one of its ends joins it. When a
+  member finds the frame's text different from the text these objects last saw, because `vc.run` or an undo changed
+  it, a range made before throws `Stale text range`, and so does its `typename`; a change that was reversed before
+  that read leaves the text as the range knew it, and the range keeps working. These objects keep a record of the
+  frame's last 100,000 edits, and a range made before an edit that is no longer in that record throws
+  `Stale text range` too. A character attribute
   read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
   `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
   own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
   that take the same leading; when one of those values is outside 0.1 to 5000 pt, it throws
   and changes nothing. A paragraph attribute reads the first paragraph the range touches and sets every one of them. A value a range already
-  has runs no command. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
+  has runs no command; a `leading` set on characters with auto leading turns their auto leading off even when it equals
+  the auto leading. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
   when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
   font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
   `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story` and
