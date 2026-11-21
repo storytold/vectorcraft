@@ -115,6 +115,7 @@ pub(crate) const MASK_TOO_COSTLY: &str = "Script folder mask takes too many step
 pub(crate) const NOT_WRITABLE: &str = "Script file is not open for writing";
 pub(crate) const UNENCODABLE: &str = "Script file cannot encode the text";
 pub(crate) const WRITE_FAILED: &str = "Script file could not be written";
+pub(crate) const READ_ONLY: &str = "Script file is read-only";
 pub(crate) const NOT_EMPTY: &str = "Script folder is not empty";
 pub(crate) const NAME_TAKEN: &str = "Script file name is already in use";
 pub(crate) const BAD_NAME: &str = "Script file name must be a name without a folder";
@@ -271,6 +272,9 @@ pub(crate) struct Disk {
     /// when they were last written to the grants file.
     kept: Vec<(std::path::PathBuf, bool, bool)>,
     recorded: usize,
+    /// While set, the gate of a command the script runs leaves out the files of the open documents
+    /// ([`Disk::gate`]): the command reads and writes only where the script's `File` objects may.
+    pub(crate) exact: bool,
     /// The write bits setting `readonly` cleared from each file in this run, by its device and
     /// inode, which a rename keeps, at most [`MAX_ENTRIES`] files: clearing `readonly` gives them back.
     #[cfg(unix)]
@@ -324,6 +328,7 @@ impl Disk {
             ran_too_much: setup.engine_code.1,
             kept: Vec::new(),
             recorded: 0,
+            exact: false,
             #[cfg(unix)]
             cleared: HashMap::new(),
         };
@@ -457,6 +462,8 @@ impl Disk {
     /// The gate for a command the script runs: the places it reads and writes now, and the files of
     /// the open documents, `documents`.
     pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
+        // A save, export or open of a `File` the script names reads and writes as its `File` would.
+        let documents = if self.exact { Vec::new() } else { documents };
         crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, also: None }
     }
 
@@ -674,6 +681,35 @@ impl Disk {
             Err(ScriptRead::Failed(_)) => Err(WRITE_FAILED),
             Err(_) => Err(ACCESS_DENIED),
         }
+    }
+
+    /// The real path a save or export of the document to `path` writes, as a `File` opened for
+    /// writing would write it ([`Disk::target`]), or why it may not: a folder is not a file, and a
+    /// read-only file is not written over.
+    pub(crate) fn save_target(&self, path: &str) -> Result<std::path::PathBuf, &'static str> {
+        let real = self.target(path, true)?;
+        match std::fs::metadata(&real) {
+            Ok(m) if !m.is_file() => Err(NOT_REGULAR),
+            Ok(m) if m.permissions().readonly() => Err(READ_ONLY),
+            _ => Ok(real),
+        }
+    }
+
+    /// The real path of the file `path` that opening it as a document reads, as a `File` reads it
+    /// ([`ScriptScope::locate`]), or why it may not: it is not there, it is not a regular file, or
+    /// the script may not read it.
+    pub(crate) fn open_target(&self, path: &str) -> Result<std::path::PathBuf, &'static str> {
+        let p = self.checked(path)?;
+        let real = match self.scope.locate(p) {
+            Ok(real) => real,
+            Err(ScriptRead::Missing) => return Err(NOT_FOUND),
+            Err(ScriptRead::Refused | ScriptRead::TooLarge) => return Err(ACCESS_DENIED),
+            Err(ScriptRead::Failed(_)) => return Err(READ_FAILED),
+        };
+        if !real.is_file() {
+            return Err(NOT_REGULAR);
+        }
+        Ok(real)
     }
 
     /// Counts `n` more bytes written in the run, which ends past [`MAX_RUN_BYTES`].

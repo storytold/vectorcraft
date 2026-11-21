@@ -310,7 +310,9 @@ impl ScriptGate {
                 Access::Read => self.read.allows(&real) || self.write.allows(&real),
                 Access::Write => self.write.allows(&real),
             };
-            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real))
+            // A read-only file is not written over, also where a rename could replace it.
+            let read_only = matches!(access, Access::Write) && std::fs::metadata(&real).is_ok_and(|m| m.is_file() && m.permissions().readonly());
+            !read_only && (scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)))
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -954,6 +956,28 @@ mod tests {
         assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
         let fourth = narrow(third, gate(&base));
         assert_eq!(reads(&fourth), (true, false), "and after a fourth");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_script_gate_does_not_write_over_a_read_only_file() {
+        let (base, _) = folders("gate-read-only");
+        let out = base.join("out/kept.svg");
+        std::fs::write(&out, "<svg/>").unwrap();
+        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::of_folder(&base.join("out")), documents: vec![], also: None };
+        let (kept, fresh) = (s(out.clone()), s(base.join("out/new.svg")));
+        let check = |p: &str| with_script_gate(gate.clone(), || (check_write(p).is_ok(), check_read(p).is_ok()));
+        assert_eq!(check(&kept), (true, true));
+        let mut perms = std::fs::metadata(&out).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&out, perms.clone()).unwrap();
+        assert_eq!(check(&kept), (false, true), "a read-only file is read but not written");
+        assert!(check(&fresh).0, "a new file next to it is written");
+        let documents = ScriptGate { documents: vec![kept.clone()], ..gate.clone() };
+        assert!(!with_script_gate(documents, || check_write(&kept).is_ok()), "also when it is an open document's file");
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        std::fs::set_permissions(&out, perms).unwrap();
         let _ = std::fs::remove_dir_all(base);
     }
 
