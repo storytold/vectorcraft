@@ -1421,6 +1421,36 @@ fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     assert_eq!(app.session.tool_options()["selected"], json!([2]), "Plain click selects that artboard alone");
 }
 
+/// A tool drag ends with the modifiers held when its button went up. Shift let go after the
+/// release in the same frame still constrains the Rectangle tool's last rectangle to a square, and
+/// Shift pressed after the release does not constrain it.
+#[test]
+fn tool_drag_ends_with_the_modifiers_of_its_button_release() {
+    let draw = |held: egui::Modifiers, after: egui::Modifiers| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let from = app.canvas_rect.unwrap().center() - vec2(30.0, 15.0);
+        let to = from + vec2(60.0, 30.0);
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: held };
+        frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(held), egui::Event::PointerMoved(from), b(from, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(30.0, 15.0))]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to), b(to, false), egui::Event::ModifiersChanged(after)]);
+        frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        let st = app.session.active().unwrap();
+        let kids = st.doc.layers[0].children().unwrap();
+        assert_eq!(kids.len(), 1, "the drag draws one rectangle");
+        let b = kids[0].geometric_bounds().unwrap();
+        (b.width(), b.height())
+    };
+    let (w, h) = draw(egui::Modifiers::SHIFT, egui::Modifiers::NONE);
+    assert!((w - h).abs() < 1e-6, "Shift held at the release draws a square, got {w} x {h}");
+    let (w, h) = draw(egui::Modifiers::NONE, egui::Modifiers::SHIFT);
+    assert!((w - 2.0 * h).abs() < 1e-6, "Shift pressed after the release does not constrain, got {w} x {h}");
+}
+
 /// A press on an artboard's name starts no drag. Moving with the button still held is not hover,
 /// so Shift over a gridline intersection does not position the Perspective Selection tool's plane
 /// until the button is up.
