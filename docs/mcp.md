@@ -10916,12 +10916,13 @@ The rest are VectorCraft's own rules:
   encoded back to 0..255) is above the level (1 to 255) and black otherwise; Posterize maps each channel to the
   nearest of its 2 to 255 evenly spaced levels, the higher one on a tie. The adjusted color is composited over the
   color below in the layer's blend mode, at its opacity times its fill opacity, through its layer mask, and
-  transparency is kept. A hidden one is left out. One with nothing visible below it in its group changes nothing; in
-  a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
+  transparency is kept. A hidden one is left out. One with nothing visible below it in its group that draws (a layer
+  that stores no pixels or is at 0 opacity or 0 fill with nothing clipped to it doesn't, nor does a group of only such
+  layers) changes nothing, and so does one at 0 opacity or 0 fill; in a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
   applied.
 - Other adjustment layers, Invert, Threshold and Posterize layers that others are clipped to, that are clipped to
   another adjustment layer, whose data can't be read (a level out of range, too short, or two adjustment blocks on
-  one layer) or whose merge needs more memory than allowed, fill layers that store no pixels and whose fill isn't
+  one layer) or whose merge, its layer mask included, needs more memory than allowed, fill layers that store no pixels and whose fill isn't
   read, layer effects that are switched on, the other knockouts (top-level layers, clipped layers, layers that others
   are clipped to, Pass Through groups with layers in other modes, other Knockout values, and merges that need more
   memory than allowed) and vector masks are not applied; the `warnings` count them.
