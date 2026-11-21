@@ -10920,7 +10920,9 @@ The rest are VectorCraft's own rules:
   that stores no pixels, other than a solid color fill drawn over the canvas, a layer whose pixels are all
   transparent, or one at 0 opacity or 0 fill with nothing clipped to it doesn't, nor does a group of only such
   layers, nor a layer or group whose layer mask hides all of it, for a layer a mask of 0 over each of its pixels that
-  isn't fully transparent) changes nothing, and so does one at 0 opacity or 0 fill; in a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
+  isn't fully transparent, for a group the same over its layers' pixels, or a mask of 0 everywhere when it holds an
+  adjustment layer or a fill that stores no pixels, and for a layer with layers clipped to it the same as for the
+  layer) changes nothing, and so does one at 0 opacity or 0 fill; in a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
   applied. One whose layer mask needs more memory than allowed beside the canvases it would change is not applied,
   and a clip, or a merge for another layer, that it is part of goes on without it.
 - Other adjustment layers, Invert, Threshold and Posterize layers that others are clipped to, that are clipped to
