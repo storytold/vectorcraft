@@ -2365,6 +2365,11 @@ mod tests {
         let above = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 150.0, 60.0)));
         assert_eq!(above["source"], json!({"kind":"extent","node":id}));
         assert_eq!(above["orientation"], json!("horizontal"));
+        // Past a corner, the side the pointer is farther out on decides.
+        let corner = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 280.0, 70.0)));
+        assert_eq!(corner["orientation"], json!("vertical"));
+        let corner = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 230.0, 40.0)));
+        assert_eq!(corner["orientation"], json!("horizontal"));
         let beside = preview(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 260.0, 150.0)));
         assert_eq!(beside["orientation"], json!("vertical"));
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 260.0, 150.0));
@@ -2383,6 +2388,26 @@ mod tests {
         t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0));
         t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 100.0));
         assert!(t.pending.is_none() && t.points.len() == 1, "a plain click picks a point");
+        // After the first point, Alt does not make the path whole: the second click picks a point.
+        t.pointer(&c, &held(PointerKind::Move, 100.0, 150.0));
+        assert!(matches!(t.hover, Some(Target::Segment(_))), "{:?}", t.hover);
+        t.pointer(&c, &held(PointerKind::Down, 100.0, 150.0));
+        t.pointer(&c, &held(PointerKind::Up, 100.0, 150.0));
+        let d = t.pending.as_ref().expect("the second click starts placing a dimension between the two points");
+        assert!(
+            !matches!(d.source, Some(DimensionSource::Extent { .. }))
+                && d.a.distance(Point::new(150.0, 100.0)) < 1e-6
+                && d.b.distance(Point::new(100.0, 150.0)) < 1e-6,
+            "{d:?}"
+        );
+
+        // A hovered segment's length also stays by the pointer at a high zoom.
+        let mut t = DimensionTool::default();
+        t.pointer(&zoomed, &PointerEvent::new(PointerKind::Move, 150.0, 100.0));
+        assert!(matches!(t.hover, Some(Target::Segment(_))), "{:?}", t.hover);
+        let o = t.overlays(&zoomed);
+        let near = |o: &Overlay| matches!(o, Overlay::Measure { p, .. } if p.distance(Point::new(150.0, 100.0)) < zoomed.tol(20.0));
+        assert!(o.iter().any(near), "{o:?}");
     }
 
     /// A point that Smart Guides leave where the pointer already is (the pointer right in line

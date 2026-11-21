@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on; for an extent source, an error when that would put the line more than 1,000,000 pt from its first point and no offset is given), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -175,7 +175,14 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
                 dim.options = o.clone();
             }
             if let Some(orientation) = orientation(p, dim.mode)? {
-                dim.set_orientation(orientation, doc).map_err(error)?;
+                // An offset given with the orientation replaces the one the orientation would
+                // give: the dimension takes the orientation, and `resolve` reads its points.
+                if let Err(e) = dim.set_orientation(orientation, doc) {
+                    if p.get("offset").is_none() {
+                        return Err(error(e));
+                    }
+                    dim.orientation = orientation;
+                }
             }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;

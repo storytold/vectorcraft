@@ -425,10 +425,11 @@ impl DimensionSource {
         })
     }
     /// Whether a path it measures differs between `before` and `after`, or is in only one of them.
+    /// A node without a path, or missing from both, counts as changed.
     pub fn art_changed(&self, before: &Document, after: &Document) -> bool {
         self.nodes().into_iter().any(|id| match (before.node(id), after.node(id)) {
-            (Some(old), Some(new)) => !std::ptr::eq(old, new) && old.path_data() != new.path_data(),
-            (old, new) => old.is_some() != new.is_some(),
+            (Some(old), Some(new)) => old.path_data().is_none() || (!std::ptr::eq(old, new) && old.path_data() != new.path_data()),
+            _ => true,
         })
     }
     /// The map that took the measured art from `before` to `after`, when every path it measures
@@ -861,28 +862,44 @@ impl Dimension {
     /// that side as the old line lay from its points. A dimension of a whole path
     /// ([`DimensionSource::Extent`]) first reads from `doc` the outermost points it measures in the
     /// new orientation, and its line keeps its distance from the whole path ([`Self::span`]), on
-    /// the side the middle of the old line is on.
+    /// the side the middle of the old line is on. A line that lay across the path goes as far past
+    /// the path as it lay from its first point. For such a dimension it is an error when the path
+    /// no longer exists, or when the line would lie more than 1,000,000 pt from its first point,
+    /// and the dimension is then left as it was.
     pub fn set_orientation(&mut self, orientation: Orientation, doc: &Document) -> Result<(), String> {
         if self.mode != DimensionMode::Linear || self.orientation == orientation {
             self.orientation = orientation;
             return Ok(());
         }
-        let (handle, mut gap) = (self.handle(), self.offset.abs());
-        if let Some(DimensionSource::Extent { .. }) = &self.source {
-            // Measured from the whole path.
-            let (low, high) = self.span(Some(doc));
-            let line = self.a.to_vec2().dot(self.normal()) + self.offset;
-            gap = if line >= high { line - high } else { (low - line).max(0.0) };
+        let mut next = self.clone();
+        let (handle, mut gap) = (next.handle(), next.offset.abs());
+        if let Some(DimensionSource::Extent { .. }) = &next.source {
+            // Measured from the whole path, relative to the first point, which the line is
+            // `offset` from. A line on the path's edge, to within the rounding of the
+            // projections, is outside it.
+            let n = next.normal();
+            let base = next.a.to_vec2().dot(n);
+            let (low, high) = next.span(Some(doc));
+            let eps = 8.0 * f64::EPSILON * ((next.a.x * n.x).abs() + (next.a.y * n.y).abs() + low.abs() + high.abs());
+            let (low, high, line) = (low - base, high - base, next.offset);
+            gap = if line >= high - eps {
+                (line - high).max(0.0)
+            } else if line <= low + eps {
+                (low - line).max(0.0)
+            } else {
+                gap
+            };
         }
-        self.orientation = orientation;
-        if let Some(DimensionSource::Extent { node }) = &self.source {
-            (self.a, self.b) = extent(doc, *node, orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
+        next.orientation = orientation;
+        if let Some(DimensionSource::Extent { node }) = &next.source {
+            (next.a, next.b) = extent(doc, *node, orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
         }
-        let n = self.normal();
-        let across = |p: Point| p.to_vec2().dot(n);
-        let (low, high) = self.span(Some(doc));
-        let h = across(handle);
-        let whole = matches!(self.source, Some(DimensionSource::Extent { .. }));
+        // Along the new normal, relative to the new first point, so that the result is the offset.
+        let n = next.normal();
+        let base = next.a.to_vec2().dot(n);
+        let (low, high) = next.span(Some(doc));
+        let (low, high, h) = (low - base, high - base, handle.to_vec2().dot(n) - base);
+        let whole = matches!(next.source, Some(DimensionSource::Extent { .. }));
         let at = if whole && h >= high {
             high + gap
         } else if whole && h <= low {
@@ -894,11 +911,14 @@ impl Dimension {
         } else {
             low - gap
         };
-        let offset = at - across(self.a);
-        if offset.is_finite() && offset.abs() <= 1e6 {
-            self.offset = offset;
+        if at.is_finite() && at.abs() <= 1e6 {
+            next.offset = at;
+        } else if whole {
+            // The old offset would put the line across the path.
+            return Err("Invalid dimension offset".into());
         }
-        self.length = self.measured();
+        next.length = next.measured();
+        *self = next;
         Ok(())
     }
     fn bisector(&self) -> Vec2 {

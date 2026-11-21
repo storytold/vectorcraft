@@ -84,7 +84,7 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   placed.
   The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
-  describes plotting an object's overall horizontal and vertical dimensions by holding Alt
+  describes plotting an object's horizontal and vertical dimensions by holding Alt
   (Option on macOS) over its path. With Alt held, hovering a path shows a box through the path's
   outermost points, as a Smart Guide when Smart Guides are on and in the tool's own color when
   they are off, with its width and height beside the pointer when Measurement Labels are on.
@@ -177,8 +177,10 @@ another document.
   line from the first point: along the left normal of a → b for an aligned dimension, downward
   for a horizontal one and leftward for a vertical one. A negative offset goes the other way.
 - `dimension.update`: restyle or move existing dimensions, or change the orientation of linear
-  ones. A new orientation keeps the line on the side of the points it was on. An update that
-  changes nothing records no undo step.
+  ones. A new orientation keeps the line on the side of the points it was on. For a dimension of
+  a whole path, a new orientation that would put the line more than 1,000,000 pt from its first
+  point is an error unless the update also gives `offset`. An update that changes nothing records
+  no undo step.
 - `dimension.applyToAll`: every dimension takes one dimension's style, in one undo step.
 - `tool.select {"tool":"dimension"}` and
   `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"mm","scale":"1:10"}}}`
