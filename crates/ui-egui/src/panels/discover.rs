@@ -1,5 +1,17 @@
 //! Help searches the tools, menu commands, and built-in tutorials.
 
+use craft::behavior::{DisplayOrder, ItemSource, Selection};
+use craft::i18n::Folder;
+use craft_keymap::{Chord, CommandRef};
+use craft_ui::buttons::Button;
+use craft_ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft_ui::display::{Kbd, Shade, Text};
+use craft_ui::layout_components::Row;
+use craft_ui::list::{List, ListRow};
+use craft_ui::menu::search::{HelpEntry, SearchIndex, Synonyms, rank};
+use craft_ui::runtime::focus::{self, FocusTarget};
+use craft_ui::style::TypeRole;
+use craft_ui::text::TextField;
 use egui::Ui;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -8,6 +20,8 @@ use crate::{VectorcraftApp, menus};
 
 pub const ID: &str = "discover";
 const MAX_QUERY: usize = 1024;
+/// The sections of the results, in the order they show.
+const SECTIONS: [&str; 3] = ["tool", "command", "tutorial"];
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Hit {
@@ -32,18 +46,15 @@ pub struct View {
     pub results: Vec<Hit>,
     pub selected: Option<usize>,
     pub focus: bool,
-    /// The menu state ([`crate::native_menu::state_hash`]: commands run, shortcuts, the language,
+    /// The menu state ([`menus::model::state_key`]: commands run, shortcuts, the language,
     /// recent files and more) the results were last brought up to date for.
     current_for: Option<u64>,
 }
 
-fn matches(query: &str, text: &str) -> bool {
-    let text = text.to_lowercase();
-    query.split_whitespace().all(|word| text.contains(word))
-}
-
-fn now(app: &VectorcraftApp) -> u64 {
-    crate::native_menu::state_hash(app, None)
+/// The text of a tool's shortcut, empty when it has none.
+fn tool_shortcut(id: &str) -> String {
+    // PLAN: assumed crate::commands::chord(command: &str) -> Option<String>, the `Chord::display` text of the command's chord
+    crate::commands::chord(&format!("tool:{id}")).unwrap_or_default()
 }
 
 /// Updates the retained results' labels, menu paths and shortcuts after the menu state changes (a
@@ -52,7 +63,7 @@ fn now(app: &VectorcraftApp) -> u64 {
 /// Grid), and leaves the results when no menu lists it any more, such as a recent file that was
 /// removed.
 fn refresh(app: &mut VectorcraftApp) {
-    let stamp = now(app);
+    let stamp = menus::model::state_key(app, None);
     if app.ui.discover.current_for == Some(stamp) {
         return;
     }
@@ -70,7 +81,7 @@ fn refresh(app: &mut VectorcraftApp) {
         match hit.kind {
             "tool" => {
                 hit.label = crate::i18n::tr(lang, &hit.english_label).into();
-                hit.shortcut = crate::shortcut_editor::tool_shortcut(&hit.id).unwrap_or_default().into();
+                hit.shortcut = tool_shortcut(&hit.id);
             }
             "command" => {
                 let same = by_command.get(&(hit.id.as_str(), hit.params.to_string())).map_or(&[][..], Vec::as_slice);
@@ -94,28 +105,34 @@ fn refresh(app: &mut VectorcraftApp) {
     app.ui.discover.current_for = Some(stamp);
 }
 
-fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
-    let query = query.trim().to_lowercase();
-    if query.is_empty() {
-        return Vec::new();
-    }
-    let mut hits = Vec::new();
+/// The tools, each with the entry the search ranks it by.
+fn tool_hits() -> Vec<(HelpEntry, Hit)> {
     let lang = crate::i18n::current();
-    for tool in vectorcraft_tools::catalog::all_tools() {
-        let label = crate::i18n::tr(lang, tool.label);
-        if matches(&query, &format!("{} {label} {}", tool.label, tool.id)) {
-            hits.push(Hit {
+    vectorcraft_tools::catalog::all_tools()
+        .into_iter()
+        .map(|tool| {
+            let label: String = crate::i18n::tr(lang, tool.label).into();
+            let entry = HelpEntry::new(CommandRef::with_params("learn.locateTool", json!({"tool": tool.id})), label.clone())
+                .with_english(tool.label)
+                .with_words(tool.id);
+            let hit = Hit {
                 kind: "tool",
                 id: tool.id.into(),
-                label: label.into(),
+                label,
                 path: vec![],
-                shortcut: crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or_default().into(),
+                shortcut: tool_shortcut(tool.id),
                 english_label: tool.label.into(),
                 english_path: vec![],
                 params: Value::Null,
-            });
-        }
-    }
+            };
+            (entry, hit)
+        })
+        .collect()
+}
+
+/// The menu commands, each with the entry the search ranks it by.
+fn command_hits(app: &VectorcraftApp) -> Vec<(HelpEntry, Hit)> {
+    let mut hits = Vec::new();
     for entry in menus::menu_entries(app) {
         let Some(id) = entry.command else { continue };
         // The menu bar in the window has no VectorCraft menu; only the native macOS bar shows it.
@@ -123,35 +140,63 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
             continue;
         }
         let label = menus::shown_label(app, &id, &entry.params, &entry.label);
-        let path = entry.shown_path;
-        if matches(&query, &format!("{} {label} {} {} {id}", entry.label, entry.path.join(" "), path.join(" "))) {
-            hits.push(Hit {
-                kind: "command",
-                id,
-                label,
-                path,
-                shortcut: entry.shortcut,
-                english_label: entry.label,
-                english_path: entry.path,
-                params: entry.params,
-            });
-        }
+        let help = HelpEntry::new(CommandRef::with_params(id.clone(), entry.params.clone()), label.clone())
+            .with_english(entry.label.clone())
+            .with_path(entry.shown_path.clone())
+            .with_words(format!("{} {id}", entry.path.join(" ")));
+        let hit = Hit {
+            kind: "command",
+            id,
+            label,
+            path: entry.shown_path,
+            shortcut: entry.shortcut,
+            english_label: entry.label,
+            english_path: entry.path,
+            params: entry.params,
+        };
+        hits.push((help, hit));
     }
+    hits
+}
+
+/// The tutorials, each with the entry the search ranks it by.
+fn tutorial_hits() -> Vec<(HelpEntry, Hit)> {
+    let mut hits = Vec::new();
     for skill in super::learn::catalog::SKILLS {
         for tutorial in skill.tutorials {
-            if matches(&query, &format!("{} {} {}", skill.title, tutorial.title, tutorial.id)) {
-                hits.push(Hit {
-                    kind: "tutorial",
-                    id: tutorial.id.into(),
-                    label: tutorial.title.into(),
-                    path: vec![skill.title.into()],
-                    shortcut: String::new(),
-                    english_label: tutorial.title.into(),
-                    english_path: vec![skill.title.into()],
-                    params: Value::Null,
-                });
-            }
+            let entry = HelpEntry::new(CommandRef::with_params("learn.show", json!({"tutorial": tutorial.id})), tutorial.title)
+                .with_path([skill.title])
+                .with_words(tutorial.id);
+            let hit = Hit {
+                kind: "tutorial",
+                id: tutorial.id.into(),
+                label: tutorial.title.into(),
+                path: vec![skill.title.into()],
+                shortcut: String::new(),
+                english_label: tutorial.title.into(),
+                english_path: vec![skill.title.into()],
+                params: Value::Null,
+            };
+            hits.push((entry, hit));
         }
+    }
+    hits
+}
+
+fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    // PLAN: assumed SearchIndex::new(&Folder, &[HelpEntry], &Synonyms) (the contract's takes an `EnvView`, which a command has no `Ui` for)
+    let folder = Folder::new(crate::i18n::current().code());
+    // PLAN: assumed crate::i18n::search_words() -> SearchWords, the interface language's `Words::set::<SearchWords>()`
+    let synonyms = Synonyms::of(&crate::i18n::search_words());
+    let mut hits = Vec::new();
+    for section in [tool_hits(), command_hits(app), tutorial_hits()] {
+        let (entries, candidates): (Vec<HelpEntry>, Vec<Hit>) = section.into_iter().unzip();
+        let index = SearchIndex::new(&folder, &entries, &synonyms);
+        hits.extend(rank(&index, query, &[], &|_| 0).into_iter().filter_map(|at| candidates.get(at).cloned()));
     }
     hits
 }
@@ -161,7 +206,7 @@ fn results(app: &VectorcraftApp) -> Value {
 }
 
 fn set_query(app: &mut VectorcraftApp, query: &str) {
-    app.ui.discover.current_for = Some(now(app));
+    app.ui.discover.current_for = Some(menus::model::state_key(app, None));
     app.ui.discover.results = search(app, query);
     app.ui.discover.query = query.into();
     app.ui.discover.selected = None;
@@ -227,23 +272,73 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     })
 }
 
+/// One row of the results list: a section heading, or a result by its position in `View::results`.
+#[derive(Clone, Copy)]
+enum ResultRow {
+    Heading(&'static str),
+    Hit(usize),
+}
+
+/// The results list's rows: each section that has results, under its heading.
+struct ResultRows(Vec<ResultRow>);
+
+impl ResultRows {
+    fn of(results: &[Hit]) -> Self {
+        let mut rows = Vec::with_capacity(results.len() + SECTIONS.len());
+        for kind in SECTIONS {
+            let hits: Vec<usize> = results.iter().enumerate().filter(|(_, hit)| hit.kind == kind).map(|(index, _)| index).collect();
+            if !hits.is_empty() {
+                rows.push(ResultRow::Heading(kind));
+                rows.extend(hits.into_iter().map(ResultRow::Hit));
+            }
+        }
+        ResultRows(rows)
+    }
+}
+
+impl DisplayOrder<usize> for ResultRows {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn is_section(&self, at: usize) -> bool {
+        matches!(self.0.get(at), Some(ResultRow::Heading(_)))
+    }
+}
+
+impl ItemSource<usize> for ResultRows {}
+
+fn section_title(kind: &str) -> String {
+    match kind {
+        "tool" => tl!("Tools"),
+        "command" => tl!("Search Commands…"),
+        _ => tl!("Learn"),
+    }
+    .to_string()
+}
+
+/// The chord of a hit's shortcut text; text that is not a chord shows as written.
+fn shortcut_kbd(shortcut: &str) -> Kbd {
+    Chord::parse(shortcut).map_or_else(|_| Kbd::new(shortcut.to_owned()), Kbd::chord)
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     refresh(app);
     let mut query = app.ui.discover.query.clone();
-    let field = ui.add(egui::TextEdit::singleline(&mut query).char_limit(MAX_QUERY).hint_text(tl!("Search")).desired_width(f32::INFINITY));
+    let field = TextField::search(tl!("Search").to_string(), Bind::bound(&mut query)).limit(MAX_QUERY).show(ui);
     if std::mem::take(&mut app.ui.discover.focus) {
-        field.request_focus();
+        focus::request(ui.ctx(), FocusTarget::Id(field.response.id));
     }
-    if field.changed()
+    if query != app.ui.discover.query
         && let Err(e) = app.run("help.discover.search", json!({"query": query}))
     {
         app.status(e);
     }
-    if (field.has_focus() || field.lost_focus())
-        && !app.session.tool_busy()
-        && !app.session.tool_composing()
-        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-    {
+    if field.escaped {
         if let Err(e) = app.run("window.panel.close", json!({"panel": ID})) {
             app.status(e);
         }
@@ -253,56 +348,54 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut home = false;
     let mut back = false;
     let mut locate = None;
-    ui.horizontal(|ui| {
-        home = ui.button(tl!("Home")).clicked();
+    Row::new().show(ui, |ui, _| {
+        home = Button::new(tl!("Home").to_string()).show(ui).clicks == 1;
         if app.ui.discover.selected.is_some() {
-            back = ui.button(tl!("Back")).clicked();
+            back = Button::new(tl!("Back").to_string()).show(ui).clicks == 1;
         }
     });
-    crate::widgets::divider(ui);
     if let Some(hit) = app.ui.discover.selected.and_then(|i| app.ui.discover.results.get(i)) {
-        ui.heading(&hit.label);
+        Text::new(hit.label.clone()).role(TypeRole::BodyStrong).show(ui);
         if !hit.path.is_empty() {
-            ui.label(hit.path.join(" › "));
+            Text::new(hit.path.join(" › ")).shade(Shade::Muted).show(ui);
         }
         if !hit.shortcut.is_empty() {
-            ui.label(menus::pretty_shortcut(&hit.shortcut));
+            shortcut_kbd(&hit.shortcut).show(ui);
         }
         if hit.kind == "tutorial"
             && let Some((_, tutorial)) = super::learn::catalog::tutorial(&hit.id)
         {
             for (index, step) in tutorial.steps.iter().enumerate() {
-                ui.label(format!("{}. {}", index + 1, step.plain()));
-                if let Some(tool) = step.tool
-                    && let Some(info) = vectorcraft_tools::tool_info(tool)
-                    && ui.link(crate::i18n::tr(crate::i18n::current(), info.label)).clicked()
-                {
-                    locate = Some(tool);
-                }
+                Row::new().show(ui, |ui, _| {
+                    Text::new(format!("{}.", index + 1)).show(ui);
+                    if super::learn::step_text(ui, step) {
+                        locate = step.tool;
+                    }
+                });
             }
         }
     } else {
-        egui::ScrollArea::vertical().id_salt("discover-results").show(ui, |ui| {
-            if app.ui.discover.results.is_empty() && !query.trim().is_empty() {
-                ui.label(tl!("No results"));
-            }
-            for kind in ["tool", "command", "tutorial"] {
-                let label = match kind {
-                    "tool" => tl!("Tools"),
-                    "command" => tl!("Search Commands…"),
-                    _ => tl!("Learn"),
-                };
-                let mut heading = false;
-                for (index, hit) in app.ui.discover.results.iter().enumerate().filter(|(_, h)| h.kind == kind) {
-                    if !heading {
-                        crate::widgets::subheader(ui, label);
-                        heading = true;
-                    }
-                    if ui.selectable_label(false, &hit.label).on_hover_text(hit.path.join(" › ")).clicked() {
-                        chosen = Some(index);
-                    }
-                }
-            }
+        if app.ui.discover.results.is_empty() && !query.trim().is_empty() {
+            Text::new(tl!("No results").to_string()).show(ui);
+        }
+        let rows = ResultRows::of(&app.ui.discover.results);
+        let hits = &app.ui.discover.results;
+        let mut selection = Selection::default();
+        List::new(tl!("Search").to_string())
+            .id_salt("discover-results")
+            .select(SelectMode::Single)
+            .selection(Bind::bound(&mut selection))
+            .show_items(ui, &rows, &mut |at, _| match rows.0.get(*at) {
+                Some(ResultRow::Heading(kind)) => ListRow::new(section_title(kind)).section_heading(),
+                Some(ResultRow::Hit(index)) => match hits.get(*index) {
+                    Some(hit) => ListRow::new(hit.label.clone()).tooltip(hit.path.join(" › ")),
+                    None => ListRow::spacer(),
+                },
+                None => ListRow::spacer(),
+            });
+        chosen = selection.items.first().and_then(|at| match rows.0.get(*at) {
+            Some(ResultRow::Hit(index)) => Some(*index),
+            _ => None,
         });
     }
     if home {
