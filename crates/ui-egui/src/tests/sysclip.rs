@@ -1,11 +1,10 @@
 //! The system clipboard's formats through a headless fake service (M4.57): what Copy publishes,
 //! what Paste takes from other apps (bitmaps, PDF, text), the Paste menu and keyboard paste.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex, MutexGuard};
 
+use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, EventClipboard, Flavor, RGBA8};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_engine::Session;
@@ -13,22 +12,18 @@ use vectorcraft_engine::cmd::clipboard::{BITMAP, Flavour, PDF, PNG, SVG, TEXT};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
-use crate::{Services, SystemClipboard, VectorcraftApp, background, menus};
+use crate::sysclip::engine_flavour;
+use crate::{Services, VectorcraftApp, background};
 
 /// The fake clipboard's contents: what the app wrote, or what "another app" copied.
 #[derive(Default)]
 pub(super) struct Board {
     flavours: Vec<Flavour>,
-    ours: bool,
     /// How many times the app wrote it.
     writes: usize,
     /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
     /// find nothing.
     locked: bool,
-    /// Raised by every write and every copy elsewhere.
-    changes: u64,
-    /// The platform has no change count.
-    uncounted: bool,
     /// The app's writes empty the clipboard and then fail.
     partial: bool,
     /// With `partial`, the formats other than text are written before the failure.
@@ -44,11 +39,17 @@ pub(super) struct Board {
     text_only_has: bool,
 }
 
-struct Fake(Rc<RefCell<Board>>);
+/// A [`ClipboardBackend`] over a shared [`Board`]. It is `Send`, so the board is shared through a
+/// mutex: the test keeps the other end to look at what the app wrote and to copy "elsewhere".
+pub(super) struct Fake(Arc<Mutex<Board>>);
 
 impl Fake {
-    fn find(&self, mimes: &[&'static str]) -> Option<Flavour> {
-        let b = self.0.borrow();
+    fn board(&self) -> MutexGuard<'_, Board> {
+        self.0.lock().unwrap()
+    }
+
+    fn find(&self, mimes: &[&str]) -> Option<Flavour> {
+        let b = self.board();
         if b.locked {
             return None;
         }
@@ -57,51 +58,76 @@ impl Fake {
     }
 }
 
-impl SystemClipboard for Fake {
-    fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
-        let mut b = self.0.borrow_mut();
+/// `png` as the raw bitmap a backend reads a bitmap as ([`RGBA8`]): width and height as little-endian
+/// `u32`s, then straight RGBA8 pixels.
+fn raw_bitmap(png: &[u8]) -> Option<Vec<u8>> {
+    let img = image::load_from_memory(png).ok()?.to_rgba8();
+    let mut raw = [img.width().to_le_bytes(), img.height().to_le_bytes()].concat();
+    raw.extend_from_slice(img.as_raw());
+    Some(raw)
+}
+
+impl ClipboardBackend for Fake {
+    fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
+        let ours: Vec<Flavour> = flavors.iter().cloned().filter_map(engine_flavour).collect();
+        let mut b = self.board();
         if b.locked || b.refuse {
-            return Err("another app has the clipboard open".into());
+            return Err(ClipboardError::Other("another app has the clipboard open".into()));
         }
         if let Some(copied) = b.race.take() {
             b.flavours = vec![copied];
             if b.race_with_our_formats {
-                b.flavours.extend(flavours.iter().filter(|f| f.mime != TEXT).cloned());
+                b.flavours.extend(ours.into_iter().filter(|f| f.mime != TEXT));
             }
-            b.ours = false;
-            b.changes += 1;
-            return Err("another app has the clipboard open".into());
+            return Err(ClipboardError::Other("another app has the clipboard open".into()));
         }
         if b.partial {
-            b.flavours = if b.partial_keeps_others { flavours.iter().filter(|f| f.mime != TEXT).cloned().collect() } else { vec![] };
-            b.changes += 1;
-            return Err("a format could not be written".into());
+            b.flavours = if b.partial_keeps_others { ours.into_iter().filter(|f| f.mime != TEXT).collect() } else { vec![] };
+            return Err(ClipboardError::Other("a format could not be written".into()));
         }
-        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1, changes: b.changes + 1, ..std::mem::take(&mut *b) };
-        Ok(())
+        *b = Board { flavours: ours, writes: b.writes + 1, ..std::mem::take(&mut *b) };
+        Ok(0)
     }
-    fn change_count(&mut self) -> Option<u64> {
-        let b = self.0.borrow();
-        (!b.uncounted).then_some(b.changes)
+
+    fn read(&mut self, mimes: &[&str], _limit: u64) -> Result<Option<Flavor>, ClipboardError> {
+        Ok(self.find(mimes).map(|f| {
+            // A bitmap found as "any bitmap" comes back raw, as a backend reads one.
+            let any_bitmap = f.mime.starts_with("image/") && f.mime != SVG && mimes.contains(&BITMAP) && !mimes.contains(&f.mime);
+            match any_bitmap.then(|| raw_bitmap(&f.data)).flatten() {
+                Some(raw) => Flavor::new(RGBA8, raw),
+                None => Flavor::new(f.mime, f.data),
+            }
+        }))
     }
-    fn holds_ours(&mut self) -> bool {
-        self.0.borrow().ours
+
+    fn read_image(&mut self, _limit: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+        let img = self.find(&[BITMAP]).and_then(|f| image::load_from_memory(&f.data).ok()).map(|img| img.to_rgba8());
+        Ok(img.map(|img| ClipboardImage { width: img.width(), height: img.height(), rgba: img.into_raw() }))
     }
-    fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
-        self.find(mimes)
+
+    fn read_files(&mut self, _limit: usize) -> Result<Option<Vec<std::path::PathBuf>>, ClipboardError> {
+        Ok(None)
     }
-    fn has(&mut self, mimes: &[&'static str]) -> bool {
-        if self.0.borrow().text_only_has {
+
+    fn has(&mut self, mimes: &[&str]) -> bool {
+        if self.board().text_only_has {
             return mimes.contains(&TEXT) && self.find(&[TEXT]).is_some();
         }
         self.find(mimes).is_some()
     }
 }
 
+/// A fake clipboard and the board the test looks at it through. A test that builds its own app
+/// installs the fake with `Services::clipboard`.
+pub(super) fn fake() -> (Fake, Arc<Mutex<Board>>) {
+    let board = Arc::new(Mutex::new(Board::default()));
+    (Fake(board.clone()), board)
+}
+
 /// An app with a document and a fake system clipboard, the view centred on (250, 180).
-pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
-    let board = Rc::new(RefCell::new(Board::default()));
-    let services = Services { system_clipboard: Some(Box::new(Fake(board.clone()))), ..Default::default() };
+pub(super) fn app() -> (VectorcraftApp, Arc<Mutex<Board>>) {
+    let (fake, board) = fake();
+    let services = Services { clipboard: Some(Box::new(fake)), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
     let v = app.view_mut().unwrap();
@@ -110,36 +136,31 @@ pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 }
 
 /// Another app copies `flavours`.
-pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
+pub(super) fn copy_elsewhere(board: &Arc<Mutex<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
-    let mut b = board.borrow_mut();
-    *b = Board { flavours, ours: false, changes: b.changes + 1, ..std::mem::take(&mut *b) };
+    let mut b = board.lock().unwrap();
+    *b = Board { flavours, ..std::mem::take(&mut *b) };
 }
 
 /// Another app opens the clipboard (`true`) or closes it.
-pub(super) fn lock(board: &Rc<RefCell<Board>>, locked: bool) {
-    board.borrow_mut().locked = locked;
-}
-
-/// The fake clipboard reports no change count, as on platforms that have none.
-pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
-    board.borrow_mut().uncounted = true;
+pub(super) fn lock(board: &Arc<Mutex<Board>>, locked: bool) {
+    board.lock().unwrap().locked = locked;
 }
 
 /// The fake clipboard's `has` finds text only, as the Linux clipboard's does.
-pub(super) fn has_text_only(board: &Rc<RefCell<Board>>) {
-    board.borrow_mut().text_only_has = true;
+pub(super) fn has_text_only(board: &Arc<Mutex<Board>>) {
+    board.lock().unwrap().text_only_has = true;
 }
 
 /// The app's writes fail (`true`) and change nothing, while reads still work.
-pub(super) fn refuse_writes(board: &Rc<RefCell<Board>>, refuse: bool) {
-    board.borrow_mut().refuse = refuse;
+pub(super) fn refuse_writes(board: &Arc<Mutex<Board>>, refuse: bool) {
+    board.lock().unwrap().refuse = refuse;
 }
 
 /// The app's writes empty the clipboard and then fail, as when one format can't be written; with
 /// `keep_others`, the formats other than text are written.
-pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>, keep_others: bool) {
-    let mut b = board.borrow_mut();
+pub(super) fn fail_writes_after_emptying(board: &Arc<Mutex<Board>>, keep_others: bool) {
+    let mut b = board.lock().unwrap();
     b.partial = true;
     b.partial_keeps_others = keep_others;
 }
@@ -147,8 +168,8 @@ pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>, keep_others
 /// Another app copies `data` of type `mime` while the app's next write tries to open the
 /// clipboard, and that write fails. With `our_formats`, its copy also carries the app's formats
 /// other than text.
-pub(super) fn copy_during_next_write(board: &Rc<RefCell<Board>>, mime: &'static str, data: Vec<u8>, our_formats: bool) {
-    let mut b = board.borrow_mut();
+pub(super) fn copy_during_next_write(board: &Arc<Mutex<Board>>, mime: &'static str, data: Vec<u8>, our_formats: bool) {
+    let mut b = board.lock().unwrap();
     b.race = Some(Flavour { mime, data });
     b.race_with_our_formats = our_formats;
 }
@@ -165,12 +186,12 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
 }
 
 /// How many times the app wrote the clipboard.
-pub(super) fn writes(board: &Rc<RefCell<Board>>) -> usize {
-    board.borrow().writes
+pub(super) fn writes(board: &Arc<Mutex<Board>>) -> usize {
+    board.lock().unwrap().writes
 }
 
-pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
-    board.borrow().flavours.iter().map(|f| f.mime).collect()
+pub(super) fn written(board: &Arc<Mutex<Board>>) -> Vec<&'static str> {
+    board.lock().unwrap().flavours.iter().map(|f| f.mime).collect()
 }
 
 /// The objects the last paste selected.
@@ -291,7 +312,7 @@ fn key(key: egui::Key, pressed: bool, modifiers: egui::Modifiers) -> egui::Event
 }
 
 /// [`app`] with the background worker of a host that writes from any thread, as the desktop app's.
-fn app_with_worker() -> (VectorcraftApp, Rc<RefCell<Board>>) {
+fn app_with_worker() -> (VectorcraftApp, Arc<Mutex<Board>>) {
     let (mut app, board) = app();
     app.services.write_shared = Some(Arc::new(|_: &str, _: &[u8]| Err("no files are written here".into())));
     (app, board)
@@ -299,7 +320,7 @@ fn app_with_worker() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
 /// until the sender is dropped, or for 10 s.
-pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
+pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Arc<Mutex<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)
@@ -340,11 +361,11 @@ fn copy_publishes_pdf_to_the_service_only_with_the_preference_on() {
     let (mut app, board) = app();
     copy_rect(&mut app);
     assert_eq!(written(&board), [TEXT, SVG, PNG]);
-    assert!(String::from_utf8_lossy(&board.borrow().flavours[0].data).contains("<svg"));
+    assert!(String::from_utf8_lossy(&board.lock().unwrap().flavours[0].data).contains("<svg"));
     run(&mut app, "prefs.set", json!({"key": "copyAsPdf", "value": true}));
     run(&mut app, "edit.cut", json!({}));
     assert_eq!(written(&board), [TEXT, SVG, PDF, PNG]);
-    assert!(board.borrow().flavours[2].data.starts_with(b"%PDF"));
+    assert!(board.lock().unwrap().flavours[2].data.starts_with(b"%PDF"));
     // Nothing goes through egui's text output when the service is there.
     assert!(app.clipboard_out.is_none());
 }
@@ -354,7 +375,7 @@ fn our_own_copy_pastes_the_lossless_internal_clipboard() {
     let (mut app, board) = app();
     copy_rect(&mut app);
     // As if the clipboard held only the PNG: still ours, so the rectangle comes back as a path.
-    board.borrow_mut().flavours.retain(|f| f.mime == PNG);
+    board.lock().unwrap().flavours.retain(|f| f.mime == PNG);
     run(&mut app, "edit.paste", json!({}));
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }));
 }
@@ -378,7 +399,7 @@ fn copy_publishes_the_formats_the_worker_makes_and_pastes_meanwhile() {
     drop(hold);
     background::wait_all(&mut app);
     assert_eq!(written(&board), [TEXT, SVG, PNG]);
-    assert_eq!(board.borrow().flavours, app.session.clipboard_flavours());
+    assert_eq!(board.lock().unwrap().flavours, app.session.clipboard_flavours());
     assert_eq!(app.ui.status, "Ready");
 }
 
@@ -395,7 +416,7 @@ fn a_later_copy_replaces_formats_not_written_yet() {
     run(&mut app, "edit.cut", json!({}));
     drop(hold);
     background::wait_all(&mut app);
-    let b = board.borrow();
+    let b = board.lock().unwrap();
     assert_eq!(b.writes, 1);
     assert_eq!(b.flavours, app.session.clipboard_flavours());
     assert_ne!(b.flavours, first);
@@ -410,11 +431,11 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
     copy_elsewhere(&board, vec![(TEXT, b"Words another app copied".to_vec())]);
     copy_rect(&mut app);
     assert_eq!(written(&board), [TEXT, SVG, PNG]);
-    assert_eq!(board.borrow().flavours, app.session.clipboard_flavours());
+    assert_eq!(board.lock().unwrap().flavours, app.session.clipboard_flavours());
     assert_eq!(app.background.jobs.len(), 1, "only the save");
     drop(hold);
     background::wait_all(&mut app);
-    assert_eq!(board.borrow().writes, 1);
+    assert_eq!(board.lock().unwrap().writes, 1);
 }
 
 /// A PNG whose header reads but whose pixel data is cut short, which the renderer can't decode.
@@ -578,7 +599,7 @@ fn text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     copy_elsewhere(&board, vec![(TEXT, b"Words copied in a field".to_vec())]);
     drop(hold);
     background::wait_all(&mut app);
-    assert_eq!(board.borrow().writes, 0);
+    assert_eq!(board.lock().unwrap().writes, 0);
     run(&mut app, "edit.paste", json!({}));
     let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("not type: {:?}", pasted(&app)[0].kind) };
     assert_eq!(t.plain_text(), "Words copied in a field");
@@ -596,7 +617,7 @@ fn label_text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     assert!(app.forwarded.is_empty(), "the window's Copy stays there");
     drop(hold);
     background::wait_all(&mut app);
-    assert_eq!(board.borrow().writes, 0);
+    assert_eq!(board.lock().unwrap().writes, 0);
 }
 
 /// The Edit menu's Paste into a text field after Copy of type, before the formats are written: it
@@ -615,7 +636,9 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
     for paste in [false, true] {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             if paste {
-                menus::invoke_from_system_menu(&mut app, ui.ctx(), "edit.paste", json!({}));
+                craft_ui::runtime::commands::fire(ui.ctx(), "edit.paste", craft_ui::runtime::commands::FireSource::Menu);
+                // PLAN: assumed `fn run_fired(&mut self, ctx: &egui::Context)` on VectorcraftApp (hub-w1) runs what was fired.
+                app.run_fired(ui.ctx());
             }
             ui.add(egui::TextEdit::singleline(&mut field).id(id)).request_focus();
         });
@@ -715,8 +738,8 @@ fn the_worker_makes_the_formats_the_session_makes() {
             assert_eq!(written(&board), mimes, "{what}");
             let session = app.session.clipboard_flavours();
             let dated = mimes.contains(&PDF) && vectorcraft_doc::metadata::output_time() != second;
-            if board.borrow().flavours == session || !dated {
-                assert_eq!(board.borrow().flavours, session, "{what}");
+            if board.lock().unwrap().flavours == session || !dated {
+                assert_eq!(board.lock().unwrap().flavours, session, "{what}");
                 return;
             }
         }
@@ -740,7 +763,7 @@ fn the_worker_makes_the_formats_the_session_makes() {
     let t = run(&mut app, "text.create", json!({"x": 20, "y": 250, "text": "Words"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [t]}));
     check(&mut app, "type alone", &[TEXT, SVG, PNG]);
-    assert_eq!(board.borrow().flavours[0].data, b"Words");
+    assert_eq!(board.lock().unwrap().flavours[0].data, b"Words");
     run(&mut app, "prefs.set", json!({"key": "copyAsPdf", "value": true}));
     run(&mut app, "select.all", json!({}));
     check(&mut app, "everything, with On Copy: PDF", &[TEXT, SVG, PDF, PNG]);
@@ -821,17 +844,6 @@ fn a_pdf_from_another_app_pastes_as_vectors_ahead_of_its_bitmap() {
 }
 
 #[test]
-fn a_bitmap_on_the_system_clipboard_enables_paste() {
-    let (mut app, board) = app();
-    copy_elsewhere(&board, vec![(PNG, blue_png())]);
-    assert!(!menus::enabled(&app, "edit.paste"), "not looked at before a frame");
-    frame(&mut app, vec![]);
-    assert!(menus::enabled(&app, "edit.paste") && menus::enabled(&app, "edit.pasteInPlace"));
-    menus::invoke(&mut app, "edit.paste", json!({}));
-    assert!(matches!(pasted(&app)[0].kind, NodeKind::Image(_)));
-}
-
-#[test]
 fn keyboard_paste_of_a_bitmap_without_a_paste_event() {
     let (mut app, board) = app();
     let (cmd, none) = (egui::Modifiers::COMMAND, egui::Modifiers::NONE);
@@ -852,10 +864,16 @@ fn keyboard_paste_of_a_bitmap_without_a_paste_event() {
     assert_eq!(count(&app), 2);
 }
 
+/// An app on a host that reads its clipboard only inside a paste event (the web).
+fn web_app() -> VectorcraftApp {
+    let clipboard = EventClipboard::new(|| 0, |_| Ok(0));
+    VectorcraftApp::new(Session::new(), Services { clipboard: Some(Box::new(clipboard)), ..Default::default() })
+}
+
 #[test]
-fn without_the_service_plain_text_is_still_not_pasted() {
-    // The web: SVG text through egui only (see shortcuts' copy_and_paste_events_use_the_system_clipboard).
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+fn on_the_web_plain_text_is_still_not_pasted() {
+    // The web: SVG text through the paste event only (see shortcuts' copy_and_paste_events_use_the_system_clipboard).
+    let mut app = web_app();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     frame(&mut app, vec![]);
     frame(&mut app, vec![key(egui::Key::V, false, egui::Modifiers::COMMAND)]);
@@ -864,9 +882,9 @@ fn without_the_service_plain_text_is_still_not_pasted() {
 }
 
 #[test]
-fn a_picture_the_host_read_from_a_paste_pastes_without_the_service() {
+fn on_the_web_a_picture_the_host_read_from_a_paste_pastes() {
     // The web: the page's paste event carries the picture, egui's Paste event no text.
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = web_app();
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
     let v = app.view_mut().unwrap();
     (v.center, v.fitted) = (Point::new(250.0, 180.0), true);
