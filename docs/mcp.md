@@ -9354,12 +9354,12 @@ keeps its cell. With `moveArtwork`, an object moves with the listed artboard its
 is on another artboard stays. `indices` that is not a list, an empty list, an entry that is not a whole number and an
 `at` that is not [x, y] are refused before anything moves, and an index past the last artboard is `no such artboard`.
 The reply adds `indices` and `moved`, the number of artboards that moved; with none moved (every listed artboard
-locked, or already in place) no undo step is recorded. Without `indices` the command lays out every artboard as
-before, and its reply is `{artboards, rows, columns}`. In the desktop app, the Artboard tool's canvas menu and
-Contextual Task Bar (Rearrange), and while the Artboard tool is in use the Artboards panel's menu (Rearrange…) and its
-Rearrange button, open the Rearrange dialog (kind `rearrangeArtboards` with field `indices`) for the artboards the tool
-has selected, showing their count. With another tool Rearrange… is off and the panel's button is Rearrange All
-Artboards. Its OK changes nothing yet: the grid's outline follows the pointer, and the
+locked, or already in place) no undo step is recorded. Without `indices` the command lays out every artboard, and its
+reply is `{artboards, rows, columns}`; `at` there puts the grid's top-left at `at` too. In the desktop app, the
+Artboard tool's canvas menu and Contextual Task Bar (Rearrange), and while the Artboard tool is in use the Artboards
+panel's menu (Rearrange…) and its Rearrange button, open the Rearrange dialog (kind `rearrangeArtboards` with field
+`indices`) for the artboards the tool has selected, showing their count. With another tool Rearrange… is off and the
+panel's button is Rearrange All Artboards. Its OK changes nothing yet: the grid's outline follows the pointer, and the
 next press on the canvas runs `artboard.rearrange` with `indices` and `at` at the press, as one undo step. Enter, when
 no other control has the keyboard focus, runs it with `at` at the pointer over the canvas, else without `at` (the grid at the first selected artboard's top-left).
 A press with Space held pans or zooms as usual and places nothing. Esc, another tool or another document cancels it
