@@ -544,6 +544,52 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
 }
 
+/// A redraw stroke that starts and ends near the path, within Edit selected paths within but off
+/// it, bends onto the path smoothly over that distance instead of stepping onto it with a short,
+/// steep piece.
+#[test]
+fn pencil_redraw_bends_the_stroke_onto_the_path_smoothly() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 200.0, 100.0);
+    // Along the top edge, 10 pt above it, from x 40 to x 160.
+    let pts: Vec<[f64; 2]> = (0..=24).map(|i| [40.0 + f64::from(i) * 5.0, -10.0]).collect();
+    s.execute("path.freehand", &json!({"points": pts, "redraw": {"id": id.0, "within": 20}})).unwrap();
+    assert_eq!(paths(&s).len(), 1, "redrawn, no new path");
+    let bp = path(&s, id).to_bezpath();
+    use kurbo::ParamCurve;
+    // 5 pt along from where the stroke meets the path, it is bent 10 × (1 − 5 / 20) = 7.5 pt of
+    // the 10 pt onto the path, so about 2.5 pt above it; stepping onto the path leaves it 10 pt.
+    let across = kurbo::Line::new((45.0, -50.0), (45.0, 50.0));
+    let near_start: Vec<f64> =
+        bp.segments().flat_map(|seg| seg.intersect_line(across)).map(|x| across.eval(x.line_t).y).filter(|y| *y < 50.0).collect();
+    assert!(!near_start.is_empty(), "{bp:?}");
+    for y in near_start {
+        assert!(y > -6.0, "the stroke bends onto the path, it doesn't step down to it: y {y} at x 45");
+    }
+}
+
+/// `preview` draws the stroke as a new path on top, beside the selected path, and leaves the
+/// selection as it was, in Draw Behind and Draw Inside too, as the Pencil previews a stroke that
+/// redraws a selected path.
+#[test]
+fn pencil_preview_draws_on_top_and_leaves_the_selection_as_it_was() {
+    for mode in ["normal", "behind", "inside"] {
+        let mut s = session();
+        let r = rect(&mut s, 400.0, 400.0, 50.0, 50.0);
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        s.execute("view.drawMode", &json!({ "mode": mode })).unwrap();
+        let (parent, _, _) = s.doc().unwrap().doc.position(r).unwrap();
+        let out =
+            s.execute("path.freehand", &json!({"points": [[100, 200], [150, 220], [200, 200]], "keepSelected": false, "preview": true})).unwrap();
+        let id = NodeId(out["id"].as_u64().unwrap());
+        let d = &s.doc().unwrap().doc;
+        let ((rp, ri, _), (np, ni, _)) = (d.position(r).unwrap(), d.position(id).unwrap());
+        assert!(rp == parent && np == parent, "{mode}: beside the path, in no clip group");
+        assert!(ni > ri, "{mode}: on top of the path");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![r], "{mode}: the selection as it was");
+    }
+}
+
 /// With Keep selected off, a new stroke leaves nothing selected (the earlier selection goes too,
 /// as Illustrator starts the stroke by dropping it, #5752); a continued or redrawn path is
 /// deselected and the rest of the selection stays. The stroke is one undo step.
@@ -609,8 +655,14 @@ fn freehand_with_fit_off_joins_the_points_with_straight_segments() {
     .unwrap();
     let sp = path(&s, r).subpaths[0].clone();
     assert!(corners(&sp), "{:?}", sp.anchors);
+    // Each end's bend stops `within` (4) along the stroke, at a point added on its first and last
+    // piece; the drawn points beyond stay as drawn.
     let inner: Vec<_> = at(&sp).into_iter().filter(|p| p.1 < 499.0).collect();
-    assert_eq!(inner, [(125.0, 470.0), (150.0, 460.0), (175.0, 470.0)]);
+    let t = 4.0 / 25f64.hypot(31.0);
+    let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+    assert_eq!(inner.len(), 5, "{inner:?}");
+    assert!(near(inner[0], (100.0 + 25.0 * t, 501.0 - 31.0 * t)) && near(inner[4], (200.0 - 25.0 * t, 501.0 - 31.0 * t)), "{inner:?}");
+    assert_eq!(inner[1..4], [(125.0, 470.0), (150.0, 460.0), (175.0, 470.0)]);
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "fit": "no"})).is_err());
 }
 
