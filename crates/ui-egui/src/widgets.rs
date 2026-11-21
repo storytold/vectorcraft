@@ -9,6 +9,21 @@ use vectorcraft_doc::Unit;
 use crate::theme::{self, Tokens};
 use crate::{icons, scrub};
 
+/// Shared editable-field height, matching the Control bar's buttons and profile selector.
+pub(crate) const FIELD_HEIGHT: f32 = 24.0;
+
+/// The corners of the first part of a field group (spinner, field, arrow sharing their
+/// borders): the scheme's control corners on its left end, square where it meets the next part.
+pub(crate) fn group_start(t: &Tokens) -> CornerRadius {
+    CornerRadius { nw: t.radius, sw: t.radius, ne: 0, se: 0 }
+}
+
+/// The corners of the last part of a field group: square where it meets the part before it, the
+/// scheme's control corners on its right end ([`group_start`]).
+pub(crate) fn group_end(t: &Tokens) -> CornerRadius {
+    CornerRadius { nw: 0, sw: 0, ne: t.radius, se: t.radius }
+}
+
 mod blend;
 mod buttons;
 mod chips;

@@ -433,8 +433,8 @@ pub(crate) fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, 
 fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<&Arrowhead>, custom: &[Arrowhead], start: bool) -> Option<Option<Arrowhead>> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(64.0, 24.0), Sense::click());
-    ui.painter().rect_filled(r, 2, t.input);
-    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
+    ui.painter().rect_filled(r, t.cr(), t.input);
+    ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(3.0, 0.0), pos2(r.right() - 16.0, r.bottom()));
     paint_arrow(ui, body, cur, start, t.text_strong);
     icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 8.0, r.center().y), vec2(10.0, 10.0)), t.icon);
@@ -544,9 +544,9 @@ pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, shown: Option<
     let uniform = brushed == Some(false);
     let sense = if uniform { Sense::hover() } else { Sense::click() };
     let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), sense);
-    ui.painter().rect_filled(r, 2, t.input);
+    ui.painter().rect_filled(r, t.cr(), t.input);
     let border = if resp.hovered() && !uniform { t.text } else { t.input_border };
-    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, border), StrokeKind::Inside);
+    ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.0, border), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
     let (shape, icon) = if keeps_size { (t.text_disabled, t.text_disabled) } else { (t.text_strong, t.icon) };
     paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), shape);

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Color32, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
@@ -177,13 +177,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
-            let (panel, margin) = if app.ui.toolbar_right {
-                (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 })
+            let (panel, margin, inner) = if app.ui.toolbar_right {
+                (egui::Panel::right("toolbar"), egui::Margin { left: 0, right: 6, top: 6, bottom: 6 }, crate::theme::Edge::Left)
             } else {
-                (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 })
+                (egui::Panel::left("toolbar"), egui::Margin { left: 6, right: 0, top: 6, bottom: 6 }, crate::theme::Edge::Right)
             };
             let docked = panel.resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
-                crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
+                crate::theme::card(ui, &t, margin, inner, |ui| body(app, ui, cols, None));
             });
             ui.ctx().data_mut(|d| d.insert_temp(docked_rect_id(), docked.response.rect));
         }
@@ -316,9 +316,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
                     let well = egui::Rect::from_center_size(rect.center(), metrics.well);
                     if is_active {
-                        ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
+                        ui.painter().rect_filled(well, t.cr(), t.tool_active);
                     } else if resp.hovered() {
-                        ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
+                        ui.painter().rect_filled(well, t.cr(), t.hover);
                     }
                     let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
                     icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
@@ -1016,9 +1016,9 @@ fn tool_strip(
         crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
-            ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
+            ui.painter().rect_filled(well, t.cr(), t.tool_active);
         } else if resp.hovered() {
-            ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
+            ui.painter().rect_filled(well, t.cr(), t.hover);
         }
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
