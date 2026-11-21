@@ -38,6 +38,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod tags;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -1765,6 +1767,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -1784,6 +1787,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("parent", get(l, item_parent)),
         ("name", property(l, item_name, item_set_name)),
         ("note", property(l, item_note, item_set_note)),
+        ("tags", get(l, tags::item_tags)),
         ("hidden", property(l, item_hidden, item_set_hidden)),
         ("locked", property(l, item_locked, item_set_locked)),
         ("selected", property(l, item_selected, item_set_selected)),
@@ -1811,7 +1815,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "layer",
             "pixelAligned",
             "sliced",
-            "tags",
             "uRL",
             "uuid",
             "visibilityVariable",
@@ -1830,6 +1833,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     classes.push(class("PageItem", None, page_item, None));
     classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
+    classes.extend(tags::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }
 

@@ -101,6 +101,7 @@ pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
+pub(crate) mod tags;
 mod textedit;
 
 pub use textedit::effective_kerning;
@@ -375,6 +376,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
         v.extend(svgfilter::specs());

@@ -75,7 +75,7 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems RulerUnits ZOrderMethod",
+         PageItems RulerUnits Tag Tags ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -90,8 +90,8 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
-         views views= width",
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= \
+         typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name typename"),
@@ -103,10 +103,14 @@ const INSIDE: &[(&str, &str)] = &[
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
          left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
+    ("Tags.", "prototype"),
+    ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Tag.", "prototype"),
+    ("Tag.prototype.", "constructor name name= parent remove typename value value="),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),
