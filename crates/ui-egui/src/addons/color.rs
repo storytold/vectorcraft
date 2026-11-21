@@ -88,6 +88,12 @@ fn adjustment(i: usize) -> (&'static str, &'static str, &'static [Field]) {
     ADJUSTMENTS.get(i).copied().unwrap_or(ADJUSTMENTS[0])
 }
 
+/// The adjustments' names in `lang`, in [`ADJUSTMENTS`] order: each effect's name as the Effect
+/// menu, History and Edit › Undo show it ([`crate::i18n::effect_name`]).
+fn adjustment_names(lang: crate::i18n::Lang) -> Vec<String> {
+    ADJUSTMENTS.iter().map(|a| crate::i18n::effect_name(lang, a.0).unwrap_or_else(|| crate::i18n::tr(lang, a.1).to_string())).collect()
+}
+
 /// Object › Plug-ins › Color Effects.
 pub fn menu() -> Vec<Item> {
     let cmd = |(label, id, p): (&'static str, &'static str, Value)| Item::Cmd(label, id, p);
@@ -150,11 +156,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let mut st: Picked = pstate(ui.ctx(), STATE);
-    let labels: Vec<&str> = ADJUSTMENTS.iter().map(|a| a.1).collect();
-    let (id, label, fields) = adjustment(st.index);
+    let names = adjustment_names(crate::i18n::current());
+    let labels: Vec<&str> = names.iter().map(String::as_str).collect();
+    let (id, _, fields) = adjustment(st.index);
+    let current = ADJUSTMENTS.iter().position(|a| a.0 == id).and_then(|i| labels.get(i)).copied().unwrap_or_default();
     const LABEL_W: f32 = 84.0;
     widgets::label_row(ui, tl!("Adjustment"), LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "color-effects-pick", label, &labels, 150.0) {
+        if let Some(i) = widgets::dropdown_names(ui, "color-effects-pick", current, &labels, 150.0) {
             st.index = i;
         }
     });

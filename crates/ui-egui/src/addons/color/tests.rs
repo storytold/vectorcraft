@@ -46,6 +46,33 @@ fn every_adjustment_offered_is_a_colour_adjustment_with_its_defaults() {
     }
 }
 
+/// Apply as Filter records a step that History and Edit › Undo name as the panel names the
+/// adjustment, in every language (German's plain `Levels` row and its Effect menu row differ).
+#[test]
+fn history_names_a_filter_step_as_the_panel_names_its_adjustment() {
+    for (i, (id, _, fields)) in ADJUSTMENTS.iter().enumerate() {
+        let mut app = app();
+        app.run("paint.setFill", json!({"color": "#806040"})).unwrap();
+        let (_, mut params) = Picked { index: i, ..Picked::default() }.params();
+        if let Some((key, _, (_, max), ..)) = fields.first() {
+            params[*key] = json!(max);
+        }
+        app.run("addon.color.filter", json!({ "effect": id, "params": params })).unwrap();
+        let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
+        assert_eq!(h.effect(), Some(*id), "the step Apply as Filter records for {params}");
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let step = crate::panels::history::shown(&h);
+            let text = painted_text(&mut app, |app, ui| {
+                set_pstate(ui.ctx(), STATE, Picked { index: i, ..Picked::default() });
+                show(app, ui);
+            });
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            assert!(text.lines().any(|line| line == step), "{} {id}: {step:?} in {text}", lang.code());
+        }
+    }
+}
+
 #[test]
 fn the_panel_shows_the_values_and_its_buttons() {
     let mut app = app();
