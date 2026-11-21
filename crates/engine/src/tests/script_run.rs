@@ -488,6 +488,48 @@ fn a_document_a_script_opened_from_a_file_it_may_only_read_stays_read_only_for_s
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A document a script's command opened from a file the script may only read stays read-only for
+/// scripts after the person reverts it, and after Data Recovery restores it in a new session.
+#[test]
+fn a_read_only_document_stays_read_only_for_scripts_after_a_revert_or_a_recovery() {
+    let dir = fresh_folder("gate-read-only-rebuilt");
+    let file = dir.join("a.svg");
+    let p = file.to_string_lossy().into_owned();
+    let store = std::sync::Arc::new(crate::cmd::recovery::MemoryStore::default());
+    let mut s = two_docs();
+    s.recovery.set_store(store.clone());
+    s.execute("document.export", &json!({"path": p, "format": "svg"})).unwrap();
+    let bytes = std::fs::read(&file).unwrap();
+    let tried = |what: String| {
+        format!(
+            "try {{ {what}; vc.log('ok'); }} catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let edit = tried("vc.run('shape.rectangle', {x: 1, y: 1, width: 1, height: 1})".into());
+    let over =
+        [tried(format!("vc.run('document.save', {{path: {p:?}}})")), tried(format!("vc.run('document.export', {{path: {p:?}, format: 'svg'}})"))]
+            .concat();
+    let r = run_reading(&mut s, &file, &format!("{}{edit}", tried(format!("vc.run('document.open', {{path: {p:?}}})")))).unwrap();
+    assert_eq!(r["log"], json!(["ok", "ok"]), "{r}");
+
+    s.execute("file.revert", &json!({})).unwrap();
+    let r = run(&mut s, &format!("{edit}{}{over}", tried("vc.run('document.save', {})".into()))).unwrap();
+    assert_eq!(r["log"], json!(["ok", "denied", "denied", "denied"]), "after a revert: {r}");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes, "the file is as it was");
+
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store);
+    s.execute("file.recovery.restore", &json!({})).unwrap();
+    let index = s.documents().iter().position(|d| d.path.as_deref() == Some(p.as_str())).unwrap();
+    s.execute("document.activate", &json!({"index": index})).unwrap();
+    let r = run(&mut s, &format!("{edit}{over}")).unwrap();
+    assert_eq!(r["log"], json!(["ok", "denied", "denied"]), "after a recovery: {r}");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes, "the file is as it was");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A command a script runs does not save into the app's own libraries; the same command run
 /// outside a script does.
 #[test]
