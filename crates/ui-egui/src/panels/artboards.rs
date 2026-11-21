@@ -221,6 +221,16 @@ pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
 /// The selected artboards (of `n`): while the Artboard tool is in use, those it has selected
 /// (Shift-click, #1139), else the active one.
 pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
+    let mut all = tool_selection(app, n);
+    if all.is_empty() {
+        all.push(selected(app, n));
+    }
+    all
+}
+
+/// The artboards (of `n`) the Artboard tool has selected while it is in use, sorted and once
+/// each; empty with another tool or with none selected.
+pub(crate) fn tool_selection(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     let tool = (app.session.tool_id() == "artboard").then(|| app.session.tool_options()["selected"].clone());
     let mut all: Vec<usize> = tool
         .iter()
@@ -230,9 +240,6 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
         .filter_map(|i| usize::try_from(i).ok())
         .filter(|i| *i < n)
         .collect();
-    if all.is_empty() {
-        all.push(selected(app, n));
-    }
     all.sort_unstable();
     all.dedup();
     all
@@ -721,7 +728,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     set_pstate(ui.ctx(), "ab-keys", keys.then_some(app.frame_iteration()));
     let n = abs.len();
     widgets::bottom_bar(ui, |ui| {
-        if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {
+        // With artboards selected by the Artboard tool, Rearrange for those.
+        if !tool_selection(app, n).is_empty() {
+            if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange"), false, true, 24.0).clicked() {
+                open_rearrange_selected(app);
+            }
+        } else if widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards"), false, n > 1, 24.0).clicked() {
             open_rearrange(app);
         }
         ui.add_space((ui.available_width() - 4.0 * 28.0).max(0.0));
@@ -766,6 +778,16 @@ pub(crate) fn open_rearrange(app: &mut VectorcraftApp) {
     app.run("ui.menuDialog", json!({ "command": "artboard.rearrange" })).ok();
 }
 
+/// Open Rearrange for the selected artboards ([`picked`]), whose OK waits for a click on the
+/// canvas.
+pub(crate) fn open_rearrange_selected(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if n > 0 {
+        let indices = picked(app, n);
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let sel = selected(app, n);
@@ -796,6 +818,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Rearrange All Artboards…"), n > 1, false) {
         open_rearrange(app);
+    }
+    if menu_item(ui, tl!("Rearrange…"), !tool_selection(app, n).is_empty(), false) {
+        open_rearrange_selected(app);
     }
     ui.separator();
     if menu_item(ui, tl!("Fit to Artwork Bounds"), n > 0, false) {

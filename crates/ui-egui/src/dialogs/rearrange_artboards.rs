@@ -4,14 +4,26 @@
 //! Spacing and Move Artwork with Artboard, with the document's artboard count. OK runs
 //! `artboard.rearrange` as one undo step (#681).
 //!
+//! Rearrange (the Artboard tool's canvas menu and Contextual Task Bar, the Artboards panel's
+//! Rearrange… and its button while the Artboard tool is in use) is the same dialog for the
+//! selected artboards (field `indices`), with their count. Its OK waits for a click on the canvas,
+//! which places the grid's top-left there: the grid follows the pointer until then, Enter places it
+//! at the pointer (or, off the canvas, at the first selected artboard's top-left), a Space-drag
+//! still pans, and Esc, another tool or another document cancels it. The click or Enter runs
+//! `artboard.rearrange` with `indices` and `at` as one undo step
+//! (https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/rearrange-artboards.html).
+//!
 //! Fields: `layout` (`gridByRow` | `gridByColumn` | `row` | `column`), `order` (`leftToRight` |
-//! `rightToLeft`), `columns` (the rows of a grid by column), `spacing` (pt) and `moveArtwork`.
+//! `rightToLeft`), `columns` (the rows of a grid by column), `spacing` (pt), `moveArtwork` and, for
+//! Rearrange, `indices`.
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::newdoc::ArtboardLayout;
+use vectorcraft_engine::cmd::newdoc::{ArtboardLayout, rearrange_grid};
+use vectorcraft_geom::Rect;
 
 use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
+use crate::canvas::Xf;
+use crate::state::{Dialog, RearrangePlacement, View};
 use crate::{VectorcraftApp, widgets};
 
 /// The dialog kind of Rearrange All Artboards.
@@ -19,11 +31,17 @@ pub const KIND: &str = "rearrangeArtboards";
 
 const CMD: &str = "artboard.rearrange";
 
+/// The status bar's message while a Rearrange waits for its click.
+pub(crate) const PLACE_HINT: &str = "Click on the canvas to place the artboards (Esc cancels)";
+
 /// Width of the label column.
 const LABEL_W: f32 = 96.0;
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Rearrange All Artboards").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 320.0, ..DialogSpec::FORM };
+
+fn heading(d: &Dialog) -> String {
+    if indices(d).is_some() { tl!("Rearrange") } else { tl!("Rearrange All Artboards") }.into()
+}
 
 /// The fields a fresh dialog starts with.
 pub fn fields() -> Value {
@@ -37,6 +55,135 @@ pub fn open_fields(app: &VectorcraftApp) -> Value {
         fields["spacing"] = json!(spacing);
     }
     fields
+}
+
+/// Open Rearrange for artboards `indices`, kept sorted and once each; none opens nothing. A
+/// placement still waiting is dropped.
+pub(crate) fn open_selected(app: &mut VectorcraftApp, indices: &[usize]) {
+    cancel_placement(app);
+    if indices.is_empty() {
+        return;
+    }
+    let mut indices = indices.to_vec();
+    indices.sort_unstable();
+    indices.dedup();
+    let mut fields = open_fields(app);
+    fields["indices"] = json!(indices);
+    app.ui.dialog = Some(Dialog::new(KIND, fields));
+}
+
+/// The artboards of a menu item's params that list nothing but `indices` (the Artboard tool's
+/// Rearrange), as whole numbers.
+pub(crate) fn menu_indices(p: &Value) -> Option<Vec<usize>> {
+    let o = p.as_object().filter(|o| o.len() == 1)?;
+    let list = o.get("indices")?.as_array()?;
+    list.iter().map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok())).collect()
+}
+
+/// The artboards a Rearrange dialog lays out; `None` for Rearrange All Artboards.
+fn indices(d: &Dialog) -> Option<Vec<usize>> {
+    d.fields.get("indices").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).filter_map(|i| usize::try_from(i).ok()).collect())
+}
+
+/// The artboards a waiting placement lays out.
+fn placed(pl: &RearrangePlacement) -> Vec<usize> {
+    pl.params["indices"].as_array().into_iter().flatten().filter_map(Value::as_u64).filter_map(|i| usize::try_from(i).ok()).collect()
+}
+
+/// Drop the placement waiting for its click, and its message in the status bar.
+pub(crate) fn cancel_placement(app: &mut VectorcraftApp) {
+    if app.ui.rearrange_placement.take().is_some() && app.ui.status == PLACE_HINT {
+        app.status("");
+    }
+}
+
+/// Whether a placement waits for its click: one whose document is no longer the active one, whose
+/// tool is no longer the tool in use, or whose listed places no longer hold the artboards it was
+/// confirmed for (removed or moved in the list) is dropped.
+pub(crate) fn refresh_placement(app: &mut VectorcraftApp) -> bool {
+    let Some(pl) = app.ui.rearrange_placement.as_ref() else { return false };
+    let same = app.session.active().filter(|d| d.uid == pl.doc).is_some_and(|d| {
+        let listed = placed(pl);
+        listed.len() == pl.ids.len() && listed.iter().zip(&pl.ids).all(|(i, id)| d.doc.artboards.get(*i).is_some_and(|a| a.id == *id))
+    });
+    if same && app.session.tool_id() == pl.tool {
+        return true;
+    }
+    cancel_placement(app);
+    false
+}
+
+/// The canvas's input while a placement waits and no modal dialog is open (`modal`): Esc cancels
+/// it, a press on the canvas runs `artboard.rearrange` with the grid's top-left (`at`) at the
+/// pressed point, and Enter, when no other control has the keyboard focus, runs it with `at` at the
+/// pointer over the canvas, else with the grid at the first selected artboard's top-left. While
+/// Space lends the view tools (`space`), presses pan or zoom as usual. Returns true when the
+/// placement takes the frame's input, so no tool gets it.
+pub(crate) fn placement_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, modal: bool, space: bool) -> bool {
+    if !refresh_placement(app) || modal {
+        return false;
+    }
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        cancel_placement(app);
+        return true;
+    }
+    let armed = app.ui.rearrange_placement.as_ref().is_some_and(|pl| pl.armed);
+    if let Some(pl) = app.ui.rearrange_placement.as_mut() {
+        pl.armed = true;
+    }
+    if space {
+        return false;
+    }
+    let pointer = ui.input(|i| i.pointer.clone());
+    // The grid follows the pointer.
+    if pointer.is_moving() {
+        ui.ctx().request_repaint();
+    }
+    let xf = Xf::at(rect, app.view().unwrap_or(&View::default()), app.canvas_ui_zoom);
+    // A finger press once a pen has been seen navigates the view and places nothing.
+    let navigates = crate::touch::finger_navigates_only();
+    let pressed = pointer.interact_pos().filter(|p| pointer.primary_pressed() && !navigates && resp.hovered() && rect.contains(*p));
+    // Enter belongs to the control that has the keyboard focus, when another one has it.
+    let free_keys = ui.memory(|m| m.focused().is_none_or(|id| id == resp.id));
+    let entered = armed && free_keys && ui.input(|i| i.key_pressed(egui::Key::Enter));
+    let at = match (pressed, entered) {
+        (Some(p), _) => Some(xf.to_doc(p)),
+        (None, true) => pointer.hover_pos().filter(|p| resp.hovered() && rect.contains(*p)).map(|p| xf.to_doc(p)),
+        (None, false) => return false,
+    };
+    let Some(mut pl) = app.ui.rearrange_placement.take() else { return false };
+    let listed = placed(&pl);
+    let locked = app.session.active().is_some_and(|d| listed.iter().all(|i| d.doc.artboards.get(*i).is_some_and(|a| a.locked)));
+    if let Some(at) = at {
+        pl.params["at"] = json!([at.x, at.y]);
+    }
+    match app.run(CMD, pl.params) {
+        // Every selected artboard locked: nothing could move.
+        Ok(r) if r["moved"] == 0 && locked => app.status("the artboard is locked"),
+        Ok(_) => app.status(""),
+        Err(e) => app.status(e),
+    }
+    true
+}
+
+/// The grid a waiting placement makes with its top-left at the pointer: the outline of each
+/// artboard that moves, in `color`, 1 point wide on screen.
+pub(crate) fn paint_placement(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, color: egui::Color32) {
+    let Some(pl) = app.ui.rearrange_placement.as_ref().filter(|pl| app.session.tool_id() == pl.tool) else { return };
+    let (Some(at), Some(st)) = (app.hover_doc, app.session.active().filter(|d| d.uid == pl.doc)) else { return };
+    let boards: Vec<&vectorcraft_doc::Artboard> = placed(pl).into_iter().filter_map(|i| st.doc.artboards.get(i)).collect();
+    let sizes: Vec<(f64, f64)> = boards.iter().map(|a| (a.rect.width(), a.rect.height())).collect();
+    let p = &pl.params;
+    let layout = p["layout"].as_str().and_then(ArtboardLayout::parse).unwrap_or_default();
+    let lines = p["columns"].as_f64().filter(|c| c.is_finite()).map_or(2, |c| c.round().max(1.0) as u64);
+    let spacing = p["spacing"].as_f64().filter(|s| s.is_finite()).unwrap_or(20.0).clamp(-1.0e5, 1.0e5);
+    let (origins, ..) = rearrange_grid(&sizes, at, layout, lines, spacing, p["order"] == "rightToLeft");
+    // A locked artboard keeps its cell but stays where it is.
+    for ((o, (w, h)), a) in origins.iter().zip(&sizes).zip(&boards) {
+        if !a.locked {
+            painter.add(egui::Shape::closed_line(xf.quad(Rect::new(o.x, o.y, o.x + w, o.y + h)), egui::Stroke::new(1.0, color)));
+        }
+    }
 }
 
 /// A layout's toggle: its tooltip and its artboards' cells (column, row) in their order, left to
@@ -58,15 +205,20 @@ fn mirrored(cells: &[(u8, u8)], rtl: bool) -> Vec<(u8, u8)> {
 
 /// `artboard.rearrange` parameters from the fields.
 fn params(d: &Dialog) -> Value {
-    json!({
+    let mut p = json!({
         "layout": d.str("layout"), "order": d.str("order"), "columns": d.f64("columns", 2.0),
         "spacing": d.f64("spacing", 20.0), "moveArtwork": d.bool("moveArtwork"),
-    })
+    });
+    if let Some(indices) = indices(d) {
+        p["indices"] = json!(indices);
+    }
+    p
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
-    let n = app.session.active().map_or(0, |doc| doc.doc.artboards.len());
+    let selected = indices(d);
+    let n = selected.as_ref().map_or_else(|| app.session.active().map_or(0, |doc| doc.doc.artboards.len()), Vec::len);
     let layout = ArtboardLayout::parse(&d.str("layout")).unwrap_or_default();
     let rtl = d.str("order") == "rightToLeft";
     widgets::label_row(ui, tl!("Layout:"), LABEL_W, |ui| {
@@ -114,12 +266,32 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::check(ui, d, "moveArtwork", tl!("Move Artwork with Artboard"));
     });
     ui.add_space(8.0);
-    widgets::dim_label(ui, &crate::i18n::fmt(tl!("Artboards: {n}"), &[("n", &n.to_string())]));
+    let count = if selected.is_some() { tl!("Selected Artboards: {n}") } else { tl!("Artboards: {n}") };
+    widgets::dim_label(ui, &crate::i18n::fmt(count, &[("n", &n.to_string())]));
     false
 }
 
+/// Rearrange All Artboards runs at once. Rearrange closes and waits for its click on the canvas
+/// ([`placement_input`]).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let result = run_and_close(app, CMD, params(d))?;
+    let result = match indices(d) {
+        None => {
+            cancel_placement(app);
+            run_and_close(app, CMD, params(d))?
+        }
+        Some(listed) => {
+            let st = app.session.active().ok_or_else(|| "no document".to_string())?;
+            let ids: Vec<u32> = listed.iter().filter_map(|i| st.doc.artboards.get(*i)).map(|a| a.id).collect();
+            if ids.len() != listed.len() {
+                return Err("no such artboard".into());
+            }
+            let (doc, tool) = (st.uid, app.session.tool_id().to_string());
+            app.ui.rearrange_placement = Some(RearrangePlacement { doc, tool, params: params(d), ids, armed: false });
+            app.ui.dialog = None;
+            app.status(PLACE_HINT);
+            Value::Null
+        }
+    };
     app.ui.rearrange_artboards_spacing = json!(d.f64("spacing", 20.0));
     Ok(result)
 }
@@ -228,5 +400,46 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         // Two rows (Columns 2 reads Rows for a grid by column), the first column at the right.
         assert_eq!(origins(&app), [(120.0, 0.0), (120.0, 70.0), (0.0, 0.0), (0.0, 70.0)]);
+    }
+
+    /// The Artboard tool's canvas menu opens Rearrange for the artboards the tool has selected,
+    /// with their count; OK moves nothing and waits for a click on the canvas with those artboards
+    /// and the dialog's fields. Rearrange All Artboards still lays out every artboard at once.
+    #[test]
+    fn rearrange_from_the_canvas_menu_waits_for_a_click_with_the_selected_artboards() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        let items = crate::menus::context_items(&app);
+        let target = items.iter().find_map(|i| match i {
+            crate::menus::Item::Cmd("Rearrange", id, p) => Some(crate::menus::click_target("Rearrange", id, p)),
+            _ => None,
+        });
+        let (id, p) = target.expect("Rearrange in the canvas menu");
+        crate::menus::invoke(&mut app, &id, p);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        let ctx = context();
+        frame(&mut app, &ctx, vec![]);
+        let texts = frame(&mut app, &ctx, vec![]);
+        for want in ["Rearrange", "Layout:", "Move Artwork with Artboard", "Selected Artboards: 2"] {
+            assert!(texts.iter().any(|t| t == want), "{want:?} in {texts:?}");
+        }
+        assert!(!texts.iter().any(|t| t == "Rearrange All Artboards" || t == "Artboards: 3"), "{texts:?}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("layout".into(), json!("row"));
+        let (before, undo) = (origins(&app), app.session.doc().unwrap().history.undo.len());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!((origins(&app), app.session.doc().unwrap().history.undo.len()), (before.clone(), undo));
+        let waiting = app.ui.rearrange_placement.as_ref().expect("waits for a click");
+        assert_eq!((waiting.params["indices"].clone(), waiting.params["layout"].clone()), (json!([0, 2]), json!("row")));
+        assert_eq!(app.ui.status, PLACE_HINT);
+
+        // Rearrange All Artboards drops it and runs at once.
+        app.run("ui.menuDialog", json!({"command": CMD})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_ne!(origins(&app), before);
+        assert!(app.ui.rearrange_placement.is_none());
+        assert_ne!(app.ui.status, PLACE_HINT);
     }
 }

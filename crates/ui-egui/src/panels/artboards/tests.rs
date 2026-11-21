@@ -1601,16 +1601,17 @@ fn the_artboard_tools_menu_lists_the_pages_entries_in_order() {
 }
 
 /// An entry whose command can't run is left out: Cut with every artboard selected, or a locked one;
-/// Delete Artboards in a document of one; Select All Artboards with all selected; Rearrange with one;
-/// Fit to Artwork Bounds without art; Switch Orientation on a square artboard.
+/// Delete Artboards in a document of one; Select All Artboards with all selected; Fit to Artwork
+/// Bounds without art; Switch Orientation on a square artboard. Rearrange lays out the one selected
+/// artboard.
 #[test]
 fn the_artboard_tools_menu_leaves_out_what_cannot_run() {
     let shown = |app: &VectorcraftApp, label: &str| menu_labels(&crate::menus::context_items(app)).contains(&label);
     let mut app = menu_app(1);
-    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Rearrange", "Fit to Artwork Bounds"] {
+    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Fit to Artwork Bounds"] {
         assert!(!shown(&app, label), "{label} with one empty artboard");
     }
-    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation"));
+    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation") && shown(&app, "Rearrange"));
     app.session.execute("artboard.setProps", &json!({"index": 0, "width": 50})).unwrap();
     assert!(!shown(&app, "Switch Orientation"), "a square artboard");
 
@@ -1780,6 +1781,23 @@ fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
     choose(&mut app, "Delete Empty Artboards");
     assert_eq!(board_names(&app), ["Artboard 1"]);
     assert_eq!(selected(&app, 1), 0);
+}
+
+/// The panel's Rearrange button and Rearrange… lay out the artboards the Artboard tool has
+/// selected, once each and in document order; with another tool nothing is selected by it, so the
+/// button is Rearrange All Artboards and Rearrange… is off, while the other entries still act on
+/// the active artboard.
+#[test]
+fn the_panels_rearrange_lays_out_only_what_the_artboard_tool_selected() {
+    let mut app = menu_app(3);
+    app.session.set_tool_option("selected", &json!([2, 0, 2]));
+    assert_eq!(tool_selection(&app, 3), [0, 2]);
+    open_rearrange_selected(&mut app);
+    let d = app.ui.dialog.take().unwrap();
+    assert_eq!((d.kind.as_str(), d.fields["indices"].clone()), (crate::dialogs::rearrange_artboards::KIND, json!([0, 2])));
+    app.select_tool("selection");
+    select(&mut app, 1);
+    assert_eq!((tool_selection(&app, 3), picked(&app, 3)), (vec![], vec![1]), "another tool");
 }
 
 /// A lock entry lists only the artboards it changes and is left out when it has none, so it never

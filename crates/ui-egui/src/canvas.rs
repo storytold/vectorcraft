@@ -430,6 +430,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             print_tiling_overlay(app, &painter, &xf);
         }
         original_path_overlay(app, &painter, &xf);
+        crate::dialogs::rearrange_artboards::paint_placement(app, &painter, &xf, t.selection);
 
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
