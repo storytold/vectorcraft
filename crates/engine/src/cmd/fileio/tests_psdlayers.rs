@@ -1707,6 +1707,107 @@ fn an_adjustment_mask_past_the_memory_allowed_isnt_applied() {
     }
 }
 
+/// An adjustment layer's mask is read beside the canvases it changes: a 100 × 1 mask fits 256 bytes
+/// alone, but not beside a 6 × 1 canvas, so the layer isn't applied. With the memory for both, it is.
+#[test]
+fn an_adjustment_mask_counts_the_canvas_it_changes() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let masked = |clipped: bool| L { clipped, mask: Some(([0, 0, 1, 100], 255, 0, vec![255; 100])), ..adjustment("Invert", b"nvrt", &[]) };
+    for clipped in [false, true] {
+        let f = file(6, 1, &[layer("Under", [0, 0, 1, 6], [10, 20, 30, 255]), masked(clipped)], 8, false, false);
+        let (doc, warnings) = psdlayers::import(&f, false, 256, cms).unwrap_or_else(|e| panic!("{clipped}: {e}")).unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under"], "{clipped}: {warnings:?}");
+        assert_eq!(warnings, ["1 adjustment layer was not applied"], "{clipped}");
+        let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Invert"], "{clipped}: {warnings:?}");
+        assert!(warnings.is_empty(), "{clipped}: {warnings:?}");
+    }
+}
+
+/// An adjustment layer whose mask is too large to read is left out without stopping the clip or the
+/// merge around it: a layer clipped above it still clips to the base, and a layer in a mode
+/// VectorCraft lacks above a pass-through group holding it still merges in its mode.
+#[test]
+fn an_adjustment_mask_too_large_leaves_the_clip_and_merge_around_it() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let masked = |clipped: bool| L { clipped, mask: Some(([0, 0, 100, 100], 255, 0, vec![255; 10_000])), ..adjustment("Invert", b"nvrt", &[]) };
+    let layers = [layer("Base", [0, 0, 1, 1], [200, 0, 0, 255]), masked(true), L { clipped: true, ..layer("Photo", [0, 0, 1, 2], [0, 0, 255, 255]) }];
+    let (doc, warnings) = psdlayers::import(&file(2, 1, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Base + Photo"], "{warnings:?}");
+    assert_eq!(warnings, ["1 adjustment layer was not applied"]);
+    // Gray 100 under Linear Dodge's gray 20 gives gray 120.
+    let layers = [
+        layer("Under", [0, 0, 1, 1], [100, 100, 100, 255]),
+        group_end(),
+        masked(false),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [20, 20, 20, 255]) },
+    ];
+    let (doc, warnings) = psdlayers::import(&file(1, 1, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{warnings:?}");
+    let merged = "layers in blend modes VectorCraft doesn't have (Linear Dodge) were merged with the layers below them";
+    assert_eq!(warnings, ["1 adjustment layer was not applied", merged]);
+    let Some([c]) = doc.layers[0].children().map(Vec::as_slice) else { panic!("the merged layer holds one image") };
+    let NodeKind::Image(img) = &c.kind else { panic!("the merged layer holds an image") };
+    let px = craft_image_codecs::decode(&doc.images[&img.key].bytes).unwrap().to_rgba8();
+    assert_eq!(px, [120, 120, 120, 255]);
+}
+
+/// A layer merged in a pass-through group for its mode or its knockout takes the adjustment layers
+/// kept below it with it: an adjustment layer above that group in an outer pass-through group then
+/// merges with it, and the gray 100 posterizes to 85.
+#[test]
+fn an_adjustment_layer_above_a_group_whose_kept_ones_merged_is_applied() {
+    let tops = [
+        ("Linear Dodge", vec![L { blend: b"lddg", ..layer("Top", [0, 0, 1, 1], [100, 100, 100, 255]) }]),
+        ("knockout", vec![layer("Photo", [0, 0, 1, 1], [50, 50, 50, 255]), knockout(layer("Top", [0, 0, 1, 1], [100, 100, 100, 255]), 1, 255)]),
+    ];
+    for (what, top) in tops {
+        let layers = [
+            &[group_end(), group_end(), adjustment("Invert", b"nvrt", &[])][..],
+            &top,
+            &[group("Inner", b"pass"), adjustment("Posterize", b"post", &[0, 4, 0, 0]), group("Folder", b"pass")],
+        ]
+        .concat();
+        let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(row_of(&s, sublayer(&d.layers[0], "Posterize")), [[85, 85, 85, 255]], "{what}: {r}");
+        assert!(r["warnings"].to_string().contains("1 adjustment layer was not applied"), "{what}: {r}");
+    }
+}
+
+/// A layer whose pixels are all transparent draws nothing: an adjustment layer above it in a
+/// pass-through group, directly or in a pass-through group inside it, still changes what is below
+/// the group.
+#[test]
+fn an_adjustment_layer_over_transparent_pixels_changes_what_is_below_the_group() {
+    let clear = || layer("Clear", [0, 0, 1, 1], [50, 50, 50, 0]);
+    let dodge = || L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) };
+    let direct = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        clear(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let (s, r) = open(&file(1, 1, &direct, 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[245, 235, 225, 255]], "{r}");
+    let nested = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        group_end(),
+        clear(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let (s, r) = open(&file(1, 1, &nested, 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]], "{r}");
+}
+
 /// Damaged Invert, Threshold and Posterize layers, masked and clipped, open without a panic.
 #[test]
 fn damaged_adjustment_layers_never_panic() {

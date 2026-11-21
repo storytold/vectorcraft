@@ -45,11 +45,14 @@
 //! otherwise, and Posterize maps each channel to the nearest of its evenly spaced levels, the higher
 //! one on a tie. The adjusted color is composited over the color below in the layer's blend mode,
 //! at its opacity times its fill opacity, through its layer mask; transparency stays as it was. One
-//! with nothing visible below it in its group that draws (a layer that stores no pixels or is at 0
+//! with nothing visible below it in its group that draws (a layer that stores no pixels, other than
+//! a solid color fill drawn over the canvas, a layer whose pixels are all transparent, or one at 0
 //! opacity or 0 fill with nothing clipped to it doesn't, nor does a group of only such layers)
 //! changes nothing; in a pass-through group it changes
 //! what is below the group when the group is merged, and otherwise isn't applied. One that layers
-//! are clipped to, and one clipped to another adjustment layer, isn't applied.
+//! are clipped to, and one clipped to another adjustment layer, isn't applied. One whose layer mask
+//! needs more memory than allowed beside the canvases it would change isn't applied, and a clip, or
+//! a merge for another layer, that it is part of goes on without it.
 //!
 //! Other adjustment layers, Invert, Threshold and Posterize data that can't be read (a level out of
 //! range, too short, or a second adjustment block on the layer), fill layers that store no pixels and
@@ -969,6 +972,12 @@ struct Builder<'a, F> {
     blank_log: Vec<usize>,
     /// How many times a merge was counted as not made because it needed more memory than allowed.
     squeezed: usize,
+    /// The adjustment layer whose own merge with the layers below it is being made: a layer mask of
+    /// its too large to read stops that merge, where one of another adjustment layer drawn in it
+    /// leaves that one out.
+    adjusting: Option<usize>,
+    /// Whether each record's stored transparency is 0 everywhere, once [`Self::clear`] has read it.
+    clear: Vec<Cell<Option<bool>>>,
 }
 
 impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
@@ -1098,8 +1107,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     }
 
     /// Does record `i`'s layer mask, switched on, fit the memory allowed for reading it with
-    /// [`Self::mask`]? `true` when it has none, and when its size is damaged (reading it says so).
-    fn mask_fits(&self, i: usize) -> Result<bool, String> {
+    /// [`Self::mask`] beside `live` bytes of canvases held while it is read, and the copies of what
+    /// is below the pass-through groups being merged? `true` when it has none, and when its size is
+    /// damaged (reading it says so).
+    fn mask_fits(&self, i: usize, live: u64) -> Result<bool, String> {
         let rec = self.record(i)?;
         let Some(m) = rec.mask.filter(|m| !m.disabled) else { return Ok(true) };
         if !rec.channels.iter().any(|(c, _)| *c == -2) {
@@ -1110,7 +1121,42 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         if w > max_side || rows > max_side {
             return Ok(true);
         }
-        Ok(self.fits((row_bytes(w, self.h.depth) as u64 + w as u64).saturating_mul(rows as u64)).is_ok())
+        let bytes = (row_bytes(w, self.h.depth) as u64 + w as u64).saturating_mul(rows as u64);
+        Ok(bytes.saturating_add(live) <= self.room())
+    }
+
+    /// Does record `i` store pixels that are all fully transparent, so that it paints nothing?
+    /// Its transparency is read once. `false` when it stores none, or has no transparency, or its
+    /// transparency can't be read within the memory allowed or is damaged (drawing it says so).
+    fn clear(&self, i: usize) -> Result<bool, String> {
+        if let Some(clear) = self.clear.get(i).and_then(Cell::get) {
+            return Ok(clear);
+        }
+        let rec = self.record(i)?;
+        let (w, rows) = rec.bounds.size();
+        let max_side = if self.h.psb { 300_000 } else { 30_000 };
+        let alpha = rec.channels.iter().find(|(c, _)| *c == -1).map(|(_, data)| data);
+        let clear = match alpha {
+            Some(data) if !rec.draws_nothing() && !rec.color_over_canvas() && w <= max_side && rows <= max_side => {
+                let (depth, row) = (self.h.depth, row_bytes(w, self.h.depth));
+                let bytes = (row as u64).saturating_mul(rows as u64);
+                if bytes > self.room() {
+                    false
+                } else {
+                    self.spend(bytes)?;
+                    match layer_channel(data, rows, row, self.h.psb, depth) {
+                        Ok(plane) => (0..rows)
+                            .all(|y| plane.get(y * row..(y + 1) * row).is_some_and(|r| (0..w).all(|x| byte(sample(r, x, depth, false)) == 0))),
+                        Err(_) => false,
+                    }
+                }
+            }
+            _ => false,
+        };
+        if let Some(c) = self.clear.get(i) {
+            c.set(Some(clear));
+        }
+        Ok(clear)
     }
 
     /// Multiply `c`'s transparency by record `i`'s layer mask.
@@ -1229,9 +1275,12 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         // A clipped adjustment layer changes the merged canvas in place, through its layer mask.
         let adjust = self.adjustment(body)?;
-        // Its layer mask too large to read needs more memory than allowed.
-        if adjust.is_some() && !base_adjustment && !self.mask_fits(i)? {
-            return Ok(false);
+        // Its layer mask too large to read needs more memory than allowed: it isn't applied, and the
+        // layers clipped above it still clip to the base.
+        if adjust.is_some() && !base_adjustment && !self.mask_fits(i, 0)? {
+            self.squeezed += 1;
+            self.unadjust(i);
+            return Ok(true);
         }
         let layer = match adjust {
             Some(_) => Canvas::default(),
@@ -1279,6 +1328,16 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         if let Some(a) = adjust {
             // Clipped to an adjustment layer, it would change the layers below that one: not applied.
             if base_adjustment {
+                self.unadjust(i);
+                return Ok(true);
+            }
+            // The mask is read beside the merged canvas and the base's shape.
+            let shape = match &u.clip {
+                Some(Clip::Shape(s)) => 4 * s.len() as u64,
+                _ => 0,
+            };
+            if !self.mask_fits(i, (16 * c.px.len() as u64).saturating_add(shape))? {
+                self.squeezed += 1;
                 self.unadjust(i);
                 return Ok(true);
             }
@@ -1497,6 +1556,12 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 continue;
             }
             let (clips, drawn) = self.base_draws(items, k)?;
+            // One in a mode VectorCraft lacks (an adjustment layer aside), or with a shallow knockout
+            // that cuts what is below it, is merged with the layers below it in the group, which
+            // takes the ones kept so far with them (see `merged`).
+            if (matches!(r.blend, Blend::Other(_)) && (children.is_some() || r.adjust().is_none())) || self.cuts(items, k, clips, drawn && draws)? {
+                records.clear();
+            }
             // One that layers are clipped to isn't kept, and a pass-through group they are clipped to
             // is drawn alone (see `clip`). One at 0 opacity changes nothing (see `adjust_below`).
             let keeps = !clips && r.opacity * r.fill > 0.0 && (!draws || !records.is_empty());
@@ -1515,6 +1580,33 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             }
         }
         Ok((records, draws))
+    }
+
+    /// Does item `k` of `items`, a pass-through group's layers, take a shallow knockout that is merged
+    /// with the layers below it (see [`Self::knocks`])? Only one that `clips` nothing, is in the
+    /// Normal mode over visible layers in the Normal mode back to the last one merged for its mode,
+    /// and where it and something below it draw (`draws`).
+    fn cuts(&self, items: &[Item], k: usize, clips: bool, draws: bool) -> Result<bool, String> {
+        let record = |item: &Item| match item {
+            Item::Layer(i) | Item::Group(i, _) => self.record(*i),
+        };
+        let Some(r) = items.get(k).map(record).transpose()? else { return Ok(false) };
+        let normal = Blend::Mode(BlendMode::Normal);
+        if r.knockout != 1 || clips || !draws || r.blend != normal {
+            return Ok(false);
+        }
+        for below in items.get(..k).unwrap_or_default().iter().rev() {
+            let b = record(below)?;
+            if b.hidden || b.clipped {
+                continue;
+            }
+            match b.blend {
+                Blend::Other(_) if matches!(below, Item::Group(..)) || b.adjust().is_none() => break,
+                blend if blend != normal => return Ok(false),
+                _ => {}
+            }
+        }
+        Ok(true)
     }
 
     /// Does anything in `items` draw: a visible layer or group that isn't clipped and draws (see
@@ -1567,7 +1659,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         Ok(match item {
             Item::Layer(i) => {
                 let r = self.record(*i)?;
-                (r, !r.draws_nothing())
+                (r, !r.draws_nothing() && !self.clear(*i)?)
             }
             Item::Group(g, children) => (self.record(*g)?, self.draws(children)?),
         })
@@ -1732,9 +1824,9 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         let mut below = false;
         for b in out.iter().filter(|b| b.visible && b.opacity > 0.0) {
             below |= match &b.body {
-                // An adjustment layer, a layer that draws nothing, or a group of such layers, has
-                // nothing to change.
-                Body::Layer(i) => !self.record(*i)?.draws_nothing(),
+                // An adjustment layer, a layer that draws nothing or whose pixels are all
+                // transparent, or a group of such layers, has nothing to change.
+                Body::Layer(i) => !self.record(*i)?.draws_nothing() && !self.clear(*i)?,
                 Body::Group(_, items) => self.draws(items)?,
                 // Clipped layers merged with a base that has no pixels have none either.
                 Body::Merged(c) => c.px.iter().any(|p| p[3] > 0.0),
@@ -1751,7 +1843,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         let saved = self.saved();
         let outer = self.try_from_here();
-        let made = self.merge_into(out, &u)?;
+        let adjusting = self.adjusting.replace(u.record);
+        let made = self.merge_into(out, &u);
+        self.adjusting = adjusting;
+        let made = made?;
         self.tried(outer, made)?;
         if !made {
             self.restore(saved)?;
@@ -2018,8 +2113,17 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         if let Some(a) = self.adjustment(&u.body)? {
             if let Some(c) = acc.as_mut() {
                 let mask = match u.mask_of {
-                    // A layer mask too large to read needs more memory than allowed.
-                    Some(i) if !self.mask_fits(i)? => return Ok(false),
+                    // A layer mask too large to read beside the canvas needs more memory than
+                    // allowed: the adjustment isn't applied, and the rest of the merge goes on.
+                    Some(i) if !self.mask_fits(i, 16 * c.px.len() as u64)? => {
+                        // The adjustment's own merge isn't made then.
+                        if self.adjusting == Some(u.record) {
+                            return Ok(false);
+                        }
+                        self.squeezed += 1;
+                        self.unadjust(u.record);
+                        return Ok(true);
+                    }
                     Some(i) => self.mask(i, false)?,
                     None => None,
                 };
@@ -2454,6 +2558,8 @@ pub(super) fn import(
         laid_blank: vec![false; records.len()],
         blank_log: vec![],
         squeezed: 0,
+        adjusting: None,
+        clear: vec![Cell::new(None); records.len()],
     };
     let layers = b.list(&items, Level::Top)?;
     // A drawing for a knockout or a clip leaves hidden layers out; those that came in anyway aren't.

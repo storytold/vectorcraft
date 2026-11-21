@@ -10917,9 +10917,11 @@ The rest are VectorCraft's own rules:
   nearest of its 2 to 255 evenly spaced levels, the higher one on a tie. The adjusted color is composited over the
   color below in the layer's blend mode, at its opacity times its fill opacity, through its layer mask, and
   transparency is kept. A hidden one is left out. One with nothing visible below it in its group that draws (a layer
-  that stores no pixels or is at 0 opacity or 0 fill with nothing clipped to it doesn't, nor does a group of only such
+  that stores no pixels, other than a solid color fill drawn over the canvas, a layer whose pixels are all
+  transparent, or one at 0 opacity or 0 fill with nothing clipped to it doesn't, nor does a group of only such
   layers) changes nothing, and so does one at 0 opacity or 0 fill; in a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
-  applied.
+  applied. One whose layer mask needs more memory than allowed beside the canvases it would change is not applied,
+  and a clip, or a merge for another layer, that it is part of goes on without it.
 - Other adjustment layers, Invert, Threshold and Posterize layers that others are clipped to, that are clipped to
   another adjustment layer, whose data can't be read (a level out of range, too short, or two adjustment blocks on
   one layer) or whose merge, its layer mask included, needs more memory than allowed, fill layers that store no pixels and whose fill isn't
