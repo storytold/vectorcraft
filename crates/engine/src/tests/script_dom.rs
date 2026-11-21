@@ -431,6 +431,18 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
 }
 
 #[test]
+fn a_listed_preset_keeps_more_rows_than_artboards() {
+    use crate::cmd::newdoc::{ArtboardLayout, DocSettings};
+    let settings = DocSettings { artboards: 2, layout: ArtboardLayout::GridByColumn, ..DocSettings::default() };
+    let settings = settings.with_params(&json!({"artboardLayout": {"rows": 4}}), "file.new").unwrap();
+    let listed = settings.to_json();
+    assert_eq!((&listed["artboardLayout"]["columns"], &listed["artboardLayout"]["rows"]), (&json!(1), &json!(4)), "{listed}");
+    // Five artboards from the listing fill four rows, not two.
+    let more = settings.with_params(&json!({"artboards": 5, "artboardLayout": listed["artboardLayout"]}), "file.new").unwrap();
+    assert_eq!(more.boards().iter().filter(|b| b.x0 == more.boards()[0].x0).count(), 4);
+}
+
+#[test]
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
@@ -485,6 +497,65 @@ fn assigning_the_selection_clears_a_layers_panel_target() {
     log(&mut s, "var d = app.activeDocument; d.selection = d.pageItems[0];");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.target), (vec![a], None));
+}
+
+#[test]
+fn an_edit_keeps_a_layers_panel_target() {
+    let (mut s, a, b) = doc();
+    s.execute("layer.target", &json!({"id": a.0})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[1].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.target), (vec![a], Some(a)));
+    // A targeted layer stays targeted, with its art selected.
+    let layer = s.active().unwrap().doc.layers[0].id;
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[1].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.target, sel.objects.len(), sel.objects.contains(&b)), (Some(layer), 4, true));
+}
+
+/// A document with a rectangle at the bottom of the stack, then a dynamic symbol instance of two
+/// rectangles and an Objects on Path group of one rectangle: (session, instance, group, the
+/// group's rectangle).
+fn chosen_parts() -> (Session, NodeId, NodeId, NodeId) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    rect(&mut s, 300.0, 200.0, 20.0, 20.0);
+    let (x, y) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 50.0, 10.0, 20.0, 20.0));
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let inst = id(s.execute("symbol.new", &json!({"name": "Pair", "ids": [x.0, y.0], "type": "dynamic"})).unwrap());
+    let member = rect(&mut s, 10.0, 100.0, 20.0, 20.0);
+    let line = id(s.execute("shape.line", &json!({"x1": 50, "y1": 250, "x2": 350, "y2": 250})).unwrap());
+    s.execute("select.set", &json!({"ids": [member.0]})).unwrap();
+    let group = id(s.execute("object.objectsOnPath.attach", &json!({"path": line.0})).unwrap());
+    (s, inst, group, member)
+}
+
+#[test]
+fn an_edit_keeps_an_object_chosen_inside_a_symbol_or_on_a_path() {
+    let (mut s, inst, group, member) = chosen_parts();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    let before = s.active().unwrap().selection.clone();
+    log(&mut s, "app.activeDocument.pageItems[0].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.symbol_part.clone()), (before.objects, before.symbol_part));
+    s.execute("object.objectsOnPath.selectMember", &json!({"member": member.0})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[0].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.on_path_member), (vec![group], Some(member)));
+}
+
+#[test]
+fn assigning_the_selection_selects_a_symbol_or_on_path_group_as_a_whole() {
+    let (mut s, inst, group, member) = chosen_parts();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    log(&mut s, "var d = app.activeDocument; d.selection = d.selection[0];");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.symbol_part.clone()), (vec![inst], None));
+    s.execute("object.objectsOnPath.selectMember", &json!({"member": member.0})).unwrap();
+    log(&mut s, "var d = app.activeDocument; d.selection = d.selection[0];");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.on_path_member), (vec![group], None));
 }
 
 #[test]

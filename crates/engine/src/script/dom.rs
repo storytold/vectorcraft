@@ -443,9 +443,10 @@ fn coords_of(d: &Data) -> std::result::Result<Coords, HostError> {
 }
 
 /// Selects `before` again in the active document `doc` with the selection commands, so that the
-/// journal holds the change: the objects in their order with their direct-selected anchors, then
-/// the segments, the ruler guides and the key object, guide or anchor. Objects that are now
-/// deleted, hidden or locked are left out.
+/// journal holds the change: a Layers panel target, a dynamic symbol instance's object or an Objects
+/// on Path group's object with its own command, else the objects in their order with their
+/// direct-selected anchors, then the segments, the ruler guides and the key object, guide or anchor.
+/// Objects that are now deleted, hidden or locked are left out.
 fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -> std::result::Result<(), HostError> {
     // Slices selected with the Slice Selection tool are the whole selection when there are any.
     let slices: Vec<u64> = before.slices.iter().filter(|i| doc.is_slice(**i)).map(|i| i.0).collect();
@@ -454,6 +455,24 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
         return Ok(());
     }
     let keep = |id: &NodeId| editable(doc, *id);
+    // Each of these commands sets the whole selection. One that refuses (its object is no longer
+    // inside the isolated group, or a symbol's object is now hidden) changes nothing, and the
+    // objects are selected as below.
+    if let Some(t) = before.target.filter(keep)
+        && command(h, "layer.target", &json!({"id": t.0})).is_ok()
+    {
+        return Ok(());
+    }
+    if let Some(p) = before.symbol_part.as_ref().filter(|p| keep(&p.instance))
+        && command(h, "symbol.instance.selectPart", &json!({"id": p.instance.0, "path": p.path})).is_ok()
+    {
+        return Ok(());
+    }
+    if let Some(m) = before.on_path_member.filter(keep)
+        && command(h, "object.objectsOnPath.selectMember", &json!({"member": m.0})).is_ok()
+    {
+        return Ok(());
+    }
     let partial = |id: &NodeId| before.anchors.contains_key(id) || before.segments.contains_key(id);
     let kept: Vec<NodeId> = before.objects.iter().copied().filter(keep).collect();
     if kept.is_empty() {
@@ -503,8 +522,9 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
 /// Runs `f` with the document `uid` active, and makes the document that was active before active
 /// again after. With `keep_selection`, the document's selection is put back as it was when `f`'s
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
-/// ruler guides, slices and the key included, less the objects that are now deleted, hidden or
-/// locked.
+/// ruler guides, slices, the key, a Layers panel target and an object chosen inside a dynamic
+/// symbol instance or an Objects on Path group included, less the objects that are now deleted,
+/// hidden or locked.
 fn on_doc<T>(
     h: &Host,
     uid: u64,
@@ -1054,12 +1074,15 @@ fn doc_set_selection(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// Makes `ids` the selection of `doc`, with no command when it already is: the same objects, each
-/// selected as a whole, and no ruler guide, slice, key or Layers panel target.
+/// selected as a whole (no dynamic symbol instance's object or Objects on Path group's object
+/// chosen in it), and no ruler guide, slice, key or Layers panel target.
 fn set_selection(h: &Host, doc: Doc, ids: Vec<NodeId>) -> Answer {
     let same = with_doc(h, doc, |_, st| {
         let sel = &st.selection;
         sel.objects == ids
             && sel.target.is_none()
+            && sel.symbol_part.is_none()
+            && sel.on_path_member.is_none()
             && sel.anchors.is_empty()
             && sel.segments.is_empty()
             && sel.guides.is_empty()
