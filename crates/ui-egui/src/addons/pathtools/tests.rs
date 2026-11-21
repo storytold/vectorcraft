@@ -99,14 +99,20 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("arc"));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift.
+    // The Tangent Circle tool's radius for Shift, Ask For Circle Radius and Auto-Update Default.
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
     let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Tangent Circle Tool Options") && text.contains("Radius:"), "{text}");
-    app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), json!(12.5));
+    for s in ["Tangent Circle Tool Options", "Radius:", "Ask For Circle Radius", "Auto-Update Default"] {
+        assert!(text.contains(s), "{s} in {text}");
+    }
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("askRadius") && !d.bool("autoUpdateDefault"));
+    d.fields.insert("radius".into(), json!(12.5));
+    d.fields.insert("askRadius".into(), json!(true));
     crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!((o["radius"].clone(), o["askRadius"].clone(), o["autoUpdateDefault"].clone()), (json!(12.5), json!(true), json!(false)));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
 }
 
