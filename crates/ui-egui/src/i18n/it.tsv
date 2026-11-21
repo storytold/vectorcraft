@@ -7315,7 +7315,6 @@ axis	Y Axis	Asse Y
 	Up Arrow	Up Arrow
 	Down Arrow	Down Arrow
 	Bidirectional	Bidirectional
-	Chevron	Chevron
 	Nature Icons	Nature Icons
 	Tree	Tree
 	Leaf	Leaf
@@ -7838,7 +7837,6 @@ arrowhead	Target	Bersaglio
 	Half Arrow (right)	Mezza freccia (destra)
 	Double Bar	Doppia barra
 	Dot on Bar	Punto su barra
-	Chevron	Gallone
 	Plus	Più
 	Hexagon (open)	Esagono (aperto)
 	Tag	Etichetta
@@ -7852,7 +7850,6 @@ arrowhead	Target	Bersaglio
 	Swallowtail	Coda di rondine
 	Bracket	Parentesi
 	Fork	Forcella
-	Leaf	Foglia
 	Kite	Aquilone
 	Triangle to Bar	Da triangolo a barra
 	Oval	Ovale

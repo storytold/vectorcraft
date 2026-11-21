@@ -7287,7 +7287,6 @@ axis	Y Axis	Y축
 	Up Arrow	Up Arrow
 	Down Arrow	Down Arrow
 	Bidirectional	Bidirectional
-	Chevron	Chevron
 	Nature Icons	Nature Icons
 	Tree	Tree
 	Leaf	Leaf
@@ -7810,7 +7809,6 @@ arrowhead	Target	과녁
 	Half Arrow (right)	반쪽 화살표 (오른쪽)
 	Double Bar	이중 막대
 	Dot on Bar	막대 위 점
-	Chevron	갈매기형
 	Plus	더하기
 	Hexagon (open)	육각형 (윤곽)
 	Tag	태그
@@ -7824,7 +7822,6 @@ arrowhead	Target	과녁
 	Swallowtail	제비 꼬리
 	Bracket	대괄호
 	Fork	포크
-	Leaf	잎
 	Kite	연
 	Triangle to Bar	삼각형에서 막대
 	Oval	타원

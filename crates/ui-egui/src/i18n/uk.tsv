@@ -7297,7 +7297,6 @@ axis	Y Axis	Вісь Y
 	Up Arrow	Up Arrow
 	Down Arrow	Down Arrow
 	Bidirectional	Bidirectional
-	Chevron	Chevron
 	Nature Icons	Nature Icons
 	Tree	Tree
 	Leaf	Leaf
@@ -7820,7 +7819,6 @@ arrowhead	Target	Мішень
 	Half Arrow (right)	Половина стрілки (праворуч)
 	Double Bar	Подвійна смуга
 	Dot on Bar	Крапка на смузі
-	Chevron	Шеврон
 	Plus	Плюс
 	Hexagon (open)	Шестикутник (контурний)
 	Tag	Ярлик
@@ -7834,7 +7832,6 @@ arrowhead	Target	Мішень
 	Swallowtail	Ластівчин хвіст
 	Bracket	Дужка
 	Fork	Вилка
-	Leaf	Листок
 	Kite	Дельтоїд
 	Triangle to Bar	Трикутник до смуги
 	Oval	Овал
