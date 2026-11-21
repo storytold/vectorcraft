@@ -821,6 +821,45 @@ fn outline_stroke_is_offered_for_a_member_of_a_stroked_compound_path() {
     assert!(app.session.active().unwrap().doc.node(compound).is_none(), "the stroked compound path was replaced by its outline");
 }
 
+#[test]
+fn outline_stroke_ignores_a_linked_dimensions_lines_when_its_source_is_selected() {
+    for grouped in [false, true] {
+        let mut app = app();
+        let source = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        let dimension = NodeId(
+            app.run("dimension.create", json!({"source": {"kind": "segment", "edge": {"node": source.0, "subpath": 0, "segment": 0}}}))
+                .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        app.run("select.set", json!({"ids": [source.0, dimension.0]})).unwrap();
+        if grouped {
+            app.run("object.group", json!({})).unwrap();
+        }
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let p = screen(&app, 100.0, 125.0);
+        let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "grouped: {grouped}");
+        assert!(has(&texts, "Arrange"), "the menu opened: {texts:?}");
+        assert!(!has(&texts, "Outline Stroke"), "only the protected dimension has strokes: {texts:?}");
+        click(&mut app, &ctx, pos2(10.0, 590.0), PointerButton::Primary);
+
+        app.run("paint.setStroke", json!({"ids": [source.0], "color": "#000000"})).unwrap();
+        app.run("stroke.set", json!({"ids": [source.0], "weight": 6})).unwrap();
+        let dimension_art = app.session.active().unwrap().doc.node(dimension).unwrap().children().unwrap().to_vec();
+        let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+        assert!(has(&texts, "Outline Stroke"), "the source has a stroke to outline: {texts:?}");
+        click(&mut app, &ctx, at(&texts, "Outline Stroke"), PointerButton::Primary);
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(source).is_none(), "the source was replaced by filled outlines");
+        assert_eq!(st.doc.node(dimension).unwrap().children().unwrap(), dimension_art.as_slice(), "the dimension keeps its own art");
+    }
+}
+
 /// Point type holding `t` at (20, 60), with Auto Spell Check on.
 fn spelled(app: &mut VectorcraftApp, t: &str) -> NodeId {
     let id = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": t, "size": 24})).unwrap()["id"].as_u64().unwrap());

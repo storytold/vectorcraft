@@ -1143,21 +1143,29 @@ pub(crate) fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
 }
 
-/// Does Outline Stroke have a stroke to turn into art somewhere under `n`: a visible stroke of
-/// some paint and weight on a path or compound path (type is not outlined by it)?
-fn has_outlinable_stroke(n: &Node) -> bool {
-    let mut found = false;
-    each_leaf(n, &mut |l| {
-        found |= !matches!(l.kind, NodeKind::Text(_)) && l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st)));
-    });
-    found
+/// Does Outline Stroke have a stroke to turn into art under `n`, outside the dimension subtrees
+/// the command will keep? Guides, clipping paths and type are not outlined.
+fn has_outlinable_stroke(n: &Node, kept: &[NodeId]) -> bool {
+    if kept.contains(&n.id) {
+        return false;
+    }
+    match &n.kind {
+        NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => false,
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st)))
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().any(|c| has_outlinable_stroke(c, kept)),
+        _ => false,
+    }
 }
 
 /// Does `object.path.outlineStroke` have a stroke to outline in `st`'s selection? It acts on the
 /// selection's roots (a compound path's member stands for its compound, which holds the
-/// appearance), so eligibility looks at those same roots, not at the selected nodes themselves.
+/// appearance), excluding the linked dimensions that the command lifts while outlining their art.
 pub fn can_outline_stroke(st: &crate::DocState) -> bool {
-    selection_roots(st).into_iter().filter_map(|id| st.doc.node(id)).any(has_outlinable_stroke)
+    let roots = selection_roots(st);
+    let kept = super::dimension::with_their_art(&st.doc, &roots);
+    roots.into_iter().filter_map(|id| st.doc.node(id)).any(|n| has_outlinable_stroke(n, &kept))
 }
 
 /// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a
