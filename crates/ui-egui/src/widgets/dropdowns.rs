@@ -641,10 +641,14 @@ type Opener = (Option<(egui::Id, bool)>, u64, u64);
 /// The frames after a popup opens in which a search that found no opener runs again.
 const OPENER_RETRY_FRAMES: u64 = 3;
 
-/// The widget that opened `popup`: a button whose popup has egui's default id, or a submenu's row,
-/// found among the widgets of this frame and the previous one. Once found, later frames of the same
-/// opening reuse it; a search that finds nothing runs again for the first few frames.
+/// The widget that opened `popup`: the button [`menu_opener`] recorded for it, a button whose popup
+/// has egui's default id, or a submenu's row, found among the widgets of this frame and the previous
+/// one. Once found, later frames of the same opening reuse it; a search that finds nothing runs
+/// again for the first few frames.
 fn popup_opener(ctx: &egui::Context, popup: egui::Id) -> Option<(egui::Id, bool)> {
+    if let Some(button) = ctx.data(|d| d.get_temp::<egui::Id>(own_opener_key(popup))) {
+        return Some((button, false));
+    }
     let key = popup.with("menu-scroll-opener");
     let frame = ctx.cumulative_frame_nr();
     let cached = ctx.data(|d| d.get_temp::<Opener>(key)).filter(|&(_, _, seen)| seen + 1 >= frame);
@@ -673,7 +677,7 @@ fn popup_opener(ctx: &egui::Context, popup: egui::Id) -> Option<(egui::Id, bool)
 /// opened it, or the point a context menu was opened at. The flag is true for a submenu, which
 /// opens beside its row: down from the row's top, or up from its bottom. While the opening widget
 /// is not drawn, the rect it last had is used. A popup with an id of its own (`Popup::id`) has no
-/// anchor.
+/// anchor unless [`menu_opener`] recorded its button.
 fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
     let ctx = ui.ctx();
     let popup = ui.layer_id().id;
@@ -699,6 +703,19 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
     Some((rect.expand2(vec2(0.0, grow)), submenu))
 }
 
+/// Records `button` as the widget that opens the menu `popup`, a popup with an id of its own
+/// (`Popup::id`), so that [`menu_scroll`] measures the menu's room from the button, as it does for a
+/// popup with egui's default id. Call it before the popup is shown. The record is kept for later
+/// openings of `popup` and is replaced when another button is recorded for it.
+pub fn menu_opener(button: &Response, popup: egui::Id) {
+    button.ctx.data_mut(|d| d.insert_temp(own_opener_key(popup), button.id));
+}
+
+/// Where [`menu_opener`] records the button of a popup with an id of its own.
+fn own_opener_key(popup: egui::Id) -> egui::Id {
+    popup.with("menu-scroll-own-opener")
+}
+
 /// The body of a menu or popup list: as tall as its items up to the bottom bars of the window it
 /// opens in, and scrolling only past that, so long menus (Window, Effect, a panel's menu) stay
 /// reachable on small windows and in a floating panel's short OS window. Its scroll bar has a column
@@ -709,7 +726,8 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
 /// keyboard selection still use the full text.
 ///
 /// The list's height comes from the room below and above the button, row or point the popup opens
-/// from. A popup with an id of its own measures from its own top instead.
+/// from. A popup with an id of its own measures from its own top instead, unless [`menu_opener`]
+/// recorded the button it opens from.
 pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
     let ctx = ui.ctx().clone();
     let margins = egui::Frame::popup(ui.style()).total_margin().sum();

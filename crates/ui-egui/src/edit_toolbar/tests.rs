@@ -25,7 +25,12 @@ fn slot_of(app: &VectorcraftApp, tool: &str) -> Option<usize> {
 
 /// One headless frame of the toolbar, its keys handled first as in the app; returns what it painted.
 fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Shape> {
-    let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
+    run_frame_in(app, ctx, SCREEN, time, events)
+}
+
+/// [`run_frame`] in a window of `size`.
+fn run_frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2, time: f64, events: Vec<Event>) -> Vec<egui::Shape> {
+    let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)), ..Default::default() };
     let mut out = ctx.run_ui(input, |ui| {
         crate::shortcuts::handle(app, ui.ctx());
         crate::toolbar::show(app, ui);
@@ -712,6 +717,74 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
         let want = format!("{}\u{a0}:", crate::i18n::tr(fr, heading));
         assert_eq!(items(&french, &want).len(), 1, "{want:?}");
     }
+}
+
+/// A toolbar named Mine, made with New Toolbar, that holds 21 tools, drawn at (80, 40) in a window of
+/// `size`; returns its + button.
+fn long_toolbar(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2) -> Rect {
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    let tools = ["lasso", "magicWand", "ellipse", "polygon", "star", "pencil", "smooth", "eraser", "scissors", "knife", "paintbrush"];
+    let tools = tools.iter().chain(&["blobBrush", "pen", "curvature", "width", "warp", "rotate", "scale", "shear", "zoom", "hand"]);
+    let bar = crate::custom_toolbars::find_mut(&mut app.ui, "Mine").unwrap();
+    bar.slots = tools.map(|t| vec![t.to_string()]).collect();
+    bar.pos = [80.0, 40.0];
+    run_frame_in(app, ctx, size, 0.0, vec![]);
+    run_frame_in(app, ctx, size, 0.1, vec![]);
+    let area = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
+    let buttons: Vec<Rect> = crate::toolbar::tests::widget_rects(ctx, vec2(26.0, 26.0)).into_iter().filter(|r| area.contains(r.center())).collect();
+    assert_eq!(buttons.len(), 2, "the + and ••• buttons: {buttons:?}");
+    buttons[0]
+}
+
+/// Opens the Add Tool… menu from `plus` in a window of `size`, then moves the pointer down its rows
+/// for 16 frames; returns where the menu opened and, for each of those frames, whether it was open
+/// and where it was.
+fn point_down_the_add_menu(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2, plus: Rect) -> (Rect, Vec<(bool, Option<Rect>)>) {
+    run_frame_in(app, ctx, size, 1.0, vec![Event::PointerMoved(plus.center()), button(plus.center(), true)]);
+    run_frame_in(app, ctx, size, 1.05, vec![button(plus.center(), false)]);
+    run_frame_in(app, ctx, size, 1.5, vec![]);
+    run_frame_in(app, ctx, size, 1.6, vec![]);
+    let id = crate::custom_toolbars::add_menu_id("Mine");
+    let menu = || ctx.memory(|m| m.area_rect(id));
+    let opened = menu().expect("the menu is open");
+    let mut seen = vec![];
+    for k in 0..16u8 {
+        let at = pos2(opened.center().x, opened.top() + 12.0 + f32::from(k) * 20.0);
+        run_frame_in(app, ctx, size, 2.0 + 0.05 * f64::from(k), vec![Event::PointerMoved(at)]);
+        seen.push((egui::Popup::is_id_open(ctx, id), menu()));
+    }
+    (opened, seen)
+}
+
+/// On a toolbar made with New Toolbar that holds many tools, the + button sits low in the window,
+/// with less room under it than the Add Tool… menu needs. The menu then opens above the button and
+/// stays where it opened, as tall as it opened, while the pointer moves down its rows.
+#[test]
+fn the_add_tool_menu_stays_put_under_a_long_toolbar() {
+    let mut app = app();
+    let ctx = ctx();
+    let size = vec2(1000.0, 800.0);
+    let plus = long_toolbar(&mut app, &ctx, size);
+    assert!(plus.bottom() > size.y * 0.6, "the + button is low in the window: {plus:?}");
+    let (opened, seen) = point_down_the_add_menu(&mut app, &ctx, size, plus);
+    assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(opened), "the menu at {opened:?} is inside the window");
+    assert!(opened.bottom() <= plus.top(), "the menu at {opened:?} opens above the + button at {plus:?}");
+    assert!(seen.iter().all(|s| *s == (true, Some(opened))), "opened at {opened:?}, then {seen:?}");
+}
+
+/// With the + button of the same toolbar in the middle of a taller window, the Add Tool… menu opens
+/// below the button and stays there, as tall as it opened, while the pointer moves down its rows.
+#[test]
+fn the_add_tool_menu_stays_put_below_a_button_mid_window() {
+    let mut app = app();
+    let ctx = ctx();
+    let size = vec2(1000.0, 1600.0);
+    let plus = long_toolbar(&mut app, &ctx, size);
+    assert!((size.y * 0.3..size.y * 0.7).contains(&plus.center().y), "the + button is in the middle of the window: {plus:?}");
+    let (opened, seen) = point_down_the_add_menu(&mut app, &ctx, size, plus);
+    assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(opened), "the menu at {opened:?} is inside the window");
+    assert!(opened.top() >= plus.bottom(), "the menu at {opened:?} opens below the + button at {plus:?}");
+    assert!(seen.iter().all(|s| *s == (true, Some(opened))), "opened at {opened:?}, then {seen:?}");
 }
 
 /// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.

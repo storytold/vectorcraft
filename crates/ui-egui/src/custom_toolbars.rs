@@ -1379,6 +1379,7 @@ pub(crate) fn add_menu_id(name: &str) -> egui::Id {
 /// where a click adds one at the end (dimmed: in the toolbar already). It scrolls past the window's
 /// bottom bars, as other long menus do ([`widgets::menu_scroll`]).
 fn add_menu(button: &egui::Response, t: &Tokens, bar: &CustomToolbar, actions: &mut Vec<Action>) {
+    widgets::menu_opener(button, add_menu_id(&bar.name));
     egui::Popup::menu(button).id(add_menu_id(&bar.name)).show(|ui| {
         widgets::menu_min_width(ui, 200.0);
         widgets::menu_scroll(ui, |ui| {
