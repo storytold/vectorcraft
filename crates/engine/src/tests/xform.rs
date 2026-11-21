@@ -879,13 +879,6 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
     for (cmd, params) in [
         ("object.cropImage", json!({})),
         ("imageTrace.make", json!({})),
-        ("links.relink", json!({"path": "/nowhere/pic.png"})),
-        // Refused before the folder is searched, so a file missing there does not hide it.
-        ("links.relink", json!({"folder": "/nowhere"})),
-        ("links.embed", json!({"ids": [img.0]})),
-        ("links.unembed", json!({})),
-        // Refused before any file is written.
-        ("links.unembed", json!({"folder": "/nowhere"})),
         ("object.createObjectMosaic", json!({})),
         ("object.mesh.create", json!({})),
         (

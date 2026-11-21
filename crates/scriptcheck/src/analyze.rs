@@ -239,6 +239,10 @@ enum Pending<'s> {
     MenuString(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
+    /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
+    /// or an update (`++`, `--`) that sets it may follow. With `true`, a prefix update came before
+    /// the receiver, and it sets the property unless a member or a call follows it.
+    Setter(Option<usize>, bool),
     /// A platform name where a property key or a label may stand (first, or after `{`, `,`, `;` or
     /// `}`): it is a key or a label when `:` follows.
     Name(&'s str, Option<usize>),

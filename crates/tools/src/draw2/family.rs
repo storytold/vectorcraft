@@ -448,6 +448,10 @@ impl Tool for FamilyTool {
                 _ => self.grid_skew_key(key).is_some(),
             }
     }
+    /// The pointer left the canvas: the Smart Guide of the hover goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.snap.clear();
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
@@ -1252,6 +1256,23 @@ mod tests {
             "{a:?}"
         );
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align")));
+    }
+
+    /// The "anchor" label a hover shows goes when the pointer leaves the canvas.
+    #[test]
+    fn leaving_the_canvas_drops_the_hover_label() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let label = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor"));
+        for id in ["arc", "spiral", "rectangularGrid", "polarGrid"] {
+            let mut t = FamilyTool::new(id);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+            assert!(label(&t.overlays(&cx)), "{id}");
+            t.hover_ended(&cx);
+            assert!(!label(&t.overlays(&cx)), "{id}: {:?}", t.overlays(&cx));
+        }
     }
 
     /// A grid's Default Size and Reference Point are options for a click's dialog; the drag

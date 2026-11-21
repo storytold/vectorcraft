@@ -1010,6 +1010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-cdr"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=9b28b56bc7207ef7ce806f37df72cb94c0ad5c37#9b28b56bc7207ef7ce806f37df72cb94c0ad5c37"
+dependencies = [
+ "crc32fast",
+ "flate2",
+]
+
+[[package]]
 name = "craft-cms"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
@@ -6725,16 +6734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vectorcraft-cdr"
-version = "0.24.1"
-dependencies = [
- "crc32fast",
- "flate2",
- "proptest",
- "vectorcraft-cdr",
-]
-
-[[package]]
 name = "vectorcraft-cli"
 version = "0.24.1"
 dependencies = [
@@ -6818,6 +6817,7 @@ version = "0.24.1"
 dependencies = [
  "cfb",
  "chrono",
+ "craft-cdr",
  "craft-docpath",
  "craft-image-codecs",
  "craft-jxl",
@@ -6849,7 +6849,6 @@ dependencies = [
  "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
- "vectorcraft-cdr",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-eps",
@@ -7057,6 +7056,7 @@ dependencies = [
  "craft-image-codecs",
  "craft-vectorcraft-format",
  "log",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2",
@@ -7065,6 +7065,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
  "wasmi",
+ "wasmparser 0.228.0",
  "wat",
  "web-time",
 ]
