@@ -173,7 +173,7 @@ fn filter(s: &mut Session, p: &Value) -> Result<Value> {
     let label = effects::effect_info(id).map_or("Apply as Filter", |e| e.label.trim_end_matches('…'));
     let kinds = effects::addons::duotone::swatch_kinds(&s.doc()?.doc);
     let swatches = |name: &str| kinds.get(name).copied();
-    recolor_links(s, &given, C, label, &|c| map.apply(c), &|c, link, tint| map.apply_link(c, link, tint, &swatches))
+    s.edit_effect(id, |s| recolor_links(s, &given, C, label, &|c| map.apply(c), &|c, link, tint| map.apply_link(c, link, tint, &swatches)))
 }
 
 /// Apply Fill to Stroke (`to_stroke`) or Apply Stroke to Fill: each target copies one of its own

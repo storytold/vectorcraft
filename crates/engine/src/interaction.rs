@@ -4,6 +4,9 @@ use super::{Affine, Arc, Document, NodeId, Selection, Value};
 #[derive(Clone, Debug)]
 pub struct Interaction {
     pub label: String,
+    /// The built-in effect the last preview applied or edited ([`crate::Session::edit_effect`]):
+    /// the step the interaction records keeps it when `label` is the effect's name.
+    pub(crate) effect: Option<&'static str>,
     pub doc: Arc<Document>,
     /// The selection the previews start from (shared, so a preview frame copies nothing).
     pub selection: Arc<Selection>,

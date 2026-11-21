@@ -67,16 +67,14 @@ fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, 
     }
 }
 
-/// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
-/// without its trailing ellipsis. A plug-in effect's name is shown as it is.
+/// The effect's name in the UI language as the Effect menu shows it ([`crate::i18n::effect_name`]
+/// of `__effect`), else `__label` as it is. A plug-in effect's name is shown as it is.
 fn heading_label(d: &Dialog) -> String {
     let label = d.str("__label");
     if vectorcraft_plugins::effect::plugin_id(&d.str("__effect")).is_some() {
         return label;
     }
-    let dotted = format!("{label}…");
-    let shown = tl!(&dotted);
-    if shown != dotted { shown.trim_end_matches('…').to_string() } else { tl!(&label).to_string() }
+    crate::i18n::effect_name(crate::i18n::current(), &d.str("__effect")).unwrap_or(label)
 }
 
 /// The dialog kind asking whether to edit an effect that is already applied or add another.

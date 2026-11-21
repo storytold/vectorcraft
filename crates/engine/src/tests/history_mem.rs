@@ -461,3 +461,43 @@ fn color_mode_paint_snapshots_count_toward_the_history_budget() {
         original.appearance.unwrap().effects[0].params["retainedTemplateData"]
     );
 }
+
+/// A step that applies an effect keeps the effect, through undo and redo too. A step named like an
+/// effect by anything else keeps none: a plain edit, an undo group named like the effect, and a
+/// group another command started that an effect only extends.
+#[test]
+fn only_steps_an_effect_records_keep_the_effect() {
+    let mut s = session_with_rects(2);
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| (e.label.clone(), e.effect()));
+    assert_eq!(last(&s), Some(("Add".into(), None)), "a plain edit named like Pathfinder › Add");
+    s.execute("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.redo.last().and_then(|e| e.effect()), Some("stylize.feather"), "an undone step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "a redone step");
+    s.begin_named_undo_group(Some("Feather".into()));
+    s.execute("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    s.end_undo_group(false);
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "a group named like the effect");
+    s.begin_undo_group();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.transform"})).unwrap();
+    s.end_undo_group(false);
+    assert_eq!(last(&s), Some(("Transform".into(), None)), "a group a transform started");
+    // An interaction's step keeps the effect its last preview applied, and none when a later
+    // preview replaced it with another command.
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "a kept preview");
+    s.begin_interaction("Transform").unwrap();
+    s.preview("effect.apply", &json!({"effect": "distort.transform"})).unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Transform".into(), None)), "a replaced preview");
+    s.begin_interaction("Feather").unwrap();
+    s.preview("command.batch", &json!({"commands": [{"command": "effect.apply", "params": {"effect": "stylize.feather"}}]})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "a batch the preview ran");
+}

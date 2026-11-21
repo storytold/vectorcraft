@@ -2456,14 +2456,15 @@ fn untranslated_report() {
     assert!(strings.len() > 500, "menu scan found only {} strings", strings.len());
     let literals = tl_literals();
     assert!(literals.len() > 300, "scan found only {} tl! literals", literals.len());
-    // Undo step names: the recorded names, every effect's name without its ellipsis, and the
-    // Liquify tools' step names (`{} Tool`). A name's row is its plain row or the row of the same
-    // name with an ellipsis (`panels::history::step_name`); a template made with
-    // `Session::edit_named` needs a plain row, which `panels::history::entry_name` fills.
+    // Undo step names: the recorded names and the Liquify tools' step names (`{} Tool`). A name's
+    // row is its plain row or the row of the same name with an ellipsis
+    // (`panels::history::step_name`); a template made with `Session::edit_named` needs a plain
+    // row, which `panels::history::entry_name` fills. A step that applies an effect is named as
+    // the Effect menu names it (`i18n::has_effect_name`), listed under "effect names".
     let scan = undo_scan();
     let mut undo = scan.labels;
     assert!(undo.len() > 300, "scan found only {} undo labels", undo.len());
-    undo.extend(vectorcraft_effects::effect_catalog().iter().map(|e| e.label.trim_end_matches('…').to_string()));
+    let effect_ids: Vec<&'static str> = vectorcraft_effects::effect_catalog().iter().map(|e| e.id).collect();
     let liquify = ["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
     undo.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
     assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
@@ -2488,6 +2489,11 @@ fn untranslated_report() {
         add(l.code, "menu strings", strings.iter().filter(|s| !kept(s) && cat.plain(s).is_none()).cloned().collect::<BTreeSet<_>>());
         add(l.code, "tl! strings", literals.iter().filter(|s| cat.plain(s).is_none()).cloned().collect::<BTreeSet<_>>());
         add(l.code, "undo labels", undo.iter().filter(|s| crate::panels::history::step_name(lang, s).is_none()).cloned().collect::<BTreeSet<_>>());
+        add(
+            l.code,
+            "effect names",
+            effect_ids.iter().filter(|id| !crate::i18n::has_effect_name(lang, id)).map(|id| id.to_string()).collect::<BTreeSet<_>>(),
+        );
         add(l.code, "undo label templates", scan.templates.iter().filter(|t| cat.plain(t).is_none()).cloned().collect::<BTreeSet<_>>());
         let (entries, _) = parse_entries(l.source);
         let rows: BTreeSet<(&str, &str)> = entries.iter().map(|(ctx, src, _)| (ctx.as_str(), src.as_str())).collect();
