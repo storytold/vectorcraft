@@ -852,6 +852,55 @@ fn a_library_tint_whose_color_the_document_deleted_brings_the_color_back() {
     assert_eq!((&again["added"], &again["existing"]), (&json!([]), &json!(["Ink half"])), "{again}");
 }
 
+/// A numbered tint of the document whose global color was deleted without unlinking it is the
+/// library's tint only with that color: adding the tint brings the color back under its name.
+#[test]
+fn a_numbered_tint_whose_color_the_document_deleted_brings_the_color_back() {
+    let mut s = session();
+    let id = tinted_ink_library_and_a_red_ink(&mut s);
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#0000ff", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Ink half", "color": "#00ff00"}));
+    run(&mut s, "swatch.new", json!({"name": "Ink half 2", "swatch": "Ink", "tint": 50}));
+    run(&mut s, "swatch.delete", json!({"names": ["Ink"], "unlink": false}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Ink half"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Ink"]), &json!(["Ink half 2"])), "{r}");
+    assert!(is_global(&s, "Ink", "#0000ff"), "{r}");
+    assert_eq!(tint_base(&s, "Ink half 2").as_deref(), Some("Ink"), "{r}");
+}
+
+/// A deleted color that a document tint found here links to keeps its name when the call also
+/// picks it, so a pattern added earlier in the call whose art brings another color of a taken
+/// name does not take that name first.
+#[test]
+fn a_deleted_color_a_found_tint_links_to_keeps_its_name_beside_a_pattern() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#00ff00", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Ink 2", "color": "#0000ff", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Ink 2 half", "swatch": "Ink 2", "tint": 50}));
+    let dot = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 6, "height": 6}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Ink", "ids": [dot]}));
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": [dot]}));
+    run(&mut s, "select.set", json!({"ids": [dot]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Tiles", "width": 8, "height": 8}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Tiles.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#ff0000", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Ink 2", "color": "#0000ff", "global": true}));
+    run(&mut s, "swatch.new", json!({"name": "Ink 2 half", "swatch": "Ink 2", "tint": 50}));
+    run(&mut s, "swatch.delete", json!({"names": ["Ink 2"], "unlink": false}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Ink 2 half", "Ink 2"]}));
+    assert!(r["existing"].as_array().is_some_and(|a| a.contains(&json!("Ink 2 half"))), "{r}");
+    assert_eq!(tint_base(&s, "Ink 2 half").as_deref(), Some("Ink 2"), "{r}");
+    assert!(is_global(&s, "Ink 2", "#0000ff"), "{r}");
+    let fill = doc(&s).pattern("Tiles").unwrap().art[0].appearance.fill_paint();
+    let Paint::Solid { swatch, .. } = &fill else { panic!("the tile is filled with a color: {fill:?}") };
+    let green = swatch.clone().unwrap_or_default();
+    assert!(is_global(&s, &green, "#00ff00"), "{r}");
+}
+
 /// A library tint added with a pattern whose art took a numbered copy that the library also names
 /// is found again on the next add: the tint links to the copy the art took, and adding the pattern
 /// and the tint again adds nothing.
@@ -875,6 +924,10 @@ fn a_library_tint_linked_to_the_copy_a_pattern_took_is_found_again() {
     let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Ink half"]}));
     let base = tint_base(&s, "Ink half").unwrap_or_default();
     assert!(is_global(&s, &base, "#0000ff"), "{r}");
+    // The pattern's art and the tint link to the same color.
+    let fill = doc(&s).pattern("Tiles").unwrap().art[0].appearance.fill_paint();
+    let Paint::Solid { swatch, .. } = &fill else { panic!("the tile is filled with a color: {fill:?}") };
+    assert_eq!(swatch.as_deref(), Some(base.as_str()), "{r}");
     let swatches = doc(&s).swatches_iter().count();
     let again = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Ink half"]}));
     assert_eq!(again["added"], json!([]), "{again}");

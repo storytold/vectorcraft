@@ -145,11 +145,12 @@ pub(crate) fn imported_name(imported: &Imported, name: &str) -> String {
 }
 
 /// The pattern of `d` that [`import`] of pattern `name` of library `lib` would use without adding
-/// anything to `d` → its name in `d`. A pattern whose art uses no other resource is compared as
-/// [`existing_pattern`] does. One whose art uses other resources, such as a pattern it is painted
-/// with, is imported into a copy of `d` as [`probe_import`] does, so that those resources are
-/// compared too.
-pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Option<String> {
+/// anything to `d` → its name in `d`, and the swatches of `d` that the art takes under another
+/// name than its own, as [`import`] lists them. A pattern whose art uses no other resource is
+/// compared as [`existing_pattern`] does. One whose art uses other resources, such as a pattern it
+/// is painted with, is imported into a copy of `d` as [`probe_import`] does, so that those
+/// resources are compared too.
+pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Option<(String, SwatchNames)> {
     let gathered = gather(lib, name);
     let only_pattern = gathered.patterns.len() == 1
         && gathered.symbols.is_empty()
@@ -161,14 +162,24 @@ pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Optio
         && gathered.images.is_empty()
         && gathered.graph_designs.is_empty();
     if only_pattern {
-        return existing_pattern(d, lib, name);
+        return existing_pattern(d, lib, name).map(|target| (target, vec![]));
     }
     // Without a pattern to reuse, the document is not copied.
     if !has_candidate(d, lib, name) {
         return None;
     }
     let (_, _, imported) = probe_import(d, lib, name, &gathered).ok()?;
-    (imported.added == 0).then(|| imported_name(&imported, name))
+    if imported.added != 0 {
+        return None;
+    }
+    let took = imported
+        .renamed
+        .iter()
+        .filter(|r| r["kind"] == "swatch")
+        .filter_map(|r| Some((r["from"].as_str()?.to_string(), r["to"].as_str()?.to_string())))
+        .filter(|(_, to)| d.swatches_iter().any(|w| w.name == *to))
+        .collect();
+    Some((imported_name(&imported, name), took))
 }
 
 /// Whether `d` has a pattern that importing pattern `name` of `lib` can reuse: one under that name

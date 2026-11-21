@@ -1169,8 +1169,18 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             .any(|n| !links.contains_key(n) && by_name.contains_key(n) && lib_by_name.get(n).is_some_and(|b| b.global || b.spot))
     };
     let picked_names: HashSet<&str> = picked.iter().map(|(_, w)| w.name.as_str()).collect();
+    // The picked patterns the document already has, each probed once: library pattern name → its
+    // name in the document and the colors of the document its art takes under other names.
+    let mut present: HashMap<&str, Option<(String, patternlib::SwatchNames)>> = HashMap::new();
+    if let Some(src) = &patterns {
+        for (_, w) in &picked {
+            let Paint::Pattern { pattern, .. } = &w.paint else { continue };
+            present.entry(pattern.as_str()).or_insert_with(|| patternlib::present_pattern(d, src, pattern));
+        }
+    }
     // Whether the document's swatch `x` of the name of library swatch `w` is `w` with its colors
-    // linked to swatches of the document → the library's global and spot colors to bring back.
+    // linked to swatches of the document → the library's global and spot colors to bring back,
+    // those this call picks included.
     // `x` shows `w`'s paint with each color linked to: the name `links` gives it; its own name when
     // that is the document's color of the library color's paint and kind; or, for a library color
     // the document has under no name, that color's own name, which then comes in under it.
@@ -1192,9 +1202,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 (None, Some(b)) => match by_name.get(t) {
                     Some(y) => l == t && y.paint == b.paint && same_kind(y, b),
                     None if l == t && !group_names.contains(t) => {
-                        if !picked_names.contains(l) {
-                            restore.push(l.to_string());
-                        }
+                        restore.push(l.to_string());
                         true
                     }
                     None => false,
@@ -1209,9 +1217,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // `paint` is `w`'s paint with the colors it links to as `links` has them in the document → the
     // name of the document's swatch, and the library colors to bring back for it ([`fit`]).
     let there = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| -> Option<(String, Vec<String>)> {
-        if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
-            let target = patternlib::present_pattern(d, src, pattern)?;
-            return library_pattern_swatch(d, w, &target).map(|n| (n, vec![]));
+        if let (Paint::Pattern { pattern, .. }, Some(_)) = (&w.paint, &patterns) {
+            let (target, _) = present.get(pattern.as_str())?.as_ref()?;
+            return library_pattern_swatch(d, w, target).map(|n| (n, vec![]));
         }
         if let Some(restore) = by_name.get(w.name.as_str()).filter(|x| same_color_kind(x, w)).and_then(|x| fit(x, w, links)) {
             return Some((w.name.clone(), restore));
@@ -1224,7 +1232,12 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             None if group_names.contains(w.name.as_str()) => numbered(w, paint, links),
             None => (w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == *paint)).then(|| w.name.clone()),
         };
-        found.map(|n| (n, vec![]))
+        // A numbered copy brings back the colors it links to that the document deleted, as a
+        // swatch of `w`'s own name does.
+        found.map(|n| {
+            let back = by_name.get(n.as_str()).and_then(|x| fit(x, w, links)).unwrap_or_default();
+            (n, back)
+        })
     };
     // The global or spot color of the document that library color `b` is: its own name, or the
     // numbered copy of it that adding `b` would find. While no color or color group has its name,
@@ -1254,17 +1267,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // numbered copy that the library also names) is the one the picked tints and gradients link
     // to, as when the pattern came in, unless this call adds the color itself. The colors the art
     // takes are those of an import into a copy of the document, which adds nothing.
-    if let Some(src) = &patterns
-        && looked_up.iter().any(|n| !base_names.contains_key(*n))
-    {
+    if looked_up.iter().any(|n| !base_names.contains_key(*n)) {
         for (_, w) in &picked {
             let Paint::Pattern { pattern, .. } = &w.paint else { continue };
-            if patternlib::present_pattern(d, src, pattern).is_none() {
-                continue;
-            }
-            let mut probe: vectorcraft_doc::Document = (**d).clone();
-            let Ok((_, _, took)) = patternlib::import(&mut probe, src, pattern) else { continue };
-            for (from, to) in took {
+            let Some(Some((_, took))) = present.get(pattern.as_str()) else { continue };
+            for (from, to) in took.iter().cloned() {
                 let fits = |b: &&Swatch| by_name.get(to.as_str()).is_some_and(|x| (x.global || x.spot) && x.paint == b.paint && same_kind(x, b));
                 if looked_up.contains(from.as_str()) && !picked_names.contains(from.as_str()) && lib_by_name.get(from.as_str()).is_some_and(fits) {
                     base_names.entry(from).or_insert(to);
@@ -1279,6 +1286,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // the document has no swatch of that name (one deleted without unlinking them): they come back
     // under their own names.
     let mut restore: Vec<String> = vec![];
+    // Those that this call picks: they are added first, so that they keep their names, which the
+    // art of a pattern added before them could otherwise take.
+    let mut reserved: HashSet<String> = HashSet::new();
     for &(group, w) in &picked {
         // A tint or gradient is compared with its colors linked to the names they have here.
         let paint = relinked(&w.paint, &base_names);
@@ -1286,13 +1296,20 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             Some((name, back)) => {
                 existing.push((w.name.clone(), name));
                 for n in back {
-                    if !restore.contains(&n) {
+                    if picked_names.contains(n.as_str()) {
+                        reserved.insert(n);
+                    } else if !restore.contains(&n) {
                         restore.push(n);
                     }
                 }
             }
             None => fresh.push((group, w)),
         }
+    }
+    if !reserved.is_empty() {
+        let (first, rest): (Vec<_>, Vec<_>) = fresh.into_iter().partition(|(_, w)| reserved.contains(&w.name));
+        fresh = first;
+        fresh.extend(rest);
     }
     let undo_before = s.doc()?.history.undo.len();
     // Library name → the name it got in the document. The colors the patterns brought that no
