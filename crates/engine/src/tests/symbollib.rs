@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 10, "{libs:?}");
+    assert_eq!(libs.len(), 9, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -115,7 +115,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
         (Some("media-controls"), Some("Media Controls"), Some("builtIn"))
     );
     assert_eq!(
-        (libs[9]["id"].as_str(), libs[9]["name"].as_str(), libs[9]["category"].as_str()),
+        (libs[8]["id"].as_str(), libs[8]["name"].as_str(), libs[8]["category"].as_str()),
         (Some("element-icons"), Some("Element Icons"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
