@@ -447,7 +447,7 @@ fn locate(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let row = ancestry.last().copied().ok_or(EngineError::NoNode(id))?;
     st.layer_rows = vec![row];
-    st.locate_reveal = Some(row);
+    st.layers_reveal = Some(crate::LayersReveal::Row(row));
     st.revision += 1;
     let ancestry: Vec<u64> = ancestry.iter().map(|i| i.0).collect();
     Ok(if layers_only { json!({ "id": row.0, "objectId": id.0, "ancestry": ancestry }) } else { json!({ "id": id.0, "ancestry": ancestry }) })
