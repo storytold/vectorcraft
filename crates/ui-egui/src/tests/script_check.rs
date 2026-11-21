@@ -8,19 +8,30 @@ use vectorcraft_engine::Session;
 use super::picks::{poll, scripted};
 use crate::{VectorcraftApp, dialogs, io, menus};
 
-/// An app reading files from disk.
+/// An app reading files from disk, whose window has a dialog host.
 fn app() -> VectorcraftApp {
     let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-    VectorcraftApp::new(Session::new(), services)
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.adopt_context(&crate::testing::ui_context());
+    app
+}
+
+/// The context of the app's window.
+fn window(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().expect("the app's window")
 }
 
 /// One headless frame of the app's dialog host.
 fn frame(app: &VectorcraftApp) {
-    // PLAN: assumed `craft::ui::testing::ui_context()` gives a context that can run a frame
-    let ctx = craft::ui::testing::ui_context();
     let host = app.dialogs().expect("the app has a dialog host");
-    let mut out = ctx.run_ui(Default::default(), |ui| host.with(|h| h.run(ui)));
+    let mut out = window(app).run_ui(Default::default(), |ui| host.with(|h| h.run(ui)));
     out.textures_delta.clear();
+}
+
+/// Closes every open dialog as its Close button does.
+fn close_all(app: &VectorcraftApp) {
+    let ctx = window(app);
+    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&ctx, d.id))));
 }
 
 /// A script with a little of everything the report shows.
@@ -68,16 +79,17 @@ fn check_script_shows_the_report_and_copy_report_copies_it() {
     frame(&app);
     assert_eq!(groups(&app).len(), shown.len());
     // A script that does nothing has the name group only.
-    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft::ui::testing::ui_context(), d.id))));
+    close_all(&app);
     menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": "var a = 1;", "name": "Clean.jsx"})).unwrap().unwrap();
     assert_eq!(groups(&app).len(), 1);
-    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft::ui::testing::ui_context(), d.id))));
+    close_all(&app);
     assert!(app.dialogs().unwrap().with(|h| h.open_dialogs().is_empty()), "Close closes it");
     // The script's text does as well as its bytes.
     let by_text = menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": SCRIPT, "name": "Tidy.jsx"})).unwrap().unwrap();
     assert_eq!(by_text, r);
     // Nothing was copied until Copy is pressed, and the pump puts what it copied on the clipboard.
-    dialogs::script_check::pump(&mut app, &egui::Context::default());
+    let ctx = window(&app);
+    dialogs::script_check::pump(&mut app, &ctx);
     assert!(app.clipboard_out.is_none());
 }
 
@@ -135,10 +147,12 @@ fn file_open_of_a_script_checks_it_with_what_it_includes() {
     assert_eq!(pending["pending"], "fileDialog");
     let requests = picker.requests();
     assert_eq!(requests.len(), 1);
-    let filters: Vec<(&str, Vec<&str>)> = requests[0].filters.iter().map(|f| (f.name.as_str(), f.extensions.iter().map(String::as_str).collect())).collect();
+    let filters: Vec<(&str, Vec<&str>)> =
+        requests[0].filters.iter().map(|f| (f.name.as_str(), f.extensions.iter().map(String::as_str).collect())).collect();
     assert_eq!(filters, [("Scripts", vec!["jsx", "jsxinc", "jsxbin"])]);
     picker.answer(&[&path]);
-    poll(&mut app, &egui::Context::default());
+    let ctx = window(&app);
+    poll(&mut app, &ctx);
     assert_eq!(name(&app), "main.jsx");
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -185,7 +199,8 @@ fn check_script_asks_off_the_ui_thread_and_needs_no_document() {
     assert_eq!(requests[0].filters.first().map(|f| f.name.as_str()), Some("Scripts"));
     app.run("file.close", json!({})).unwrap();
     picker.answer(&[&path.to_string_lossy()]);
-    poll(&mut app, &egui::Context::default());
+    let ctx = window(&app);
+    poll(&mut app, &ctx);
     assert_eq!(name(&app), "picked.jsx", "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -1,8 +1,8 @@
 //! The Properties panel: sections that change with the selection.
 
+use craft::behavior::{ColumnWidth, IconId};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft::behavior::{ColumnWidth, IconId};
 use craft::ui::layout_components::{Grid, Row};
 use craft::ui::patterns::panels::Inspector;
 
@@ -261,10 +261,10 @@ mod object_sections;
 mod transform_section;
 mod type_sections;
 
+pub(crate) use appearance_section::{GlobalEditKey, global_edit_options, global_edit_popover, global_edit_results};
+pub(crate) use artboard_sections::{ArtboardSizeChoice, artboard_presets, artboard_size_controls, artboard_size_row};
 pub use transform_section::transform_section;
 pub use type_sections::type_sections;
-pub(crate) use appearance_section::{GlobalEditKey, global_edit_options, global_edit_popover, global_edit_results};
-pub(crate) use artboard_sections::{ArtboardSizeChoice, artboard_size_controls, artboard_size_row};
 
 pub(crate) mod dynamic_text;
 pub(crate) mod graph;

@@ -128,7 +128,7 @@ pub mod save_brush_library;
 pub mod save_for_web;
 pub(crate) mod save_library;
 pub(crate) mod save_options;
-mod save_pdf;
+pub(crate) mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
 pub mod save_symbol_library;
@@ -181,7 +181,7 @@ pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 // PLAN: these re-exports are kept as they were; export-w13 removes any whose item it deletes.
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
+    ExportForScreensDialog, KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
     export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows, settings_format as screen_settings_format,

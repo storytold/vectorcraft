@@ -142,6 +142,7 @@ use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::Label;
 use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::runtime::requests::ColorRequest;
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::table::Table;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
@@ -1569,32 +1570,40 @@ fn run_preview(app: &mut VectorcraftApp, (on, cmd, params): (bool, &'static str,
     }
 }
 
-/// Feeds the open Recolor Artwork what it shows of the app, runs what its passes asked for, opens
-/// the Color Picker it asked for over it and previews its recolour: once a frame, after the window's
-/// dialog host ran.
+/// Feeds the open Recolor Artwork what it shows of the app, runs what its passes asked for, asks for
+/// the Color Picker over a row's new colour, gives the row the colour that picker answered and
+/// previews its recolour: once a frame, after the window's dialog host ran.
 // PLAN: hub-w2 adds the line `recolor::pump(app, ctx)` to `dialogs::host::pump` (co.A6 names this pump).
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(id) = app.color_dialogs.recolor.as_ref().map(|open| open.id) else { return };
     let Some(dialogs) = app.dialogs() else { return };
+    // The colour the picker answered for a row reaches the row here, where the app can snap it to Limit to Library.
+    dialogs.with(|host| {
+        if let Some(d) = host.get_mut_by_id::<RecolorDialog>(id)
+            && let Some((row, c)) = d.picked.take()
+        {
+            // A colour picked as RGB keeps the model of the row's new colour (CMYK in a CMYK document).
+            let picked = Color::rgb(c.r, c.g, c.b);
+            let was = rows(&d.fields).get(row).and_then(to_color);
+            with_new_color(app, d, row, was.map_or(picked, |was| keep_model(was, picked)));
+        }
+    });
     let Some(mut work) = dialogs.with(|host| host.get_mut_by_id::<RecolorDialog>(id).map(RecolorDialog::take_work)) else { return };
-    let picker = work.run(app);
-    let picker = picker.and_then(|(row, swatches)| {
+    // PLAN: the picker opens on its colour fields: `ColorRequest` cannot ask it to start on its swatches view (the
+    // `bool` beside the row; framework gap).
+    let request = work.run(app).and_then(|(row, _)| {
         let r = rows(&work.fields).into_iter().nth(row)?;
-        Some((row, to_color(&r).or_else(|| from_colors(&r).first().copied()).unwrap_or_default(), swatches))
+        let color = to_color(&r).or_else(|| from_colors(&r).first().copied()).unwrap_or_default();
+        Some(ColorRequest::new(row.to_string(), srgba(&color)))
     });
     let previewing = preview_params(&work.fields);
     let feed = Feed::of(app, &work.fields);
     dialogs.with(|host| {
         if let Some(d) = host.get_mut_by_id::<RecolorDialog>(id) {
             d.put_work(work, feed);
+            d.color_request = request;
         }
     });
-    if let Some((row, color, swatches)) = picker {
-        // PLAN: assumed `color_picker::open_over(app, parent, color, row, swatches) -> Result<(), String>` (color-w8's request row).
-        if let Err(e) = super::color_picker::open_over(app, id, color, row, swatches) {
-            app.status(e);
-        }
-    }
     if let Some(p) = previewing {
         run_preview(app, p);
     }
@@ -1700,6 +1709,10 @@ pub(crate) struct RecolorDialog {
     ends: (Option<usize>, Option<usize>),
     /// The row whose right-click menu is open, and where it opened.
     row_menu: Option<(usize, egui::Pos2)>,
+    /// The Color Picker asked for over a row's new colour, keyed by the row's index, until the picker opens.
+    color_request: Option<ColorRequest>,
+    /// The row and colour the picker answered, until the pump gives the row that colour.
+    picked: Option<(usize, Srgba)>,
 }
 
 impl RecolorDialog {
@@ -1713,6 +1726,8 @@ impl RecolorDialog {
             filed: Filed::default(),
             ends: (None, None),
             row_menu: None,
+            color_request: None,
+            picked: None,
         }
     }
 
@@ -1844,6 +1859,17 @@ impl StackDialog for RecolorDialog {
 
     fn held_state(&self) -> Option<HeldOk> {
         self.held.state()
+    }
+
+    fn take_color_request(&mut self) -> Option<ColorRequest> {
+        self.color_request.take()
+    }
+
+    /// The picker's OK for the row its request named.
+    fn answer_color(&mut self, key: &str, color: Srgba) {
+        if let Ok(row) = key.parse() {
+            self.picked = Some((row, color));
+        }
     }
 
     // PLAN: color-w20 asked for `canvas()` to return the main canvas while the Color Theme Picker is on; no main
@@ -3531,7 +3557,7 @@ mod tests {
     /// Cancel leaves the rows and the preview as they were; OK sets that row's new color, and only
     /// that row's, in the document's model (a color picked as RGB is CMYK in a CMYK document), and
     /// the art previews it; nothing is committed until Recolor Artwork's own OK.
-    // PLAN: assumed color-w8's `open_over` opens the framework's `ColorPickerDialog` as a child of Recolor Artwork. Its
+    // The row's `ColorRequest` opens the framework's `ColorPickerDialog` as a child of Recolor Artwork. Its
     // `ui.dialog.set` takes only `#rrggbb`, so the trial picks in RGB; a CMYK mix and a Lab color kept in their model
     // are color-w8's picker trials (`in_document_model`).
     #[test]

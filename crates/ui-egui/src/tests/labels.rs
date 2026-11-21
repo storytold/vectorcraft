@@ -17,8 +17,7 @@ fn app() -> VectorcraftApp {
 /// Every string painted by `f` in a headless frame (app fonts installed), one per line. The second
 /// of two frames: windows size themselves invisibly in their first.
 pub(crate) fn painted_text(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> String {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui)).textures_delta.clear();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui));
     out.textures_delta.clear();

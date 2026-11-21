@@ -1,5 +1,7 @@
+use serde_json::Value;
+
 use super::fonts::MAX_RECENT_FONTS;
-use super::{Value, VectorcraftApp, canvas, dialogs, fileio, io, menus, panels};
+use super::{VectorcraftApp, canvas, dialogs, fileio, io, menus, panels};
 use crate::placing;
 use crate::state::ReplaceFontWarning;
 

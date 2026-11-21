@@ -1,8 +1,9 @@
 use craft::behavior::{CanvasView, ZoomScheme};
 use craft::ui::canvas::{NavigationOptions, ViewRequest};
+use serde_json::Value;
 use vectorcraft_engine::Prefs;
 
-use super::{Value, VectorcraftApp, View, ViewInfo, panels};
+use super::{VectorcraftApp, View, ViewInfo, panels};
 use crate::state::ViewMove;
 
 /// The canvas's navigation options for `p`: the wheel, Animated Zoom, the trackpad and touch gestures.

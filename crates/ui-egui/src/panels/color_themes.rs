@@ -33,7 +33,6 @@ use vectorcraft_color::Color;
 use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
-// PLAN: assumed `crate::panels::srgba(&Color) -> Srgba` beside `c32` (co.A11, hub-w2).
 use super::color::color_of_values;
 use super::{active_paint, c32, color_json, proxy_cmd, srgba};
 use crate::VectorcraftApp;

@@ -8,6 +8,7 @@
 
 use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::SliderScale;
 use serde::Deserialize;
@@ -215,9 +216,9 @@ fn resolution_row() -> Param {
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
         let shown = preset.unwrap_or(RESOLUTION_LABELS.len() - 1);
         ui.horizontal(|ui| {
-            craft::ui::pickers::ComboBox::from_id_salt("ro-ppi").selected_text(tl!(RESOLUTION_LABELS.get(shown).copied().unwrap_or_default())).show_ui(
-                ui,
-                |ui| {
+            craft::ui::pickers::ComboBox::from_id_salt("ro-ppi")
+                .selected_text(tl!(RESOLUTION_LABELS.get(shown).copied().unwrap_or_default()))
+                .show_ui(ui, |ui| {
                     for (i, label) in RESOLUTION_LABELS.iter().enumerate() {
                         if ui.selectable_label(i == shown, tl!(*label)).clicked() {
                             if let Some(p) = RESOLUTIONS.get(i) {
@@ -226,10 +227,13 @@ fn resolution_row() -> Param {
                             fields.set("__otherPpi", i == RESOLUTION_LABELS.len() - 1);
                         }
                     }
-                },
-            );
+                });
             if preset.is_none() {
-                let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi))).range(1.0..=4608.0).step(1.0).unit(super::ppi_suffix()).show(ui);
+                let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
+                    .range(1.0..=4608.0)
+                    .step(1.0)
+                    .unit_kind(UnitKind::PixelsPerInch)
+                    .show(ui);
                 if let Some(Some(v)) = field.value().copied() {
                     fields.set("ppi", v);
                 }
@@ -265,13 +269,16 @@ fn color_choice(
         let start = first(fields);
         let shown = at.max(start);
         ui.horizontal(|ui| {
-            craft::ui::pickers::ComboBox::from_id_salt(("ro", key)).selected_text(tl!(labels.get(shown).copied().unwrap_or_default())).show_ui(ui, |ui| {
-                for (i, l) in labels.iter().enumerate().skip(start) {
-                    if ui.selectable_label(i == shown, tl!(*l)).clicked() {
-                        fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+            craft::ui::pickers::ComboBox::from_id_salt(("ro", key)).selected_text(tl!(labels.get(shown).copied().unwrap_or_default())).show_ui(
+                ui,
+                |ui| {
+                    for (i, l) in labels.iter().enumerate().skip(start) {
+                        if ui.selectable_label(i == shown, tl!(*l)).clicked() {
+                            fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+                        }
                     }
-                }
-            });
+                },
+            );
             if at == ids.len() {
                 let c = vectorcraft_color::Color::from_hex(&current).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
                 let (rect, response) = ui.allocate_exact_size(egui::vec2(28.0, 18.0), egui::Sense::click());
@@ -335,7 +342,8 @@ fn webp_rows() -> Vec<Param> {
     let compression = ParamKind::radio(vec![("true".into(), tl!(lossless).into()), ("false".into(), tl!(lossy).into())], Some("true".into()));
     vec![
         Param::new("lossless", tl!("Compression:"), compression),
-        Param::new("quality", tl!("Quality:"), ParamKind::range(0.0, 100.0, f64::from(WEBP_QUALITY), SliderScale::Linear)).enabled_when("lossless", "false"),
+        Param::new("quality", tl!("Quality:"), ParamKind::range(0.0, 100.0, f64::from(WEBP_QUALITY), SliderScale::Linear))
+            .enabled_when("lossless", "false"),
     ]
 }
 

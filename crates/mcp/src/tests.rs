@@ -1421,6 +1421,26 @@ fn reusable_listener(addr: std::net::SocketAddr) -> std::net::TcpListener {
     socket.into()
 }
 
+/// A `Remote` connected to `listener`, and the app's end of its connection: a thread takes the
+/// connection and answers its sign-in, which `Remote::connect` waits for.
+fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) {
+    let addr = listener.local_addr().unwrap().to_string();
+    std::thread::scope(|scope| {
+        let app = scope.spawn(|| {
+            let (stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(WAIT)).unwrap();
+            let mut line = String::new();
+            BufReader::new(stream.try_clone().unwrap()).read_line(&mut line).unwrap();
+            let auth: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!((auth["method"].as_str(), auth["params"]["token"].as_str()), (Some("auth"), Some(TOKEN)));
+            writeln!(&stream, "{}", json!({"id": auth["id"], "ok": true})).unwrap();
+            stream
+        });
+        let remote = Remote::connect(&addr, TOKEN).unwrap();
+        (remote, app.join().unwrap())
+    })
+}
+
 fn wait_for_remote_eof(remote: &Remote) {
     let probe = remote.connection_probe();
     probe.set_read_timeout(Some(WAIT)).unwrap();
@@ -1431,8 +1451,7 @@ fn wait_for_remote_eof(remote: &Remote) {
 fn remote_edit_succeeds_once_when_app_restarts() {
     let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
     let addr = listener.local_addr().unwrap();
-    let mut remote = Remote::connect(&addr.to_string(), TOKEN).unwrap();
-    let (old_connection, _) = listener.accept().unwrap();
+    let (mut remote, old_connection) = signed_in(&listener);
     let old_handle = std::thread::spawn(move || {
         let timeout = WAIT;
         old_connection.set_read_timeout(Some(timeout)).unwrap();
@@ -1500,9 +1519,7 @@ fn remote_edit_succeeds_once_when_app_restarts() {
 #[test]
 fn remote_does_not_send_on_a_connection_with_a_stray_line() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap().to_string();
-    let mut remote = Remote::connect(&addr, TOKEN).unwrap();
-    let (mut stale, _) = listener.accept().unwrap();
+    let (mut remote, mut stale) = signed_in(&listener);
     stale.set_read_timeout(Some(WAIT)).unwrap();
     writeln!(stale, "{}", json!({"ok": false, "error": "idle"})).unwrap();
     let probe = remote.connection_probe();
@@ -1531,8 +1548,7 @@ fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
     let closed_remote = || {
         let listener = reusable_listener(std::net::SocketAddr::from(([127, 0, 0, 1], 0)));
         let addr = listener.local_addr().unwrap();
-        let remote = Remote::connect(&addr.to_string(), TOKEN).unwrap();
-        let (old_connection, _) = listener.accept().unwrap();
+        let (remote, old_connection) = signed_in(&listener);
         drop(old_connection);
         drop(listener);
         wait_for_remote_eof(&remote);

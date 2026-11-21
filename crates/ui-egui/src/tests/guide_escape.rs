@@ -8,7 +8,7 @@ use vectorcraft_doc::{Document, Selection};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-use crate::{VectorcraftApp, canvas::Xf};
+use crate::VectorcraftApp;
 
 const SELECTION_TOOLS: [&str; 3] = ["selection", "directSelection", "groupSelection"];
 
@@ -85,10 +85,10 @@ impl GuideDrag {
         view.zoom = 1.0;
         view.rotation = 0.0;
         f.frame(vec![]);
-        let rect = f.app.canvas_rect.unwrap();
-        let xf = Xf::new(rect, f.app.view().unwrap());
+        let rect = f.app.view().unwrap().rect;
+        let view = f.app.canvas_view().unwrap();
         let point = |at| if vertical { Point::new(at, 60.0) } else { Point::new(60.0, at) };
-        (f.from, f.to, f.end) = (xf.to_screen(point(100.0)), xf.to_screen(point(140.0)), xf.to_screen(point(160.0)));
+        (f.from, f.to, f.end) = (view.to_screen(point(100.0)), view.to_screen(point(140.0)), view.to_screen(point(160.0)));
         assert!([f.from, f.to, f.end].into_iter().all(|p| rect.contains(p)));
         assert_eq!(vectorcraft_engine::cmd::guide_indexes(&f.before, &f.selection.guides), vec![0, 1]);
         f.app.session.active_mut().unwrap().mark_saved();

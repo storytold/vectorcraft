@@ -652,7 +652,7 @@ fn a_single_key_shortcut_opens_the_dialog_its_menu_item_opens() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
-/// Smooth on F opens its slider without smoothing the path; OK keeps the result as one undo step.
+/// Smooth on F opens its slider without smoothing the path; Enter keeps the result as one undo step.
 #[test]
 fn smooth_on_a_single_key_waits_for_its_slider() {
     let mut app = app_with_shortcut("object.path.smooth", "F");
@@ -661,11 +661,14 @@ fn smooth_on_a_single_key_waits_for_its_slider() {
         (0..=60).map(|i| json!({"x": 20 + i * 5, "y": 150.0 + 40.0 * (f64::from(i) / 10.0).sin() + f64::from(i % 2) * 3.0})).collect();
     app.session.execute("path.create", &json!({"anchors": anchors})).unwrap();
     let before = undo_len(&app);
-    frame(&mut app, press_f());
-    assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::smooth_slider::KIND), "{}", app.ui.status);
+    let ctx = ready(&mut app);
+    key_frame(&mut app, &ctx, press_f());
+    idle(&mut app, &ctx, 1);
+    assert!(crate::dialogs::smooth_slider::showing(&app), "{}", app.ui.status);
     assert_eq!(undo_len(&app), before, "the path is not smoothed yet");
-    close_top_dialog(&mut app, true);
-    assert!(dialog_kind(&app).is_none());
+    key_frame(&mut app, &ctx, press(Key::Enter, Modifiers::NONE));
+    idle(&mut app, &ctx, 1);
+    assert!(!crate::dialogs::smooth_slider::showing(&app));
     assert_eq!(undo_len(&app), before + 1, "the slider's result is one undo step");
 }
 

@@ -31,10 +31,11 @@ mod tabs;
 pub use control_bar::{
     AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_placement, read_hidden_groups,
 };
+pub(crate) use control_bar::{control_bar_place, rank, set_control_bar_place};
 #[cfg(test)]
 use hints::hint_segments;
 pub(crate) use hints::tool_hint;
-pub use hints::{hint_bar, hint_strings};
+pub use hints::{HINT_SLOT, hint_bar, hint_strings};
 pub use status_bar::{StatusBarShow, deserialize_status_bar_show, set_status_bar_show, status_bar};
 #[cfg(test)]
 use status_bar::{color_profile_name, date_time_label};

@@ -21,10 +21,9 @@ use serde_json::{Value, json};
 use vectorcraft_geom::shapes::EllipseMode;
 use vectorcraft_tools::addons::box3d::{self, CustomShape};
 
+use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::chrome::rank;
-// PLAN: assumed `crate::edits::{apply_edits, EditPath}` (wg.A16, widgets-w13).
-use crate::VectorcraftApp;
 use crate::edits::{self, EditPath};
 use crate::menus::cp;
 

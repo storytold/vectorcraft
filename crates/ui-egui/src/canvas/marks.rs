@@ -153,7 +153,7 @@ pub(crate) struct Marks {
 /// gate is on and dropped, with the text nodes they hold, when it is off.
 pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
     let mut m = Marks { original: original_band(app), ..Marks::default() };
-    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let revolve_edit = super::revolve_editing(app);
     let edges = app.ui.view.edges && !revolve_edit;
     let hidden_gate = edges && app.ui.view.hidden_chars;
     let spelling_gate = app.ui.view.auto_spell_check && !revolve_edit;
@@ -174,9 +174,8 @@ pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
         return m;
     };
     let key = (st.uid, st.revision);
-    if fades {
-        // PLAN: assumed `artboards::frames(app: &VectorcraftApp) -> Vec<PageFrame>` and `fade_quads(view: &CanvasView, frames: &[PageFrame]) -> Vec<[Pos2; 4]>`.
-        m.fade = artboards::fade_quads(view, &artboards::frames(app));
+    if fades && let Some(shown) = app.view() {
+        m.fade = artboards::fade_quads(view, &artboards::frames(app, st, shown, shown.outline));
     }
     if shows_artboards {
         m.bleed = artboards::bleed_paths(st);

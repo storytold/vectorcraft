@@ -4,14 +4,16 @@
 use craft::behavior::DropOperation;
 use egui::{Event, PointerButton, Pos2};
 use serde_json::json;
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{Color, GradientGeom, GradientPaint, Paint};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
 use super::{CarriedArt, Dropped, Payload, apply_drop};
 use crate::panel_drag::PanelDrag;
-use crate::panels::symbols::SymbolKey;
+use crate::panels::brushes::{BrushKey, BrushLibraries};
+use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
+use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 use crate::{VectorcraftApp, canvas};
 
 /// One frame of the canvas inside a central panel. → nothing; the app's view is set by it.
@@ -42,7 +44,10 @@ fn undo_len(app: &VectorcraftApp) -> usize {
 }
 
 /// Each payload's effect, on art and off it: a style applies to the object hit (Alt adds on top), a paint fills it
-/// and leaves the selection, an appearance copies unless dropped on its source, and off art nothing changes.
+/// and leaves the selection (a gradient fits it), an appearance copies unless dropped on its source, a brush strokes
+/// the path hit and off art places its art if it has any, a library brush is added and applied in one step, a symbol
+/// is placed where it lands (a library's added and placed in one step, on art too), and off art the rest does
+/// nothing.
 #[test]
 fn a_drop_runs_the_effect_of_its_payload() {
     use DropOperation::{Copy, Move};
@@ -64,9 +69,63 @@ fn a_drop_runs_the_effect_of_its_payload() {
     apply_drop(&mut app, &dropped(&app, Payload::Style(name.clone()), on_b, Copy)).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint();
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::paint(blue.clone())), on_b, Move)).unwrap();
+    assert_eq!(fill(&app), blue, "a proxy's paint fills as a swatch does");
+    let mut gradient = GradientPaint::new(Default::default());
+    gradient.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None });
+    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move)).unwrap();
+    assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()), "a gradient fits the object it lands on");
+    app.run("transparency.set", json!({"opacity": 40})).unwrap();
+    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::Appearance(a)), on_b, Move)).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (na, nb) = (doc.node(a).unwrap(), doc.node(b).unwrap());
+    assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity), "the appearance is copied");
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::Appearance(b)), Point::new(250.0, 70.0), Move)).unwrap();
+    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::Appearance(b)), on_b, Move)).unwrap();
     assert_eq!(undo_len(&app), n, "dropped on its own source: nothing changes");
+
+    let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
+    let brush_of = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(path).unwrap().appearance.stroke().and_then(|s| s.brush.clone());
+    let uid = app.session.active().unwrap().uid;
+    let brush = |name: &str| Payload::Brush(BrushKey { doc: uid, name: name.into(), group: false });
+    let library = |kind: &str, id: &str, name: &str| {
+        Payload::Library(LibraryKey { panel: library_panel::panel_id(kind, id), name: name.into(), folder: false })
+    };
+    let (on_path, empty) = (Point::new(200.0, 200.0), Point::new(200.0, 160.0));
+    apply_drop(&mut app, &dropped(&app, brush("Arrow"), on_path, Move)).unwrap();
+    assert_eq!(brush_of(&app).as_deref(), Some("Arrow"));
+    let sparkles = library(BrushLibraries::KIND, "scatter-shapes", "Sparkles");
+    let n = undo_len(&app);
+    apply_drop(&mut app, &dropped(&app, sparkles.clone(), empty, Move)).unwrap();
+    assert_eq!(undo_len(&app), n, "off art a library brush does nothing");
+    apply_drop(&mut app, &dropped(&app, sparkles, on_path, Move)).unwrap();
+    assert_eq!(brush_of(&app).as_deref(), Some("Sparkles"));
+    assert_eq!(undo_len(&app), n + 1, "a library brush is added and applied in one step");
+    let n = undo_len(&app);
+    apply_drop(&mut app, &dropped(&app, brush("3 pt. Round"), empty, Move)).unwrap();
+    assert_eq!(undo_len(&app), n, "a calligraphic brush has no art to place");
+    for (i, name) in ["Arrow", "Dots", "Chain"].into_iter().enumerate() {
+        let at = Point::new(60.0 + 140.0 * i as f64, 260.0);
+        apply_drop(&mut app, &dropped(&app, brush(name), at, Move)).unwrap();
+        let st = app.session.active().unwrap();
+        let [placed] = st.selection.objects.as_slice() else { panic!("{name}: one object selected: {:?}", st.selection.objects) };
+        assert!((st.doc.node(*placed).unwrap().geometric_bounds().unwrap().center() - at).hypot() < 0.1, "{name}: its art is centred there");
+    }
+
+    let symbol_at = |app: &VectorcraftApp, at: Point| {
+        let st = app.session.active().unwrap();
+        let placed = st.doc.node(st.selection.objects[0]).unwrap();
+        assert!(matches!(&placed.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"));
+        assert!((placed.geometric_bounds().unwrap().center() - at).hypot() < 1e-6, "placed where it landed");
+    };
+    let n = undo_len(&app);
+    apply_drop(&mut app, &dropped(&app, library(SymbolLibraries::KIND, "basic-shapes", "Star"), on_b, Move)).unwrap();
+    assert_eq!(undo_len(&app), n + 1, "a library symbol is added and placed in one step");
+    symbol_at(&app, on_b);
+    apply_drop(&mut app, &dropped(&app, Payload::Symbol(SymbolKey { doc: uid, name: "Star".into() }), empty, Move)).unwrap();
+    symbol_at(&app, empty);
 }
 
 /// A symbol of another document is added here and placed in one undo step, the source is unchanged, and a symbol of

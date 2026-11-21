@@ -720,9 +720,11 @@ pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(json!({"set": to_set, "action": to_action, "step": to, "moved": true}))
 }
 
-/// Makes the set named `name`, empty, and selects it. A name that is empty or taken is an error.
+/// Makes the set named `name`, empty, and selects it. A name that is empty or taken, or one that would
+/// give the set a file Load Actions… refuses ([`model::name_keeps_set_loadable`]), is an error.
 pub(crate) fn new_set(app: &mut VectorcraftApp, name: &str) -> Result<(), String> {
     let name = name.trim();
+    model::name_keeps_set_loadable(app, None, name)?;
     app.ui.actions.new_set(name).map_err(list_error)?;
     app.ui.action_set = Some(name.to_string());
     app.ui.actions_panel.selected = Some(ActionSelection::Set(name.to_string()));
@@ -731,9 +733,12 @@ pub(crate) fn new_set(app: &mut VectorcraftApp, name: &str) -> Result<(), String
 }
 
 /// Renames the set `set` to `name`; a selection, a collapse, the current set and an open dialog keep
-/// the set.
+/// the set. A name that would give the set a file Load Actions… refuses, counting the steps the
+/// recording in progress adds to it ([`model::name_keeps_set_loadable`]), is an error, and then
+/// nothing is renamed.
 pub(crate) fn rename_set(app: &mut VectorcraftApp, set: &str, name: &str) -> Result<(), String> {
     let name = name.trim();
+    model::name_keeps_set_loadable(app, Some(set), name)?;
     app.ui.actions.rename_set(set, name).map_err(list_error)?;
     // A recording into the set measures its file again.
     app.ui.recording_base = None;

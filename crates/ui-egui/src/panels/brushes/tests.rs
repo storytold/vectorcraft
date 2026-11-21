@@ -330,8 +330,6 @@ fn delete_button(t: &mut Trial, modifiers: Modifiers) {
 
 fn assert_delete_dialog(t: &Trial, message: &str) {
     assert_eq!(t.dialog_key().as_deref(), Some(crate::dialogs::brush_delete::KIND), "Delete Brush asks first");
-    // PLAN: appearance-w15 to add `#[cfg(test)] pub(crate) fn open_question(app) -> Option<(String, bool)>` (the
-    // message and `used`) in `dialogs/brush_delete.rs`, as `confirm::open_question` (widgets-w10 note 8).
     let (said, used) = crate::dialogs::brush_delete::open_question(&t.app()).expect("the Delete Brush question");
     assert_eq!(said, message);
     assert_eq!(used, message == IN_USE);

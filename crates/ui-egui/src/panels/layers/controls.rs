@@ -1,7 +1,7 @@
 use craft::behavior::IconId;
 use craft::keymap::Mods;
-use craft::layers::ui::tree::LayerRowKey;
 use craft::layers::ui::panel::MenuTarget; // PLAN: assumed path of craft-layers' panel types
+use craft::layers::ui::tree::LayerRowKey;
 use craft::ui::contract::{Entry, ListDrag};
 use craft::ui::menu::{MenuRow, PanelRow};
 use craft::ui::primitives::IconSpec;
@@ -24,7 +24,7 @@ const DELETE: usize = 0;
 const NEW_LAYER: usize = 1;
 const NEW_SUBLAYER: usize = 2;
 const MASK: usize = 3;
-const LOCATE: usize = 4;
+pub(super) const LOCATE: usize = 4;
 
 /// One row of the panel menu with the state its command has.
 enum Item {

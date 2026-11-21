@@ -54,7 +54,6 @@ impl Keyboard {
 /// A document with a selected rectangle and the Pen tool chosen.
 fn pen_app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    crate::shortcut_editor::sync(&app.ui);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
     app.select_tool("pen");

@@ -34,6 +34,13 @@ const COPIES: [(&str, u32); 4] = [("3 x 3", 3), ("5 x 5", 5), ("7 x 7", 7), ("9 
 /// The engine commands of the footer buttons and the panel menu, in order.
 const COMMANDS: [&str; 3] = ["object.pattern.saveCopy", "object.pattern.done", "object.pattern.cancel"];
 
+/// The Pattern Options panel's own state, kept while the app runs.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PatternOptionsPanel {
+    /// The pattern picked to edit outside pattern editing mode (the first one until one is).
+    pub(crate) chosen: String,
+}
+
 fn editing(app: &VectorcraftApp) -> Option<(PatternDef, Unit)> {
     let st = app.session.active()?;
     let pe = st.doc.pattern_edit.as_ref()?;

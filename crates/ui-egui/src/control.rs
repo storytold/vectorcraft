@@ -327,12 +327,12 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
         .collect();
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    Hiding { hidden, readable: readable_ids, sent: Vec::new() }
+    Hiding { hidden, readable: readable_ids, sent: Vec::new(), folders: Vec::new() }
 }
 
 /// What a reply hides ([`hide_library_ids`]).
-#[derive(Debug, Default)]
-struct Hiding {
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Hiding {
     /// The ids of the loaded libraries the request may not read, longest first, each with the id
     /// shown instead ([`unreadable_library_ids`]).
     hidden: Vec<(String, String)>,
@@ -342,9 +342,47 @@ struct Hiding {
     /// The paths outside the read roots that the request sent ([`sent_paths`]), each as a hidden
     /// library id with the id shown. They are matched after the hidden libraries.
     sent: Vec<(String, String)>,
+    /// The recovery folders in use and those a failure message named: a reply hides each, and each folder on the way
+    /// to one that it writes as a whole path ([`Hiding::hide`]).
+    folders: Vec<String>,
 }
 
 impl Hiding {
+    /// Hides in `reply` what this hides, and the paths outside the read root that `sent`, the request's params, holds.
+    fn hide(&self, reply: &mut Value, sent: &Value) {
+        if !holds_a_separator(reply) {
+            return;
+        }
+        let mut given = Vec::new();
+        written_paths(sent, ParamsPlace::top(None), false, &mut given);
+        let kept = kept_written_paths(reply, &given);
+        let mut paths = Vec::new();
+        sent_paths(sent, &mut paths);
+        for folder in &self.folders {
+            collect_sent_paths(&json!(folder), ParamsPlace::top(None), true, &mut paths);
+            for on_the_way in std::path::Path::new(folder).ancestors().skip(1).map(|p| p.to_string_lossy()) {
+                if !on_the_way.is_empty() && writes_whole_path(reply, &on_the_way) {
+                    collect_sent_paths(&json!(on_the_way), ParamsPlace::top(None), true, &mut paths);
+                }
+            }
+        }
+        let mut hiding = self.clone();
+        hiding.set_hidden(paths, cfg!(windows));
+        hide_library_ids(reply, &hiding);
+        restore_written_paths(reply, kept);
+    }
+
+    /// `error`, the failure of a reply sent after its request was handled, as that reply shows it with `sent` as the
+    /// request's params. Without a read root in force it is `error` as it is.
+    pub(crate) fn hide_error(&self, error: &str, sent: &Value) -> String {
+        if vectorcraft_engine::file_access::current().is_none() {
+            return error.to_owned();
+        }
+        let mut reply = json!({"ok": false, "error": error});
+        self.hide(&mut reply, sent);
+        reply["error"].as_str().map_or_else(|| error.to_owned(), str::to_owned)
+    }
+
     /// Adds the hidden and readable ids of `other` that this one does not hold.
     fn merge(&mut self, other: Hiding) {
         self.add_hidden(other.hidden);
@@ -1249,27 +1287,20 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     if !holds_a_separator(reply) {
         return;
     }
-    let mut given = Vec::new();
-    written_paths(sent, ParamsPlace::top(None), false, &mut given);
-    let kept = kept_written_paths(reply, &given);
-    let mut hiding = unreadable_library_ids(app);
+    let mut hiding = deferred_hiding(app);
     hiding.merge(before);
-    let mut paths = Vec::new();
-    sent_paths(sent, &mut paths);
+    hiding.hide(reply, sent);
+}
+
+/// What a reply hides as the app holds it now: the libraries hidden now and the recovery folders. A reply sent after
+/// its request was handled (a screenshot's) is hidden with it ([`Hiding::hide_error`]).
+pub(crate) fn deferred_hiding(app: &VectorcraftApp) -> Hiding {
+    let mut hiding = unreadable_library_ids(app);
     // The status text of a recovery copy that failed names the recovery folder it went to, or the
     // first folder on the way to it that is a file or is missing.
     let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
-    for folder in app.recovery.named.iter().chain(current.as_ref()) {
-        collect_sent_paths(&json!(folder), ParamsPlace::top(None), true, &mut paths);
-        for on_the_way in std::path::Path::new(folder).ancestors().skip(1).map(|p| p.to_string_lossy()) {
-            if !on_the_way.is_empty() && writes_whole_path(reply, &on_the_way) {
-                collect_sent_paths(&json!(on_the_way), ParamsPlace::top(None), true, &mut paths);
-            }
-        }
-    }
-    hiding.set_hidden(paths, cfg!(windows));
-    hide_library_ids(reply, &hiding);
-    restore_written_paths(reply, kept);
+    hiding.folders = app.recovery.named.iter().cloned().chain(current).collect();
+    hiding
 }
 
 /// Does `v` write `path` in a string or a key at any depth with no path text before it (a letter, a

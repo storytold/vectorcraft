@@ -1100,18 +1100,26 @@ fn precise_cursors_command_toggles_the_preference() {
 #[test]
 fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     use crate::shortcut_editor as ed;
-    let e = ed::entry("view.preciseCursors").expect("listed in the editor");
+    const ID: &str = "view.preciseCursors";
+    let e = ed::entry(ID).expect("listed in the editor");
     assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Use Precise Cursors", "View", false));
-    assert_eq!(ed::default_of("view.preciseCursors"), None, "no default key");
-    let mut overrides = craft::keymap::Overrides::new();
-    assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None);
-    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+Q"), false), Ok(vec![]));
-    let chord = ed::effective_in(&overrides, "view.preciseCursors").expect("assigned");
-    assert_eq!(ed::normalize(&chord), ed::normalize("Cmd+Alt+Shift+Q"));
+    assert_eq!(ed::default_of(ID), None, "no default key");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // The `shortcuts.*` commands read the window's keymap, which its first frame builds.
+    crate::tests::synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    let shortcut = |app: &mut VectorcraftApp| {
+        let rows = app.run("shortcuts.list", json!({ "query": ID })).unwrap();
+        rows.as_array().and_then(|rows| rows.iter().find(|r| r["id"] == ID)).expect("listed")["shortcut"].clone()
+    };
+    assert_eq!(shortcut(&mut app), Value::Null);
+    app.run("shortcuts.set", json!({"id": ID, "shortcut": "Cmd+Alt+Shift+Q"})).unwrap();
+    let typed = craft::keymap::Binding::parse("Cmd+Alt+Shift+Q").unwrap().trigger.to_string();
+    assert_eq!(shortcut(&mut app), json!(typed), "assigned");
     // A key another command holds is refused, so the new command can't take it over silently.
-    assert!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+P"), false).is_err());
-    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", None, false), Ok(vec![]));
-    assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None, "cleared again");
+    assert!(app.run("shortcuts.set", json!({"id": ID, "shortcut": "Cmd+Alt+Shift+P"})).is_err());
+    assert_eq!(shortcut(&mut app), json!(typed), "the refused key changed nothing");
+    app.run("shortcuts.set", json!({"id": ID, "shortcut": null})).unwrap();
+    assert_eq!(shortcut(&mut app), Value::Null, "cleared again");
 }
 
 /// The command is a preference, not an edit: no undo step, no unsaved changes, with a document open.

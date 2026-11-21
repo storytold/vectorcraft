@@ -1,4 +1,4 @@
-//! What the Tool Options dialogs share: setting a tool's options, the reference point row and reading a
+//! What the Tool Options dialogs share: their title, setting a tool's options, the reference point row and reading a
 //! length a dialog holds.
 
 // PLAN: ui-egui reaches the framework through `craft::..`; the crate's Cargo.toml needs the `craft` dependency
@@ -12,6 +12,12 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
 
 use crate::VectorcraftApp;
+
+/// The title of `tool`'s options dialog: "{tool} Options".
+pub(crate) fn title(tool: &str) -> String {
+    let label = vectorcraft_tools::tool_info(tool).map_or("", |t| t.label);
+    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
+}
 
 /// Sets `tool`'s options to `values` (`tool.setOption`), the options its next drag and click use.
 pub(crate) fn set_options(app: &mut VectorcraftApp, tool: &str, values: Map<String, Value>) -> Result<(), String> {

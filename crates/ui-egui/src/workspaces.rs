@@ -11,6 +11,7 @@
 //! Every `key` below is a workspace name (any case) or its id.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use craft::behavior::dock::{NamedWorkspace, Workspace as DockWorkspace, WorkspaceChrome, WorkspaceError, WorkspaceKeeps, WorkspaceSet};
@@ -422,7 +423,7 @@ pub fn switch(app: &mut VectorcraftApp, key: &str) -> Result<String, String> {
     let left = record(ui);
     ui.workspaces.remember(&current, left);
     // Keeps the live layout under the old id and replaces it with the target's.
-    ui.workspaces.set.select(&id, &mut ui.dock_workspace).map_err(|e| refusal(e, key))?;
+    ui.workspaces.set.select(&id, Arc::make_mut(&mut ui.dock_workspace)).map_err(|e| refusal(e, key))?;
     let w = ui.workspaces.edited.get(&id).cloned().unwrap_or_else(|| saved_record(&ui.workspaces, &id));
     apply_record(ui, &w);
     crate::panel_docking::reconcile(&mut ui.dock_workspace);
@@ -435,7 +436,7 @@ pub fn reset(app: &mut VectorcraftApp) -> String {
     let ui = &mut app.ui;
     let id = ui.workspaces.set.current.clone();
     // The current workspace is always one the set has (`sanitize`); an unknown one has nothing to reset.
-    let _ = ui.workspaces.set.reset(&mut ui.dock_workspace);
+    let _ = ui.workspaces.set.reset(Arc::make_mut(&mut ui.dock_workspace));
     ui.workspaces.forget(&id);
     let w = saved_record(&ui.workspaces, &id);
     // The toolbars made with New Toolbar stay in the workspace they were made in.
@@ -473,7 +474,7 @@ pub fn save_as(ui: &mut UiState, name: &str) -> Result<(), String> {
     }
     let record = record(ui);
     let chrome = chrome_of(&record);
-    let layout = ui.dock_workspace.clone();
+    let layout = DockWorkspace::clone(&ui.dock_workspace);
     let id = ui.workspaces.set.save(&name, layout, chrome, WorkspaceKeeps::NONE).map_err(|e| refusal(e, &name))?;
     ui.workspaces.forget(&id);
     ui.workspaces.records.insert(id, record);
@@ -697,7 +698,7 @@ mod tests {
         let mut app = app();
         app.ui.control_bar = true;
         for panel in ["layers", "stroke"] {
-            app.ui.dock_workspace.apply(Action::activate(panel.to_string()), false, |_: &String| Permissions::ALL).unwrap();
+            Arc::make_mut(&mut app.ui.dock_workspace).apply(Action::activate(panel.to_string()), false, |_: &String| Permissions::ALL).unwrap();
         }
         let layout = crate::panel_docking::layout_of(&app.ui);
         save_as(&mut app.ui, "Mine").unwrap();

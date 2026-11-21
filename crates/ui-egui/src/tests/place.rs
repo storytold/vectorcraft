@@ -620,9 +620,27 @@ fn the_control_bars_file_name_relinks_the_image() {
     assert!(dialog_kind(&app).is_some(), "Placement Options opens");
 }
 
+/// The centre of the Control bar's control whose accessible name starts with `name`, read from the accessibility tree
+/// of one Control bar frame.
+fn control_named(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) -> Pos2 {
+    ctx.enable_accesskit();
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| crate::chrome::control_bar(app, ui));
+    out.textures_delta.clear();
+    out.platform_output
+        .accesskit_update
+        .iter()
+        .flat_map(|u| u.nodes.iter())
+        .find_map(|(_, n)| {
+            let b = n.bounds().filter(|_| n.label().is_some_and(|l| l.starts_with(name)))?;
+            Some(egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+        })
+        .unwrap_or_else(|| panic!("no control named {name}"))
+}
+
 #[test]
 fn the_control_bar_and_properties_trace_a_selected_image() {
-    use crate::panels::image_trace::{TRACE_BUTTON_W, selected_trace};
+    use crate::panels::image_trace::selected_trace;
     let selected_preset = |app: &VectorcraftApp| selected_trace(app).map(|t| t.0);
     use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
     let mut app = app();
@@ -639,7 +657,8 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
         assert!(has(&props, s), "Properties: {s}");
     }
     // The button's arrow lists the presets; choosing one traces the image with it.
-    click_control(&mut app, &ctx, at(&bar, "Image Trace") + vec2(TRACE_BUTTON_W / 2.0, 0.0));
+    let arrow = control_named(&mut app, &ctx, "Tracing Presets");
+    click_control(&mut app, &ctx, arrow);
     click_label(&mut app, &ctx, "6 Colors");
     assert_eq!(selected_preset(&app).as_deref(), Some("6 Colors"));
     // The button itself traces with the Default preset.

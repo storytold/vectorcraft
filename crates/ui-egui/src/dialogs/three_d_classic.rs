@@ -14,7 +14,10 @@ use craft::ui::canvas::Canvas;
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::SelectionOutline;
 use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::display::Picture;
+use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
@@ -381,9 +384,10 @@ fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
         {
             let keys = crate::panels::symbols::document_symbols(doc, flat.revision);
             let at = egui::Rect::from_two_pos(view.to_screen(state.quad[0]), view.to_screen(state.quad[2]));
-            let art = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(w as f32, h as f32));
-            // PLAN: assumed a content painter helper that hands `paint_symbol_art` its `ContentPainterCx`.
-            craft::ui::primitives::content_painter(ui, at, |cx| crate::panels::symbols::paint_symbol_art(cx, at, doc, &keys, &m.symbol, art));
+            let art = vectorcraft_geom::Rect::new(0.0, 0.0, w, h);
+            let paint = |cx: &ContentPainterCx<'_>, rect: egui::Rect| crate::panels::symbols::paint_symbol_art(cx, rect, doc, &keys, &m.symbol, art);
+            // Decorative: the Art box below is the surface's accessible control.
+            Picture::painter("", ThumbAspect::SQUARE, paint).show_at(ui, at);
         }
         let rules = BoxRules::default().with_scale(ScaleRule::Free).with_aspect_linked(false).with_allow(BoxAllow::new(true, false, false));
         TransformBox::new(tl!("Art box"), Bind::bound(&mut state), rect, 0.0)

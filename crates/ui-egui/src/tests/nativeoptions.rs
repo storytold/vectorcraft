@@ -5,7 +5,7 @@
 use craft::ui::dialog::{OpenDialog, StandardPrompt};
 use serde_json::{Value, json};
 
-use crate::dialogs::confirm::ReplaceFiles;
+use crate::dialogs::confirm::{REPLACE_FILES, ReplaceFiles};
 use crate::tests_svg::app;
 use crate::{VectorcraftApp, dialogs};
 

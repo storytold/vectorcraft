@@ -26,7 +26,7 @@ fn reader() -> egui::Context {
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<Node> {
     let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, height)));
     let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();
@@ -155,7 +155,7 @@ fn tools_open_their_options() {
     }
     assert!(open_options(&mut app, "lasso").is_err(), "a tool without options");
     // Hand fits the artboard in the window, Zoom goes to 100%.
-    app.view_mut().unwrap().rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(660.0, 460.0)); // PLAN: assumed `view_mut() -> Option<&mut View>`
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(660.0, 460.0));
     app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
     open_options(&mut app, "hand").unwrap();
     let v = *app.view().unwrap();
@@ -278,7 +278,6 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     for (k, double) in [false, true].into_iter().enumerate() {
         app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
         nodes = settled(&mut app, &ctx, k as f64 * 10.0, 900.0);
-        // PLAN: assumed the Tools rail's screen-reader name is "Tools"
         let rail = named_rect(&nodes, "Tools");
         for label in footer {
             let r = named_rect(&nodes, label);
@@ -341,8 +340,7 @@ fn the_columns_command_toggles_or_sets_the_toolbar_columns() {
 
 /// The Tools group of `first`'s strip panel, with the rect of its floating window.
 fn strip_rect(app: &VectorcraftApp, first: &str) -> Option<egui::Rect> {
-    // PLAN: assumed `Layout::floating_rect(&self, panel: &String) -> Option<egui::Rect>` on the dock layout
-    crate::panel_docking::layout_of(&app.ui).floating_rect(&strip_id(&Owner::Tools, first))
+    crate::panel_docking::layout_of(&app.ui).location(&strip_id(&Owner::Tools, first)).ok()?.floating
 }
 
 #[test]

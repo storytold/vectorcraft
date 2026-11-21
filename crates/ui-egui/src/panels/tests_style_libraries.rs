@@ -8,7 +8,7 @@ use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_engine::Session;
 
 use super::graphic_styles::GraphicStyleLibraries;
-use super::library_panel::tests::{click, confirm_save, context, menu_library_ids};
+use super::library_panel::tests::{click, confirm_save, context, menu_library_ids, save_to_tmp};
 use super::library_panel::{self, LibraryKind, last_open};
 use crate::VectorcraftApp;
 
@@ -82,7 +82,6 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     app.run("window.graphicStyleLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
 }
-
 
 #[test]
 fn paper_cutouts_opens_from_the_window_menu_and_applies_a_layered_style() {
@@ -174,7 +173,6 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -182,8 +180,10 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
         ..Default::default()
     };
     let mut app = app_with(services);
+    let picker = crate::tests::picks::scripted(&mut app);
     app.run("ui.saveGraphicStyleLibrary", json!({})).unwrap();
     confirm_save(&mut app, &[]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert!(path.ends_with(".vcstyles"), "{path}");
     // Opening it opens it in the library panel, not as a document.
@@ -195,5 +195,3 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     assert_eq!(other.submenu, Some("Other Libraries"));
     assert_eq!(GraphicStyleLibraries::get(&app, &open.id).unwrap().1.len(), app.session.doc().unwrap().doc.graphic_styles.len());
 }
-
-

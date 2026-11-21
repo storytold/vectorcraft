@@ -4,8 +4,8 @@
 //! ([`ask_missing_font_edit`]). Both texts are shown as given: callers translate their template
 //! before filling in a name, so the name is never translated.
 
-use craft::ui::dialog::{Alert, DialogId, DialogResult, DialogStack, HeldOk, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage, dialog_id};
-use egui::{Context, Ui};
+use craft::ui::dialog::{Alert, DialogResult, HostedAlert, PromptChoice, StandardPrompt, StartupStage};
+use egui::Context;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -16,8 +16,8 @@ pub const KIND: &str = "confirm";
 /// The key of a message with a Close button only ([`tell`]).
 pub const MESSAGE: &str = "message";
 
-/// What the reply of a save or export says is pending while the question about replacing files asks
-/// ([`ask_replace_files`]).
+/// The key of the question about replacing files ([`ask_replace_files`]), and what the reply of a save or export
+/// says is pending while it asks.
 pub const REPLACE_FILES: &str = "replaceFiles";
 
 /// The key of the question a click or double-click asks before it edits type set in fonts that
@@ -30,51 +30,56 @@ pub const MISSING_FONT_EDIT: &str = vectorcraft_tools::text::MISSING_FONT_EDIT;
 /// family's answer never takes another's.
 macro_rules! wrapped_dialog {
     ($wrapper:ident, $inner:ty, $key:expr) => {
-        impl StackDialog for $wrapper {
-            type Result = <$inner as StackDialog>::Result;
+        impl ::craft::ui::dialog::StackDialog for $wrapper {
+            type Result = <$inner as ::craft::ui::dialog::StackDialog>::Result;
 
-            fn id(&self) -> DialogId {
-                dialog_id($key)
+            fn id(&self) -> ::craft::ui::dialog::DialogId {
+                ::craft::ui::dialog::dialog_id($key)
             }
 
-            fn instance(&self) -> Option<DialogId> {
-                self.0.instance()
+            fn instance(&self) -> Option<::craft::ui::dialog::DialogId> {
+                <$inner as ::craft::ui::dialog::StackDialog>::instance(&self.0)
             }
 
             fn key(&self) -> Option<&str> {
                 Some($key)
             }
 
-            fn show(&mut self, ui: &mut Ui, stack: &DialogStack) -> Option<DialogResult<Self::Result>> {
-                self.0.show(ui, stack)
+            fn show(
+                &mut self,
+                ui: &mut ::egui::Ui,
+                stack: &::craft::ui::dialog::DialogStack,
+            ) -> Option<::craft::ui::dialog::DialogResult<Self::Result>> {
+                <$inner as ::craft::ui::dialog::StackDialog>::show(&mut self.0, ui, stack)
             }
 
-            fn confirm(&mut self, ctx: &Context) -> Option<Self::Result> {
-                self.0.confirm(ctx)
+            fn confirm(&mut self, ctx: &::egui::Context) -> Option<Self::Result> {
+                <$inner as ::craft::ui::dialog::StackDialog>::confirm(&mut self.0, ctx)
             }
 
-            fn held_state(&self) -> Option<HeldOk> {
-                self.0.held_state()
+            fn held_state(&self) -> Option<::craft::ui::dialog::HeldOk> {
+                <$inner as ::craft::ui::dialog::StackDialog>::held_state(&self.0)
             }
 
-            fn json_fields(&self) -> Option<Value> {
-                self.0.json_fields()
+            fn json_fields(&self) -> Option<::serde_json::Value> {
+                <$inner as ::craft::ui::dialog::StackDialog>::json_fields(&self.0)
             }
 
-            fn set_json_field(&mut self, ctx: &Context, field: &str, value: Value) -> Result<(), String> {
-                self.0.set_json_field(ctx, field, value)
+            fn set_json_field(&mut self, ctx: &::egui::Context, field: &str, value: ::serde_json::Value) -> Result<(), String> {
+                <$inner as ::craft::ui::dialog::StackDialog>::set_json_field(&mut self.0, ctx, field, value)
             }
 
-            fn cancelled(&mut self, ctx: &Context) {
-                self.0.cancelled(ctx)
+            fn cancelled(&mut self, ctx: &::egui::Context) {
+                <$inner as ::craft::ui::dialog::StackDialog>::cancelled(&mut self.0, ctx)
             }
 
-            fn preview_color(&mut self, key: &str, color: Option<craft::theme::Srgba>) {
-                self.0.preview_color(key, color)
+            fn preview_color(&mut self, key: &str, color: Option<::craft::theme::Srgba>) {
+                <$inner as ::craft::ui::dialog::StackDialog>::preview_color(&mut self.0, key, color)
             }
         }
     };
 }
+pub(crate) use wrapped_dialog;
 
 /// A confirmation: its tag is the command OK runs and that command's params.
 pub(crate) struct Question(StandardPrompt);
@@ -88,6 +93,10 @@ wrapped_dialog!(Message, HostedAlert, MESSAGE);
 /// tool's edit token.
 pub(crate) struct MissingFontQuestion(StandardPrompt);
 wrapped_dialog!(MissingFontQuestion, StandardPrompt, MISSING_FONT_EDIT);
+
+/// The question whether a save or export may replace files; its tag is a [`ReplaceFiles`].
+pub(crate) struct ReplaceFilesPrompt(StandardPrompt);
+wrapped_dialog!(ReplaceFilesPrompt, StandardPrompt, REPLACE_FILES);
 
 /// The tag of the question whether a save or export may replace files ([`ask_replace_files`]).
 pub(crate) struct ReplaceFiles {
@@ -152,7 +161,7 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
     });
     // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
     // (however many messages wait: the save or export needs the answer).
-    dialogs.with(|host| host.enqueue(StartupStage::Warning, prompt));
+    dialogs.with(|host| host.enqueue(StartupStage::Warning, ReplaceFilesPrompt(prompt)));
 }
 
 /// Ask whether to edit type whose story is drawn in fonts that aren't available, which the Type
@@ -236,4 +245,17 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
 // PLAN: the prompt exposes no message text, so the question's words cannot be read back.
 pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, Value)> {
     app.dialogs()?.with(|host| host.get::<Question>().and_then(|q| q.0.tag_as::<(String, Value)>().cloned()))
+}
+
+/// The message open now, if one is: its message and detail.
+#[cfg(test)]
+pub(crate) fn open_message(app: &VectorcraftApp) -> Option<(String, String)> {
+    // The host opens queued messages in `enqueue` order, so the one open is the oldest told.
+    app.dialogs()?.with(|host| host.is_open::<Message>()).then(|| app.told.0.first().cloned()).flatten()
+}
+
+/// The files the question about replacing files names, while it is open.
+#[cfg(test)]
+pub(crate) fn open_replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
+    app.dialogs()?.with(|host| host.get::<ReplaceFilesPrompt>().and_then(|q| q.0.tag_as::<ReplaceFiles>().map(|tag| tag.files.clone())))
 }

@@ -17,17 +17,15 @@ use vectorcraft_engine::cmd::wand::color_tolerance_max;
 
 use super::{part_hidden, set_part_hidden};
 use crate::VectorcraftApp;
-// PLAN: assumed `widgets::stroke_lengths(app) -> LengthUnits` beside `general_lengths` (cv.B5b)
+// PLAN: assumed `canvas::stroke_lengths(app) -> LengthUnits` beside `general_lengths` (cv.B5b)
 use crate::canvas::stroke_lengths;
 
 const STROKE_KEY: &str = "wand-hide-stroke";
 const TRANSPARENCY_KEY: &str = "wand-hide-transparency";
 
 /// The panel menu's Hide / Show rows: (command id, hidden-part key, part name).
-const PARTS: [(&str, &str, &str); 2] = [
-    ("ui.magicWand.strokeOptions", STROKE_KEY, "Stroke Options"),
-    ("ui.magicWand.transparencyOptions", TRANSPARENCY_KEY, "Transparency Options"),
-];
+const PARTS: [(&str, &str, &str); 2] =
+    [("ui.magicWand.strokeOptions", STROKE_KEY, "Stroke Options"), ("ui.magicWand.transparencyOptions", TRANSPARENCY_KEY, "Transparency Options")];
 
 fn options(app: &mut VectorcraftApp) -> Value {
     app.session.execute("magicWand.options", &json!({})).unwrap_or_default()
@@ -67,13 +65,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !part_hidden(app, STROKE_KEY) {
         Divider::horizontal().show(ui);
         row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", tolerance(&o, "strokeTolerance").range(0.0..=cmax))));
-        let weight = NumberField::length(
-            tl!("Tolerance:"),
-            Bind::given(Some(o["weightTolerance"].as_f64().unwrap_or(0.0))),
-            stroke_lengths(app),
-        )
-        .id_salt("weightTolerance")
-        .range(0.0..=1000.0);
+        let weight = NumberField::length(tl!("Tolerance:"), Bind::given(Some(o["weightTolerance"].as_f64().unwrap_or(0.0))), stroke_lengths(app))
+            .id_salt("weightTolerance")
+            .range(0.0..=1000.0);
         row(app, ui, &o, tl!("Stroke Weight"), "strokeWeight", Some(("weightTolerance", weight)));
     }
     if !part_hidden(app, TRANSPARENCY_KEY) {

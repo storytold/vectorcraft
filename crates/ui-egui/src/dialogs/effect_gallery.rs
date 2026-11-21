@@ -11,40 +11,36 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use craft::imaging::ui::filter_gallery::{
+    EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGallerySession, FilterIndex, FilterTree,
+    FilterTreeLayout, GalleryFilter, GalleryThumb, LayerId, SessionField,
+};
 use craft::theme::variant::Tone;
-use craft::ui::contract::Revision;
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
+use craft::ui::display::Picture;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::notices::{Notice, NoticeLayout};
-use craft::ui::patterns::form_dialogs::FieldValue;
-use craft::ui::primitives::textures::{ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
-use craft::ui::runtime::egui::widgets::Checkbox;
-use craft::ui::runtime::egui::widgets::Picture;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
+use craft::ui::primitives::textures::{Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use craft::ui::runtime::env::{Env, Label};
 use craft::ui::runtime::overlay::CloseReason;
-use craft::ui::runtime::requests::PathRequest;
 use craft::ui::runtime::words::CommonWords;
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS, PixelSpace};
 use vectorcraft_geom::{Affine, Point};
-use vectorcraft_imaging::ui::filter_gallery::{
-    EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGallerySession, FilterGalleryWords as _,
-    FilterIndex, FilterTree, FilterTreeLayout, GalleryFilter, GalleryThumb, LayerId, SessionField,
-};
 
-use super::file_asks::Owner;
-use super::{EffectCx, effect, effect_params, file_asks, json_of};
+use super::effect;
+use super::effect_params::{EffectCx, effect_params};
+use super::form::json_of;
+use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-
-// PLAN: the crate paths of the framework items (`craft::ui::…`, `vectorcraft_imaging::ui::filter_gallery`), `EffectCx::new(id)`,
-// `effect_params(&EffectCx, &Map) -> Vec<Param>` (ef.C3, ef.C4), `json_of(&[Param], &DialogFields) -> Value` (wg.S12),
-// `file_asks::ask(app, &FilePick, Owner::Free, FnOnce(&mut VectorcraftApp, String) + Send)` (fl.A3),
-// `LivePreview::{run, commit}` (wg.A20), `app.dialogs: DialogHost` and `app.effect_dialogs.gallery: Option<Open>` (ef.C1, hub-w2) are
-// assumed: none is in this tree yet.
+use crate::file_asks::Owner;
 
 /// Thumbnail of one filter, in pixels at most. The drawing is original; the filter is this app's.
 const THUMB: usize = 36;
@@ -54,6 +50,8 @@ const PREVIEW_H: usize = 84;
 
 /// The command the preview and OK run: the whole stack as one undo step.
 const COMMAND: &str = "command.batch";
+/// The undo step the batch makes.
+const LABEL: &str = "Effect Gallery";
 
 /// The dialog's key: its id and the name automation reaches it by.
 const KEY: &str = "effectGallery";
@@ -82,68 +80,68 @@ pub(crate) struct Open {
     preview: LivePreview,
 }
 
-/// Opens the gallery on the current selection.
-pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let _ = p;
+/// Opens the gallery on the current selection. OK is held: [`commit`] keeps the previewed stack, and a refusal
+/// keeps the dialog open with its reason; Cancel takes the canvas preview away.
+pub fn open(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
     if app.session.active().is_none_or(|s| s.selection.is_empty()) {
         return Err(tl!("Select artwork to apply effects").into());
     }
-    let dialog = EffectGalleryDialog::new();
-    let id = dialog.id();
-    app.dialogs.open(dialog);
+    let dialog = EffectGalleryDialog::new(app);
+    let rollback = |app: &mut VectorcraftApp| {
+        if let Some(open) = app.effect_dialogs.gallery.take() {
+            open.preview.cancel(app);
+        }
+    };
+    let options = HeldOptions { cancel: Some(Box::new(rollback)), ..HeldOptions::default() };
+    let id = open_held_with(app, dialog, commit, options).ok_or("no window")?;
     app.effect_dialogs.gallery = Some(Open { id, preview: LivePreview::default() });
     Ok(Value::Null)
 }
 
-/// Runs the gallery's part of one frame: shows the stack on the canvas, files the held OK's commit and starts
-/// a Browse press's file dialog. A gallery that closed takes its canvas preview away.
-pub fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
-    let Some(mut open) = app.effect_dialogs.gallery.take() else { return };
-    let Some((on, visible, held, asked)) = app.dialogs.get_mut_by_id::<EffectGalleryDialog>(open.id).map(|dialog| {
-        let visible = dialog.entries(true);
-        (dialog.preview_on && !visible.is_empty(), visible, dialog.held.take(), dialog.asked.take())
-    }) else {
-        // Cancel leaves the preview to remove; after OK the batch is committed and nothing is left.
-        open.preview.run(app, false, COMMAND, &Value::Null);
-        return;
-    };
-    open.preview.run(app, on, COMMAND, &stack_batch_params(&visible));
-    if let Some(layers) = held {
-        let all = entries_of(&layers, &app_index(app, open.id), false);
-        let answer = open.preview.commit(app, COMMAND, stack_batch_params(&all)).map(|_| ()).map_err(Label::from);
-        if let Some(dialog) = app.dialogs.get_mut_by_id::<EffectGalleryDialog>(open.id) {
-            dialog.answer_ok(answer);
-        }
+/// The held OK: keeps the previewed stack as one undo step. A refused batch leaves the gallery and its preview open.
+fn commit(app: &mut VectorcraftApp, batch: &Value) -> Result<(), String> {
+    let Some(open) = app.effect_dialogs.gallery.take() else { return app.run(COMMAND, batch.clone()).map(drop) };
+    let committed = open.preview.clone().commit(app, COMMAND, batch.clone()).map(drop);
+    if committed.is_err() {
+        app.effect_dialogs.gallery = Some(open);
     }
-    if let Some(layer) = asked {
-        ask_texture(app, open.id, layer);
-    }
-    app.effect_dialogs.gallery = Some(open);
+    committed
 }
 
-/// The filter index of the open gallery `id`; empty once it closed.
-fn app_index(app: &mut VectorcraftApp, id: DialogId) -> FilterIndex {
-    app.dialogs.get_mut_by_id::<EffectGalleryDialog>(id).map(|dialog| dialog.index.clone()).unwrap_or_default()
+/// Runs the gallery's part of one frame: shows the visible layers on the canvas and starts a Browse press's file
+/// dialog. A closed gallery's preview is the held OK's to keep or its cancel's to take away.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(mut open) = app.effect_dialogs.gallery.take() else { return };
+    let id = open.id;
+    let shown = dialogs.with(|host| {
+        host.get_mut_by_id::<EffectGalleryDialog>(id).map(|dialog| {
+            let visible = dialog.entries(true);
+            (dialog.preview_on && !visible.is_empty(), stack_batch_params(&visible), dialog.asked.take())
+        })
+    });
+    let Some((on, batch, asked)) = shown else {
+        app.effect_dialogs.gallery = Some(open);
+        return;
+    };
+    // `run` reports a failed preview itself.
+    let _ = open.preview.run(app, on, LABEL, COMMAND, &batch);
+    app.effect_dialogs.gallery = Some(open);
+    if let Some(layer) = asked {
+        ask_texture(app, id, layer);
+    }
 }
 
 /// Asks for the image Load Texture reads into the layer `layer`. The answer finds the layer by its own id, wherever
 /// it moved, and is dropped for a layer deleted since or a gallery that closed (a layer id is never used twice).
 fn ask_texture(app: &mut VectorcraftApp, id: DialogId, layer: LayerId) {
-    use vectorcraft_engine::cmd::fileio;
-    let filters = crate::FilePick::filters(fileio::FORMATS.iter().filter(|f| f.read && f.raster).map(|f| (f.label, fileio::read_extensions(f))));
-    let pick = crate::FilePick { filters, ..Default::default() };
-    file_asks::ask(app, &pick, Owner::Free, move |app, path| {
-        // The button is off where files can't be read.
-        let loaded = app.services.read.as_ref().map(|read| read(&path).and_then(|bytes| effect::texture_fields(&bytes)));
-        match loaded {
-            Some(Ok(fields)) => {
-                if let Some(dialog) = app.dialogs.get_mut_by_id::<EffectGalleryDialog>(id) {
-                    dialog.answer_texture(layer, fields);
-                }
+    effect::pick_texture(app, Owner::Free, move |app, _, fields| {
+        let Some(dialogs) = app.dialogs() else { return };
+        dialogs.with(|host| {
+            if let Some(dialog) = host.get_mut_by_id::<EffectGalleryDialog>(id) {
+                dialog.answer_texture(layer, fields);
             }
-            Some(Err(e)) => app.status(e),
-            None => {}
-        }
+        });
     });
 }
 
@@ -171,7 +169,7 @@ struct Catalog {
 }
 
 impl Catalog {
-    fn new() -> Self {
+    fn new(app: &VectorcraftApp) -> Self {
         let mut categories = Vec::new();
         let mut filters = Vec::new();
         for (at, (name, _)) in CATEGORIES.iter().enumerate() {
@@ -180,9 +178,9 @@ impl Catalog {
                 continue;
             }
             for id in &ids {
-                // The rows that depend on a layer's values (Loaded Texture) start from no loaded texture.
-                let cx = EffectCx::new(id);
-                filters.push(GalleryFilter::new(*id, Label::from(effect_label(id)), *name, effect_params(&cx, &default_params(id))));
+                // The rows do not depend on the values: a texture row reads the loaded texture each pass.
+                let cx = EffectCx::new(app, id, false);
+                filters.push(GalleryFilter::new(*id, Label::from(effect_label(id)), *name, effect_params(&cx, &DialogFields::new())));
             }
             categories.push(FilterCategory::new(*name, Label::from(tl!(name).to_string()), ids.into_iter().map(str::to_owned).collect()));
         }
@@ -223,7 +221,8 @@ fn entries_of(layers: &[EffectLayer], index: &FilterIndex, visible_only: bool) -
         .filter(|layer| layer.visible || !visible_only)
         .filter_map(|layer| {
             let filter = index.filter(&layer.filter)?;
-            let Value::Object(params) = vectorcraft_effects::upgrade_params(&layer.filter, &json_of(&filter.params, &layer.fields)) else {
+            let Value::Object(params) = vectorcraft_effects::upgrade_params(&layer.filter, &Value::Object(json_of(&filter.params, &layer.fields)))
+            else {
                 return None;
             };
             Some(StackEntry { effect: layer.filter.clone(), visible: layer.visible, params })
@@ -232,8 +231,8 @@ fn entries_of(layers: &[EffectLayer], index: &FilterIndex, visible_only: bool) -
 }
 
 /// The Effect Gallery on the dialog host: the framework's filter tree, settings and effect-layer stack over one
-/// [`FilterGallerySession`], with a preview of the visible layers and OK held for [`pump`] to commit.
-pub struct EffectGalleryDialog {
+/// [`FilterGallerySession`], with a preview of the visible layers and OK held for [`commit`].
+pub(crate) struct EffectGalleryDialog {
     id: DialogId,
     open: bool,
     catalog: Catalog,
@@ -241,16 +240,16 @@ pub struct EffectGalleryDialog {
     session: FilterGallerySession,
     selected: usize,
     preview_on: bool,
-    /// The layers OK filed; the app commits them and answers.
-    held: HeldAnswer<Vec<EffectLayer>>,
+    /// The batch OK filed; the app commits it and answers.
+    held: HeldAnswer<Value>,
     /// A Browse press waiting for the app's file dialog, with the layer it belongs to.
     asked: Option<LayerId>,
 }
 
 impl EffectGalleryDialog {
     /// A gallery on one layer of the first Artistic filter, previewing.
-    pub fn new() -> Self {
-        let catalog = Catalog::new();
+    fn new(app: &VectorcraftApp) -> Self {
+        let catalog = Catalog::new(app);
         let first = catalog.categories.first().and_then(|category| category.filters.first()).cloned().unwrap_or_default();
         let index = FilterIndex::of(&catalog);
         let session = FilterGallerySession::new(&first, &catalog);
@@ -272,21 +271,14 @@ impl EffectGalleryDialog {
         entries_of(&self.session.effects, &self.index, visible_only)
     }
 
-    /// The app's answer to the held OK: `Ok` closes the dialog in its next pass, `Err` shows the reason and enables OK.
-    fn answer_ok(&mut self, answer: Result<(), Label>) {
-        self.held.answer(answer);
-    }
-
     /// Writes the picked texture into the layer `layer`, wherever it is now. A deleted layer takes nothing.
-    fn answer_texture(&mut self, layer: LayerId, fields: Map<String, Value>) {
+    fn answer_texture(&mut self, layer: LayerId, fields: [(&'static str, FieldValue); 2]) {
         let Some(at) = self.session.position(layer) else { return };
         let Some(mut values) = self.session.effects.get(at).map(|effect| effect.fields.clone()) else { return };
         for (key, value) in fields {
-            if let Value::String(text) = value {
-                values.set(key, FieldValue::Text(text));
-            }
+            values.set(key, value);
         }
-        self.session.apply(EffectChange::with_fields(at, values), &self.catalog, &mut self.selected);
+        self.apply(EffectChange::with_fields(at, values));
     }
 
     /// Applies `change` to the stack.
@@ -295,14 +287,24 @@ impl EffectGalleryDialog {
     }
 }
 
-impl Default for EffectGalleryDialog {
-    fn default() -> Self {
-        Self::new()
+impl HoldsOk for EffectGalleryDialog {
+    type Answer = Value;
+
+    fn held_ok(self) -> Self {
+        self
+    }
+
+    fn take_ok(&mut self) -> Option<Value> {
+        self.held.take()
+    }
+
+    fn answer_ok(&mut self, answer: Result<(), Label>) {
+        self.held.answer(answer);
     }
 }
 
 impl StackDialog for EffectGalleryDialog {
-    type Result = Vec<EffectLayer>;
+    type Result = Value;
 
     fn id(&self) -> DialogId {
         self.id
@@ -312,12 +314,13 @@ impl StackDialog for EffectGalleryDialog {
         Some(KEY)
     }
 
-    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Self::Result>> {
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Value>> {
         let words = Env::of(ui).words::<CommonWords>();
-        let EffectGalleryDialog { open, index, session, selected, preview_on, held, asked, .. } = self;
+        let EffectGalleryDialog { open, catalog, index, session, selected, preview_on, held, asked, .. } = self;
         // The app accepted the held OK: this pass closes the dialog with it. A measuring run closes nothing.
         let finish = held.is_accepted() && !craft::ui::runtime::measure::active(ui.ctx());
-        let refusal = held.refusal().map(|(reason, refused)| (reason.clone(), refused.clone()));
+        // A refusal is cleared once the stack changes, so one still held is for the stack shown.
+        let refusal = held.refusal().map(|(reason, _)| reason.clone());
         let current = (*selected).min(session.effects.len().saturating_sub(1));
         let visible = entries_of(&session.effects, index, true);
         let key = {
@@ -366,7 +369,7 @@ impl StackDialog for EffectGalleryDialog {
                         changes.extend(stack.change);
                     });
                 });
-                if let Some((reason, _)) = refusal.as_ref().filter(|(_, refused)| refused == effects) {
+                if let Some(reason) = &refusal {
                     Notice::new(Tone::Bad, reason.clone()).layout(NoticeLayout::Inline).show(ui);
                 }
             });
@@ -376,18 +379,19 @@ impl StackDialog for EffectGalleryDialog {
         if let Some(at) = picked_layer {
             *selected = at;
         }
+        let changed = !changes.is_empty();
         for change in changes {
-            session.apply(change, &self.catalog, selected);
+            session.apply(change, &*catalog, selected);
         }
         if asked.is_none() {
             *asked = pressed;
         }
-        if held.refusal().is_some_and(|(_, refused)| refused != &session.effects) {
+        if changed {
             held.clear_refusal();
         }
-        // OK files the layers for the app, which commits them before the dialog closes.
+        // OK files the batch for the app, which commits it before the dialog closes.
         if shown.output.picked == Some(0) && !held.is_waiting() {
-            held.file(session.effects.clone());
+            held.file(stack_batch_params(&entries_of(&session.effects, index, false)));
         }
         if finish && shown.output.closed == Some(CloseReason::Activated) {
             return Some(held.finish().map_or(DialogResult::Cancel, DialogResult::Ok));
@@ -395,13 +399,13 @@ impl StackDialog for EffectGalleryDialog {
         shown.output.closed.map(|_| DialogResult::Cancel)
     }
 
-    /// OK as the button: files the layers and answers none; once the app accepted them, answers them.
-    fn confirm(&mut self, _: &Context) -> Option<Self::Result> {
+    /// OK as the button: files the batch and answers none; once the app accepted it, answers it.
+    fn confirm(&mut self, _: &Context) -> Option<Value> {
         if self.held.is_accepted() {
             return self.held.finish();
         }
         if !self.held.is_waiting() {
-            self.held.file(self.session.effects.clone());
+            self.held.file(stack_batch_params(&self.entries(false)));
         }
         None
     }
@@ -424,9 +428,12 @@ impl StackDialog for EffectGalleryDialog {
             return Ok(());
         }
         match self.session.field_change(&self.catalog, self.selected, field, &value)? {
-            Some(SessionField::Change(change)) => self.apply(change),
+            Some(SessionField::Change(change)) => {
+                self.apply(change);
+                self.held.clear_refusal();
+            }
             Some(SessionField::Select(at)) => self.selected = at.min(self.session.effects.len().saturating_sub(1)),
-            None => {}
+            _ => {}
         }
         Ok(())
     }
@@ -445,7 +452,7 @@ fn stack_batch_commands(stack: &[StackEntry]) -> Vec<Value> {
 }
 
 fn stack_batch_params(stack: &[StackEntry]) -> Value {
-    json!({ "label": "Effect Gallery", "commands": stack_batch_commands(stack) })
+    json!({ "label": LABEL, "commands": stack_batch_commands(stack) })
 }
 
 fn effect_label(id: &str) -> String {
@@ -568,84 +575,85 @@ fn color_image(data: &[u8], w: usize, h: usize) -> egui::ColorImage {
 
 #[cfg(test)]
 mod tests {
+    use craft::ui::dialog::{DialogId, StackDialog as _, dialog_id};
     use serde_json::{Value, json};
+    use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
-
-    use craft::ui::dialog::StackDialog as _;
 
     use super::EffectGalleryDialog;
     use crate::VectorcraftApp;
 
-    fn frame(app: &mut VectorcraftApp) -> egui::Context {
+    /// An app with a window context and a 40 pt square, and the gallery open on it. Returns the square's id.
+    fn drawing() -> (VectorcraftApp, egui::Context, u64) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
         let ctx = crate::testing::ui_context();
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| crate::dialogs::host::pump(app, ui.ctx()));
-        out.textures_delta.clear();
-        ctx
+        app.ui_ctx = Some(ctx.clone());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        super::open(&mut app, &json!({})).unwrap();
+        (app, ctx, id)
     }
 
-    fn id() -> craft::ui::dialog::DialogId {
-        craft::ui::dialog::dialog_id(super::KEY)
+    fn id() -> DialogId {
+        dialog_id(super::KEY)
     }
 
-    fn set(app: &mut VectorcraftApp, field: &str, value: Value) {
-        app.run("ui.dialog.set", json!({"dialog": super::KEY, "field": field, "value": value})).unwrap();
+    /// `ui.dialog.set` on the gallery.
+    fn set(app: &VectorcraftApp, ctx: &egui::Context, field: &str, value: Value) {
+        app.dialogs().unwrap().with(|host| host.set_json_field(ctx, id(), field, value)).unwrap();
     }
 
-    fn two_layers(app: &mut VectorcraftApp) {
+    /// The pump of one frame: the canvas preview, the held OK and the file asks.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        crate::dialogs::host::pump(app, ctx);
+    }
+
+    fn effects(app: &VectorcraftApp, node: u64) -> Vec<vectorcraft_doc::Effect> {
+        app.session.active().unwrap().doc.node(NodeId(node)).unwrap().appearance.effects.clone()
+    }
+
+    #[test]
+    fn stack_preview_is_one_interaction() {
+        let (mut app, ctx, node) = drawing();
+        set(&app, &ctx, "effects", json!([{ "filter": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
+        frame(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "the stack previews on the canvas");
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id())));
+        frame(&mut app, &ctx);
+        assert!(!app.session.in_interaction());
+        assert!(effects(&app, node).is_empty());
+    }
+
+    #[test]
+    fn stack_ok_is_one_undo_step() {
+        let (mut app, ctx, node) = drawing();
         set(
-            app,
+            &app,
+            &ctx,
             "effects",
             json!([
                 { "filter": "artistic.cutout", "visible": true, "params": { "levels": 3 } },
                 { "filter": "stylize.glowingEdges", "visible": false, "params": { "edgeWidth": 2 } }
             ]),
         );
-    }
-
-    fn drawing(app: &mut VectorcraftApp) -> u64 {
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
-        app.run("ui.effectGalleryDialog", json!({})).unwrap();
-        id
-    }
-
-    #[test]
-    fn stack_preview_is_one_interaction() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let id_node = drawing(&mut app);
-        set(&mut app, "effects", json!([{ "filter": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
-        let ctx = frame(&mut app);
-        assert!(app.session.in_interaction(), "the stack previews on the canvas");
-        assert!(app.dialogs.cancel_by_id(&ctx, id()));
-        frame(&mut app);
-        assert!(!app.session.in_interaction());
-        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id_node)).unwrap().appearance.effects.is_empty());
-    }
-
-    #[test]
-    fn stack_ok_is_one_undo_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let id_node = drawing(&mut app);
-        two_layers(&mut app);
-        let ctx = frame(&mut app);
+        frame(&mut app, &ctx);
         let steps = app.session.active().unwrap().history.undo.len();
-        // OK is held: the first answer files the layers, the pump commits them, the second closes the dialog.
-        assert!(!app.dialogs.confirm_by_id(&ctx, id()));
-        frame(&mut app);
-        assert!(app.dialogs.confirm_by_id(&ctx, id()));
-        let st = app.session.active().unwrap();
-        let n = st.doc.node(vectorcraft_doc::NodeId(id_node)).unwrap();
-        assert_eq!(n.appearance.effects.len(), 2);
-        assert_eq!(n.appearance.effects[0].id, "artistic.cutout");
-        assert_eq!(n.appearance.effects[0].params.get("levels").and_then(|v| v.as_i64()), Some(3));
-        assert_eq!(n.appearance.effects[1].id, "stylize.glowingEdges");
-        assert!(!n.appearance.effects[1].visible);
-        assert_eq!(st.history.undo.len(), steps + 1);
+        // OK is held: the first answer files the batch, the pump commits it, the second closes the dialog.
+        let dialogs = app.dialogs().unwrap();
+        assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id())));
+        frame(&mut app, &ctx);
+        assert!(dialogs.with(|host| host.confirm_by_id(&ctx, id())));
+        let applied = effects(&app, node);
+        assert_eq!(applied.len(), 2);
+        assert_eq!(applied[0].id, "artistic.cutout");
+        assert_eq!(applied[0].params.get("levels").and_then(Value::as_i64), Some(3));
+        assert_eq!(applied[1].id, "stylize.glowingEdges");
+        assert!(!applied[1].visible);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
     }
 
-    /// Load Texture… in the Settings, with the file dialog shown off the UI thread: the image goes into the layer
-    /// that asked wherever it moved, and an answer for a deleted layer is dropped.
+    /// Load Texture… in the Settings, answered after the stack changed: the image goes into the layer that asked
+    /// wherever it moved, and an answer for a deleted layer is dropped.
     #[test]
     fn settings_load_texture_answers_into_the_gallery() {
         use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
@@ -654,19 +662,11 @@ mod tests {
         let path = dir.join("texture.png");
         image::RgbaImage::from_fn(6, 4, |x, y| image::Rgba([(x * 40) as u8, (y * 60) as u8, 90, 255])).save(&path).unwrap();
         let picked = path.to_string_lossy().into_owned();
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        // PLAN: assumed `crate::tests::picks::scripted(&mut App) -> Picker` (fl.A20) and `file_asks::poll`.
-        let picker = crate::tests::picks::scripted(&mut app);
+        let (mut app, ctx, _) = drawing();
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-        drawing(&mut app);
-        let layers = || {
-            json!([
-                { "filter": "artistic.roughPastels", "visible": true, "params": {} },
-                { "filter": "artistic.roughPastels", "visible": true, "params": {} }
-            ])
-        };
+        let picker = crate::tests::picks::scripted(&mut app);
         let loaded_rows = |app: &VectorcraftApp| -> Vec<bool> {
-            let fields = app.dialogs.get::<EffectGalleryDialog>().unwrap().json_fields().unwrap();
+            let fields = app.dialogs().unwrap().with(|host| host.get_mut_by_id::<EffectGalleryDialog>(id()).unwrap().json_fields().unwrap());
             fields["effects"]
                 .as_array()
                 .unwrap()
@@ -678,26 +678,24 @@ mod tests {
                 .collect()
         };
         // Selects `row`, presses Browse of its Texture row, and lets `meanwhile` change the stack before the answer.
-        let ask = |app: &mut VectorcraftApp, row: usize, meanwhile: &dyn Fn(&mut VectorcraftApp)| {
-            set(app, "effects", layers());
-            set(app, "select", json!(row));
-            frame(app);
-            app.run("ui.click", json!({"name": "Browse"})).unwrap();
-            let ctx = frame(app);
+        let ask = |app: &mut VectorcraftApp, row: usize, meanwhile: &dyn Fn(&VectorcraftApp)| {
+            let layer = json!({ "filter": "artistic.roughPastels", "visible": true, "params": {} });
+            set(app, &ctx, "effects", json!([layer, layer]));
+            set(app, &ctx, "select", json!(row));
+            // The Texture row's Browse press, as the dialog's pass records it.
+            app.dialogs().unwrap().with(|host| {
+                let dialog = host.get_mut_by_id::<EffectGalleryDialog>(id()).unwrap();
+                dialog.asked = Some(dialog.session.effects[dialog.selected].id);
+            });
+            frame(app, &ctx);
             meanwhile(app);
             picker.answer(&[picked.as_str()]);
-            crate::file_asks::poll(app, &ctx);
+            crate::file_asks::poll(app);
             loaded_rows(app)
         };
         assert_eq!(ask(&mut app, 1, &|_| {}), [false, true], "the selected layer asked");
-        assert_eq!(ask(&mut app, 0, &|app| set(app, "move", json!({"from": 0, "to": 1}))), [false, true], "the layer that asked moved");
-        assert_eq!(
-            ask(&mut app, 1, &|app| {
-                set(app, "delete", json!(true));
-            }),
-            [false],
-            "the layer that asked was deleted"
-        );
+        assert_eq!(ask(&mut app, 0, &|app| set(app, &ctx, "move", json!({"from": 0, "to": 1}))), [false, true], "the layer that asked moved");
+        assert_eq!(ask(&mut app, 1, &|app| set(app, &ctx, "delete", json!(true))), [false], "the layer that asked was deleted");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

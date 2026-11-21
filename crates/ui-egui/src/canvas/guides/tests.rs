@@ -12,8 +12,11 @@ fn app() -> VectorcraftApp {
     app
 }
 
+/// The theme's tokens, as a pass of the app's interface resolves them.
 fn tokens() -> Tokens {
-    Tokens::get(&egui::Context::default())
+    let mut tokens = None;
+    let _ = crate::testing::ui_context().run_ui(Default::default(), |ui| tokens = Some(Tokens::clone(Env::of(ui).tokens.tokens())));
+    tokens.expect("the pass ran")
 }
 
 fn shown_of(app: &VectorcraftApp) -> Option<Shown> {
@@ -36,8 +39,7 @@ fn artboard_guide_label_colors_only_its_own_guides() {
     }
     app.session.execute("guide.add", &json!({"vertical": false, "pos": 150})).unwrap();
     let s = shown_of(&app).unwrap();
-    let pref = pref_color(&app.session.prefs.guide_color, tokens().guide);
-    let pref = Rgba::rgb(pref.r(), pref.g(), pref.b());
+    let pref = guide_color(&app.session.prefs, &tokens());
     let red = color_at(&s, 100.0).unwrap();
     assert_ne!(red, pref, "the labelled artboard's guide has the label colour");
     assert_eq!(color_at(&s, 520.0), Some(pref), "an artboard without a label");

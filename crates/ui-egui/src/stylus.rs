@@ -82,7 +82,6 @@ pub(crate) fn sync_eraser_tool(app: &mut VectorcraftApp) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // PLAN: needs the `craft` facade dependency in crates/ui-egui/Cargo.toml (not in this set's files).
     use craft::behavior::PointerSample;
     use vectorcraft_engine::Session;
 

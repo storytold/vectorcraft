@@ -55,7 +55,6 @@ fn srgba(color: &vectorcraft_color::Color) -> Srgba {
 
 /// `paint` as a paint well shows it. `tile` gives the texture of the pattern named to it; `None`
 /// shows the field fill until the host has one.
-// PLAN: the contract row names `vectorcraft_doc::Paint` and `PatternTextures`; neither exists.
 pub fn well_paint(paint: &Paint, tile: &dyn Fn(&str) -> Option<CachedTexture>) -> color_ui::Paint {
     match paint {
         Paint::None => color_ui::Paint::None,
@@ -340,13 +339,13 @@ mod tests {
     /// pixel off its neighbours.
     #[test]
     fn gradient_face_lines_up_with_whole_pixels() {
+        use craft::ui::contract::Show as _;
         use craft::ui::display::Picture;
         use craft::ui::list::ThumbAspect;
         use craft::ui::testing::Fixture;
         let gp = paint(GradientKind::Linear, 0.0);
         let mut fixture = Fixture::new(move |ui| {
             let face = paint_face(&gp);
-            // PLAN: assumed `Picture::show(ui)` as the other components.
             Picture::painter("", ThumbAspect::new(1, 1), move |cx, rect| face.paint(cx, rect)).show(ui);
         });
         let ppp = 1.5;

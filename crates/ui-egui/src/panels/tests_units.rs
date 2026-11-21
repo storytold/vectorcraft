@@ -76,7 +76,9 @@ fn panels_show_millimetres_after_the_preference_changes() {
     // The next frame: no restart, nothing cached.
     p.frame();
     assert_eq!(p.value("Width"), Some(side_mm()), "Transform panel");
-    let mut b = Panel::new(p.into_app(), bar);
+    let mut app = app_with_rect();
+    general_mm(&mut app);
+    let mut b = Panel::new(app, bar);
     assert_eq!(b.value("Width"), Some(side_mm()), "Control bar");
     // Document Setup back to points: everything follows the document.
     run(&mut b.app(), "document.setUnits", json!({"units": "Points"}));

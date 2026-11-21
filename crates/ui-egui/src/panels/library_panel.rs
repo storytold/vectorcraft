@@ -18,16 +18,16 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use craft::behavior::IconId;
-use craft::behavior::SelectionModel;
+use craft::behavior::{IconId, Selection, SelectionModel};
+use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Bind, SelectMode, Selection, Trigger};
+use craft::ui::contract::{Bind, SelectMode, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
 use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetView};
 use craft::ui::primitives::{ContentPainterCx, IconSpec};
 use craft::ui::runtime::access::PopupKind;
-use craft::ui::runtime::commands::CommandRef;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar};
 use egui::{Rect, Ui};
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,7 @@ use vectorcraft_engine::cmd::swatchlib::{self, LibraryInfo};
 
 use super::swatches::View;
 use crate::VectorcraftApp;
-use crate::file_asks::{self, Owner, PickRequest, Picked};
+use crate::file_asks::{self, Owner};
 use crate::state::UiState;
 
 /// What every library panel's id starts with.
@@ -173,6 +173,7 @@ pub(crate) struct Kind {
     path: fn(&VectorcraftApp, &str) -> Option<String>,
     neighbour: fn(&VectorcraftApp, &str, isize) -> Option<String>,
     add: fn(&mut VectorcraftApp, &str, Vec<String>),
+    add_label: &'static str,
     body: fn(&mut VectorcraftApp, &mut Ui, &str),
 }
 
@@ -187,6 +188,7 @@ fn kind_of<K: LibraryKind>() -> Kind {
         path: K::path,
         neighbour: neighbour::<K>,
         add: K::add,
+        add_label: K::ADD,
         body: body::<K>,
     }
 }
@@ -219,15 +221,13 @@ pub(crate) fn parse(panel: &str) -> Option<(Kind, &str)> {
 
 /// Is panel `panel` open (in the dock or floating)?
 pub(crate) fn is_open(ui: &UiState, panel: &str) -> bool {
-    // PLAN: assumed `Workspace::<String>::contains(&String)` (ch.P1)
-    ui.dock_workspace.contains(&panel.to_string())
+    ui.dock_workspace.layout().contains(&panel.to_string())
 }
 
 /// The open library panels.
 fn open_panels(ui: &UiState) -> Vec<String> {
     let mut out: Vec<String> = vec![];
-    // PLAN: assumed `Workspace::<String>::panels()` over `&String` (ch.P1)
-    for p in ui.dock_workspace.panels() {
+    for p in ui.dock_workspace.layout().panels() {
         if p.starts_with(PREFIX) && !out.contains(p) {
             out.push(p.clone());
         }
@@ -329,8 +329,7 @@ pub fn restore(app: &mut VectorcraftApp) {
             // A file now in the user library folder loads as that User Defined library.
             && let Ok(id) = app.run(k.load, json!({ "path": path })).map(|r| r["library"].as_str().unwrap_or_default().to_string())
             && id != p.id
-            // PLAN: assumed `Workspace::<String>::rename(&String, &String) -> Result<_, impl Display>` (ch.K27)
-            && app.ui.dock_workspace.rename(&p.panel(), &panel_id(k.kind, &id)).is_ok()
+            && app.ui.dock_workspace.rename(&p.panel(), panel_id(k.kind, &id)).is_ok()
         {
             p.id = id;
         }
@@ -447,7 +446,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         if is_open(&app.ui, &to) {
             app.run("window.panel.activate", json!({ "panel": to }))?;
         } else if next != id {
-            app.ui.dock_workspace.rename(&given.to_string(), &to).map_err(|e| e.to_string())?;
+            app.ui.dock_workspace.rename(&given.to_string(), to.clone()).map_err(|e| e.to_string())?;
             app.ui.library_panels.retain(|q| !(q.kind == k.kind && q.id == next));
             let path = if next.starts_with("loaded/") { (k.path)(app, &next) } else { None };
             if let Some(s) = settings_mut(app, k, &id) {
@@ -474,8 +473,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 
 /// `ui.libraryPanel.locate {panel, path?}`: Locate Library… of a library panel whose library can't
 /// be found, Persistent or not (any other panel is an error). Load the library at `path`, else one
-/// picked in an open dialog (the answer arrives on a later pass and runs this command again with
-/// its path), and show it in open panel `panel`, which keeps its view, Show Find Field and
+/// picked in an open dialog (the answer arrives on a later pass), and show it in open panel `panel`, which keeps its view, Show Find Field and
 /// Persistent. When the file's library has a panel open already, `panel` closes and is forgotten,
 /// and that panel is brought forward, made persistent when `panel` was. → what `ui.libraryPanel`
 /// answers
@@ -489,9 +487,13 @@ pub(crate) fn locate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
         return Err(format!("library panel `{given}` isn't missing its library"));
     }
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    let filters = library_pick_filters(k.kind);
-    let then = ("ui.libraryPanel.locate", json!({ "panel": given }));
-    let Some(path) = pick_library_file(app, path, filters, then)? else { return Ok(Value::Null) };
+    let panel = given.to_string();
+    pick_library_file(app, path, library_pick_filters(k.kind), move |app, path| located(app, &panel, &path))
+}
+
+/// Locate Library… answered with the file at `path` for missing library panel `given`.
+fn located(app: &mut VectorcraftApp, given: &str, path: &str) -> Result<Value, String> {
+    let (k, id) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
     let r = app.run(k.load, json!({ "path": path }))?;
     let next = r["library"].as_str().unwrap_or_default().to_string();
     let to = panel_id(k.kind, &next);
@@ -527,34 +529,26 @@ pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&
     }
 }
 
-/// Other Library…: the library file at `path`, else one picked in an open dialog. The pick is asked
-/// of the app (`file_asks`) and answers on a later pass: `None` then, and when it answers `then`
-/// (a command and its params) runs again with `path` added. A picker the app lacks reports it in
-/// the status bar.
-// PLAN: `then` is a fourth parameter (the sheet has three): the later answer must say which command to continue.
+/// Other Library… and Locate Library…: `then` loads the library file at `path`, else one picked in
+/// an open dialog. The pick is asked of the app (`file_asks`) and answers on a later pass, which
+/// runs `then` with the picked file; until then this returns what `file_asks::ask` returns.
 pub(crate) fn pick_library_file(
     app: &mut VectorcraftApp,
     path: Option<String>,
     filters: Vec<(&'static str, &'static [&'static str])>,
-    then: (&'static str, Value),
-) -> Result<Option<String>, String> {
-    if path.is_some() {
-        return Ok(path);
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    if let Some(path) = path {
+        return then(app, path);
     }
-    // PLAN: assumed `file_asks::ask(&mut VectorcraftApp, PickRequest, Owner, impl FnOnce(&mut VectorcraftApp, Picked) + 'static)` (fl.A3)
-    let request = PickRequest::open(Default::default()).filters(filters);
-    file_asks::ask(app, request, Owner::Free, move |app, picked| match picked {
-        Picked::Path(path) => {
-            let (command, mut params) = then;
-            params["path"] = json!(path);
-            if let Err(e) = app.run(command, params) {
-                app.status(e);
-            }
-        }
-        Picked::Unavailable => app.status("This app can't open a file dialog."),
-        _ => {}
-    });
-    Ok(None)
+    let request = filters.into_iter().fold(PickRequest::open("library"), |r, (name, exts)| r.filter(name, exts));
+    Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| match picked {
+        Picked::Paths(paths) => match paths.into_iter().next() {
+            Some(path) => then(app, path.to_string_lossy().into_owned()),
+            None => Ok(Value::Null),
+        },
+        _ => Ok(Value::Null),
+    }))
 }
 
 /// The User Defined library a Window menu slot (`prefix` and a number from 1) stands for, of
@@ -734,9 +728,10 @@ fn open<K: LibraryKind>(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
-/// One row of a library panel's menu with its state, or a separator.
+/// One row of a library panel's menu with its label and state (`checked` for the rows that check), or
+/// a separator.
 enum MenuEntry {
-    Row { command: CommandRef, enabled: bool, checked: bool },
+    Row { command: CommandRef, label: &'static str, enabled: bool, checked: Option<bool> },
     Separator,
 }
 
@@ -746,22 +741,30 @@ fn menu_entries(app: &VectorcraftApp, panel: &str) -> Vec<MenuEntry> {
     let Some((k, id)) = parse(panel) else { return vec![] };
     let s = settings(&app.ui, k.kind, id);
     let (view, hide_find, persistent) = s.map_or((k.view, false, false), |s| (s.view.unwrap_or(k.view), s.hide_find, s.persistent));
-    let row = |id: &str, params: Value, enabled: bool, checked: bool| {
-        let mut params = params;
+    let row = |command: &str, mut params: Value, label: &'static str, enabled: bool, checked: Option<bool>| {
         params["panel"] = json!(panel);
-        MenuEntry::Row { command: CommandRef::with_params(id, params), enabled, checked }
+        MenuEntry::Row { command: CommandRef::with_params(command, params), label, enabled, checked }
     };
     let has_selection = !selected(app, panel).items.is_empty();
-    let mut out = vec![row("ui.libraryPanel.add", json!({}), has_selection, false), MenuEntry::Separator];
-    out.extend(View::ALL.iter().map(|&(v, _)| row("ui.libraryPanel", json!({ "view": v }), true, v == view)));
-    out.extend([MenuEntry::Separator, row("ui.libraryPanel", json!({ "showFind": hide_find }), true, !hide_find), MenuEntry::Separator]);
-    for step in [-1, 1] {
+    let mut out = vec![row("ui.libraryPanel.add", json!({}), k.add_label, has_selection, None), MenuEntry::Separator];
+    out.extend(View::ALL.iter().map(|&(v, label)| row("ui.libraryPanel", json!({ "view": v }), label, true, Some(v == view))));
+    out.extend([
+        MenuEntry::Separator,
+        row("ui.libraryPanel", json!({ "showFind": hide_find }), "Show Find Field", true, Some(!hide_find)),
+        MenuEntry::Separator,
+    ]);
+    for (step, label) in [(-1, "Previous Library"), (1, "Next Library")] {
         let next = (k.neighbour)(app, id, step);
         let params = next.as_ref().map_or_else(|| json!({}), |next| json!({ "library": next }));
-        out.push(row("ui.libraryPanel", params, next.is_some(), false));
+        out.push(row("ui.libraryPanel", params, label, next.is_some(), None));
     }
-    out.push(row("ui.libraryPanel", json!({ "persistent": !persistent }), true, persistent));
-    out.push(MenuEntry::Row { command: CommandRef::with_params("window.panel.close", json!({ "panel": panel })), enabled: true, checked: false });
+    out.push(row("ui.libraryPanel", json!({ "persistent": !persistent }), "Persistent", true, Some(persistent)));
+    out.push(MenuEntry::Row {
+        command: CommandRef::with_params("window.panel.close", json!({ "panel": panel })),
+        label: "Close Library",
+        enabled: true,
+        checked: None,
+    });
     out
 }
 
@@ -776,12 +779,16 @@ pub(crate) fn menu_rows(app: &VectorcraftApp, panel: &str) -> Vec<PanelRow> {
         .collect()
 }
 
-/// Fills the enabled and checked state of library panel `panel`'s [`menu_rows`].
-pub(crate) fn menu_states(app: &VectorcraftApp, panel: &str, states: &mut crate::panels::PanelMenuStates) {
+/// Gives library panel `panel`'s [`menu_rows`] their names, enabled and checked states: one command
+/// names several rows with different params.
+pub(crate) fn menu_states(app: &VectorcraftApp, panel: &str, states: &mut CommandStates) {
     for e in menu_entries(app, panel) {
-        if let MenuEntry::Row { command, enabled, checked } = e {
-            // PLAN: assumed `PanelMenuStates::set(&CommandRef, enabled, checked)` (ch.P8 / ty.A15)
-            states.set(&command, enabled, checked);
+        if let MenuEntry::Row { command, label, enabled, checked } = e {
+            let mut state = CommandState::new().title(tl!(label)).enabled(enabled);
+            if let Some(checked) = checked {
+                state = state.checked(checked);
+            }
+            states.set(command, state);
         }
     }
 }
@@ -860,4 +867,4 @@ pub(crate) fn library_items(ui: &mut Ui, libs: &[LibraryRef], checked: &dyn Fn(&
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

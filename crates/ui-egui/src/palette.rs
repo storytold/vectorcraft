@@ -585,7 +585,6 @@ fn build(app: &VectorcraftApp, ui: &egui::Ui) -> Built {
 /// as costly as production's, so not per pass or per open), with the tool entries re-homed in
 /// place when a toolbar changes. A home is shown and never searched, so the index stays.
 fn kept_build(app: &mut VectorcraftApp, ui: &egui::Ui) -> Arc<Built> {
-    // PLAN: assumed menus-w5 `Menus::catalog_generation(&self) -> u64`, the `AppCatalog::generation` of its private catalog
     let key = BuildKey { catalog: app.menus.catalog_generation(), native: app.services.native_menu.is_some() };
     // PLAN: assumed hub-w1 `CanvasCache::palette: Option<(BuildKey, Arc<Built>)>` (decision request)
     let mut built = match app.canvas.palette.take() {
@@ -1017,8 +1016,12 @@ mod tests {
         let expected: [(&str, Opened); 5] = [
             ("object.path.cleanUp", any),
             ("object.mesh.create", any),
-            ("type.smartPunctuation", |app| app.dialogs().open_dialogs().iter().any(|d| d.key == crate::dialogs::smart_punctuation::COMMAND)),
-            ("edit.findReplace", |app| app.dialogs().get::<craft::text::ui::find::FindReplaceDialog>().is_some()),
+            ("type.smartPunctuation", |app| {
+                app.dialogs().is_some_and(|d| {
+                    d.with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(crate::dialogs::smart_punctuation::COMMAND)))
+                })
+            }),
+            ("edit.findReplace", |app| app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<craft::text::ui::find::FindReplaceDialog>()))),
             ("object.path.smooth", crate::dialogs::smooth_slider::showing),
         ];
         for (id, opened) in expected {

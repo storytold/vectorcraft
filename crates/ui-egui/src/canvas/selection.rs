@@ -453,7 +453,7 @@ fn tool_draws_points(app: &mut VectorcraftApp) -> bool {
 /// outlines, the anchors, then the dots. They show only with the edges on and outside a Revolve edit. A `Pane` body is
 /// display-only, so it shows no hover.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, _win: Win, kind: BodyKind) {
-    if !app.ui.view.edges || crate::dialogs::three_d::gizmo_shown(app) {
+    if !app.ui.view.edges || super::revolve_editing(app) {
         return;
     }
     let rect = space.view.rect;

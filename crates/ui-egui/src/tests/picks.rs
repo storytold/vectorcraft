@@ -9,7 +9,7 @@ use std::sync::Arc;
 // PLAN: assumed ui-egui depends on craft-host, craft-ui-panels and craft-ui (hub-w1/hub-w2 add them).
 use craft::host::{Host, PickKind, PickRequest, Picked, ScriptedFiles};
 use craft::ui::contract::Bind;
-use craft::ui::dialog::{DialogId, OpenDialog, PromptKind, StandardPrompt};
+use craft::ui::dialog::{DialogId, HeldOk, OpenDialog, PromptKind, StandardPrompt};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::requests::{PathKind, PathRequest};
 use egui::{Pos2, Rect, vec2};
@@ -92,19 +92,24 @@ pub(crate) fn open_dialogs(app: &VectorcraftApp) -> Vec<OpenDialog> {
 }
 
 /// Sets `fields` of dialog `id` as a person editing them would, presses OK when `ok`, and runs the
-/// app's pump over the answer.
+/// app's pump over the answer. A dialog that holds its OK files the answer for the app; once the
+/// pump accepted it the dialog closes, as its next pass would close it.
 pub(crate) fn answer_dialog(app: &mut VectorcraftApp, id: DialogId, fields: &[(&str, Value)], ok: bool) {
     let ctx = app.ui_ctx.clone().expect("a window context");
     let host = app.dialogs().expect("the window's dialog host");
-    host.with(|h| {
+    let closed = host.with(|h| {
         for (field, value) in fields {
             h.set_json_field(&ctx, id, field, value.clone()).unwrap_or_else(|e| panic!("{field}: {e}"));
         }
-        if ok {
-            assert!(h.confirm_by_id(&ctx, id), "OK was refused");
-        }
+        ok && h.confirm_by_id(&ctx, id)
     });
+    if ok && !closed {
+        assert_eq!(host.with(|h| h.held_state(id)), Some(HeldOk::Waiting), "OK was refused");
+    }
     crate::dialogs::host::pump(app, &ctx);
+    if host.with(|h| h.held_state(id) == Some(HeldOk::Accepted) && h.confirm_by_id(&ctx, id)) {
+        crate::dialogs::host::pump(app, &ctx);
+    }
 }
 
 /// The open question whether to replace a file: [`file_asks::ask_replace`]'s, with the file name it
@@ -697,7 +702,7 @@ fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, close: bool) -> Vec<
         raw.viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
     }
     let mut out = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();

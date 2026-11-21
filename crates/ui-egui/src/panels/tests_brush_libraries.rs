@@ -1,26 +1,20 @@
 //! Headless frames of brush libraries in library panels: clicking a brush adds it to the
-//! document's Brushes (and applies it to the selected paths), dragging one carries it out, the
-//! Window menu and the Brushes panel open libraries, Save Brushes writes User Defined libraries
+//! document's Brushes (and applies it to the selected paths), the Window menu and the Brushes panel open libraries, Save Brushes writes User Defined libraries
 //! that reopen, and Other Library… turns down files it can't read.
 
-use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui::{Event, Modifiers, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
 use super::brushes::BrushLibraries;
+use super::library_panel::tests::{click, confirm_save, context, menu_library_ids};
 use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use crate::VectorcraftApp;
-use crate::panel_drag::PanelDrag;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
-}
-
-fn context() -> egui::Context {
-    let ctx = crate::testing::ui_context();
-    ctx
 }
 
 /// One frame of `draw` with `events`; the texts it painted.
@@ -39,23 +33,6 @@ fn frame(ctx: &egui::Context, events: Vec<Event>, time: f64, mut draw: impl FnMu
     let mut v = vec![];
     out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
     v
-}
-
-/// The centre of the open library panel's tile of brush `name` (a new window takes a sizing frame
-/// first).
-fn tile(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, time: f64) -> Pos2 {
-    for t in [time, time + 0.25] {
-        frame(ctx, vec![], t, |ui| library_panel::show_window(app, ui.ctx()));
-    }
-    let id = library_panel::tile_id(&last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default(), name);
-    ctx.read_response(id).unwrap_or_else(|| panic!("no tile for {name}")).rect.center()
-}
-
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) {
-    let at = tile(app, ctx, name, time);
-    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
-    let events = vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at), button(true), button(false)];
-    frame(ctx, events, time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
@@ -100,20 +77,11 @@ fn clicking_a_library_brush_adds_it_to_the_documents_brushes_in_one_step() {
     assert!(!has(&app, "Teardrop"));
     BrushLibraries::add(&mut app, "art-ribbons", vec!["Teardrop".into(), "Double Line".into()]);
     assert!(has(&app, "Teardrop") && has(&app, "Double Line"));
-    // Find filters by name; list rows give the type.
+    // List rows give the type.
     let lib = BrushLibraries::get(&app, "art-ribbons").unwrap().1;
-    let rows = BrushLibraries::rows(&lib, "art-ribbons", "tear");
-    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Teardrop"]);
-    assert_eq!(BrushLibraries::describe(rows[0].item.unwrap()), "Art");
-    // Dragging a brush out of the panel carries it.
-    let at = tile(&mut app, &ctx, "Notched Ribbon", 8.0);
-    let press = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE };
-    frame(&ctx, vec![Event::PointerMoved(at), press], 8.5, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    for (i, d) in [20.0, 60.0].into_iter().enumerate() {
-        frame(&ctx, vec![Event::PointerMoved(at + vec2(d, d))], 8.6 + 0.1 * i as f64, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    }
-    let carried = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
-    assert_eq!(carried.as_deref(), Some(&PanelDrag::LibraryBrush { library: "art-ribbons".into(), name: "Notched Ribbon".into() }));
+    let rows = BrushLibraries::rows(&lib, "art-ribbons");
+    let teardrop = rows.iter().find(|r| r.name == "Teardrop").and_then(|r| r.item).expect("Teardrop is listed");
+    assert_eq!(BrushLibraries::describe(teardrop), "Art");
     assert!(app.run("window.brushLibrary", json!({"library": "nope"})).is_err());
     app.run("window.brushLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());

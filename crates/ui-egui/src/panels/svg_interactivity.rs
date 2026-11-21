@@ -29,6 +29,13 @@ pub const ID: &str = "svgInteractivity";
 /// The engine command of the panel menu's one row.
 const CLEAR_EVENTS: &str = "svgInteractivity.clearEvents";
 
+/// The SVG Interactivity panel's own state, kept while the app runs.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SvgInteractivityPanel {
+    /// The event picked to edit ([`picked`] reads it).
+    pub(crate) event: String,
+}
+
 /// The panel's values: whether there are targets, and their events (`None` where they differ).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Info {

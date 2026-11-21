@@ -453,9 +453,6 @@ impl VectorcraftApp {
     /// app that copied it run in it, [`Clipboard::read_later`]; text that names the picture is the
     /// flavour when the picture can't be made), and the internal clipboard is left as it is.
     pub(crate) fn adopt_system_clipboard_or_defer(&mut self, defer: bool) -> Result<Option<MakeFlavour>, String> {
-        // A paste command may run before the next tick consumes an image signal: this is that
-        // paste, so a queued `PasteImage` must not read the clipboard a second time.
-        self.clipboard_image_request = None;
         let pasted = self.clipboard_in.take();
         let center = self.view().map(|v| [v.center.x, v.center.y]);
         let (cmd, params) = match pasted {

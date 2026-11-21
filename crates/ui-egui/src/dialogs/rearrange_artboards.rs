@@ -8,70 +8,39 @@
 //! `rightToLeft`), `columns` (the rows of a grid by column), `spacing` (pt) and `moveArtwork`.
 
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::FormDialog;
-use craft::ui::primitives::{Glyph, IconSpec};
+use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
-use craft::ui::style::{TypeRole, UiTokens};
+use craft::ui::style::TypeRole;
 use craft::ui::text::NumberField;
-use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::newdoc::ArtboardLayout;
 
 use super::layer_options::check;
 use crate::VectorcraftApp;
+use crate::page_glyphs::LayoutGlyph;
 
 /// The command Rearrange All Artboards runs; the key of its dialog.
 pub(crate) const CMD: &str = "artboard.rearrange";
 
-/// A layout toggle's picture: small artboards in the grid cells (column, row), tinted, and over them their order as a
-/// line from a dot on the first to an arrowhead on the last.
-#[derive(MemoProps)]
-struct CellsGlyph(&'static [(u8, u8)]);
-
-impl Glyph for CellsGlyph {
-    fn paint(&self, painter: &Painter, _: &UiTokens, rect: Rect, color: Color32, _: bool) {
-        let tiles = self.0;
-        // Cells at most half the square a side: a row's artboards stand tall, a column's lie flat.
-        let side = rect.width().min(rect.height());
-        let scale = side / 20.0;
-        let (cols, rows) = tiles.iter().fold((1u8, 1u8), |(c, r), &(x, y)| (c.max(x.saturating_add(1)), r.max(y.saturating_add(1))));
-        let cell = vec2((side / f32::from(cols)).min(side / 2.0), (side / f32::from(rows)).min(side / 2.0));
-        let origin = rect.center() - vec2(f32::from(cols) * cell.x, f32::from(rows) * cell.y) / 2.0;
-        let centre = |&(x, y): &(u8, u8)| origin + vec2((f32::from(x) + 0.5) * cell.x, (f32::from(y) + 0.5) * cell.y);
-        for tile in tiles {
-            painter.rect_filled(Rect::from_center_size(centre(tile), cell - vec2(2.0, 2.0) * scale), 1.0, color.gamma_multiply(0.35));
-        }
-        let path: Vec<Pos2> = tiles.iter().map(centre).collect();
-        if let ([first, ..], [.., from, to]) = (path.as_slice(), path.as_slice()) {
-            let (first, from, to) = (*first, *from, *to);
-            let dir = (to - from).normalized();
-            let wing = dir.rot90() * 2.5 * scale;
-            let head = vec![to + dir * 1.5 * scale, to - dir * 2.5 * scale + wing, to - dir * 2.5 * scale - wing];
-            painter.circle_filled(first, 1.6 * scale, color);
-            painter.add(Shape::line(path, Stroke::new(1.2 * scale, color)));
-            painter.add(Shape::convex_polygon(head, color, Stroke::NONE));
-        }
-    }
-}
-
-static GRID_BY_ROW: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0), (0, 1), (1, 1)]);
-static GRID_BY_ROW_RTL: CellsGlyph = CellsGlyph(&[(1, 0), (0, 0), (1, 1), (0, 1)]);
-static GRID_BY_COLUMN: CellsGlyph = CellsGlyph(&[(0, 0), (0, 1), (1, 0), (1, 1)]);
-static GRID_BY_COLUMN_RTL: CellsGlyph = CellsGlyph(&[(1, 0), (1, 1), (0, 0), (0, 1)]);
-static ROW: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0), (2, 0)]);
-static ROW_RTL: CellsGlyph = CellsGlyph(&[(2, 0), (1, 0), (0, 0)]);
+static GRID_BY_ROW: LayoutGlyph = LayoutGlyph { tiles: &[(0, 0), (1, 0), (0, 1), (1, 1)] };
+static GRID_BY_ROW_RTL: LayoutGlyph = LayoutGlyph { tiles: &[(1, 0), (0, 0), (1, 1), (0, 1)] };
+static GRID_BY_COLUMN: LayoutGlyph = LayoutGlyph { tiles: &[(0, 0), (0, 1), (1, 0), (1, 1)] };
+static GRID_BY_COLUMN_RTL: LayoutGlyph = LayoutGlyph { tiles: &[(1, 0), (1, 1), (0, 0), (0, 1)] };
+static ROW: LayoutGlyph = LayoutGlyph { tiles: &[(0, 0), (1, 0), (2, 0)] };
+static ROW_RTL: LayoutGlyph = LayoutGlyph { tiles: &[(2, 0), (1, 0), (0, 0)] };
 /// One column reads the same either way.
-static COLUMN: CellsGlyph = CellsGlyph(&[(0, 0), (0, 1), (0, 2)]);
-static LEFT_TO_RIGHT: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0)]);
-static RIGHT_TO_LEFT: CellsGlyph = CellsGlyph(&[(1, 0), (0, 0)]);
+static COLUMN: LayoutGlyph = LayoutGlyph { tiles: &[(0, 0), (0, 1), (0, 2)] };
+static LEFT_TO_RIGHT: LayoutGlyph = LayoutGlyph { tiles: &[(0, 0), (1, 0)] };
+static RIGHT_TO_LEFT: LayoutGlyph = LayoutGlyph { tiles: &[(1, 0), (0, 0)] };
 
 /// A layout's toggle: its tooltip and its picture in the order the toggles preview (`rtl`: right to left).
-fn layout_glyph(l: ArtboardLayout, rtl: bool) -> (&'static str, &'static CellsGlyph) {
+fn layout_glyph(l: ArtboardLayout, rtl: bool) -> (&'static str, &'static LayoutGlyph) {
     match (l, rtl) {
         (ArtboardLayout::GridByRow, false) => (tl!("Grid by Row"), &GRID_BY_ROW),
         (ArtboardLayout::GridByRow, true) => (tl!("Grid by Row"), &GRID_BY_ROW_RTL),

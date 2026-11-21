@@ -107,7 +107,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
-use craft::automation::{Captures, ControlChannel, ControlRequest};
+use craft::automation::{ControlChannel, ControlRequest};
 use craft::behavior::GestureId;
 use craft::host::Host;
 use craft::ui::runtime::overlay::{self, OpenFilter};
@@ -175,8 +175,6 @@ pub struct VectorcraftApp {
     /// The control channel's requests and their replies, while the host opened one.
     // PLAN: an `Option` because `new` has no receiver; shell-w12's `run_control` reads `self.channel` as one.
     pub(crate) channel: Option<ControlChannel>,
-    /// The window captures the control channel asked for.
-    pub(crate) captures: Captures,
     /// Where a control-channel Rotate View drag began, kept between its requests.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// The egui context the UI's textures were uploaded to (0: none yet; see

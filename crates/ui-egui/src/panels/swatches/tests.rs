@@ -1,34 +1,32 @@
 use super::*;
 use crate::dialogs::swatch_options::KIND;
+use crate::tests::picks::{answer_dialog, cancel_dialog, draw_dialogs, open_dialogs};
 use craft::keymap::Mods;
+use craft::ui::contract::ReorderMove;
+use craft::ui::dialog::DialogId;
 use egui::Pos2;
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
 mod context_menu;
 
-// PLAN: assumed from color-w10 and `use super::*`: `PresetEvent`, `SwatchKey`, `DropAt`, `DropPayload::new`,
-// `EditEvent::Commit { before, after }`, `ReorderMove { keys, parent, to }`, `selected(&VectorcraftApp) -> Vec<String>`,
-// `set_selected(&mut VectorcraftApp, Vec<String>)` and `on_event(app, &[SwatchKey], PresetEvent<SwatchKey>)`.
-// PLAN: assumed hub-w2 `app.dialogs()` with `get(key) -> Option<_>`, `json_fields(key)`, `set_json_field(key, field, value)`,
-// `confirm_by_id(key) -> Result<_, _>` and `cancel_by_id(key)`.
-
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
 }
 
-/// One frame of the panel at `time` on a persistent context.
+/// One frame of the panel at `time` on the app's window context.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) {
     let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
     let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| show(app, ui));
     out.textures_delta.clear();
 }
 
-fn context() -> egui::Context {
-    let ctx = crate::testing::ui_context();
-    ctx
+/// The app's window context, which its dialog host lives on.
+fn context(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().expect("a window context")
 }
 
 fn none() -> Mods {
@@ -48,13 +46,7 @@ fn cmd_alt() -> Mods {
 }
 
 fn doc(app: &VectorcraftApp) -> Document {
-    app.session.doc().unwrap().doc.clone()
-}
-
-fn row_name(k: &SwatchKey) -> &str {
-    match k {
-        SwatchKey::Group(n) | SwatchKey::Swatch(n) => n,
-    }
+    app.session.doc().unwrap().doc.as_ref().clone()
 }
 
 /// The row `name` is: a colour group or a swatch.
@@ -62,44 +54,46 @@ fn key_of(app: &VectorcraftApp, name: &str) -> SwatchKey {
     if doc(app).swatch_groups.iter().any(|g| g.name == name) { SwatchKey::Group(name.into()) } else { SwatchKey::Swatch(name.into()) }
 }
 
-/// The rows in panel order: the ungrouped swatches, then each group followed by its swatches.
-fn shown_keys(app: &VectorcraftApp) -> Vec<SwatchKey> {
-    let d = doc(app);
-    let mut shown: Vec<SwatchKey> = d.swatches.iter().map(|w| SwatchKey::Swatch(w.name.clone())).collect();
-    for g in &d.swatch_groups {
-        shown.push(SwatchKey::Group(g.name.clone()));
-        shown.extend(g.swatches.iter().map(|w| SwatchKey::Swatch(w.name.clone())));
-    }
-    shown
+/// The rows in panel order, as the browser shows every swatch.
+fn shown_rows(app: &VectorcraftApp) -> Vec<SwatchKey> {
+    shown_keys(&groups(app, Kind::All, ""))
 }
 
 /// Feeds the browser event `event` to the panel's handler.
 fn feed(app: &mut VectorcraftApp, event: PresetEvent<SwatchKey>) {
-    let shown = shown_keys(app);
+    let shown = shown_rows(app);
     on_event(app, &shown, event);
 }
 
 /// The panel's rows `names` selected, as the browser selects them.
 fn select_rows(app: &mut VectorcraftApp, names: &[&str]) {
-    set_selected(app, names.iter().map(|n| n.to_string()).collect());
+    let keys: Vec<SwatchKey> = names.iter().map(|n| key_of(app, n)).collect();
+    app.ui.swatches_panel.state.selection = Selection::new(keys.clone(), keys.last().cloned(), keys.first().cloned());
 }
 
 /// A click on swatch `name` with `mods` held.
 fn clicked(app: &mut VectorcraftApp, name: &str, mods: Mods) {
     let key = key_of(app, name);
-    feed(app, PresetEvent::Select { key, mods });
+    feed(app, PresetEvent::select(key, mods));
 }
 
 /// A double click on swatch `name`.
 fn activated(app: &mut VectorcraftApp, name: &str) {
     let key = key_of(app, name);
-    feed(app, PresetEvent::Activate { key });
+    feed(app, PresetEvent::activate(key, none()));
 }
 
-/// `payload` released onto row `name` with `mods` held.
-fn dropped(app: &mut VectorcraftApp, payload: PanelDrag, name: &str, mods: Mods) {
-    let (shown, at) = (shown_keys(app), DropAt::Onto(key_of(app, name)));
-    dnd::on_dropped(app, &shown, &at, &DropPayload::new(payload), mods);
+/// `drag` released onto row `name` with `mods` held.
+fn dropped(app: &mut VectorcraftApp, drag: PanelDrag, name: &str, mods: Mods) {
+    let (shown, at) = (shown_rows(app), DropAt::Onto(key_of(app, name)));
+    dnd::on_dropped(app, &shown, &at, &drag, mods);
+}
+
+/// `drag` released on the list below its last row with `mods` held.
+fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
+    let shown = shown_rows(app);
+    let at = DropAt::gap(None, shown.len());
+    dnd::on_dropped(app, &shown, &at, &drag, mods);
 }
 
 /// The drag the row `name` starts, carrying rows `names`.
@@ -109,42 +103,49 @@ fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
 
 /// Art `ids` dragged off the canvas.
 fn art_drag(app: &VectorcraftApp, ids: Vec<vectorcraft_doc::NodeId>) -> PanelDrag {
-    // PLAN: assumed `PanelDrag::Art { document, ids }` (widgets-w13).
     PanelDrag::Art { document: app.session.active().map(|st| st.uid).unwrap_or_default(), ids }
 }
 
 /// The browser's reorder committing `names` before row `before` (a colour group: into it).
 fn reorder_before(app: &mut VectorcraftApp, names: &[&str], before: &str) {
-    let shown = shown_keys(app);
-    let to = shown.iter().filter(|k| !names.contains(&row_name(k))).position(|k| row_name(k) == before).expect("the row is shown");
-    let mv = ReorderMove { keys: names.iter().map(|n| key_of(app, n)).collect(), parent: None, to };
-    dnd::on_reorder(app, &shown, &EditEvent::Commit { before: None, after: mv });
+    let shown = shown_rows(app);
+    let to = shown.iter().filter(|k| !names.contains(&name_of(k))).position(|k| name_of(k) == before).expect("the row is shown");
+    let keys: Vec<SwatchKey> = names.iter().map(|n| key_of(app, n)).collect();
+    let mv = ReorderMove::new(keys[0].clone(), keys, to, false);
+    dnd::on_reorder(app, &shown, &mv);
 }
 
-fn dialog_open(app: &mut VectorcraftApp, key: &str) -> bool {
-    app.dialogs().get(key).is_some()
+/// The open dialog with `key`, the top one when several are.
+fn dialog_id(app: &VectorcraftApp, key: &str) -> Option<DialogId> {
+    open_dialogs(app).into_iter().rev().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id)
 }
 
-fn dialog_field(app: &mut VectorcraftApp, key: &str, field: &str) -> Value {
-    app.dialogs().json_fields(key).and_then(|f| f.get(field).cloned()).unwrap_or(Value::Null)
+fn dialog_open(app: &VectorcraftApp, key: &str) -> bool {
+    dialog_id(app, key).is_some()
+}
+
+fn dialog_field(app: &VectorcraftApp, key: &str, field: &str) -> Value {
+    open_dialogs(app).into_iter().rev().find(|d| d.key.as_deref() == Some(key)).and_then(|d| d.fields?.get(field).cloned()).unwrap_or(Value::Null)
 }
 
 fn set_field(app: &mut VectorcraftApp, key: &str, field: &str, value: Value) {
-    app.dialogs().set_json_field(key, field, value);
+    let id = dialog_id(app, key).expect("the dialog is open");
+    answer_dialog(app, id, &[(field, value)], false);
 }
 
 fn confirm(app: &mut VectorcraftApp, key: &str) {
-    app.dialogs().confirm_by_id(key).unwrap();
+    let id = dialog_id(app, key).expect("the dialog is open");
+    answer_dialog(app, id, &[], true);
 }
 
 fn cancel(app: &mut VectorcraftApp, key: &str) {
-    app.dialogs().cancel_by_id(key);
+    let id = dialog_id(app, key).expect("the dialog is open");
+    cancel_dialog(app, id);
 }
 
 /// One frame of the hosted dialogs, which preview live edits.
 fn dialog_frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(2.0), ..Default::default() }, |ui| crate::dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
+    draw_dialogs(app, ctx);
 }
 
 #[test]
@@ -153,9 +154,9 @@ fn double_click_opens_swatch_options_and_ok_edits_linked_art() {
     app.run("swatch.edit", json!({"name": "Red", "global": true})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("paint.setFill", json!({"ids": [id], "swatch": "Red"})).unwrap();
-    let ctx = context();
+    let ctx = context(&app);
     activated(&mut app, "Red");
-    assert_eq!((dialog_field(&mut app, KIND, "__swatch"), dialog_field(&mut app, KIND, "mode")), (json!("Red"), json!("rgb")));
+    assert_eq!((dialog_field(&app, KIND, "__swatch"), dialog_field(&app, KIND, "mode")), (json!("Red"), json!("rgb")));
     // The dialog previews live on the canvas; OK keeps the edit as one undo step.
     let undo = undo_steps(&app);
     dialog_frame(&mut app, &ctx);
@@ -163,7 +164,7 @@ fn double_click_opens_swatch_options_and_ok_edits_linked_art() {
     set_field(&mut app, KIND, "color", json!("#00ff00"));
     set_field(&mut app, KIND, "name", json!("Signal"));
     confirm(&mut app, KIND);
-    assert!(!dialog_open(&mut app, KIND) && !app.session.in_interaction());
+    assert!(!dialog_open(&app, KIND) && !app.session.in_interaction());
     let d = doc(&app);
     assert_eq!(d.swatch("Signal").and_then(|w| w.paint.color()).map(|c| c.to_hex()), Some("#00ff00".into()));
     let fill = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
@@ -174,21 +175,21 @@ fn double_click_opens_swatch_options_and_ok_edits_linked_art() {
 #[test]
 fn cancel_rolls_the_preview_back() {
     let mut app = app();
-    let ctx = context();
+    let ctx = context(&app);
     let before = doc(&app);
     app.run("ui.swatchOptions", json!({"name": "Bright Blue"})).unwrap();
     set_field(&mut app, KIND, "color", json!("#000000"));
     dialog_frame(&mut app, &ctx);
     assert_ne!(doc(&app), before, "previewed");
     cancel(&mut app, KIND);
-    assert!(!dialog_open(&mut app, KIND) && !app.session.in_interaction());
+    assert!(!dialog_open(&app, KIND) && !app.session.in_interaction());
     assert_eq!(doc(&app), before);
 }
 
 #[test]
 fn switching_documents_clears_the_selection() {
     let mut app = app();
-    let ctx = context();
+    let ctx = context(&app);
     frame(&mut app, &ctx, 0.0);
     select_rows(&mut app, &["White"]);
     frame(&mut app, &ctx, 0.5);
@@ -290,21 +291,21 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("paint.setFill", json!({"ids": [id], "swatch": "Red"})).unwrap();
     delete(&mut app, vec!["Red".into(), "Brights".into()], false);
-    assert_eq!(dialog_field(&mut app, confirm_key, "__command"), json!("swatch.delete"), "delete asks first");
+    assert!(dialog_open(&app, confirm_key), "delete asks first");
     assert!(doc(&app).swatch("Red").is_some(), "nothing is deleted before OK");
     confirm(&mut app, confirm_key);
-    assert!(!dialog_open(&mut app, confirm_key));
+    assert!(!dialog_open(&app, confirm_key));
     let d = doc(&app);
     assert!(d.swatch("Red").is_none() && d.swatch("Bright Red").is_none() && d.swatch_groups.iter().all(|g| g.name != "Brights"));
     let fill = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
     assert_eq!(fill, Paint::solid(Color::from_hex("#ed1c24").unwrap()), "the art keeps its colour, unlinked");
     // Cancel keeps the swatch; Alt-click (now) deletes without asking.
     delete(&mut app, vec!["Orange".into()], false);
-    assert!(dialog_open(&mut app, confirm_key));
+    assert!(dialog_open(&app, confirm_key));
     cancel(&mut app, confirm_key);
     assert!(doc(&app).swatch("Orange").is_some());
     delete(&mut app, vec!["Orange".into()], true);
-    assert!(!dialog_open(&mut app, confirm_key) && doc(&app).swatch("Orange").is_none());
+    assert!(!dialog_open(&app, confirm_key) && doc(&app).swatch("Orange").is_none());
     assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
 }
 
@@ -327,31 +328,36 @@ fn bracketed_user_swatches_and_groups_can_be_deleted_and_edited() {
     assert!(doc(&app).swatch("[Mine]").is_none());
 }
 
-/// The prompt carries the count the language's plural rule needs, and names the kind of thing.
+/// One question covers every swatch of a delete of one or several, and OK deletes them all in one undo step.
 #[test]
-fn deleting_several_swatches_uses_each_count_form() {
+fn deleting_several_swatches_asks_once_for_all_of_them() {
     let mut app = app();
     let key = crate::dialogs::confirm::KIND;
-    // PLAN: assumed the prompt's fields `count` and `noun` (StandardPrompt::confirm_delete).
     for count in [1usize, 2, 5, 21] {
-        let names: Vec<String> = (1..=count).map(|n| format!("Swatch {n}")).collect();
-        delete(&mut app, names, false);
-        assert_eq!(dialog_field(&mut app, key, "count"), json!(count));
-        assert_ne!(dialog_field(&mut app, key, "noun"), Value::Null, "{count}");
-        cancel(&mut app, key);
+        let names: Vec<String> = (1..=count).map(|n| format!("Swatch {count}.{n}")).collect();
+        for (n, name) in names.iter().enumerate() {
+            app.run("swatch.new", json!({"name": name, "color": format!("#{n:02x}3366")})).unwrap();
+        }
+        let undo = undo_steps(&app);
+        delete(&mut app, names.clone(), false);
+        assert_eq!(open_dialogs(&app).iter().filter(|d| d.key.as_deref() == Some(key)).count(), 1, "{count}");
+        confirm(&mut app, key);
+        let d = doc(&app);
+        assert!(names.iter().all(|n| d.swatch(n).is_none()), "{count}");
+        assert_eq!(undo_steps(&app), undo + 1, "{count}");
     }
 }
 
 #[test]
 fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_group() {
     let mut app = app();
-    let ctx = context();
+    let ctx = context(&app);
     let key = crate::dialogs::new_swatch::KIND;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     new_swatch(&mut app, &["Bright Red".into()], cmd());
-    assert_eq!((dialog_field(&mut app, key, "name"), dialog_field(&mut app, key, "group")), (json!("R=255 G=128 B=0"), json!("Brights")));
+    assert_eq!((dialog_field(&app, key, "name"), dialog_field(&app, key, "group")), (json!("R=255 G=128 B=0"), json!("Brights")));
     assert_eq!(
-        (dialog_field(&mut app, key, "spot"), dialog_field(&mut app, key, "global")),
+        (dialog_field(&app, key, "spot"), dialog_field(&app, key, "global")),
         (json!(true), json!(true)),
         "Cmd/Ctrl-click makes a spot colour"
     );
@@ -363,10 +369,10 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
     // Alt-click saves at once; a gradient takes only a name and stays out of colour groups.
     app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
     new_swatch(&mut app, &["Brights".into()], alt());
-    assert!(!dialog_open(&mut app, key) && doc(&app).swatch("New Gradient Swatch 1").is_some());
+    assert!(!dialog_open(&app, key) && doc(&app).swatch("New Gradient Swatch 1").is_some());
     new_swatch(&mut app, &[], none());
-    assert_eq!(dialog_field(&mut app, key, "name"), json!("New Gradient Swatch 2"));
-    assert_ne!(dialog_field(&mut app, key, "__paint"), Value::Null);
+    assert_eq!(dialog_field(&app, key, "name"), json!("New Gradient Swatch 2"));
+    assert_ne!(dialog_field(&app, key, "__paint"), Value::Null);
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
     assert!(doc(&app).swatch("New Gradient Swatch 2").is_some_and(|w| matches!(w.paint, Paint::Gradient(_))));
@@ -378,7 +384,7 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
 #[test]
 fn swatches_made_from_an_rgb_fill_stay_rgb_in_a_cmyk_document() {
     let mut app = app();
-    let ctx = context();
+    let ctx = context(&app);
     let key = crate::dialogs::new_swatch::KIND;
     app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
     let newest = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatches.last().map(|w| w.paint.clone()).expect("a swatch");
@@ -421,10 +427,10 @@ fn swatches_made_from_an_rgb_fill_stay_rgb_in_a_cmyk_document() {
 #[test]
 fn new_color_group_dialog_makes_a_group_from_swatches_or_artwork() {
     let mut app = app();
-    let ctx = context();
+    let ctx = context(&app);
     let key = crate::dialogs::new_color_group::KIND;
     app.run("ui.newColorGroup", json!({"swatches": ["Red", "Sunset"]})).unwrap();
-    assert_eq!((dialog_field(&mut app, key, "name"), dialog_field(&mut app, key, "fromArtwork")), (json!("Color Group"), json!(false)));
+    assert_eq!((dialog_field(&app, key, "name"), dialog_field(&app, key, "fromArtwork")), (json!("Color Group"), json!(false)));
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
     let d = doc(&app);
@@ -437,7 +443,7 @@ fn new_color_group_dialog_makes_a_group_from_swatches_or_artwork() {
     app.run("select.set", json!({"ids": [id]})).unwrap();
     app.run("ui.newColorGroup", json!({})).unwrap();
     assert_eq!(
-        (dialog_field(&mut app, key, "name"), dialog_field(&mut app, key, "fromArtwork"), dialog_field(&mut app, key, "toGlobal")),
+        (dialog_field(&app, key, "name"), dialog_field(&app, key, "fromArtwork"), dialog_field(&app, key, "toGlobal")),
         (json!("Color Group 2"), json!(true), json!(true))
     );
     dialog_frame(&mut app, &ctx);
@@ -508,18 +514,18 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
     let undo = undo_steps(&app);
     // Delete: asks, Cancel keeps, OK deletes.
     let drag = rows_drag(&app, "Orange", &["Orange"]);
-    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &DropPayload::new(drag.clone()));
-    assert_eq!(dialog_field(&mut app, key, "__command"), json!("swatch.delete"));
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(dialog_open(&app, key), "Delete asks first");
     cancel(&mut app, key);
     assert!(doc(&app).swatch("Orange").is_some() && undo_steps(&app) == undo, "Cancel keeps it");
-    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &DropPayload::new(drag));
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
     confirm(&mut app, key);
     assert!(doc(&app).swatch("Orange").is_none());
     assert_eq!(undo_steps(&app), undo + 1, "one undo step");
     app.run("edit.undo", json!({})).unwrap();
     // The dragged selection goes together; None never does.
     let drag = rows_drag(&app, "Lime", &["[None]", "Red", "Lime"]);
-    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &DropPayload::new(drag));
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
     confirm(&mut app, key);
     let d = doc(&app);
     assert!(d.swatch("Red").is_none() && d.swatch("Lime").is_none() && d.swatch("[None]").is_some() && d.swatch("Orange").is_some());
@@ -527,20 +533,20 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
     let before = doc(&app);
     for name in ["[None]", REGISTRATION] {
         let drag = rows_drag(&app, name, &[name]);
-        dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &DropPayload::new(drag));
-        assert!(!dialog_open(&mut app, key) && doc(&app) == before, "{name}");
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+        assert!(!dialog_open(&app, key) && doc(&app) == before, "{name}");
     }
     // New Swatch: copies go after their swatches, as one undo step; reserved rows duplicate nothing.
     let undo = undo_steps(&app);
     let drag = rows_drag(&app, "Orange", &["Orange"]);
-    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &DropPayload::new(drag));
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
     let n = names_of(&app, None);
     assert_eq!(n.get(n.iter().position(|x| x == "Orange").unwrap() + 1).map(String::as_str), Some("Orange copy"));
     assert_eq!(undo_steps(&app), undo + 1);
     let kept = doc(&app);
     for name in ["[None]", REGISTRATION] {
         let drag = rows_drag(&app, name, &[name]);
-        dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &DropPayload::new(drag));
+        dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
         assert_eq!(doc(&app), kept, "{name}");
     }
 }
@@ -551,7 +557,7 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
     let before = doc(&app);
     let drag = art_drag(&app, vec![vectorcraft_doc::NodeId(id)]);
-    dnd::on_list_drop(&mut app, &DropPayload::new(drag), none());
+    dropped_below(&mut app, drag, none());
     let patterns = app.run("pattern.list", json!({})).unwrap();
     assert_eq!(patterns["patterns"].as_array().map(Vec::len), Some(1), "{patterns}");
     assert_eq!(patterns["editing"], Value::Null, "no pattern editing mode");
@@ -696,7 +702,7 @@ fn a_color_cmd_dropped_on_empty_list_space_becomes_a_spot_swatch() {
     let mut app = app();
     let count = doc(&app).swatches_iter().count();
     let rgb = Color::from_hex("#123456").unwrap();
-    dnd::on_list_drop(&mut app, &DropPayload::new(PanelDrag::paint(Paint::solid(rgb))), cmd());
+    dropped_below(&mut app, PanelDrag::paint(Paint::solid(rgb)), cmd());
     let newest = newest_swatch(&app);
     assert_eq!((newest.paint, newest.spot, newest.global), (Paint::solid(rgb), true, true), "{}", app.ui.status);
     assert_eq!(doc(&app).swatches_iter().count(), count + 1);
@@ -870,13 +876,12 @@ fn the_active_tint_or_gradient_swatch_is_highlighted_and_a_tint_edits_its_base()
     assert_eq!(active_swatch(&app).as_deref(), Some("Ink"), "no tint swatch yet: its base");
     app.run("swatch.new", json!({})).unwrap();
     assert_eq!(active_swatch(&app).as_deref(), Some("Ink 40%"));
-    // PLAN: color-w10 replaces `entries` with `groups`.
-    let tint = entries(&app, Kind::Color, "Ink 40").into_iter().find(|e| e.name() == "Ink 40%").unwrap();
-    assert!(matches!(tint, Entry::Swatch { global: true, spot: true, .. }), "a tint swatch shows its base's kind");
+    let tint = groups(&app, Kind::Color, "Ink 40").into_iter().flat_map(|g| g.entries).find(|e| e.name == "Ink 40%").unwrap();
+    assert_eq!(tint.kind, SwatchKind::Spot, "a tint swatch shows its base's kind");
     app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
     assert_eq!(active_swatch(&app).as_deref(), Some("Sunset"), "the applied gradient swatch");
     app.run("ui.swatchOptions", json!({"name": "Ink 40%"})).unwrap();
-    assert_eq!(dialog_field(&mut app, KIND, "__swatch"), json!("Ink"), "a tint swatch opens its base's options");
+    assert_eq!(dialog_field(&app, KIND, "__swatch"), json!("Ink"), "a tint swatch opens its base's options");
 }
 
 /// Selecting art scrolls the tiles to its swatch, once, and clears the panel's own selection so
@@ -890,7 +895,7 @@ fn selecting_art_scrolls_to_its_swatch() {
     let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("paint.setFill", json!({"ids": [id], "swatch": "Last Ink"})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let ctx = context();
+    let ctx = context(&app);
     frame(&mut app, &ctx, 0.0);
     frame(&mut app, &ctx, 0.1);
     select_rows(&mut app, &["Red"]);
@@ -900,8 +905,9 @@ fn selecting_art_scrolls_to_its_swatch() {
     }
     assert!(selected(&app).is_empty(), "the art's swatch is highlighted");
     // Once: the focus was given in a pass above, so later asks find nothing to scroll to.
-    let ui = egui::Ui::new(ctx.clone(), egui::Id::unique("t"), egui::UiBuilder::new());
-    assert_eq!(focus_swatch(&app, &ui, Some("Last Ink")), None);
+    let mut model = std::mem::take(&mut app.ui.swatches_panel);
+    assert_eq!(model.focus(&app, Some("Last Ink")), None);
+    app.ui.swatches_panel = model;
 }
 
 /// Deselecting art keeps its swatch highlighted (not the White new art gets) until the paints for
@@ -915,25 +921,29 @@ fn deselecting_keeps_the_arts_swatch_highlighted() {
     app.run("select.none", json!({})).unwrap();
     // New art's paints back to the defaults, as for art that came in with a file.
     app.run("paint.default", json!({})).unwrap();
-    let ctx = context();
-    let ui = egui::Ui::new(ctx.clone(), egui::Id::unique("t"), egui::UiBuilder::new());
-    let shown = |app: &VectorcraftApp| kept_swatch(app, &ui, active_swatch(app));
-    assert_ne!(shown(&app).as_deref(), Some("Ink 185"), "nothing selected yet: new art's paint");
+    // The swatch the panel lights for the active paint, as a pass asks for it.
+    let shown = |app: &mut VectorcraftApp| {
+        let mut model = std::mem::take(&mut app.ui.swatches_panel);
+        let kept = model.kept(app, active_swatch(app));
+        app.ui.swatches_panel = model;
+        kept
+    };
+    assert_ne!(shown(&mut app).as_deref(), Some("Ink 185"), "nothing selected yet: new art's paint");
     app.run("select.set", json!({"ids": [id]})).unwrap();
-    assert_eq!(shown(&app).as_deref(), Some("Ink 185"));
+    assert_eq!(shown(&mut app).as_deref(), Some("Ink 185"));
     app.run("select.none", json!({})).unwrap();
-    assert_eq!(shown(&app).as_deref(), Some("Ink 185"), "kept after deselecting");
-    assert_eq!(shown(&app).as_deref(), Some("Ink 185"), "and on later frames");
+    assert_eq!(shown(&mut app).as_deref(), Some("Ink 185"), "kept after deselecting");
+    assert_eq!(shown(&mut app).as_deref(), Some("Ink 185"), "and on later frames");
     // A colour picked with nothing selected is new art's: its swatch shows.
     app.run("paint.setFill", json!({"swatch": "Black"})).unwrap();
-    assert_eq!(shown(&app).as_deref(), Some("Black"));
+    assert_eq!(shown(&mut app).as_deref(), Some("Black"));
     // Other art selected (a white one) shows its swatch, and keeps it once deselected.
     let white = app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("paint.setFill", json!({"ids": [white.clone()], "swatch": "White"})).unwrap();
     app.run("select.set", json!({"ids": [white]})).unwrap();
-    assert_eq!(shown(&app).as_deref(), Some("White"));
+    assert_eq!(shown(&mut app).as_deref(), Some("White"));
     app.run("select.none", json!({})).unwrap();
-    assert_eq!(shown(&app).as_deref(), Some("White"));
+    assert_eq!(shown(&mut app).as_deref(), Some("White"));
 }
 
 /// A selected image, or text in a colour no swatch has, highlights no swatch (not None); text in
@@ -994,10 +1004,8 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     let lab = Color::lab(60.0, 50.0, 20.0);
     app.run("swatch.new", json!({"name": "Ink", "color": lab, "spot": true})).unwrap();
     let tile = |app: &VectorcraftApp| {
-        // PLAN: color-w10 replaces `entries` with `groups`.
-        let ink = entries(app, Kind::All, "Ink").into_iter().find(|e| e.name() == "Ink");
-        let Some(Entry::Swatch { paint, .. }) = ink else { panic!("the Ink tile") };
-        paint.color().unwrap()
+        let d = doc(app);
+        shown(&d, d.swatch("Ink").expect("the Ink swatch")).0.color().unwrap()
     };
     assert_eq!(tile(&app), lab);
     app.run("swatch.spotOptions", json!({"useLab": false})).unwrap();
@@ -1014,16 +1022,16 @@ fn color_group_options_opens_on_a_sole_selected_group() {
     let key = crate::dialogs::color_group_options::KIND;
     for sel in [vec![], vec!["Red"], vec!["Brights", "Red"], vec!["Brights", "Grays"]] {
         select_rows(&mut app, &sel);
-        assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && !dialog_open(&mut app, key), "{sel:?}");
+        assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && !dialog_open(&app, key), "{sel:?}");
     }
     select_rows(&mut app, &["Grays"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&mut app, key, "__group"), json!("Grays"));
+    assert_eq!(dialog_field(&app, key, "__group"), json!("Grays"));
     set_field(&mut app, key, "name", json!("Neutrals"));
     confirm(&mut app, key);
     assert_eq!(selected(&app), ["Neutrals"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&mut app, key, "__group"), json!("Neutrals"));
+    assert_eq!(dialog_field(&app, key, "__group"), json!("Neutrals"));
     cancel(&mut app, key);
     // The command run on its own, and as batch steps, keeps the selection the same way.
     app.run("swatch.renameGroup", json!({"group": "Neutrals", "name": "Stone"})).unwrap();
@@ -1044,12 +1052,12 @@ fn color_group_options_without_a_group_opens_on_the_selected_group() {
     let key = crate::dialogs::color_group_options::KIND;
     select_rows(&mut app, &["Grays"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&mut app, key, "__group"), json!("Grays"));
+    assert_eq!(dialog_field(&app, key, "__group"), json!("Grays"));
     cancel(&mut app, key);
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let ctx = context();
+    let ctx = context(&app);
     frame(&mut app, &ctx, 0.0);
-    assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && !dialog_open(&mut app, key), "another document");
+    assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && !dialog_open(&app, key), "another document");
 }
 
 /// Renames in a batch move the selection to another group neither after an Ungroup of the

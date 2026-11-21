@@ -9,26 +9,26 @@
 
 use std::sync::Arc;
 
-use craft::behavior::{IconId, Selection};
+use craft::behavior::{EditEvent, IconId, Selection};
 use craft::color_ui::palette::{SwatchColor, SwatchEntry, SwatchGroup, SwatchKind, SwatchPaint};
 use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
-use craft::keymap::{CommandRef, Mods};
 use craft::theme::Srgba;
-use craft::ui::contract::{Bind, DropAt, DropPlace, SelectMode};
+use craft::ui::choice::SwatchFace;
+use craft::ui::contract::{Bind, DropAt, DropPlace, MemoProps, SelectMode};
 use craft::ui::contract::{Entry, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
-use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec};
+use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec, StrokeWidth};
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::style::UiTokens;
-use egui::{Color32, Painter, Rect, Response, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, Painter, Rect, Response, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, GradientKind, Paint, Swatch};
 use vectorcraft_doc::Document;
 
 use super::library_panel::{self, LibraryKind};
-use super::{active_paint, apply_click, color_json};
+use super::{active_paint, apply_click, color_json, proxy_cmd};
 use crate::VectorcraftApp;
 use crate::panel_drag::PanelDrag;
 
@@ -348,9 +348,9 @@ fn swatch_params(d: &Document, name: &str) -> Value {
 /// stop selected recolors the stop as dropping the swatch on it does, and with a freeform gradient point selected it
 /// recolors the point. A color swatch also becomes the Color Guide's base color, linked to the spot color it is or is a
 /// tint of.
-fn apply(app: &mut VectorcraftApp, ui: &Ui, name: &str, alt: bool) {
+fn apply(app: &mut VectorcraftApp, name: &str, alt: bool) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
-    let params = swatch_params(d, name);
+    let mut params = swatch_params(d, name);
     let color = if name == REGISTRATION { Paint::registration().color() } else { d.swatch(name).and_then(|s| s.paint.color()) };
     let link = d.swatch_link(name);
     if let Some(c) = color {
@@ -362,7 +362,8 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, name: &str, alt: bool) {
     {
         return;
     }
-    apply_click(app, ui, params);
+    params["focus"] = json!(!alt);
+    app.run(proxy_cmd(app, alt), params).ok();
 }
 
 /// The panel's body: the proxy, Recent Colors, the browser and the footer.
@@ -395,10 +396,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Without a selection the swatch of the active paint is highlighted.
     let picked = model.names();
     let base = if picked.is_empty() { active.into_iter().collect() } else { picked };
-    let lit: Vec<String> = app.session.active().map(|st| highlighted(&st.doc, &base).into_iter().map(str::to_string).collect()).unwrap_or_default();
+    let Some(st) = app.session.active() else {
+        app.ui.swatches_panel = model;
+        return;
+    };
+    let thumbs = Thumbs {
+        revision: (st.uid, st.revision),
+        lit: highlighted(&st.doc, &base).into_iter().map(str::to_string).collect(),
+        doc: Arc::clone(&st.doc),
+    };
     let shown_app: &VectorcraftApp = app;
     let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .thumb(|cx, rect, info| thumb(shown_app, &lit, cx, rect, info))
+        .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
             SwatchKey::Group(_) => vec![],
@@ -412,20 +421,39 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .footer(None)
         .show(ui);
     app.ui.swatches_panel = model;
+    let shown = shown_keys(&data);
     // PLAN: assumed `events` carries `Select` too: `used` holds colour swatches only, and a gradient, pattern or None
     // swatch also applies on a click.
     for event in out.events {
-        match event {
-            PresetEvent::Select { key, mods, .. } => apply(app, ui, name_of(&key), mods.alt),
-            PresetEvent::Activate { key, .. } => activate(app, &key),
-            PresetEvent::Menu { target, command, .. } => menu_command(app, &target, &command),
-            // PLAN: assumed `dnd::apply_event(app: &mut VectorcraftApp, event: PresetEvent<SwatchKey>)` (color-w11) runs
-            // `swatch.move`, `swatch.new`, the pattern and replace drops, and the reorders.
-            event @ (PresetEvent::Dropped { .. } | PresetEvent::Reorder { .. }) => dnd::apply_event(app, event),
-            _ => {}
-        }
+        on_event(app, &shown, event);
     }
     footer(app, ui);
+}
+
+/// The rows the browser shows for `groups`, in its order: each group's row, then its swatches.
+fn shown_keys(groups: &[SwatchGroup]) -> Vec<SwatchKey> {
+    groups
+        .iter()
+        .flat_map(|g| std::iter::once(SwatchKey::Group(g.name.clone())).chain(g.entries.iter().map(|e| SwatchKey::Swatch(e.name.clone()))))
+        .collect()
+}
+
+/// Runs a browser event over the `shown` rows: a click applies the swatch, a double click opens its editor, a row
+/// menu item runs on its row, and drops and reorders change the document.
+fn on_event(app: &mut VectorcraftApp, shown: &[SwatchKey], event: PresetEvent<SwatchKey>) {
+    match event {
+        PresetEvent::Select { key: SwatchKey::Swatch(name), mods, .. } => apply(app, &name, mods.alt),
+        PresetEvent::Activate { key, .. } => activate(app, &key),
+        PresetEvent::Menu { target, command, .. } => menu_command(app, &target, &command),
+        PresetEvent::Dropped { at, payload, mods, .. } => {
+            if let Some(drag) = payload.get::<PanelDrag>() {
+                dnd::on_dropped(app, shown, &at, drag, mods);
+            }
+        }
+        // Only a finished gesture changes the document; Begin and Update are previews.
+        PresetEvent::Reorder(EditEvent::Commit { after, .. } | EditEvent::Set { after, .. }) => dnd::on_reorder(app, shown, &after),
+        _ => {}
+    }
 }
 
 /// What a swatch's drag or row menu may carry: paints and art dragged off the canvas, not the Appearance panel's
@@ -450,7 +478,6 @@ fn activate(app: &mut VectorcraftApp, key: &SwatchKey) {
 fn row_items(app: &VectorcraftApp, key: &SwatchKey) -> Vec<Entry<String>> {
     let SwatchKey::Swatch(name) = key else { return vec![] };
     let enabled = app.session.active().and_then(|st| st.doc.swatch(name)).is_some_and(|s| !s.is_reserved());
-    // PLAN: assumed `Entry::new(value, label)` with `.enabled(bool)`.
     [("options", tl!("Swatch Options…")), ("duplicate", tl!("Duplicate Swatch")), ("delete", tl!("Delete Swatch"))]
         .into_iter()
         .map(|(id, label)| Entry::new(id.to_string(), label).enabled(enabled))
@@ -471,42 +498,63 @@ fn menu_command(app: &mut VectorcraftApp, key: &SwatchKey, command: &str) {
     }
 }
 
+/// What the swatch thumbnails read: the active document at its revision and the names drawn selected.
+#[derive(MemoProps)]
+struct Thumbs {
+    /// The document's uid and revision.
+    revision: (u64, u64),
+    /// The selected swatches, those of selected colour groups, or the active paint's swatch.
+    lit: Vec<String>,
+    #[memo_props(covered_by = "revision", reason = "a document's uid and revision change with every edit of it")]
+    doc: Arc<Document>,
+}
+
 /// The thumbnail of swatch cell `info` (a colour group is the browser's folder row, not a thumbnail).
-fn thumb(app: &VectorcraftApp, lit: &[String], cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SwatchKey>) {
+fn thumb(t: &Thumbs, cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SwatchKey>) {
     let SwatchKey::Swatch(name) = info.key else { return };
+    let selected = info.selected || t.lit.contains(name);
     if name == REGISTRATION {
-        draw_registration(&cx.painter, rect);
+        paint_swatch(cx, rect, &Paint::registration(), selected, (false, false), None);
         return;
     }
-    let Some(st) = app.session.active() else { return };
-    let Some(s) = st.doc.swatch(name) else { return };
-    let (paint, global, spot) = shown(&st.doc, s);
-    paint_swatch(&cx.painter, rect, &paint, (info.selected || lit.contains(name), info.hovered), (global, spot), Some(&st.doc));
+    let Some(s) = t.doc.swatch(name) else { return };
+    let (paint, global, spot) = shown(&t.doc, s);
+    paint_swatch(cx, rect, &paint, selected, (global, spot), Some(&t.doc));
 }
 
-/// A swatch's tile: its paint, the pattern's rendered tile from `pattern`'s document, and the corner of a global colour
-/// (with the dot of a spot one). `state` is (selected, hovered), `kind` is (global, spot).
-pub(super) fn paint_swatch(painter: &Painter, rect: Rect, paint: &Paint, state: (bool, bool), kind: (bool, bool), pattern: Option<&Document>) {
-    // PLAN: assumed `widgets::swatch_tile_in(painter, rect, paint, selected, hovered)`: `swatch_tile` over a painter.
-    widgets::swatch_tile_in(painter, rect, paint, state.0, state.1);
-    if let Some(doc) = pattern {
-        pattern_thumb_in(doc, painter, rect.shrink(1.0), paint);
+/// A swatch's tile: the framework's swatch face (its edge and selected ring) in the paint's colour, with a gradient,
+/// a pattern (its rendered tile from `pattern`'s document), None's slash or Registration's mark inside, and the corner
+/// of a global colour (with the dot of a spot one). `kind` is (global, spot).
+pub(super) fn paint_swatch(cx: &ContentPainterCx<'_>, rect: Rect, paint: &Paint, selected: bool, kind: (bool, bool), pattern: Option<&Document>) {
+    let face = paint.color().filter(|_| !paint.is_registration()).map_or(Srgba::rgb(1.0, 1.0, 1.0), |c| super::srgba(&c));
+    SwatchFace::new(face).selected(selected).paint(cx, rect);
+    let inner = rect.shrink(cx.stroke_width(StrokeWidth::Medium));
+    match paint {
+        _ if paint.is_registration() => registration_mark(cx, inner),
+        Paint::Solid { .. } => {}
+        Paint::None => {
+            let slash = Stroke::new(cx.stroke_width(StrokeWidth::Medium), Color32::from_rgb(0xe0, 0x20, 0x20));
+            cx.data_shapes([Shape::line_segment([inner.left_bottom(), inner.right_top()], slash)]);
+        }
+        Paint::Pattern { .. } if pattern.is_some_and(|doc| pattern_thumb_in(doc, cx, inner, paint)) => {}
+        _ => crate::paint_preview::paint_rect(cx, inner, paint),
     }
     if kind.0 || kind.1 {
-        global_mark(painter, rect, kind.1);
+        global_mark(cx, rect, kind.1);
     }
 }
 
-/// A pattern swatch drawn from the pattern of its name in `doc` (cached by the definition's identity and size).
-fn pattern_thumb_in(doc: &Document, painter: &Painter, r: Rect, paint: &Paint) {
+/// Draws a pattern swatch from the pattern of its name in `doc` (cached by the definition's identity and size);
+/// `false` when the pattern renders nothing.
+fn pattern_thumb_in(doc: &Document, cx: &ContentPainterCx<'_>, r: Rect, paint: &Paint) -> bool {
     use std::collections::HashMap;
     type Key = (String, Vec<usize>, String, u32);
     thread_local! {
         static CACHE: crate::graphics::TexCache<HashMap<Key, Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
     }
-    let Paint::Pattern { pattern, .. } = paint else { return };
-    let Some(def) = doc.pattern(pattern) else { return };
-    let ctx = painter.ctx();
+    let Paint::Pattern { pattern, .. } = paint else { return false };
+    let Some(def) = doc.pattern(pattern) else { return false };
+    let ctx = cx.painter.ctx();
     let px = (r.width() * ctx.pixels_per_point()).round().max(4.0) as u32;
     let key = (
         pattern.clone(),
@@ -528,30 +576,33 @@ fn pattern_thumb_in(doc: &Document, painter: &Painter, r: Rect, paint: &Paint) {
         });
         tex
     });
-    if let Some(tex) = tex {
-        painter.rect_filled(r, 0.0, Color32::WHITE);
-        painter.image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-    }
+    let Some(tex) = tex else { return false };
+    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    cx.data_shapes([Shape::rect_filled(r, 0.0, Color32::WHITE), Shape::image(tex.id(), r, uv, Color32::WHITE)]);
+    true
 }
 
-fn draw_registration(painter: &Painter, r: Rect) {
-    let t = crate::theme::Tokens::get(painter.ctx());
-    painter.rect_filled(r, 0.0, Color32::WHITE);
+/// Registration's mark: a black target on white.
+fn registration_mark(cx: &ContentPainterCx<'_>, r: Rect) {
     let c = r.center();
-    let s = Stroke::new(1.0, Color32::BLACK);
-    painter.circle_stroke(c, r.width() * 0.28, s);
-    painter.line_segment([pos2(r.left() + 2.0, c.y), pos2(r.right() - 2.0, c.y)], s);
-    painter.line_segment([pos2(c.x, r.top() + 2.0), pos2(c.x, r.bottom() - 2.0)], s);
-    painter.rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+    let s = Stroke::new(cx.stroke_width(StrokeWidth::Thin), Color32::BLACK);
+    let inset = cx.stroke_width(StrokeWidth::Medium);
+    cx.data_shapes([
+        Shape::circle_stroke(c, r.width() * 0.28, s),
+        Shape::line_segment([pos2(r.left() + inset, c.y), pos2(r.right() - inset, c.y)], s),
+        Shape::line_segment([pos2(c.x, r.top() + inset), pos2(c.x, r.bottom() - inset)], s),
+    ]);
 }
 
 /// The white corner of a global colour's tile; a spot colour has a dot in it.
-fn global_mark(painter: &Painter, cell: Rect, spot: bool) {
-    let k = cell.shrink(1.0).right_bottom();
-    painter.add(egui::Shape::convex_polygon(vec![k, k - vec2(5.0, 0.0), k - vec2(0.0, 5.0)], Color32::WHITE, Stroke::NONE));
+fn global_mark(cx: &ContentPainterCx<'_>, cell: Rect, spot: bool) {
+    let k = cell.shrink(cx.stroke_width(StrokeWidth::Thin)).right_bottom();
+    let side = cell.width().min(cell.height()) * 0.3;
+    let mut shapes = vec![Shape::convex_polygon(vec![k, k - vec2(side, 0.0), k - vec2(0.0, side)], Color32::WHITE, Stroke::NONE)];
     if spot {
-        painter.circle_filled(k - vec2(1.6, 1.6), 1.0, Color32::BLACK);
+        shapes.push(Shape::circle_filled(k - vec2(side, side) * 0.32, side * 0.2, Color32::BLACK));
     }
+    cx.data_shapes(shapes);
 }
 
 /// The ink colours of the CMYK glyph (cyan, magenta, yellow, black) and the RGB glyph's bars.
@@ -566,6 +617,7 @@ const LAB_AXES: [Color32; 4] =
 
 /// A colour model's glyph: its fixed data colours in a box, which a tinted SVG cannot carry. It ignores the tint
 /// except for the outline.
+#[derive(MemoProps)]
 struct ModelGlyph {
     cells: &'static [Color32],
     /// Three vertical bars instead of a two-by-two grid of quarters.
@@ -724,9 +776,15 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
         },
         _ => {}
     }
-    // PLAN: assumed `dnd::footer_drop(app, &out)` (color-w11) duplicates the rows dropped on New Swatch and asks to
-    // delete the ones dropped on Delete, from `FooterOutput::dropped`.
-    dnd::footer_drop(app, &out);
+    if let Some(drop) = &out.dropped
+        && let Some(drag) = drop.payload::<PanelDrag>()
+    {
+        match drop.index {
+            0 => dnd::on_footer_drop(app, dnd::FooterTarget::Delete, drag),
+            1 => dnd::on_footer_drop(app, dnd::FooterTarget::New, drag),
+            _ => {}
+        }
+    }
     popup(ui, "swatch-kinds", out.responses.get(4), |ui| {
         for (k, label) in Kind::ALL {
             if item(ui, label, true, Some(k == kind)) {

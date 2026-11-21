@@ -37,15 +37,14 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     if fired.phase == FirePhase::Release {
         return;
     }
-    if command.id == "select.all" && crate::panels::artboards::selects_all(app, ctx) {
+    if command.id == "select.all" && crate::panels::artboards::selects_all(app) {
         // With the Artboard tool, Select All's keys after a click on an Artboards panel row select every artboard
         // instead of the art.
         crate::panels::artboards::select_all(app);
         return;
     }
-    match menu_target(app, command) {
-        Some(Ok((id, params))) => crate::menus::invoke(app, &id, params),
-        Some(Err(why)) => app.status(why),
+    match menu_target(command) {
+        Some((id, params)) => crate::menus::invoke(app, &id, params),
         None => crate::menus::invoke(app, &command.id, shortcut_params(command)),
     }
 }
@@ -140,10 +139,9 @@ fn selected_type_is_vertical(app: &VectorcraftApp) -> Option<bool> {
 }
 
 /// What a shortcut without params runs when its command's menu bar item gives params
-/// ([`crate::shortcut_editor::menu_target_now`]): what a click on that item runs, or while the item
-/// is dimmed, why the command can't run.
-fn menu_target(app: &VectorcraftApp, c: &CommandRef) -> Option<Result<(String, serde_json::Value), String>> {
-    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target_now(app, &c.id)).flatten()
+/// ([`crate::shortcut_editor::menu_target`]): what a click on that item runs.
+fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
+    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target(&c.id)).flatten()
 }
 
 /// Params used when a shortcut invokes its command. The named panel function keys retain their

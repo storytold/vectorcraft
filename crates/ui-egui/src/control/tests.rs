@@ -606,35 +606,51 @@ fn deferred_pointer_reply_uses_the_gesture_document_after_file_new() {
 }
 
 /// `ui.dialog.set {fields, action}` confirms or cancels the dialog it set the fields in, within the
-/// same request, and replies `{dialog, result}`. A bad `action` or a refused field sets nothing and
-/// leaves the dialog open.
+/// same request. A bad `action` or a refused field sets nothing and leaves the dialog open.
 #[test]
 fn dialog_set_with_an_action_answers_the_same_dialog() {
+    use craft::ui::dialog::{DialogId, DialogResult};
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let open = |app: &mut VectorcraftApp| app.ui.dialog = Some(crate::state::Dialog::new("note", json!({"text": "a"})));
-    let text = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.fields["text"].clone());
-    open(&mut app);
+    let ctx = crate::testing::ui_context();
+    app.ui_ctx = Some(ctx.clone());
+    let open = |app: &mut VectorcraftApp| -> DialogId {
+        let dialog = HostedParamDialog::new(&ctx, "note", DialogFields::from_pairs([("text", "a")]), |_| {
+            ParamDialog::new("note", "Note", vec![Param::new("text", "Text:", ParamKind::text(""))])
+        });
+        app.dialogs().expect("a window").with(|h| h.open(dialog))
+    };
+    let text = |app: &VectorcraftApp, id: DialogId| {
+        app.dialogs().expect("a window").with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().text("text").map(str::to_owned)))
+    };
+    let taken = |app: &VectorcraftApp, id: DialogId| app.dialogs().expect("a window").with(|h| h.take_by_id::<HostedParamDialog>(id));
+    let request = |app: &mut VectorcraftApp, params: Value| {
+        let (req, _) = ControlRequest::new("ui.dialog.set", params);
+        let Reply::Done(r) = handle(app, &ctx, &req) else { panic!("expected immediate reply") };
+        r
+    };
+    let id = open(&mut app);
     for params in [
         json!({"fields": [{"field": "text", "value": "b"}], "action": "ok"}),
         json!({"fields": [{"field": "text", "value": "b"}], "action": true}),
         json!({"fields": [{"field": "text", "value": "b"}], "action": null}),
         json!({"fields": [{"field": "text", "value": "b"}, {"field": "nope", "value": 1}], "action": "confirm"}),
     ] {
-        let r = input_request(&mut app, "ui.dialog.set", params.clone());
+        let r = request(&mut app, params.clone());
         assert_eq!(r["ok"], false, "{params}: {r}");
-        assert_eq!(text(&app), Some(json!("a")), "{params}: the dialog stays open as it was");
+        assert_eq!(text(&app, id).as_deref(), Some("a"), "{params}: the dialog stays open as it was");
     }
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "b"}], "action": "confirm"}));
+    let r = request(&mut app, json!({"fields": [{"field": "text", "value": "b"}], "action": "confirm"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "b"}}, "result": null}));
-    assert!(app.ui.dialog.is_none(), "confirmed in the same request");
-    open(&mut app);
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [{"field": "text", "value": "c"}], "action": "cancel"}));
+    let Some(DialogResult::Ok(answer)) = taken(&app, id) else { panic!("confirmed in the same request") };
+    assert_eq!(answer.fields.text("text"), Some("b"), "the answer holds the field set with it");
+    let id = open(&mut app);
+    let r = request(&mut app, json!({"fields": [{"field": "text", "value": "c"}], "action": "cancel"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(r["result"], json!({"dialog": {"kind": "note", "fields": {"text": "c"}}, "result": null}));
-    assert!(app.ui.dialog.is_none(), "canceled in the same request");
-    let r = input_request(&mut app, "ui.dialog.set", json!({"fields": [], "action": "confirm"}));
-    assert_eq!(r["error"], "no dialog open");
+    assert!(matches!(taken(&app, id), Some(DialogResult::Cancel)), "canceled in the same request");
+    let r = request(&mut app, json!({"fields": [], "action": "confirm"}));
+    assert_eq!(r["ok"], false, "no dialog open: {r}");
 }
 
 /// #1004: `ui.render` (the MCP `screenshot` of a connected app) renders the artboard asked

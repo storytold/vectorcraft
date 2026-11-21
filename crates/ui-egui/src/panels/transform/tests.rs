@@ -5,8 +5,6 @@ use super::*;
 use crate::panels::tests_units::{cancel_dialog, confirm_dialog, run_menu, set_dialog_field};
 use crate::tests::panel_harness::Panel;
 
-// PLAN: assumed op.A15 `Panel::into_app(self) -> VectorcraftApp` (object-panels-w8).
-
 fn panel(app: VectorcraftApp) -> Panel {
     Panel::new(app, show)
 }
@@ -209,17 +207,18 @@ fn a_rectangle_corner_kind_applies_a_merge_on_another_thread_first() {
 /// angles show a blank angle. The shared angle is kept for the revision.
 #[test]
 fn a_rectangle_and_an_ellipse_show_their_angle() {
-    let mut app = new_app();
+    let mut p = panel(new_app());
     for shape in ["shape.rectangle", "shape.ellipse"] {
         let mut ids = vec![];
         for (y, angle) in [(20, 30), (200, 60)] {
+            let mut app = p.app();
             let id = app.run(shape, json!({"x": 50, "y": y, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
             app.run("object.rotate", json!({"angle": angle, "absolute": true})).unwrap();
             app.run("object.resetBoundingBox", json!({})).unwrap();
             ids.push(id);
         }
-        app.run("select.set", json!({"ids": [ids[0]]})).unwrap();
-        let mut p = panel(app);
+        p.app().run("select.set", json!({"ids": [ids[0]]})).unwrap();
+        p.frame();
         assert_eq!((degrees(&p, "Rotate"), degrees(&p, "Angle")), (Some(0.0), Some(30.0)), "{shape}");
         let key = p.app().canvas.shape_angle.clone();
         assert!(key.is_some(), "{shape}: the angle is kept");
@@ -231,7 +230,6 @@ fn a_rectangle_and_an_ellipse_show_their_angle() {
         p.app().run("select.set", json!({"ids": [ids[1]]})).unwrap();
         p.frame();
         assert_eq!(degrees(&p, "Angle"), Some(60.0), "{shape}");
-        app = p.into_app();
     }
 }
 
@@ -608,11 +606,11 @@ fn shear_app() -> VectorcraftApp {
     app
 }
 
-/// Types `value` into the panel's Shear field of a [`shear_app`] and returns the app.
-fn type_shear(value: &str) -> VectorcraftApp {
+/// Types `value` into the panel's Shear field of a [`shear_app`] and returns the panel.
+fn type_shear(value: &str) -> Panel {
     let mut p = panel(shear_app());
     p.type_into("Shear", value);
-    p.into_app()
+    p
 }
 
 /// The Shear field takes -359° to 359°: a typed 120, 359 and -359 shear about the reference point
@@ -621,7 +619,8 @@ fn type_shear(value: &str) -> VectorcraftApp {
 fn the_shear_field_takes_angles_from_minus_359_to_359() {
     for (typed, angle, like) in [("120", 120.0, Some(-60.0)), ("359", 359.0, None), ("-359", -359.0, None), ("45", 45.0, None)] {
         let before = shear_app().selection_box().unwrap();
-        let app = type_shear(typed);
+        let p = type_shear(typed);
+        let app = p.app();
         assert_eq!(app.ui.status, "", "{typed}: no error");
         let got = app.selection_box().unwrap();
         assert_ne!(got, before, "{typed}: sheared");

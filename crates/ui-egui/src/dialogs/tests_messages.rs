@@ -5,12 +5,14 @@ use serde_json::json;
 
 use super::confirm::{self, KIND, MESSAGE};
 use crate::VectorcraftApp;
-use crate::tests_svg::app;
 
-/// Gives `app` a window to host dialogs in.
-fn host(app: &mut VectorcraftApp) {
+/// An app with a document and a window to host dialogs in.
+fn app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     let ctx = app.ui_ctx.get_or_insert_with(egui::Context::default).clone();
     crate::testing::install(&ctx);
+    app
 }
 
 /// One frame of the host, then the pump.
@@ -46,8 +48,7 @@ fn close_top(app: &mut VectorcraftApp, ok: bool) {
 
 #[test]
 fn a_message_told_while_a_dialog_is_open_shows_after_it_once_per_text() {
-    let (mut app, _) = app("/tmp/doc.vectorcraft");
-    host(&mut app);
+    let mut app = app();
     confirm::ask(&mut app, "Question?", "", "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}));
     pass(&mut app);
     confirm::tell(&mut app, "First", "");
@@ -65,9 +66,9 @@ fn a_message_told_while_a_dialog_is_open_shows_after_it_once_per_text() {
 
 #[test]
 fn a_question_closes_before_its_command_runs_and_cancel_runs_nothing() {
-    let (mut app, written) = app("/tmp/doc.vectorcraft");
-    host(&mut app);
-    confirm::ask(&mut app, "Save as?", "", "file.saveAs", json!({}));
+    let mut app = app();
+    let define = json!({"command": "variable.define"});
+    confirm::ask(&mut app, "Define a variable?", "", "ui.menuDialog", define.clone());
     pass(&mut app);
     assert_eq!(keys(&app), [Some(KIND.to_string())]);
     close_top(&mut app, true);
@@ -75,9 +76,8 @@ fn a_question_closes_before_its_command_runs_and_cancel_runs_nothing() {
     assert_eq!(open.len(), 1, "only the dialog the command opened");
     assert_ne!(open[0].as_deref(), Some(KIND));
     close_top(&mut app, false);
-    confirm::ask(&mut app, "Save as?", "", "file.saveAs", json!({}));
+    confirm::ask(&mut app, "Define a variable?", "", "ui.menuDialog", define);
     pass(&mut app);
     close_top(&mut app, false);
     assert!(keys(&app).is_empty(), "Cancel runs nothing");
-    assert!(written.borrow().is_empty());
 }

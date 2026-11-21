@@ -186,6 +186,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         super::find_replace::pump,
         super::check_spelling::pump,
         super::custom_dictionary::pump,
+        super::confirm::pump,
         super::confirm::pump_missing_font,
         super::actions::pump,
         super::script_run::pump,

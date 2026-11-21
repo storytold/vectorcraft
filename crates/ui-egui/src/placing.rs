@@ -265,7 +265,6 @@ pub fn start_queue(app: &mut VectorcraftApp, p: &Value, asks: bool) -> Result<Va
 /// also when it has no bitmap to read.
 pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Option<Value>, String> {
     if std::mem::take(&mut app.placing.adopted) {
-        app.clipboard_image_request = None;
         return Ok(None);
     }
     if !(app.placing.for_user && available(app)) {

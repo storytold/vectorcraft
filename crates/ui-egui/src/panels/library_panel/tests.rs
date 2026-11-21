@@ -5,6 +5,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 use crate::panels::swatches::SwatchLibraries;
+use crate::tests::picks::{Picker, answer_dialog, open_dialogs, scripted};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -13,7 +14,7 @@ fn app() -> VectorcraftApp {
 }
 
 /// A context whose frames report their accessibility tree, so rows are found by their names.
-fn context() -> egui::Context {
+pub(crate) fn context() -> egui::Context {
     let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     ctx
@@ -32,7 +33,7 @@ fn selected_names(app: &VectorcraftApp, panel: &str) -> Vec<String> {
 /// Click the control of the panel opened last that screen readers name `name` (a row or a footer
 // PLAN: assumed to be replaced by the framework pointer driver (`Fixture`) once the harness lands here.
 /// action) with `modifiers` held; `_time` is kept for the callers' spacing of clicks.
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, _time: f64) {
+pub(crate) fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, _time: f64) {
     let panel = shown(app);
     let draw = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui, &panel);
     let (_, at) = control(app, ctx, &draw, name);
@@ -43,14 +44,33 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: M
 }
 
 /// Set the fields of the hosted save dialog that `app` shows and press its OK.
-fn confirm_save(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
-    // PLAN: assumed hosted-dialog driver of appearance-w18: `host::{set_json_field, confirm_by_id, pump}`.
-    let id = crate::dialogs::host::open_dialog_id(app).expect("a save dialog is open");
-    for (name, value) in fields {
-        crate::dialogs::host::set_json_field(app, &id, name, value.clone());
+pub(crate) fn confirm_save(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
+    let id = open_dialogs(app).last().map(|d| d.id).expect("a save dialog is open");
+    answer_dialog(app, id, fields, true);
+}
+
+/// Answers the save pick `app` asked with the name it suggests in `/tmp`, and runs the pick's continuation.
+pub(crate) fn save_to_tmp(app: &mut VectorcraftApp, picker: &Picker) {
+    let name = picker.requests().last().and_then(|r| r.file_name.clone()).expect("a save pick is open");
+    picker.answer_saved(&format!("/tmp/{name}"), None);
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    crate::tests::picks::poll(app, &ctx);
+}
+
+/// The libraries the "Open … Library" rows of a `K` panel menu open, in menu order.
+pub(crate) fn menu_library_ids<K: LibraryKind>(app: &VectorcraftApp) -> Vec<String> {
+    fn ids(rows: &[PanelRow], out: &mut Vec<String>) {
+        for row in rows {
+            match row {
+                PanelRow::Command(c) => out.extend(c.params["library"].as_str().map(str::to_string)),
+                PanelRow::Submenu(_, rows) => ids(rows, out),
+                _ => {}
+            }
+        }
     }
-    crate::dialogs::host::confirm_by_id(app, &id);
-    crate::dialogs::host::pump(app);
+    let mut out = vec![];
+    ids(&library_rows::<K>(app), &mut out);
+    out
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
@@ -175,7 +195,6 @@ fn saving_to_a_file_and_opening_a_palette_file() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -183,9 +202,11 @@ fn saving_to_a_file_and_opening_a_palette_file() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    let picker = scripted(&mut app);
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     app.run("ui.saveSwatchLibrary", json!({})).unwrap();
     confirm_save(&mut app, &[("format", json!("gpl"))]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert!(path.ends_with(".gpl"), "{path}");
     let text = String::from_utf8(bytes).unwrap();
@@ -218,7 +239,6 @@ fn the_save_dialog_writes_swatch_exchange_files() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -226,9 +246,11 @@ fn the_save_dialog_writes_swatch_exchange_files() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    let picker = scripted(&mut app);
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     app.run("ui.saveSwatchLibrary", json!({})).unwrap();
     confirm_save(&mut app, &[("format", json!("ase")), ("name", json!("Brand Kit"))]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert_eq!(path, "/tmp/Brand Kit.ase", "the save panel suggests the name");
     let lib = vectorcraft_color::palette_io::read_bytes(&bytes, "x").unwrap();
@@ -263,8 +285,7 @@ fn swatch_exchange_files_without_a_path_open_in_the_library_panel() {
     assert_eq!(app.session.documents().len(), 1, "not opened as a document");
 }
 
-fn docking(app: &VectorcraftApp) -> &craft::ui::docking::Layout<String> {
-    // PLAN: assumed `Workspace::layout() -> &Layout<String>` (ch.P1)
+fn docking(app: &VectorcraftApp) -> &craft::behavior::dock::Layout<String> {
     app.ui.dock_workspace.layout()
 }
 
@@ -298,7 +319,7 @@ fn each_library_opens_in_a_panel_of_its_own() {
     app.run("window.panel.move", json!({"panel": brights, "anchor": pastels})).unwrap();
     assert!(groups(&app).contains(&vec![pastels.clone(), brights.clone()]), "{:?}", groups(&app));
     app.run("window.panel.dock", json!({"panel": styles})).unwrap();
-    assert!(craft::ui::docking::Layout { root: docking(&app).root.clone(), floating: vec![] }.contains(&styles));
+    assert!(docking(&app).root.as_ref().is_some_and(|docked| docked.contains(&styles)));
     app.run("window.panel.close", json!({"panel": brights})).unwrap();
     assert!(!is_open(&app.ui, &brights) && is_open(&app.ui, &pastels));
     app.run("window.panel", json!({"panel": brights})).unwrap();
@@ -433,12 +454,13 @@ fn a_persistent_panel_whose_file_is_gone_is_listed_as_missing_until_located() {
     let moved = dir.join("moved").join("Brand.gpl");
     std::fs::write(&moved, palette).unwrap();
     let picked = moved.to_string_lossy().into_owned();
-    next.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    let picker = scripted(&mut next);
     let (_, at) = control(&mut next, &ctx, &body, "Locate Library…");
     click_at(&mut next, &ctx, &body, at);
     // The picker's answer arrives on a later pass.
-    draw_frame(&mut next, &ctx, &body, vec![]);
-    draw_frame(&mut next, &ctx, &body, vec![]);
+    picker.answer(&[&picked]);
+    let window = next.ui_ctx.clone().expect("a window context");
+    crate::tests::picks::poll(&mut next, &window);
     let located = panel_id("swatches", &format!("loaded/{}", moved.to_string_lossy()));
     assert!(!is_open(&next.ui, &brand) && is_open(&next.ui, &located), "{}", next.ui.status);
     let (_, id) = parse(&located).unwrap();
@@ -629,11 +651,12 @@ fn built_in_library_swatches_are_listed_in_the_ui_language() {
     assert!(texts.iter().any(|t| t == "Argile") && texts.iter().any(|t| t == "Argile 1"), "{texts:?}");
     assert!(!texts.iter().any(|t| t == "Clay" || t == "Clay 1"), "{texts:?}");
     let lib = SwatchLibraries::get(&app, "earth-tones").unwrap().1;
-    for query in ["argile 2", "clay 2"] {
-        let rows = SwatchLibraries::rows(&lib, "earth-tones", query);
-        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Clay", "Clay 2"], "{query}");
-    }
-    assert!(SwatchLibraries::rows(&lib, "loaded/1", "argile").is_empty(), "another library's swatch is matched by its own name only");
+    // The browser's Find matches the shown name and the stored one.
+    let rows = SwatchLibraries::rows(&lib, "earth-tones");
+    let shown_rows = browser_rows::<SwatchLibraries>(&panel, "earth-tones", &rows);
+    let clay = shown_rows.iter().find(|r| r.key.name == "Clay 2").expect("Clay 2 is listed");
+    assert_eq!(clay.search_name.as_deref(), Some("Clay 2"));
+    assert_eq!(SwatchLibraries::label("loaded/1", "Clay"), "Clay", "another library's swatch shows its own name only");
     assert_eq!(SwatchLibraries::label("grays-neutrals", "K=35"), "K=35");
     assert_eq!(SwatchLibraries::label("user/1", "Clay 3"), "Clay 3");
     click(&mut app, &ctx, "Argile 1", Modifiers::NONE, 1.0);

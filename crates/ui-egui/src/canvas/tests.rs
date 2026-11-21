@@ -1,4 +1,5 @@
 use craft::pages::ui::marks::{HiddenMark, MarkAnchor, PlacedMark};
+use craft::ui::dialog::StackDialog;
 use egui::{Color32, Pos2, Shape, pos2, vec2};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_engine::Session;
@@ -14,6 +15,8 @@ use super::outline::{node_outline, walk_drawn};
 use super::raster::{frame_view, pixel_region, placed_changes, placed_key_at, placed_since, poll_worker};
 use super::*;
 use crate::CacheKey;
+use crate::panels::actions::tests_support::{cancel_dialog, is_open};
+use crate::tests::taskbar::{BAR, click, offer, on_canvas};
 
 #[test]
 fn shaper_selection_highlights_only_the_visible_result() {
@@ -2476,114 +2479,6 @@ fn outline_is_per_document_and_new_documents_start_in_preview() {
     assert!(app.run("view.outline", json!({})).is_err());
 }
 
-/// A split-view pane or floating window draws its own view's Outline, whatever the current view
-/// shows: the white canvas and dark gray artboard names in Outline, and the pasteboard and the
-/// theme's names in Preview.
-#[test]
-fn a_pane_draws_its_own_views_outline() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
-    crate::doc_windows::new_window(&mut app).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
-    let t = Tokens::get(&ctx);
-    let other = (0, 1);
-    for pane_outline in [true, false] {
-        crate::doc_windows::view_mut(&mut app, other).unwrap().outline = pane_outline;
-        app.view_mut().unwrap().outline = !pane_outline;
-        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            panes::pane(&mut app, ui, other, cell);
-        });
-        out.textures_delta.clear();
-        let mut s = vec![];
-        fn flat(s: Shape, out: &mut Vec<Shape>) {
-            match s {
-                Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
-                s => out.push(s),
-            }
-        }
-        out.shapes.into_iter().for_each(|c| flat(c.shape, &mut s));
-        let fills: Vec<Color32> = s.iter().filter_map(|s| if let Shape::Rect(r) = s { Some(r.fill) } else { None }).collect();
-        let names: Vec<Color32> = s
-            .iter()
-            .filter_map(|s| if let Shape::Text(x) = s { names_an_artboard(x.galley.text()).then_some(x.fallback_color) } else { None })
-            .collect();
-        let (canvas, name) = if pane_outline { (Color32::WHITE, OUTLINE_DIM) } else { (t.pasteboard, t.text_dim) };
-        assert_eq!(fills.first(), Some(&canvas), "pane in Outline: {pane_outline}");
-        assert_eq!(names, [name; 2], "pane in Outline: {pane_outline}");
-    }
-}
-
-/// With a display profile, a split-view pane or floating window blends translucent art with the
-/// paper before the conversion, as the canvas does, and in its own Outline converts the art alone.
-#[test]
-fn a_pane_blends_translucent_art_before_the_display_profile() {
-    use crate::display_profile::{Found, Reading};
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-    let half = app.run("shape.rectangle", json!({"x": 50, "y": 25, "width": 100, "height": 50})).unwrap()["id"].clone();
-    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
-    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
-    app.run("select.none", json!({})).unwrap();
-    crate::doc_windows::new_window(&mut app).unwrap();
-    app.canvas.panes.worker_started = true; // every pane render on this thread
-    let p3 = crate::display_profile::tests::p3();
-    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
-    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
-    let ctx = egui::Context::default();
-    let other = (0, 1);
-    let slot = (app.session.documents()[0].uid, 1);
-    // The pane's raster one frame uploads, and the key it was rendered for.
-    let pane = |app: &mut VectorcraftApp| -> (Vec<egui::Color32>, CacheKey) {
-        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            panes::pane(app, ui, other, cell);
-        });
-        let (key, tex) = app.canvas.panes.shown.get(&slot).expect("the pane's render");
-        let id = tex.id();
-        let pixels = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
-            let egui::ImageData::Color(img) = &d.image;
-            img.pixels.clone()
-        });
-        let key = key.clone();
-        out.textures_delta.clear();
-        (pixels.expect("the pane uploads"), key)
-    };
-    app.session.prefs.monitor_profile_display = false;
-    let (srgb, key) = pane(&mut app);
-    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
-    app.session.prefs.monitor_profile_display = true;
-    let (shown, key) = pane(&mut app);
-    assert!(key.backdrop.is_some(), "the pane's Preview blends with its paper");
-    assert_eq!(srgb.len(), shown.len());
-    let plain = |s: egui::Color32| {
-        let mut px = s.to_array();
-        t.apply_premultiplied(&mut px);
-        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
-    };
-    let mut blended = 0;
-    for (s, c) in srgb.iter().zip(&shown) {
-        if s.a() == 0 || s.a() == 255 {
-            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
-        } else {
-            assert_eq!(c.a(), s.a(), "the alpha is kept");
-            let p = plain(*s);
-            if (0..3).any(|j| c.to_array()[j].abs_diff(p.to_array()[j]) > 2) {
-                blended += 1;
-            }
-        }
-    }
-    assert!(blended > 100, "{blended} translucent pixels blended with the paper");
-    // The pane's own Outline: the art converts alone, while the current view stays in Preview.
-    crate::doc_windows::view_mut(&mut app, other).unwrap().outline = true;
-    app.view_mut().unwrap().outline = false;
-    let (_, key) = pane(&mut app);
-    assert!(key.outline && key.backdrop.is_none(), "the pane's Outline has no paper to blend with");
-}
-
 /// #3797: a preferences file saved while View › Outline was an interface setting still loads, with
 /// its other view settings, and its Outline value does not put a document in Outline.
 #[test]
@@ -3295,233 +3190,6 @@ fn escape_leaves_an_isolated_sublayer_in_one_step() {
     assert_eq!(app.session.active().unwrap().isolation, None, "one Escape leaves every level");
 }
 
-#[test]
-fn a_symbol_dropped_on_the_canvas_is_placed_there() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
-    let name = app.session.execute("symbol.new", &json!({})).unwrap()["name"].as_str().unwrap().to_string();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    // Released over empty canvas: an instance centred there.
-    let at = xf.to_screen(Point::new(250.0, 180.0));
-    let document = app.session.active().unwrap().uid;
-    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol { document, name: name.clone() });
-    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    let st = app.session.active().unwrap();
-    let placed = st.selection.objects.first().copied().unwrap();
-    let n = st.doc.node(placed).unwrap();
-    assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
-    let c = n.geometric_bounds().unwrap().center();
-    assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
-}
-
-#[test]
-fn a_library_symbol_dropped_on_the_canvas_is_added_and_placed_there_in_one_step() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    // Dropped on art too, it is placed, not applied to the art.
-    app.session.execute("shape.rectangle", &json!({"x": 200, "y": 150, "width": 100, "height": 60})).unwrap();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    let undo = app.session.active().unwrap().history.undo.len();
-    let at = xf.to_screen(Point::new(250.0, 180.0));
-    egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Star".into() });
-    let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    let st = app.session.active().unwrap();
-    assert_eq!(st.doc.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Star"]);
-    assert_eq!(st.history.undo.len(), undo + 1, "added and placed as one undo step");
-    assert_eq!(st.history.undo.last().unwrap().label, "Add to Symbols");
-    let placed = st.selection.objects.first().copied().unwrap();
-    let n = st.doc.node(placed).unwrap();
-    assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"));
-    // The registration point (the centre) is where it was dropped, in document coordinates
-    // (the pointer's screen position, which rounds 250, 180 a little).
-    let size = st.doc.unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Star")).cloned().unwrap();
-    let b = n.geometric_bounds().unwrap();
-    assert!((b.width() - size[0].as_f64().unwrap()).abs() < 1e-6, "{b:?} {size}");
-    assert!((b.center() - xf.to_doc(at)).hypot() < 1e-6 && (b.center() - Point::new(250.0, 180.0)).hypot() < 0.1, "{b:?}");
-    app.run("edit.undo", json!({})).unwrap();
-    let st = app.session.active().unwrap();
-    assert!(st.doc.symbols.is_empty() && st.doc.node(placed).is_none());
-}
-
-#[test]
-fn a_brush_dropped_on_a_path_is_applied_to_it() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let id = app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap()["id"].as_u64().unwrap();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    let brush = |app: &VectorcraftApp| {
-        let st = app.session.active().unwrap();
-        st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.stroke().and_then(|s| s.brush.clone())
-    };
-    let drop = |app: &mut VectorcraftApp, at: Point| {
-        let at = xf.to_screen(at);
-        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Brush { name: "Arrow".into(), def: json!({}) });
-        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    };
-    // Off the path: nothing.
-    drop(&mut app, Point::new(200.0, 250.0));
-    assert_eq!(brush(&app), None);
-    // On it: the path's stroke takes the brush.
-    drop(&mut app, Point::new(200.0, 150.0));
-    assert_eq!(brush(&app).as_deref(), Some("Arrow"));
-}
-
-#[test]
-fn a_brush_with_art_dropped_off_the_art_places_a_copy_of_its_art_there() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    let drop = |app: &mut VectorcraftApp, name: &str, at: Point| {
-        let def = app.session.execute("brush.get", &json!({"name": name})).unwrap();
-        let at = xf.to_screen(at);
-        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Brush { name: name.into(), def });
-        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    };
-    let undo = app.session.active().unwrap().history.undo.len();
-    // A calligraphic brush has no art: nothing.
-    drop(&mut app, "3 pt. Round", Point::new(200.0, 250.0));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
-    // An art brush: a copy of its art, centered where it lands, selected.
-    drop(&mut app, "Arrow", Point::new(200.0, 250.0));
-    let st = app.session.active().unwrap();
-    assert_eq!(st.history.undo.len(), undo + 1);
-    assert_eq!(st.history.undo.last().unwrap().label, "Place Brush Art");
-    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
-    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
-    assert!((b.center() - Point::new(200.0, 250.0)).hypot() < 0.1, "{b:?}");
-    // A scatter brush and a pattern brush (its tiles, in one group) place their art too.
-    for (i, name) in ["Dots", "Chain"].into_iter().enumerate() {
-        let at = Point::new(80.0 + 200.0 * i as f64, 60.0);
-        drop(&mut app, name, at);
-        let st = app.session.active().unwrap();
-        assert_eq!(st.history.undo.len(), undo + 2 + i, "{name}");
-        let [placed] = st.selection.objects.as_slice() else { panic!("{name}: one object selected: {:?}", st.selection.objects) };
-        let n = st.doc.node(*placed).unwrap();
-        assert!((n.geometric_bounds().unwrap().center() - at).hypot() < 0.1, "{name}");
-        if name == "Chain" {
-            assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Side Tile"));
-        }
-    }
-}
-
-#[test]
-fn a_library_brush_dropped_on_a_path_is_added_and_applied_in_one_step() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let id = app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap()["id"].as_u64().unwrap();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    let drop = |app: &mut VectorcraftApp, at: Point| {
-        let at = xf.to_screen(at);
-        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::LibraryBrush { library: "scatter-shapes".into(), name: "Sparkles".into() });
-        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    };
-    let undo = app.session.active().unwrap().history.undo.len();
-    // Off the path: nothing.
-    drop(&mut app, Point::new(200.0, 250.0));
-    assert!(vectorcraft_brush::find(&app.session.active().unwrap().doc, "Sparkles").is_none());
-    // On it: added, with the symbol it scatters, and applied, as one step.
-    drop(&mut app, Point::new(200.0, 150.0));
-    let st = app.session.active().unwrap();
-    assert!(vectorcraft_brush::find(&st.doc, "Sparkles").is_some() && st.doc.symbols.iter().any(|s| s.name == "Sparkle"), "{}", app.ui.status);
-    let n = st.doc.node(vectorcraft_doc::NodeId(id)).unwrap();
-    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.clone()).as_deref(), Some("Sparkles"));
-    assert_eq!(st.history.undo.len(), undo + 1);
-    assert_eq!(st.history.undo.last().unwrap().label, "Add to Brushes");
-}
-
-#[test]
-fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
-    use vectorcraft_color::{Color, GradientGeom, GradientPaint, Paint};
-    use widgets::{PanelDrag, SwatchRows};
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
-    app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let xf = app.canvas_view().unwrap();
-    let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
-        let at = xf.to_screen(at);
-        egui::DragAndDrop::set_payload(&ctx, d);
-        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
-    };
-    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
-    let red = Paint::solid(Color::from_hex("#ed1c24").unwrap());
-    let rows = SwatchRows { grabbed: "Red".into(), names: vec!["Red".into()], groups: false };
-    let swatch = PanelDrag::Paint { paint: red.clone(), params: json!({"swatch": "Red"}), rows: Some(rows), library: None };
-    // Off the art nothing happens.
-    drop(&mut app, swatch.clone(), Point::new(300.0, 250.0));
-    assert_eq!(fill(&app), Paint::solid(Color::WHITE));
-    drop(&mut app, swatch, Point::new(100.0, 100.0));
-    assert_eq!(fill(&app), red, "paint.setFill with the hit id");
-    assert!(app.session.active().unwrap().selection.is_empty(), "the selection stays as it was");
-    // A proxy's paint works the same.
-    drop(&mut app, PanelDrag::paint(Paint::solid(Color::rgb(0.0, 0.0, 1.0))), Point::new(60.0, 60.0));
-    assert_eq!(fill(&app), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
-    // A dragged gradient (the Gradient panel's thumbnail, a proxy) fits the object it lands on.
-    let mut g = GradientPaint::new(Default::default());
-    g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None });
-    drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
-    assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
-}
-
-#[test]
-fn dropping_the_appearance_thumbnail_on_art_copies_the_appearance() {
-    use vectorcraft_doc::NodeId;
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
-    run(&mut app, "file.new", json!({"width": 400, "height": 300}));
-    let a = run(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
-    run(&mut app, "effect.apply", json!({"effect": "distort.twist"}));
-    run(&mut app, "transparency.set", json!({"opacity": 40}));
-    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
-    run(&mut app, "select.set", json!({ "ids": [a] }));
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    // The Appearance panel's thumbnail (its drag payload) released over the second rectangle.
-    let xf = app.canvas_view().unwrap();
-    let drop = |app: &mut VectorcraftApp, at: Point| {
-        let at = xf.to_screen(at);
-        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Appearance(NodeId(a)));
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-        frame(app, &ctx, vec![up]);
-    };
-    drop(&mut app, Point::new(250.0, 70.0));
-    let doc = &app.session.active().unwrap().doc;
-    let (na, nb) = (doc.node(NodeId(a)).unwrap(), doc.node(NodeId(b)).unwrap());
-    assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity));
-    assert_eq!(nb.appearance.effects[0].id, "distort.twist");
-    // Dropped on empty canvas or on the source itself: nothing changes.
-    let undo_len = app.session.active().unwrap().history.undo.len();
-    drop(&mut app, Point::new(350.0, 250.0));
-    drop(&mut app, Point::new(70.0, 70.0));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_len);
-}
-
 /// The art the canvas hands the panels while a move is carried off it.
 fn carried(ctx: &egui::Context) -> Option<Vec<vectorcraft_doc::NodeId>> {
     match craft::ui::runtime::drag::active::<crate::panel_drag::PanelDrag>(ctx).as_deref() {
@@ -4231,31 +3899,20 @@ fn the_task_bar_recolors_coloured_art() {
     let id = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap()["id"].clone();
     app.session.execute("paint.setFill", &json!({"ids": [id], "color": "#cc3322"})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    let click = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![]);
-        frame(app, &ctx, vec![]);
-        let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Right to left: the frame's margin, More Options, Shape Properties (Lock's place), then Recolor.
-        let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 30.0 - 6.0 - 15.0, bar.center().y);
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        frame(app, &ctx, vec![button(true)]);
-        frame(app, &ctx, vec![button(false)]);
-    };
     let st = app.session.active().unwrap();
     assert!(has_colors(&st.doc, &st.selection.objects));
-    click(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::recolor::KIND));
+    click(&mut app, RECOLOR);
+    assert!(is_open::<crate::dialogs::recolor::RecolorDialog>(&app));
 
-    app.ui.dialog = None;
     app.session.execute("paint.setFill", &json!({"ids": [id], "none": true})).unwrap();
     app.session.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
     let st = app.session.active().unwrap();
     assert!(!has_colors(&st.doc, &st.selection.objects), "None paints have no colours");
-    click(&mut app);
-    assert!(app.ui.dialog.is_none(), "no Recolor button without colours");
+    assert!(on_canvas(&mut app, |rig| rig.target(RECOLOR).is_none()), "no Recolor button without colours");
 }
+
+/// The Contextual Task Bar's Recolor Artwork button, by its name.
+const RECOLOR: &str = "Recolor Artwork";
 
 /// Recolor Artwork shows in the bars when any selected object has a color, whichever of them it is,
 /// and not for an empty selection or ids that are gone.
@@ -4293,18 +3950,7 @@ fn the_task_bar_lock_button_locks_selected_art_in_isolation_mode() {
     app.session.execute("select.set", &json!({"ids": [a.clone(), b.clone()]})).unwrap();
     let g = app.session.execute("object.group", &json!({})).unwrap()["id"].clone();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    let click_lock = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![]);
-        frame(app, &ctx, vec![]);
-        let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Right to left: the frame's margin, More Options, then Lock.
-        let at = pos2(bar.right() - 8.0 - 30.0 - 6.0 - 15.0, bar.center().y);
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        frame(app, &ctx, vec![button(true)]);
-        frame(app, &ctx, vec![button(false)]);
-    };
+    let click_lock = |app: &mut VectorcraftApp| click(app, "Lock (⌘2)");
     let locked = |app: &VectorcraftApp, id: &serde_json::Value| {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().locked
     };
@@ -4367,28 +4013,19 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    let click_first = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![]);
-        frame(app, &ctx, vec![]);
-        let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Left to right: the frame's margin, the handle and its spacing, then the first button.
-        let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.center().y);
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        frame(app, &ctx, vec![button(true)]);
-        frame(app, &ctx, vec![button(false)]);
-    };
     let first = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();
         st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().unwrap()
     };
+    let first_action = |app: &mut VectorcraftApp| offer(app).and_then(|o| o.actions.first().map(|a| a.0));
     assert!(matches!(first(&app).kind, NodeKind::Image(_)));
-    click_first(&mut app);
+    assert_eq!(first_action(&mut app), Some("Image Trace"));
+    click(&mut app, "Image Trace");
     assert_eq!(first(&app).name.as_deref(), Some("Image Trace"), "the image was traced");
     assert_eq!(app.ui.open_panel, None, "the Image Trace panel is left as it was");
 
-    click_first(&mut app);
+    assert_eq!(first_action(&mut app), Some("Expand"));
+    click(&mut app, "Expand");
     let expanded = first(&app);
     assert_ne!(expanded.name.as_deref(), Some("Image Trace"), "the trace was expanded");
     let mut images = 0;
@@ -4443,14 +4080,8 @@ fn the_task_bar_removes_a_selected_images_background() {
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "dot.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    let labels = task_bar_labels(&mut app, &ctx);
-    let at = labels.iter().find(|(t, _)| t == "Remove Background").map(|(_, r)| r.center()).expect("Remove Background is offered");
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
-    frame(&mut app, &ctx, vec![button(true)]);
-    frame(&mut app, &ctx, vec![button(false)]);
-    assert!(app.ui.dialog.is_none(), "it runs at once");
+    click(&mut app, "Remove Background");
+    assert!(!app.any_dialog_open(), "it runs at once");
     let st = app.session.active().unwrap();
     let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
     let px = craft_image_codecs::decode(&st.doc.images[&im.key].bytes)
@@ -4474,25 +4105,6 @@ fn the_task_bar_removes_a_selected_images_background() {
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
 }
 
-/// The labels the Contextual Task Bar draws in a headless frame (after one to lay it out), with
-/// their rects; none while it isn't shown. The SVG loaders are installed so the icons draw as
-/// images instead of egui's ⚠ placeholder, which the label list would otherwise pick up.
-fn task_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect)> {
-    egui_extras::install_image_loaders(ctx);
-    frame(app, ctx, vec![]);
-    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-    out.textures_delta.clear();
-    let Some(bar) = task_bar_rect(ctx) else { return vec![] };
-    out.shapes
-        .iter()
-        .filter_map(|c| match &c.shape {
-            egui::Shape::Text(t) if bar.contains(t.visual_bounding_rect().center()) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
-            _ => None,
-        })
-        .collect()
-}
-
 /// A selected group's Contextual Task Bar offers Ungroup and Isolate. While an opacity mask is
 /// edited, when Enter Isolation Mode is off, a group in the mask art gets Ungroup without Isolate.
 #[test]
@@ -4500,8 +4112,6 @@ fn the_task_bar_leaves_isolate_out_while_an_opacity_mask_is_edited() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
     let rect = |app: &mut VectorcraftApp, x: f64| {
         app.session.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone()
     };
@@ -4511,12 +4121,17 @@ fn the_task_bar_leaves_isolate_out_while_an_opacity_mask_is_edited() {
         app.session.execute("object.group", &json!({})).unwrap();
     };
     group(&mut app, 20.0);
-    assert_eq!(names(&mut app), ["Ungroup", "Isolate", "Duplicate"]);
+    assert_eq!(task_bar_actions(&mut app), ["Ungroup", "Isolate", "Duplicate"]);
     let (obj, m) = (rect(&mut app, 200.0), rect(&mut app, 200.0));
     app.session.execute("transparency.makeOpacityMask", &json!({"ids": [obj, m]})).unwrap();
     app.session.execute("transparency.editOpacityMask", &json!({"id": obj})).unwrap();
     group(&mut app, 200.0);
-    assert_eq!(names(&mut app), ["Ungroup", "Duplicate"]);
+    assert_eq!(task_bar_actions(&mut app), ["Ungroup", "Duplicate"]);
+}
+
+/// The names of the actions the Contextual Task Bar shows, in order; none while it isn't shown.
+fn task_bar_actions(app: &mut VectorcraftApp) -> Vec<&'static str> {
+    offer(app).map(|o| o.actions.iter().map(|a| a.0).collect()).unwrap_or_default()
 }
 
 /// The Artboard tool's Contextual Task Bar buttons act on its selected artboards: Resize opens
@@ -4530,27 +4145,24 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     app.select_tool("artboard");
     crate::panels::artboards::select(&mut app, 2);
     app.session.set_tool_option("selected", &json!([2, 0]));
-    let ctx = egui::Context::default();
-    let press = |app: &mut VectorcraftApp, label: &str| {
-        let labels = task_bar_labels(app, &ctx);
-        let at = labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1.center();
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        frame(app, &ctx, vec![button(true)]);
-        frame(app, &ctx, vec![button(false)]);
-        app.ui.dialog.take()
-    };
-    let d = press(&mut app, "Resize").expect("Artboard Options");
-    assert_eq!((d.kind.as_str(), d.f64("index", 9.0)), ("artboardOptions", 2.0));
-    let d = press(&mut app, "Rearrange All").expect("Rearrange All Artboards");
-    assert_eq!(d.kind, crate::dialogs::rearrange_artboards::KIND);
-    let d = press(&mut app, "Export").expect("Export for Screens");
-    assert_eq!((d.kind.as_str(), &d.fields["boards"]), (crate::dialogs::EXPORT_FOR_SCREENS, &json!([true, false, true])));
+    // The fields of the open dialog `D`, which the test then closes so the canvas takes the next click.
+    fn fields_then_cancel<D: StackDialog>(app: &mut VectorcraftApp) -> serde_json::Value {
+        let fields = app.dialogs().and_then(|d| d.with(|h| h.get::<D>().and_then(|d| d.json_fields()))).unwrap_or_default();
+        cancel_dialog::<D>(app);
+        fields
+    }
+    click(&mut app, "Resize");
+    assert_eq!(fields_then_cancel::<crate::dialogs::artboard_options::ArtboardOptionsDialog>(&mut app)["index"], json!(2), "Artboard Options");
+    click(&mut app, "Rearrange All");
+    fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app);
+    click(&mut app, "Export");
+    assert_eq!(fields_then_cancel::<crate::dialogs::ExportForScreensDialog>(&mut app)["boards"], json!([true, false, true]), "Export for Screens");
 
     let boards =
         |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| (a.name.clone(), a.rect.size())).collect::<Vec<_>>();
     let before = boards(&app);
-    assert!(press(&mut app, "Duplicate").is_none());
+    click(&mut app, "Duplicate");
+    assert!(!app.any_dialog_open());
     let after = boards(&app);
     assert_eq!(after[..3], before[..]);
     assert_eq!(after[3..], [("Artboard 1 copy".to_string(), before[0].1), ("Artboard 3 copy".to_string(), before[2].1)]);
@@ -4559,32 +4171,8 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     assert_eq!(boards(&app), before, "one undo step");
 }
 
-/// The names and places of the buttons the Contextual Task Bar draws, from the accessibility tree
-/// (`ctx` has it enabled): an icon-only button is named by its hover text.
-fn task_bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect)> {
-    frame(app, ctx, vec![]);
-    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-    out.textures_delta.clear();
-    let Some(bar) = task_bar_rect(ctx) else { return vec![] };
-    let Some(update) = out.platform_output.accesskit_update.as_ref() else { return vec![] };
-    let mut v: Vec<(String, egui::Rect)> = update
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
-        .filter_map(|(_, n)| {
-            let b = n.bounds()?;
-            let r = egui::Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32));
-            let label = n.label()?;
-            bar.contains(r.center()).then(|| (label.to_string(), r))
-        })
-        .collect();
-    v.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
-    v
-}
-
 /// With anchors direct-selected, the Contextual Task Bar offers Remove Anchor Points, Connect,
-/// Cut Path and the two convert buttons, which show their icons alone. Converting to smooth and to
+/// Cut Path and the two convert buttons. Converting to smooth and to
 /// corner changes the selected anchor, Cut Path opens the path there and Connect closes it again,
 /// as the Control bar's anchor buttons do.
 #[test]
@@ -4594,11 +4182,7 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     let id = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 80})).unwrap()["id"].as_u64().unwrap();
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
-    assert_eq!(names(&mut app), ["Remove Anchor Points", "Connect", "Cut Path", "Duplicate"]);
-    let buttons = task_bar_buttons(&mut app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    let buttons = task_bar_actions(&mut app);
     let expected = [
         "Remove Anchor Points",
         "Connect",
@@ -4608,29 +4192,21 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
         "Duplicate",
     ];
     assert_eq!(buttons[..expected.len()], expected, "{buttons:?}");
-    let press = |app: &mut VectorcraftApp, label: &str| {
-        let labels = task_bar_buttons(app, &ctx);
-        let at = labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1.center();
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
-        frame(app, &ctx, vec![button(true)]);
-        frame(app, &ctx, vec![button(false)]);
-    };
     let subpath =
         |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().path_data().unwrap().subpaths[0].clone();
     let last_undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().unwrap().label.clone();
-    press(&mut app, "Convert Selected Anchor Points to Smooth");
+    click(&mut app, "Convert Selected Anchor Points to Smooth");
     let a = subpath(&app).anchors[1];
     assert!(a.has_in() && a.has_out(), "smooth: {a:?}");
     assert_eq!(last_undo(&app), "Convert Anchor Points");
-    press(&mut app, "Convert Selected Anchor Points to Corner");
+    click(&mut app, "Convert Selected Anchor Points to Corner");
     let a = subpath(&app).anchors[1];
     assert!(!a.has_in() && !a.has_out(), "corner: {a:?}");
-    press(&mut app, "Cut Path");
+    click(&mut app, "Cut Path");
     assert_eq!(last_undo(&app), "Cut Path");
     let sp = subpath(&app);
     assert!(!sp.closed && sp.anchors.len() == 5, "the rectangle opens at the anchor: {sp:?}");
-    press(&mut app, "Connect");
+    click(&mut app, "Connect");
     assert_eq!(last_undo(&app), "Join");
     let sp = subpath(&app);
     assert!(sp.closed && sp.anchors.len() == 4, "the ends join again: {sp:?}");
@@ -4990,28 +4566,24 @@ fn the_task_bar_stays_up_through_a_click_and_gives_way_to_a_drag() {
     app.run("shape.rectangle", json!({"x": 40, "y": 60, "width": 60, "height": 60})).unwrap();
     app.run("shape.rectangle", json!({"x": 260, "y": 60, "width": 60, "height": 60})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
-    for _ in 0..30 {
-        frame(&mut app, &ctx, vec![]);
-    }
-    let first = task_bar_rect(&ctx).expect("the task bar shows under the second rectangle");
-    let xf = app.canvas_view().unwrap();
-    let at = xf.to_screen(Point::new(70.0, 90.0));
-    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(at, true)]);
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.session.tool_busy(), "the press is under way");
-    let pressed = task_bar_rect(&ctx).expect("the task bar stays up through the press");
-    assert!(pressed.center().x < first.center().x - 50.0, "it moved under the rectangle pressed: {pressed:?} from {first:?}");
-    // Dragged, it gives way until the drag ends.
-    let to = at + vec2(40.0, 30.0);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + vec2(20.0, 15.0))]);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
-    frame(&mut app, &ctx, vec![]);
-    assert!(task_bar_rect(&ctx).is_none(), "hidden while the object is dragged");
-    frame(&mut app, &ctx, vec![button(to, false)]);
-    frame(&mut app, &ctx, vec![]);
-    assert!(task_bar_rect(&ctx).is_some(), "back once the drag ends");
+    on_canvas(&mut app, |rig| {
+        let first = rig.target(BAR).expect("the task bar shows under the second rectangle").rect;
+        let at = rig.app().canvas_view().unwrap().to_screen(Point::new(70.0, 90.0));
+        let press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() };
+        rig.fx.frame(vec![egui::Event::PointerMoved(at), press]);
+        rig.fx.frame(vec![]);
+        assert!(rig.app().session.tool_busy(), "the press is under way");
+        let pressed = rig.fx.by_label(BAR).expect("the task bar stays up through the press").rect;
+        assert!(pressed.center().x < first.center().x - 50.0, "it moved under the rectangle pressed: {pressed:?} from {first:?}");
+        // Dragged, it gives way until the drag ends.
+        let to = at + vec2(40.0, 30.0);
+        rig.fx.frame(vec![egui::Event::PointerMoved(at + vec2(20.0, 15.0))]);
+        rig.fx.frame(vec![egui::Event::PointerMoved(to)]);
+        rig.fx.frame(vec![]);
+        assert!(rig.fx.by_label(BAR).is_none(), "hidden while the object is dragged");
+        rig.fx.release_at(to);
+        assert!(rig.fx.by_label(BAR).is_some(), "back once the drag ends");
+    });
 }
 
 /// The fade is drawn only on the canvas: exports with the Artboard tool active and the fade on are
@@ -5030,7 +4602,7 @@ fn the_pasteboard_fade_leaves_exports_unchanged() {
     app.select_tool("artboard");
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
-    assert!(fades_outside_artboards(&app));
+    assert!(super::artboards::fades_outside_artboards(&app));
     assert_eq!(exports(&mut app), plain);
 }
 
@@ -5152,31 +4724,8 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }
 
-/// The labels the Contour bar draws in a headless frame, with their rects; none while it isn't
-/// shown.
-fn contour_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
-    egui_extras::install_image_loaders(ctx);
-    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-    out.textures_delta.clear();
-    let Some(bar) = contour_bar::bar_rect(ctx) else { return vec![] };
-    out.shapes
-        .iter()
-        .filter_map(|c| match &c.shape {
-            egui::Shape::Text(t) if bar.contains(t.visual_bounding_rect().center()) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
-            _ => None,
-        })
-        .collect()
-}
-
-/// A click on the centre of the label `name` of the Contour bar, laid out by one frame before it.
-fn click_contour_bar(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
-    let labels = contour_bar_labels(app, ctx, vec![]);
-    let at = labels.iter().find(|(t, _)| t == name).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{name}` in {labels:?}"));
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    contour_bar_labels(app, ctx, vec![egui::Event::PointerMoved(at)]);
-    contour_bar_labels(app, ctx, vec![button(true), button(false)]);
-}
+/// The Contour bar's corner styles and Bake, by name.
+const CONTOUR_CONTROLS: [&str; 4] = ["Sharp", "Round", "Square", "Bake"];
 
 /// The Contour bar shows with the Contour tool and a shape selected: Sharp, Round and Square set the
 /// corner style (of a selected Contour at once, else of the next one), and Bake turns a Contour into
@@ -5186,17 +4735,13 @@ fn the_contour_bar_sets_corners_and_bakes() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
-    let ctx = egui::Context::default();
+    let shown = |app: &mut VectorcraftApp| on_canvas(app, |rig| CONTOUR_CONTROLS.into_iter().filter(|n| rig.target(n).is_some()).collect::<Vec<_>>());
 
     // Only the Contour tool shows it.
     app.select_tool("selection");
-    assert!(contour_bar_labels(&mut app, &ctx, vec![]).is_empty());
+    assert!(shown(&mut app).is_empty());
     app.select_tool("contour");
-    contour_bar_labels(&mut app, &ctx, vec![]);
-    let names: Vec<String> = contour_bar_labels(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
-    for want in ["Contour", "Sharp", "Round", "Square", "Bake"] {
-        assert!(names.iter().any(|n| n == want), "{want} in {names:?}");
-    }
+    assert_eq!(shown(&mut app), CONTOUR_CONTROLS);
     let offsets = |app: &VectorcraftApp| {
         let mut found = vec![];
         app.session.active().unwrap().doc.walk(|n| {
@@ -5209,20 +4754,20 @@ fn the_contour_bar_sets_corners_and_bakes() {
 
     // No Contour yet: Round is kept for the next one, and Bake does nothing.
     let steps = app.session.active().unwrap().history.undo.len();
-    click_contour_bar(&mut app, &ctx, "Round");
+    click(&mut app, "Round");
     assert_eq!(app.session.tool_options()["corners"], json!("round"));
-    click_contour_bar(&mut app, &ctx, "Bake");
+    click(&mut app, "Bake");
     assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing to bake");
     assert!(offsets(&app).is_empty());
 
     // A Contour made now has round corners; Square changes the selected Contour in place.
     app.session.execute("addon.contour.set", &json!({"offset": 8, "corners": "round"})).unwrap();
     assert_eq!(offsets(&app), ["round"]);
-    click_contour_bar(&mut app, &ctx, "Square");
+    click(&mut app, "Square");
     assert_eq!(offsets(&app), ["bevel"], "the selected Contour changed, none was added");
 
     // Bake: the live effect is gone and the art stays.
-    click_contour_bar(&mut app, &ctx, "Bake");
+    click(&mut app, "Bake");
     assert!(offsets(&app).is_empty(), "baked");
 }
 

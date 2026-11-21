@@ -14,6 +14,7 @@ use std::sync::Arc;
 // PLAN: assumed import paths of the framework items below: `craft::ui::primitives::IconId`,
 // `craft::ui::runtime::commands::{CommandState, CommandStates}`, `craft::ui::menu::PanelRow`,
 // `craft::ui::patterns::presets::*`, `crate::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
+use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton, SplitButton, ToggleButton};
 use craft::ui::choice::Checkbox;
@@ -23,10 +24,9 @@ use craft::ui::form::{Field, SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::presets::{
-    NamedPresetEvent, NamedPresetRow, NamedPresetStyle, PickerField, PresetError, PresetPicker, PresetRow, PresetState,
+    NameCheck, NamedPresetEvent, NamedPresetRow, NamedPresetStyle, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
 };
 use craft::ui::pickers::Select;
-use craft::behavior::IconId;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::sections::Section;
 use egui::Ui;
@@ -806,14 +806,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let mut value = list.presets.iter().any(|p| p.0 == st.preset).then(|| st.preset.clone());
     let session = &app.session;
+    let source = PresetSource::listed(&list.rows);
+    let taken = |name: &str| session.trace_preset_taken(name, None).then_some(PresetError::NameTaken);
     let preset_row = NamedPresetRow::new(
         tl!("Preset:"),
-        PresetPicker::new(tl!("Preset"), Bind::bound(&mut value), &list.rows, Bind::bound(&mut app.ui.image_trace_panel.picker))
+        PresetPicker::new(tl!("Preset"), Bind::bound(&mut value), &source, Bind::bound(&mut app.ui.image_trace_panel.picker))
             .field(PickerField::Name),
     )
     .style(NamedPresetStyle::Menu)
     .built_in(|name: &String| list.presets.iter().any(|p| p.3 && p.0 == *name))
-    .check_name(|name: &str| session.trace_preset_taken(name, None).then_some(PresetError::NameTaken))
+    .check_name(NameCheck::of_host(&taken))
     .suggest_name(session.new_trace_preset_name())
     .show(ui);
     for event in preset_row.events {
@@ -839,13 +841,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     Row::new().show(ui, |ui, _| {
         picked = view_pick(ui, st.view);
         let tip = tl!("Press and hold to view the source image");
-        held = IconButton::new(IconId::new("eye"))
-            .label(tip)
-            .tooltip(tip)
-            .selected(app.ui.trace_hold_source.is_some())
-            .enabled(any_trace)
-            .show(ui)
-            .held;
+        held =
+            IconButton::new(IconId::new("eye")).label(tip).tooltip(tip).selected(app.ui.trace_hold_source.is_some()).enabled(any_trace).show(ui).held;
     });
     if let Some(v) = picked {
         st.view = v;

@@ -21,32 +21,32 @@ use crate::dialogs::simplify_slider::StripKind;
 use crate::{VectorcraftApp, canvas};
 
 /// The bar's access name, as the framework's `TaskBar` gives it.
-pub(super) const BAR: &str = "Contextual Task Bar";
+pub(crate) const BAR: &str = "Contextual Task Bar";
 
 /// The room of a canvas fixture.
 const CANVAS_ROOM: Vec2 = vec2(1000.0, 700.0);
 
 /// An app shown in a framework fixture. The fixture's closure owns what it shows, so the app lives in
 /// an `Rc<RefCell<..>>` that [`driven`] moves it into and back out of.
-pub(super) struct Rig {
+pub(crate) struct Rig {
     app: Rc<RefCell<VectorcraftApp>>,
     /// The fixture, for the input a test sends beyond a click.
-    pub(super) fx: Fixture,
+    pub(crate) fx: Fixture,
 }
 
 impl Rig {
     /// The shown app, for commands and reads between frames.
-    pub(super) fn app(&self) -> RefMut<'_, VectorcraftApp> {
+    pub(crate) fn app(&self) -> RefMut<'_, VectorcraftApp> {
         self.app.borrow_mut()
     }
 
     /// The node named `name` once the frames have settled.
-    pub(super) fn target(&mut self, name: &str) -> Option<Target> {
+    pub(crate) fn target(&mut self, name: &str) -> Option<Target> {
         self.fx.settle().by_label(name)
     }
 
     /// Clicks the node named `name`.
-    pub(super) fn click(&mut self, name: &str) {
+    pub(crate) fn click(&mut self, name: &str) {
         let target = self.target(name).unwrap_or_else(|| panic!("no node named {name:?}"));
         self.fx.click(&target);
         self.fx.settle();
@@ -110,6 +110,8 @@ pub(super) fn driven<R>(app: &mut VectorcraftApp, room: Vec2, show: fn(&mut Vect
     let mut fx = Fixture::new(move |ui| show(&mut shown.borrow_mut(), ui));
     fx.room(room);
     crate::testing::install(fx.ctx());
+    // The window's dialog host is the fixture's, as a real window's frame gives the app its context.
+    held.borrow_mut().adopt_context(fx.ctx());
     let mut rig = Rig { app: held, fx };
     let out = f(&mut rig);
     let Rig { app: held, fx } = rig;
@@ -119,7 +121,7 @@ pub(super) fn driven<R>(app: &mut VectorcraftApp, room: Vec2, show: fn(&mut Vect
 }
 
 /// [`driven`] on the canvas.
-pub(super) fn on_canvas<R>(app: &mut VectorcraftApp, f: impl FnOnce(&mut Rig) -> R) -> R {
+pub(crate) fn on_canvas<R>(app: &mut VectorcraftApp, f: impl FnOnce(&mut Rig) -> R) -> R {
     driven(
         app,
         CANVAS_ROOM,
@@ -148,13 +150,13 @@ fn select(app: &mut VectorcraftApp, ids: &[u64]) {
     app.run("select.set", json!({"ids": ids})).unwrap();
 }
 
-/// Clicks the bar's node named `name`.
-fn click(app: &mut VectorcraftApp, name: &str) {
+/// Clicks the canvas's node named `name`.
+pub(crate) fn click(app: &mut VectorcraftApp, name: &str) {
     on_canvas(app, |rig| rig.click(name));
 }
 
 /// The bar's offer once the canvas is laid out.
-fn offer(app: &mut VectorcraftApp) -> Option<Offer> {
+pub(crate) fn offer(app: &mut VectorcraftApp) -> Option<Offer> {
     on_canvas(app, |rig| {
         rig.fx.settle();
         offered(&mut rig.app())

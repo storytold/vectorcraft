@@ -37,7 +37,7 @@ mod raster;
 pub(crate) mod rulers;
 mod selection;
 mod selection_widgets;
-mod task_bar;
+pub(crate) mod task_bar;
 mod tool_adapter;
 mod widgets;
 
@@ -49,7 +49,7 @@ use home::home;
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
-pub(crate) use rulers::{general_lengths, type_lengths};
+pub(crate) use rulers::{general_lengths, stroke_lengths, type_lengths};
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
 pub(crate) use tool_adapter::{in_gesture, pose_on_page};
@@ -67,6 +67,11 @@ pub(crate) enum BodyKind {
 /// Performance › Animated Zoom, which needs GPU Performance.
 pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
     p.animated_zoom && p.gpu_performance
+}
+
+/// Whether a 3D effect is edited in its dialog: the selection's marks and widgets give way to the dialog's gizmo.
+pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
+    app.three_d_dialog.is_some()
 }
 
 /// The id `Canvas::new("Document")` gets for a body of `win`.
@@ -130,8 +135,13 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     }
     let moved = view.moved.take();
     let mut cv = view.canvas(scaling, area);
-    // The rulers' zero point reaches the canvas through the strips `rulers::show` shows in the body.
-    let (x, y, _zero) = rulers::texts(app, win);
+    let (x, y, mut zero) = rulers::texts(app, win);
+    let strips = if app.ui.view.rulers && !presenting {
+        Some(rulers::strips(&mut zero, kind))
+    } else {
+        rulers::hidden(app);
+        None
+    };
     let pasteboard = app.session.documents().get(win.0).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
     let layers = move || bounds;
     let prefs = &app.session.prefs;
@@ -143,6 +153,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .queued(&queued)
         .navigation(crate::app::view::navigation(prefs))
         .rulers(x, y)
+        .with_rulers(strips)
         .precise_cursors(prefs.use_precise_cursors);
     if let Some(pasteboard) = pasteboard {
         canvas = canvas.pasteboard(pasteboard);
@@ -159,6 +170,11 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         }
     });
     let output = shown.output;
+    if kind == BodyKind::Live
+        && let Some(out) = &output.rulers
+    {
+        rulers::apply(app, ui, out);
+    }
     let pressed = matches!(output.press.phase, PressPhase::Down { .. });
     let Body { reply, context_at, edited } = body;
     let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
@@ -195,16 +211,10 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         crate::panels::tabs::stop_guide(app, ui, space);
         crate::dialogs::simplify_slider::show(app, ui, &space.view);
     }
-    if app.ui.view.rulers && !presenting {
-        rulers::show(app, ui, space, win, kind);
-    } else {
-        rulers::hidden(app);
-    }
     guides::show(app, ui, space, win, kind);
     selection::show(app, ui, space, win, kind);
     widgets::show(app, ui, space, win, kind);
-    let gizmo = crate::dialogs::three_d::gizmo_shown(app);
-    if !presenting && !gizmo {
+    if !presenting && !revolve_editing(app) {
         crate::panels::three_d::handles::show(app, ui, space);
     }
     if live {
@@ -213,7 +223,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         if app.ui.screen_mode < 3 {
             let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
             // The bars give way to a drag, not to a click.
-            let task_bar = (app.ui.task_bar && !gizmo && !strip && !in_gesture(app, ui.ctx())).then(|| task_bar::task_bar(app, ui, space)).flatten();
+            let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !in_gesture(app, ui.ctx()))
+                .then(|| task_bar::task_bar(app, ui, space))
+                .flatten();
             quick_pen_bar::quick_pen_bar(app, ui, space);
             contour_bar::contour_bar(app, ui, space);
             // After the task bar, which the row of character alternates keeps clear of.

@@ -29,7 +29,6 @@ use serde_json::{Map, Value, json};
 use vectorcraft_color::cms;
 use vectorcraft_color::{Color, GradientKind, Paint};
 
-// PLAN: assumed `crate::panels::proxy_events(app, &SwatchPairOutput)` (co.A2, hub-w2).
 use super::{Live, active_paint, color_json, live_run, proxy_events};
 use crate::VectorcraftApp;
 use crate::edits::{EditPath, apply_event};

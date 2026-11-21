@@ -5,7 +5,6 @@
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::Ordering;
 
 use craft::keymap::{Binding, CommandDef, CommandRef, Mods, Scope};
 use craft::menu::{Item, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
@@ -18,7 +17,7 @@ use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
 use super::{TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
-use crate::VectorcraftApp;
+use crate::{UiState, VectorcraftApp};
 
 /// The application's name in the application menu and in the layout's own rows.
 pub(crate) const APP_NAME: &str = "VectorCraft";
@@ -38,10 +37,18 @@ pub(crate) struct Menus {
     /// The menus as built, before a layout.
     pub(crate) bar: MenuBar,
     /// `bar` laid out for the shell's target: what the in-window bar shows.
-    pub(crate) laid: MenuBar,
+    pub(crate) laid: Tracked<MenuBar>,
     /// The states of the catalogued commands and of every menu item's reference.
     pub(crate) states: Tracked<CommandStates>,
     catalog: Option<AppCatalog>,
+}
+
+impl Menus {
+    /// The generation of the catalog the last rebuild made, 0 before the first: what the palette's
+    /// index is built for.
+    pub(crate) fn catalog_generation(&self) -> u64 {
+        self.catalog.as_ref().map_or(0, AppCatalog::generation)
+    }
 }
 
 /// What the Home screen remembers when it opens (`app.home`): the active document and the
@@ -85,7 +92,7 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), crate::dialogs::proof_setup::saved_revision()).hash(&mut h);
-    crate::shortcut_editor::GENERATION.load(Ordering::Relaxed).hash(&mut h);
+    hash_listed_names(&app.ui, &mut h);
     let fonts = vectorcraft_text::FontDb::global();
     (fonts.generation(), fonts.installed_fonts_ready()).hash(&mut h);
     // What the in-window labels read.
@@ -147,18 +154,21 @@ fn role(title: &str) -> MenuRole {
 }
 
 /// The hash of what the catalog's rows depend on, which moves its generation.
-fn generation() -> u64 {
+fn generation(ui: &UiState) -> u64 {
     let mut h = DefaultHasher::new();
-    let fonts = vectorcraft_text::FontDb::global();
-    (
-        crate::i18n::current().code(),
-        plugin_revision(),
-        crate::scripts_menu::revision(),
-        crate::shortcut_editor::GENERATION.load(Ordering::Relaxed),
-        fonts.generation(),
-    )
-        .hash(&mut h);
+    (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), vectorcraft_text::FontDb::global().generation()).hash(&mut h);
+    hash_listed_names(ui, &mut h);
     h.finish()
+}
+
+/// Hashes the names of the saved workspaces and the custom toolbars, which the Window menu lists as rows.
+fn hash_listed_names(ui: &UiState, h: &mut DefaultHasher) {
+    for w in &ui.workspaces.set.saved {
+        w.name.hash(h);
+    }
+    for t in &ui.custom_toolbars {
+        t.name.hash(h);
+    }
 }
 
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
@@ -180,13 +190,15 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let bar = MenuBar::new(menus);
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
-    match AppCatalog::new(defs, generation()) {
+    match AppCatalog::new(defs, generation(&app.ui)) {
         Ok(catalog) => app.menus.catalog = Some(catalog),
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),
     }
     app.menus.bar = bar;
-    app.menus.laid = laid;
+    if *app.menus.laid != laid {
+        app.menus.laid.edit(|l| *l = laid);
+    }
     app.menus.states.edit(|s| *s = states);
 }
 

@@ -1,14 +1,9 @@
-// PLAN: `panels/actions.rs` (not in this set's Files table) declares `#[cfg(test)] mod tests_edits;` and drops the 48 moved tests; owners menus-w13 / menus-w14 / menus-w16 / menus-w17.
-// PLAN: assumed menus-w14 `tests_support` signatures (all `pub(super)`): `app_with_sets() -> VectorcraftApp`; `app_with_three_moves() / app_with_a_stop(bool) / app_with_a_view_step() -> (VectorcraftApp, closure)`; `app_with_two_rectangles() -> (VectorcraftApp, closure, [u64; 2])`; `app_with_a_noted_rect()` (base signature); `push_set(&mut app, &str, Vec<Action>)`; `action(&str, Vec<(&str, Value)>) -> Action`; `steps(&app, set, action) -> Vec<(String, Value)>`; `counts(&app) -> Vec<usize>` (actions per set, in set order); `set_names(&app) -> Vec<String>`; `undo_steps(&app) -> usize`; `select_set(&mut app, &str)`; `current_set(&app) -> Option<String>`; `recording_into(&app) -> Option<String>`; `select_action(&mut app, usize)` / `selected_action(&app) -> Option<usize>` (index into `ActionList::actions`); `select_step(&mut app, usize, usize)` / `selected_step(&app) -> Option<(usize, usize)>` (action index, step); `dialog_field::<D>(&app, &str) -> Value`; `set_dialog::<D>(&mut app, &str, Value)`; `confirm_dialog::<D>(&mut app) -> Result<(), String>` (Err is the refusal reason); `cancel_dialog::<D>(&mut app)`.
-// PLAN: assumed `app.dialogs() -> &DialogHost` and `app.dialogs_mut() -> &mut DialogHost`; dialog types `crate::dialogs::{action_batch::BatchDialog, action_new::NewActionDialog, action_set_options::SetOptionsDialog, action_stop::RecordStopDialog, action_insert_menu_item::InsertMenuItemDialog}`; `edits::{new_set(&mut app, &str) -> Result<_, String>, ask_reset(&mut app), ask_clear(&mut app), take_answers(&mut app), ActionsQuestion}`; `menu::run(&mut app, &str)` returning `()`; `model::prefs::serialize(&ActionList) -> Value`; `files::{MAX_ACTION_STEPS, MAX_SET_FILE, write_set(&ActionList, &str) -> String}`.
-// PLAN: assumed `ui.actionSet.delete` / `ui.actionSet.clear` take `names`, a gone name in a plain delete answers "no such action set", `clear` with names that are not a list answers "the action set names are not a list", and an action's function key is stored in `Action::options` as `key`, `cmd`, `shift`.
 use std::collections::BTreeSet;
 
 use craft::automation::actions::{ActionColor, ActionList, ActionStep};
 use craft::automation::ui::actions::LibraryPrompt;
-use craft::ui::dialog::PromptChoice; // PLAN: assumed path of craft-ui-panels in the app
+use craft::ui::dialog::{PromptChoice, StackDialog};
 use serde_json::{Value, json};
-use vectorcraft_engine::Session;
 
 use super::edits::{self, ActionsQuestion};
 use super::tests_support::*;
@@ -21,18 +16,16 @@ use crate::dialogs::action_stop::RecordStopDialog;
 
 /// The index in `ActionList::actions` of action `action` of set `set` (both in panel order).
 fn global(app: &VectorcraftApp, set: usize, action: usize) -> usize {
-    let name = set_names(app).get(set).cloned().expect("the set exists");
-    let found = app.ui.actions.actions().iter().enumerate().filter(|(_, a)| a.set.as_deref() == Some(name.as_str())).nth(action);
-    found.map(|(i, _)| i).expect("the action exists")
+    model::flat(&app.ui.actions, set, action).expect("the action exists")
 }
 
 fn at(app: &VectorcraftApp, set: usize, action: usize) -> &Action {
     app.ui.actions.action(global(app, set, action)).expect("the action exists")
 }
 
-fn action_names(app: &VectorcraftApp, set: usize) -> Vec<String> {
-    let name = set_names(app).get(set).cloned().expect("the set exists");
-    app.ui.actions.actions().iter().filter(|a| a.set.as_deref() == Some(name.as_str())).map(|a| a.name.clone()).collect()
+/// The steps of action `action` in set `set`, each as its command and params.
+fn steps(app: &VectorcraftApp, set: usize, action: usize) -> Vec<(String, Value)> {
+    at(app, set, action).steps.iter().map(|s| (s.command.clone(), s.params.clone())).collect()
 }
 
 /// Excludes the given steps of an action that has none excluded.
@@ -54,42 +47,58 @@ fn clear_steps(app: &mut VectorcraftApp, set: usize, action: usize) {
     }
 }
 
-/// The steps of action `action` in set `set`: each command, with its `dx` when it has one.
-fn step_names(app: &VectorcraftApp, set: usize, action: usize) -> Vec<String> {
-    steps(app, set, action)
-        .iter()
-        .map(|(c, p)| match p.get("dx") {
-            Some(dx) => format!("{c} {dx}"),
-            None => c.clone(),
-        })
-        .collect()
-}
-
 /// The function key of an action as `(key, cmd, shift)`; none for no key.
-fn key_of(app: &VectorcraftApp, set: usize, action: usize) -> Option<(i64, bool, bool)> {
-    let options = &at(app, set, action).options;
-    let key = options.get("key").and_then(Value::as_i64).filter(|k| *k != 0)?;
-    let flag = |name: &str| options.get(name).and_then(Value::as_bool).unwrap_or(false);
-    Some((key, flag("cmd"), flag("shift")))
-}
-
-fn left_of(app: &VectorcraftApp, id: u64) -> f64 {
-    app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0
-}
-
-/// The sets as Save Actions… writes them.
-fn saved_sets(app: &VectorcraftApp) -> Value {
-    super::model::prefs::serialize(&app.ui.actions)
+fn key_of(app: &VectorcraftApp, set: usize, action: usize) -> Option<(u8, bool, bool)> {
+    model::function_key(at(app, set, action)).map(|k| (k.key, k.cmd, k.shift))
 }
 
 /// The built-in set as a new app has it.
 fn built_in() -> Value {
-    saved_sets(&VectorcraftApp::new(Session::new(), Default::default()))
+    saved_sets(&new_app())
 }
 
-/// The names the open question asks about, when it asks about sets.
-fn question_names(app: &VectorcraftApp) -> Option<Vec<String>> {
-    app.dialogs().get::<ActionsQuestion>().and_then(|q| q.0.tag_as::<Vec<String>>().cloned())
+/// The current set: where a recording goes.
+fn current_set(app: &VectorcraftApp) -> Option<String> {
+    app.ui.action_set.clone()
+}
+
+/// Clicks the header of the set `name`: it is selected and current.
+fn select_set(app: &mut VectorcraftApp, name: &str) {
+    app.ui.actions_panel.selected = Some(ActionSelection::Set(name.to_string()));
+    app.ui.action_set = Some(name.to_string());
+}
+
+/// The name of the set the recording in progress goes into.
+fn recording_set(app: &VectorcraftApp) -> Option<String> {
+    let (set, ..) = app.ui.recording.as_ref()?;
+    model::set_name(&app.ui.actions, *set).map(str::to_string)
+}
+
+/// Field `field` of the open `D`, as `ui.inspect` reports it.
+fn dialog_field<D: StackDialog>(app: &VectorcraftApp, field: &str) -> Value {
+    let fields = app.dialogs().and_then(|d| d.with(|h| h.get::<D>().and_then(StackDialog::json_fields)));
+    fields.expect("the dialog is open")[field].clone()
+}
+
+/// The index field `field` of the open `D`.
+fn dialog_index<D: StackDialog>(app: &VectorcraftApp, field: &str) -> Option<usize> {
+    dialog_field::<D>(app, field).as_u64().and_then(|i| usize::try_from(i).ok())
+}
+
+/// The name of the set the open `D` holds.
+fn dialog_set<D: StackDialog>(app: &VectorcraftApp) -> Option<String> {
+    set_names(app).get(dialog_index::<D>(app, "set")?).cloned()
+}
+
+/// The name of the action the open `D` holds.
+fn dialog_action<D: StackDialog>(app: &VectorcraftApp) -> Option<String> {
+    let flat = model::flat(&app.ui.actions, dialog_index::<D>(app, "set")?, dialog_index::<D>(app, "action")?)?;
+    app.ui.actions.action(flat).map(|a| a.name.clone())
+}
+
+/// What the open Actions question asks, when it is Reset's or Clear's.
+fn library_question(app: &VectorcraftApp) -> Option<LibraryPrompt> {
+    app.dialogs()?.with(|h| h.get::<ActionsQuestion>().and_then(|q| q.0.tag_as::<LibraryPrompt>().cloned()))
 }
 
 /// Answers the open Actions question as its buttons do, and takes the answer as the frame's pump does.
@@ -97,12 +106,22 @@ fn answer(app: &mut VectorcraftApp, choice: PromptChoice) {
     if choice == PromptChoice::Cancel {
         cancel_dialog::<ActionsQuestion>(app);
     } else {
-        if let Some(q) = app.dialogs_mut().get_mut::<ActionsQuestion>() {
-            q.0.set_choice(choice);
+        if let Some(dialogs) = app.dialogs() {
+            dialogs.with(|h| {
+                if let Some(q) = h.get_mut::<ActionsQuestion>() {
+                    q.0.set_choice(choice);
+                }
+            });
         }
         confirm_dialog::<ActionsQuestion>(app).expect("the question takes the answer");
     }
     edits::take_answers(app);
+}
+
+/// The panel menu's Delete.
+fn menu_delete(app: &mut VectorcraftApp) {
+    let ran = menu::run(app, &CommandRef::from(ActionsPanelCommands::Delete).id, &Value::Null);
+    ran.expect("Delete is a row of the panel menu").expect("the menu runs it");
 }
 
 fn new_doc(app: &mut VectorcraftApp) {
@@ -113,9 +132,11 @@ fn new_doc(app: &mut VectorcraftApp) {
 /// current one are saved with the UI preferences.
 #[test]
 fn create_new_set_names_a_set_that_recordings_go_into() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     new_doc(&mut app);
-    edits::new_set(&mut app, "Print").unwrap();
+    crate::dialogs::action_set_options::open_new(&mut app);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Print"));
+    confirm_dialog::<SetOptionsDialog>(&mut app).unwrap();
     assert_eq!((set_names(&app), counts(&app)), (vec!["Default Actions".to_string(), "Print".into()], vec![6, 0]));
     assert_eq!(current_set(&app).as_deref(), Some("Print"), "the new set is current");
     let rect = json!({"x": 10, "y": 10, "width": 20, "height": 20});
@@ -130,7 +151,7 @@ fn create_new_set_names_a_set_that_recordings_go_into() {
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(counts(&app), [7, 1], "recorded into the set made current");
     let saved = serde_json::to_value(&app.ui).unwrap();
-    let mut restored = VectorcraftApp::new(Session::new(), Default::default());
+    let mut restored = new_app();
     restored.ui = serde_json::from_value::<crate::state::UiState>(saved).unwrap();
     assert_eq!(set_names(&restored), ["Default Actions", "Print"]);
     assert_eq!(current_set(&restored).as_deref(), Some("Default Actions"));
@@ -162,13 +183,20 @@ fn rename_action_renames_one_action_and_refuses_bad_params() {
 /// and keeps the dialog open.
 #[test]
 fn options_with_a_field_that_is_not_an_index_change_nothing() {
+    use crate::dialogs::action_set_options::{open, open_action};
     let mut app = app_with_sets();
-    for (field, value) in [("set", json!(null)), ("set", json!(9)), ("set", json!("Gone")), ("action", json!(null)), ("action", json!(9))] {
-        crate::dialogs::action_set_options::open_action(&mut app, 1, 0);
+    for (of_action, field, value) in
+        [(true, "action", json!(null)), (true, "set", json!(null)), (true, "action", json!(9)), (false, "set", json!(null)), (false, "set", json!(9))]
+    {
+        if of_action {
+            open_action(&mut app, 1, 0);
+        } else {
+            open(&mut app, 1);
+        }
         set_dialog::<SetOptionsDialog>(&mut app, "name", json!("X"));
         set_dialog::<SetOptionsDialog>(&mut app, field, value.clone());
         assert!(confirm_dialog::<SetOptionsDialog>(&mut app).is_err(), "{field}={value}");
-        assert!(app.dialogs().is_open::<SetOptionsDialog>(), "the dialog stays open: {field}={value}");
+        assert!(is_open::<SetOptionsDialog>(&app), "the dialog stays open: {field}={value}");
         assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "{field}={value}");
         assert_eq!(action_names(&app, 1), ["Nudge", "Nudge Again"], "{field}={value}");
         cancel_dialog::<SetOptionsDialog>(&mut app);
@@ -180,18 +208,21 @@ fn options_with_a_field_that_is_not_an_index_change_nothing() {
 #[test]
 fn deleting_sets_moves_or_clears_the_selected_action() {
     let mut app = app_with_sets();
-    let named = |app: &VectorcraftApp| selected_action(app).and_then(|i| app.ui.actions.action(i)).map(|a| a.name.clone());
+    let named = |app: &VectorcraftApp| match app.ui.actions_panel.selected {
+        Some(ActionSelection::Action(i)) => app.ui.actions.action(i).map(|a| a.name.clone()),
+        _ => None,
+    };
     let nudge = app.ui.actions.actions().iter().position(|a| a.name == "Nudge Again").unwrap();
-    select_action(&mut app, nudge);
+    app.ui.actions_panel.selected = Some(ActionSelection::Action(nudge));
     app.run(DELETE_SETS, json!({"names": ["Default Actions"]})).unwrap();
     assert_eq!(named(&app).as_deref(), Some("Nudge Again"), "Nudge Again is still selected, at its new index");
-    push_set(&mut app, "Last", vec![action("Spin", vec![])]);
+    push_set(&mut app, "Last", vec![action("Spin", &[])]);
     let spin = app.ui.actions.actions().iter().position(|a| a.name == "Spin").unwrap();
-    select_action(&mut app, spin);
+    app.ui.actions_panel.selected = Some(ActionSelection::Action(spin));
     app.run(DELETE_SETS, json!({"names": ["Last"]})).unwrap();
-    assert_eq!(selected_action(&app), None, "the deleted set's action is no longer selected");
+    assert_eq!(app.ui.actions_panel.selected, None, "the deleted set's action is no longer selected");
     edits::new_set(&mut app, "Set 1").unwrap();
-    assert_eq!(selected_action(&app), None, "a new set starts with nothing selected");
+    assert_eq!(named(&app), None, "a new set starts with no action selected");
 }
 
 /// Delete Selection with a set selected asks first: Cancel keeps every set, Proceed deletes the
@@ -200,19 +231,19 @@ fn deleting_sets_moves_or_clears_the_selected_action() {
 fn delete_selection_asks_and_then_deletes_the_selected_set() {
     let mut app = app_with_sets();
     select_set(&mut app, "Mine");
-    menu::run(&mut app, "actionsPanel.delete");
-    assert!(app.dialogs().is_open::<ActionsQuestion>(), "Delete Selection asks before deleting a set");
-    assert_eq!(question_names(&app), Some(vec!["Mine".to_string()]));
+    menu_delete(&mut app);
+    assert!(is_open::<ActionsQuestion>(&app), "Delete Selection asks before deleting a set");
+    assert_eq!(asked(&app), Some(vec!["Mine".to_string()]));
     assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "nothing is deleted before the answer");
     answer(&mut app, PromptChoice::Cancel);
-    assert!(!app.dialogs().is_open::<ActionsQuestion>());
+    assert!(!is_open::<ActionsQuestion>(&app));
     assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "Cancel deletes nothing");
-    menu::run(&mut app, "actionsPanel.delete");
+    menu_delete(&mut app);
     answer(&mut app, PromptChoice::Proceed);
     assert_eq!(set_names(&app), ["Default Actions", "Other"], "Proceed deletes the selected set and its actions");
     assert_eq!(current_set(&app), None, "no set is current after the current one is deleted");
-    menu::run(&mut app, "actionsPanel.delete");
-    assert!(!app.dialogs().is_open::<ActionsQuestion>(), "nothing selected: nothing to ask about");
+    menu_delete(&mut app);
+    assert!(!is_open::<ActionsQuestion>(&app), "nothing selected: nothing to ask about");
 }
 
 /// After New Set makes another set current, the panel menu's Delete asks about that set and
@@ -221,10 +252,10 @@ fn delete_selection_asks_and_then_deletes_the_selected_set() {
 fn delete_after_new_set_targets_the_new_set() {
     let mut app = app_with_sets();
     let nudge = app.ui.actions.actions().iter().position(|a| a.name == "Nudge").unwrap();
-    select_action(&mut app, nudge);
+    app.ui.actions_panel.selected = Some(ActionSelection::Action(nudge));
     edits::new_set(&mut app, "Set 1").unwrap();
-    menu::run(&mut app, "actionsPanel.delete");
-    assert_eq!(question_names(&app), Some(vec!["Set 1".to_string()]), "the new set, not the action");
+    menu_delete(&mut app);
+    assert_eq!(asked(&app), Some(vec!["Set 1".to_string()]), "the new set, not the action");
     assert_eq!(action_names(&app, 1).len(), 2);
 }
 
@@ -235,14 +266,14 @@ fn ok_deletes_the_asked_set_after_an_earlier_set_is_deleted_under_the_question()
     let mut app = app_with_sets();
     push_set(&mut app, "Third", vec![]);
     select_set(&mut app, "Other");
-    menu::run(&mut app, "actionsPanel.delete");
-    assert_eq!(question_names(&app), Some(vec!["Other".to_string()]));
+    menu_delete(&mut app);
+    assert_eq!(asked(&app), Some(vec!["Other".to_string()]));
     app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
     assert_eq!(set_names(&app), ["Default Actions", "Other", "Third"]);
     answer(&mut app, PromptChoice::Proceed);
     assert_eq!(set_names(&app), ["Default Actions", "Third"], "Proceed deletes Other, the asked set");
     select_set(&mut app, "Third");
-    menu::run(&mut app, "actionsPanel.delete");
+    menu_delete(&mut app);
     app.run(DELETE_SETS, json!({"names": ["Third"]})).unwrap();
     answer(&mut app, PromptChoice::Proceed);
     assert_eq!(set_names(&app), ["Default Actions"], "the asked set is gone: Proceed deletes nothing else");
@@ -252,13 +283,13 @@ fn ok_deletes_the_asked_set_after_an_earlier_set_is_deleted_under_the_question()
 /// current, and New Set makes a set again.
 #[test]
 fn deleting_the_default_and_the_last_set_leaves_an_empty_panel() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.run(DELETE_SETS, json!({"names": ["Default Actions"]})).unwrap();
     assert!(app.ui.actions.actions().is_empty() && app.ui.actions.sets().is_empty());
     assert_eq!(current_set(&app), None);
     crate::dialogs::action_set_options::open_new(&mut app);
     confirm_dialog::<SetOptionsDialog>(&mut app).unwrap();
-    assert!(!app.dialogs().is_open::<SetOptionsDialog>());
+    assert!(!is_open::<SetOptionsDialog>(&app));
     assert_eq!((set_names(&app), current_set(&app)), (vec!["Set 1".to_string()], Some("Set 1".to_string())), "New Set works on an empty panel");
 }
 
@@ -272,12 +303,12 @@ fn deleting_sets_keeps_a_recording_in_its_set() {
     app.run(START_RECORDING, json!({})).unwrap();
     assert_eq!(app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap(), json!({"deleted": 1}));
     assert_eq!(set_names(&app), ["Default Actions", "Other"]);
-    assert_eq!((recording_into(&app).as_deref(), current_set(&app).as_deref()), (Some("Other"), Some("Other")), "still recording into Other");
-    assert_eq!(app.run(DELETE_SETS, json!({"names": ["Gone"]})).unwrap_err(), "no such action set");
+    assert_eq!((recording_set(&app).as_deref(), current_set(&app).as_deref()), (Some("Other"), Some("Other")), "still recording into Other");
+    assert_eq!(app.run(DELETE_SETS, json!({"names": ["Gone"]})).unwrap_err(), "the action sets changed; nothing was deleted");
     assert_eq!(set_names(&app), ["Default Actions", "Other"], "a refused name deletes nothing");
     assert_eq!(app.run(DELETE_SETS, json!({})).unwrap(), json!({"deleted": 1}), "the current set by default");
     assert_eq!(set_names(&app), ["Default Actions"]);
-    assert_eq!(recording_into(&app), None, "the recording into the deleted set stops");
+    assert_eq!(recording_set(&app), None, "the recording into the deleted set stops");
     assert_eq!(app.session.journal.held(), None);
 }
 
@@ -288,11 +319,11 @@ fn deleting_a_set_closes_its_batch_dialog() {
     let mut app = app_with_sets();
     crate::dialogs::action_batch::open(&mut app, 1, 0).unwrap();
     app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
-    assert!(!app.dialogs().is_open::<BatchDialog>(), "the Batch dialog of the deleted set closes");
+    assert!(!is_open::<BatchDialog>(&app), "the Batch dialog of the deleted set closes");
     let mut app = app_with_sets();
     crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
     app.run(DELETE_SETS, json!({"names": ["Default Actions"]})).unwrap();
-    assert!(app.dialogs().is_open::<BatchDialog>(), "the Batch dialog of a kept set stays open");
+    assert!(is_open::<BatchDialog>(&app), "the Batch dialog of a kept set stays open");
 }
 
 /// `ui.actionSet.duplicate` puts the copy of an action or a set right after its source, refuses
@@ -306,23 +337,22 @@ fn the_duplicate_command_copies_by_index_and_keeps_recordings_and_dialogs_in_pla
     assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 2})).unwrap_err(), "no such action");
     assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "a refused index copies nothing");
     crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
-    let before = dialog_field::<BatchDialog>(&app, "action");
+    assert_eq!(dialog_action::<BatchDialog>(&app).as_deref(), Some("Nudge Again"));
     assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap(), json!({"set": 1, "action": 1}));
     let names = action_names(&app, 1);
     assert_eq!((names.len(), names[0].as_str(), names[2].as_str()), (3, "Nudge", "Nudge Again"), "the copy follows its source");
-    assert!(app.dialogs().is_open::<BatchDialog>(), "the Batch dialog stays open");
-    assert_eq!(dialog_field::<BatchDialog>(&app, "action"), before, "on the same action");
+    assert!(is_open::<BatchDialog>(&app), "the Batch dialog stays open");
+    assert_eq!(dialog_action::<BatchDialog>(&app).as_deref(), Some("Nudge Again"), "on the same action");
     cancel_dialog::<BatchDialog>(&mut app);
     new_doc(&mut app);
     select_set(&mut app, "Other");
     app.run(START_RECORDING, json!({})).unwrap();
     crate::dialogs::action_set_options::open(&mut app, 2);
-    let before = dialog_field::<SetOptionsDialog>(&app, "set");
     assert_eq!(app.run(DUPLICATE, json!({"set": 0})).unwrap(), json!({"set": 1}));
     let names = set_names(&app);
     assert_eq!((names.len(), names[0] != names[1], &names[2..]), (4, true, &["Mine".to_string(), "Other".to_string()][..]));
-    assert_eq!(recording_into(&app).as_deref(), Some("Other"), "still recording into Other");
-    assert_eq!(dialog_field::<SetOptionsDialog>(&app, "set"), before, "Set Options still on Other");
+    assert_eq!(recording_set(&app).as_deref(), Some("Other"), "still recording into Other");
+    assert_eq!(dialog_set::<SetOptionsDialog>(&app).as_deref(), Some("Other"), "Set Options still on Other");
 }
 
 /// `ui.actionSet.reset` replaces every set, edited ones included, with the built-in set, makes it
@@ -340,7 +370,7 @@ fn reset_replaces_every_set_with_the_built_in_set_and_clears_what_named_the_old_
     assert_eq!(app.run(RESET, json!({})).unwrap(), json!({"changed": true, "mode": "replace", "set": 0}));
     assert_eq!(saved_sets(&app), built_in(), "only the built-in set, as it comes");
     assert_eq!(current_set(&app).as_deref(), Some("Default Actions"), "it is current");
-    assert!(!app.dialogs().is_open::<BatchDialog>(), "the Batch dialog of a replaced set closes");
+    assert!(!is_open::<BatchDialog>(&app), "the Batch dialog of a replaced set closes");
     assert_eq!(undo_steps(&app), undo, "no undo step");
 
     app.ui.actions.clear_all();
@@ -353,7 +383,7 @@ fn reset_replaces_every_set_with_the_built_in_set_and_clears_what_named_the_old_
 /// changes nothing once it is current.
 #[test]
 fn reset_on_the_built_in_set_makes_it_current_then_changes_nothing() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     assert_eq!(current_set(&app), None, "a new app has no current set");
     assert_eq!(app.run(RESET, json!({"mode": "replace"})).unwrap()["changed"], true, "the set becomes current");
     assert_eq!(current_set(&app).as_deref(), Some("Default Actions"));
@@ -362,7 +392,7 @@ fn reset_on_the_built_in_set_makes_it_current_then_changes_nothing() {
     assert_eq!(app.ui.actions.revision(), revision, "the list stays as it was");
     crate::dialogs::action_set_options::open(&mut app, 0);
     assert_eq!(app.run(RESET, json!({})).unwrap()["changed"], true, "Set Options for the set closes");
-    assert!(!app.dialogs().is_open::<SetOptionsDialog>());
+    assert!(!is_open::<SetOptionsDialog>(&app));
 }
 
 /// Append adds a copy of the built-in set after the sets there are, with the first free number,
@@ -383,7 +413,7 @@ fn reset_append_adds_the_built_in_set_with_a_free_number_and_keeps_the_rest() {
     assert_eq!(app.run(RESET, json!({"mode": "append"})).unwrap()["set"], 4);
     assert_eq!(set_names(&app)[4], "Default Actions 4");
     assert_eq!(current_set(&app).as_deref(), Some("Mine"), "the current set stays");
-    assert!(app.dialogs().is_open::<BatchDialog>(), "the Batch dialog stays open");
+    assert!(is_open::<BatchDialog>(&app), "the Batch dialog stays open");
 }
 
 /// `ui.actionSet.reset` refuses params that are not an object, another key or mode, and a reset
@@ -439,18 +469,18 @@ fn clear_deletes_every_set_and_clears_what_named_them() {
     assert_eq!(set_names(&app).len(), 4);
     select_set(&mut app, "Other");
     let nudge = app.ui.actions.actions().iter().position(|a| a.name == "Nudge Again").unwrap();
-    select_action(&mut app, nudge);
+    app.ui.actions_panel.selected = Some(ActionSelection::Action(nudge));
     crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
 
     assert_eq!(app.run(CLEAR, json!({})).unwrap(), json!({"cleared": 4}));
     assert!(app.ui.actions.actions().is_empty() && app.ui.actions.sets().is_empty());
-    assert_eq!((current_set(&app), selected_action(&app)), (None, None), "no set is current and no action selected");
-    assert!(!app.dialogs().is_open::<BatchDialog>(), "the Batch dialog of a deleted set closes");
+    assert_eq!((current_set(&app), &app.ui.actions_panel.selected), (None, &None), "no set is current and no action selected");
+    assert!(!is_open::<BatchDialog>(&app), "the Batch dialog of a deleted set closes");
     assert_eq!(undo_steps(&app), undo, "no undo step");
 
     assert_eq!(app.run(CLEAR, Value::Null).unwrap(), json!({"cleared": 0}), "nothing left to clear");
     assert_eq!(app.run(CLEAR, json!({"names": []})).unwrap(), json!({"cleared": 0}));
-    let mut restarted = VectorcraftApp::new(Session::new(), Default::default());
+    let mut restarted = new_app();
     restarted.ui = serde_json::from_value::<crate::state::UiState>(serde_json::to_value(&app.ui).unwrap()).unwrap();
     assert!(set_names(&restarted).is_empty(), "no sets after a restart either");
     assert_eq!(current_set(&restarted), None);
@@ -458,7 +488,7 @@ fn clear_deletes_every_set_and_clears_what_named_them() {
     push_set(&mut app, "Mine", vec![]);
     crate::dialogs::action_set_options::open_new(&mut app);
     assert_eq!(app.run(CLEAR, json!({})).unwrap(), json!({"cleared": 1}));
-    assert!(app.dialogs().is_open::<SetOptionsDialog>(), "a New Set dialog names no set and stays open");
+    assert!(is_open::<SetOptionsDialog>(&app), "a New Set dialog names no set and stays open");
     cancel_dialog::<SetOptionsDialog>(&mut app);
     assert_eq!(app.run(RESET, json!({"mode": "append"})).unwrap()["set"], 0);
     assert_eq!(saved_sets(&app), built_in(), "Reset Actions adds the built-in set again");
@@ -527,7 +557,7 @@ fn clear_refuses_bad_params_changed_sets_and_a_running_action() {
 /// adds the built-in set, OK replaces; Clear changes nothing until Proceed.
 #[test]
 fn reset_and_clear_ask_before_they_change_the_sets() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     push_set(&mut app, "Mine", vec![]);
     select_set(&mut app, "Mine");
     let cases: [(PromptChoice, bool, Vec<&str>, Option<&str>); 4] = [
@@ -539,8 +569,7 @@ fn reset_and_clear_ask_before_they_change_the_sets() {
     for (choice, escape, want, current) in cases {
         let sets_before = set_names(&app);
         edits::ask_reset(&mut app);
-        let q = app.dialogs().get::<ActionsQuestion>().expect("Reset asks first");
-        assert!(matches!(q.0.tag_as::<LibraryPrompt>(), Some(LibraryPrompt::Reset)), "{choice:?}");
+        assert_eq!(library_question(&app), Some(LibraryPrompt::Reset), "Reset asks first: {choice:?}");
         assert_eq!(set_names(&app), sets_before, "nothing changes before the answer");
         if escape {
             cancel_dialog::<ActionsQuestion>(&mut app);
@@ -548,7 +577,7 @@ fn reset_and_clear_ask_before_they_change_the_sets() {
         } else {
             answer(&mut app, choice);
         }
-        assert!(!app.dialogs().is_open::<ActionsQuestion>(), "{choice:?} closes the question");
+        assert!(!is_open::<ActionsQuestion>(&app), "{choice:?} closes the question");
         assert_eq!(set_names(&app), want, "{choice:?} escape={escape}");
         assert_eq!(current_set(&app).as_deref(), current, "{choice:?} escape={escape}");
     }
@@ -556,8 +585,7 @@ fn reset_and_clear_ask_before_they_change_the_sets() {
 
     push_set(&mut app, "Mine", vec![]);
     edits::ask_clear(&mut app);
-    let q = app.dialogs().get::<ActionsQuestion>().expect("Clear asks first");
-    assert!(matches!(q.0.tag_as::<LibraryPrompt>(), Some(LibraryPrompt::ClearAll)));
+    assert_eq!(library_question(&app), Some(LibraryPrompt::ClearAll), "Clear asks first");
     assert_eq!(set_names(&app), ["Default Actions", "Mine"], "nothing changes before the answer");
     answer(&mut app, PromptChoice::Cancel);
     assert_eq!(set_names(&app), ["Default Actions", "Mine"], "Cancel clears nothing");
@@ -573,25 +601,25 @@ fn new_action_asks_for_a_name_and_set_and_records_into_the_new_action() {
     new_doc(&mut app);
     select_set(&mut app, "Mine");
     crate::dialogs::action_new::open(&mut app).unwrap();
-    assert!(app.dialogs().is_open::<NewActionDialog>());
+    assert!(is_open::<NewActionDialog>(&app));
     let fields = (
-        dialog_field::<NewActionDialog>(&app, "set"),
+        dialog_set::<NewActionDialog>(&app),
         dialog_field::<NewActionDialog>(&app, "name"),
         dialog_field::<NewActionDialog>(&app, "key"),
         dialog_field::<NewActionDialog>(&app, "color"),
     );
-    assert_eq!(fields, (json!("Mine"), json!("Action 3"), json!(0), json!("")), "the current set, a free name, no key or color");
+    assert_eq!(fields, (Some("Mine".to_string()), json!("Action 3"), json!(0), json!("")), "the current set, a free name, no key or color");
     cancel_dialog::<NewActionDialog>(&mut app);
     assert_eq!(counts(&app), [6, 2, 0], "Cancel adds nothing");
-    assert_eq!(recording_into(&app), None, "and records nothing");
+    assert_eq!(recording_set(&app), None, "and records nothing");
     crate::dialogs::action_new::open(&mut app).unwrap();
-    set_dialog::<NewActionDialog>(&mut app, "set", json!("Other"));
+    set_dialog::<NewActionDialog>(&mut app, "set", json!(2));
     set_dialog::<NewActionDialog>(&mut app, "name", json!("  Box  "));
     confirm_dialog::<NewActionDialog>(&mut app).unwrap();
-    assert!(!app.dialogs().is_open::<NewActionDialog>());
+    assert!(!is_open::<NewActionDialog>(&app));
     assert_eq!(action_names(&app, 2), ["Box"], "added to the set chosen, with the name trimmed");
     assert_eq!(current_set(&app).as_deref(), Some("Other"), "its set is current");
-    assert_eq!(recording_into(&app).as_deref(), Some("Other"), "Record starts recording into it");
+    assert_eq!(recording_set(&app).as_deref(), Some("Other"), "Record starts recording into it");
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
     let commands: Vec<String> = steps(&app, 2, 0).into_iter().map(|(c, _)| c).collect();
@@ -628,18 +656,18 @@ fn new_action_refuses_bad_params_and_adds_nothing() {
         }
     }
     assert_eq!(counts(&app), [6, 2, 0], "nothing added");
-    assert_eq!(recording_into(&app), None, "nothing recording");
-    // The dialog names its set, so it stays with it when another set goes, and closes with it.
+    assert_eq!(recording_set(&app), None, "nothing recording");
+    // The dialog follows its set down, and closes with it.
     crate::dialogs::action_new::open(&mut app).unwrap();
-    set_dialog::<NewActionDialog>(&mut app, "set", json!("Other"));
+    set_dialog::<NewActionDialog>(&mut app, "set", json!(2));
     app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
-    assert_eq!(dialog_field::<NewActionDialog>(&app, "set"), json!("Other"), "New Action stays on Other");
+    assert_eq!(dialog_set::<NewActionDialog>(&app).as_deref(), Some("Other"), "New Action follows Other");
     app.run(DELETE_SETS, json!({"names": ["Other"]})).unwrap();
-    assert!(!app.dialogs().is_open::<NewActionDialog>(), "New Action closes with its set");
+    assert!(!is_open::<NewActionDialog>(&app), "New Action closes with its set");
     crate::dialogs::action_new::open(&mut app).unwrap();
-    set_dialog::<NewActionDialog>(&mut app, "set", json!("Gone"));
+    set_dialog::<NewActionDialog>(&mut app, "set", json!(9));
     assert!(confirm_dialog::<NewActionDialog>(&mut app).is_err());
-    assert!(app.dialogs().is_open::<NewActionDialog>(), "a set that is gone: the dialog stays open");
+    assert!(is_open::<NewActionDialog>(&app), "a set that is gone: the dialog stays open");
     cancel_dialog::<NewActionDialog>(&mut app);
     new_doc(&mut app);
     app.run(NEW_ACTION, json!({"set": 0, "name": "A"})).unwrap();
@@ -650,7 +678,7 @@ fn new_action_refuses_bad_params_and_adds_nothing() {
     app.run(STOP_RECORDING, json!({})).unwrap();
     app.ui.actions.clear_all();
     assert_eq!(crate::dialogs::action_new::open(&mut app).unwrap_err(), "no such action set");
-    assert!(!app.dialogs().is_open::<NewActionDialog>());
+    assert!(!is_open::<NewActionDialog>(&app));
 }
 
 /// Action Options shows the action's function key and color; OK sets them and keeps the name's
@@ -662,7 +690,11 @@ fn action_options_sets_the_function_key_and_color_and_keeps_the_steps() {
     open_action(&mut app, 1, 1);
     let fill = |app: &mut VectorcraftApp| {
         assert_eq!(
-            (dialog_field::<SetOptionsDialog>(app, "key"), dialog_field::<SetOptionsDialog>(app, "shift"), dialog_field::<SetOptionsDialog>(app, "color")),
+            (
+                dialog_field::<SetOptionsDialog>(app, "key"),
+                dialog_field::<SetOptionsDialog>(app, "shift"),
+                dialog_field::<SetOptionsDialog>(app, "color")
+            ),
             (json!(0), json!(false), json!(""))
         );
         set_dialog::<SetOptionsDialog>(app, "key", json!(15));
@@ -671,12 +703,12 @@ fn action_options_sets_the_function_key_and_color_and_keeps_the_steps() {
     };
     fill(&mut app);
     cancel_dialog::<SetOptionsDialog>(&mut app);
-    assert_eq!((key_of(&app, 1, 1), at(&app, 1, 1).color.clone()), (None, ActionColor::default()), "Cancel keeps them");
+    assert_eq!((key_of(&app, 1, 1), at(&app, 1, 1).color), (None, ActionColor::default()), "Cancel keeps them");
     open_action(&mut app, 1, 1);
     fill(&mut app);
     confirm_dialog::<SetOptionsDialog>(&mut app).unwrap();
     let green = ActionColor::from_name("green");
-    assert_eq!((at(&app, 1, 1).name.as_str(), key_of(&app, 1, 1), at(&app, 1, 1).color.clone()), ("Nudge Again", Some((15, false, true)), green.clone()));
+    assert_eq!((at(&app, 1, 1).name.as_str(), key_of(&app, 1, 1), at(&app, 1, 1).color), ("Nudge Again", Some((15, false, true)), green));
     assert_eq!(steps(&app, 1, 1), [("object.move".to_string(), json!({"dx": 1, "dy": 0}))], "the steps stay");
     open_action(&mut app, 1, 1);
     let shown = (
@@ -687,12 +719,16 @@ fn action_options_sets_the_function_key_and_color_and_keeps_the_steps() {
     assert_eq!(shown, (json!(15), json!(true), json!("green")), "shown when it opens again");
     cancel_dialog::<SetOptionsDialog>(&mut app);
     app.run(RENAME_ACTION, json!({"set": 1, "action": 1, "name": "Push"})).unwrap();
-    assert_eq!((key_of(&app, 1, 1), at(&app, 1, 1).color.clone()), (Some((15, false, true)), green.clone()), "a rename keeps them");
+    assert_eq!((key_of(&app, 1, 1), at(&app, 1, 1).color), (Some((15, false, true)), green), "a rename keeps them");
     app.run(DUPLICATE, json!({"set": 1, "action": 1})).unwrap();
-    assert_eq!((key_of(&app, 1, 2), at(&app, 1, 2).color.clone()), (None, green), "the copy has no key");
+    assert_eq!((key_of(&app, 1, 2), at(&app, 1, 2).color), (None, green), "the copy has no key");
     assert_eq!(key_of(&app, 1, 1), Some((15, false, true)), "the original keeps it");
     app.run(ACTION_OPTIONS, json!({"set": 1, "action": 1, "key": 0, "color": null})).unwrap();
-    assert_eq!((at(&app, 1, 1).name.as_str(), key_of(&app, 1, 1), at(&app, 1, 1).color.clone()), ("Push", None, ActionColor::default()), "cleared; the name stays");
+    assert_eq!(
+        (at(&app, 1, 1).name.as_str(), key_of(&app, 1, 1), at(&app, 1, 1).color),
+        ("Push", None, ActionColor::default()),
+        "cleared; the name stays"
+    );
     app.run(ACTION_OPTIONS, json!({"set": 1, "action": 1, "key": 15, "cmd": true, "shift": true})).unwrap();
     app.run(ACTION_OPTIONS, json!({"set": 1, "action": 1, "key": 14})).unwrap();
     assert_eq!(key_of(&app, 1, 1), Some((14, true, true)), "a new key keeps the modifiers left out");
@@ -723,7 +759,6 @@ fn insert_stop_goes_after_the_given_step_or_at_the_end_and_keeps_exclusions() {
     assert_eq!(steps[4].1, json!({"message": "", "allowContinue": false}), "the message and Allow Continue are optional");
     assert_eq!(excluded(&app, 0, 0), BTreeSet::from([0, 3]), "the step excluded after the insertion point moved with it");
 
-    // PLAN: the old test also put an exclusion past the last step (usize::MAX) in the set; `ActionList::set_step` refuses one, so the model cannot hold it.
     let (mut app, _) = app_with_three_moves();
     exclude(&mut app, 0, 0, &[1]);
     app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
@@ -799,7 +834,7 @@ fn insert_menu_item_goes_after_the_given_step_or_at_the_end_runs_nothing_and_pla
 fn batch_refuses_an_action_with_a_view_step() {
     let (mut app, _) = app_with_a_view_step();
     assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "Batch cannot play an action with a View menu step");
-    assert!(!app.dialogs().is_open::<BatchDialog>());
+    assert!(!is_open::<BatchDialog>(&app));
     exclude(&mut app, 0, 0, &[1]);
     crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap();
 }
@@ -873,7 +908,7 @@ fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
         let held = steps(&app, 0, 0)[3].1.clone();
         let start = app.session.journal.len();
         crate::menus::invoke(&mut app, item.command, item.params.clone());
-        assert!(app.dialogs().open_dialogs().is_empty(), "{item:?} opens a dialog");
+        assert!(app.dialogs().is_some_and(|d| d.with(|h| h.is_empty())), "{item:?} opens a dialog");
         let ran = app.session.journal_for_action(start);
         let without_artboard = |p: &Value| {
             let mut p = p.clone();
@@ -1094,7 +1129,7 @@ fn delete_step_keeps_an_open_record_stop_on_its_place() {
     app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
     assert_eq!(dialog_field::<RecordStopDialog>(&app, "step"), json!(1), "a deleted step above moves it up");
     app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 1})).unwrap();
-    assert!(!app.dialogs().is_open::<RecordStopDialog>(), "deleting its step closes it");
+    assert!(!is_open::<RecordStopDialog>(&app), "deleting its step closes it");
 }
 
 #[test]
@@ -1103,21 +1138,21 @@ fn move_step_within_action_updates_order_exclusions_and_selection() {
     let at = global(&app, 0, 0);
     app.ui.actions.insert_step(at, 3, ActionStep::new("object.move", json!({"dx": 8, "dy": 0}))).unwrap();
     exclude(&mut app, 0, 0, &[1]);
-    select_step(&mut app, at, 3);
+    app.ui.actions_panel.selected = Some(ActionSelection::Step(at, 3));
     assert_eq!(
         app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 1, "before": 4})).unwrap(),
         json!({"set": 0, "action": 0, "step": 3, "moved": true})
     );
     assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 4", "object.move 8", "object.move 2"]);
     assert_eq!(excluded(&app, 0, 0), BTreeSet::from([3]), "the moved step stays excluded");
-    assert_eq!(selected_step(&app), Some((at, 2)), "the selected step stays selected");
+    assert_eq!(app.ui.actions_panel.selected, Some(ActionSelection::Step(at, 2)), "the selected step stays selected");
     assert_eq!(
         app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 2, "before": 0})).unwrap(),
         json!({"set": 0, "action": 0, "step": 0, "moved": true})
     );
     assert_eq!(step_names(&app, 0, 0), ["object.move 8", "object.move 1", "object.move 4", "object.move 2"]);
     assert_eq!(excluded(&app, 0, 0), BTreeSet::from([3]));
-    assert_eq!(selected_step(&app), Some((at, 0)), "the moved selected step is selected where it went");
+    assert_eq!(app.ui.actions_panel.selected, Some(ActionSelection::Step(at, 0)), "the moved selected step is selected where it went");
     for before in [1, 2] {
         assert_eq!(
             app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 1, "before": before})).unwrap(),
@@ -1134,10 +1169,10 @@ fn move_step_within_action_updates_order_exclusions_and_selection() {
 fn move_step_between_actions_and_sets_keeps_file_roundtrip() {
     let (mut app, _) = app_with_three_moves();
     exclude(&mut app, 0, 0, &[2]);
-    push_set(&mut app, "Other", vec![action("Empty", vec![]), action("One", vec![("object.rotate", json!({"angle": 5}))])]);
-    select_set(&mut app, "Default Actions");
+    push_set(&mut app, "Other", vec![action("Empty", &[]), action("One", &[("object.rotate", json!({"angle": 5}))])]);
+    select_set(&mut app, "Moves");
     let (from, empty) = (global(&app, 0, 0), global(&app, 1, 0));
-    select_step(&mut app, from, 2);
+    app.ui.actions_panel.selected = Some(ActionSelection::Step(from, 2));
     assert_eq!(
         app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 2, "toSet": 1, "toAction": 0, "before": 0})).unwrap(),
         json!({"set": 1, "action": 0, "step": 0, "moved": true})
@@ -1146,12 +1181,11 @@ fn move_step_between_actions_and_sets_keeps_file_roundtrip() {
     assert!(excluded(&app, 0, 0).is_empty());
     assert_eq!(step_names(&app, 1, 0), ["object.move 4"], "an empty action takes a step");
     assert_eq!(excluded(&app, 1, 0), BTreeSet::from([0]), "the moved step stays excluded");
-    assert_eq!(selected_step(&app), Some((empty, 0)));
+    assert_eq!(app.ui.actions_panel.selected, Some(ActionSelection::Step(empty, 0)));
     assert_eq!(current_set(&app).as_deref(), Some("Other"), "the step's new set is current");
     app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 0, "toSet": 1, "toAction": 1, "before": 0})).unwrap();
     assert_eq!(step_names(&app, 1, 1), ["object.move 1", "object.rotate"]);
-    assert_eq!(selected_step(&app), Some((empty, 0)), "an unmoved selected step stays");
-    // PLAN: the old check also read back through `files::read_set`; the model round trip is `to_file` / `from_file`, which menus-w14's file tests cover as bytes.
+    assert_eq!(app.ui.actions_panel.selected, Some(ActionSelection::Step(empty, 0)), "an unmoved selected step stays");
     let loaded = ActionList::from_file(app.ui.actions.to_file());
     assert_eq!(loaded.actions().len(), app.ui.actions.actions().len());
     for (a, b) in loaded.actions().iter().zip(app.ui.actions.actions()) {
@@ -1162,13 +1196,13 @@ fn move_step_between_actions_and_sets_keeps_file_roundtrip() {
 #[test]
 fn move_step_rejects_invalid_and_oversize_destinations_without_changes() {
     let (mut app, _) = app_with_three_moves();
-    let big = |text: String| action("Big", vec![("document.note", json!({ "s": text }))]);
-    push_set(&mut app, "Full", vec![action("Full", vec![("object.move", json!({"dx": 0})); files::MAX_ACTION_STEPS])]);
+    let big = |text: String| action("Big", &[("document.note", json!({ "s": text }))]);
+    push_set(&mut app, "Full", vec![action("Full", &vec![("object.move", json!({"dx": 0})); files::MAX_ACTION_STEPS])]);
     push_set(&mut app, "Big", vec![big(String::new())]);
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.actions, "Big").len() - 4;
+    let room = files::MAX_SET_FILE - set_file(&app, 2).len() - 4;
     app.ui.actions.delete_set("Big").unwrap();
     push_set(&mut app, "Big", vec![big("x".repeat(room))]);
-    assert!(files::write_set(&app.ui.actions, "Big").len() <= files::MAX_SET_FILE);
+    assert!(set_file(&app, 2).len() <= files::MAX_SET_FILE);
     let before = saved_sets(&app);
     for (params, want) in [
         (json!({}), "no such action"),
@@ -1196,32 +1230,28 @@ fn move_step_rejects_invalid_and_oversize_destinations_without_changes() {
 fn step_and_set_edits_keep_an_open_insert_menu_item_on_its_place() {
     let (mut app, _) = app_with_three_moves();
     crate::dialogs::action_insert_menu_item::open(&mut app, Some((0, 0)), Some(2));
-    let before = dialog_field::<InsertMenuItemDialog>(&app, "action");
+    assert_eq!(dialog_action::<InsertMenuItemDialog>(&app).as_deref(), Some("Three Moves"));
     app.run(DUPLICATE, json!({"set": 0, "action": 0})).unwrap();
-    assert_eq!(dialog_field::<InsertMenuItemDialog>(&app, "action"), before, "a copied action keeps it on its action");
+    assert_eq!(dialog_action::<InsertMenuItemDialog>(&app).as_deref(), Some("Three Moves"), "a copied action keeps it on its action");
     app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
     assert_eq!(dialog_field::<InsertMenuItemDialog>(&app, "step"), json!(1), "a deleted step above moves it up");
     app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 1})).unwrap();
-    assert!(!app.dialogs().is_open::<InsertMenuItemDialog>(), "deleting its step closes it");
+    assert!(!is_open::<InsertMenuItemDialog>(&app), "deleting its step closes it");
     crate::dialogs::action_insert_menu_item::open(&mut app, Some((0, 0)), None);
-    app.run(DELETE_SETS, json!({"names": ["Default Actions"]})).unwrap();
-    assert!(!app.dialogs().is_open::<InsertMenuItemDialog>(), "deleting its set closes it");
+    app.run(DELETE_SETS, json!({"names": ["Moves"]})).unwrap();
+    assert!(!is_open::<InsertMenuItemDialog>(&app), "deleting its set closes it");
 }
 
 #[test]
 fn an_excluded_stop_does_not_hold_and_batch_refuses_an_included_one() {
     let (mut app, x) = app_with_a_stop(false);
     assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "Batch cannot play an action with a stop");
-    assert!(!app.dialogs().is_open::<BatchDialog>());
+    assert!(!is_open::<BatchDialog>(&app));
     app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap();
     crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap();
     app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": true})).unwrap();
-    assert_eq!(
-        confirm_dialog::<BatchDialog>(&mut app).unwrap_err(),
-        "Batch cannot play an action with a stop",
-        "a stop included since it opened"
-    );
-    assert!(app.dialogs().is_open::<BatchDialog>(), "the refusal keeps the dialog open");
+    assert_eq!(confirm_dialog::<BatchDialog>(&mut app).unwrap_err(), "Batch cannot play an action with a stop", "a stop included since it opened");
+    assert!(is_open::<BatchDialog>(&app), "the refusal keeps the dialog open");
     cancel_dialog::<BatchDialog>(&mut app);
     app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap();
     play(&mut app, 0, 0).unwrap();
@@ -1234,13 +1264,13 @@ fn an_excluded_stop_does_not_hold_and_batch_refuses_an_included_one() {
 fn set_edits_keep_an_open_record_stop_on_its_action() {
     let mut app = app_with_sets();
     crate::dialogs::action_stop::open_record(&mut app, Some((1, 0)), None);
-    let before = dialog_field::<RecordStopDialog>(&app, "set");
+    assert_eq!(dialog_set::<RecordStopDialog>(&app).as_deref(), Some("Mine"));
     app.run(DUPLICATE, json!({"set": 0})).unwrap();
-    assert_eq!(dialog_field::<RecordStopDialog>(&app, "set"), before, "a copied set above keeps it on its set");
+    assert_eq!(dialog_set::<RecordStopDialog>(&app).as_deref(), Some("Mine"), "a copied set above keeps it on its set");
     app.run(DELETE_SETS, json!({"names": ["Default Actions"]})).unwrap();
-    assert_eq!(dialog_field::<RecordStopDialog>(&app, "set"), before, "a deleted set above keeps it on its set");
+    assert_eq!(dialog_set::<RecordStopDialog>(&app).as_deref(), Some("Mine"), "a deleted set above keeps it on its set");
     app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
-    assert!(!app.dialogs().is_open::<RecordStopDialog>(), "deleting its set closes it");
+    assert!(!is_open::<RecordStopDialog>(&app), "deleting its set closes it");
 }
 
 /// A Select Object step goes after the given step, or at the action's end, runs nothing when it

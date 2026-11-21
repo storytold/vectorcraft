@@ -32,7 +32,6 @@ use vectorcraft_geom::Rect;
 use crate::VectorcraftApp;
 use crate::chrome::rank;
 use craft::keymap::CommandRef;
-// PLAN: assumed craft-pages, craft-behavior and craft-keymap as direct dependencies of ui-egui (Cargo.toml owner: hub).
 
 /// The panel's view state, kept in `UiState::artboards_ui`.
 #[derive(Clone, Debug, Default)]
@@ -92,7 +91,6 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, 
     let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() else { return true };
     let r = ab.rect;
     if options {
-        // PLAN: assumed chrome::rank::GROUP (chrome-w16) for the group that leaves last.
         Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| {
             super::properties::artboard_size_row(app, ui, i, r.width(), r.height());
             if icon_button(ui, "dc-new-item", tl!("New Artboard"), true) {
@@ -494,11 +492,8 @@ fn select_copies(app: &mut VectorcraftApp, all: &[usize], r: &Value) {
 
 /// Draw the artboard list and its commands, filling the space above a sized panel's footer.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let rows: Vec<PageListRow> = app
-        .session
-        .active()
-        .map(|d| d.doc.artboards.iter().map(|a| PageListRow::new(a.name.clone()).locked(a.locked)).collect())
-        .unwrap_or_default();
+    let rows: Vec<PageListRow> =
+        app.session.active().map(|d| d.doc.artboards.iter().map(|a| PageListRow::new(a.name.clone()).locked(a.locked)).collect()).unwrap_or_default();
     if rows.is_empty() {
         super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;

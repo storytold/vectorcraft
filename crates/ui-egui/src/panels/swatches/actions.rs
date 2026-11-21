@@ -1,5 +1,4 @@
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::dialog::StandardPrompt;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use serde_json::{Value, json};
@@ -60,10 +59,11 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
         app.run("swatch.delete", params).ok();
         return;
     }
-    let prompt = StandardPrompt::confirm_delete(names.iter().take(4).cloned(), names.len())
-        .paragraph(tl!("Art using a deleted global swatch keeps its colour."));
-    // PLAN: assumed `confirm::ask_prompt(app, prompt, command, params)`: the confirm host over a `StandardPrompt`.
-    crate::dialogs::confirm::ask_prompt(app, prompt, "swatch.delete", params);
+    let message = match names.as_slice() {
+        [n] => crate::i18n::fmt(tl!("Delete “{name}”?"), &[("name", n)]),
+        _ => crate::i18n::tn(names.len() as u64, "Delete this {n} swatch or group?", "Delete these {n} swatches and groups?"),
+    };
+    crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
 }
 
 /// Duplicates the swatches `names` (`swatch.duplicate`, each copy just after its swatch and in its

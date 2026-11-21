@@ -10,16 +10,25 @@
 
 use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::overlay::Side;
+use craft::behavior::{IconId, Mixed};
+use craft::color_ui::ui::PaintChip;
 use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
-use craft::ui::contract::{BodyCx, ThemeScope};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope};
 use craft::ui::docking::GroupAt;
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::pickers::Select;
 use craft::ui::rails::{RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
-use craft::ui::runtime::commands::CommandRef;
-use egui::{Pos2, Sense, Ui, Vec2, vec2};
+use craft::ui::runtime::commands::{self, CommandRef};
+use craft::ui::text::NumberField;
+use egui::{Pos2, Ui, Vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
 
+use crate::paint_preview::well_paint;
 use crate::state::{CustomToolbar, UiState};
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -63,14 +72,22 @@ pub(crate) fn strip_id(owner: &Owner, first: &str) -> String {
     format!("strip:{}:{first}", owner.part())
 }
 
-/// Whether the Tools panel shows (Window › Tools).
+/// Whether the Tools panel is open (Window › Tools): the layout is the one store of it.
 pub(crate) fn shown(ui: &UiState) -> bool {
-    ui.toolbar
+    crate::panel_docking::layout_of(ui).contains(&TOOLS.to_owned())
 }
 
-/// Shows or hides the Tools panel.
-pub(crate) fn set_shown(ui: &mut UiState, on: bool) {
-    ui.toolbar = on;
+/// Opens (back where it was) or closes the Tools panel; a refusal goes to the status bar.
+pub(crate) fn set_shown(app: &mut VectorcraftApp, on: bool) {
+    let done = if on {
+        crate::panel_docking::reveal_panel(app, TOOLS).map(drop)
+    } else {
+        let ctx = app.ui_ctx.clone();
+        crate::panel_docking::apply(app, ctx.as_ref(), vec![Action::close(TOOLS.to_owned())]).map(drop)
+    };
+    if let Err(e) = done {
+        app.status(e);
+    }
 }
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
@@ -109,9 +126,10 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
     ("Color", &[&["gradient", "mesh"], &["eyedropper", "measure"]]),
 ];
 
-pub(crate) fn tip(t: &ToolInfo) -> String {
-    match crate::shortcut_editor::tool_shortcut(t.id) {
-        Some(s) => format!("{} ({})", tl!(t.label), crate::shortcut_editor::as_typed(s)),
+/// A tool's name with the key that picks it in the window of `ctx`, as its button's tip shows it.
+pub(crate) fn tip(ctx: &egui::Context, t: &ToolInfo) -> String {
+    match commands::chord(ctx, &CommandRef::new(format!("tool:{}", t.id))) {
+        Some(chord) => format!("{} ({})", tl!(t.label), chord.display(crate::keymap::platform())),
         None => tl!(t.label).to_string(),
     }
 }
@@ -456,22 +474,19 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
-    let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
     for (key, label, choices) in MIRROR {
-        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text));
-        let cur = opts[key].as_str().unwrap_or_default();
-        let shown = choices.iter().find(|(v, _)| *v == cur).map_or(cur, |(_, l)| *l);
-        let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
-        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, MIRROR_DROPDOWN_WIDTH).and_then(|i| choices.get(i)) {
+        let entries: Vec<Entry<&'static str>> = choices.iter().map(|&(value, name)| Entry::new(value, tl!(name))).collect();
+        let current = opts[key].as_str().and_then(|v| choices.iter().find(|(value, _)| *value == v)).map(|(value, _)| *value);
+        let picked = Field::new(tl!(label))
+            .show(ui, |ui, _| Select::new(tl!(label), Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui).value().copied())
+            .inner
+            .flatten();
+        if let Some(value) = picked {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
     }
-    ui.separator();
 }
-
-/// The width of Mirror & Cut's Axis and Keep menus in the Control bar.
-const MIRROR_DROPDOWN_WIDTH: f32 = 96.0;
 
 /// Crop Image's cropping options: the cropped image's resolution (PPI: a list, with the
 /// resolutions above what the image allows disabled, or a typed value), the reference point, the
@@ -500,7 +515,7 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // Resolution: the list's choices above the image's limit are disabled; a typed value is held to it.
     let ppi = opts["ppi"].as_f64().unwrap_or(own);
-    let label = |v: f64| crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
+    let label = |v: f64| crate::i18n::fmt(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
     let labels: Vec<String> = PPI_CHOICES.iter().map(|v| label(*v)).collect();
     let names: Vec<&str> = labels.iter().map(String::as_str).collect();
     // PLAN: C4 asks for Select/NumberField/TransformFields members; their signatures are not in the bundle, so the widgets stay.
@@ -548,96 +563,101 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes and screen mode under the rail's
-/// tools, as large as the rail's columns leave room for (#1129): in two columns the proxy and
-/// buttons grow and the three drawing modes show side by side. The All Tools drawer's Show section
-/// hides any of them.
+/// tools: in two columns the three drawing modes show side by side, in one only the current one,
+/// which cycles them. The All Tools drawer's Show section hides any of them.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
     let two = footer.columns > 1;
     let show = app.ui.toolbar_show;
-    // PLAN: assumed the colour area's B1 proxy and chips (and `ScreenModeButton`) keep today's `panels::proxy`, `paint_chip` and icon button.
     if show.fill_stroke {
-        ui.vertical_centered(|ui| crate::panels::proxy(app, ui, if two { 54.0 } else { 36.0 }));
-        ui.add_space(5.0);
+        crate::panels::proxy(app, ui);
     }
     // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
-    let (chip, gap) = if two { (17.0, 4.0) } else { (11.0, 2.0) };
     if show.coloring {
-        ui.horizontal(|ui| {
-            ui.add_space((ui.available_width() - 3.0 * chip - 2.0 * gap) / 2.0);
-            ui.spacing_mut().item_spacing.x = gap;
-            let mut clicked = None;
-            for (tip, cmd) in
-                [("Color (, or Shift+,)", "paint.lastColor"), ("Gradient (. or Shift+.)", "paint.lastGradient"), ("None (/)", "paint.none")]
-            {
-                let (r, resp) = ui.allocate_exact_size(vec2(chip, chip), Sense::click());
-                match cmd {
-                    "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
-                    "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient),
-                    _ => widgets::paint_chip(ui, r, &Paint::None),
+        let chips = [
+            (tl!("Color (, or Shift+,)"), "paint.lastColor", Paint::solid(app.session.last_solid)),
+            (tl!("Gradient (. or Shift+.)"), "paint.lastGradient", Paint::Gradient(Box::new(app.session.last_gradient.clone()))),
+            (tl!("None (/)"), "paint.none", Paint::None),
+        ];
+        let fallback = crate::panels::srgba(&app.session.last_solid);
+        let mut clicked = None;
+        Row::new().show(ui, |ui, _| {
+            for (label, cmd, paint) in &chips {
+                let shown = Mixed::Same(well_paint(paint, &|_| None));
+                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).tooltip(*label).show(ui);
+                if let Some(mods) = out.clicked {
+                    clicked = Some((*cmd, mods.cmd));
                 }
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(tip)));
-                if resp.on_hover_text(tl!(tip)).clicked() {
-                    clicked = Some(cmd);
-                }
-            }
-            // Cmd/Ctrl-click on Gradient resets the gradient to White, Black.
-            if clicked == Some("paint.lastGradient") && ui.input(|i| i.modifiers.command) {
-                crate::panels::gradient::reset_to_linear_white_black(app);
-            } else if let Some(cmd) = clicked {
-                app.run(cmd, json!({})).ok();
             }
         });
-        ui.add_space(6.0);
+        match clicked {
+            // Cmd/Ctrl-click on Gradient resets the gradient to White, Black.
+            Some(("paint.lastGradient", true)) => crate::panels::gradient::reset_to_linear_white_black(app),
+            Some((cmd, _)) => {
+                app.run(cmd, json!({})).ok();
+            }
+            None => {}
+        }
     }
     let modes = [
         (vectorcraft_engine::DrawMode::Normal, "dc-draw-normal", "Draw Normal", "normal"),
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    if two && show.draw_mode {
-        // Side by side, each one a click away.
-        ui.horizontal(|ui| {
-            ui.add_space((ui.available_width() - 3.0 * 22.0) / 2.0);
-            for (mode, icon, name, id) in modes {
-                if widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), app.session.draw_mode == mode, 22.0).clicked() {
-                    app.run("view.drawMode", json!({ "mode": id })).ok();
+    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: bool| {
+        let tip = format!("{} (Shift+D)", tl!(name));
+        IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on).show(ui).clicked()
+    };
+    let mut run = None;
+    Row::new().show(ui, |ui, _| {
+        if show.draw_mode {
+            if two {
+                // Side by side, each one a click away.
+                for (mode, icon, name, id) in modes {
+                    if mode_button(ui, icon, name, app.session.draw_mode == mode) {
+                        run = Some(("view.drawMode", json!({ "mode": id })));
+                    }
                 }
+            } else if let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
+                && mode_button(ui, icon, name, mode != vectorcraft_engine::DrawMode::Normal)
+            {
+                // One column: the current mode's button, which cycles them.
+                run = Some(("view.drawMode", json!({})));
             }
-        });
-    }
-    ui.vertical_centered(|ui| {
-        // One column: the current mode's button, which cycles them.
-        if !two
-            && show.draw_mode
-            && let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
-            && widgets::icon_button(ui, icon, &format!("{} (Shift+D)", tl!(name)), mode != vectorcraft_engine::DrawMode::Normal, 26.0).clicked()
-        {
-            app.run("view.drawMode", json!({})).ok();
         }
-        if show.screen_mode && widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
-            app.run("view.screenMode", json!({})).ok();
+        if show.screen_mode {
+            let tip = tl!("Change Screen Mode (F)");
+            if IconButton::new(IconId::new("dc-screen-mode")).label(tip).tooltip(tip).show(ui).clicked() {
+                run = Some(("view.screenMode", json!({})));
+            }
         }
     });
+    if let Some((cmd, params)) = run {
+        app.run(cmd, params).ok();
+    }
 }
 
 /// The Puppet Warp tool's Control bar: Expand (how far the mesh reaches past the art), Show Mesh
 /// and Select All Pins.
 fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
-    ui.label(egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text));
-    let unit = app.session.general_unit();
-    if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-        app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
-    }
+    let lengths = crate::canvas::rulers::general_lengths(app);
+    let mut set = None;
+    Field::new(tl!("Expand:")).show(ui, |ui, _| {
+        let field = NumberField::length(tl!("Expand"), Bind::given(opts["expand"].as_f64()), lengths).range(0.0..=1000.0);
+        if let Some(v) = field.show(ui).value().copied().flatten() {
+            set = Some(("expand", json!(v.clamp(0.0, 1000.0))));
+        }
+    });
     let show = opts["showMesh"].as_bool().unwrap_or(true);
-    if widgets::check(ui, "Show Mesh", show, true) {
-        app.run("tool.setOption", json!({ "key": "showMesh", "value": !show })).ok();
+    if let Some(on) = Checkbox::new(Bind::given(show)).label(tl!("Show Mesh")).show(ui).value().copied() {
+        set = Some(("showMesh", json!(on)));
     }
-    if widgets::flat_button_fit(ui, "Select All Pins", 104.0).clicked() {
-        app.run("tool.setOption", json!({ "key": "selectAllPins", "value": true })).ok();
+    if Button::new(tl!("Select All Pins")).show(ui).clicked() {
+        set = Some(("selectAllPins", json!(true)));
     }
-    ui.separator();
+    if let Some((key, value)) = set {
+        app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+    }
 }
 
 pub(crate) mod card;

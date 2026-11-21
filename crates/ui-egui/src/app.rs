@@ -569,6 +569,7 @@ impl VectorcraftApp {
         panel_docking::close_overlays_for_modal(self, &ctx);
         dialogs::host::pump(self, &ctx);
         prefs_dialog::show(self, ui);
+        crate::shortcut_editor::show(self, ui);
         credits::open_taken_link(self);
         palette::show(self, ui);
         // A shape drawn on the canvas, in a dialog or by a command in this pass shows the Transform

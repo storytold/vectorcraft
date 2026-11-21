@@ -10,7 +10,7 @@ use craft::menu::Node;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use crate::menus::{self, Entry};
+use crate::menus;
 use crate::{VectorcraftApp, script_runs, scripts_menu};
 
 /// This thread's context, with a host whose jobs run on threads. Tests run on threads of their
@@ -60,6 +60,27 @@ fn write(dir: &std::path::Path, name: &str, text: &str) -> String {
 /// File › Scripts' items.
 fn scripts() -> Vec<Node> {
     scripts_menu::items()
+}
+
+/// The File › Scripts submenu's entries as the menu bar shows them: the first submenu that lists a
+/// script itself (its folders come after it).
+fn shown_scripts(nodes: &[Node]) -> Option<&[Node]> {
+    nodes.iter().find_map(|node| match node {
+        Node::Submenu { children, .. } if children.iter().any(|c| matches!(c, Node::Item(i) if i.command.id == scripts_menu::COMMAND)) => {
+            Some(children.as_slice())
+        }
+        Node::Submenu { children, .. } => shown_scripts(children),
+        _ => None,
+    })
+}
+
+/// The label of an item or a submenu.
+fn label(node: &Node) -> Option<String> {
+    match node {
+        Node::Item(item) => Some(item.label.clone()),
+        Node::Submenu { label, .. } => Some(label.clone()),
+        _ => None,
+    }
 }
 
 /// Menu items as text: a command's label, `label/[…]` for a submenu, `(text)` for a note and `-`
@@ -179,23 +200,16 @@ fn a_listed_script_reads_its_included_files_and_runs_files_beside_it() {
 #[test]
 fn script_and_folder_names_are_shown_as_they_are_in_every_language() {
     let dir = folder("language");
-    let app = app(&dir);
+    let mut app = app(&dir);
     write(&dir, "Layers.js", "");
     write(&dir, "Export/Layers.jsx", "");
     read(&app);
     let de = crate::i18n::Lang::from_code("de").unwrap();
     assert!(crate::i18n::tr(de, "Layers") != "Layers" && crate::i18n::tr(de, "Export") != "Export", "German translates both words");
     crate::i18n::set_current(de);
-    let items = scripts();
-    // PLAN: assumed `menus::entry(app: &VectorcraftApp, node: &Node) -> Option<Entry>` (menus-w5).
-    let labels: Vec<String> = items
-        .iter()
-        .filter_map(|item| match menus::entry(&app, item)? {
-            Entry::Sub(label, _) => Some(label.to_string()),
-            Entry::Item(row) => Some(row.label.to_string()),
-            _ => None,
-        })
-        .collect();
+    menus::model::refresh(&mut app, &ctx());
+    let labels: Vec<String> =
+        app.menus.bar.menus.iter().find_map(|m| shown_scripts(&m.children)).expect("File › Scripts").iter().filter_map(label).collect();
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(labels[..2], ["Export", "Layers"]);
     assert_ne!(labels[2], "Check Script…", "the fixed items are translated");
@@ -206,7 +220,6 @@ fn script_and_folder_names_are_shown_as_they_are_in_every_language() {
     write(&dir, "Zed/All Artboards.js", "");
     read(&app);
     assert!(!menus::menu_strings().contains("All Artboards") && !menus::menu_strings().contains("Zed"));
-    // PLAN: assumed the palette's entry accessor keeps `(_, id, _)` rows (menus-w12).
     assert!(!crate::palette::items().iter().any(|(_, id, _)| id == scripts_menu::COMMAND), "a script runs from its menu item");
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -315,7 +328,10 @@ fn the_macos_menu_bar_lists_the_same_scripts_and_follows_a_new_listing() {
     };
     assert_eq!((label.as_str(), check.command.id.as_str(), other.command.id.as_str()), ("Export", "ui.checkScript", "ui.runScript"));
     let [Node::Item(script)] = children.as_slice() else { panic!("{children:?}") };
-    assert_eq!((script.label.as_str(), script.command.id.as_str(), &script.command.params), ("All Artboards", scripts_menu::COMMAND, &json!({ "path": path })));
+    assert_eq!(
+        (script.label.as_str(), script.command.id.as_str(), &script.command.params),
+        ("All Artboards", scripts_menu::COMMAND, &json!({ "path": path }))
+    );
     assert!(script.enabled && script.shortcut.is_none());
     // A read that finds the same scripts changes nothing the menu bar would rebuild for.
     read(&app);

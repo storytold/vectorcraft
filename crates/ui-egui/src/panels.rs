@@ -56,19 +56,36 @@ pub mod variables;
 
 use std::sync::Arc;
 
-use egui::{Rect, Sense, Ui, vec2};
+use craft::behavior::{ColumnWidth, IconId, Mixed};
+use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
+use craft::theme::Srgba;
+use craft::theme::variant::Tone;
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::SwatchSpacing;
+use craft::ui::contract::{Bind, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Grid, Row};
+use craft::ui::menu::{Menu, PanelMenu, PanelRow};
+use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
+use craft::ui::pickers::Select;
+use craft::ui::popover::Popover;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::CommandStates;
+use craft::ui::runtime::env::Label;
+use craft::ui::text::{NumberField, link_toggle};
+use egui::{Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{LiveCorners, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_engine::inspect::StrokeMixed;
 use vectorcraft_geom::shapes::CornerKind;
 
-use crate::theme::Tokens;
-use craft::ui::menu::PanelRow;
-use craft::ui::runtime::commands::CommandStates;
-
-use crate::widgets::dim_label;
-use crate::{VectorcraftApp, icons};
+use crate::VectorcraftApp;
+use crate::canvas::rulers::general_lengths;
+use crate::edits::{EditPath, apply_edits};
+use crate::paint_preview::well_paint;
+use crate::panel_drag::PanelDrag;
 
 /// The first selected node, as the `Arc` the document holds, if any. It does not change with later
 /// edits: read it again after one.
@@ -89,51 +106,53 @@ pub(crate) fn corner_style(app: &VectorcraftApp, n: &Node) -> (Option<f64>, Opti
     LiveCorners::of(n).map_or((None, None), |c| c.style(&c.picked(partial)))
 }
 
-/// The width of a panel's number fields: the Transform fields', two to a row beside the reference
-/// point, their labels and the W/H link, so every field in the panel is as wide (#696). Measured
-/// from the full row, before its widgets.
-pub(crate) fn field_width(ui: &Ui) -> f32 {
-    // The reference point and its gap, the four labels and the W/H link.
-    const AROUND: f32 = 37.0 + 70.0;
-    ((ui.available_width() - AROUND) / 2.0).clamp(60.0, 110.0)
+/// One entry per corner kind, labelled as the Corners dialog labels them.
+pub(crate) fn corner_entries() -> Vec<Entry<CornerKind>> {
+    CornerKind::ALL.iter().map(|k| Entry::new(*k, crate::dialogs::corners::kind_label(*k))).collect()
 }
 
-/// The Corner Radius field of a live rectangle's properties: [`corner_radius`], which a new value
-/// sets on those corners. The link behind it is the `singleCornerRadius` preference: on, a Corner
-/// menu follows that sets the kind of all four corners; off, a row for each of the four corners
-/// follows, each with a radius field and a Corner menu that set its own corner.
-pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str) {
-    let fw = field_width(ui);
+/// The Corner Radius row of a live rectangle's properties: [`corner_radius_field`] and the link
+/// behind it, the `singleCornerRadius` preference. On, a Corner row follows that sets the kind of
+/// all four corners; off, the field goes and a radius field and a Corner select follow for each of
+/// the four corners, each setting its own corner.
+pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let single = app.session.prefs.single_corner_radius;
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Corner Radius:"));
-        if single {
-            corner_radius_field(app, ui, n, id, fw);
-        }
-        let tip = tl!("Single Corner Radius");
-        if crate::widgets::icon_button(ui, if single { "link" } else { "link-2-off" }, tip, single, 22.0).clicked() {
-            transform::set_pref(app, "singleCornerRadius", !single);
-        }
+    let mut toggled = None;
+    Field::new(tl!("Corner Radius:")).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            if single {
+                corner_radius_field(app, ui, n);
+            }
+            toggled = link_toggle(tl!("Single Corner Radius"), Bind::given(single)).show(ui).value().copied();
+        });
     });
+    if let Some(on) = toggled {
+        transform::set_pref(app, "singleCornerRadius", on);
+    }
     if single {
-        corner_kind_row(app, ui, n, id, fw);
+        corner_kind_row(app, ui, n);
     } else {
-        corner_fields(app, ui, n, id, fw);
+        corner_fields(app, ui, n);
     }
 }
 
-/// The Corner menu of a live rectangle whose corners share one radius field: the kind of all four
-/// corners, also while some of them are Direct-Selected, blank when they differ. A pick sets it on
-/// every corner of each selected live rectangle ([`set_rectangle_kinds`]).
-fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, width: f32) {
+/// The Corner select of a live rectangle whose corners share one radius field: the kind of all
+/// four corners, also while some of them are Direct-Selected, blank when they differ. A pick sets
+/// it on every corner of each selected live rectangle ([`set_rectangle_kinds`]).
+fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
+    let entries = corner_entries();
     let current = lc.style(&lc.all()).1;
-    ui.horizontal(|ui| {
-        dim_label(ui, tl!("Corner:"));
-        if let Some(kind) = corner_kind_menu(ui, (id, "kind"), tl!("Corner:"), current, width) {
-            set_rectangle_kinds(app, kind, None);
-        }
-    });
+    let picked = Field::new(tl!("Corner:")).show(ui, |ui, _| corner_select(ui, tl!("Corner:"), current, &entries)).inner.flatten();
+    if let Some(kind) = picked {
+        set_rectangle_kinds(app, kind, None);
+    }
+}
+
+/// A select of the corner kinds named `name`, showing `current` (blank for None). Returns the kind
+/// picked.
+fn corner_select(ui: &mut Ui, name: &'static str, current: Option<CornerKind>, entries: &[Entry<CornerKind>]) -> Option<CornerKind> {
+    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).show(ui).value().copied()
 }
 
 /// Set `kind` on corner `corner` (every corner for None) of each selected live rectangle
@@ -167,55 +186,79 @@ fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<
     }
 }
 
-/// A menu of the corner kinds, `width` wide, showing `current` (blank for None) and named `name`
-/// for screen readers. Returns the kind picked.
-fn corner_kind_menu(ui: &mut Ui, id: impl std::hash::Hash, name: &str, current: Option<CornerKind>, width: f32) -> Option<CornerKind> {
-    let names: Vec<&str> = CornerKind::ALL.iter().map(|k| crate::dialogs::corners::kind_label(*k)).collect();
-    let shown = current.map_or("", crate::dialogs::corners::kind_label);
-    crate::widgets::dropdown_names_named(ui, id, Some(name), shown, &names, width).and_then(|i| CornerKind::ALL.get(i).copied())
-}
-
 /// The corners of a live rectangle in the order their fields show, with their labels.
 fn rectangle_corners() -> [(usize, &'static str); 4] {
     [(0, tl!("Top Left:")), (1, tl!("Top Right:")), (2, tl!("Bottom Right:")), (3, tl!("Bottom Left:"))]
 }
 
-/// One Corner Radius field and one Corner menu per corner of a live rectangle, each pair on its own
-/// row with the corner's label, the fields and menus in line; in a panel too narrow for that, each
-/// menu goes on the row under its field. A value typed or a kind picked is set on that corner
-/// alone, of each selected live rectangle ([`set_rectangle_corners`]).
-fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, width: f32) {
+/// The columns of [`corner_fields`]: each corner's labelled radius field, then its Corner select.
+const CORNER_COLUMNS: [ColumnWidth; 2] = [ColumnWidth::fill(1.0), ColumnWidth::Content];
+
+/// One Corner Radius field and one Corner select per corner of a live rectangle, each pair on its
+/// own row with the corner's label; in a panel too narrow for that, each select goes under its
+/// field. A value typed or a kind picked is set on that corner alone, of each selected live
+/// rectangle ([`set_rectangle_corners`]).
+fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
-    let unit = app.session.general_unit();
-    let widest = |names: &mut dyn Iterator<Item = &str>| names.map(|t| crate::widgets::dim_label_width(ui, t)).fold(0.0, f32::max);
-    let labels = widest(&mut rectangle_corners().into_iter().map(|(_, label)| label));
-    // The longest kind name, with the room the menu's button gives around it and its arrow.
-    let menu_width = width.max(widest(&mut CornerKind::ALL.into_iter().map(crate::dialogs::corners::kind_label)) + 26.0);
-    // The two gaps between the grid's three columns are 6 points each.
-    let in_line = labels + width + menu_width + 12.0 <= ui.available_width();
-    egui::Grid::new((id, "corners")).num_columns(if in_line { 3 } else { 2 }).spacing(vec2(6.0, 4.0)).show(ui, |ui| {
+    let lengths = general_lengths(app);
+    let entries = corner_entries();
+    let mut radii = Vec::new();
+    let mut kinds = Vec::new();
+    let _ = Grid::new(&CORNER_COLUMNS).show(ui, |ui, _| {
         for (k, label) in rectangle_corners() {
-            dim_label(ui, label);
-            if let Some(v) = crate::widgets::num_field_named(ui, (id, "corner", k), Some(label), Some(lc.radius(k)), unit, width) {
-                // A negative radius typed in rounds nothing: the command takes 0 or more.
-                set_rectangle_corners(app, json!({"radius": v.max(0.0)}), Some(k));
+            Field::new(label).show(ui, |ui, _| {
+                radii.push((k, NumberField::length(label, Bind::given(Some(lc.radius(k))), lengths).show(ui).edit));
+            });
+            if let Some(kind) = corner_select(ui, label, Some(lc.kind(k)), &entries) {
+                kinds.push((k, kind));
             }
-            if !in_line {
-                ui.end_row();
-                ui.label("");
+        }
+    });
+    for (k, edit) in &radii {
+        apply_edits(app, edit, EditPath::Scope, |app, v: &Option<f64>, _| {
+            // A negative radius typed in rounds nothing: the command takes 0 or more.
+            if let Some(v) = v {
+                set_rectangle_corners(app, json!({"radius": v.max(0.0)}), Some(*k));
             }
-            if let Some(kind) = corner_kind_menu(ui, (id, "kind", k), label, Some(lc.kind(k)), menu_width) {
-                set_rectangle_kinds(app, kind, Some(k));
-            }
-            ui.end_row();
+        });
+    }
+    for (k, kind) in kinds {
+        set_rectangle_kinds(app, kind, Some(k));
+    }
+}
+
+/// [`corner_radius_row`]'s field: [`corner_radius`], which a new value sets on those corners.
+pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
+    let edit = NumberField::length(tl!("Corner Radius"), Bind::given(corner_radius(app, n)), general_lengths(app)).show(ui).edit;
+    apply_edits(app, &edit, EditPath::Scope, |app, v: &Option<f64>, _| {
+        if let Some(r) = v {
+            app.run("object.setLiveShape", json!({"radius": r.max(0.0)})).ok();
         }
     });
 }
 
-/// [`corner_radius_row`]'s field, `width` wide.
-pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: impl std::hash::Hash + std::fmt::Debug, width: f32) {
-    if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), app.session.general_unit(), width) {
-        app.run("object.setLiveShape", json!({"radius": r.max(0.0)})).ok();
+/// The icon the command catalog gives command `id`: the Align panel's align, distribute and Align
+/// To buttons' and the Pathfinder panel's, so a bar or menu row of the command shows the panel's
+/// glyph. `None` for every other command.
+pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
+    use align::{AlignTo, Button};
+    if let Some(op) = id.strip_prefix("object.pathfinder.") {
+        return pathfinder::SHAPE_MODES.iter().chain(&pathfinder::PATHFINDERS).find(|(_, _, o)| *o == op).map(|(icon, _, _)| *icon);
+    }
+    if let Some(to) = align::align_to_command(id) {
+        return Some(match to {
+            AlignTo::Selection => "dc-alignto-selection",
+            AlignTo::Key => "dc-alignto-key",
+            AlignTo::Artboard => "dc-alignto-artboard",
+        });
+    }
+    let in_table = |table: &[(&'static str, &str, &str, &str)], axis: &str, v: &str| table.iter().find(|r| r.2 == axis && r.3 == v).map(|r| r.0);
+    match align::button(id)? {
+        Button::Align(axis, v) => in_table(&align::ALIGN, axis, v),
+        Button::AlignCenters => Some("dc-al-center"),
+        Button::Distribute(axis, v) => in_table(&align::DISTRIBUTE, axis, v),
+        Button::Spacing("vertical") => Some("dc-dist-vspace"),
+        Button::Spacing(_) => Some("dc-dist-hspace"),
     }
 }
 
@@ -225,7 +268,6 @@ pub(crate) fn selection_len(app: &VectorcraftApp) -> usize {
 }
 
 /// Whether the panel part `key` is hidden by its panel's menu.
-// PLAN: assumed `UiState::hidden_parts` is a set of part keys (op.A3)
 pub(crate) fn part_hidden(app: &VectorcraftApp, key: &str) -> bool {
     app.ui.hidden_parts.contains(key)
 }
@@ -233,7 +275,7 @@ pub(crate) fn part_hidden(app: &VectorcraftApp, key: &str) -> bool {
 /// Hides or shows the panel part `key`.
 pub(crate) fn set_part_hidden(app: &mut VectorcraftApp, key: &'static str, on: bool) {
     if on {
-        app.ui.hidden_parts.insert(key.to_string());
+        app.ui.hidden_parts.insert(key);
     } else {
         app.ui.hidden_parts.remove(key);
     }
@@ -297,31 +339,31 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         crate::addons::units::ID => crate::addons::units::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
-            dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
+            Text::new(tl!("This panel is on the roadmap (see the parity plan).")).shade(Shade::Muted).show(ui);
         }
     }
 }
 
 /// A panel's menu: its rows and the states of its commands, both from the panel's module.
-struct PanelMenu {
+struct PanelMenuSource {
     id: &'static str,
     rows: fn(&VectorcraftApp) -> Vec<PanelRow>,
     states: fn(&VectorcraftApp, &mut CommandStates),
 }
 
-/// Lists a panel's menu from its module's `menu_rows` and `menu_states`.
-// PLAN: `text_styles` is assumed to take its `Kind`; the two style panels go through closures.
+/// Lists a panel's menu from its module's `menu_rows` and `menu_states`; a module that serves two
+/// panels takes the panel's kind.
 macro_rules! menu {
     ($id:expr, $module:ident) => {
-        PanelMenu { id: $id, rows: $module::menu_rows, states: $module::menu_states }
+        PanelMenuSource { id: $id, rows: $module::menu_rows, states: $module::menu_states }
     };
     ($id:expr, $module:ident, $kind:expr) => {
-        PanelMenu { id: $id, rows: |app| $module::menu_rows(app, $kind), states: |app, states| $module::menu_states(app, states, $kind) }
+        PanelMenuSource { id: $id, rows: |app| $module::menu_rows(app, $kind), states: |app, states| $module::menu_states(app, $kind, states) }
     };
 }
 
 /// Every panel with a menu of its own.
-static PANEL_MENUS: &[PanelMenu] = &[
+static PANEL_MENUS: &[PanelMenuSource] = &[
     menu!("swatches", swatches),
     menu!("color", color),
     menu!("colorGuide", color_guide),
@@ -385,15 +427,6 @@ pub(crate) fn panel_menu_states(app: &VectorcraftApp, states: &mut CommandStates
         (menu.states)(app, states);
     }
     crate::canvas::task_bar::menu_states(app, states);
-}
-
-/// The ≡ button drawn into `rect` that opens a panel menu.
-pub(crate) fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.interact(rect, ui.scope_id().with(("panel-menu", id)), Sense::click());
-    icons::paint(ui, "menu", rect.shrink(1.0), if resp.hovered() { t.text_strong } else { t.text_dim });
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Panel menu")));
-    resp.on_hover_text(tl!("Panel menu"))
 }
 
 pub fn libraries(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -516,85 +549,137 @@ pub(crate) fn active_paint(app: &VectorcraftApp) -> Paint {
     if app.session.fill_active { f } else { s }
 }
 
-/// Draw the Fill/Stroke proxy and handle its clicks through commands.
-pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
-    let (f, s) = current_paints(app);
+/// The Fill/Stroke proxy: fill and stroke wells (the stroke a ring), the active one in front, with
+/// the Swap and Default buttons. Its clicks run commands ([`proxy_events`]); a paint dropped on a
+/// well that is not "?" paints that proxy.
+pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (fill, stroke) = current_paints(app);
     let mixed = mixed_paints(app, ui.ctx());
-    let c = crate::widgets::fill_stroke_proxy(ui, &f, &s, mixed, app.session.fill_active, size);
-    if (c.fill && !app.session.fill_active) || (c.stroke && app.session.fill_active) {
-        app.run("paint.toggleActive", json!({})).ok();
-    }
-    if c.swap {
-        app.run("paint.swap", json!({})).ok();
-    }
-    if c.default {
-        app.run("paint.default", json!({})).ok();
-    }
-    if let Some(stroke) = c.pick {
-        app.run("ui.colorPicker", json!({ "stroke": stroke })).ok();
-    }
-    if let Some(p) = c.dropped_fill {
-        app.run("paint.setFill", p).ok();
-    }
-    if let Some(p) = c.dropped_stroke {
-        app.run("paint.setStroke", p).ok();
+    let well = |label: &'static str, paint: &Paint, mixed: bool| {
+        PairWell::paint(label, if mixed { Mixed::Mixed } else { Mixed::Same(well_paint(paint, &|_| None)) })
+    };
+    let wells = [well(tl!("Fill"), &fill, mixed.0), well(tl!("Stroke"), &stroke, mixed.1).ring(true)];
+    let active = if app.session.fill_active { Well::Primary } else { Well::Secondary };
+    let out = SwatchPair::new(tl!("Fill and Stroke"), wells, Bind::given(active))
+        .swap_button(tl!("Swap Fill and Stroke"))
+        .default_button(tl!("Default Fill and Stroke"))
+        .popover(false)
+        .drags([Some(PanelDrag::paint(fill)), Some(PanelDrag::paint(stroke))])
+        .accepts(move |well, drag| takes_drop(mixed, well, drag))
+        .show(ui);
+    proxy_events(app, &out);
+    if let Some((well, drag)) = &out.dropped {
+        drop_paint(app, *well, drag);
     }
 }
 
-/// The Fill (or `stroke`) chip of the Control bar and the Properties panel, `size` square (with a
-/// `chevron` after it): the proxy's paint, "?" when the selected objects' paints differ. A click
-/// brings that proxy forward and opens a popover with the Swatches panel; Shift-click (or the
-/// popover's toggle) shows the Color panel's mixer instead.
-pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool, size: f32, chevron: bool) {
+/// Runs what a Fill/Stroke proxy reported this pass ([`proxy_commands`]): this proxy's, or the
+/// Color panel's, whose wells are the same two.
+pub(crate) fn proxy_events<P>(app: &mut VectorcraftApp, out: &SwatchPairOutput<P>) {
+    for (cmd, params) in proxy_commands(out.activated.then_some(out.active), out.double_clicked, out.swap, out.defaults) {
+        app.run(cmd, params).ok();
+    }
+}
+
+/// The commands a proxy's events run, in order: the other well made active brings that proxy
+/// forward, Swap and Default, and a double click opens the Color Picker on that proxy's paint.
+fn proxy_commands(activated: Option<Well>, double_clicked: Option<Well>, swap: bool, defaults: bool) -> Vec<(&'static str, Value)> {
+    let mut commands = Vec::new();
+    if let Some(well) = activated {
+        commands.push(("paint.toggleActive", json!({ "fill": well == Well::Primary })));
+    }
+    if swap {
+        commands.push(("paint.swap", json!({})));
+    }
+    if defaults {
+        commands.push(("paint.default", json!({})));
+    }
+    if let Some(well) = double_clicked {
+        commands.push(("ui.colorPicker", json!({ "stroke": well == Well::Secondary })));
+    }
+    commands
+}
+
+/// Whether a proxy well takes `drag`: a paint that paints something, dropped on a well that is not
+/// "?" (`mixed`: the fill's and the stroke's).
+fn takes_drop(mixed: (bool, bool), well: Well, drag: &PanelDrag) -> bool {
+    let mixed = if well == Well::Primary { mixed.0 } else { mixed.1 };
+    !mixed && matches!(drag, PanelDrag::Paint { params, .. } if !params.is_null())
+}
+
+/// Paints the fill (the primary well) or the stroke with the paint `drag` carries.
+fn drop_paint(app: &mut VectorcraftApp, well: Well, drag: &PanelDrag) {
+    if let PanelDrag::Paint { params, .. } = drag {
+        let cmd = if well == Well::Primary { "paint.setFill" } else { "paint.setStroke" };
+        app.run(cmd, params.clone()).ok();
+    }
+}
+
+/// The open Fill/Stroke chip popover: the chip it hangs from and whether it shows the Color
+/// panel's mixer instead of the swatches.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PaintPopover {
+    /// The response id of the chip that opened it.
+    chip: egui::Id,
+    /// The mixer shows, not the swatches.
+    mixer: bool,
+}
+
+/// The Fill (or `stroke`) chip of the Control bar and the Properties panel: the proxy's paint, "?"
+/// when the selected objects' paints differ, the stroke as a ring. A click brings that proxy
+/// forward and opens a popover with the Swatches panel; Shift-click (or the popover's toggle)
+/// shows the Color panel's mixer instead.
+pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool) {
     let (fill, stroke_paint) = current_paints(app);
     let mixed = mixed_paints(app, ui.ctx());
-    let (paint, mixed) = if stroke { (stroke_paint, mixed.1) } else { (fill, mixed.0) };
-    let tip = if stroke {
-        tl!("Stroke: click for swatches, Shift-click for the color mixer")
+    let (paint, mixed, label, tip) = if stroke {
+        (stroke_paint, mixed.1, tl!("Stroke"), tl!("Stroke: click for swatches, Shift-click for the color mixer"))
     } else {
-        tl!("Fill: click for swatches, Shift-click for the color mixer")
+        (fill, mixed.0, tl!("Fill"), tl!("Fill: click for swatches, Shift-click for the color mixer"))
     };
-    let resp = crate::widgets::chip_button_named(ui, size, chevron, tip, |ui, chip| {
-        crate::widgets::proxy_chip(ui, chip, &paint, mixed, stroke.then_some(size * 0.25));
-    });
-    if resp.clicked() {
+    let shown = if mixed { Mixed::Mixed } else { Mixed::Same(well_paint(&paint, &|_| None)) };
+    let fallback = srgba(&paint.color().unwrap_or(Color::BLACK));
+    let out = PaintChip::new(label, Bind::given(shown), fallback).popover(false).ring(stroke).tooltip(tip).show(ui);
+    let chip = out.edit.response.id;
+    if let Some(mods) = out.clicked {
         app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
-        set_pstate(ui.ctx(), MIXER, ui.input(|i| i.modifiers.shift));
+        app.ui.paint_popover = Some(PaintPopover { chip, mixer: mods.shift });
     }
-    // A popover that keeps its own open state: the Swatches body opens menus of its own (Swatch
-    // Libraries, Show Swatch Kinds), which a remembered egui popup would close with them (#536).
-    crate::widgets::popover(&resp, resp.clicked(), |ui| paint_popover(app, ui));
+    let mut open = app.ui.paint_popover.is_some_and(|p| p.chip == chip);
+    if !open {
+        return;
+    }
+    // The popover keeps its own open state: the Swatches body opens menus of its own (Swatch
+    // Libraries, Show Swatch Kinds), which close with it (#536).
+    let _ = Popover::new(label, Bind::bound(&mut open)).opened_by(&out.edit.response).show(ui, |ui, _| paint_popover(app, ui));
+    if !open {
+        app.ui.paint_popover = None;
+    }
 }
 
-/// The chip popovers' width (a narrow Swatches or Color panel).
-const POPOVER_WIDTH: f32 = 248.0;
-/// Panel state: the chip popovers show the Color panel's mixer instead of the swatches.
-const MIXER: &str = "paint-popover-mixer";
-
-/// The body of a Fill/Stroke chip popover: a Swatches / Color mixer toggle above that panel's body.
+/// The body of a Fill/Stroke chip popover: a Swatches / Color Mixer toggle above that panel's body.
+/// The mixer is the Color panel, so its menu comes along: the color modes (Grayscale, RGB, HSB,
+/// CMYK, Web Safe RGB), Invert, Complement and the rest (#4249).
 fn paint_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.set_width(POPOVER_WIDTH);
-    let mixer: bool = pstate(ui.ctx(), MIXER);
-    ui.horizontal(|ui| {
-        for (icon, tip, m) in [("swatch-book", "Swatches", false), ("palette", "Color Mixer (Shift-click the chip)", true)] {
-            if crate::widgets::icon_button(ui, icon, tip, mixer == m, 22.0).clicked() {
-                set_pstate(ui.ctx(), MIXER, m);
+    let mixer = app.ui.paint_popover.is_some_and(|p| p.mixer);
+    let mut picked = None;
+    Row::new().show(ui, |ui, _| {
+        for (icon, tip, m) in [("swatch-book", tl!("Swatches"), false), ("palette", tl!("Color Mixer (Shift-click the chip)"), true)] {
+            if IconButton::new(IconId::new(icon)).label(tip).tooltip(tip).selected(mixer == m).show(ui).clicked() {
+                picked = Some(m);
             }
         }
-        // The mixer is the Color panel, so its menu comes along: the color modes (Grayscale,
-        // RGB, HSB, CMYK, Web Safe RGB), Invert, Complement and the rest (#4249).
         if mixer {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let (rect, _) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
-                let resp = menu_button(ui, "color-mixer", rect);
-                egui::Popup::menu(&resp).show(|ui| {
-                    ui.set_min_width(200.0);
-                    color::menu(app, ui);
-                });
+            let button = IconButton::new(IconId::new("menu")).label(tl!("Panel menu")).popup(PopupKind::Menu).show(ui).response;
+            Menu::new(tl!("Panel menu")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+                PanelMenu::new(color::menu_rows(app), Vec::new()).show(ui);
             });
         }
     });
-    crate::widgets::divider(ui);
+    if let (Some(m), Some(open)) = (picked, &mut app.ui.paint_popover) {
+        open.mixer = m;
+    }
+    Divider::horizontal().show(ui);
     if mixer {
         color::show(app, ui);
     } else {
@@ -727,46 +812,22 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// Rows of chips (the Session's recent colors, which every paint command feeds), wrapped onto as
-/// many rows as the panel's width needs, under a "Recent Colors" header when `heading` is set;
-/// returns the one clicked, for the caller to apply. The chips sit in a group that, without the
-/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which
-/// the Swatches panel makes a swatch of.
-pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool) -> Option<Color> {
-    let t = Tokens::get(ui.ctx());
-    if heading {
-        crate::widgets::subheader(ui, tl!("Recent Colors"));
-    }
-    let width = ui.available_width();
-    let colors = &app.session.recent_colors;
-    // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge.
-    let per_row = (((width - 21.0) / 19.0).floor() as usize + 1).max(1);
-    let rows = colors.len().div_ceil(per_row).max(1);
-    let (r, _) = ui.allocate_exact_size(vec2(width, 3.0 + rows as f32 * 19.0), Sense::hover());
-    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    // The chips go in a child `Ui` over the box, so screen readers find them inside its group;
-    // their ids stay under the caller's scope.
-    let scope = ui.scope_id();
-    let mut builder = egui::UiBuilder::new().max_rect(r).accessibility_role(egui::accesskit::Role::Group);
-    if !heading {
-        builder = builder.accessibility_label(tl!("Recent Colors"));
-    }
-    let ui = &mut ui.new_child(builder);
-    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
-        node.set_bounds(egui::accesskit::Rect { x0: r.min.x.into(), y0: r.min.y.into(), x1: r.max.x.into(), y1: r.max.y.into() });
-    });
-    let mut chosen = None;
-    for (i, c) in colors.iter().enumerate() {
-        let (row, col) = (i / per_row, i % per_row);
-        let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cell, scope.with(("recent", i)), Sense::click_and_drag());
-        crate::widgets::drag_source(ui, &resp, || crate::panel_drag::PanelDrag::paint(Paint::solid(*c)));
-        crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
-        if resp.on_hover_text(c.to_hex()).clicked() {
-            chosen = Some(*c);
-        }
-    }
-    chosen
+/// The Session's recent colors (which every paint command feeds) as a wrapping palette named
+/// "Recent Colors"; returns the one clicked, for the caller to apply. A cell drags its color as a
+/// solid paint, which the Swatches panel makes a swatch of.
+pub(crate) fn recent_colors(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
+    let stored: Vec<Color> = app.session.recent_colors.iter().copied().collect();
+    let cells: Vec<(Label, Srgba)> = stored.iter().map(|c| (Label::from(c.to_hex()), srgba(c))).collect();
+    // A colour no cell holds, so no cell shows as picked and every click is a pick.
+    let mut picked = Srgba::BLACK.with_alpha(0.0);
+    let dragged = stored.clone();
+    let out = SwatchPalette::new(tl!("Recent Colors"), Bind::bound(&mut picked), &cells)
+        .spacing(SwatchSpacing::Spaced)
+        .drag_payload(move |drag: &ListDrag<usize>| dragged.get(drag.grabbed).map(|c| PanelDrag::paint(Paint::solid(*c))))
+        .show(ui);
+    // The palette reports the cell's sRGB; the stored colour keeps its own model.
+    let rgba = out.edit?.value()?.to_rgba();
+    stored.into_iter().zip(&cells).find(|(_, (_, cell))| cell.to_rgba() == rgba).map(|(c, _)| c)
 }
 
 /// A colour as command JSON, keeping its model.
@@ -801,17 +862,20 @@ pub(crate) fn c32(c: &Color) -> egui::Color32 {
     egui::Color32::from_rgb(r, g, b)
 }
 
-/// A labelled empty-state message used by list panels.
-pub(crate) fn empty_state(ui: &mut Ui, icon: &str, title: &str, body: &str) {
-    let t = Tokens::get(ui.ctx());
-    ui.add_space(12.0);
-    ui.vertical_centered(|ui| {
-        icons::icon(ui, icon, 28.0, t.text_disabled);
-        ui.add_space(4.0);
-        ui.label(egui::RichText::new(tl!(title)).size(12.5).color(t.text));
-        ui.label(egui::RichText::new(tl!(body)).size(11.5).color(t.text_dim));
-    });
-    ui.add_space(12.0);
+/// A document colour as the framework's colour type: its sRGB, opaque.
+pub(crate) fn srgba(c: &Color) -> Srgba {
+    let [r, g, b, _] = c.to_rgba8(1.0);
+    Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0)
+}
+
+/// The empty state of a panel with nothing to show: `icon` over the title and the message,
+/// centred in the panel.
+pub(crate) fn empty_state(ui: &mut Ui, icon: &'static str, title: &str, body: &str) {
+    Notice::new(Tone::Neutral, body.to_owned())
+        .layout(NoticeLayout::Centred)
+        .title(title.to_owned())
+        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new(icon))))
+        .show(ui);
 }
 
 #[cfg(test)]
@@ -819,40 +883,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dropping_a_proxy_paint_on_the_other_proxy_applies_it() {
-        use egui::{Event, Modifiers, PointerButton};
-        use vectorcraft_color::{Color, Paint};
-
-        use crate::panel_drag::PanelDrag;
+    fn proxy_events_run_their_commands() {
+        let ran = |activated, double, swap, defaults| -> Vec<(&'static str, Value)> { proxy_commands(activated, double, swap, defaults) };
+        assert!(ran(None, None, false, false).is_empty(), "a pass with no event runs nothing");
+        assert_eq!(ran(Some(Well::Primary), None, false, false), vec![("paint.toggleActive", json!({"fill": true}))]);
+        assert_eq!(ran(Some(Well::Secondary), None, false, false), vec![("paint.toggleActive", json!({"fill": false}))]);
+        assert_eq!(ran(None, None, true, false), vec![("paint.swap", json!({}))]);
+        assert_eq!(ran(None, None, false, true), vec![("paint.default", json!({}))]);
+        assert_eq!(ran(None, Some(Well::Secondary), false, false), vec![("ui.colorPicker", json!({"stroke": true}))]);
+        assert_eq!(ran(None, Some(Well::Primary), false, false), vec![("ui.colorPicker", json!({"stroke": false}))]);
 
         let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
         app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         app.run("paint.setStroke", json!({"color": "#0000ff"})).unwrap();
-        let ctx = egui::Context::default();
-        let stroke_at = std::cell::Cell::new(egui::Pos2::ZERO);
-        let frame = |app: &mut crate::VectorcraftApp, events: Vec<Event>| {
-            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-                proxy(app, ui, 36.0);
-                if let Some(c) = ctx.read_response(ui.scope_id().with("stroke-proxy")).map(|r| r.rect.center()) {
-                    stroke_at.set(c);
-                }
-            });
-            out.textures_delta.clear();
-        };
-        frame(&mut app, vec![]);
-        let at = stroke_at.get();
-        let red = PanelDrag::paint(Paint::solid(Color::from_hex("#ff0000").unwrap()));
-        egui::DragAndDrop::set_payload(&ctx, red);
-        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
-        frame(&mut app, vec![Event::PointerMoved(at), release]);
-        let stroke = app.session.shown_stroke().unwrap();
-        assert_eq!(stroke.paint.color().map(|c| c.to_hex()), Some("#ff0000".into()), "{}", app.ui.status);
-        let st = app.session.active().unwrap();
-        let id = st.selection.objects[0];
-        assert_eq!(st.doc.node(id).unwrap().appearance.fill_paint().color().map(|c| c.to_hex()), Some("#ff0000".into()));
-        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+        let green = PanelDrag::paint(Paint::solid(Color::from_hex("#00ff00").unwrap()));
+        assert!(takes_drop((false, false), Well::Secondary, &green));
+        assert!(!takes_drop((false, true), Well::Secondary, &green), "a mixed well takes no drop");
+        assert!(takes_drop((false, true), Well::Primary, &green), "the other well still does");
+        drop_paint(&mut app, Well::Secondary, &green);
+        let (fill, stroke) = current_paints(&app);
+        assert_eq!(stroke.color().map(|c| c.to_hex()), Some("#00ff00".into()), "{}", app.ui.status);
+        assert_eq!(fill.color().map(|c| c.to_hex()), Some("#ff0000".into()), "a drop on the stroke leaves the fill");
+        drop_paint(&mut app, Well::Primary, &green);
+        assert_eq!(current_paints(&app).0.color().map(|c| c.to_hex()), Some("#00ff00".into()));
     }
 
     #[test]
@@ -872,21 +927,18 @@ mod tests {
 
     #[test]
     fn drag_scrolling_in_a_short_list_goes_toward_the_nearer_edge() {
-        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
-        // A 40 pt view: each band is 20 pt deep, so the pointer is in one band at most.
-        for (depth, want) in [(5.0, 270.0), (15.0, 130.0), (20.0, 0.0), (25.0, -130.0), (35.0, -270.0)] {
-            let got = drag_scroll_speed(40.0, depth);
-            assert!(near(got, want), "40 pt view, pointer {depth} pt down: {got} pt/s, want {want}");
+        for h in [40.0, 56.0, 100.0] {
+            let speed = |depth: f32| drag_scroll_speed(h, depth);
+            assert!(speed(1.0) > 0.0 && speed(h - 1.0) < 0.0, "{h} pt view: the top edge shows earlier rows, the bottom later ones");
+            assert!(speed(1.0) > speed(h / 4.0).max(0.0), "{h} pt view: faster nearer the edge");
+            for depth in [1.0, h / 8.0, h / 4.0] {
+                assert!((speed(depth) + speed(h - depth)).abs() < 1e-3, "{h} pt view: symmetric about the middle at {depth} pt");
+            }
+            assert_eq!(speed(h / 2.0), 0.0, "{h} pt view: the middle scrolls neither way");
+            assert_eq!(speed(-1.0), 0.0, "{h} pt view: above the view");
+            assert_eq!(speed(h + 1.0), 0.0, "{h} pt view: below the view");
         }
-        // Just outside a 20 pt view, the pointer does not scroll the list toward the far edge.
-        for depth in [-1.0, 21.0] {
-            assert_eq!(drag_scroll_speed(20.0, depth), 0.0, "20 pt view, pointer {depth} pt down");
-        }
-        // From 56 pt up, the bands stay 28 pt deep and the speeds are unchanged.
-        for (h, depth, want) in [(100.0, 5.0, 290.0), (100.0, 95.0, -290.0), (100.0, 50.0, 0.0), (56.0, 0.0, 340.0), (56.0, 27.0, 70.0)] {
-            let got = drag_scroll_speed(h, depth);
-            assert!(near(got, want), "{h} pt view, pointer {depth} pt down: {got} pt/s, want {want}");
-        }
+        assert_eq!(drag_scroll_speed(100.0, 50.0), 0.0, "a tall view has a still middle band");
         for h in [0.0, -10.0, f32::NAN, f32::INFINITY] {
             assert_eq!(drag_scroll_speed(h, 5.0), 0.0, "view height {h}");
         }

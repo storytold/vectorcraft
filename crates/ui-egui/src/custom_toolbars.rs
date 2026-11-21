@@ -546,7 +546,7 @@ mod tests {
 
     /// The items of Window › Toolbars: (label, command id, params).
     fn toolbars_menu(app: &VectorcraftApp) -> Vec<(String, String, Value)> {
-        crate::shortcut_editor::sync(&app.ui);
+        sync(&app.ui);
         let window = crate::menus::menu_tree().into_iter().find(|(m, _)| *m == "Window").map(|(_, items)| items).unwrap();
         let Some(items) = window.into_iter().find_map(|n| match n {
             Node::Submenu { label, children, .. } if label == "Toolbars" => Some(children),

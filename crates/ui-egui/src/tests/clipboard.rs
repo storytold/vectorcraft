@@ -11,6 +11,7 @@ use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
+use crate::addons::dialogs::tests as host;
 use crate::{Services, VectorcraftApp, dialogs, menus};
 
 fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
@@ -36,9 +37,10 @@ fn swatch(app: &mut VectorcraftApp, name: &str, hex: &str) {
 }
 
 /// A rectangle filled with global swatch Brand (red) and stroked with Ink (black) copied from one
-/// document, and a second document (active) whose Brand is blue and Ink green.
+/// document, and a second document (active) whose Brand is blue and Ink green; in a window.
 fn conflicting() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     swatch(&mut app, "Brand", "#ff0000");
     swatch(&mut app, "Ink", "#000000");
@@ -62,8 +64,19 @@ fn linked(hex: &str, name: &str) -> Paint {
     Paint::Solid { color: Color::from_hex(hex).unwrap(), swatch: Some(name.into()), tint: 1.0 }
 }
 
-fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-    app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+/// The open Swatch Conflict question.
+fn question(app: &VectorcraftApp) -> craft::ui::dialog::DialogId {
+    dialogs::swatch_conflict::id(app).expect("Swatch Conflict is open")
+}
+
+/// Every string the window paints, its dialogs included, in the second of two passes.
+fn window_text(app: &mut VectorcraftApp) -> String {
+    let ctx = host::ctx(app);
+    let raw = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0))), ..Default::default() };
+    ctx.run_ui(raw(), |ui| app.ui(ui)).textures_delta.clear();
+    let mut out = ctx.run_ui(raw(), |ui| app.ui(ui));
+    out.textures_delta.clear();
+    crate::tests_labels::shapes_text(&out)
 }
 
 #[test]
@@ -71,19 +84,22 @@ fn the_swatch_conflict_dialog_asks_about_each_swatch_then_pastes() {
     let mut app = conflicting();
     assert_eq!(run(&mut app, "edit.paste", json!({})), json!({"dialog": dialogs::swatch_conflict::KIND}));
     assert!(objects(&app).is_empty(), "nothing is pasted before the answer");
-    // It draws headlessly, naming the swatch it asks about.
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| dialogs::show(app, ui.ctx()));
+    let id = question(&app);
+    // It draws, naming the swatch it asks about.
+    let text = window_text(&mut app);
     for label in ["Swatch Conflict", "\u{201c}Brand\u{201d}", "Conflict 1 of 2", "Merge Swatches", "Add Swatches", "Apply to All"] {
         assert!(text.contains(label), "{label} in {text}");
     }
     // Brand: add; Ink: merge.
-    set(&mut app, "choice", json!("add"));
-    dialogs::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["index"], 1, "the next conflict");
+    host::set(&app, id, "choice", json!("add"));
+    assert!(!host::confirm(&app, id), "OK asks about the next conflict instead of answering");
+    assert_eq!(dialogs::swatch_conflict::id(&app), Some(id), "the next conflict");
+    host::frame(&mut app);
     assert!(objects(&app).is_empty());
-    set(&mut app, "choice", json!("merge"));
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    host::set(&app, id, "choice", json!("merge"));
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
     assert_eq!(paints(&app), (linked("#ff0000", "Brand 2"), linked("#00ff00", "Ink")));
     // One undo step takes the object and the added swatch away.
     run(&mut app, "edit.undo", json!({}));
@@ -94,30 +110,35 @@ fn the_swatch_conflict_dialog_asks_about_each_swatch_then_pastes() {
 fn apply_to_all_answers_the_rest_and_cancel_pastes_nothing() {
     let mut app = conflicting();
     run(&mut app, "edit.paste", json!({}));
-    dialogs::cancel(&mut app);
-    assert!(app.ui.dialog.is_none() && objects(&app).is_empty());
+    host::cancel(&app, question(&app));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none() && objects(&app).is_empty());
     run(&mut app, "edit.pasteInPlace", json!({}));
-    set(&mut app, "choice", json!("add"));
-    set(&mut app, "applyToAll", json!(true));
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    let id = question(&app);
+    host::set(&app, id, "choice", json!("add"));
+    host::set(&app, id, "applyToAll", json!(true));
+    assert!(host::confirm(&app, id), "Apply to All answers the rest");
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
     assert_eq!(paints(&app), (linked("#ff0000", "Brand 2"), linked("#000000", "Ink 2")));
     // An answer given with the command needs no dialog (agents).
     let v = run(&mut app, "edit.pasteInPlace", json!({"swatchConflict": "merge"}));
     assert_eq!(v["merged"], 2);
-    assert!(app.ui.dialog.is_none());
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
 }
 
 #[test]
 fn ok_pastes_nothing_after_another_document_became_active() {
     let mut app = conflicting();
     run(&mut app, "edit.paste", json!({}));
-    set(&mut app, "applyToAll", json!(true));
+    let id = question(&app);
+    host::set(&app, id, "applyToAll", json!(true));
     app.run("document.activate", json!({"index": 0})).unwrap();
     let before = objects(&app);
     let undo = app.session.active().unwrap().history.undo.len();
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none(), "it closes as Cancel does");
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    assert!(dialogs::swatch_conflict::id(&app).is_none(), "it closes as Cancel does");
     assert_eq!(objects(&app), before, "the document made active pastes nothing");
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     app.run("document.activate", json!({"index": 1})).unwrap();
@@ -175,7 +196,7 @@ fn with_system_clipboard(text: &'static str) -> VectorcraftApp {
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     assert!(!menus::enabled(&app, "edit.paste"), "not checked before a frame");
     let ctx = egui::Context::default();
-    ctx.run_ui(Default::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+    ctx.run_ui(Default::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
     app
 }
 
@@ -225,30 +246,31 @@ fn a_paste_check_runs_in_line_when_the_probe_has_stopped() {
 
 #[test]
 fn the_layers_panel_menu_toggles_paste_remembers_layers() {
+    use craft::ui::menu::PanelRow;
+    use craft::ui::runtime::commands::{CommandRef, CommandStates};
+
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
-    let ctx = crate::testing::ui_context();
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::layers::menu(app, ui));
-        out.textures_delta.clear();
-        let mut texts = vec![];
-        for c in &out.shapes {
-            if let egui::Shape::Text(t) = &c.shape {
-                texts.push((t.galley.text().to_string(), t.visual_bounding_rect()));
-            }
-        }
-        texts
+    let item = |app: &VectorcraftApp| {
+        let rows = crate::panels::layers::menu_rows(app);
+        let found = rows.into_iter().find_map(|row| match row {
+            PanelRow::Command(command) if command.id == "layer.pasteRemembersLayers" => Some(command),
+            _ => None,
+        });
+        found.expect("Paste Remembers Layers is in the menu")
     };
-    let item = |texts: &[(String, egui::Rect)]| texts.iter().find(|(t, _)| t.ends_with("Paste Remembers Layers")).cloned().unwrap();
-    let (label, r) = item(&frame(&mut app, vec![]));
-    assert!(!label.starts_with('✓'));
-    let button =
-        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for e in [egui::Event::PointerMoved(r.center()), button(true), button(false)] {
-        frame(&mut app, vec![e]);
-    }
+    let checked = |app: &VectorcraftApp, command: &CommandRef| {
+        let mut states = CommandStates::new();
+        crate::panels::layers::menu_states(app, &mut states);
+        let state = states.get(command).expect("the row has a state");
+        // Checking a state that is already checked leaves it as it is.
+        state.clone().checked(true) == *state
+    };
+    let command = item(&app);
+    assert!(!checked(&app, &command));
+    menus::invoke(&mut app, &command.id, command.params.clone());
     assert!(app.session.active().unwrap().doc.paste_remembers_layers);
-    assert!(item(&frame(&mut app, vec![])).0.starts_with('✓'), "checked");
+    assert!(checked(&app, &item(&app)), "checked");
 }
 
 static TEST_CLIP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

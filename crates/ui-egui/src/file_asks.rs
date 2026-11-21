@@ -273,7 +273,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         let result = then(app);
         report(app, result);
     }
-    // PLAN: assumed `ReplaceFiles { doc: u64, files: Vec<String>, allowed: Vec<String>, command: String, params: Value }` (widgets-w10).
     if let Some(DialogResult::Ok(mut answer)) = files
         && answer.choice == PromptChoice::Proceed
         && let Some(r) = answer.take_tag::<ReplaceFiles>()

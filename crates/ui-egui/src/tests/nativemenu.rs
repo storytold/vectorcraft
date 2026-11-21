@@ -36,7 +36,8 @@ fn find<'a>(bar: &'a MenuBar, command: &str) -> &'a Item {
 #[test]
 fn settings_lists_every_preferences_page() {
     let mut m = Mac::new(true);
-    let layout = mac_layout(&m.app.menus.bar, &LayoutOptions { app_name: "VectorCraft", label: &|text: &'static str| text.to_string(), keys: &|_| None });
+    let layout =
+        mac_layout(&m.app.menus.bar, &LayoutOptions { app_name: "VectorCraft", label: &|text: &'static str| text.to_string(), keys: &|_| None });
     let app_menu = layout.bar.menus.iter().find(|menu| menu.role == MenuRole::App).expect("the app menu");
     let settings = app_menu
         .children
@@ -51,12 +52,14 @@ fn settings_lists_every_preferences_page() {
     assert_eq!((pages[0].label.as_str(), pages[0].shortcut.clone()), ("General…", Some(Chord::parse("Cmd+K").unwrap())));
     assert!(pages[1..].iter().all(|it| it.shortcut.is_none()));
     for (it, page) in pages.iter().zip(PREF_CATEGORIES) {
-        assert_eq!((it.command.id.as_str(), &it.command.params, it.label.clone()), ("edit.preferences", &json!({"category": page}), format!("{page}…")));
+        assert_eq!(
+            (it.command.id.as_str(), &it.command.params, it.label.clone()),
+            ("edit.preferences", &json!({"category": page}), format!("{page}…"))
+        );
     }
     let units = pages.iter().find(|it| it.command.params["category"] == "Units").expect("the Units page").command.clone();
     m.fake.report(MenuEvent::Click(units));
     m.frame(vec![]);
-    // PLAN: assumed `prefs_dialog::is_open(&VectorcraftApp) -> bool` and `page(&VectorcraftApp) -> Option<&str>`
     assert!(crate::prefs_dialog::is_open(&m.app), "a page opens the dialog, not a parameter form");
     assert_eq!(crate::prefs_dialog::page(&m.app), Some("Units"));
 }
@@ -124,10 +127,9 @@ impl Mac {
             ..Default::default()
         };
         let app = &mut self.app;
-        // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
         craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();
@@ -142,14 +144,12 @@ impl Mac {
 
     /// Where the document's point (`x`, `y`) is on the screen.
     fn on_canvas(&self, x: f64, y: f64) -> Pos2 {
-        // PLAN: assumed `app.canvas_view() -> Option<View>` with `to_screen(Point) -> Pos2`
         self.app.canvas_view().expect("the canvas was shown").to_screen(vectorcraft_geom::Point::new(x, y))
     }
 
     /// The canvas's rectangle on the screen.
     fn canvas_rect(&self) -> Rect {
-        // PLAN: assumed `View::canvas: Rect`
-        self.app.canvas_view().expect("the canvas was shown").canvas
+        self.app.canvas_view().expect("the canvas was shown").rect
     }
 
     /// Run `n` frames, each with the events that `step` returns (`step` may act on the app first),
@@ -340,8 +340,9 @@ fn fonts_that_load_read_the_menus_again() {
 /// menus are read as the preview begins and as it ends, and not for the fonts between.
 #[test]
 fn the_font_menu_preview_reads_the_menus_when_it_ends() {
-    // PLAN: assumed `font_menu::{Preview, apply_preview(app, owner, Preview), end_previews(app, &[owner])}` (ty.S4)
-    use crate::font_menu::{Preview, apply_preview, end_previews};
+    use craft::behavior::Preview;
+
+    use crate::font_menu::{apply_preview, end_previews};
     let owner = egui::Id::new("font-menu-preview-test");
     // The app reads the menus after each step as at the end of a frame.
     let read = |m: &mut Mac, step: &dyn Fn(&mut VectorcraftApp)| {

@@ -6,20 +6,20 @@
 //! The rail places and dismisses the card ([`ToolTips`]); this module only says which tools have
 //! one and draws it.
 
+use craft::behavior::IconId;
+use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Icon, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::primitives::IconSpec;
 use craft::ui::rails::ToolTips;
-use egui::{RichText, Sense, Ui, vec2};
+use craft::ui::style::{Span, TypeRole};
+use egui::Ui;
 use vectorcraft_tools::ToolInfo;
 use vectorcraft_tools::catalog::tool_description;
 use vectorcraft_tools::tool_info;
 
 use crate::VectorcraftApp;
 use crate::icons;
-use crate::theme::Tokens;
-
-/// The card's width.
-const WIDTH: f32 = 260.0;
-/// The size of the tool's icon on the card.
-const ICON: f32 = 32.0;
 
 /// The tool cards of one pass: the two preferences they follow.
 pub(crate) struct Cards {
@@ -52,30 +52,28 @@ impl ToolTips<String> for Cards {
     }
 }
 
-/// The card: icon, name and shortcut; what the tool does; one line per action of its hint.
-fn card(ui: &mut Ui, tool: &ToolInfo, description: &str, animated_zoom: bool) {
-    let t = Tokens::get(ui.ctx());
-    // Every line wraps inside the card's width, long translated names included.
-    ui.set_max_width(WIDTH);
-    ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(vec2(ICON, ICON), Sense::hover());
-        icons::paint(ui, icons::tool_icon(tool.icon), r, t.icon);
-        ui.add_space(4.0);
-        ui.add(egui::Label::new(RichText::new(super::tip(tool)).strong().color(t.text_strong)).wrap());
+/// The card: icon, name and shortcut; what the tool does; one line per action of its hint, its
+/// keys in bold. Every line wraps inside the card's width, long translated names included.
+fn card(ui: &mut Ui, tool: &ToolInfo, description: &'static str, animated_zoom: bool) {
+    let name = super::tip(ui.ctx(), tool);
+    Row::new().show(ui, |ui, _| {
+        Icon::new(IconSpec::svg(IconId::new(icons::tool_icon(tool.icon)))).show(ui);
+        Text::new(name).role(TypeRole::BodyStrong).show(ui);
     });
-    ui.add(egui::Label::new(RichText::new(tl!(description)).color(t.text)).wrap());
+    Text::new(tl!(description)).show(ui);
     let lines = lines(tool.id, animated_zoom);
     if !lines.is_empty() {
-        ui.separator();
+        Divider::horizontal().show(ui);
     }
     for line in lines {
-        let mut job = egui::text::LayoutJob::default();
-        job.wrap.max_width = ui.available_width();
-        for (text, bold) in line {
-            let font = if bold { crate::theme::semibold(12.0) } else { egui::FontId::proportional(12.0) };
-            job.append(&text, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
-        }
-        ui.label(job);
+        let spans = line
+            .into_iter()
+            .map(|(text, bold)| {
+                let span = Span::new(text);
+                if bold { span.strong() } else { span }
+            })
+            .collect();
+        Text::styled(spans).show(ui);
     }
 }
 

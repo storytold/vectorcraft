@@ -1,14 +1,8 @@
-use super::{Document, Entry, Paint, PanelDrag, REGISTRATION, SwatchRows, Value, VectorcraftApp, json, swatch_params};
-// PLAN: assumed `SwatchKey`, `DropAt`, `DropPayload`, `EditEvent`, `ReorderMove` are re-exported to `super` by color-w10.
-use super::{DropAt, DropPayload, EditEvent, ReorderMove, SwatchKey};
+use super::{Document, Paint, PanelDrag, REGISTRATION, Value, VectorcraftApp, json, name_of, swatch_params};
+use crate::panel_drag::SwatchRows;
+use craft::color_ui::ui::SwatchKey;
 use craft::keymap::Mods;
-
-/// The name a swatch or group row stands for.
-fn name_of(key: &SwatchKey) -> &str {
-    match key {
-        SwatchKey::Group(n) | SwatchKey::Swatch(n) => n,
-    }
-}
+use craft::ui::contract::{DropAt, ReorderMove};
 
 /// A drag released on the panel.
 pub(super) enum Drop {
@@ -54,12 +48,9 @@ pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> Pane
     let name = name_of(key);
     let (paint, params) = match key {
         SwatchKey::Group(_) => (Paint::None, Value::Null),
-        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(&Entry::Registration).unwrap_or_default()),
+        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
         SwatchKey::Swatch(_) => match d.swatch(name) {
-            Some(w) => {
-                let e = Entry::Swatch { name: w.name.clone(), paint: w.paint.clone(), global: w.global, spot: w.spot };
-                (w.paint.clone(), swatch_params(&e).unwrap_or_default())
-            }
+            Some(w) => (w.paint.clone(), swatch_params(d, name)),
             None => (Paint::None, Value::Null),
         },
     };
@@ -81,30 +72,18 @@ fn place(shown: &[SwatchKey], at: &DropAt<SwatchKey>) -> (Option<String>, bool) 
     }
 }
 
-/// Runs the drop of `payload` (a [`PanelDrag`] the panel takes; anything else is ignored).
-fn drop_payload(app: &mut VectorcraftApp, payload: &DropPayload, target: Option<String>, after: bool, mods: Mods) {
-    let Some(d) = payload.get::<PanelDrag>() else { return };
-    if let Some(drop) = Drop::of(d, target, after, mods) {
+/// `drag` dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`); a gap with no
+/// row under the pointer is the end of the list.
+pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, drag: &PanelDrag, mods: Mods) {
+    let (target, after) = place(shown, at);
+    if let Some(drop) = Drop::of(drag, target, after, mods) {
         apply_drop(app, drop);
     }
 }
 
-/// A payload dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`).
-pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, payload: &DropPayload, mods: Mods) {
-    let (target, after) = place(shown, at);
-    drop_payload(app, payload, target, after, mods);
-}
-
-/// A payload dropped on the panel away from any row: it goes to the end of the list.
-pub(super) fn on_list_drop(app: &mut VectorcraftApp, payload: &DropPayload, mods: Mods) {
-    drop_payload(app, payload, None, false, mods);
-}
-
 /// A reorder of the browser: one `swatch.move`, one undo step. `to` counts the `shown` rows left
 /// once the moved ones are taken out, so it names the row the move lands before (or the end).
-pub(super) fn on_reorder(app: &mut VectorcraftApp, shown: &[SwatchKey], event: &EditEvent<ReorderMove<SwatchKey>>) {
-    // Only the committed gesture changes the document; Begin and Update are previews.
-    let EditEvent::Commit { after: mv, .. } = event else { return };
+pub(super) fn on_reorder(app: &mut VectorcraftApp, shown: &[SwatchKey], mv: &ReorderMove<SwatchKey>) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
     let names: Vec<String> = mv.keys.iter().map(|k| name_of(k).to_string()).collect();
     let rest: Vec<&SwatchKey> = shown.iter().filter(|s| !mv.keys.iter().any(|k| name_of(k) == name_of(s))).collect();
@@ -130,9 +109,9 @@ pub(super) enum FooterTarget {
 
 /// Swatches or groups dragged from the list and released on a footer button (ap.AP8 `FooterDrop`):
 /// New Swatch duplicates the swatches among them, Delete Swatch asks to delete them as a click on
-/// the button does. Other payloads are left to their own targets.
-pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, payload: &DropPayload) {
-    let Some(PanelDrag::Paint { rows: Some(r), .. }) = payload.get::<PanelDrag>() else { return };
+/// the button does. Other drags are left to their own targets.
+pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
+    let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
     match target {
         FooterTarget::Delete => {
             let names = super::actions::deletable(app, &r.names);
@@ -144,7 +123,6 @@ pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, pay
             let Some(st) = app.session.active() else { return };
             let names: Vec<String> = r.names.iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).cloned().collect();
             if !names.is_empty() {
-                // PLAN: assumed `duplicate(app, &names)` and `pub(super)`; color-w10 drops the `ctx` argument with the pstate selection.
                 super::actions::duplicate(app, &names);
             }
         }

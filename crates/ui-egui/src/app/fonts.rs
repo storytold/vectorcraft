@@ -1,4 +1,6 @@
-use super::{VectorcraftApp, json};
+use serde_json::json;
+
+use super::VectorcraftApp;
 
 /// The most fonts Type › Recent Fonts lists (Preferences › Type › Number of Recent Fonts).
 pub const MAX_RECENT_FONTS: usize = 15;

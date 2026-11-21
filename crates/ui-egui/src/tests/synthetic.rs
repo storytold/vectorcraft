@@ -15,7 +15,7 @@ pub(crate) fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &st
     assert_eq!(r["ok"], true, "{r}");
 }
 
-/// One whole app frame (`logic` and `ui`, as production runs them) in an 800 × 600 window with
+/// One whole app frame (`tick` and `ui`, as production runs them) in an 800 × 600 window with
 /// `events`, so test keys go through the key stage, the board and `run_fired`. The first pass of a
 /// context builds the keymap: a test that presses a key at once runs one empty frame first.
 pub(crate) fn key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
@@ -28,7 +28,7 @@ pub(crate) fn key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: V
         ..Default::default()
     };
     let mut out = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();

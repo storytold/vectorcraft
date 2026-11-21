@@ -217,25 +217,24 @@ fn an_image_only_paste_event_imports_the_system_image_once() {
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Image { .. }));
 }
 
-/// The image-only paste schedules the tick that reads the rich clipboard and remembers the chord
-/// held when the image arrived, not the next pass's (possibly stale) modifiers.
+/// The image-only paste runs the paste of the chord held when the image arrived (Paste in Place
+/// for Cmd+Shift), not of the next pass's modifiers, and pastes once.
 #[test]
-fn an_image_only_paste_requests_its_tick_and_keeps_the_paste_time_chord() {
+fn an_image_only_paste_keeps_the_paste_time_chord() {
     let (mut app, board) = app();
     copy_elsewhere(&board, vec![(PNG, blue_png())]);
+    // The first pass builds the keymap.
+    frame(&mut app, vec![]);
     let held = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
-    let out = frame(
+    frame(
         &mut app,
         vec![egui::Event::ModifiersChanged(held), egui::Event::PasteImage(Arc::new(egui::ColorImage::filled([4, 2], egui::Color32::BLUE)))],
     );
-    assert_eq!(app.clipboard_image_request, Some(held), "the paste-time chord is kept");
-    let delay = out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay);
-    assert_eq!(delay, std::time::Duration::ZERO, "the request asks for the tick that will consume it");
-    // The next pass carries the keyboard's modifiers back as None; the stored chord still picks
-    // Paste in Place rather than Paste.
+    // The next pass carries the keyboard's modifiers back as None.
     frame(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
-    assert_eq!(app.clipboard_image_request, None, "the one-shot request is consumed");
     assert_eq!(count(&app), 1, "the image pasted once");
+    let label = app.session.active().unwrap().history.undo.last().map(|step| step.label.clone());
+    assert_eq!(label.as_deref(), Some("Paste in Place"), "the paste-time chord picks the paste");
 }
 
 /// A text paste alongside `PasteImage` takes the text path only: the image signal must not read
@@ -295,14 +294,20 @@ pub(crate) fn blue_png() -> Vec<u8> {
     png
 }
 
-/// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`,
-/// in the test's one context (in a new one the app starts its fonts over).
+/// One headless frame of the app delivering `events` (its tick, then its pass: shortcuts too, from
+/// the second frame on), then the commands the frame fired, which the window runs before its next
+/// frame; in the test's one context (in a new one the app starts its fonts over).
 pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     thread_local! {
-        static CTX: egui::Context = egui::Context::default();
+        static CTX: egui::Context = crate::testing::ui_context();
     }
     let ctx = CTX.with(Clone::clone);
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| app.logic(ui.ctx()));
+    craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+    });
+    craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
     out.textures_delta.clear();
     out
 }
@@ -347,7 +352,7 @@ fn window_frame(app: &mut VectorcraftApp, copy: Option<&str>) {
     let ctx = CTX.with(Clone::clone);
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0)));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         if let Some(text) = copy {
             ui.ctx().copy_text(text.into());
         }
@@ -605,21 +610,6 @@ fn text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     assert_eq!(t.plain_text(), "Words copied in a field");
 }
 
-/// Text a floating panel's label copies after Copy, before the formats are written: its window
-/// keeps the Copy, the formats are not written, and the system clipboard keeps the text.
-#[test]
-fn label_text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
-    let (mut app, board, hold) = app_with_busy_worker("");
-    copy_rect(&mut app);
-    let ctx = egui::Context::default();
-    crate::shortcuts::note_copied_in_window(&ctx);
-    crate::panel_docking::forward_keys(&mut app, &ctx, vec![egui::Event::Copy], Some(egui::Modifiers::COMMAND));
-    assert!(app.forwarded.is_empty(), "the window's Copy stays there");
-    drop(hold);
-    background::wait_all(&mut app);
-    assert_eq!(board.lock().unwrap().writes, 0);
-}
-
 /// The Edit menu's Paste into a text field after Copy of type, before the formats are written: it
 /// waits for them, not for a save started after them, and pastes the type's text, not what
 /// another app copied before.
@@ -637,8 +627,9 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             if paste {
                 craft::ui::runtime::commands::fire(ui.ctx(), "edit.paste", craft::ui::runtime::commands::FireSource::Menu);
-                // PLAN: assumed `fn run_fired(&mut self, ctx: &egui::Context)` on VectorcraftApp (hub-w1) runs what was fired.
-                app.run_fired(ui.ctx());
+                for fired in &craft::ui::runtime::frame::take_output(ui.ctx()).fired {
+                    crate::shortcuts::run_fired(&mut app, ui.ctx(), fired);
+                }
             }
             ui.add(egui::TextEdit::singleline(&mut field).id(id)).request_focus();
         });

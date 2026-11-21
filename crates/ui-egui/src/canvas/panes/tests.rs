@@ -174,6 +174,30 @@ fn pane_middle(
     [p.r(), p.g(), p.b()]
 }
 
+/// One headless frame that draws only window `w`'s pane, in a 600 × 400 cell → the whole output.
+fn pane_out(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win) -> egui::FullOutput {
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+        max_texture_side: Some(8192),
+        ..Default::default()
+    };
+    ctx.run_ui(raw, |ui| {
+        pane(app, ui, w, egui::Rect::from_min_size(Pos2::ZERO, vec2(600.0, 400.0)));
+    })
+}
+
+/// A document with a 50% red rectangle over most of its artboard and a second window of it, the first window
+/// floating beside the current one → the app.
+fn translucent_in_two_windows() -> VectorcraftApp {
+    let mut app = app_with(1);
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 300, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    app
+}
+
 /// The distinct left and top edges of `c`: how many columns and rows its panes take.
 fn columns_and_rows(c: &[egui::Rect]) -> (usize, usize) {
     let lefts: BTreeSet<u32> = c.iter().map(|r| r.left().to_bits()).collect();
@@ -1009,7 +1033,7 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     };
     app.session.prefs.monitor_profile_display = false;
     let (srgb, width) = pane(&mut app);
-    assert!(pane_source(&mut app, &ctx, (1, 1)).over.is_none(), "no display profile: nothing to blend");
+    assert!(pane_source(&mut app, &ctx, (1, 1)).frame.cache.over().is_none(), "no display profile: nothing to blend");
     let p3 = crate::display_profile::tests::p3();
     app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
     app.session.prefs.monitor_profile_display = true;
@@ -1017,7 +1041,7 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     let t = app.display_profile.transform(true).expect("the reported profile gives a transform");
     let (shown, _) = pane(&mut app);
     let source = pane_source(&mut app, &ctx, (1, 1));
-    let (backdrop, _) = source.over.as_ref().expect("the pane's Preview blends with its paper");
+    let (backdrop, _) = source.frame.cache.over().expect("the pane's Preview blends with its paper");
     assert!(
         !backdrop.artboards.is_empty() && backdrop.artboards.iter().all(|(_, c)| *c == back_paper),
         "the pane blends with its own document's paper: {backdrop:?}"
@@ -1056,4 +1080,49 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     // The check tells the two papers and the plain conversion apart.
     assert!(differs(want, blend(s, front_paper)), "the front document's paper blends to another color");
     assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
+}
+
+/// A pane draws its own view's Outline, whatever the current view shows: in Preview the middle of its picture shows
+/// the rectangle's red fill, in Outline it does not, and its picture follows its own Outline, not the current view's.
+#[test]
+fn a_pane_draws_its_own_views_outline() {
+    let mut app = translucent_in_two_windows();
+    let ctx = egui::Context::default();
+    let other = (0, 1);
+    let red = |[r, g, b]: [u8; 3]| r > g.saturating_add(60) && r > b.saturating_add(60);
+    let shown = |app: &mut VectorcraftApp, pane_outline: bool, current_outline: bool| {
+        crate::doc_windows::view_mut(app, other).unwrap().outline = pane_outline;
+        app.view_mut().unwrap().outline = current_outline;
+        forget(app, &ctx);
+        let middle = pane_middle(app, &ctx, 0, vec![], &mut |a| pane_out(a, &ctx, other));
+        let request = ThumbRequest::for_cell(600.0, ctx.pixels_per_point());
+        let key = PaneKey { slot: (app.session.documents()[0].uid, other.1) };
+        (middle, pane_source(app, &ctx, other).revision(&key, &request))
+    };
+    let (preview, preview_rev) = shown(&mut app, false, true);
+    let (outline, outline_rev) = shown(&mut app, true, false);
+    assert!(red(preview), "the pane's Preview shows the fill: {preview:?}");
+    assert!(!red(outline), "the pane's Outline shows no fill: {outline:?}");
+    assert_ne!(preview_rev, outline_rev, "the pane's picture follows its own Outline");
+    let (_, current_rev) = shown(&mut app, true, true);
+    assert_eq!(current_rev, outline_rev, "the current view's Outline does not reach the pane");
+}
+
+/// With a display profile, a floating window's pane blends its Preview with the paper before the conversion, as the
+/// canvas does, and in its own Outline, while the current view stays in Preview, converts the art alone.
+#[test]
+fn a_pane_blends_translucent_art_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = translucent_in_two_windows();
+    let p3 = crate::display_profile::tests::p3();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    app.session.prefs.monitor_profile_display = true;
+    let ctx = egui::Context::default();
+    let other = (0, 1);
+    pane_out(&mut app, &ctx, other).textures_delta.clear();
+    assert!(pane_source(&mut app, &ctx, other).frame.cache.over().is_some(), "the pane's Preview blends with its paper");
+    crate::doc_windows::view_mut(&mut app, other).unwrap().outline = true;
+    app.view_mut().unwrap().outline = false;
+    let cache = pane_source(&mut app, &ctx, other).frame.cache;
+    assert!(cache.outline && cache.over().is_none(), "the pane's Outline has no paper to blend with");
 }

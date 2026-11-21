@@ -1,9 +1,8 @@
 //! The rulers of a canvas body: what they read (units, zero point) and the document edits their
 //! gestures make (guides dragged out of a strip, the zero point dragged out of the corner).
 
-// PLAN: canvas-w10 registers `mod rulers;` in canvas.rs; `BodyKind` is written by canvas-w10 and is assumed at `super::BodyKind`.
 use craft::behavior::{Axis, EditEvent, GesturePhase, Mixed, RulerUnits, Ticks};
-use craft::ui::canvas::{CanvasRulers, CanvasSpace, GuideDrag, RulerText, Rulers, RulersOutput};
+use craft::ui::canvas::{CanvasRulers, GuideDrag, RulerText, Rulers, RulersOutput};
 use craft::ui::contract::Bind;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use egui::Ui;
@@ -77,6 +76,11 @@ pub(crate) fn type_lengths(app: &VectorcraftApp) -> LengthUnits {
     lengths(app.session.type_unit())
 }
 
+/// The Units ▸ Stroke unit as the lengths stroke fields show.
+pub(crate) fn stroke_lengths(app: &VectorcraftApp) -> LengthUnits {
+    lengths(app.session.stroke_unit())
+}
+
 /// One axis counting `unit`, `per_doc` of its units to a document point.
 fn axis(unit: Unit, per_doc: f64) -> RulerText {
     RulerText::new(RulerUnits::new(per_doc, Ticks::decimal(unit == Unit::Pixels)), unit_kind(unit))
@@ -125,19 +129,9 @@ pub(super) fn hidden(app: &mut VectorcraftApp) {
     app.session.end_ruler_origin_drag();
 }
 
-/// Shows the rulers over the canvas body and applies what they report. Returns the guide a strip is placing, which
-/// `guides::show` draws. A pane's rulers only paint.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace, _win: Win, kind: BodyKind) -> Option<GuideDrag> {
-    let live = matches!(kind, BodyKind::Live);
-    let mut zero = app.ruler_origin();
-    // PLAN: assumes the body's ui spans the canvas rect.
-    let at = ui.max_rect();
-    let out = Rulers::new("Rulers", Bind::bound(&mut zero)).units(units()).interactive(live).show_at(ui, at);
-    if !live {
-        return None;
-    }
-    apply(app, ui, &out, &mut zero);
-    out.guide
+/// The strips of a body's rulers, counting from `zero`. A pane's strips only paint.
+pub(super) fn strips(zero: &mut Point, kind: BodyKind) -> Rulers<'_> {
+    Rulers::new(tl!("Rulers"), Bind::bound(zero)).units(units()).interactive(kind == BodyKind::Live)
 }
 
 /// A drag in progress, kept between passes: what it started in, and whether it no longer counts.
@@ -192,15 +186,15 @@ fn active_artboard(app: &VectorcraftApp) -> usize {
     app.view().map_or(0, |v| v.artboard)
 }
 
-/// Applies what the rulers reported in this pass.
-fn apply(app: &mut VectorcraftApp, ui: &Ui, out: &RulersOutput, zero: &mut Point) {
+/// Applies what a live body's rulers reported in its pass.
+pub(super) fn apply(app: &mut VectorcraftApp, ui: &Ui, out: &RulersOutput) {
     if let Some(drag) = &out.guide {
         guide(app, ui, drag);
     }
     for event in out.zero.events.iter() {
         match event {
             EditEvent::Begin { .. } => zero_begin(app, ui),
-            EditEvent::Update { value, .. } => *zero = zero_update(app, ui, *value),
+            EditEvent::Update { value, .. } => zero_update(app, ui, *value),
             // A release where it began (a click, or dropped back on the corner) moves nothing.
             EditEvent::Commit { before, after, .. } if matches!(before, Mixed::Same(start) if start == after) => zero_cancel(app, ui),
             EditEvent::Commit { after, .. } => zero_commit(app, ui, *after),
@@ -218,18 +212,19 @@ fn zero_begin(app: &mut VectorcraftApp, ui: &Ui) {
     set_drag(ui, ZERO, Some(Drag::begin(app)));
 }
 
-/// The zero point proposed for the pointer at `at`, snapped as a drawn point is. Nothing is edited before the release.
-fn zero_update(app: &mut VectorcraftApp, ui: &Ui, at: Point) -> Point {
+/// The pointer is at `at`: the engine shows the zero point snapped there as a drawn point is. Nothing is edited before
+/// the release.
+fn zero_update(app: &mut VectorcraftApp, ui: &Ui, at: Point) {
     let mut state = drag_state(ui, ZERO).unwrap_or_else(|| Drag::begin(app));
     if state.stale(app) {
         state.cancelled = true;
         set_drag(ui, ZERO, Some(state));
         app.session.end_ruler_origin_drag();
-        return at;
+        return;
     }
     set_drag(ui, ZERO, Some(state));
     let view = app.view_info();
-    app.session.ruler_origin_drag(Some(at), view).unwrap_or(at)
+    app.session.ruler_origin_drag(Some(at), view);
 }
 
 /// The release: the one edit of the drag, at the snapped point.

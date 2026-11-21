@@ -15,11 +15,13 @@ use craft::behavior::dock::{
     Action, Column, DockEdge, DockPlacement, Floating, Group, Layout, MAX_PANELS, Node, PanelPlace, PanelState, Permissions, SplitSize, Target,
     Workspace, node_at,
 };
+use std::sync::Arc;
+
 use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, BodyCx, Show as _};
+use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelSpec,
+    DockCommands, DockConfig, DockEvent, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelSpec, PanelSpecs,
     actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
@@ -59,6 +61,8 @@ pub(crate) struct Runtime {
     columns: Vec<(String, egui::Rect)>,
     /// The OS windows the floating windows showed in last pass, each named by its first panel.
     windows: Vec<(String, egui::ViewportId)>,
+    /// What the dock reads of the panels, kept up to date by [`refresh_specs`].
+    specs: Tracked<Specs>,
 }
 
 /// `ui.docking`: the layout in use, the hidden panels, the open flyout, the focused panel, the
@@ -118,16 +122,21 @@ fn permissions(id: &str) -> Permissions {
     }
 }
 
-// PLAN: the strip key's form belongs to `toolbar::strip_id` (chrome-w10), which offers no parse; the owner is found by building each candidate's key with `Owner::panel`.
 /// The rail panel `id` draws: the Tools panel, a toolbar of `ui.custom_toolbars`, or a group torn
 /// off one of them.
 fn rail_owner(ui: &UiState, id: &str) -> Option<Owner> {
+    rail_owner_among(ui.custom_toolbars.iter().map(|bar| bar.id), id)
+}
+
+// PLAN: the strip key's form belongs to `toolbar::strip_id` (chrome-w10), which offers no parse; the owner is found by building each candidate's key with `Owner::panel`.
+/// [`rail_owner`] among the toolbars with ids `toolbars`.
+fn rail_owner_among(toolbars: impl Iterator<Item = u32>, id: &str) -> Option<Owner> {
     if !is_rail(id) {
         return None;
     }
     let first = id.rsplit(':').next().unwrap_or_default().to_owned();
     std::iter::once(Owner::Tools)
-        .chain(ui.custom_toolbars.iter().map(|bar| Owner::Toolbar(bar.id)))
+        .chain(toolbars.map(Owner::Toolbar))
         .flat_map(|parent| [Owner::Strip(Box::new(parent.clone()), first.clone()), parent])
         .find(|owner| owner.panel() == id)
 }
@@ -157,8 +166,8 @@ pub(crate) fn default_workspace(front: Option<&str>) -> Workspace<String> {
 
 /// Fits a loaded or switched-to workspace to the panels the app knows now ([`registered`]):
 /// unknown panels go back to hidden, missing default panels come back, the canvas always shows.
-pub(crate) fn reconcile(ws: &mut Workspace<String>) {
-    ws.reconcile(|p: &String| registered(p), |p: &String| permissions(p), &default_workspace(None));
+pub(crate) fn reconcile(ws: &mut Arc<Workspace<String>>) {
+    Arc::make_mut(ws).reconcile(|p: &String| registered(p), |p: &String| permissions(p), &default_workspace(None));
 }
 
 /// Changes the workspace by `actions`, all or none. While a dock pass runs on `ctx` (a panel body
@@ -172,7 +181,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: Option<&egui::Context>, actio
         },
         None => actions,
     };
-    let closed = app.ui.dock_workspace.apply_all(actions, false, |p: &String| permissions(p)).map_err(|e| e.to_string())?;
+    let closed = Arc::make_mut(&mut app.ui.dock_workspace).apply_all(actions, false, |p: &String| permissions(p)).map_err(|e| e.to_string())?;
     settle(app);
     Ok(closed)
 }
@@ -954,37 +963,59 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, pos: egui::P
     apply(app, ctx.as_ref(), actions).map(drop)
 }
 
-/// The app's panels as the dock reads them: their names, icons and rights, their bodies, and the
-/// canvas and tool rails it hands back to the app to draw.
-pub(crate) struct Panels<'a> {
-    /// The app whose panels these are.
-    app: &'a mut VectorcraftApp,
+/// What the dock reads of the app's panels besides their fixed names and icons: the language the
+/// names are in, the names of the toolbars made with New Toolbar and the titles of the library
+/// panels in the layout. Plain data, edited only when one of them changes ([`refresh_specs`]), so
+/// the dock reads no spec in a pass where none changed.
+#[derive(Clone, Debug, Default, PartialEq, PlainData)]
+pub(crate) struct Specs {
+    /// The UI language's code.
+    lang: &'static str,
+    /// Each toolbar made with New Toolbar: its id and name.
+    toolbars: Vec<(u32, String)>,
+    /// Each library panel of the layout: its id and tab text.
+    libraries: Vec<(String, String)>,
 }
 
-impl Panels<'_> {
+impl Specs {
+    /// The specs as the app shows them now.
+    fn of(app: &VectorcraftApp) -> Specs {
+        let libraries = layout_of(&app.ui)
+            .panels()
+            .filter_map(|panel| crate::panels::library_panel::tab_label(app, panel).map(|label| (panel.clone(), label)))
+            .collect();
+        Specs {
+            lang: crate::i18n::current().code(),
+            toolbars: app.ui.custom_toolbars.iter().map(|bar| (bar.id, bar.name.clone())).collect(),
+            libraries,
+        }
+    }
+
     /// The tab text of `panel`.
     fn label(&self, panel: &str) -> String {
         if panel == CANVAS {
             return tl!("Canvas").to_string();
         }
-        let mut owner = rail_owner(&self.app.ui, panel);
+        let mut owner = rail_owner_among(self.toolbars.iter().map(|(id, _)| *id), panel);
         // A strip is named for the toolbar it was torn off.
         while let Some(Owner::Strip(parent, _)) = owner {
             owner = Some(*parent);
         }
         match owner {
-            Some(Owner::Toolbar(id)) => {
-                self.app.ui.custom_toolbars.iter().find(|bar| bar.id == id).map_or_else(|| panel.to_owned(), |bar| bar.name.clone())
-            }
+            Some(Owner::Toolbar(id)) => self.toolbars.iter().find(|(bar, _)| *bar == id).map_or_else(|| panel.to_owned(), |(_, name)| name.clone()),
             Some(_) => tl!("Tools").to_string(),
-            None => crate::panels::library_panel::tab_label(self.app, panel)
+            None => self
+                .libraries
+                .iter()
+                .find(|(library, _)| library == panel)
+                .map(|(_, label)| label.clone())
                 .or_else(|| crate::state::all_panels().find(|p| p.0 == panel).map(|p| tl!(p.1).to_string()))
                 .unwrap_or_else(|| panel.to_owned()),
         }
     }
 }
 
-impl DockPanels<String> for Panels<'_> {
+impl PanelSpecs<String> for Specs {
     fn spec(&self, panel: &String) -> PanelSpec {
         let spec = PanelSpec::new(self.label(panel));
         if panel == CANVAS {
@@ -1001,7 +1032,25 @@ impl DockPanels<String> for Panels<'_> {
     fn permissions(&self, panel: &String) -> Permissions {
         permissions(panel)
     }
+}
 
+/// Brings the dock's spec model up to date: edited, which moves its revision, only when a label
+/// changed.
+fn refresh_specs(app: &mut VectorcraftApp) {
+    let now = Specs::of(app);
+    if *app.dock_rt.specs != now {
+        app.dock_rt.specs.edit(|specs| *specs = now);
+    }
+}
+
+/// The app's panels as the dock shows them: their bodies, and the canvas and tool rails it hands
+/// back to the app to draw.
+pub(crate) struct Panels<'a> {
+    /// The app whose panels these are.
+    app: &'a mut VectorcraftApp,
+}
+
+impl DockPanels<String> for Panels<'_> {
     fn body(&mut self, panel: &String, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         crate::dock::panel_body(self.app, ui, panel);
     }
@@ -1058,18 +1107,25 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if let Some(panel) = app.dock_rt.raise.take() {
         raise(app, &ctx, &panel);
     }
-    // PLAN: the sheet moves the workspace out with `mem::take`; the area gets a copy instead, so panel bodies that read the layout in the pass (`visible`, `showing`) see it. Their changes still go through `apply`.
-    let mut workspace = app.ui.dock_workspace.clone();
+    refresh_specs(app);
+    // The area shares the workspace's `Arc`, so panel bodies that read the layout in the pass
+    // (`visible`, `showing`) see it; their changes go through `apply`.
+    let mut workspace = Arc::clone(&app.ui.dock_workspace);
     let flyout_before = app.ui.open_panel.clone();
     let mut flyout = flyout_before.clone();
     let rails = |id: &String| is_rail(id);
     let hide = if app.ui.screen_mode >= 3 { HidePanels::All } else { HidePanels::Except(&rails) };
     let auto_collapse = app.session.prefs.auto_collapse_icon_panels;
+    // The specs leave the app for the pass, which lends the app to the panel bodies.
+    let specs = std::mem::take(&mut app.dock_rt.specs);
     let output = {
         let mut panels = Panels { app: &mut *app };
-        let area = DockArea::new("Dock", Bind::bound(&mut workspace), &mut panels, DockConfig::default()).hide(hide).flyout(Bind::bound(&mut flyout));
+        let area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
+            .hide(hide)
+            .flyout(Bind::bound(&mut flyout));
         if auto_collapse { area.auto_collapse().show(ui) } else { area.show(ui) }
     };
+    app.dock_rt.specs = specs;
     // A workspace a command switched to in this pass (`Workspace::replace`) stays; the pass's edits
     // were to the one it replaced.
     if app.ui.dock_workspace.revision() == workspace.revision() {
@@ -1080,7 +1136,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.ui.open_panel = flyout;
     }
     if output.error.is_some() {
-        app.ui.dock_workspace.replace(default_workspace(None));
+        Arc::make_mut(&mut app.ui.dock_workspace).replace(default_workspace(None));
         app.status(tl!("Invalid panel layout; restored the default dock").to_string());
     }
     if !output.requested.is_empty()

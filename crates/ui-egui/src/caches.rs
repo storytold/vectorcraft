@@ -87,6 +87,9 @@ pub struct CanvasCache {
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
+    /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
+    /// canvas drops its art there relative to the pointer (`canvas::drops`).
+    pub grab: Option<Point>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.

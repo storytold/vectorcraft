@@ -12,20 +12,23 @@
 //! Control bar's Style picker lists the same styles ([`style_picker`]). Graphic style libraries open
 //! in library panels ([`GraphicStyleLibraries`]).
 
-// PLAN: `crates/ui-egui/Cargo.toml` and the workspace manifest have no `craft` facade dependency yet; the integration owner adds it.
-// PLAN: assumed paths of the framework items: `craft::ui::patterns::presets::*`,
-// `craft::ui::primitives::*`, `craft::ui::contract::*`, `craft::behavior::*`.
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, ReorderMove, SelectMode};
+use craft::ui::display::Divider;
+use craft::ui::menu::{MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
-    PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFooterEvent, PresetFooterOptions, PresetPicker, PresetReorder, PresetRow, PresetView,
-    ThumbPainter,
+    PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFooterEvent, PresetFooterOptions, PresetPicker, PresetReorder, PresetRow, PresetState,
+    PresetView, ThumbPainter,
 };
-use craft::ui::primitives::{ContentPainterCx, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, Thumbnails};
+use craft::ui::primitives::{
+    ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::sections::FooterAction;
 use egui::{Color32, Rect, Sense, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -36,13 +39,12 @@ use vectorcraft_doc::{
 };
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
-use vectorcraft_footer::FooterAction;
 use vectorcraft_geom::{Affine, Point, shapes};
 
 use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
 use super::{alt_held, selection_len};
 use crate::VectorcraftApp;
-use crate::menus::{Item, Sep, c, cp, sub};
+use crate::menus::{Sep, c, cp, sub};
 use crate::panel_drag::PanelDrag;
 
 /// A style of the panel: its name, which is unique in a document.
@@ -86,6 +88,27 @@ pub(crate) enum Preview {
     #[default]
     Square,
     Text,
+}
+
+/// The Graphic Styles panel's state for the session (`UiState::graphic_styles_panel`).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct GraphicStylesPanel {
+    /// The browser's view settings.
+    state: PresetState<StyleKey>,
+    /// The Control bar picker's view settings.
+    picker_state: PresetState<StyleKey>,
+    /// The styles selected in the panel; the lead is the one the Symbol Styler applies.
+    selection: Selection<StyleKey>,
+    /// What the thumbnails show the styles on.
+    preview: Preview,
+    /// [`look_hashes`] of the active document and the `(uid, revision)` they were computed at.
+    looks: Option<((u64, u64), Arc<Vec<u64>>)>,
+}
+
+/// The thumbnails of the document's styles (`"vc-style-thumbs"`) or of the libraries' (`"vc-style-lib-thumbs"`): a
+/// document's style and a library's may share a name.
+fn thumbnails(ctx: &egui::Context, salt: &'static str) -> Thumbnails<StyleKey> {
+    Thumbnails::in_context(ctx, salt, ThumbnailOptions::new())
 }
 
 /// Side of the large preview shown while the pointer rests on a style.
@@ -399,12 +422,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
     let sel_count = before.items.len();
     let events = {
-        let (state, selection, store) = (&mut panel.state, &mut panel.selection, &panel.thumbs);
+        let store = thumbnails(ui.ctx(), "vc-style-thumbs");
+        let (state, selection, store) = (&mut panel.state, &mut panel.selection, &store);
         let footer = PresetFooterOptions::new()
             .new_group(false)
             .can_delete(sel_count > 0)
             .slider(view == View::Thumbnail)
-            .action(FooterAction::new(IconId::new("link_2_off"), tl!("Break Link to Graphic Style").to_string()).enabled(linked));
+            .action(FooterAction::new(IconSpec::svg(IconId::new("link_2_off")), tl!("Break Link to Graphic Style")).enabled(linked));
         let in_doc = |key: &StyleKey| doc.graphic_style(key).is_some();
         // PLAN: assumed `Entry::new(value, label)` with `.enabled(bool)`, and `PresetBrowser::row_items`.
         let items = |key: &StyleKey| {
@@ -571,7 +595,8 @@ pub(crate) fn style_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rows = style_rows(&doc);
     let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
     let out = {
-        let (state, store) = (&mut panel.picker_state, &panel.thumbs);
+        let store = thumbnails(ui.ctx(), "vc-style-thumbs");
+        let (state, store) = (&mut panel.picker_state, &store);
         // PLAN: assumed `PresetPicker::thumb(ThumbPainter)` as the browser's.
         PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &rows, Bind::bound(state))
             .field(PickerField::Thumbnail)
@@ -634,99 +659,107 @@ fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
 
 // ---------- the panel menu ----------
 
-/// The id of the panel-menu row `row` that is not a catalog command.
-fn row_id(row: &str) -> String {
-    format!("ui.graphicStyles.{row}")
+/// The id prefix of the panel menu's rows that are not catalog commands; [`run`] runs them.
+const ROW: &str = "ui.graphicStyles";
+
+fn id(row: &str) -> String {
+    format!("{ROW}.{row}")
 }
 
-/// The panel menu's rows, in the order of the panel menu.
-// PLAN: assumed A15 shapes: `menu_rows(&VectorcraftApp) -> Vec<Item>` with ids from `row_id` leaked to `&'static str`
-// by `ROWS`, `menu_states(&VectorcraftApp) -> Vec<(&'static str, bool, bool)>` as (id, enabled, checked),
-// `run(&mut VectorcraftApp, &str, &Value) -> Result<Value, String>`.
-const ROWS: [&str; 9] = [
-    "ui.graphicStyles.new",
-    "ui.graphicStyles.duplicate",
-    "ui.graphicStyles.merge",
-    "ui.graphicStyles.delete",
-    "ui.graphicStyles.selectUnused",
-    "ui.graphicStyles.preview",
-    "ui.graphicStyles.options",
-    "ui.graphicStyles.square",
-    "ui.graphicStyles.text",
-];
+fn cmd(row: &str) -> PanelRow {
+    PanelRow::Command(CommandRef::new(id(row)))
+}
 
-/// The panel menu.
-pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<Item> {
-    let sel = selected(app);
-    let mut items = vec![
-        Item::Cmd("New Graphic Style…", ROWS[0], Value::Null),
-        Item::Cmd("Duplicate Graphic Style", ROWS[1], Value::Null),
-        Item::Cmd("Merge Graphic Styles", ROWS[2], Value::Null),
-        Item::Cmd("Delete Graphic Style", ROWS[3], Value::Null),
-        Item::Cmd("Break Link to Graphic Style", "graphicStyle.breakLink", Value::Null),
-        Item::Sep,
-        Item::Cmd("Select All Unused", ROWS[4], Value::Null),
-        Item::Cmd("Sort by Name", "graphicStyle.sortByName", Value::Null),
-        Item::Sep,
+fn view_ref(view: View) -> CommandRef {
+    CommandRef::with_params("ui.panelView", json!({ "panel": "graphicStyles", "view": view }))
+}
+
+/// Override Character Color, which turns the preference over.
+fn override_ref(app: &VectorcraftApp) -> CommandRef {
+    CommandRef::with_params("graphicStyle.setOptions", json!({ "overrideCharColor": !app.session.prefs.override_char_color }))
+}
+
+/// Save Graphic Style Library… of the styles selected in the panel.
+fn save_library(app: &VectorcraftApp) -> CommandRef {
+    CommandRef::with_params("ui.saveGraphicStyleLibrary", json!({ "names": selected(app) }))
+}
+
+/// The panel menu's rows, in production's order.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let mut rows = vec![
+        cmd("new"),
+        cmd("duplicate"),
+        cmd("merge"),
+        cmd("delete"),
+        PanelRow::Command(CommandRef::new("graphicStyle.breakLink")),
+        PanelRow::Separator,
+        cmd("selectUnused"),
+        PanelRow::Command(CommandRef::new("graphicStyle.sortByName")),
+        PanelRow::Separator,
     ];
-    items.extend(View::ALL.iter().map(|(v, label)| Item::Cmd(label, "ui.panelView", json!({ "panel": "graphicStyles", "view": v }))));
-    items.extend([
-        Item::Sep,
-        Item::Cmd("Use Square for Previews", ROWS[7], Value::Null),
-        Item::Cmd("Use Text for Previews", ROWS[8], Value::Null),
-        Item::Cmd("Override Character Color", "graphicStyle.setOptions", json!({ "overrideCharColor": !app.session.prefs.override_char_color })),
-        Item::Sep,
-        Item::Cmd("Graphic Style Options…", ROWS[6], Value::Null),
-        Item::Sub("Open Graphic Style Library", window_menu()),
-        Item::Cmd("Save Graphic Style Library…", "ui.saveGraphicStyleLibrary", json!({ "names": sel })),
+    rows.extend(View::ALL.iter().map(|(v, _)| PanelRow::Command(view_ref(*v))));
+    let mut libraries = library_panel::library_rows::<GraphicStyleLibraries>(app);
+    libraries.extend([PanelRow::Separator, PanelRow::Command(CommandRef::new("window.graphicStyleLibrary.other"))]);
+    rows.extend([
+        PanelRow::Separator,
+        cmd("square"),
+        cmd("text"),
+        PanelRow::Command(override_ref(app)),
+        PanelRow::Separator,
+        cmd("options"),
+        PanelRow::Submenu(tl!("Open Graphic Style Library").into(), libraries),
+        PanelRow::Command(save_library(app)),
     ]);
-    items
+    rows
 }
 
-/// Whether each state-carrying row is enabled and checked: Merge needs two or more selected styles, Delete a
-/// selected style other than the Default, Options and Duplicate exactly one.
-pub(crate) fn menu_states(app: &VectorcraftApp) -> Vec<(&'static str, bool, bool)> {
+/// The enabled and checked state of the menu's rows: Merge needs two or more selected styles, Delete a selected
+/// style other than the Default, Options and Duplicate exactly one.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let sel = selected(app);
     let one = sel.len() == 1;
     let preview = app.ui.graphic_styles_panel.preview;
-    let mut states = vec![
-        (ROWS[0], selection_len(app) > 0, false),
-        (ROWS[1], one, false),
-        (ROWS[2], sel.len() > 1, false),
-        (ROWS[3], !doomed(&sel).is_empty(), false),
-        (ROWS[4], app.session.active().is_some(), false),
-        (ROWS[6], one && sel[0] != DEFAULT_GRAPHIC_STYLE, false),
-        (ROWS[7], true, preview == Preview::Square),
-        (ROWS[8], true, preview == Preview::Text),
-        ("graphicStyle.breakLink", app.session.selection_graphic_style().is_some(), false),
-        ("graphicStyle.setOptions", true, app.session.prefs.override_char_color),
+    let enabled = [
+        ("new", selection_len(app) > 0),
+        ("duplicate", one),
+        ("merge", sel.len() > 1),
+        ("delete", !doomed(&sel).is_empty()),
+        ("selectUnused", app.session.active().is_some()),
+        ("options", one && sel[0] != DEFAULT_GRAPHIC_STYLE),
     ];
-    states.extend(View::ALL.iter().map(|(v, _)| ("ui.panelView", true, app.ui.graphic_styles_view == *v)));
-    states
+    for (row, on) in enabled {
+        states.set(CommandRef::new(id(row)), CommandState::new().enabled(on));
+    }
+    states.set(CommandRef::new(id("square")), CommandState::new().checked(preview == Preview::Square));
+    states.set(CommandRef::new(id("text")), CommandState::new().checked(preview == Preview::Text));
+    states.set(CommandRef::new("graphicStyle.breakLink"), CommandState::new().enabled(app.session.selection_graphic_style().is_some()));
+    states.set(override_ref(app), CommandState::new().checked(app.session.prefs.override_char_color));
+    states.set(save_library(app), CommandState::new().enabled(app.session.active().is_some()));
+    for (v, _) in View::ALL {
+        states.set(view_ref(v), CommandState::new().checked(app.ui.graphic_styles_view == v));
+    }
 }
 
-/// Run the panel-menu row `id`.
-pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<Value, String> {
+/// Run the panel-menu row `id` (an id under `ui.graphicStyles`).
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Result<Value, String> {
     let sel = selected(app);
-    match id {
-        _ if id == ROWS[0] => new_style(app, true),
-        _ if id == ROWS[1] => duplicate(app, &sel),
+    match id.strip_prefix(ROW).and_then(|row| row.strip_prefix('.')) {
+        Some("new") => new_style(app, true),
+        Some("duplicate") => duplicate(app, &sel),
         // Merged in panel order, which `selected` keeps.
-        _ if id == ROWS[2] => run_status(app, "ui.mergeGraphicStyles", json!({ "names": sel })),
-        _ if id == ROWS[3] => delete(app, &doomed(&sel), false),
-        _ if id == ROWS[4] => {
+        Some("merge") => return app.run("ui.mergeGraphicStyles", json!({ "names": sel })),
+        Some("delete") => delete(app, &doomed(&sel), false),
+        Some("selectUnused") => {
             let names: Vec<String> = serde_json::from_value(app.run("graphicStyle.unused", json!({}))?["names"].clone()).unwrap_or_default();
             select(app, names);
         }
-        _ if id == ROWS[5] => {}
-        _ if id == ROWS[6] => {
-            if let [name] = sel.as_slice() {
-                run_status(app, "ui.graphicStyleOptions", json!({ "name": name }));
-            }
-        }
-        _ if id == ROWS[7] => app.ui.graphic_styles_panel.preview = Preview::Square,
-        _ if id == ROWS[8] => app.ui.graphic_styles_panel.preview = Preview::Text,
-        _ => return app.run(id, params.clone()),
+        Some("options") => match sel.as_slice() {
+            [name] => return app.run("ui.graphicStyleOptions", json!({ "name": name })),
+            _ => return Err("Graphic Style Options needs one selected style".into()),
+        },
+        Some("square") => app.ui.graphic_styles_panel.preview = Preview::Square,
+        Some("text") => app.ui.graphic_styles_panel.preview = Preview::Text,
+        _ => return Err(format!("`{id}` isn't a Graphic Styles panel command")),
     }
     Ok(Value::Null)
 }
@@ -842,7 +875,7 @@ impl LibraryKind for GraphicStyleLibraries {
     /// The style on the Graphic Styles panel's preview shape.
     fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx<'_>, r: Rect, s: &LibStyle) {
         let source = LibThumbs { app, style: s, preview: app.ui.graphic_styles_panel.preview };
-        paint_thumb(cx, r, &app.ui.graphic_styles_panel.thumbs, &source, &s.style().name);
+        paint_thumb(cx, r, &thumbnails(cx.painter.ctx(), "vc-style-lib-thumbs"), &source, &s.style().name);
     }
     fn describe(s: &LibStyle) -> String {
         describe(s.style())
@@ -855,18 +888,11 @@ impl LibraryKind for GraphicStyleLibraries {
         run_status(app, "graphicStyle.addFromLibrary", json!({"library": id, "names": names}));
     }
     fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
-        use crate::menus::menu_item;
-        ui.separator();
+        Divider::horizontal().show(ui);
         // As a command, so its file dialog, shown off the UI thread, loads the library when it
         // answers.
-        if menu_item(ui, tl!("Other Library…"), true, false)
-            && let Err(e) = app.run("window.graphicStyleLibrary.other", json!({}))
-        {
-            app.status(e);
-        }
-        if menu_item(ui, tl!("Save Graphic Style Library…"), app.session.active().is_some(), false) {
-            run_status(app, "ui.saveGraphicStyleLibrary", json!({ "names": selected(app) }));
-        }
+        MenuItem::command(CommandRef::new("window.graphicStyleLibrary.other")).show(ui);
+        MenuItem::command(save_library(app)).show(ui);
     }
 }
 
@@ -884,10 +910,8 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 
 /// Other Library…: load the library (or document) at `path`, else one picked in an open dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(GraphicStyleLibraries::KIND))? {
-        Some(path) => load_library(app, json!({ "path": path })),
-        None => Ok(Value::Null),
-    }
+    let filters = library_panel::library_pick_filters(GraphicStyleLibraries::KIND);
+    library_panel::pick_library_file(app, path, filters, |app, path| load_library(app, json!({ "path": path })))
 }
 
 /// The id prefix of the Window → Graphic Style Libraries → User Defined slots.
@@ -927,11 +951,16 @@ pub(crate) fn window_menu() -> Vec<crate::menus::Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dialogs::{confirm, graphic_style_options};
+    use crate::tests::picks::{answer_dialog, open_dialogs};
     use craft::keymap::Mods;
+    use craft::ui::dialog::{DialogId, dialog_id};
     use vectorcraft_engine::Session;
 
+    /// An app with a window, on a document holding one rectangle.
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
         app
@@ -943,6 +972,18 @@ mod tests {
 
     fn doc(app: &VectorcraftApp) -> Document {
         (*app.session.active().unwrap().doc).clone()
+    }
+
+    /// The `graphicStyle.delete` the open question runs on OK, and the styles it names.
+    fn asked_delete(app: &VectorcraftApp) -> Option<Vec<String>> {
+        let (command, params) = confirm::open_question(app)?;
+        assert_eq!(command, "graphicStyle.delete");
+        serde_json::from_value(params["names"].clone()).ok()
+    }
+
+    /// The open dialog with key `key`.
+    fn open_dialog(app: &VectorcraftApp, key: &str) -> Option<DialogId> {
+        open_dialogs(app).into_iter().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id)
     }
 
     /// A `Dropped` event of `payload` over `over` with Alt as `alt`.
@@ -963,14 +1004,13 @@ mod tests {
         select(&mut app, unused.clone());
         on_event(&mut app, PresetEvent::Delete(unused[0].clone()), false);
         assert_eq!(names(&app), before, "nothing goes before OK");
-        // PLAN: assumed `confirm::open_question(app) -> Option<String>` and `host::confirm_by_id`.
-        assert_eq!(crate::dialogs::confirm::open_question(&app).as_deref(), Some("Delete these 4 graphic styles?"));
-        crate::dialogs::host::confirm_by_id(&mut app, crate::dialogs::confirm::KIND);
+        assert_eq!(asked_delete(&app), Some(unused));
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert_eq!(names(&app), ["Mine"]);
         assert!(selected(&app).is_empty());
         // Alt deletes at once.
         on_event(&mut app, PresetEvent::Delete("Mine".into()), true);
-        assert!(names(&app).is_empty() && crate::dialogs::confirm::open_question(&app).is_none());
+        assert!(names(&app).is_empty() && confirm::open_question(&app).is_none());
     }
 
     #[test]
@@ -1108,10 +1148,14 @@ mod tests {
         let n0 = names(&app);
         select(&mut app, vec![n0[1].clone(), n0[2].clone()]);
         run(&mut app, "ui.graphicStyles.merge", &Value::Null).unwrap();
-        let kind = crate::dialogs::graphic_style_options::KIND;
-        crate::dialogs::host::set_json_field(&mut app, kind, "name", json!("Both"));
-        crate::dialogs::host::confirm_by_id(&mut app, kind);
-        crate::dialogs::host::pump(&mut app);
+        let id = open_dialog(&app, graphic_style_options::KIND).expect("Merge asks for the name");
+        answer_dialog(&mut app, id, &[("name", json!("Both"))], false);
+        // The options dialog holds its OK: the pump runs it, and the next OK closes the dialog.
+        let ctx = app.ui_ctx.clone().unwrap();
+        for _ in 0..2 {
+            app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
+            crate::dialogs::host::pump(&mut app, &ctx);
+        }
         let d = doc(&app);
         let (a, b, both) = (d.graphic_style(&n0[1]).unwrap(), d.graphic_style(&n0[2]).unwrap(), d.graphic_style("Both").unwrap());
         assert_eq!(both.appearance.items.len(), a.appearance.items.len() + b.appearance.items.len());
@@ -1146,12 +1190,12 @@ mod tests {
         let n = names(&app);
         on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropDelete { keys: vec!["Mine".into()] }), false);
         assert_eq!(names(&app), n);
-        assert_eq!(crate::dialogs::confirm::open_question(&app).as_deref(), Some("Delete the graphic style “Mine”?"));
-        crate::dialogs::host::confirm_by_id(&mut app, crate::dialogs::confirm::KIND);
+        assert_eq!(asked_delete(&app), Some(vec!["Mine".to_string()]));
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert!(!names(&app).iter().any(|s| s == "Mine"));
         app.run("edit.undo", json!({})).unwrap();
         on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropDelete { keys: vec!["Mine".into()] }), true);
-        assert!(!names(&app).iter().any(|s| s == "Mine") && crate::dialogs::confirm::open_question(&app).is_none());
+        assert!(!names(&app).iter().any(|s| s == "Mine") && confirm::open_question(&app).is_none());
     }
 
     /// Art or an appearance dropped on a style with Alt replaces that style; not when the object already links it.
@@ -1229,7 +1273,7 @@ mod tests {
         on_event(&mut app, PresetEvent::Menu { target: "Style A".into(), command: "duplicate".into() }, false);
         assert!(names(&app).contains(&"Style A copy".to_string()) && names(&app).contains(&"Style B copy".to_string()));
         on_event(&mut app, PresetEvent::Menu { target: "Style A".into(), command: "options".into() }, false);
-        assert_eq!(crate::dialogs::host::open_dialogs(&app), [crate::dialogs::graphic_style_options::KIND]);
+        assert!(open_dialog(&app, graphic_style_options::KIND).is_some());
     }
 
     /// Default's protections: no Options, no Delete; Merge needs two or more styles.
@@ -1237,7 +1281,11 @@ mod tests {
     fn right_click_context_menu_default_style_disables_options_and_delete() {
         let mut app = app();
         select(&mut app, vec![DEFAULT_GRAPHIC_STYLE.to_string()]);
-        let state = |app: &VectorcraftApp, id: &str| menu_states(app).into_iter().find(|s| s.0 == id).map(|s| s.1);
+        let state = |app: &VectorcraftApp, id: &str| {
+            let mut states = CommandStates::new();
+            menu_states(app, &mut states);
+            states.get(&CommandRef::new(id)).map(|s| s.enabled)
+        };
         assert_eq!(state(&app, "ui.graphicStyles.options"), Some(false), "Options disabled on Default Graphic Style");
         assert_eq!(state(&app, "ui.graphicStyles.delete"), Some(false), "Delete disabled on Default Graphic Style");
         assert_eq!(state(&app, "ui.graphicStyles.duplicate"), Some(true));

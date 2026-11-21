@@ -418,9 +418,10 @@ pub struct UiState {
     #[serde(rename = "language", skip_serializing)]
     pub legacy_language: Option<String>,
     pub brightness: Brightness,
-    /// The panel arrangement: docks, floating windows, closed panels and where each goes back.
+    /// The panel arrangement: docks, floating windows, closed panels and where each goes back. One
+    /// `Arc` the dock area keeps across frames; writers change it through `Arc::make_mut`.
     #[serde(rename = "dock")]
-    pub dock_workspace: craft::behavior::dock::Workspace<String>,
+    pub dock_workspace: std::sync::Arc<craft::behavior::dock::Workspace<String>>,
     /// The tool each slot of the Tools panel showed last.
     pub tools_last_used: craft::ui::rails::LastUsed<String>,
     /// The saved workspaces, the current one and the changes made in each since it was saved.
@@ -976,6 +977,9 @@ pub struct UiState {
     /// The panel parts a panel menu's Hide Options turned off. Not saved.
     #[serde(skip)]
     pub hidden_parts: BTreeSet<&'static str>,
+    /// The open Fill/Stroke chip popover of the Control bar or the Properties panel. Not saved.
+    #[serde(skip)]
+    pub paint_popover: Option<crate::panels::PaintPopover>,
     /// The Image Trace panel's shown settings and preset picker. Not saved.
     #[serde(skip)]
     pub image_trace_panel: crate::panels::image_trace::ImageTraceUi,
@@ -1482,6 +1486,7 @@ impl Default for UiState {
             properties_panel: Default::default(),
             transform_panel: Default::default(),
             hidden_parts: BTreeSet::new(),
+            paint_popover: None,
             image_trace_panel: Default::default(),
             asset_export_panel: Default::default(),
             pattern_options_panel: Default::default(),

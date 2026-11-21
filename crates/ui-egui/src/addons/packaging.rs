@@ -18,6 +18,7 @@ use craft::ui::contract::{ActivateOn, CollectionEvent, Props as _, SelectMode, S
 use craft::ui::display::{Divider, Text};
 use craft::ui::list::{Finding, Findings, FindingsList, FindingsWords, List, ListRow, Severity, ThumbSize};
 use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::doc::Document;
@@ -296,8 +297,18 @@ pub(crate) fn follow_role(app: &mut VectorcraftApp, role: &str, filled_for: &mut
 /// The panel's ≡ menu rows: Role Swatches… opens the options of `addon.packaging.setRoleSwatch` on
 /// the Cut role and its current swatch (from the rows the panel last read).
 pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    vec![PanelRow::Command(role_swatches(app))]
+}
+
+/// Role Swatches… needs a document.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    states.set(role_swatches(app), CommandState::new().enabled(app.session.active().is_some()));
+}
+
+/// The command of the menu's Role Swatches… row.
+fn role_swatches(app: &VectorcraftApp) -> CommandRef {
     let swatch = app.addon_panels.fold.rows.rows.iter().find(|r| r.0 == "cut").map_or_else(|| "Cut".to_string(), |r| r.1.clone());
-    vec![PanelRow::Command(CommandRef::with_params(SET_ROLE_SWATCH, json!({ "role": "cut", "swatch": swatch })))]
+    CommandRef::with_params(SET_ROLE_SWATCH, json!({ "role": "cut", "swatch": swatch }))
 }
 
 pub mod preview;
