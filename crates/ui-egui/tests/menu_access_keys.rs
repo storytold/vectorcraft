@@ -771,7 +771,8 @@ fn menu_access_stationary_pointer_repeat_and_rerun_do_not_retarget_or_double_inv
         if db.menu_family_list_now().len() > 20 {
             break;
         }
-        db.add_font(vectorcraft_testkit::fonts::renamed(&format!("Menu Test Font {i:02}")));
+        // `renamed` needs a family name as long as "Source Sans 3" (13 bytes).
+        db.add_font(vectorcraft_testkit::fonts::renamed(&format!("Menu Test F{i:02}")));
     }
     let text = s.app.run("text.create", json!({"x": 250, "y": 200, "text": "Menu", "font": "Inter", "size": 12})).unwrap()["id"].clone();
     s.app.run("select.set", json!({"ids": [text]})).unwrap();

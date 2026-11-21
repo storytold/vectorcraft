@@ -451,6 +451,7 @@ impl ToolContext<'_> {
             skip_guides: !self.guides,
             clip_outlines: false,
             area_type_interior: false,
+            ignore_layer_preview: false,
         }
     }
 

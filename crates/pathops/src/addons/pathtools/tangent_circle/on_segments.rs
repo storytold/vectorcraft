@@ -7,7 +7,7 @@
 //!
 //! The roots are found by sampling a distance function along one parameter: samples where it is 0,
 //! bisection where it changes sign, and a golden-section search where it comes down to 0 between
-//! samples without changing sign.
+//! samples without changing sign. For a radius, each second segment has its own distance function.
 
 use kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, ParamCurveNearest, Point, Vec2};
 
@@ -256,7 +256,19 @@ pub fn circles_of_radius(first: CubicBez, second: &[CubicBez], radius: f64) -> V
     let mut found = vec![];
     for side in [1.0, -1.0] {
         let center = |t: f64| normal(&first, t, own).map(|n| first.eval(t) + n * (side * radius));
-        for t in roots(&samples, |t| center(t).and_then(|c| nearest(c, second)).map(|(d, _)| d - radius), CONTACT * radius) {
+        // Each second segment is searched on its own, so that two segments touching circles close
+        // together along `first` give both; `touching` then checks each circle against all of them.
+        let mut ts: Vec<f64> = second
+            .iter()
+            .flat_map(|seg| {
+                let dist = |t: f64| center(t).and_then(|c| nearest(c, std::slice::from_ref(seg))).map(|(d, _)| d - radius);
+                roots(&samples, dist, CONTACT * radius)
+            })
+            .collect();
+        // A segment repeated in `second` gives the same places again; each is checked once.
+        ts.sort_by(f64::total_cmp);
+        ts.dedup();
+        for t in ts {
             if let Some(c) = center(t)
                 && let Some(touch) = touching(c, radius, second, own)
             {
