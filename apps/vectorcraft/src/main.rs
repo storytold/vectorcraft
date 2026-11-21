@@ -79,6 +79,7 @@ mod windows_alt_codes;
 mod windows_cores;
 mod windows_screen_color;
 mod windows_stylus;
+mod windows_symbol_chars;
 mod xwayland;
 
 use vectorcraft_engine::Session;
