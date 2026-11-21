@@ -172,6 +172,7 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "weather-icons", name: "Weather Icons", make: weather_icons },
     BuiltinSymbolLibrary { id: "nature-icons", name: "Nature Icons", make: nature_icons },
     BuiltinSymbolLibrary { id: "media-controls", name: "Media Controls", make: media_controls },
+    BuiltinSymbolLibrary { id: "element-icons", name: "Element Icons", make: element_icons },
 ];
 
 /// Built-in library `id`, made once.
@@ -726,6 +727,56 @@ fn copy_options(src: &Document, from: &str, d: &mut Document, to: &str) {
     d.set_symbol_export_type(to, src.symbol_export_type(from));
     d.set_symbol_nine_slice(to, src.symbol_nine_slice(from));
     d.set_symbol_pixel_aligned(to, src.symbol_pixel_aligned(from));
+}
+
+
+/// Element Icons: fire, water, earth, air, light and dark marks for RPG/UI art (original, no 9-slice).
+fn element_icons() -> SymbolLibrary {
+    let c = Point::ZERO;
+    let fire = [
+        (0.0, -20.0),
+        (8.0, -8.0),
+        (6.0, -2.0),
+        (12.0, 6.0),
+        (4.0, 4.0),
+        (6.0, 18.0),
+        (0.0, 12.0),
+        (-6.0, 18.0),
+        (-4.0, 4.0),
+        (-12.0, 6.0),
+        (-6.0, -2.0),
+        (-8.0, -8.0),
+    ];
+    let water = [(0.0, -18.0), (10.0, -2.0), (12.0, 8.0), (6.0, 16.0), (-6.0, 16.0), (-12.0, 8.0), (-10.0, -2.0)];
+    let earth = [(-16.0, 14.0), (-6.0, -4.0), (0.0, 4.0), (6.0, -10.0), (16.0, 14.0)];
+    let air = [(-18.0, -8.0), (8.0, -8.0), (14.0, -14.0), (18.0, -4.0), (10.0, 2.0), (8.0, -2.0), (-18.0, -2.0)];
+    let dark =
+        [(4.0, -18.0), (14.0, -10.0), (16.0, 2.0), (10.0, 14.0), (-2.0, 18.0), (-14.0, 10.0), (-8.0, 2.0), (-2.0, -2.0), (6.0, -2.0), (8.0, -10.0)];
+    let fire: Vec<Point> = fire.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let water: Vec<Point> = water.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let earth: Vec<Point> = earth.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let air: Vec<Point> = air.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let dark: Vec<Point> = dark.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let icons = [
+        ("Fire", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&fire, true)), "#e67e22"),
+        ("Water", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&water, true)), "#3498db"),
+        ("Earth", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&earth, true)), "#27ae60"),
+        ("Air", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&air, true)), "#85c1e9"),
+        ("Light", shapes::star(c, 18.0, 7.0, 6, 0.0), "#f7dc6f"),
+        ("Dark", vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&dark, true)), "#5d6d7e"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Element Icons".into();
+    SymbolLibrary { name: "Element Icons".into(), doc }
 }
 
 fn builtin_info(b: &BuiltinSymbolLibrary) -> LibraryInfo {
