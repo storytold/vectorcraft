@@ -78,8 +78,12 @@ fn tag_index(d: &Document, id: NodeId, p: &Value, c: &str) -> Result<usize> {
     tags_of(n).iter().position(|t| t.id == tag).ok_or_else(|| bad(c, format!("object {} has no tag {tag}", id.0)))
 }
 
-/// The text `p` gives for `key` (a tag's name or value), at most [`MAX_TAG_TEXT`] bytes.
+/// The text `p` gives for `key` (a tag's name or value), at most [`MAX_TAG_TEXT`] bytes. `None`
+/// when `p` leaves it out; a null is an error.
 fn tag_text<'a>(p: &'a Value, key: &str, c: &str) -> Result<Option<&'a str>> {
+    if p.get(key).is_some_and(Value::is_null) {
+        return Err(bad(c, format!("`{key}` must be a string")));
+    }
     let t = text_param(p, key, c)?;
     if t.is_some_and(|t| t.len() > MAX_TAG_TEXT) {
         return Err(bad(c, format!("a tag's {key} is longer than 65,536 bytes")));

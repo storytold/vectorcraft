@@ -167,6 +167,10 @@ fn a_tag_goes_stale_when_it_or_its_item_is_deleted() {
     // A tag added after another was deleted does not take the deleted one's place.
     let e = failure(&mut s, "var all = app.activeDocument.pageItems[0].tags, t = all[0]; t.remove(); all.add(); t.name;");
     assert!(e.contains("Stale tag"), "{e}");
+    // Nor after the run undoes the add: the undone document's next id does not give the tag's id
+    // out again.
+    let e = failure(&mut s, "var all = app.activeDocument.pageItems[0].tags, t = all.add(); vc.run('edit.undo'); all.add().name = 'u'; t.name;");
+    assert!(e.contains("Stale tag"), "{e}");
     // Nor when the deleted tag's id was ahead of the document's next id (a tag pasted from
     // another document).
     let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
@@ -188,6 +192,9 @@ fn tag_commands_check_their_params_and_skip_unchanged_edits() {
     for (id, p) in [
         ("object.tag.add", json!({"id": a.0, "name": too_long})),
         ("object.tag.add", json!({"id": a.0, "value": 3})),
+        ("object.tag.add", json!({"id": a.0, "name": null})),
+        ("object.tag.set", json!({"id": a.0, "tag": tag, "name": null, "value": "updated"})),
+        ("object.tag.set", json!({"id": a.0, "tag": tag, "value": null})),
         ("object.tag.add", json!({"id": 999_999})),
         ("object.tag.add", json!({"id": "1"})),
         ("object.tag.set", json!({"id": a.0, "tag": tag})),

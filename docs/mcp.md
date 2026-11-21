@@ -6824,7 +6824,7 @@ order → `{tags: [{tag, name, value}]}`, where `tag` tells each one apart from 
 changes its name or value → `{changed}`, `object.tag.remove {id, tag}` deletes it, and `object.tag.removeAll {ids?}`
 deletes every tag of the objects in `ids` or the selection → `{changed: objects}`; each edit is one undo step, and an
 edit that changes nothing adds none. Names may be empty or repeated. An object has at most 64 tags, each name and
-value at most 65,536 bytes; a layer or a ruler guide has none, and a bad value is an error that changes nothing, as is
+value at most 65,536 bytes; a layer or a ruler guide has none, and a bad value (a null name or value included) is an error that changes nothing, as is
 an add in a document whose ids have reached the top of their range (a damaged or hand-made file). The
 native file keeps the tags and their `tag` ids, and opening one keeps the first 64 tags of each object whose name and
 value are within the limit, giving a new id to a tag whose id is missing, out of range or repeated. Copies keep their source's tags. Other file formats do not write them.
