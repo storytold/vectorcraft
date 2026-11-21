@@ -19,21 +19,25 @@ pub(super) fn hover_highlight(app: &mut VectorcraftApp, p: &egui::Painter, xf: &
     if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection" | "eyedropper") {
         return;
     }
-    // With Space lending the view tools, a press pans the view and acts on no object.
     let (m, space) = p.ctx().input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    let mods = super::drag::mods(m, false);
+    // With Space lending the view tools, a press pans the view and acts on no object.
     if super::drag::space_lends_view_tools(app, m, space) {
         return;
     }
-    let id = if app.session.tool_id() == "eyedropper" {
+    // With the Eyedropper, Cmd lends a selection tool, whose click acts on what that tool outlines.
+    let eyedropper = app.session.tool_id() == "eyedropper";
+    let lent = if eyedropper && !app.session.tool_editing() { app.session.lent_tool_id(&mods) } else { None };
+    let id = if eyedropper && lent.is_none() {
         // The object the Eyedropper's click there samples, recolors or copies to, with the keys
         // held now. A selected one is outlined too: a click on it still acts on it.
-        let mods = super::drag::mods(m, false);
         let Some(id) = eyedropper_hover_object(app, h, mods, view) else { return };
         id
     } else {
+        let tool = lent.unwrap_or(app.session.tool_id());
         let Some(st) = app.session.active() else { return };
         let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
-        let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
+        let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
         if st.selection.contains(id) {
             return;
         }
@@ -70,7 +74,9 @@ pub struct HoverObjectKey {
 }
 
 /// [`vectorcraft_engine::Session::hover_object`] at `at`, found again only when its
-/// [`HoverObjectKey`] changes: over an image, or with Shift held, finding it samples a color.
+/// [`HoverObjectKey`] changes: over an image, or with Shift held, finding it samples a color. The
+/// cached key is compared field by field, the cheap fields first, and the key is copied only
+/// when it changed.
 fn eyedropper_hover_object(
     app: &mut VectorcraftApp,
     at: vectorcraft_geom::Point,
@@ -78,6 +84,42 @@ fn eyedropper_hover_object(
     view: vectorcraft_engine::ViewInfo,
 ) -> Option<vectorcraft_doc::NodeId> {
     let st = app.session.active()?;
+    let s = &app.session;
+    let cached = app.canvas.hover_object.as_ref().filter(|(k, _)| {
+        let HoverObjectKey {
+            at: k_at,
+            mods: k_mods,
+            doc,
+            selection,
+            isolation,
+            options,
+            paint,
+            fill_active,
+            stop,
+            tolerance,
+            eyedropper,
+            guides,
+            zoom,
+            outline,
+        } = k;
+        *k_at == at
+            && *k_mods == mods
+            && *doc == (st.uid, st.revision)
+            && *isolation == st.isolation
+            && *fill_active == s.fill_active
+            && *stop == s.selected_stop()
+            && *tolerance == s.prefs.selection_tolerance
+            && *eyedropper == s.prefs.eyedropper
+            && *guides == (view.guides, s.guides_locked())
+            && *zoom == view.zoom
+            && *outline == view.outline
+            && *selection == st.selection
+            && *paint == s.paint
+            && *options == s.tool_options()
+    });
+    if let Some((_, id)) = cached {
+        return *id;
+    }
     let key = HoverObjectKey {
         at,
         mods,
@@ -94,11 +136,6 @@ fn eyedropper_hover_object(
         zoom: view.zoom,
         outline: view.outline,
     };
-    if let Some((k, id)) = &app.canvas.hover_object
-        && *k == key
-    {
-        return *id;
-    }
     let id = app.session.hover_object(at, mods, view);
     app.canvas.hover_object = Some((key, id));
     id

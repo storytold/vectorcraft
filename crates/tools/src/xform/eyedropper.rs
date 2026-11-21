@@ -2009,6 +2009,31 @@ mod tests {
         assert_eq!(names(480.0, 480.0), None, "no art");
     }
 
+    /// For a Shift-click on an envelope, the hover names the envelope where its distorted contents
+    /// are drawn, and the rectangle below where they leave the point empty.
+    #[test]
+    fn shift_hover_names_the_envelope_where_its_art_is_drawn() {
+        use vectorcraft_geom::{Affine, Rect};
+        let d = doc_with_live_over_green(|d| {
+            let red = solid_rect(d, Rect::new(300.0, 300.0, 420.0, 320.0), Color::rgb(1.0, 0.0, 0.0));
+            let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+            let content = vec![std::sync::Arc::new(red)];
+            let options = Default::default();
+            Node::new(
+                d.alloc_id(),
+                NodeKind::Envelope { content, kind: Box::new(kind), fidelity: 50.0, editing: false, options, frame: Box::new(Affine::IDENTITY) },
+            )
+        });
+        let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+        let [.., green, envelope] = ids[..] else { panic!("two objects over the rectangle expected") };
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        let t = EyedropperTool::default();
+        let names = |x: f64, y: f64| t.hover_object(&cx(&d, &s, &p), Point::new(x, y), shift);
+        assert_eq!(names(360.0, 310.0), Some(envelope), "the distorted contents");
+        assert_eq!(names(360.0, 332.0), Some(green), "a point the contents leave empty");
+    }
+
     /// A plain click on a selected gradient mesh recolors its points, and the hover names that
     /// mesh; Image Trace's Ignore Color pick, which the panel samples, names nothing.
     #[test]

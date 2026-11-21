@@ -61,12 +61,13 @@ use input::handle_input;
 use outline::KEY_OUTLINE;
 #[cfg(test)]
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
+pub use overlays::HoverObjectKey;
+pub use overlays::SharedPaths;
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{
     HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, overlay_hover_text, selection_overlay,
 };
-pub use overlays::{HoverObjectKey, SharedPaths};
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
 pub(crate) use quick_pen_bar::quick_pen_bar_rect;
