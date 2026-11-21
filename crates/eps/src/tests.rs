@@ -331,6 +331,72 @@ fn many_repeats_keep_their_places_in_a_smooth_shading() {
     }
 }
 
+/// Level 3 smooth shadings handle two-stop (`FunctionType 2`), hard-edge (duplicate offset),
+/// zero-span (solid fallback), and degenerate zero-length linear/radial gradients cleanly.
+#[test]
+fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
+    use vectorcraft_color::GradientGeom;
+
+    // Two-stop linear gradient emits a single FunctionType 2 (no stitching FunctionType 3).
+    let two_stop = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let two_doc = doc_with(|d| {
+        vec![path(
+            d,
+            shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)),
+            Paint::Gradient(Box::new(GradientPaint::new(two_stop))),
+            Paint::None,
+            0.0,
+        )]
+    });
+    let two_page = page_of(&two_doc, &opts(&two_doc));
+    assert!(two_page.contains("/ShadingType 2") && two_page.contains("/FunctionType 2"), "{two_page}");
+    assert!(!two_page.contains("/FunctionType 3"), "{two_page}");
+
+    // Hard-edge gradient (two stops at offset 0.5) skips the zero-width segment and stitches at 0.5.
+    let hard = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    );
+    let hard_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(hard))), Paint::None, 0.0)]
+    });
+    let hard_page = page_of(&hard_doc, &opts(&hard_doc));
+    assert!(hard_page.contains("/FunctionType 3") && hard_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{hard_page}");
+
+    // Two stops at the same interior offset pad to 0 and 1, emitting a hard-edge stitch at 0.5.
+    let flat = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let flat_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(flat))), Paint::None, 0.0)]
+    });
+    let flat_page = page_of(&flat_doc, &opts(&flat_doc));
+    assert!(flat_page.contains("/FunctionType 3") && flat_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{flat_page}");
+    assert!(flat_page.contains("/C0 [1 0 0] /C1 [1 0 0]") && flat_page.contains("/C0 [0 0 1] /C1 [0 0 1]"), "{flat_page}");
+
+    // Zero-length linear and radial gradients still emit valid shfill geometry.
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let mut gp = GradientPaint::new(Gradient::new(
+            kind,
+            vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+        ));
+        gp.geom = Some(GradientGeom { start: Point::new(50.0, 50.0), end: Point::new(50.0, 50.0), aspect: 1.0, focal: None });
+        let deg_doc =
+            doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(gp)), Paint::None, 0.0)]);
+        let deg_page = page_of(&deg_doc, &opts(&deg_doc));
+        assert!(deg_page.contains("shfill"), "{kind:?}: {deg_page}");
+    }
+}
+
 #[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
@@ -2071,4 +2137,53 @@ fn ruby_is_written_with_its_type() {
         page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
+}
+
+#[test]
+fn tiff_preview_round_trips_when_postscript_is_unreadable() {
+    let d = doc_with(|d| vec![red_rect(d)]);
+    for kind in [Preview::TiffColor, Preview::TiffBlackWhite] {
+        let out = export(&d, &EpsOptions { preview: kind, ..opts(&d) }, Some(&preview()), None).unwrap();
+        let (ps, tiff) = sections(&out.bytes).unwrap();
+        let tiff = tiff.unwrap();
+        // Corrupt the PostScript body while keeping the binary header and TIFF preview intact.
+        let bad_ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\nunknown_op\n%%EOF\n";
+        let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
+        let imported = import_with(&wrapped, false).unwrap();
+        assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
+        let mut has_image = false;
+        imported.document.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                has_image = true;
+            }
+        });
+        assert!(has_image, "{kind:?}: expected preview image node");
+        assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    }
+}
+
+#[test]
+fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
+    // Ordinary benign fixture with native edit payload + TIFF preview round-trips cleanly.
+    let d = doc_with(|d| vec![red_rect(d)]);
+    let payload = b"vectorcraft-native-edit-payload".to_vec();
+    let out = export(&d, &EpsOptions { native: Some(payload.clone()), preview: Preview::TiffColor, ..opts(&d) }, Some(&preview()), None).unwrap();
+    assert!(super::has_native(&out.bytes));
+    assert_eq!(super::native(&out.bytes).as_deref(), Some(payload.as_slice()));
+    let benign = import_with(&out.bytes, false).unwrap();
+    assert!(!benign.preview);
+
+    // Truncated DOS EPS binary header is refused cleanly without panicking.
+    let mut bad_header = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    bad_header.extend_from_slice(&[0xFF; 26]);
+    assert!(sections(&bad_header).is_none());
+    assert!(import_with(&bad_header, false).is_err());
+
+    // Bounded malformed currentfile filter hitting EOF early does not panic or hang.
+    let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n2 2 8 [2 0 0 -2 0 2] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
+    let _ = import_with(truncated_inline, false);
+
+    // Unterminated PostScript string at EOF is refused cleanly.
+    let unterminated = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n(unterminated";
+    assert!(import_with(unterminated, false).is_err());
 }

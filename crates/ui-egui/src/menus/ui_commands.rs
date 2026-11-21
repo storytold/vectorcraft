@@ -2170,4 +2170,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{plane?: left|right|ground (default: the active plane)} open the plane's options, as double-clicking its plane widget does (dialog `perspectivePlane`: location (pt along the plane's normal), objects: none|move|copy): OK runs perspective.plane.move",
     ),
+    ("ui.findAndReplace", "Find and Replace…", "", "{} open the Find and Replace dialog (Edit › Find and Replace…; dialog `findReplace`)"),
+    ("ui.retype", "Retype", "", "{} open the Retype panel (Window › Retype) or start Retype"),
 ];

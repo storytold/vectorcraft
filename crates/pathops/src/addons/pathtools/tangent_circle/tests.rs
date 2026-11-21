@@ -655,6 +655,20 @@ fn two_circles_between_the_same_two_places_tried_are_both_found() {
 }
 
 #[test]
+fn two_segments_that_touch_circles_close_together_give_both() {
+    // A peak whose two feet touch circles of radius 20 on y = 0 at both feet, between the same
+    // places tried along the line; then the same on a line 10,000 pt long, with the feet 10 pt apart.
+    for (len, a, b) in [(100.0, 50.03, 50.15), (1e4, 5003.0, 5013.0)] {
+        let top = 0.5 * (a + b);
+        let second = [line((a, 40.0), (top, 60.0)), line((top, 60.0), (b, 40.0))];
+        let found = circles_of_radius(line((0.0, 0.0), (len, 0.0)), &second, 20.0);
+        assert_eq!(found.len(), 2, "{len}: {found:?}");
+        assert!(near(found[0].circle.center, a, 20.0, 1e-6) && near(found[0].second, a, 40.0, 1e-6), "{len}: {found:?}");
+        assert!(near(found[1].circle.center, b, 20.0, 1e-6) && near(found[1].second, b, 40.0, 1e-6), "{len}: {found:?}");
+    }
+}
+
+#[test]
 fn a_tiny_circle_between_long_lines_close_together_is_found() {
     let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.5, &[line((0.0, 1e-4), (100.0, 1e-4))]);
     assert_eq!(found.len(), 1, "{found:?}");

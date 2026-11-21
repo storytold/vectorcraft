@@ -1249,6 +1249,11 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
         crate::dialogs::check_spelling::COMMAND => crate::dialogs::check_spelling::open(app),
+        "ui.findAndReplace" => {
+            let empty = serde_json::Map::new();
+            crate::dialogs::find_replace::open(app, &empty)
+        }
+        "ui.retype" => crate::panel_docking::reveal_panel(app, crate::panels::retype::ID),
 
         _ => return None,
     };
