@@ -896,6 +896,10 @@ mod tests_color_wheel_gamut;
 #[cfg(test)]
 mod tests_color_wheel_harmony;
 #[cfg(test)]
+mod tests_color_wheel_hex;
+#[cfg(test)]
+mod tests_color_wheel_opacity;
+#[cfg(test)]
 mod tests_color_wheel_vision;
 #[cfg(test)]
 mod tests_constrain;

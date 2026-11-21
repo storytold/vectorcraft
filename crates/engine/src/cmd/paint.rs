@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a Live Paint group among the targets (or inside one) takes the fill on its faces only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes (the color the bucket paints with) and the selection keeps its paint → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), opacity?: 0..100 (a percentage, as transparency.set's; the opacity of that fill item on each target, in the undo step of the paint, or alone without color, none, swatch or gradient, when it changes neither the defaults nor the recent colors; the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso take it themselves; with no paint, a target without that fill item is left as it is (a paint given with the opacity creates the item, which then takes it), and an opacity that no target takes is an error that also leaves the paint undone; type characters have no opacity of their own, so an opacity that only characters would take is an error, and so are one with nothing selected and no ids and one for an object selected in a symbol instance), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no item, and no ids or id other than null, are given), the paint goes to those characters only; without `item`, a Live Paint group among the targets (or inside one) takes the fill on its faces only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it, and its opacity when `opacity` changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did; on a graph's axis line, tick mark or radar ring, its rows for every line of its kind. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes (the color the bucket paints with) and the selection keeps its paint → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed), or with an opacity alone how many took the opacity}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke",
             [],
             None,
-            "{…as paint.setFill, item?: the stroke item to set, aligned?: bool (as paint.setFill)} same as paint.setFill, for the stroke; without `item`, a Live Paint group among the targets (or inside one) takes the stroke on its edges only; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, as paint.setFill",
+            "{…as paint.setFill, item?: the stroke item to set, aligned?: bool (as paint.setFill), opacity?: 0..100 (the opacity of that stroke item, as paint.setFill's for the fill item)} same as paint.setFill, for the stroke; without `item`, a Live Paint group among the targets (or inside one) takes the stroke on its edges only; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row or changed it, and its opacity when `opacity` changed it (exceptions: docs/mcp.md); on a graph label, as paint.setFill",
             has_doc,
             |s, p| { set_paint(s, p, false) }
         ),
@@ -160,7 +160,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors)}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, a Live Paint group's first face's fill and first edge's stroke, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, a Live Paint group counting with its faces' fills and its edges' strokes, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors), fillOpacity, strokeOpacity: 0..100, the opacity of the fill (stroke) item that paint.setFill {opacity} sets, from the first selected object (or painted object in a selected group) that has one (a gradient mesh's first picked point's), or null with nothing selected (the defaults for new art), for an object selected in a symbol instance, while the Type tool has characters selected, and when only type characters or objects without that item are selected}",
             always,
             proxies
         ),
@@ -236,6 +236,56 @@ impl Session {
             }
         }
         None
+    }
+
+    /// The opacity (0..1) of the fill (or stroke) that `paint.setFill {opacity}` sets: the item's,
+    /// or for a gradient mesh with points picked the first picked point's. The rows the command
+    /// would edit are read in order (a group without an active Appearance row stands for its
+    /// contents), and the first that exists answers. `None` with nothing selected, for an object
+    /// selected in a symbol instance, while the Type tool has characters selected, and when only
+    /// type characters, objects without that item or the art of graph designs in a graph series
+    /// are selected.
+    pub fn proxy_opacity(&self, stroke: bool) -> Option<f32> {
+        let st = self.active()?;
+        if st.selection.symbol_part.is_some() {
+            return None;
+        }
+        // The command would give the opacity to the characters, which have none of their own.
+        if super::textedit::selected_range(self).is_some_and(|(_, a, b)| a != b) {
+            return None;
+        }
+        let item = self.appearance_item();
+        let of = |n: &Node, item: Option<usize>| -> Option<f32> {
+            if item.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                return None;
+            }
+            if !stroke
+                && item.is_none()
+                && let NodeKind::Mesh(m) = &n.kind
+                && let Some((_, points)) = picked_mesh_points(self, &[n.id]).first()
+            {
+                return points.first().and_then(|i| m.points.get(*i)).map(|q| q.opacity);
+            }
+            if stroke { n.appearance.stroke_at(item).map(|s| s.opacity) } else { n.appearance.fill_at(item).map(|f| f.opacity) }
+        };
+        let subjects = st.selection.subjects();
+        // The command leaves out the art of a graph design in a series, which the graph draws again
+        // from the design, and a series group stands for the paths directly in it
+        // (graph::paint_targets).
+        let editable = |id: &&NodeId| !super::graph::is_design_art(&st.doc, **id);
+        // As the command picks its rows (ItemTarget::of_kind): the active item when it is a row of
+        // this kind in the first selected object's stack, read in the selected objects' own
+        // stacks; else the topmost one of the painted leaves (a group's contents). A row of a
+        // graph design's art selected first stands for nothing (item_target_at).
+        let first = subjects.first().filter(editable).and_then(|id| st.doc.node(*id));
+        let active = item.filter(|i| first.and_then(|n| n.appearance.items.get(*i)).is_some_and(|it| it.is_fill() == !stroke));
+        if active.is_some() {
+            let targets = super::graph::series_group_marks_where(&st.doc, subjects, |n| n.extras().series_index.is_some());
+            return targets.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, active));
+        }
+        // The command's targets: a targeted layer stands for its visible, unlocked art.
+        let leaves = super::paint_targets(self, &Value::Null).ok()?;
+        leaves.iter().filter(editable).filter_map(|id| st.doc.node(*id)).find_map(|n| of(n, None))
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
@@ -405,7 +455,12 @@ impl Session {
 fn proxies(s: &mut Session, _: &Value) -> Result<Value> {
     let (fill, stroke) = s.proxy_paints();
     let (fill_mixed, stroke_mixed) = s.proxy_mixed();
-    Ok(json!({"fill": fill, "stroke": stroke, "fillActive": s.fill_active, "fillMixed": fill_mixed, "strokeMixed": stroke_mixed}))
+    // As transparency.info answers an opacity: a percentage to two places.
+    let percent = |o: Option<f32>| o.map(|o| (f64::from(o) * 10_000.0).round() / 100.0);
+    Ok(json!({
+        "fill": fill, "stroke": stroke, "fillActive": s.fill_active, "fillMixed": fill_mixed, "strokeMixed": stroke_mixed,
+        "fillOpacity": percent(s.proxy_opacity(false)), "strokeOpacity": percent(s.proxy_opacity(true)),
+    }))
 }
 
 /// `stroke` param, defaulting to the proxy that is in front.
@@ -524,13 +579,39 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         return Err(bad(cmd, "`tint` goes with a global or spot `swatch`"));
     }
     check_keep_model(p, cmd)?;
-    let paint = paint_from(s, p)?.ok_or_else(|| bad(cmd, "give color, none, swatch or gradient"))?;
+    let opacity = opacity_param(p, cmd)?;
+    let paint = paint_from(s, p)?;
+    if paint.is_none() && opacity.is_none() {
+        return Err(bad(cmd, "give color, none, swatch, gradient or opacity"));
+    }
     // As `paint.editGradient`: a `dither` given applies to gradient fills only. A gradient swatch
     // (named) keeps its own dither; `"swatch": null` names none.
-    if !fill && matches!(&paint, Paint::Gradient(g) if g.gradient.dither) && p.get("swatch").and_then(Value::as_str).is_none() {
+    if !fill && matches!(&paint, Some(Paint::Gradient(g)) if g.gradient.dither) && p.get("swatch").and_then(Value::as_str).is_none() {
         return Err(bad(cmd, "`dither` applies to gradient fills (paint.setFill)"));
     }
-    apply_paint(s, p, paint, fill)
+    apply_paint_opacity(s, p, paint, opacity, fill)
+}
+
+/// The `opacity` param of `paint.setFill` and `paint.setStroke` (a percentage) as 0..1; `None`
+/// when it is left out or null.
+fn opacity_param(p: &Value, cmd: &str) -> Result<Option<f32>> {
+    match p.get("opacity") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v.as_f64() {
+            Some(o) if (0.0..=100.0).contains(&o) => Ok(Some((o / 100.0) as f32)),
+            _ => Err(bad(cmd, "`opacity` must be a number from 0 to 100")),
+        },
+    }
+}
+
+/// Whether `p` gives `key` a value other than null.
+fn names(p: &Value, key: &str) -> bool {
+    p.get(key).is_some_and(|v| !v.is_null())
+}
+
+/// The error for an `opacity` that would go to type characters, which have no opacity of their own.
+fn characters_have_no_opacity(cmd: &str) -> EngineError {
+    bad(cmd, "type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke")
 }
 
 /// [`apply_paint`] on the proxy named by `stroke` (default: the active one), focusing it.
@@ -543,17 +624,38 @@ fn apply_to_proxy(s: &mut Session, p: &Value, paint: Paint, cmd: &str) -> Result
 /// `paint.setFill`) and of the defaults for new art, focus its proxy unless `focus` is false, and
 /// remember the paint. Replies `{objects}`: how many objects took the paint.
 pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) -> Result<Value> {
+    apply_paint_opacity(s, p, Some(paint), None, fill)
+}
+
+/// [`apply_paint`] with `paint` optional, which also sets the `opacity` (0..1) of the fill (or
+/// stroke) item each target takes it on, in the same undo step: the picked gradient mesh points'
+/// own opacity for a fill, nothing on a target without that item. The opacity alone changes neither
+/// the defaults for new art nor the remembered colors. An opacity that would go only to type
+/// characters, to an object selected in a symbol instance, or to no target at all is an error.
+fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity: Option<f32>, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
     let bucket = bucket_color_params(s, p, cmd)?;
     let p = bucket.as_ref().unwrap_or(p);
+    // A bad `target` or `aligned` is refused for every kind of target: `item_target` reads no
+    // `target` once `id` or `ids` names an object, and selected characters read neither.
+    super::appearance::aligned(p, cmd)?;
+    super::appearance::targets_contents(p)?;
     let focus = switch_or(p, "focus", true, cmd)?;
-    let span = spans_targets(p, &paint).map_err(|e| bad(cmd, e))?;
-    // Characters selected with the Type tool take the paint, not the whole type object (#1063).
-    if p.get("ids").is_none()
-        && p.get("item").is_none()
+    // An opacity alone places no gradient, so `span` may only be "object" with it.
+    let span = spans_targets(p, paint.as_ref().unwrap_or(&Paint::None)).map_err(|e| bad(cmd, e))?;
+    // Characters selected with the Type tool take the paint, not the whole type object (#1063). A
+    // null `ids` or `id` names no object, as the targets read it.
+    let on_characters = !names(p, "ids") && !names(p, "id") && p.get("item").is_none();
+    // An opacity for the characters is refused before their typing session ends, so the session
+    // and its undo step stay as they are.
+    if on_characters && opacity.is_some() && super::textedit::selected_range(s).is_some_and(|(_, a, b)| a != b) {
+        return Err(characters_have_no_opacity(cmd));
+    }
+    if on_characters
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
+        let (Some(paint), None) = (paint, opacity) else { return Err(characters_have_no_opacity(cmd)) };
         // After Select All in threaded text, every frame's text takes it.
         let story = super::textedit::editing_story(s);
         let ranges: Vec<(NodeId, usize, usize)> =
@@ -606,6 +708,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     // An object of a dynamic symbol instance's art selected with Direct Selection: that object's
     // fill or stroke changes for this instance only (solid, none, gradient or pattern).
     if let Some((id, path)) = selected_part_target(s, p, cmd)? {
+        let Some(paint) = paint.filter(|_| opacity.is_none()) else {
+            return Err(bad(cmd, "an object selected in a symbol instance has no fill or stroke opacity of its own"));
+        };
         super::brushsym::edit_part(s, id, &path, if fill { "Fill Color" } else { "Stroke Color" }, |o| {
             if fill {
                 o.fill = Some(paint.clone());
@@ -624,36 +729,136 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets_for(s, p, fill)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
+    // An opacity has nothing to go to without targets; with a paint, the defaults then stay too.
+    if opacity.is_some() && ids.is_empty() {
+        return Err(bad(cmd, "select objects or give ids"));
+    }
     let of = super::appearance::reference_of(s, p, item, cmd)?;
-    let paint = if span {
-        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it. Each
-        // object's box is that of the row it edits.
-        let d = &s.doc()?.doc;
-        let mut spanned = Vec::with_capacity(ids.len());
-        for (id, it) in ids.iter().zip(item.per_target_of(s, of, &ids)) {
-            let (Some(it), Some(n)) = (it, d.node(*id)) else { continue };
-            spanned.push((*id, it.resolve(&n.appearance, fill, cmd)?));
+    let paint = match paint {
+        Some(paint) if span => {
+            // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it. Each
+            // object's box is that of the row it edits.
+            let d = &s.doc()?.doc;
+            let mut spanned = Vec::with_capacity(ids.len());
+            for (id, it) in ids.iter().zip(item.per_target_of(s, of, &ids)) {
+                let (Some(it), Some(n)) = (it, d.node(*id)) else { continue };
+                spanned.push((*id, it.resolve(&n.appearance, fill, cmd)?));
+            }
+            Some(placed_across(d, &spanned, paint, p, fill))
         }
-        placed_across(d, &spanned, paint, p, fill)
-    } else {
-        paint
+        paint => paint,
     };
     // The gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso: a solid
-    // fill recolors just those points of their meshes (the proxies show them: `fill_mesh_points`).
-    let mesh_points = if fill && matches!(paint, Paint::Solid { .. }) { picked_mesh_points(s, &ids) } else { vec![] };
+    // fill recolors just those points of their meshes (the proxies show them: `fill_mesh_points`),
+    // and a fill opacity fades just them.
+    let mesh_points = if fill && matches!(paint, Some(Paint::Solid { .. }) | None) { picked_mesh_points(s, &ids) } else { vec![] };
     // Without `item`, unless the Appearance panel's active fill item takes the paint.
-    let colorized = if fill && p.get("item").is_none() && item == ItemTarget::Top {
-        colorized_images(&s.doc()?.doc, &ids, &paint).map_err(|e| bad(cmd, e))?
-    } else {
-        vec![]
+    let colorized = match &paint {
+        Some(paint) if fill && p.get("item").is_none() && item == ItemTarget::Top => {
+            colorized_images(&s.doc()?.doc, &ids, paint).map_err(|e| bad(cmd, e))?
+        }
+        _ => vec![],
     };
-    let label = if fill { "Fill Color" } else { "Stroke Color" };
+    let label = match paint {
+        None => "Opacity",
+        Some(_) if fill => "Fill Color",
+        Some(_) => "Stroke Color",
+    };
     // Each object whose appearance took the paint, with the row it went to, for the paint a graph stores for its series
     // (a series mark is a path, so it always has a row here).
     let written = std::cell::RefCell::new(Vec::new());
     // The type objects whose characters took the paint (no row targeted): only those change what a graph's labels keep
     // for their characters; a row edit is kept with the label's rows.
     let characters = std::cell::RefCell::new(Vec::new());
+    // The targets that took the opacity, and whether one would have given it to its characters.
+    let (took_opacity, characters_skipped) = (std::cell::RefCell::new(std::collections::BTreeSet::new()), std::cell::Cell::new(false));
+    let paint_one = |n: &mut Node, index: Option<usize>, paint: &Paint| -> Result<()> {
+        if index.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+            characters.borrow_mut().push(n.id);
+        }
+        if index.is_none() && colorized.contains(&n.id) {
+            n.extras_mut().colorize = paint.color().map(|_| Box::new(paint.clone()));
+            return Ok(());
+        }
+        if index.is_none()
+            && let Paint::Solid { color, .. } = paint
+            && let Some((_, points)) = mesh_points.iter().find(|(id, _)| *id == n.id)
+            && let NodeKind::Mesh(m) = &mut n.kind
+        {
+            for i in points {
+                if let Some(q) = m.points.get_mut(*i) {
+                    q.color = *color;
+                }
+            }
+            return Ok(());
+        }
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            let (xf, lb) = (t.xf, t.local_bounds());
+            for r in &mut t.runs {
+                if !fill && !paint.is_none() {
+                    run_stroke_weight(&mut r.style);
+                }
+                let (cur, b) = run_paint_mut(r, !fill, lb);
+                *cur = place_run_paint(paint, p, xf, b);
+            }
+            return Ok(());
+        }
+        // A missing top fill or stroke is created first: a new stroke's weight sizes the box its
+        // gradient fits.
+        if n.appearance.paint_at(index, fill).is_none() {
+            n.appearance.set_paint_at(index, fill, Paint::None);
+        }
+        if !fill {
+            restore_unpainted_stroke(&mut n.appearance, index, paint);
+        }
+        let new_paint = keep_pattern_xf(paint, p, n.appearance.paint_at(index, fill));
+        let placed = place_paint(&new_paint, p, item_paint_bounds(n, index, fill));
+        n.appearance.set_paint_at(index, fill, placed);
+        if !fill
+            && paint.is_none()
+            && let Some(stroke) = n.appearance.stroke_at_mut(index)
+        {
+            // A stroke without paint has no weight; painting it again restores the 1 pt default.
+            stroke.width = 0.0;
+        }
+        if !fill {
+            super::object::snap_if_aligned(n);
+        }
+        let at = match index {
+            Some(_) => n.appearance.item_of_kind(index, fill),
+            None => n.appearance.items.iter().rposition(|it| it.is_fill() == fill),
+        };
+        written.borrow_mut().extend(at.map(|at| (n.id, at)));
+        Ok(())
+    };
+    // The opacity goes to what the paint went to: the picked mesh points, else the fill or stroke
+    // item. Characters, and targets without that item, are left as they are.
+    let opacity_one = |n: &mut Node, index: Option<usize>, o: f32| {
+        if index.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+            characters_skipped.set(true);
+            return;
+        }
+        if index.is_none()
+            && let Some((_, points)) = mesh_points.iter().find(|(id, _)| *id == n.id)
+            && let NodeKind::Mesh(m) = &mut n.kind
+        {
+            for i in points {
+                if let Some(q) = m.points.get_mut(*i) {
+                    q.opacity = o;
+                    took_opacity.borrow_mut().insert(n.id);
+                }
+            }
+            return;
+        }
+        let item =
+            if fill { n.appearance.fill_at_mut(index).map(|f| &mut f.opacity) } else { n.appearance.stroke_at_mut(index).map(|s| &mut s.opacity) };
+        if let Some(item) = item {
+            *item = o;
+            took_opacity.borrow_mut().insert(n.id);
+        }
+    };
     // The objects counted: with a design's art, those with a row equal to the art's.
     let ids = edit_items_then(
         s,
@@ -664,90 +869,53 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         label,
         fill,
         |n, index| {
-            if index.is_none() && matches!(n.kind, NodeKind::Text(_)) {
-                characters.borrow_mut().push(n.id);
+            if let Some(paint) = &paint {
+                paint_one(n, index, paint)?;
             }
-            if index.is_none() && colorized.contains(&n.id) {
-                n.extras_mut().colorize = paint.color().map(|_| Box::new(paint.clone()));
-                return Ok(());
+            if let Some(o) = opacity {
+                opacity_one(n, index, o);
             }
-            if index.is_none()
-                && let Paint::Solid { color, .. } = &paint
-                && let Some((_, points)) = mesh_points.iter().find(|(id, _)| *id == n.id)
-                && let NodeKind::Mesh(m) = &mut n.kind
-            {
-                for i in points {
-                    if let Some(q) = m.points.get_mut(*i) {
-                        q.color = *color;
-                    }
-                }
-                return Ok(());
-            }
-            if index.is_none()
-                && let NodeKind::Text(t) = &mut n.kind
-            {
-                let (xf, lb) = (t.xf, t.local_bounds());
-                for r in &mut t.runs {
-                    if !fill && !paint.is_none() {
-                        run_stroke_weight(&mut r.style);
-                    }
-                    let (cur, b) = run_paint_mut(r, !fill, lb);
-                    *cur = place_run_paint(&paint, p, xf, b);
-                }
-                return Ok(());
-            }
-            // A missing top fill or stroke is created first: a new stroke's weight sizes the box its
-            // gradient fits.
-            if n.appearance.paint_at(index, fill).is_none() {
-                n.appearance.set_paint_at(index, fill, Paint::None);
-            }
-            if !fill {
-                restore_unpainted_stroke(&mut n.appearance, index, &paint);
-            }
-            let new_paint = keep_pattern_xf(&paint, p, n.appearance.paint_at(index, fill));
-            let placed = place_paint(&new_paint, p, item_paint_bounds(n, index, fill));
-            n.appearance.set_paint_at(index, fill, placed);
-            if !fill
-                && paint.is_none()
-                && let Some(stroke) = n.appearance.stroke_at_mut(index)
-            {
-                // A stroke without paint has no weight; painting it again restores the 1 pt default.
-                stroke.width = 0.0;
-            }
-            if !fill {
-                super::object::snap_if_aligned(n);
-            }
-            let at = match index {
-                Some(_) => n.appearance.item_of_kind(index, fill),
-                None => n.appearance.items.iter().rposition(|it| it.is_fill() == fill),
-            };
-            written.borrow_mut().extend(at.map(|at| (n.id, at)));
             Ok(())
         },
         |before, d, changed| {
+            // An opacity that no target took is an error, which also takes back the paint given with it.
+            if opacity.is_some() && took_opacity.borrow().is_empty() {
+                if characters_skipped.get() {
+                    return Err(characters_have_no_opacity(cmd));
+                }
+                return Err(bad(cmd, "no target has that fill or stroke to take the opacity"));
+            }
+            // A graph keeps the opacity of a series mark's topmost visible fill and stroke for the whole series.
+            let kept = opacity.is_some() && super::appearance::capture_series_changes(before, d, changed);
+            let Some(paint) = &paint else { return Ok(kept) };
             let series = super::appearance::capture_series_paint_writes(before, d, changed, &written.borrow());
             // A graph line keeps the paint written to it, also when it already showed it.
             let lines = super::graph::capture_line_paint_writes(d, &written.borrow());
             let labels = super::graph::capture_label_styles(d, &characters.borrow(), &|st| {
                 if fill {
-                    st.fill = unplaced(&paint);
+                    st.fill = unplaced(paint);
                 } else {
                     if !paint.is_none() {
                         run_stroke_weight(st);
                     }
-                    st.stroke = unplaced(&paint);
+                    st.stroke = unplaced(paint);
                 }
             });
-            Ok(series || lines || labels)
+            Ok(series || lines || labels || kept)
         },
     )?;
-    // Rejected edits leave the next shape's appearance and active proxy untouched.
-    paint_new_art(s, &paint, fill);
     if focus {
         s.fill_active = fill;
     }
-    s.remember_paint(&paint);
-    Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+    // Rejected edits leave the next shape's appearance and active proxy untouched.
+    if let Some(paint) = &paint {
+        paint_new_art(s, paint, fill);
+        s.remember_paint(paint);
+    }
+    // An opacity alone counts only the objects that took it.
+    let took = took_opacity.into_inner();
+    let counted: std::collections::BTreeSet<_> = ids.iter().filter(|id| paint.is_some() || took.contains(*id)).collect();
+    Ok(json!({"objects": counted.len()}))
 }
 
 /// Is the Live Paint Bucket the active tool ([`Session::bucket_paints`]) while `p` names no `ids`,
@@ -868,11 +1036,13 @@ pub(crate) fn live_paint_covered(d: &Document, selected: &[NodeId]) -> std::coll
 /// ([`super::brushsym::selected_part`]), when `p` names no `ids`, `id` or `item`: the paint commands
 /// then change that object. A bad `target` or `aligned` is refused as it is for any other selection.
 fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(NodeId, Vec<u32>)>> {
-    if p.get("ids").is_some() || p.get("id").is_some() || p.get("item").is_some() {
+    if names(p, "ids") || names(p, "id") || p.get("item").is_some() {
         return Ok(None);
     }
     let part = super::brushsym::selected_part(s)?;
     if part.is_some() {
+        // Read `target` first: `item_target` stops at a null `id` or `ids` before it reads `target`.
+        super::appearance::targets_contents(p)?;
         item_target(s, p, cmd)?;
     }
     Ok(part)

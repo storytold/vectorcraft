@@ -514,6 +514,10 @@
 	Fill & Stroke	Täyttö ja viiva
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
+	Show Opacity	Näytä peittävyys
+	Show Hex Field	Näytä heksakenttä
+	Hex or CSS color	Heksa- tai CSS-väri
+	Parse Color	Jäsennä väri
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -7044,6 +7048,7 @@ mark-style	Japanese	Japanilainen
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` on oltava none, oklch tai hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` on oltava heksaväri (#rgb, #rgba, #rrggbb tai #rrggbbaa) tai CSS-väri rgb(), hsl() tai oklch(), enintään 48 merkkiä
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
@@ -7420,6 +7425,11 @@ axis	Y Axis	Y-akseli
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ja `maxItems` on oltava 0-{MAX_LIST}, `maxItems` vähintään 1, ja oletusarvossa on oltava niin monta kohdetta
 @msg	`name` must be a string	`name` on oltava merkkijono
 @msg	`opacity` must be a number	`opacity` on oltava luku
+@msg	`opacity` must be a number from 0 to 100	`opacity` on oltava luku 0:sta 100:aan
+@msg	`opacity` must be true or false	`opacity` on oltava true tai false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekstin merkeillä ei ole omaa peittävyyttä: lisää täyttö tai viiva Ulkoasu-paneelin komennolla Lisää uusi täyttö tai Lisää uusi viiva
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	symbolin ilmentymästä valitulla objektilla ei ole omaa täytön tai viivan peittävyyttä
+@msg	no target has that fill or stroke to take the opacity	millään kohteella ei ole tätä täyttöä tai viivaa, joka ottaisi peittävyyden
 @msg	`type` must be "path" or "compound"	`type` on oltava "path" tai "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`-kentässä on oltava 1-{MAX_UNIT} tulostettavaa merkkiä
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`-kentässä on lueteltava 1-{MAX_CONDITION_VALUES} arvoa parametrille `{other}`

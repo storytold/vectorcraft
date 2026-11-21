@@ -684,18 +684,23 @@ field does, and `false` shows them from 0 to 255 again. `ui.colorRgbPercent` (To
 palette and Keyboard Shortcuts) switches between the two and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. `"gamut": true` grays out the parts of the wheel's square and the box's field whose colors
-the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors does, and `false` shows them again. The
-test is the out-of-gamut warning's, which `color.gamutCheck` answers for one color. The shading is approximate: the
-panel tests the color at the center of each cell of a 16 by 16 grid over the square or the field and grays out the
-whole cell or none of it, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot
-print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
-color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
-each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
-`highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
-or the box. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
-and the settings are kept with the preferences.
+shows the wheel again. `"opacity": true` checks Show Opacity, as the panel menu does: a row under the wheel or the
+box with a slider and a percent field sets the opacity of the fill or stroke row (`paint.setFill {opacity}`), the
+selected gradient stop or the selected freeform point (the first stop or point when none is selected), and `false`
+hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
+or stroke row it would set is on type characters or missing. `"gamut": true` grays out the parts of the wheel's
+square and the box's field whose colors the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors
+does, and `false` shows them again. The test is the out-of-gamut warning's, which `color.gamutCheck` answers for one
+color. The shading is approximate: the panel tests the color at the center of each cell of a 16 by 16 grid over the
+square or the field and grays out the whole cell or none of it, so a grayed cell can hold printable colors and a
+clear cell can hold colors that cannot print. `{"harmony": true, "harmonyRule": "triad"}` puts a
+marker on the wheel's ring for each other color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do;
+the wheel takes the 15 rules whose colors each have a hue of their own (not `monochromatic`, `shades`,
+`complementary2`, `triad2`, `triad3` or `highContrast2`). `{"documentColors": true}` shows the row the panel menu's
+Show Document Colors adds under the wheel or the box. Keys left out or null keep their values.
+Params that are not an object, another key or a value off the list return an error and change nothing. The command
+returns `{view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, vision, documentColors}`, and the
+settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
 the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
@@ -716,6 +721,35 @@ hides the row, and `null` keeps the setting. Any other value returns an error an
 nothing selected the colors of the art `select.all` takes, in the order `color.used {}` lists them. A click on a color
 applies it to the active proxy, keeping its link to a global swatch. The answer includes `documentColors`
 with the other settings, and the setting is kept with the preferences.
+
+`ui.colorWheel {"hexField": true}` checks Show Hex Field, as the panel menu does, and `false` unchecks it. The field
+under the wheel or the box shows the color's six hex digits, and two more for the opacity when the opacity that Show
+Opacity edits rounds to less than `ff`. A text typed into it is read as `color.parse` reads it. The color is applied
+as a pick on the wheel is, and an alpha in the text sets the opacity that Show Opacity edits, whether or not that row
+shows. Where that row is gray (nothing selected, an object selected in a symbol instance, or a fill or stroke row on
+type characters or missing), only the color is applied. Text without an alpha keeps the opacity. Text that gives the
+color and opacity already there records no undo step, unless the color is a tint of a global swatch. When
+`color.parse` refuses the text, the field does not change the color and the status bar shows the error.
+
+`color.parse {"text": "#33669980"}` answers `{"color": {"model": "rgb", …}, "hex": "#336699", "opacity": 50.2}`.
+The text is a [hex color](https://www.w3.org/TR/css-color-4/#hex-notation) of 3, 4, 6 or 8 digits, with or without
+the `#`, or a CSS [`rgb()` or `rgba()`](https://www.w3.org/TR/css-color-4/#rgb-functions),
+[`hsl()` or `hsla()`](https://www.w3.org/TR/css-color-4/#the-hsl-notation) or
+[`oklch()`](https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch) color. The functions take the
+space-separated form with an optional `/ alpha`, and `rgb()` and `hsl()` also take the comma-separated legacy form.
+Hues take `deg`, `grad`, `rad` and `turn`, and `none` reads as 0. The text has at most 48 characters, not counting
+the spaces, tabs, line breaks and form feeds around it; other whitespace, such as a vertical tab or a no-break space,
+makes the text an error. The command reads a subset of CSS: a function's arguments are literal numbers, percentages,
+angles and `none`, so `calc()`, `var()`, `color-mix()`, relative color syntax and every other nested function are
+errors, as are named colors and the functions and color spaces not listed above (`hwb()`, `lab()`, `oklab()` and
+`color()`). A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
+`#rrggbb` does in every command, and `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH
+Sliders lower it; `oklch()` is an error while the working RGB space is not sRGB. Values are clamped where CSS clamps
+them when it parses them (red, green and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH
+lightness to 0 to 1 and a negative chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is
+clipped. An `hsl()` color whose saturation and lightness are so large that a channel overflows to an infinity is an
+error. `opacity` is the alpha as a percentage, or `null` when the text gives none. Any other text is an error. The
+color parameters of the other commands still refuse `#rrggbbaa` and `#rgba`.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -904,7 +938,14 @@ Cmd+Alt+/ runs `appearance.addStroke` (`press_key {key: "/", mods: {cmd: true, a
 `item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
 calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes; the proxy of
 its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
-`inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
+`inspect_document` reports it as `paint.appearanceItem`. `paint.setFill` and `paint.setStroke` also take `opacity`
+(0 to 100, a percentage as in `transparency.set`), which sets the opacity of the fill or stroke row they paint, with
+or without a new paint, as one undo step. An opacity that no target takes is an error and also leaves the paint
+undone. With an opacity alone, the reply's `objects` counts only the objects that took it. `paint.proxies` answers
+it as `fillOpacity` and `strokeOpacity`, from the first selected object that has that row. With a layer targeted,
+it reads the layer's visible, unlocked art, as the commands do. It answers null with nothing selected, for an object selected in a symbol instance, while the Type tool
+has characters selected, and when only type characters (which have no opacity of their own) or objects without that
+row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.

@@ -2626,6 +2626,10 @@ font-technology	Variable	Variables
 	One Point Perspective Preset 5	Preajuste de perspectiva de un punto 5
 	Only Web Colors	Solo colores web
 	Opacity	Opacidad
+	Show Opacity	Mostrar opacidad
+	Show Hex Field	Mostrar campo hex
+	Hex or CSS color	Color hex o CSS
+	Parse Color	Analizar color
 	Opacity & Mask Define Knockout Shape	La opacidad y la máscara definen la forma de exclusión
 	Opacity Mask	Máscara de opacidad
 	Opacity Mask Info	Información de máscara de opacidad
@@ -5231,6 +5235,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` debe ser hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` debe ser none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` debe ser un color hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un color CSS rgb(), hsl() u oklch() de 48 caracteres como máximo
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre
@@ -7329,6 +7334,11 @@ axis	Y Axis	Eje Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` y `maxItems` deben ser 0-{MAX_LIST}, `maxItems` al menos 1, y el valor predeterminado debe tener esa cantidad
 @msg	`name` must be a string	`name` debe ser una cadena
 @msg	`opacity` must be a number	`opacity` debe ser un número
+@msg	`opacity` must be a number from 0 to 100	`opacity` debe ser un número de 0 a 100
+@msg	`opacity` must be true or false	`opacity` debe ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	los caracteres de texto no tienen opacidad propia: agregue un relleno o un trazo con Agregar nuevo relleno o Agregar nuevo trazo del panel Apariencia
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objeto seleccionado en una instancia de símbolo no tiene opacidad propia de relleno ni de trazo
+@msg	no target has that fill or stroke to take the opacity	ningún destino tiene ese relleno o trazo para recibir la opacidad
 @msg	`type` must be "path" or "compound"	`type` debe ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` debe tener 1-{MAX_UNIT} caracteres imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` debe indicar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`

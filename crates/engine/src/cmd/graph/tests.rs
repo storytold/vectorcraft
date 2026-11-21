@@ -333,6 +333,25 @@ fn an_item_opacity_on_a_series_mark_survives_regeneration() {
     assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), None));
 }
 
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` on one series mark are kept by the graph as the transparency
+/// commands' item opacity is: every path of that series has them after the graph is drawn again.
+#[test]
+fn a_paint_opacity_on_a_series_mark_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("paint.setFill", &json!({"ids": [bar.0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [bar.0], "color": "#ff0000", "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let marks = series(&n, 0).children().unwrap().to_vec();
+    let opacities: Vec<(f32, f32)> = marks.iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (0.4, 0.6)), "{opacities:?}");
+}
+
 /// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
 /// graph keeps none, so the series stays opaque when it is drawn again.
 #[test]
@@ -1422,6 +1441,27 @@ fn paint_targets_leave_a_graph_designs_copy_out() {
     let (s, _, copy, art, mark) = design_art();
     let d = &s.doc().unwrap().doc;
     assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
+}
+
+/// The fill opacity the proxies show leaves out the art of a column or marker design in a series, which
+/// `paint.setFill {opacity}` leaves out too: with only that art selected there is none, also with a row of the art
+/// active, and with a mark selected after it the mark's.
+#[test]
+fn proxy_opacity_leaves_a_graph_designs_art_out() {
+    let (mut s, _, _, art, mark) = design_art();
+    let (mut m, _, marker_art) = marker_design_art();
+    for (s, art) in [(&mut s, art), (&mut m, marker_art)] {
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None);
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+        let fill = top_row(s, art, true);
+        s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+        assert_eq!(s.proxy_opacity(false), None, "with the art's fill row active");
+        assert!(s.execute("paint.setFill", &json!({"opacity": 50})).is_err());
+    }
+    s.execute("paint.setFill", &json!({"ids": [mark.0], "opacity": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": [art.0, mark.0]})).unwrap();
+    assert!((s.proxy_opacity(false).unwrap() - 0.4).abs() < 1e-6, "the mark's fill opacity");
 }
 
 /// The art of a marker design in series 1 of a line graph: the design's copy and a path inside it.
