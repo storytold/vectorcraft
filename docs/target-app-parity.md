@@ -58,7 +58,7 @@ Spiral decay now applies after each full wind of four segments. A newly drawn sp
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
-**Feature evidence last updated:** 2026-11-19.
+**Feature evidence last updated:** 2026-11-20.
 
 Window → Help Bar toggles the bottom tool-help strip independently of the status bar. Its visibility is saved with workspaces and UI preferences; Presentation Mode hides both bars. Scores and estimates are unchanged.
 
