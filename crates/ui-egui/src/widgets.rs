@@ -42,7 +42,7 @@ pub use color::{
     color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, hsb32, hue_ring, recolor_wheel, region_texture,
     ring_markers, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area, wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, color_rail_bar, focus_by_pointer, focus_outline, hex_text, pointer_phase};
 #[cfg(test)]
 pub(crate) use color::{SHADE, shade_cells, shade_edges};
 pub use drag::{
