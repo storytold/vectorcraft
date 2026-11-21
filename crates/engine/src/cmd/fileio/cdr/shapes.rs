@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use craft_cdr::Warning;
+use craft_cdr::model::{self as cd, Geometry};
 use kurbo::{Affine, BezPath, Point, Rect};
-use vectorcraft_cdr::Warning;
-use vectorcraft_cdr::model::{self as cd, Geometry};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeLayer};
