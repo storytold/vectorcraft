@@ -1476,17 +1476,20 @@ mod portable {
     /// Mail, …) still gets a picture instead of nothing (#2282), while a genuine text copy keeps
     /// pasting as text everywhere, and a shape copy whose PNG can't be made (too large, or the
     /// encoder failed) keeps pasting its SVG markup as text rather than nothing.
-    fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>) {
+    /// The third element is the SVG-as-text markup to fall back to if writing the chosen image
+    /// fails: only set alongside an image, and only when that image was preferred over matching
+    /// text (never alongside a genuine text copy, which is the primary choice already).
+    fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>, Option<String>) {
         let text = text_of(flavours);
         let svg_as_text = text.as_deref().is_some_and(|t| flavours.iter().any(|f| f.mime == SVG && f.data == t.as_bytes()));
         if svg_as_text && let Some(img) = flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)) {
-            return (None, Some(img));
+            return (None, Some(img), text);
         }
         let image = match &text {
             Some(_) => None,
             None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
         };
-        (text, image)
+        (text, image, None)
     }
 
     impl SystemClipboard for Clipboard {
@@ -1507,7 +1510,7 @@ mod portable {
                 self.ours = wl.holds_ours().then_some(Ours::Source);
                 return Ok(());
             }
-            let (text, image) = pick_one(flavours);
+            let (text, image, fallback_text) = pick_one(flavours);
             let ours = match (text, image) {
                 (Some(t), _) => {
                     cb.set_text(t.as_str())?;
@@ -1515,8 +1518,18 @@ mod portable {
                 }
                 (None, Some(img)) => {
                     let (width, height) = (img.width() as usize, img.height() as usize);
-                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) })?;
-                    Some(Ours::Image(width, height))
+                    match cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) }) {
+                        Ok(()) => Some(Ours::Image(width, height)),
+                        // The clipboard may still hold its previous content: fall back to the
+                        // matching SVG markup rather than returning an error with nothing written.
+                        Err(e) => match fallback_text {
+                            Some(t) => {
+                                cb.set_text(t.as_str())?;
+                                Some(Ours::Text(t))
+                            }
+                            None => return Err(e),
+                        },
+                    }
                 }
                 (None, None) => {
                     cb.clear()?;
@@ -2062,9 +2075,10 @@ mod portable {
             let svg = b"<svg>...</svg>".to_vec();
             let flavours =
                 vec![Flavour { mime: TEXT, data: svg.clone() }, Flavour { mime: SVG, data: svg }, Flavour { mime: PNG, data: one_px_png() }];
-            let (text, image) = pick_one(&flavours);
+            let (text, image, fallback) = pick_one(&flavours);
             assert!(text.is_none(), "the SVG markup is not written as text");
             assert!(image.is_some(), "the picture is written instead");
+            assert_eq!(fallback.as_deref(), Some("<svg>...</svg>"), "kept, in case writing the picture fails");
         }
 
         #[test]
@@ -2075,9 +2089,10 @@ mod portable {
                 Flavour { mime: SVG, data: b"<svg>...</svg>".to_vec() },
                 Flavour { mime: PNG, data: one_px_png() },
             ];
-            let (text, image) = pick_one(&flavours);
+            let (text, image, fallback) = pick_one(&flavours);
             assert_eq!(text.as_deref(), Some("hello"));
             assert!(image.is_none(), "text wins over the picture");
+            assert!(fallback.is_none(), "only set when an image was preferred over matching text");
         }
 
         #[test]
@@ -2085,9 +2100,10 @@ mod portable {
             // No TEXT flavour at all (Include SVG Code off, not a type-only copy): unaffected by
             // this change, same as before it.
             let flavours = vec![Flavour { mime: PNG, data: one_px_png() }];
-            let (text, image) = pick_one(&flavours);
+            let (text, image, fallback) = pick_one(&flavours);
             assert!(text.is_none());
             assert!(image.is_some());
+            assert!(fallback.is_none(), "no SVG-as-text match to fall back to");
         }
     }
 }
