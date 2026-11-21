@@ -1641,6 +1641,38 @@ fn smoothing_band_shows_no_seam_where_it_turns_across_a_square_side() {
     }
 }
 
+/// Zoomed out far enough that the Smooth tool's radius in points passes the top of
+/// [`crate::draw2::REACH_RANGE`], the band a smoothing drag shows has the radius its release sends.
+#[test]
+fn smoothing_band_at_the_lowest_zoom_has_the_radius_the_release_sends() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    cx.zoom = 0.005;
+    let r = crate::draw2::REACH_RANGE.1;
+    assert!(cx.tol(SMOOTH_RADIUS) > r, "the radius on screen is past the range at {}x", cx.zoom);
+    let ends = [Point::new(1000.0, 1000.0), Point::new(5000.0, 1000.0)];
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, ends[0].x, ends[0].y));
+    for i in 1..=20 {
+        let q = ends[0].lerp(ends[1], f64::from(i) / 20.0);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+    }
+    let mut frames = 0;
+    while t.overlays_pending() {
+        assert!(frames < 10_000, "the band reaches the whole drag");
+        bands(&t, &cx);
+        frames += 1;
+    }
+    check_band(&t, &cx, r);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, ends[1].x, ends[1].y));
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("expected a command, got {acts:?}") };
+    assert_eq!((c.as_str(), v["radius"].as_f64()), ("path.smoothRegion", Some(r)), "{v}");
+}
+
 /// One straight piece of a square's outline along a side, where the band goes on across only part
 /// of it, shows only the part with nothing across.
 #[test]

@@ -1920,7 +1920,7 @@ impl Tool for GestureTool {
         // release smooths.
         if (self.id == "smooth" || self.smoothing)
             && has_selected_smooth_path(cx)
-            && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
+            && let Some(path) = self.smooth_band(reach(cx, SMOOTH_RADIUS))
         {
             o.push(Overlay::SharedPath { path, color: FEEDBACK, width: 1.0, dash: Some(0.0) });
         }
