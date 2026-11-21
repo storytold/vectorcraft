@@ -5,7 +5,7 @@ use std::cell::Cell;
 
 use serde_json::{Value, json};
 
-use crate::script::{PANIC_IN_SLICE, TEST_GROWTH, TEST_RESULT_BYTES};
+use crate::script::{PANIC_IN_SLICE, TEST_GROWTH, TEST_GROWTH_BYTES, TEST_RESULT_BYTES};
 use crate::*;
 
 fn rect(x: i64) -> Value {
@@ -1017,6 +1017,54 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     assert!(!s.script_waiting());
     assert!(s.script_pump().unwrap().is_err());
     TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(state(&s), before);
+}
+
+#[test]
+fn point_changes_written_as_the_script_ends_wait_for_the_growth_answer() {
+    // The point change waits in the object model until the script ends.
+    let source = "app.activeDocument.pathItems[0].pathPoints[0].anchor = [3, -4];";
+    let mut s = two_docs();
+    let start = s.documents()[1].doc.clone();
+    assert_eq!(run(&mut s, source).unwrap()["ok"], true);
+    let added = start.retained_bytes_each(&s.documents()[1].doc).1 as u64;
+    assert!(added >= 3, "{added}");
+    // The change goes past this allowance and stays within twice it.
+    TEST_GROWTH_BYTES.with(|g| g.set(Some(added * 2 / 3)));
+    let run_to_the_question = |s: &mut Session| {
+        s.script_frames = true;
+        run(s, source).unwrap();
+        for _ in 0..1_000 {
+            if s.script_waiting() {
+                break;
+            }
+            assert!(s.script_pump().is_none());
+        }
+        assert!(s.script_waiting());
+        assert!(s.script_pump().is_none());
+        assert!(s.script_running());
+    };
+    let mut s = two_docs();
+    let before = state(&s);
+    let undo = s.documents()[1].history.undo.len();
+    run_to_the_question(&mut s);
+    assert_eq!(state(&s), before);
+    s.script_continue();
+    assert!(!s.script_waiting());
+    let done = s.script_pump().expect("the run ends once it may go on");
+    assert_eq!(done.unwrap()["ok"], true);
+    assert_eq!(s.documents()[1].history.undo.len(), undo + 1);
+    assert_ne!(state(&s), before);
+
+    let mut s = two_docs();
+    let before = state(&s);
+    run_to_the_question(&mut s);
+    assert_eq!(s.execute("script.stop", &json!({})).unwrap()["stopped"], true);
+    let ended = s.script_pump().expect("a stopped run ends");
+    TEST_GROWTH_BYTES.with(|g| g.set(None));
+    assert!(ended.is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
     assert_eq!(state(&s), before);
 }
 
