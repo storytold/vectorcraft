@@ -7171,6 +7171,14 @@ own, and the corner keeps its place and the directions the path arrives and leav
 `fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
 threshold is VectorCraft's own value.
 
+`path.smoothRegion` keeps a subpath's result only when it is smoother. Measured along lines between points no more
+than an eighth of `radius` apart (or 1/512 of the subpath's size when that is smaller), the result must turn no more
+than a thousandth more than the subpath did, with each turn at an anchor counted twice, and it must have fewer
+anchors, turn less, or bend more than a ten-thousandth less (the sum of each turn squared over the length it is taken
+over). Any other result is dropped and the subpath stays as it was. A path none of whose subpaths is kept stays a Live
+Shape if it was one, is left out of `ids` and is not counted in `before` or `after`. The measure and both thresholds
+are VectorCraft's own.
+
 In the desktop app, Object › Path › Smooth, the canvas context menu's Smooth… (listed while the selection holds a
 path) and the Contextual Task Bar's Smooth (with a path selected whole with the Direct Selection tool) open the
 slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at the
