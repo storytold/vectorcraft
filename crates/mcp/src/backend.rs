@@ -2,8 +2,8 @@
 
 use std::net::{SocketAddr, ToSocketAddrs};
 
-use craft_automation::args::{ControlOptions, EnvNames};
-use craft_automation::client::ControlClient;
+use craft::automation::args::{ControlOptions, EnvNames};
+use craft::automation::client::ControlClient;
 use serde_json::Value;
 
 /// Something that answers control-channel methods (`engine.execute`, `document.inspect`,

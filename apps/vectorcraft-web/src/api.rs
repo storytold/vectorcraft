@@ -26,7 +26,7 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
-use craft_automation::{ControlRequest, Dispatch};
+use craft::automation::{ControlRequest, Dispatch};
 use craft_web_api::methods::Methods;
 use craft_web_api::page::{PageApi, Request};
 use serde_json::{Value, json};

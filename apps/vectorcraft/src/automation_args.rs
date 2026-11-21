@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use craft_automation::args::{ControlOptions, OptionsError, Source, control_port};
+use craft::automation::args::{ControlOptions, OptionsError, Source, control_port};
 
 pub struct AutomationArgs {
     pub read_roots: Vec<PathBuf>,

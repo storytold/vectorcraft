@@ -20,7 +20,7 @@ vectorcraft-ui-egui = { workspace = true }
 craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46", version = "0.1.0" }
 vectorcraft-format = { workspace = true }
 vectorcraft-text = { workspace = true }
-craft = { workspace = true, features = ["ui", "keymap"] }
+craft = { workspace = true, features = ["ui", "keymap", "automation"] }
 egui = { workspace = true }
 egui_extras = { workspace = true }
 log = { workspace = true }
