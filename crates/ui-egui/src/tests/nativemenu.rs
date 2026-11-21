@@ -2,7 +2,7 @@
 //! backend: the Mac layout of the in-window menus, the keys it hands back to egui, the clicks it
 //! runs and when it reads the menus again.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -285,16 +285,21 @@ fn key_equivalents_become_the_input_their_keys_make() {
     assert_eq!(chord.textless_paste(&native_menu::key_events(cmd(Key::V), || None)), Some(Modifiers::COMMAND));
 }
 
-/// The fake backend: the menus the app synced, and events to report.
+/// The fake backend: the menus the app synced, events to report, and whether a failed build's
+/// retry is due (the next sync is that retry, and it succeeds).
 #[derive(Clone, Default)]
-struct Fake(Rc<RefCell<(Vec<MenuBar>, Vec<native_menu::Event>)>>);
+struct Fake(Rc<RefCell<(Vec<MenuBar>, Vec<native_menu::Event>)>>, Rc<Cell<bool>>);
 
 impl Backend for Fake {
     fn sync(&mut self, bar: &MenuBar) {
         self.0.borrow_mut().0.push(bar.clone());
+        self.1.set(false);
     }
     fn drain(&mut self) -> Vec<native_menu::Event> {
         std::mem::take(&mut self.0.borrow_mut().1)
+    }
+    fn needs_sync(&self) -> bool {
+        self.1.get()
     }
 }
 
@@ -596,6 +601,45 @@ fn fonts_that_load_read_the_menus_again() {
     }
     m.frame(vec![]);
     assert!(m.fake.synced() > synced, "the menus were read again");
+}
+
+/// A backend that could not build the menus asks for a retry: the next frame reads the menus
+/// again and hands them over once, with no click, key or change, and frames after that don't.
+#[test]
+fn a_failed_build_is_handed_the_menus_again_when_its_retry_is_due() {
+    let (m, (idle, retried, after)) = undisturbed(|m| {
+        let idle = m.reads(2, |_, _| vec![]);
+        m.fake.1.set(true);
+        let retried = m.reads(1, |_, _| vec![]);
+        let after = m.reads(2, |_, _| vec![]);
+        (idle, retried, after)
+    });
+    assert_eq!(idle, 0, "nothing changed and no retry was due");
+    assert_eq!(retried, 1, "the due retry got the menus once");
+    assert_eq!(m.fake.last(), bar(&m.app), "the retry got the menus as they are now");
+    assert_eq!(after, 0, "a retry that succeeded isn't asked for again");
+}
+
+/// A failed build is tried once more a second later; when that fails too, the same bar is not
+/// tried again, and a changed bar is.
+#[test]
+fn a_bar_that_keeps_failing_is_retried_once() {
+    let mut first = bar(&app(true));
+    let mut retry = native_menu::RebuildRetry::default();
+    assert!(retry.should_build(&first, 10.0), "a new bar is built");
+    assert_eq!(retry.failed(&first, 10.0), Some(10.0 + native_menu::REBUILD_RETRY_SECS));
+    assert_eq!(retry.retry_at(), Some(11.0));
+    assert!(!retry.should_build(&first, 10.5), "not before the retry is due");
+    assert!(retry.should_build(&first, 11.0), "the retry is due");
+    assert_eq!(retry.failed(&first, 11.0), None, "a retry that fails isn't retried");
+    assert_eq!(retry.retry_at(), None);
+    assert!(!retry.should_build(&first, 100.0), "the same bar waits for a change");
+    first.menus.pop();
+    assert!(retry.should_build(&first, 11.5), "a changed bar is built");
+    assert_eq!(retry.failed(&first, 11.5), Some(12.5), "and gets its own retry");
+    retry.succeeded();
+    assert_eq!(retry.retry_at(), None);
+    assert!(retry.should_build(&first, 11.6), "a built bar can be built again");
 }
 
 /// The font menu previews each font it highlights on the selected type, in one interaction: the

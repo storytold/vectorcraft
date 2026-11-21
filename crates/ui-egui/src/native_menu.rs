@@ -512,12 +512,60 @@ pub trait Backend {
     /// What was chosen since the last call. Items the platform runs itself (Services, Zoom, Hide…)
     /// are handled there and not reported.
     fn drain(&mut self) -> Vec<Event>;
+    /// The menus could not be built from the last bar and a new try is due ([`RebuildRetry`]):
+    /// [`sync`] reads the rows again and calls [`Backend::sync`] even though nothing changed.
+    fn needs_sync(&self) -> bool {
+        false
+    }
+}
+
+/// Seconds after a failed build before a backend tries the same bar once more.
+pub const REBUILD_RETRY_SECS: f64 = 1.0;
+
+/// When a backend tries again to build menus it could not build. A new bar is always tried. When
+/// its build fails, the same bar is tried once more [`REBUILD_RETRY_SECS`] later; when that fails
+/// too, it is not tried again until the bar changes. Times are [`crate::now_secs`].
+#[derive(Debug, Default)]
+pub struct RebuildRetry {
+    /// The bar whose build failed, and when to try it again (`None`: its retry failed too).
+    failed: Option<(MenuBar, Option<f64>)>,
+}
+
+impl RebuildRetry {
+    /// Whether to build `bar` at `now`.
+    pub fn should_build(&self, bar: &MenuBar, now: f64) -> bool {
+        match &self.failed {
+            Some((failed, at)) if failed == bar => at.is_some_and(|at| now >= at),
+            _ => true,
+        }
+    }
+
+    /// The build of `bar` failed at `now`. Returns when to try it again, if it is to be tried.
+    pub fn failed(&mut self, bar: &MenuBar, now: f64) -> Option<f64> {
+        let at = match &self.failed {
+            Some((failed, _)) if failed == bar => None,
+            _ => Some(now + REBUILD_RETRY_SECS),
+        };
+        self.failed = Some((bar.clone(), at));
+        at
+    }
+
+    /// The menus are in step with the bar (built, or updated in place).
+    pub fn succeeded(&mut self) {
+        self.failed = None;
+    }
+
+    /// When the failed bar is to be tried again.
+    pub fn retry_at(&self) -> Option<f64> {
+        self.failed.as_ref().and_then(|(_, at)| *at)
+    }
 }
 
 /// The native menu bar, while VectorCraft uses one (the in-window menus are hidden then).
 pub struct NativeMenu {
     backend: Box<dyn Backend>,
-    /// Hash of the state the menus were last read in ([`state_hash`]).
+    /// Hash of the state the menus were last read in ([`state_hash`]). The backend may not have
+    /// applied that read yet ([`Backend::needs_sync`]).
     state: Option<u64>,
     clicks: Vec<Item>,
     /// A menu opened since the last [`run`].
@@ -586,7 +634,7 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let input = ctx
         .input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { pressed: true, .. } | egui::Event::PointerButton { pressed: false, .. })));
     let state = state_hash(app, input.then_some(app.host_iteration));
-    if menu.state == Some(state) && !menu.dirty {
+    if menu.state == Some(state) && !menu.dirty && !menu.backend.needs_sync() {
         return;
     }
     let layout = layout(app);

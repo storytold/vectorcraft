@@ -25,7 +25,7 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSEventType, NSMenuDidBeginTrackingNotification, NSMenuDidEndTrackingNotification};
 use objc2_foundation::{NSNotification, NSNotificationCenter};
 use vectorcraft_ui_egui::VectorcraftApp;
-use vectorcraft_ui_egui::native_menu::{self, Backend, Event, MenuBar, MenuRole, Node, Standard};
+use vectorcraft_ui_egui::native_menu::{self, Backend, Event, MenuBar, MenuRole, Node, RebuildRetry, Standard};
 
 // AppKit can deliver window input while its system menu is still tracking (especially with
 // asynchronous menu presentation). Keep the native tracking state separate from egui popups.
@@ -130,6 +130,10 @@ pub struct MacMenu {
     structure: u64,
     /// Latest menu state to apply after AppKit finishes tracking; item ids stay stable meanwhile.
     pending: Option<MenuBar>,
+    /// A bar the menus could not be built from, and when to try it again.
+    retry: RebuildRetry,
+    /// Wakes egui when a retry is due.
+    repaint: egui::Context,
 }
 
 impl MacMenu {
@@ -150,7 +154,7 @@ impl MacMenu {
             // Wake egui, so the item runs now rather than on the next mouse move.
             repaint.request_repaint();
         }));
-        MacMenu { menu: None, entries: Vec::new(), rx, structure: 0, pending: None }
+        MacMenu { menu: None, entries: Vec::new(), rx, structure: 0, pending: None, retry: RebuildRetry::default(), repaint: ctx.clone() }
     }
 
     /// Build the menus of `bar` and make them the app's, in place of the ones before.
@@ -238,12 +242,37 @@ impl Backend for MacMenu {
         self.pending = None;
         let items = bar.items();
         if self.menu.is_none() || native_menu::structure_key(bar) != self.structure || items.len() != self.entries.len() {
-            if let Err(e) = self.build(bar) {
-                // The menus as they were stay up (a failed build changed nothing).
-                log::warn!("couldn't rebuild the macOS menu bar: {e}");
+            let now = vectorcraft_ui_egui::now_secs();
+            if !self.retry.should_build(bar, now) {
+                return;
+            }
+            let error = match vectorcraft_engine::guard::catch_panic(|| self.build(bar)) {
+                Ok(Ok(())) => None,
+                Ok(Err(e)) => Some(e.to_string()),
+                Err(e) => {
+                    // `build` takes the old menus down only after every item was made: a panic
+                    // after that leaves none installed. Forget their items, so no choice runs a
+                    // stale one, and the retry builds them all.
+                    if self.menu.is_none() {
+                        self.entries.clear();
+                    }
+                    Some(e)
+                }
+            };
+            match error {
+                None => self.retry.succeeded(),
+                Some(e) => {
+                    // A returned error leaves the menus as they were (`build` changed nothing).
+                    let again = self.retry.failed(bar, now);
+                    log::warn!("couldn't rebuild the macOS menu bar: {e}{}", if again.is_some() { "; trying again in a second" } else { "" });
+                    if again.is_some() {
+                        self.repaint.request_repaint_after(std::time::Duration::from_secs_f64(native_menu::REBUILD_RETRY_SECS));
+                    }
+                }
             }
             return;
         }
+        self.retry.succeeded();
         for (e, it) in self.entries.iter_mut().zip(items) {
             if e.item.label != it.label {
                 let text = escape(&it.label);
@@ -308,6 +337,21 @@ impl Backend for MacMenu {
             self.sync(&bar);
         }
         out
+    }
+
+    fn needs_sync(&self) -> bool {
+        let Some(at) = self.retry.retry_at() else { return false };
+        // A deferred bar waits for tracking to end, and `drain` applies it then.
+        if TRACKING.load(Ordering::Relaxed) {
+            return false;
+        }
+        let now = vectorcraft_ui_egui::now_secs();
+        if now >= at {
+            return true;
+        }
+        // A frame drawn before the retry is due (input, a repaint) asks again for one at that time.
+        self.repaint.request_repaint_after(std::time::Duration::from_secs_f64(at - now));
+        false
     }
 }
 
