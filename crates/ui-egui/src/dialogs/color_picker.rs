@@ -793,10 +793,10 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(field) = d.fields.get(COLOUR_FIELD).and_then(Value::as_str) {
         let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-        let hex = json!(picked(d).color.to_hex());
+        let colour = picked(d).color;
         match d.fields.get(COLOUR_INDEX) {
             None => {
-                parent.fields.insert(field.to_string(), hex);
+                parent.fields.insert(field.to_string(), json!(colour.to_hex()));
             }
             Some(index) => {
                 if let Some(list) = d.fields.get(COLOUR_LIST) {
@@ -807,7 +807,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
                     .and_then(|i| usize::try_from(i).ok())
                     .and_then(|i| parent.fields.get_mut(field)?.as_array_mut()?.get_mut(i))
                     .ok_or("no such color")?;
-                *entry = hex;
+                // The entry keeps the color in its own model when its hex code would read back as
+                // another color: a Lab or CMYK color the picker opened on and its OK left unchanged.
+                *entry = super::document_setup::grid_color_entry(&colour);
             }
         }
         // The dialog previews the new colour when it comes back: end this picker's interaction, as
