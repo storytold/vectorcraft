@@ -2017,6 +2017,23 @@ fn a_heavy_filter_installs_once_the_user_agrees() {
     assert!(install(&mut s, DESATURATE).get("budget").is_none());
 }
 
+/// A module that carries its manifest in a `vc_manifest` custom section is inspected and installed
+/// without any of its code running: its start function traps and its `vc_manifest` export loops.
+#[test]
+fn a_plugin_with_a_manifest_section_installs_without_running() {
+    let mut s = session();
+    let id = "test.engine.section";
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"filter","abi":1}}"#);
+    let extra = r#"(func (export "vc_manifest") (result i64) (loop $l (br $l)) (i64.const 0)) (func $trap unreachable) (start $trap)"#;
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::sectioned(&manifest, tpl::ECHO, extra, 1)).unwrap());
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert_eq!(inspected["id"], id);
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "inspecting installs nothing");
+    assert_eq!(run(&mut s, "plugin.install", json!({"dataBase64": data}))["id"], id);
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 #[test]
 fn invalid_install_flags_are_refused() {
     let mut s = session();
