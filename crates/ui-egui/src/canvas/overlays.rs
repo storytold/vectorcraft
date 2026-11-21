@@ -38,7 +38,14 @@ pub(super) fn hover_highlight(app: &mut VectorcraftApp, p: &egui::Painter, xf: &
         let Some(st) = app.session.active() else { return };
         let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
         let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
-        if st.selection.contains(id) {
+        // A Selection tool press on selected art inside `id`, such as a group member picked with
+        // Group Selection, keeps the selection and selects nothing new.
+        let kept = if tool == "selection" {
+            vectorcraft_tools::select::selected_under_in(&st.doc, &st.selection, &hit, id).is_some()
+        } else {
+            st.selection.contains(id)
+        };
+        if kept {
             return;
         }
         id

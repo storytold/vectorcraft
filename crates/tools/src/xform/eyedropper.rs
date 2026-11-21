@@ -249,12 +249,29 @@ fn drawn_live<'d>(doc: &'d Document, ancestry: &[NodeId]) -> Option<&'d Node> {
 /// The color the art blend or envelope `n` draws shows at `p`, sampled as [`art_color_at`] samples
 /// art: a blend's keys and steps, an envelope's distorted contents, symbol instances in them by
 /// their symbols' art. Evaluating it counts the objects it holds, and the art made counts its
-/// objects.
+/// objects. When less work is left than the steps of its blends make, it is not evaluated.
 fn live_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, p: Point) -> Option<Color> {
+    let steps = blend_steps_in(n);
+    if s.work < steps {
+        // Too little work is left for the steps the blends make.
+        s.spend(steps)?;
+    }
     s.spend(n.count())?;
     let art = vectorcraft_effects::expand_live_deep(Some(s.doc), n);
     s.spend(art.count())?;
     art_color_at(s, levels, [art], p)
+}
+
+/// The steps the blends in `n` and its subtree make between their keys, at the least: a blend
+/// inside another blend's keys is counted once, not once for each step that copies it.
+fn blend_steps_in(n: &Node) -> usize {
+    let mut steps = 0usize;
+    n.walk(&mut |c| {
+        if let NodeKind::Blend { children, spec } = &c.kind {
+            steps = vectorcraft_doc::blend::blend_steps(children, spec).into_iter().fold(steps, usize::saturating_add);
+        }
+    });
+    steps
 }
 
 /// The color `n` shows at `p`: an image's pixels, a mesh's interpolated patch color, a symbol
@@ -2007,6 +2024,41 @@ mod tests {
         assert_eq!(names(360.0, 310.0), Some(blend), "a blend step");
         assert_eq!(names(335.0, 310.0), Some(green), "a gap between the steps");
         assert_eq!(names(480.0, 480.0), None, "no art");
+    }
+
+    /// A blend's steps count as work before it is evaluated: the steps of every blend it holds
+    /// are counted, and with less work left than that the sample gives no color.
+    #[test]
+    fn blend_steps_count_before_the_blend_is_evaluated() {
+        use vectorcraft_doc::Document;
+        use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+        use vectorcraft_geom::Rect;
+        let blend = |d: &mut Document, steps: u32| {
+            let red = solid_rect(d, Rect::new(300.0, 300.0, 320.0, 320.0), Color::rgb(1.0, 0.0, 0.0));
+            let blue = solid_rect(d, Rect::new(400.0, 300.0, 420.0, 320.0), Color::rgb(0.0, 0.0, 1.0));
+            let spec = BlendSpec { spacing: BlendSpacing::Steps(steps), ..Default::default() };
+            Node::new(d.alloc_id(), NodeKind::Blend { children: vec![std::sync::Arc::new(red), std::sync::Arc::new(blue)], spec: Box::new(spec) })
+        };
+        let mut scratch = Document::new(500.0, 500.0);
+        let (big, small) = (blend(&mut scratch, 1000), blend(&mut scratch, 3));
+        let rect = solid_rect(&mut scratch, Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb(0.0, 1.0, 0.0));
+        assert_eq!(blend_steps_in(&big), 1000);
+        assert_eq!(blend_steps_in(&rect), 0);
+        let group =
+            Node::new(scratch.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(big), std::sync::Arc::new(small)], clip: false });
+        assert_eq!(blend_steps_in(&group), 1003, "every blend in the group");
+
+        let d = doc_with_live_over_green(|d| blend(d, 1000));
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let opts = sample_options(&cx);
+        let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
+        let at = Point::new(360.0, 310.0);
+        let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: 900, exhausted: false, patterns: 0 };
+        assert_eq!(color_under(&mut s, &d, &mut levels, at, opts).map(|(c, _)| c.to_hex()), None);
+        assert!(s.exhausted, "less work left than the blend's 1,000 steps");
+        let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: MAX_WORK, exhausted: false, patterns: 0 };
+        assert!(color_under(&mut s, &d, &mut levels, at, opts).is_some(), "a step is drawn at the point");
     }
 
     /// For a Shift-click on an envelope, the hover names the envelope where its distorted contents

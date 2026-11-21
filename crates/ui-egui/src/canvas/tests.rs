@@ -6201,6 +6201,31 @@ fn eyedropper_hover_outline_follows_the_selection_cmd_and_the_document() {
     assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "hidden art");
 }
 
+/// With a group member selected (as Group Selection leaves it), the Selection tool outlines
+/// nothing over that member, where a press keeps the selection, and the group over its other
+/// member, where a press selects the group.
+#[test]
+fn selection_hover_outline_skips_a_selected_group_member() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let b = app.session.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    app.session.execute("object.group", &json!({})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(a)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(125.0, 125.0)))]);
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "the selected member");
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(225.0, 125.0)))]);
+    let group = egui::Rect::from_two_pos(xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(250.0, 150.0)));
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    assert!(!at.is_empty() && same_box(screen_box(&at), group), "the other member: {:?}", screen_box(&at));
+}
+
 /// For a Shift-click the Eyedropper outlines the object whose color the click samples: the blend
 /// where one of its steps is drawn, and the rectangle below it in a gap between the steps.
 #[test]
