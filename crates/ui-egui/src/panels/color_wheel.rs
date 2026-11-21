@@ -972,7 +972,7 @@ fn lines_for(app: &VectorcraftApp, ui: &Ui, backdrop: &Backdrop, tgt: &Target, h
     }
     let cms = cms::active();
     let at = |x: f32, y: f32| if view == View::Box { box_pick(ch, fixed, x, y, hsb) } else { [hsb[0], x, 1.0 - y] };
-    let ratio_at = |x: f32, y: f32| backdrop.ratio(cms.display_rgb(&backdrop.drawn_color(&stored(&cms, at(x, y), was.as_ref(), cmyk_doc))));
+    let ratio_at = |x: f32, y: f32| backdrop.ratio(backdrop.shown(&cms, &stored(&cms, at(x, y), was.as_ref(), cmyk_doc)));
     let (aa, aaa) = category.minimums();
     let minimums: Vec<f64> = std::iter::once(aa).chain(aaa).collect();
     let samples = if dragging { COARSE_LINE_SAMPLES } else { LINE_SAMPLES };

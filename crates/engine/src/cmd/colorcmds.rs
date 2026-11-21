@@ -1013,6 +1013,8 @@ pub struct Backdrop {
     passes: Vec<Pass>,
     /// The color and amount a fill stains the picked object of a dynamic symbol instance with.
     stain: Option<(Color, f32)>,
+    /// Whether the canvas shows 100 % K alone as black (a rich black Appearance of Black).
+    rich_black: bool,
 }
 
 /// One level of a [`Backdrop`]: its blend mode and opacity, the art below it (a display sRGB color
@@ -1071,6 +1073,12 @@ impl Backdrop {
             Some((stain, amount)) => c.lerp(&stain, amount),
             None => *c,
         }
+    }
+
+    /// The display sRGB the canvas shows for `c` drawn as the measured object draws it, through
+    /// `cms` and the Appearance of Black the backdrop was read with.
+    pub fn shown(&self, cms: &vectorcraft_color::cms::Cms, c: &Color) -> [f32; 3] {
+        shown_rgb(cms, self.rich_black, &self.drawn_color(c))
     }
 
     /// Display sRGB `shown`, drawn as the measured color is drawn, over the background.
@@ -1140,17 +1148,16 @@ fn in_model_of(cms: &vectorcraft_color::cms::Cms, srgb: [f32; 3], like: &Color) 
 /// included). A candidate meets it by [`Backdrop::ratio`] and also with its values rounded to 8
 /// bits per channel ([`Backdrop::ratio_at_eight_bits`]). None when `color` already meets it by
 /// [`Backdrop::ratio`], or when no lightness of its hue does.
-fn closest_passing(backdrop: &Backdrop, color: &Color, minimum: f64, rich_black: bool) -> Option<Color> {
+fn closest_passing(backdrop: &Backdrop, color: &Color, minimum: f64) -> Option<Color> {
     let cms = vectorcraft_color::cms::active();
-    let drawn = |c: &Color| shown_rgb(&cms, rich_black, &backdrop.drawn_color(c));
     let ratio = |srgb: [f32; 3]| {
-        let shown = drawn(&in_model_of(&cms, srgb, color));
+        let shown = backdrop.shown(&cms, &in_model_of(&cms, srgb, color));
         backdrop.ratio(shown).min(backdrop.ratio_at_eight_bits(shown))
     };
-    if backdrop.ratio(drawn(color)) >= minimum {
+    if backdrop.ratio(backdrop.shown(&cms, color)) >= minimum {
         return None;
     }
-    let fix = wcag::closest_passing(shown_rgb(&cms, rich_black, color), minimum, &ratio)?;
+    let fix = wcag::closest_passing(shown_rgb(&cms, backdrop.rich_black, color), minimum, &ratio)?;
     Some(in_model_of(&cms, fix, color))
 }
 
@@ -1170,8 +1177,7 @@ pub fn contrast_measure(s: &Session, p: &Value) -> Result<(Value, Backdrop)> {
         }
     };
     let (color, backdrop) = contrast_backdrop(s, p)?;
-    let rich_black = s.prefs.black_on_screen == "rich";
-    let ratio = backdrop.ratio(shown_rgb(&vectorcraft_color::cms::active(), rich_black, &backdrop.drawn_color(&color)));
+    let ratio = backdrop.ratio(backdrop.shown(&vectorcraft_color::cms::active(), &color));
     let levels = |c: Category| {
         let (aa, aaa) = c.passes(ratio);
         match aaa {
@@ -1179,7 +1185,7 @@ pub fn contrast_measure(s: &Session, p: &Value) -> Result<(Value, Backdrop)> {
             None => json!({ "aa": aa }),
         }
     };
-    let fix = |minimum: f64| match closest_passing(&backdrop, &color, minimum, rich_black) {
+    let fix = |minimum: f64| match closest_passing(&backdrop, &color, minimum) {
         Some(c) => serde_json::to_value(c).unwrap_or(Value::Null),
         None => Value::Null,
     };
@@ -1295,7 +1301,7 @@ fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
         passes.push(pass);
     }
     let stain = if given { None } else { stain_of(s) };
-    Ok((color, Backdrop { against, written, passes, stain }))
+    Ok((color, Backdrop { against, written, passes, stain, rich_black }))
 }
 
 /// An object around the proxy's object: one in the document, or a group of the picked object's

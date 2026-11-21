@@ -903,6 +903,22 @@ fn a_fix_passes_as_the_canvas_paints_it() {
     assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
 }
 
+/// The backdrop shows 100 % K alone as `color.contrast` measures it under each Appearance of Black,
+/// so the Color Wheel's contrast lines use the same color.
+#[test]
+fn the_backdrop_shows_black_as_the_appearance_of_black_setting_does() {
+    let k = vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0);
+    let cms = vectorcraft_color::cms::active();
+    let mut s = Session::new();
+    let p = json!({"color": serde_json::to_value(k).unwrap(), "against": "#ffffff"});
+    let (accurate, backdrop) = crate::cmd::contrast_measure(&s, &p).unwrap();
+    assert_ne!(backdrop.shown(&cms, &k), [0.0; 3]);
+    s.prefs.black_on_screen = "rich".into();
+    let (rich, backdrop) = crate::cmd::contrast_measure(&s, &p).unwrap();
+    assert_eq!(backdrop.shown(&cms, &k), [0.0; 3]);
+    assert!(ratio(&rich) > ratio(&accurate), "{rich} {accurate}");
+}
+
 /// A translucent fix also meets the minimum with the color, the opacity, the background and the
 /// composited pixel rounded to 8 bits per channel.
 #[test]
