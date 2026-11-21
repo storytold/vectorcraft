@@ -153,7 +153,10 @@ pub trait Provider: Send + Sync {
     /// Its English name.
     fn name(&self) -> &'static str;
     fn capabilities(&self) -> Capabilities;
-    /// One variation for each of `request.styles`, in that order.
+    /// One variation for each of `request.styles`, in that order. A style's variation depends only
+    /// on the image, the prompt, the detail and that style, not on the other styles asked for: a
+    /// caller with no thread to wait on asks for one style at a time when [`Provider::parts`] gives
+    /// `None` (`ConceptRun::run_part`, which the web build uses).
     fn generate(&self, request: &Request, steps: Steps) -> Result<Vec<Variation>, ProviderError>;
     /// What [`Provider::generate`] makes, made a part at a time ([`Parts`]), for a caller with no
     /// thread to wait on; `None` (the default) when it makes no parts smaller than one style.
