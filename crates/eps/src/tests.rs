@@ -1637,6 +1637,30 @@ fn a_repeated_field_clipped_on_a_plate_is_charged_its_reference_at_the_page_limi
     assert_eq!((&page.setup, &page.body), (&full.setup, &full.body));
 }
 
+/// On a plate, an overprinting freeform gradient whose cells are translucent enough that their
+/// opacity takes every sample to no ink (or to paper white in RGB) draws no image at either level.
+#[test]
+fn a_translucent_field_whose_samples_write_no_ink_on_a_plate_draws_no_image() {
+    let faint = [Color::cmyk(0.004, 0.0, 0.0, 0.0), Color::rgb(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0)];
+    for color in faint {
+        let d = doc_with(|d| {
+            let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+            let point = |x: f64| FreeformPoint { opacity: 0.25, ..FreeformPoint::new(Point::new(x, 32.0), color) };
+            g.freeform = Some(Freeform { points: vec![point(12.0), point(52.0)], ..Default::default() });
+            let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+            for it in &mut n.appearance.items {
+                *it.overprint_mut() = true;
+            }
+            vec![n]
+        });
+        for level in [Level::Three, Level::Two] {
+            let o = EpsOptions { level, ..opts(&d) };
+            let out = crate::scene::Scene::new(&d, &o).on_plate(true).run();
+            assert!(!out.body.contains("image"), "{color:?} at {level:?}: {}", out.body);
+        }
+    }
+}
+
 /// A 200 × 200 pt document holding 8 × 8 pixels of noise as image `pic` and a three-pixel gray ramp
 /// as image `gray`, its first layer holding what `nodes` makes.
 fn image_doc_with(nodes: impl FnOnce(&mut Document) -> Vec<Node>) -> Document {

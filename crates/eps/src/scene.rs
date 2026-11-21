@@ -1597,9 +1597,36 @@ impl<'a> Scene<'a> {
             (field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect(), 255)
         };
         let n = if in_inks { 5 } else { 4 };
-        // Overprinting on a plate: the cells whose samples put none of the ink down are left out,
-        // as clear pixels at Level 3 and outside a clip of the other cells at Level 2.
-        let blank: Option<Vec<bool>> = self.keep_below.then(|| samples.chunks(n).map(|s| s.iter().take(n - 1).all(|&v| v == paper)).collect());
+        // Overprinting on a plate: the cells whose samples put none of the ink down once their
+        // opacity is applied, as `encode_inks` and `encode_image` write them (RGB converted to
+        // CMYK in CMYK output), are left out, as clear pixels at Level 3 and outside a clip of the
+        // other cells at Level 2.
+        let written = |v: u8, a: u8| {
+            let (v, a) = (u32::from(v), u32::from(a));
+            ((v * a + u32::from(paper) * (255 - a) + 127) / 255) as u8
+        };
+        let (cms, to_cmyk) = (self.cms.clone(), !in_inks && self.cmyk);
+        let intent = cms.settings().intent;
+        let mut converted: HashMap<[u8; 3], bool> = HashMap::new();
+        let blank: Option<Vec<bool>> = self.keep_below.then(|| {
+            samples
+                .chunks(n)
+                .map(|s| {
+                    let a = s.last().copied().unwrap_or(0);
+                    if a == 0 || in_inks {
+                        return s.iter().take(n - 1).all(|&v| written(v, a) == paper);
+                    }
+                    let rgb = [0, 1, 2].map(|i| s.get(i).map_or(paper, |&v| written(v, a)));
+                    if !to_cmyk {
+                        return rgb == [paper; 3];
+                    }
+                    *converted.entry(rgb).or_insert_with(|| {
+                        let inks = cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent);
+                        inks.iter().all(|&x| (unit(x) * 255.0).round() as u8 == 0)
+                    })
+                })
+                .collect()
+        });
         let blank = blank.filter(|b| b.contains(&true));
         if blank.as_ref().is_some_and(|b| !b.contains(&false)) {
             return;
