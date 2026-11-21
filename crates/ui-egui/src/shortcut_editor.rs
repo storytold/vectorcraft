@@ -1171,7 +1171,9 @@ pub fn assign_in(km: &mut Keymap, key: &str, chord: Option<&str>, force: bool) -
         Some(c) => c,
     };
     let chord = vc_chord(c).ok_or_else(|| format!("can't parse shortcut `{c}`"))?;
-    if key.starts_with("tool:") && (chord.mods.cmd || chord.mods.ctrl || chord.mods.alt) {
+    // A tool whose default has a modifier (the Quick Pen's Alt+P) may take that default back.
+    let own_default = default_of(key).and_then(vc_chord) == Some(chord);
+    if key.starts_with("tool:") && (chord.mods.cmd || chord.mods.ctrl || chord.mods.alt) && !own_default {
         return Err("tool shortcuts must be a single key (optionally with Shift)".into());
     }
     let policy = if force { Policy::Steal } else { Policy::Refuse };
@@ -2688,6 +2690,17 @@ mod tests {
         let mut ov = Overrides::new();
         assert!(assign(&mut ov, "tool:pen", Some("Cmd+Alt+Shift+F9"), true).is_err());
         assert!(assign(&mut ov, "tool:bogus", Some("Q"), true).is_err());
+    }
+
+    #[test]
+    fn a_tool_takes_back_its_own_default_with_alt() {
+        let mut saved = Overrides::new();
+        assign(&mut saved, "tool:quickPen", None, true).unwrap();
+        assign(&mut saved, "tool:quickPen", Some("Alt+P"), true).unwrap();
+        assert_eq!(crate::keymap::lookup(&keymap_with(&saved), &crate::keymap::vc_chord("Alt+P").unwrap()), Some(command_of("tool:quickPen")));
+        assert!(assign(&mut saved, "tool:quickPen", Some("Alt+Q"), true).is_err());
+        assert!(assign(&mut saved, "tool:quickPen", Some("Cmd+P"), true).is_err());
+        assert!(assign(&mut saved, "tool:pen", Some("Alt+P"), true).is_err());
     }
 
     #[test]
