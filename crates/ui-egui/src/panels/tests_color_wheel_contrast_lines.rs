@@ -165,3 +165,22 @@ fn the_panel_keeps_its_height_when_the_chip_goes() {
     // #FDC96E fails AA and shows the chip; #FFFFFF passes both levels and hides it.
     assert_eq!(height("#fdc96e"), height("#ffffff"));
 }
+
+/// A drag that changes the field on every frame (here the box's hue) finds the lines coarsely, and
+/// in full again once it ends; a drag that leaves the field as it is keeps the full lines.
+#[test]
+fn a_drag_that_changes_the_field_finds_its_lines_coarsely_until_it_ends() {
+    let mut h = harness(app("box", "hue"));
+    let coarse = |h: &Harness<'static, VectorcraftApp>| pstate::<Option<(LinesKey, Lines)>>(&h.ctx, LINES).expect("lines were found").0.4;
+    assert!(!coarse(&h));
+    h.state_mut().session.begin_interaction("test").unwrap();
+    h.run_steps(2);
+    assert!(!coarse(&h), "the field is unchanged, so the full lines are kept");
+    h.state_mut().run("paint.setFill", json!({"color": "#6efdc9"})).unwrap();
+    assert!(h.state().session.in_interaction(), "the new color is part of the drag");
+    h.run_steps(2);
+    assert!(coarse(&h), "another hue during the drag");
+    h.state_mut().session.commit_interaction().unwrap();
+    h.run_steps(2);
+    assert!(!coarse(&h), "found in full once the drag ends");
+}

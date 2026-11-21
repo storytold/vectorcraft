@@ -792,13 +792,16 @@ const BACKDROP: &str = "color-wheel-backdrop";
 pub(super) const LINES: &str = "color-wheel-lines";
 /// What the contrast lines depend on: what the color is measured against, the category, the field
 /// (the view, the channel and the component the field holds fixed) with the model a pick there
-/// stores, and the color settings.
-pub(super) type LinesKey = (Backdrop, Category, String, Under);
+/// stores, the color settings, and whether they were found coarsely during a drag.
+pub(super) type LinesKey = (Backdrop, Category, String, Under, bool);
 /// Per minimum of the category (AA, then AAA where it has one), the lines in field coordinates.
 pub(super) type Lines = Vec<Vec<Vec<(f32, f32)>>>;
 
 /// The columns and rows at which [`contrast_lines`] samples a field.
 const LINE_SAMPLES: usize = 32;
+/// The columns and rows at which [`contrast_lines`] samples a field, without the narrow-band
+/// search, while a drag changes the field (the hue ring, the box's strip).
+const COARSE_LINE_SAMPLES: usize = 8;
 /// The halvings that place a line on the edge between two samples.
 const LINE_STEPS: usize = 10;
 
@@ -810,14 +813,15 @@ type FieldPoint = (f32, f32);
 type Bands = Vec<(f32, FieldPoint, FieldPoint)>;
 
 /// Where the contrast `ratio_at` a field point crosses each of `minimums`: per minimum, polylines in
-/// field coordinates. The field is sampled on a 33 × 33 grid, and each cell whose corners fall on
-/// both sides gets a segment between the crossings on its edges, placed by bisection (marching
-/// squares; a cell with two opposite corners passing is split by its center). Around a failing
-/// sample higher than its neighbors in a column or a row, the highest ratio is looked for, so a
-/// passing band narrower than the samples gets its two edges too, joined from column to column or
-/// from row to row. Segments that share an end are joined into one polyline.
-pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64]) -> Lines {
-    let n = LINE_SAMPLES;
+/// field coordinates. The field is sampled on a grid of `n` + 1 columns and rows, and each cell
+/// whose corners fall on both sides gets a segment between the crossings on its edges, placed by
+/// bisection (marching squares; a cell with two opposite corners passing is split by its center).
+/// With `bands`, around a failing sample higher than its neighbors in a column or a row, the highest
+/// ratio is looked for, so a passing band narrower than the samples gets its two edges too, joined
+/// from column to column or from row to row. Segments that share an end are joined into one
+/// polyline.
+pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64], n: usize, narrow: bool) -> Lines {
+    let n = n.max(1);
     let at = |i: usize| i as f32 / n as f32;
     // `grid[i][j]` is column i (x) and row j (y).
     let grid: Vec<Vec<f64>> = (0..=n).map(|i| (0..=n).map(|j| ratio_at(at(i), at(j))).collect()).collect();
@@ -869,7 +873,7 @@ pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64
                 }
             }
             // Bands narrower than the samples, along each column and then each row.
-            for across in [false, true] {
+            for across in [false, true].into_iter().filter(|_| narrow) {
                 let point = |k: usize, t: f32| if across { (t, at(k)) } else { (at(k), t) };
                 let value = |k: usize, s: usize| if across { r(s, k) } else { r(k, s) };
                 let bands: Vec<Bands> = (0..=n)
@@ -949,7 +953,9 @@ fn chain(segments: Vec<[FieldPoint; 2]>) -> Vec<Vec<FieldPoint>> {
 
 /// The contrast lines of the wheel's square or the box's field on HSB `hsb`, kept per [`LinesKey`]:
 /// where a pick there, stored as the wheel stores it in place of `tgt`'s color, meets each minimum
-/// of the chosen category against `backdrop`.
+/// of the chosen category against `backdrop`. While a drag is live and the field differs from the
+/// one the kept lines were found for, the lines are found coarsely ([`COARSE_LINE_SAMPLES`]), and
+/// in full once the drag ends.
 fn lines_for(app: &VectorcraftApp, ui: &Ui, backdrop: &Backdrop, tgt: &Target, hsb: [f32; 3], cmyk_doc: bool) -> Lines {
     let set = &app.ui.color_wheel;
     let (category, view, ch) = (set.contrast_for, set.view, set.channel);
@@ -957,9 +963,10 @@ fn lines_for(app: &VectorcraftApp, ui: &Ui, backdrop: &Backdrop, tgt: &Target, h
     // The component the field holds fixed: the box's strip value, or the wheel's hue.
     let fixed = if view == View::Box { box_pos(ch, hsb).0 } else { hsb[0] };
     let field = format!("{view:?} {ch:?} {fixed} {:?} {cmyk_doc}", was.map(|c| c.model()));
-    let key: LinesKey = (backdrop.clone(), category, field, under());
+    let dragging = app.session.in_interaction();
+    let key = |coarse: bool| -> LinesKey { (backdrop.clone(), category, field.clone(), under(), coarse) };
     if let Some((k, lines)) = pstate::<Option<(LinesKey, Lines)>>(ui.ctx(), LINES)
-        && k == key
+        && (k == key(false) || (dragging && k == key(true)))
     {
         return lines;
     }
@@ -968,8 +975,9 @@ fn lines_for(app: &VectorcraftApp, ui: &Ui, backdrop: &Backdrop, tgt: &Target, h
     let ratio_at = |x: f32, y: f32| backdrop.ratio(cms.display_rgb(&backdrop.drawn_color(&stored(&cms, at(x, y), was.as_ref(), cmyk_doc))));
     let (aa, aaa) = category.minimums();
     let minimums: Vec<f64> = std::iter::once(aa).chain(aaa).collect();
-    let lines = contrast_lines(&ratio_at, &minimums);
-    set_pstate(ui.ctx(), LINES, Some((key, lines.clone())));
+    let samples = if dragging { COARSE_LINE_SAMPLES } else { LINE_SAMPLES };
+    let lines = contrast_lines(&ratio_at, &minimums, samples, !dragging);
+    set_pstate(ui.ctx(), LINES, Some((key(dragging), lines.clone())));
     lines
 }
 
