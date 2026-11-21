@@ -139,6 +139,7 @@ pub mod slices;
 pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod step_repeat;
 pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
@@ -392,6 +393,7 @@ registry! {
     Expand: [expand::KIND] => expand::SPEC,
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
+    StepAndRepeat: [step_repeat::KIND] => step_repeat::SPEC,
     WidthPoint: [width_point::KIND] => width_point::SPEC,
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
