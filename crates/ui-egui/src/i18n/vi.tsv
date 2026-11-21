@@ -8140,6 +8140,10 @@ breakText	Glyphs	Glyph
 	Tangent Circle	Đường tròn tiếp xúc
 	Tangent Circle Tool	Công cụ Đường tròn tiếp xúc
 	No tangent circle here	Không có đường tròn tiếp xúc ở đây
+	Circle Center	Tâm đường tròn
+	Circle Radii Lines	Đường bán kính
+	Snap Tolerance:	Dung sai hút:
+	Snap When Smart Guides Are Off	Hút khi tắt đường căn thông minh
 	Circle:	Đường tròn:
 @msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
 @msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp

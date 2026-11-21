@@ -10001,6 +10001,10 @@ breakText	Glyphs	字形
 	Tangent Circle	接円
 	Tangent Circle Tool	接円ツール
 	No tangent circle here	ここに接円はありません
+	Circle Center	円の中心
+	Circle Radii Lines	半径の線
+	Snap Tolerance:	スナップ許容値:
+	Snap When Smart Guides Are Off	スマートガイドがオフのときもスナップ
 	Circle:	円:
 @msg	`ids` names an object twice	`ids` に同じオブジェクトが 2 回指定されています
 @msg	select two or three paths or compound paths	パスまたは複合パスを 2 つか 3 つ選択してください

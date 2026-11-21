@@ -8468,6 +8468,10 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Ferramenta Círculo tangente
 	No tangent circle here	Nenhum círculo tangente aqui
+	Circle Center	Centro do Círculo
+	Circle Radii Lines	Linhas dos Raios
+	Snap Tolerance:	Tolerância de Ajuste:
+	Snap When Smart Guides Are Off	Ajustar com as Guias Inteligentes Desligadas
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica um objeto duas vezes
 @msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos

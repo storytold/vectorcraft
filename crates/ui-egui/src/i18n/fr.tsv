@@ -8445,6 +8445,10 @@ breakText	Glyphs	Glyphes
 	Tangent Circle	Cercle tangent
 	Tangent Circle Tool	Outil Cercle tangent
 	No tangent circle here	Aucun cercle tangent ici
+	Circle Center	Centre du cercle
+	Circle Radii Lines	Lignes des rayons
+	Snap Tolerance:	Tolérance du magnétisme :
+	Snap When Smart Guides Are Off	Magnétisme avec les repères commentés désactivés
 	Circle:	Cercle :
 @msg	`ids` names an object twice	`ids` désigne deux fois le même objet
 @msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents

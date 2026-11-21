@@ -238,13 +238,35 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         return false;
     }
     if d.str("__tool") == tangent_circle_tool::ID {
+        let label_w = tangent_circle_label_w(ui);
         let (lo, hi) = tangent_circle_tool::RADIUS_RANGE;
         let r = d.f64("radius", tangent_circle_tool::RADIUS);
-        widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Radius:"), label_w, |ui| {
             if let Some(x) = widgets::range_field(ui, "tangent-circle-radius", r, lo..=hi, " pt", 2, 96.0) {
                 d.fields.insert("radius".into(), json!(x));
             }
         });
+        for (key, label) in [("center", tl!("Circle Center")), ("radii", tl!("Circle Radii Lines"))] {
+            tangent_circle_check(ui, d, key, label);
+        }
+        let color = d.str("color");
+        let at = tangent_circle_tool::COLORS.iter().position(|(name, _)| *name == color).unwrap_or(0);
+        widgets::label_row(ui, tl!("Color:"), label_w, |ui| {
+            let shown = TANGENT_CIRCLE_COLORS.get(at).copied().unwrap_or("Red");
+            if let Some((name, _)) = widgets::dropdown_named(ui, "tangent-circle-color", Some(tl!("Color:")), shown, &TANGENT_CIRCLE_COLORS, 110.0)
+                .and_then(|i| tangent_circle_tool::COLORS.get(i))
+            {
+                d.fields.insert("color".into(), json!(name));
+            }
+        });
+        let (lo, hi) = tangent_circle_tool::SNAP_RANGE;
+        let snap = d.f64("snapTolerance", tangent_circle_tool::SNAP_PX);
+        widgets::label_row(ui, tl!("Snap Tolerance:"), label_w, |ui| {
+            if let Some(x) = widgets::range_field(ui, "tangent-circle-snap", snap, lo..=hi, " px", 2, 72.0) {
+                d.fields.insert("snapTolerance".into(), json!(x));
+            }
+        });
+        tangent_circle_check(ui, d, "snapWithoutGuides", tl!("Snap When Smart Guides Are Off"));
         return false;
     }
     let rows = [
@@ -264,6 +286,29 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         d.fields.insert("pressure".into(), json!(on));
     }
     false
+}
+
+/// The labels of the Tangent Circle tool's colors ([`tangent_circle_tool::COLORS`]), in its order.
+const TANGENT_CIRCLE_COLORS: [&str; 6] = ["Red", "Blue", "Magenta", "Green", "Black", "Gray"];
+
+/// The labels of the Tangent Circle tool's rows with a field beside them.
+const TANGENT_CIRCLE_LABELS: [&str; 3] = ["Radius:", "Color:", "Snap Tolerance:"];
+
+/// The width of the Tangent Circle tool's label column: [`LABEL_W`], or the widest of
+/// [`TANGENT_CIRCLE_LABELS`] in the interface language with a gap after it, when that is wider.
+fn tangent_circle_label_w(ui: &Ui) -> f32 {
+    TANGENT_CIRCLE_LABELS
+        .iter()
+        .map(|label| ui.painter().layout_no_wrap(tl!(label).to_string(), egui::FontId::proportional(12.5), egui::Color32::PLACEHOLDER).size().x + 8.0)
+        .fold(LABEL_W, f32::max)
+}
+
+/// A check box for the Tangent Circle tool's option `key`, labeled `label`.
+fn tangent_circle_check(ui: &mut Ui, d: &mut Dialog, key: &str, label: &str) {
+    let on = d.bool(key);
+    if widgets::check(ui, label, on, true) {
+        d.fields.insert(key.into(), json!(!on));
+    }
 }
 
 /// OK: set the tool's options. When the tool refuses one of them, nothing is set and the dialog

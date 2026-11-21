@@ -10623,6 +10623,10 @@ breakText	Glyphs	გლიფები
 	Tangent Circle	მხები წრე
 	Tangent Circle Tool	მხები წრის ხელსაწყო
 	No tangent circle here	აქ მხები წრე არ არის
+	Circle Center	წრის ცენტრი
+	Circle Radii Lines	რადიუსის ხაზები
+	Snap Tolerance:	მიბმის დაშვება:
+	Snap When Smart Guides Are Off	მიბმა, როცა ჭკვიანი დამხმარე ხაზები გამორთულია
 	Circle:	წრე:
 @msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
 @msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია
