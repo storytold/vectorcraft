@@ -836,6 +836,24 @@ fn headless_add_document_dialog_fails_without_creating() {
 }
 
 #[test]
+fn setting_selected_keeps_how_the_other_objects_are_selected() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    let anchors = s.active().unwrap().selection.anchors.get(&a).cloned();
+    assert!(anchors.is_some());
+    log(
+        &mut s,
+        "var p = app.activeDocument.pageItems;\
+         for (var i = 0; i < p.length; i++) { if (p[i].left == 200) p[i].selected = true; if (p[i].left == 100) p[i].selected = false; }",
+    );
+    let sel = &s.active().unwrap().selection;
+    assert_eq!(sel.objects, vec![a, c]);
+    assert_eq!(sel.anchors.get(&a).cloned(), anchors, "the direct-selected anchors stay");
+}
+
+#[test]
 fn add_document_takes_only_a_document_preset() {
     let mut s = Session::new();
     for source in [

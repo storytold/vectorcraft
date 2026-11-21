@@ -2644,7 +2644,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
   entry `[i]` gives. Each page item
   (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
-  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected`, `opacity` (0 to
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
   visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`

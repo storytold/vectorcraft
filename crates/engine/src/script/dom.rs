@@ -1378,17 +1378,15 @@ fn item_selected(h: &Host, a: &[Data]) -> Answer {
 fn item_set_selected(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let on = boolean(arg(a, 1), "selected")?;
-    let mut ids = with_doc(h, item.doc, |_, st| st.selection.objects.clone());
-    if ids.contains(&item.id) == on {
+    if with_doc(h, item.doc, |_, st| st.selection.objects.contains(&item.id)) == on {
         return Ok(Data::Undefined);
     }
-    if on {
-        let mut given = selection_ids(h, item.doc, arg(a, 0))?;
-        ids.append(&mut given);
-    } else {
-        ids.retain(|i| *i != item.id);
-    }
-    set_selection(h, item.doc, ids)
+    // Adding or removing the one object keeps how the others are selected (their direct-selected
+    // anchors and segments, and the key object).
+    let ids = if on { selection_ids(h, item.doc, arg(a, 0))? } else { vec![item.id] };
+    let id = if on { "select.add" } else { "select.toggle" };
+    on_doc(h, item.doc.uid, false, |h| command(h, id, &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+    Ok(Data::Undefined)
 }
 
 /// The item's geometric bounds (`visual`: its visible bounds) in document coordinates and the
