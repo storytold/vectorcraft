@@ -7,121 +7,285 @@
 //! Fields: `layout` (`gridByRow` | `gridByColumn` | `row` | `column`), `order` (`leftToRight` |
 //! `rightToLeft`), `columns` (the rows of a grid by column), `spacing` (pt) and `moveArtwork`.
 
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::primitives::{Glyph, IconSpec};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::style::{TypeRole, UiTokens};
+use craft::ui::text::NumberField;
+use craft::ui::choice::Segmented;
+use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, vec2};
 use serde_json::{Value, json};
+use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::newdoc::ArtboardLayout;
 
-use super::{DialogSpec, form, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::layer_options::check;
+use crate::VectorcraftApp;
 
-/// The dialog kind of Rearrange All Artboards.
-pub const KIND: &str = "rearrangeArtboards";
+/// The command Rearrange All Artboards runs; the key of its dialog.
+pub(crate) const CMD: &str = "artboard.rearrange";
 
-const CMD: &str = "artboard.rearrange";
+/// A layout toggle's picture: small artboards in the grid cells (column, row), tinted, and over them their order as a
+/// line from a dot on the first to an arrowhead on the last.
+struct CellsGlyph(&'static [(u8, u8)]);
 
-/// Width of the label column.
-const LABEL_W: f32 = 96.0;
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Rearrange All Artboards").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
-
-/// The fields a fresh dialog starts with.
-pub fn fields() -> Value {
-    json!({"layout": "gridByRow", "order": "leftToRight", "columns": 2, "spacing": 20, "moveArtwork": true})
-}
-
-/// The fields the menu item opens with, retaining the spacing from its last confirmation.
-pub fn open_fields(app: &VectorcraftApp) -> Value {
-    let mut fields = fields();
-    if let Some(spacing) = app.ui.rearrange_artboards_spacing.as_f64() {
-        fields["spacing"] = json!(spacing);
-    }
-    fields
-}
-
-/// A layout's toggle: its tooltip and its artboards' cells (column, row) in their order, left to
-/// right.
-fn layout_glyph(l: ArtboardLayout) -> (&'static str, &'static [(u8, u8)]) {
-    match l {
-        ArtboardLayout::GridByRow => (tl!("Grid by Row"), &[(0, 0), (1, 0), (0, 1), (1, 1)]),
-        ArtboardLayout::GridByColumn => (tl!("Grid by Column"), &[(0, 0), (0, 1), (1, 0), (1, 1)]),
-        ArtboardLayout::Row => (tl!("Arrange by Row"), &[(0, 0), (1, 0), (2, 0)]),
-        ArtboardLayout::Column => (tl!("Arrange by Column"), &[(0, 0), (0, 1), (0, 2)]),
-    }
-}
-
-/// `cells` mirrored left to right when `rtl` (the order the layout toggles preview).
-fn mirrored(cells: &[(u8, u8)], rtl: bool) -> Vec<(u8, u8)> {
-    let last = cells.iter().map(|c| c.0).max().unwrap_or(0);
-    cells.iter().map(|&(x, y)| (if rtl { last - x } else { x }, y)).collect()
-}
-
-/// `artboard.rearrange` parameters from the fields.
-fn params(d: &Dialog) -> Value {
-    json!({
-        "layout": d.str("layout"), "order": d.str("order"), "columns": d.f64("columns", 2.0),
-        "spacing": d.f64("spacing", 20.0), "moveArtwork": d.bool("moveArtwork"),
-    })
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.general_unit();
-    let n = app.session.active().map_or(0, |doc| doc.doc.artboards.len());
-    let layout = ArtboardLayout::parse(&d.str("layout")).unwrap_or_default();
-    let rtl = d.str("order") == "rightToLeft";
-    widgets::label_row(ui, tl!("Layout:"), LABEL_W, |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        for l in ArtboardLayout::ALL {
-            let (tip, cells) = layout_glyph(l);
-            if widgets::layout_button(ui, &mirrored(cells, rtl), layout == l, tip) {
-                d.fields.insert("layout".into(), json!(l.id()));
-            }
+impl Glyph for CellsGlyph {
+    fn paint(&self, painter: &Painter, _: &UiTokens, rect: Rect, color: Color32, _: bool) {
+        let tiles = self.0;
+        // Cells at most half the square a side: a row's artboards stand tall, a column's lie flat.
+        let side = rect.width().min(rect.height());
+        let scale = side / 20.0;
+        let (cols, rows) = tiles.iter().fold((1u8, 1u8), |(c, r), &(x, y)| (c.max(x.saturating_add(1)), r.max(y.saturating_add(1))));
+        let cell = vec2((side / f32::from(cols)).min(side / 2.0), (side / f32::from(rows)).min(side / 2.0));
+        let origin = rect.center() - vec2(f32::from(cols) * cell.x, f32::from(rows) * cell.y) / 2.0;
+        let centre = |&(x, y): &(u8, u8)| origin + vec2((f32::from(x) + 0.5) * cell.x, (f32::from(y) + 0.5) * cell.y);
+        for tile in tiles {
+            painter.rect_filled(Rect::from_center_size(centre(tile), cell - vec2(2.0, 2.0) * scale), 1.0, color.gamma_multiply(0.35));
         }
-    });
-    ui.add_space(4.0);
-    widgets::label_row(ui, tl!("Layout Order:"), LABEL_W, |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        // One column reads the same either way.
-        ui.add_enabled_ui(layout != ArtboardLayout::Column, |ui| {
-            for (value, cells, tip) in [
-                ("leftToRight", [(0, 0), (1, 0)], tl!("Change to Left-to-Right Layout")),
-                ("rightToLeft", [(1, 0), (0, 0)], tl!("Change to Right-to-Left Layout")),
-            ] {
-                if widgets::layout_button(ui, &cells, (value == "rightToLeft") == rtl, tip) {
-                    d.fields.insert("order".into(), json!(value));
-                }
-            }
-        });
-    });
-    ui.add_space(4.0);
-    // The rows of a grid by column; one row or column has no count to set.
-    let label = if layout == ArtboardLayout::GridByColumn { tl!("Rows:") } else { tl!("Columns:") };
-    widgets::label_row(ui, label, LABEL_W, |ui| {
-        let grid = matches!(layout, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
-        ui.add_enabled_ui(grid, |ui| {
-            let most = n.max(1) as f64;
-            if let Some(v) = widgets::spin_plain(ui, "rearrange-columns", d.f64("columns", 2.0), "", 0, 76.0, 1.0, 1.0, &[]) {
-                d.fields.insert("columns".into(), json!(v.round().clamp(1.0, most)));
-            }
-        });
-    });
-    ui.add_space(4.0);
-    widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| {
-        form::length(ui, d, "spacing", unit, 100.0);
-    });
-    ui.add_space(4.0);
-    widgets::label_row(ui, tl!("Options:"), LABEL_W, |ui| {
-        form::check(ui, d, "moveArtwork", tl!("Move Artwork with Artboard"));
-    });
-    ui.add_space(8.0);
-    widgets::dim_label(ui, &crate::i18n::fmt(tl!("Artboards: {n}"), &[("n", &n.to_string())]));
-    false
+        let path: Vec<Pos2> = tiles.iter().map(centre).collect();
+        if let ([first, ..], [.., from, to]) = (path.as_slice(), path.as_slice()) {
+            let (first, from, to) = (*first, *from, *to);
+            let dir = (to - from).normalized();
+            let wing = dir.rot90() * 2.5 * scale;
+            let head = vec![to + dir * 1.5 * scale, to - dir * 2.5 * scale + wing, to - dir * 2.5 * scale - wing];
+            painter.circle_filled(first, 1.6 * scale, color);
+            painter.add(Shape::line(path, Stroke::new(1.2 * scale, color)));
+            painter.add(Shape::convex_polygon(head, color, Stroke::NONE));
+        }
+    }
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let result = run_and_close(app, CMD, params(d))?;
-    app.ui.rearrange_artboards_spacing = json!(d.f64("spacing", 20.0));
-    Ok(result)
+static GRID_BY_ROW: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0), (0, 1), (1, 1)]);
+static GRID_BY_ROW_RTL: CellsGlyph = CellsGlyph(&[(1, 0), (0, 0), (1, 1), (0, 1)]);
+static GRID_BY_COLUMN: CellsGlyph = CellsGlyph(&[(0, 0), (0, 1), (1, 0), (1, 1)]);
+static GRID_BY_COLUMN_RTL: CellsGlyph = CellsGlyph(&[(1, 0), (1, 1), (0, 0), (0, 1)]);
+static ROW: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0), (2, 0)]);
+static ROW_RTL: CellsGlyph = CellsGlyph(&[(2, 0), (1, 0), (0, 0)]);
+/// One column reads the same either way.
+static COLUMN: CellsGlyph = CellsGlyph(&[(0, 0), (0, 1), (0, 2)]);
+static LEFT_TO_RIGHT: CellsGlyph = CellsGlyph(&[(0, 0), (1, 0)]);
+static RIGHT_TO_LEFT: CellsGlyph = CellsGlyph(&[(1, 0), (0, 0)]);
+
+/// A layout's toggle: its tooltip and its picture in the order the toggles preview (`rtl`: right to left).
+fn layout_glyph(l: ArtboardLayout, rtl: bool) -> (&'static str, &'static CellsGlyph) {
+    match (l, rtl) {
+        (ArtboardLayout::GridByRow, false) => (tl!("Grid by Row"), &GRID_BY_ROW),
+        (ArtboardLayout::GridByRow, true) => (tl!("Grid by Row"), &GRID_BY_ROW_RTL),
+        (ArtboardLayout::GridByColumn, false) => (tl!("Grid by Column"), &GRID_BY_COLUMN),
+        (ArtboardLayout::GridByColumn, true) => (tl!("Grid by Column"), &GRID_BY_COLUMN_RTL),
+        (ArtboardLayout::Row, false) => (tl!("Arrange by Row"), &ROW),
+        (ArtboardLayout::Row, true) => (tl!("Arrange by Row"), &ROW_RTL),
+        (ArtboardLayout::Column, _) => (tl!("Arrange by Column"), &COLUMN),
+    }
+}
+
+/// The settings the dialog edits.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RearrangeValues {
+    layout: ArtboardLayout,
+    /// Layout Order is right to left.
+    rtl: bool,
+    columns: f64,
+    spacing: f64,
+    move_artwork: bool,
+}
+
+impl Default for RearrangeValues {
+    fn default() -> Self {
+        RearrangeValues { layout: ArtboardLayout::GridByRow, rtl: false, columns: 2.0, spacing: 20.0, move_artwork: true }
+    }
+}
+
+impl RearrangeValues {
+    /// `artboard.rearrange` parameters.
+    fn params(&self) -> Value {
+        json!({
+            "layout": self.layout.id(), "order": self.order(), "columns": self.columns,
+            "spacing": self.spacing, "moveArtwork": self.move_artwork,
+        })
+    }
+
+    fn order(&self) -> &'static str {
+        if self.rtl { "rightToLeft" } else { "leftToRight" }
+    }
+
+    /// A grid has a count to set; one row or column has none.
+    fn is_grid(&self) -> bool {
+        matches!(self.layout, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn)
+    }
+
+    /// One column reads the same either way, so its order is not a choice.
+    fn has_order(&self) -> bool {
+        self.layout != ArtboardLayout::Column
+    }
+}
+
+/// The length unit a document unit shows as.
+fn length_kind(unit: Unit) -> UnitKind {
+    match unit {
+        Unit::Picas => UnitKind::Picas,
+        Unit::Inches => UnitKind::Inches,
+        Unit::Millimeters => UnitKind::Millimetres,
+        Unit::Centimeters => UnitKind::Centimetres,
+        Unit::Pixels => UnitKind::Pixels,
+        Unit::Meters => UnitKind::Metres,
+        Unit::Yards => UnitKind::Yards,
+        Unit::Feet | Unit::FeetInches => UnitKind::Feet,
+        _ => UnitKind::Points,
+    }
+}
+
+/// `ui.menuDialog` for Rearrange All Artboards: opens the dialog on the spacing of its last OK.
+pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let mut values = RearrangeValues::default();
+    if let Some(spacing) = app.ui.rearrange_artboards_spacing.as_f64() {
+        values.spacing = spacing;
+    }
+    let artboards = app.session.active().map_or(0, |doc| doc.doc.artboards.len());
+    let unit = app.session.general_unit();
+    let dialogs = app.dialogs().ok_or("no window")?;
+    dialogs.with(|host| host.open(RearrangeArtboardsDialog { id: dialog_id(CMD), open: true, values, artboards, unit }));
+    Ok(Value::Null)
+}
+
+/// The Rearrange All Artboards dialog; its answer is the settings OK confirmed, which [`pump`] runs.
+pub(crate) struct RearrangeArtboardsDialog {
+    id: DialogId,
+    open: bool,
+    values: RearrangeValues,
+    /// The document's artboard count, which bounds Columns.
+    artboards: usize,
+    /// The unit Spacing shows in.
+    unit: Unit,
+}
+
+/// The rows of the dialog for a document of `artboards` artboards, Spacing shown in `unit`.
+fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, unit: Unit) {
+        Field::new(tl!("Layout:")).id_salt("layout").show(ui, |ui, _| {
+            let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL
+                .into_iter()
+                .map(|l| {
+                    let (tip, glyph) = layout_glyph(l, v.rtl);
+                    Entry::new(l, tip).icon(IconSpec::glyph(glyph))
+                })
+                .collect();
+            if let Some(l) = Segmented::new(tl!("Layout:"), Bind::given(v.layout), &entries).show(ui).value().copied() {
+                v.layout = l;
+            }
+        });
+        Field::new(tl!("Layout Order:")).id_salt("order").enabled(v.has_order()).show(ui, |ui, _| {
+            let entries = [
+                Entry::new(false, tl!("Change to Left-to-Right Layout")).icon(IconSpec::glyph(&LEFT_TO_RIGHT)),
+                Entry::new(true, tl!("Change to Right-to-Left Layout")).icon(IconSpec::glyph(&RIGHT_TO_LEFT)),
+            ];
+            if let Some(rtl) = Segmented::new(tl!("Layout Order:"), Bind::given(v.rtl), &entries).show(ui).value().copied() {
+                v.rtl = rtl;
+            }
+        });
+        // The rows of a grid by column.
+        let count = if v.layout == ArtboardLayout::GridByColumn { tl!("Rows:") } else { tl!("Columns:") };
+        Field::new(count).id_salt("columns").enabled(v.is_grid()).show(ui, |ui, _| {
+            let most = artboards.max(1) as f64;
+            let field = NumberField::new(count, Bind::given(Some(v.columns))).range(1.0..=most).step(1.0).show(ui);
+            if let Some(Some(columns)) = field.edit.value().copied() {
+                v.columns = columns.round().clamp(1.0, most);
+            }
+        });
+        Field::new(tl!("Spacing:")).id_salt("spacing").show(ui, |ui, _| {
+            let units = LengthUnits::new(UnitKind::Points, length_kind(unit), 72.0);
+            let field = NumberField::length(tl!("Spacing:"), Bind::given(Some(v.spacing)), units).show(ui);
+            if let Some(Some(spacing)) = field.edit.value().copied() {
+                v.spacing = spacing;
+            }
+        });
+        Field::new(tl!("Options:")).id_salt("options").show(ui, |ui, _| {
+            if let Some(on) = check(ui, tl!("Move Artwork with Artboard"), v.move_artwork, true) {
+                v.move_artwork = on;
+            }
+        });
+        Text::new(crate::i18n::fmt(tl!("Artboards: {n}"), &[("n", &artboards.to_string())])).role(TypeRole::Caption).show(ui);
+}
+
+impl StackDialog for RearrangeArtboardsDialog {
+    type Result = RearrangeValues;
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(CMD)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<RearrangeValues>> {
+        let (artboards, unit) = (self.artboards, self.unit);
+        let shown = FormDialog::new(tl!("Rearrange All Artboards"), Bind::bound(&mut self.values)).opened(Bind::bound(&mut self.open)).show(
+            ui,
+            |ui, _, v| {
+                body(ui, v, artboards, unit);
+                true
+            },
+        );
+        match (shown.accepted, shown.closed) {
+            (Some(value), _) => Some(DialogResult::Ok(value)),
+            (None, Some(_)) => Some(DialogResult::Cancel),
+            (None, None) => None,
+        }
+    }
+
+    fn confirm(&mut self, _: &egui::Context) -> Option<RearrangeValues> {
+        Some(self.values.clone())
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let v = &self.values;
+        Some(json!({"layout": v.layout.id(), "order": v.order(), "columns": v.columns, "spacing": v.spacing, "moveArtwork": v.move_artwork}))
+    }
+
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let rejects = || FieldRefusal::Rejects(&value).message(field);
+        let inactive = || FieldRefusal::Inactive.message(field);
+        let v = &mut self.values;
+        match field {
+            "layout" => v.layout = value.as_str().and_then(ArtboardLayout::parse).ok_or_else(rejects)?,
+            "order" => {
+                let rtl = match value.as_str() {
+                    Some("leftToRight") => false,
+                    Some("rightToLeft") => true,
+                    _ => return Err(rejects()),
+                };
+                if !v.has_order() {
+                    return Err(inactive());
+                }
+                v.rtl = rtl;
+            }
+            "columns" => {
+                let columns = value.as_f64().filter(|c| c.is_finite()).ok_or_else(rejects)?;
+                if !v.is_grid() {
+                    return Err(inactive());
+                }
+                v.columns = columns.round().clamp(1.0, self.artboards.max(1) as f64);
+            }
+            "spacing" => v.spacing = value.as_f64().filter(|s| s.is_finite()).ok_or_else(rejects)?,
+            "moveArtwork" => v.move_artwork = value.as_bool().ok_or_else(rejects)?,
+            _ => return Err(FieldRefusal::Unknown.message(field)),
+        }
+        Ok(())
+    }
+}
+
+/// Runs `artboard.rearrange` for the settings OK confirmed, and remembers the spacing of a successful one.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(DialogResult::Ok(values)) = dialogs.with(|host| host.take::<RearrangeArtboardsDialog>()) else { return };
+    match app.run(CMD, values.params()) {
+        Ok(_) => app.ui.rearrange_artboards_spacing = json!(values.spacing),
+        Err(e) => app.status(e),
+    }
+    ctx.request_repaint();
 }
 
 #[cfg(test)]
@@ -129,104 +293,80 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    /// A frame of the open dialog with `events` → the texts painted. The dialog measures itself on
-    /// its first frame, so a fresh context needs two.
-    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<String> {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
-        out.shapes.iter().filter_map(|s| if let egui::epaint::Shape::Text(t) = &s.shape { Some(t.galley.text().to_string()) } else { None }).collect()
-    }
-
-    fn context() -> egui::Context {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        ctx
+    fn app(artboards: u32) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(egui::Context::default());
+        app.run("file.new", json!({"width": 100, "height": 50, "artboards": artboards})).unwrap();
+        app
     }
 
     fn origins(app: &VectorcraftApp) -> Vec<(f64, f64)> {
         app.session.active().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.rect.y0)).collect()
     }
 
-    /// #681: the menu item opens the dialog with the artboard count; Columns reads Rows for a grid
-    /// by column; OK lays the artboards out right to left, as one undo step.
-    #[test]
-    fn opens_from_the_menu_and_rearranges_by_layout_and_order() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
-        // The menu item has no params of its own: it opens this dialog, not the generic one.
+    /// Opens the dialog as the menu item does.
+    fn open_from_menu(app: &mut VectorcraftApp) {
         let (id, p) = crate::menus::click_target("Rearrange All Artboards…", CMD, &Value::Null);
-        crate::menus::invoke(&mut app, &id, p);
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
-        let ctx = context();
-        frame(&mut app, &ctx, vec![]);
-        let texts = frame(&mut app, &ctx, vec![]);
-        for want in ["Rearrange All Artboards", "Layout:", "Layout Order:", "Columns:", "Spacing:", "Move Artwork with Artboard", "Artboards: 3"] {
-            assert!(texts.iter().any(|t| t == want), "{want:?} in {texts:?}");
+        crate::menus::invoke(app, &id, p);
+    }
+
+    fn open_id(app: &VectorcraftApp) -> DialogId {
+        app.dialogs().unwrap().with(|host| host.open_dialogs().last().map(|d| d.id)).unwrap()
+    }
+
+    /// Sets `edits` in the open dialog in order; the first refusal is returned.
+    fn set(app: &VectorcraftApp, edits: &[(&str, Value)]) -> Result<(), String> {
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), open_id(app));
+        edits.iter().try_for_each(|(field, value)| app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, field, value.clone())))
+    }
+
+    /// Presses OK and runs the host pump, which runs the command.
+    fn ok(app: &mut VectorcraftApp) {
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), open_id(app));
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+    }
+
+    /// #681: the menu item opens the dialog; each setting reaches `artboard.rearrange`, as one undo step; a
+    /// setting the layout makes meaningless is refused.
+    #[test]
+    fn rearrange_fields_reach_the_command() {
+        let cases: [(u32, &[(&str, Value)], &[(f64, f64)]); 2] = [
+            (3, &[("layout", json!("row")), ("order", json!("rightToLeft")), ("spacing", json!(10))], &[(220.0, 0.0), (110.0, 0.0), (0.0, 0.0)]),
+            (
+                4,
+                &[("layout", json!("gridByColumn")), ("order", json!("rightToLeft")), ("columns", json!(2))],
+                &[(120.0, 0.0), (120.0, 70.0), (0.0, 0.0), (0.0, 70.0)],
+            ),
+        ];
+        for (artboards, edits, want) in cases {
+            let mut app = app(artboards);
+            open_from_menu(&mut app);
+            set(&app, edits).unwrap();
+            let undo = app.session.doc().unwrap().history.undo.len();
+            ok(&mut app);
+            assert!(!app.any_dialog_open());
+            assert_eq!(origins(&app), want);
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
         }
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("layout".into(), json!("gridByColumn"));
-        let texts = frame(&mut app, &ctx, vec![]);
-        assert!(texts.iter().any(|t| t == "Rows:") && !texts.iter().any(|t| t == "Columns:"), "{texts:?}");
-        // One row, right to left, 10 pt apart.
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("layout".into(), json!("row"));
-        d.fields.insert("order".into(), json!("rightToLeft"));
-        d.fields.insert("spacing".into(), json!(10));
-        frame(&mut app, &ctx, vec![]);
-        let undo = app.session.doc().unwrap().history.undo.len();
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(origins(&app), [(220.0, 0.0), (110.0, 0.0), (0.0, 0.0)]);
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        let mut app = app(3);
+        open_from_menu(&mut app);
+        assert!(set(&app, &[("layout", json!("column")), ("order", json!("rightToLeft"))]).is_err(), "one column has no order");
+        assert!(set(&app, &[("layout", json!("column")), ("columns", json!(2))]).is_err(), "one column has no count");
+        assert!(set(&app, &[("layout", json!("row")), ("columns", json!(2))]).is_err(), "one row has no count");
+        assert!(set(&app, &[("layout", json!("gridByRow")), ("columns", json!(2))]).is_ok());
     }
 
     /// The spacing confirmed last is the one the dialog opens with next time (#4558).
     #[test]
     fn keeps_spacing_when_reopening_after_rearranging() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
+        let mut app = app(3);
         app.run("ui.menuDialog", json!({"command": CMD})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("spacing".into(), json!(37));
-        crate::dialogs::confirm(&mut app).unwrap();
+        set(&app, &[("spacing", json!(37))]).unwrap();
+        ok(&mut app);
 
         app.run("ui.menuDialog", json!({"command": CMD})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("spacing", 20.0), 37.0);
-    }
-
-    /// Clicking the layout and order toggles sets the fields (the toggles' rects from the frame).
-    #[test]
-    fn the_toggles_set_layout_and_order() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 4})).unwrap();
-        app.run("ui.menuDialog", json!({ "command": CMD })).unwrap();
-        let ctx = context();
-        frame(&mut app, &ctx, vec![]);
-        frame(&mut app, &ctx, vec![]);
-        // The 26-point toggles, left to right then top to bottom: four layouts, then two orders.
-        let toggles: Vec<egui::Rect> = ctx.viewport(|vp| {
-            let mut r: Vec<egui::Rect> = vp
-                .prev_pass
-                .widgets
-                .layers()
-                .flat_map(|(_, w)| w.iter())
-                .filter(|w| w.sense.senses_click() && w.rect.width() == 26.0 && w.rect.height() == 26.0)
-                .map(|w| w.rect)
-                .collect();
-            r.sort_by(|a, b| a.top().total_cmp(&b.top()).then(a.left().total_cmp(&b.left())));
-            r
-        });
-        assert_eq!(toggles.len(), 6, "{toggles:?}");
-        for (i, key, want) in [(3, "layout", "column"), (1, "layout", "gridByColumn"), (5, "order", "rightToLeft")] {
-            let at = toggles[i].center();
-            let b = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-            frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), b(true)]);
-            frame(&mut app, &ctx, vec![b(false)]);
-            assert_eq!(app.ui.dialog.as_ref().unwrap().str(key), want);
-            // A frame for the order toggles to follow the layout (one column greys them).
-            frame(&mut app, &ctx, vec![]);
-        }
-        crate::dialogs::confirm(&mut app).unwrap();
-        // Two rows (Columns 2 reads Rows for a grid by column), the first column at the right.
-        assert_eq!(origins(&app), [(120.0, 0.0), (120.0, 70.0), (0.0, 0.0), (0.0, 70.0)]);
+        let fields = app.dialogs().unwrap().with(|host| host.open_dialogs().last().and_then(|d| d.fields.clone())).unwrap();
+        assert_eq!(fields["spacing"].as_f64(), Some(37.0));
     }
 }
