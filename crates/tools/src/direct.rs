@@ -1735,10 +1735,12 @@ impl DirectSelectionTool {
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
         self.moved = Some(d);
-        out.push(Action::Preview(
-            "object.transform".into(),
-            json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(d)), "copy": ev.mods.alt}),
-        ));
+        let mut params = json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(d)), "copy": ev.mods.alt});
+        // An Alt-drag copy follows Draw Behind.
+        if ev.mods.alt {
+            params["drawBehind"] = json!(true);
+        }
+        out.push(Action::Preview("object.transform".into(), params));
         out
     }
     fn release_move(&mut self, cx: &ToolContext, began: bool) -> Vec<Action> {
