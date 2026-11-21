@@ -1305,3 +1305,220 @@ fn a_frame_after_a_shape_shows_the_transform_panel() {
         assert_eq!(texts.iter().any(|t| t == heading), on, "on: {on}, {texts:?}");
     }
 }
+
+/// The selected live polygon's side count.
+fn polygon_sides(app: &VectorcraftApp) -> u32 {
+    match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Polygon { sides, .. } => sides,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    }
+}
+
+/// The Shape Properties rows of the contextual task bar's popover for the selected live shape.
+fn task_bar_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let n = first_selected(app).unwrap();
+    if let NodeKind::Path { live: Some(live), .. } = &n.kind {
+        let live = live.clone();
+        live_shape_rows(app, ui, &n, &live, "task-bar-shape", true);
+    }
+}
+
+/// A headless harness drawing `draw` with a live hexagon selected, its side count then set to
+/// `sides`, after its first frames.
+fn polygon_harness(sides: u32, draw: fn(&mut VectorcraftApp, &mut Ui)) -> egui_kittest::Harness<'static, VectorcraftApp> {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 50, "sides": 6})).unwrap();
+    if sides != 6 {
+        app.run("object.setLiveShape", json!({ "sides": sides })).unwrap();
+    }
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            draw(app, ui);
+        },
+        app,
+    );
+    h.run_steps(3);
+    h
+}
+
+/// Where on the Sides slider's rail a press picks `count` sides.
+fn sides_rail_at(h: &egui_kittest::Harness<'_, VectorcraftApp>, count: f64) -> egui::Pos2 {
+    use egui_kittest::kittest::Queryable;
+    let r = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Sides:").rect();
+    let (lo, hi) = (*SIDES_SLIDER.start(), *SIDES_SLIDER.end());
+    egui::pos2(r.left() + 4.0 + ((count - lo) / (hi - lo)) as f32 * (r.width() - 8.0), r.center().y)
+}
+
+/// Press the primary button at `from` and move to `to` in four frames, keeping it down.
+fn sides_press_and_move(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, from: egui::Pos2, to: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(from));
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.run_steps(1);
+    for i in 1..=4 {
+        h.event(egui::Event::PointerMoved(from + (to - from) * (i as f32 / 4.0)));
+        h.run_steps(1);
+    }
+}
+
+/// Release the primary button at `at`.
+fn sides_release(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, at: egui::Pos2) {
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(2);
+}
+
+/// Polygon Properties' Sides row has a slider beside its field, in the Transform panel, the
+/// Properties panel's Transform section and the task bar's Shape Properties: screen readers get it
+/// as a slider named Sides with the side count over 3 to 20.
+#[test]
+fn polygon_sides_slider_is_shared_by_transform_and_properties() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, task_bar_shape_rows] {
+        let h = polygon_harness(6, draw);
+        let slider = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Sides:");
+        let node = slider.accesskit_node();
+        assert_eq!(node.numeric_value(), Some(6.0));
+        assert_eq!(node.min_numeric_value(), Some(3.0));
+        assert_eq!(node.max_numeric_value(), Some(20.0));
+        let field = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Sides:");
+        assert_eq!(field.value().as_deref(), Some("6"));
+        assert!(slider.rect().left() >= field.rect().right(), "the slider follows the field on its row");
+        assert!((slider.rect().center().y - field.rect().center().y).abs() < 6.0, "one row");
+    }
+}
+
+/// A count past the slider's 20, typed or set by a command, stays as it is while the panel is
+/// drawn: the field and screen readers show it, and the rail's handle sits at its right end. A
+/// press on the rail then sets a count from 3 to 20 in one undo step, and an arrow key steps it by
+/// one in one undo step.
+#[test]
+fn polygon_sides_above_slider_range_remain_editable() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let mut h = polygon_harness(50, show);
+    let (depth, revision) = (undo(h.state()), h.state().session.active().unwrap().revision);
+    h.run_steps(3);
+    assert_eq!(polygon_sides(h.state()), 50);
+    assert_eq!(undo(h.state()), depth);
+    assert_eq!(h.state().session.active().unwrap().revision, revision, "drawing the slider leaves the document as it is");
+    let slider = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Sides:");
+    let node = slider.accesskit_node();
+    assert_eq!(node.numeric_value(), Some(50.0));
+    assert_eq!(node.max_numeric_value(), Some(50.0));
+    assert_eq!(h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Sides:").value().as_deref(), Some("50"));
+    let at = sides_rail_at(&h, 12.0);
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(1);
+    assert_eq!(polygon_sides(h.state()), 12);
+    assert_eq!(undo(h.state()), depth + 1, "a press on the rail is one undo step");
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    assert_eq!(polygon_sides(h.state()), 13);
+    assert_eq!(undo(h.state()), depth + 2, "a key step is one undo step");
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert_eq!(polygon_sides(h.state()), 12);
+}
+
+/// A drag on the Sides slider previews the side count and its release records one undo step,
+/// which Undo takes back. Escape during a drag puts the polygon back and ignores the rest of the
+/// drag, and a drag that ends at the count it started from records nothing.
+#[test]
+fn polygon_sides_slider_drag_is_one_undo_step() {
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let mut h = polygon_harness(6, show);
+    let depth = undo(h.state());
+    let (six, fifteen, ten) = (sides_rail_at(&h, 6.0), sides_rail_at(&h, 15.0), sides_rail_at(&h, 10.0));
+    sides_press_and_move(&mut h, six, fifteen);
+    assert!(h.state().session.in_interaction(), "the drag is in progress");
+    assert_eq!(polygon_sides(h.state()), 15, "the drag previews the count");
+    assert_eq!(undo(h.state()), depth);
+    sides_release(&mut h, fifteen);
+    assert!(!h.state().session.in_interaction());
+    assert_eq!(polygon_sides(h.state()), 15);
+    assert_eq!(undo(h.state()), depth + 1, "the whole drag is one undo step");
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert_eq!(polygon_sides(h.state()), 6);
+    // Escape cancels the drag; the rest of it changes nothing.
+    sides_press_and_move(&mut h, six, fifteen);
+    assert_eq!(polygon_sides(h.state()), 15);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(1);
+    assert!(!h.state().session.in_interaction(), "Escape ends the drag");
+    assert_eq!(polygon_sides(h.state()), 6, "Escape puts the count back");
+    h.event(egui::Event::PointerMoved(ten));
+    h.run_steps(1);
+    sides_release(&mut h, ten);
+    assert_eq!(polygon_sides(h.state()), 6);
+    assert_eq!(undo(h.state()), depth, "a canceled drag records no undo step");
+    // Back where it started: no undo step.
+    sides_press_and_move(&mut h, six, fifteen);
+    sides_press_and_move_back(&mut h, fifteen, six);
+    sides_release(&mut h, six);
+    assert_eq!(polygon_sides(h.state()), 6);
+    assert_eq!(undo(h.state()), depth, "a drag back to its start records no undo step");
+}
+
+/// A Sides drag whose rows stop being drawn (the task bar's popover closed under it) keeps the
+/// count it previewed as one undo step at the end of that pass, as the app ends it; the release
+/// and the rows drawn again change nothing more.
+#[test]
+fn polygon_sides_slider_drag_released_unseen_is_kept() {
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 50, "sides": 6})).unwrap();
+    let depth = undo(&app);
+    let shown = std::rc::Rc::new(std::cell::Cell::new(true));
+    let drawn = shown.clone();
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            if drawn.get() {
+                show(app, ui);
+            }
+            end_stale_sides_drag(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    let (six, fifteen) = (sides_rail_at(&h, 6.0), sides_rail_at(&h, 15.0));
+    sides_press_and_move(&mut h, six, fifteen);
+    assert!(h.state().session.in_interaction());
+    assert_eq!(polygon_sides(h.state()), 15);
+    shown.set(false);
+    h.run_steps(1);
+    assert!(!h.state().session.in_interaction(), "the drag ends with the pass that did not draw it");
+    assert_eq!(polygon_sides(h.state()), 15);
+    assert_eq!(undo(h.state()), depth + 1, "one undo step");
+    sides_release(&mut h, fifteen);
+    shown.set(true);
+    h.run_steps(2);
+    assert_eq!(polygon_sides(h.state()), 15);
+    assert_eq!(undo(h.state()), depth + 1);
+}
+
+/// Move from `from` to `to` in four frames with the primary button still down.
+fn sides_press_and_move_back(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, from: egui::Pos2, to: egui::Pos2) {
+    for i in 1..=4 {
+        h.event(egui::Event::PointerMoved(from + (to - from) * (i as f32 / 4.0)));
+        h.run_steps(1);
+    }
+}

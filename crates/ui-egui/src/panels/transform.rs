@@ -588,9 +588,9 @@ fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// A live polygon's Polygon Properties (Transform and Properties panels): its side count, angle
-/// (counterclockwise), corner type and radius, radius (centre to vertex) and side length, and Make
-/// Sides Equal, which an uneven scale enables.
+/// A live polygon's Polygon Properties (Transform and Properties panels): its side count (a field
+/// and [`sides_slider`]), angle (counterclockwise), corner type and radius, radius (center to
+/// vertex) and side length, and Make Sides Equal, which an uneven scale enables.
 pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str) {
     let LiveShape::Polygon { sides, .. } = live else { return };
     let (units, fw) = (app.session.general_unit(), super::field_width(ui));
@@ -603,9 +603,12 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Sides:"));
-        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=1000.0, "", 0, fw) {
-            set = Some(("sides", json!(s as u64)));
-        }
+        ui.horizontal(|ui| {
+            if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=1000.0, "", 0, fw) {
+                set = Some(("sides", json!(s as u64)));
+            }
+            sides_slider(app, ui, id, *sides, fw);
+        });
         ui.end_row();
         widgets::dim_label(ui, tl!("Angle:"));
         if let Some(a) = widgets::mixed_field_named(ui, (id, "angle"), Some(tl!("Angle:")), angle, "°", 1, fw) {
@@ -638,6 +641,97 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     }
     if let Some((key, v)) = set {
         app.run("object.setLiveShape", json!({ key: v })).ok();
+    }
+}
+
+/// The side counts the Sides slider of Polygon Properties spans; the field beside it takes 3 to
+/// 1,000.
+pub(crate) const SIDES_SLIDER: std::ops::RangeInclusive<f64> = 3.0..=20.0;
+
+/// A drag on a Sides slider in progress: the rows it is in, whether Escape canceled it (the rest
+/// of it is ignored until the button is up), and the main window's pass the rail was last drawn in.
+#[derive(Clone, Debug, PartialEq)]
+struct SidesDrag {
+    rows: String,
+    canceled: bool,
+    pass: u64,
+}
+
+/// Panel state key of the [`SidesDrag`] in progress.
+const SIDES_DRAG: &str = "polygon-sides-drag";
+
+/// The main window's pass in progress, which a floating window's panel also marks its drag with.
+fn root_pass(ctx: &egui::Context) -> u64 {
+    ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT)
+}
+
+/// Keeps the count a Sides slider drag previewed as one undo step when its rail was not drawn in
+/// this pass (the task bar's popover or the panel closed during the drag), so no preview stays open
+/// into a later pass; a drag Escape canceled only ends. The app runs this at the end of every
+/// pass, after the panels.
+pub(crate) fn end_stale_sides_drag(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(drag) = pstate::<Option<SidesDrag>>(ctx, SIDES_DRAG) else { return };
+    if drag.pass == root_pass(ctx) {
+        return;
+    }
+    if !drag.canceled && app.session.in_interaction() {
+        if let Err(e) = app.session.commit_interaction() {
+            app.ui.status = e.to_string();
+        }
+        app.sync_views();
+    }
+    set_pstate(ctx, SIDES_DRAG, None::<SidesDrag>);
+}
+
+/// The Sides slider of Polygon Properties (rows `id`), `width` wide, for a polygon of `sides`
+/// sides. A drag, a press on the rail included, previews the side count and its release records
+/// one undo step; Escape during the drag puts the polygon back as it was and ignores the rest of
+/// the drag. A key step sets the count at once. A count past 20 shows at the rail's right end and
+/// stays until the rail moves. Screen readers get the count the field shows.
+fn sides_slider(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, sides: u32, width: f32) {
+    let t = Tokens::get(ui.ctx());
+    let (lo, hi) = (*SIDES_SLIDER.start(), *SIDES_SLIDER.end());
+    let n = f64::from(sides);
+    let shown = widgets::SliderValue::field(n, SIDES_SLIDER, "", 0);
+    let at = ((n.clamp(lo, hi) - lo) / (hi - lo)) as f32;
+    let (dragged, phase, keyed) = widgets::color_slider_stepped(ui, (id, "sides-slider"), tl!("Sides:"), Some(shown), at, width, &|_| t.input_border);
+    let ctx = ui.ctx().clone();
+    let held = pstate::<Option<SidesDrag>>(&ctx, SIDES_DRAG).filter(|d| d.rows == id);
+    let down = ui.input(|i| i.pointer.any_down());
+    let pass = root_pass(&ctx);
+    // `None` leaves another rows' drag as it is.
+    let mut next = None;
+    if let Some(d) = held.as_ref().filter(|d| d.canceled) {
+        next = Some(down.then(|| SidesDrag { pass, ..d.clone() }));
+    } else if held.is_some() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if let Err(e) = app.session.cancel_interaction() {
+            app.ui.status = e.to_string();
+        }
+        app.sync_views();
+        next = Some(down.then(|| SidesDrag { rows: id.to_string(), canceled: true, pass }));
+    } else if let Some(x) = dragged {
+        let count = (lo + f64::from(x) * (hi - lo)).round();
+        super::live_run(app, "Live Shape Properties", "object.setLiveShape", json!({ "sides": count as u64 }), phase);
+        next = Some((phase == widgets::Live::Dragging).then(|| SidesDrag { rows: id.to_string(), canceled: false, pass }));
+    } else if let Some(k) = keyed.map(f64::round).filter(|k| *k != n) {
+        app.run("object.setLiveShape", json!({ "sides": k as u64 })).ok();
+    } else if let Some(d) = held {
+        if down {
+            next = Some(Some(SidesDrag { pass, ..d }));
+        } else {
+            // The button is up but the rail reported no release: keep the preview as a release
+            // on the rail would.
+            if app.session.in_interaction() {
+                if let Err(e) = app.session.commit_interaction() {
+                    app.ui.status = e.to_string();
+                }
+                app.sync_views();
+            }
+            next = Some(None);
+        }
+    }
+    if let Some(next) = next {
+        set_pstate(&ctx, SIDES_DRAG, next);
     }
 }
 
