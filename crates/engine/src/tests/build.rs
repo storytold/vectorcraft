@@ -3493,6 +3493,34 @@ fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_clic
     assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
 }
 
+/// A Cmd-drag of a corner widget with the Live Paint Bucket that is cut short by choosing the
+/// bucket again (the Selection tool it lent cancels the drag as it goes back) leaves the bucket's
+/// colors as they were, with New Art Has Basic Appearance off: the selected object's appearance
+/// does not replace them.
+#[test]
+fn live_paint_bucket_keeps_its_colors_when_a_lent_drag_is_cut_short() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    let rect = rect(&mut s, 300.0, 300.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let fill = s.paint.fill.clone();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, at.x + 8.0, at.y + 8.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection", "the bucket lent the Selection tool for the drag");
+    assert!(s.in_interaction(), "the corner widget drag is in progress");
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_id(), "livePaintBucket");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
+}
+
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
 /// Bucket is active (its proxies show the default paint), and one selected on the bucket's
 /// gradient is not selected once another tool is chosen.

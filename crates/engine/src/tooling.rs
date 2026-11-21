@@ -319,6 +319,7 @@ impl Session {
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let lent_by_bucket = self.lent_by_bucket();
         let Some(lender) = self.lender.take() else { return Ok(()) };
         // The points the lent tool left picked go back to the tool it was lent to when that tool
         // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
@@ -328,7 +329,12 @@ impl Session {
             .then(|| self.tool.options().get("meshPoints").cloned())
             .flatten()
             .filter(|p| lender.options().get("meshPoints") != Some(p));
+        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
+        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
+        let outer_bucket = self.back_to_bucket;
+        self.back_to_bucket |= lent_by_bucket;
         let r = self.deactivate_tool(view);
+        self.back_to_bucket = outer_bucket;
         self.keep_tool_settings();
         self.tool = lender;
         if let Some(points) = mesh_points {
