@@ -7707,7 +7707,7 @@ draws no larger than takes the cut halfway along the corner's shorter side (half
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
-rounds the picked corners (every corner, or the Direct-Selected ones) on every selected path at once,
+rounds the picked corners (every corner, or the Direct-Selected ones) whose widgets show, on every selected path at once,
 outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
 the Direct Selection tool those of any path. Direct Selection shows the widget of every corner, picked or not: a
 picked corner's widget has a dot at its center and the others are hollow. A click on a widget that is not picked
