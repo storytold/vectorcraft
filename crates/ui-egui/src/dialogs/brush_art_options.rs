@@ -14,7 +14,9 @@
 //! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
 //! `overlap` (bend on each run between sharp corners).
-//! Pattern: `scale`, `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
+//! Pattern: `scale`, `scaleMax` (the scale at the heaviest pen pressure, upright, at 180° or at
+//! the wheel's far end, %), `scaleMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation` |
+//! `stylusWheel`), `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
 //! `flipAcross`, `outerCornerTile` and `innerCornerTile` (`original`: the corner art the brush
 //! draws there | `none` | `autoCentered` | `autoBetween` | `autoSliced` | `autoOverlap`: a tile
 //! made from the side tile),
@@ -208,6 +210,8 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
         }
         BrushKind::Pattern(p) => {
             f.insert("scale".into(), json!(p.scale));
+            f.insert("scaleMode".into(), json!(p.scale_mode.unwrap_or_default().id()));
+            f.insert("scaleMax".into(), json!(p.scale_range().1));
             f.insert("spacing".into(), json!(p.spacing));
             f.insert("fit".into(), json!(id_of(&p.fit)));
             f.insert("flipAlong".into(), json!(p.flip_along));
@@ -261,6 +265,47 @@ fn art_width_mode(d: &Dialog) -> Variation {
     Variation::parse(&d.str("widthMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
 }
 
+/// How a pattern brush's scale varies: Fixed, or with the pen's pressure, tilt, bearing, rotation
+/// or wheel.
+fn pattern_scale_mode(d: &Dialog) -> Variation {
+    Variation::parse(&d.str("scaleMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
+}
+
+/// The second value (`max_key`, the definition's `def_max`) of a value that follows the pen (`key`,
+/// the same in the definition), for `brush.options` params. `null` in Options of Selected Object
+/// when the path it opened with has no second value and the second value has not been changed from
+/// the value it opened with, so each selected path keeps its own.
+fn second_value(d: &Dialog, (key, max_key, def_max): (&str, &str, &str), range: (f64, f64)) -> Value {
+    let v = clamped(d, max_key, range);
+    let def = d.fields.get("__def");
+    let opened = def.and_then(|def| def.get(key)).and_then(Value::as_f64);
+    let unset = def.and_then(|def| def.get(def_max)).is_none_or(Value::is_null);
+    if d.bool(super::brush_options::OBJECT) && unset && opened == Some(v) { Value::Null } else { json!(v) }
+}
+
+/// The second value field `max_key` (enabled only for a mode that follows the pen) and the
+/// [`PEN_SIZE_MODES`] menu `mode_key` of a row labeled `label` (an art brush's Width, a pattern
+/// brush's Scale), at `mode`. Screen readers call them `label` and Maximum, and `label` and Mode.
+fn pen_mode_controls(ui: &mut egui::Ui, d: &mut Dialog, label: &str, (max_key, mode_key): (&str, &str), range: (f64, f64), mode: Variation) {
+    let max_name = format!("{label} {}", tl!("Maximum"));
+    ui.add_enabled_ui(mode.follows_pen(), |ui| {
+        let v = clamped(d, max_key, range);
+        if let Some(v) = widgets::range_field_named(ui, ("brush-art-value", max_key), Some(&max_name), v, range.0..=range.1, "%", 0, 72.0) {
+            d.fields.insert(max_key.into(), json!(v));
+        }
+    });
+    let mode_name = format!("{label} {}", tl!("Mode"));
+    let labels = PEN_SIZE_MODES.map(Variation::label);
+    let picked = widgets::dropdown_named(ui, ("brush-pen-mode", mode_key), Some(&mode_name), mode.label(), &labels, 104.0);
+    if let Some(m) = picked.and_then(|i| PEN_SIZE_MODES.get(i)) {
+        d.fields.insert(mode_key.into(), json!(m.id()));
+    }
+}
+
+/// The modes an art brush's width and a pattern brush's scale offer, in menu order.
+const PEN_SIZE_MODES: [Variation; 6] =
+    [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
+
 /// `brush.options` params from the fields.
 pub(super) fn params(d: &Dialog) -> Value {
     let mut p = match d.str("__type").as_str() {
@@ -287,7 +332,7 @@ pub(super) fn params(d: &Dialog) -> Value {
             json!({
                 "width": clamped(d, "width", ArtBrush::WIDTH_RANGE),
                 "width_mode": if pen { json!(mode.id()) } else { Value::Null },
-                "width_max": if pen { json!(clamped(d, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
+                "width_max": if pen { second_value(d, ("width", "widthMax", "width_max"), ArtBrush::WIDTH_RANGE) } else { Value::Null },
                 "scale": serde_json::to_value(scale).unwrap_or_default(),
                 "direction": id_of(&parse_field::<Direction>(d, "direction")),
                 "flip_along": d.bool("flipAlong"),
@@ -296,8 +341,12 @@ pub(super) fn params(d: &Dialog) -> Value {
             })
         }
         _ => {
+            let mode = pattern_scale_mode(d);
+            let pen = mode.follows_pen();
             let mut p = json!({
                 "scale": clamped(d, "scale", PatternBrush::SCALE_RANGE),
+                "scale_mode": if pen { json!(mode.id()) } else { Value::Null },
+                "scale_max": if pen { second_value(d, ("scale", "scaleMax", "scale_max"), PatternBrush::SCALE_RANGE) } else { Value::Null },
                 "spacing": clamped(d, "spacing", PatternBrush::SPACING_RANGE),
                 "fit": id_of(&parse_field::<PatternFit>(d, "fit")),
                 "flip_along": d.bool("flipAlong"),
@@ -410,13 +459,6 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, range: (f64, f64), suffi
     });
 }
 
-/// A row labeled `label` with a slider and a whole-number field (%) bound to `d.fields[key]`, both
-/// kept within `range`; screen readers call the slider `label`.
-fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, range: (f64, f64)) {
-    let rail = Tokens::get(ui.ctx()).input_border;
-    widgets::label_row(ui, label, LABEL_W, |ui| super::form::slider_field_named(ui, d, key, label, range.0..=range.1, "%", &|_| rail));
-}
-
 /// A row of radio buttons bound to the string field `key`: (value, label).
 fn radios(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)]) {
     let cur = d.str(key);
@@ -472,12 +514,7 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let range = ArtBrush::WIDTH_RANGE;
     widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
         super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
-        let mode = art_width_mode(d);
-        number(ui, d, "widthMax", range, "%", mode.follows_pen());
-        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
-        if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
-            d.fields.insert("widthMode".into(), json!(m.id()));
-        }
+        pen_mode_controls(ui, d, tl!("Width:"), ("widthMax", "widthMode"), range, art_width_mode(d));
     });
     // A path sets its own width, flips, overlap and colorization, not how the art scales or runs.
     if d.bool(super::brush_options::OBJECT) {
@@ -543,7 +580,13 @@ fn arrow_button(ui: &mut egui::Ui, dir: Direction, selected: bool, tip: &str) ->
 }
 
 fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
+    // Scale, then the second scale (only when the scale follows the pen) and how it varies.
+    let rail = Tokens::get(ui.ctx()).input_border;
+    let range = PatternBrush::SCALE_RANGE;
+    widgets::label_row(ui, tl!("Scale:"), LABEL_W, |ui| {
+        super::form::slider_field_named(ui, d, "scale", tl!("Scale:"), range.0..=range.1, "%", &|_| rail);
+        pen_mode_controls(ui, d, tl!("Scale:"), ("scaleMax", "scaleMode"), range, pattern_scale_mode(d));
+    });
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
     // The tiles belong to the brush; a path sets its own scale, spacing, flips, fit and colorization.
