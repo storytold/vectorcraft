@@ -133,9 +133,10 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 }
 
 /// Makes the run's swatch, symbol, style and brush objects whose resource a `vc.run` command
-/// removed or renamed stale, so a new resource that takes the name later is not theirs.
-pub(super) fn forget_removed(h: &Host) {
-    resources::forget_removed(h);
+/// removed or renamed stale, so a new resource that takes the name later is not theirs. The check
+/// is charged to the run.
+pub(super) fn forget_removed(h: &Host) -> std::result::Result<(), HostError> {
+    resources::forget_removed(h)
 }
 
 /// A document's uid, the document as it was, and the ids of its page items then.

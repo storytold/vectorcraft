@@ -1298,8 +1298,9 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     host.charge_call(bytes)?;
     bump(&host.counts.vc_run);
     let r = command(host, &id, &params);
-    dom::forget_removed(host);
-    r
+    let forgot = dom::forget_removed(host);
+    let data = r?;
+    forgot.map(|()| data)
 }
 
 /// Runs command `id` for the script as `vc.run` does, its call already charged: it joins the run's

@@ -121,57 +121,61 @@ const KINDS: [Kind; 6] = [Kind::Swatch, Kind::Spot, Kind::Group, Kind::Symbol, K
 #[derive(Default)]
 pub(super) struct Table {
     slots: Vec<(u64, Kind, Option<String>)>,
-    index: HashMap<(u64, Kind, String), usize>,
+    /// For each document's uid, the slot of each kind and name it holds.
+    index: HashMap<u64, HashMap<(Kind, String), usize>>,
     /// Each document as [`forget_removed`] last checked it.
     checked: HashMap<u64, Arc<Document>>,
 }
 
 impl Table {
     /// Marks every slot stale whose document is no longer open, or whose resource `docs` no
-    /// longer has. A document unchanged since the last check is skipped.
-    fn forget(&mut self, docs: &[DocState]) {
-        if self.index.is_empty() {
-            return;
-        }
-        let uids: HashSet<u64> = self.index.keys().map(|(u, ..)| *u).collect();
-        for uid in uids {
-            let st = docs.iter().find(|d| d.uid == uid);
-            if let (Some(st), Some(seen)) = (st, self.checked.get(&uid))
+    /// longer has. A document unchanged since the last check is skipped, and its slots are not
+    /// visited. → how many slots and resource names it compared.
+    fn forget(&mut self, docs: &[DocState]) -> u64 {
+        let mut work = 0u64;
+        for (uid, held) in &mut self.index {
+            let st = docs.iter().find(|d| d.uid == *uid);
+            if let (Some(st), Some(seen)) = (st, self.checked.get(uid))
                 && Arc::ptr_eq(seen, &st.doc)
             {
                 continue;
             }
+            work += held.len() as u64;
             let mut present: HashMap<Kind, HashSet<String>> = HashMap::new();
-            let gone: Vec<(u64, Kind, String)> = self
-                .index
-                .keys()
-                .filter(|(u, k, n)| {
-                    *u == uid && st.is_none_or(|st| !present.entry(*k).or_insert_with(|| names(&st.doc, *k).into_iter().collect()).contains(n))
-                })
-                .cloned()
-                .collect();
-            for key in gone {
-                if let Some(i) = self.index.remove(&key) {
-                    self.slots[i].2 = None;
+            let slots = &mut self.slots;
+            held.retain(|(k, n), i| {
+                let kept = st.is_some_and(|st| present.entry(*k).or_insert_with(|| names(&st.doc, *k).into_iter().collect()).contains(n));
+                if !kept {
+                    slots[*i].2 = None;
                 }
-            }
+                kept
+            });
+            work += present.values().map(|p| p.len() as u64).sum::<u64>();
             match st {
-                Some(st) => self.checked.insert(uid, st.doc.clone()),
-                None => self.checked.remove(&uid),
+                Some(st) => self.checked.insert(*uid, st.doc.clone()),
+                None => self.checked.remove(uid),
             };
         }
+        let checked = &mut self.checked;
+        self.index.retain(|uid, held| {
+            if held.is_empty() {
+                checked.remove(uid);
+            }
+            !held.is_empty()
+        });
+        work
     }
 
     /// The slot of `name`, made when there is none.
     fn slot(&mut self, uid: u64, kind: Kind, name: &str) -> std::result::Result<usize, HostError> {
-        if let Some(i) = self.index.get(&(uid, kind, name.to_string())) {
+        if let Some(i) = self.index.get(&uid).and_then(|held| held.get(&(kind, name.to_string()))) {
             return Ok(*i);
         }
         if self.slots.len() >= MAX_SLOTS {
             return Err(HostError::Range(format!("a script may hold at most {MAX_SLOTS} swatches, symbols, styles and brushes")));
         }
         self.slots.push((uid, kind, Some(name.to_string())));
-        self.index.insert((uid, kind, name.to_string()), self.slots.len() - 1);
+        self.index.entry(uid).or_default().insert((kind, name.to_string()), self.slots.len() - 1);
         Ok(self.slots.len() - 1)
     }
 
@@ -187,18 +191,20 @@ impl Table {
     /// before go stale.
     fn rename(&mut self, uid: u64, kind: Kind, from: &str, to: &str) {
         self.remove(uid, kind, to);
+        let Some(held) = self.index.get_mut(&uid) else { return };
         for k in kind.family() {
-            if let Some(i) = self.index.remove(&(uid, *k, from.to_string())) {
+            if let Some(i) = held.remove(&(*k, from.to_string())) {
                 self.slots[i].2 = Some(to.to_string());
-                self.index.insert((uid, *k, to.to_string()), i);
+                held.insert((*k, to.to_string()), i);
             }
         }
     }
 
     /// The resource `name` of the family of `kind` is gone.
     fn remove(&mut self, uid: u64, kind: Kind, name: &str) {
+        let Some(held) = self.index.get_mut(&uid) else { return };
         for k in kind.family() {
-            if let Some(i) = self.index.remove(&(uid, *k, name.to_string())) {
+            if let Some(i) = held.remove(&(*k, name.to_string())) {
                 self.slots[i].2 = None;
             }
         }
@@ -206,9 +212,16 @@ impl Table {
 }
 
 /// After a `vc.run` command: the objects whose resource the command removed or renamed go stale.
-pub(super) fn forget_removed(h: &Host) {
-    let s = h.session.borrow();
-    h.dom.resources.borrow_mut().forget(s.documents());
+/// The slots and names the check compares are charged to the run.
+pub(super) fn forget_removed(h: &Host) -> std::result::Result<(), HostError> {
+    let work = {
+        let s = h.session.borrow();
+        h.dom.resources.borrow_mut().forget(s.documents())
+    };
+    if work > 0 {
+        h.charge_call(work)?;
+    }
+    Ok(())
 }
 
 type Kfn = fn(&Host, Kind, &[Data]) -> Answer;
@@ -799,15 +812,20 @@ fn symbol_duplicate(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     resource_ref(h, r.doc.uid, Kind::Symbol, &name)
 }
 
-/// The ids of a document's symbol instances, in the order of its page items.
-fn instances(h: &Host, st: &DocState) -> Vec<NodeId> {
-    page_items(h, st).iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))).collect()
+/// The ids of a document's symbol instances, in the order of its page items, and how many page
+/// items it looked at.
+fn instances(h: &Host, st: &DocState) -> (Vec<NodeId>, usize) {
+    let items = page_items(h, st);
+    let ids = items.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))).collect();
+    (ids, items.len())
 }
 
+/// The document of `SymbolItems` and its symbol instances; the page items scanned for them are
+/// charged to the run.
 fn instances_of(h: &Host, a: &[Data]) -> std::result::Result<(Doc, Vec<NodeId>), HostError> {
     let doc = doc_of(h, arg(a, 0), "SymbolItems")?;
-    let ids = with_doc(h, doc, |_, st| instances(h, st));
-    h.charge_call(ids.len() as u64)?;
+    let (ids, scanned) = with_doc(h, doc, |_, st| instances(h, st));
+    h.charge_call(scanned as u64)?;
     Ok((doc, ids))
 }
 
@@ -1104,7 +1122,32 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, MAX_SLOTS, Table};
+    use std::sync::Arc;
+
+    use super::{Kind, MAX_SLOTS, Table, names};
+    use crate::{DocState, Document};
+
+    #[test]
+    fn a_check_visits_only_the_documents_that_changed() {
+        let mut docs = vec![DocState::new(Document::new(612.0, 792.0), None), DocState::new(Document::new(612.0, 792.0), None)];
+        let (one, two) = (docs[0].uid, docs[1].uid);
+        let held = names(&docs[0].doc, Kind::Swatch);
+        assert!(held.len() > 1, "a new document has swatches");
+        let mut t = Table::default();
+        let slots: Vec<usize> = held.iter().map(|n| t.slot(one, Kind::Swatch, n).unwrap_or(usize::MAX)).collect();
+        let other = t.slot(two, Kind::Swatch, &held[0]).unwrap_or(usize::MAX);
+        assert!(t.forget(&docs) > 0, "the first check compares every held slot");
+        assert_eq!(t.forget(&docs), 0, "documents unchanged since the last check are not visited");
+        docs[1].doc = Arc::new((*docs[1].doc).clone());
+        let names_of_two = names(&docs[1].doc, Kind::Swatch).len() as u64;
+        assert_eq!(t.forget(&docs), 1 + names_of_two, "only the changed document's slot and names are compared");
+        assert_eq!(t.name(other, two, Kind::Swatch), Some(held[0].as_str()));
+        assert!(slots.iter().zip(&held).all(|(s, n)| t.name(*s, one, Kind::Swatch) == Some(n.as_str())));
+        docs.remove(0);
+        assert_eq!(t.forget(&docs), held.len() as u64, "a closed document's slots are compared once");
+        assert!(slots.iter().all(|s| t.name(*s, one, Kind::Swatch).is_none()), "a closed document's objects go stale");
+        assert_eq!(t.forget(&docs), 0);
+    }
 
     #[test]
     fn a_run_holds_a_bounded_number_of_resource_objects() {
