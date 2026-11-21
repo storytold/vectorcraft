@@ -1228,6 +1228,8 @@ rows below it: there `"below"` reads the art below each such level, and a given 
 Headless MCP answers it too. The answer also has `for` (the category `for` names: `normalText`, the default,
 `largeText` or `graphics`) and `fix: {aa, aaa}` (no `aaa` for graphics): for each level of that category, the closest
 color that meets it when drawn the same way, in the model of the measured color, as the Color Wheel stores a pick. The
+closest color also meets the level with the color, the background, the art below each group or layer it is drawn
+through, and the opacities rounded to 8 bits per channel. The
 search keeps the color's [OKLCH](https://bottosson.github.io/posts/oklab/) hue, raises or lowers its lightness,
 whichever takes the smaller step, and lowers its chroma where sRGB cannot show it. A level is `null` when the color
 already meets it, or when no lightness of the hue does (white on `#355f78` is 6.87:1, so no color meets 7:1 there).

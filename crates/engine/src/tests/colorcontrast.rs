@@ -758,7 +758,7 @@ fn a_picked_symbol_object_is_measured_with_its_instances_stain() {
     let fix = fix_color(&r["fix"]["aa"]);
     let drawn = fix.lerp(&vectorcraft_color::Color::BLACK, 0.5).to_rgb_uncalibrated();
     let got = vectorcraft_color::wcag::contrast_ratio(drawn, [1.0; 3]);
-    assert!((4.5..4.51).contains(&got), "{fix:?} draws {drawn:?}: {got}");
+    assert!((4.5..4.57).contains(&got), "{fix:?} draws {drawn:?}: {got}");
 }
 
 #[test]
@@ -877,7 +877,7 @@ fn a_failing_color_answers_the_closest_passing_color_of_its_hue() {
     assert_eq!(r["for"], "normalText");
     let aa = fix_color(&r["fix"]["aa"]);
     let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#355f78"})).unwrap();
-    assert!((4.5..4.51).contains(&ratio(&back)), "{back}");
+    assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
     let want = oklch_hue(&vectorcraft_color::Color::from_hex("#fdc96e").unwrap());
     assert!((oklch_hue(&aa) - want).abs() < 1.0, "{} {want}", oklch_hue(&aa));
     assert!(matches!(aa, vectorcraft_color::Color::Rgb { .. }), "an RGB color answers RGB: {aa:?}");
@@ -885,7 +885,53 @@ fn a_failing_color_answers_the_closest_passing_color_of_its_hue() {
     assert!(r["fix"]["aaa"].is_null(), "{r}");
     let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
     let aaa = s.execute("color.contrast", &json!({"color": large["fix"]["aaa"], "against": "#355f78"})).unwrap();
-    assert!((4.5..4.51).contains(&ratio(&aaa)), "large text AAA is AA's 4.5:1 for normal text: {aaa}");
+    assert!((4.5..4.57).contains(&ratio(&aaa)), "large text AAA is AA's 4.5:1 for normal text: {aaa}");
+}
+
+/// The canvas paints a color with 8 bits per channel, so a fix passes once rounded that way too:
+/// #777777 on white is 4.48:1, a gray of about 118.7/255 meets 4.5:1 but paints as #777777 again,
+/// and the fix has to paint as #767676 (4.54:1) or darker.
+#[test]
+fn a_fix_passes_as_the_canvas_paints_it() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#777777", "against": "#ffffff"})).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    let painted = fix.to_rgb_uncalibrated().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0);
+    let got = vectorcraft_color::wcag::contrast_ratio(painted, [1.0; 3]);
+    assert!(got >= 4.5, "{fix:?} paints as {painted:?}: {got}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff"})).unwrap();
+    assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
+}
+
+/// A translucent fix also meets the minimum with the color, the opacity, the background and the
+/// composited pixel rounded to 8 bits per channel.
+#[test]
+fn a_translucent_fix_passes_at_eight_bits() {
+    let eight = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0;
+    let at_eight_bits = |fix: &vectorcraft_color::Color, opacity: f32, against: f32| {
+        let (a, b) = (eight(opacity), eight(against));
+        let pixel = fix.to_rgb_uncalibrated().map(|c| eight(eight(c) * a + b * (1.0 - a)));
+        vectorcraft_color::wcag::contrast_ratio(pixel, [b; 3])
+    };
+    let mut s = Session::new();
+    // A gray can pass only before rounding: #808080 at 91.1 % over black measures 4.53:1, and at
+    // 232 / 255 its pixel is #747474 (4.49:1).
+    let r = s.execute("color.contrast", &json!({"color": "#707070", "against": "#000000", "opacity": 91.1})).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(at_eight_bits(&fix, 0.911, 0.0) >= 4.5, "{fix:?}");
+    // #040404 at 195 / 255 over a gray of 137.51 / 255 measures 4.5002:1, and over 138 / 255 it is
+    // 4.4965:1.
+    let bg = 137.51 / 255.0;
+    let p = json!({"color": "#303030", "against": [bg, bg, bg], "opacity": 19500.0 / 255.0});
+    let r = s.execute("color.contrast", &p).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(at_eight_bits(&fix, 195.0 / 255.0, bg) >= 4.5, "{fix:?}");
+    // Black at 41.7 % over white measures 3.008:1, and its pixel at 8 bits is 2.995:1, so no gray
+    // at that opacity gets a fix.
+    let p = json!({"color": "#202020", "against": "#ffffff", "opacity": 41.7, "for": "graphics"});
+    let r = s.execute("color.contrast", &p).unwrap();
+    assert_eq!(r["graphics"]["aa"], false, "{r}");
+    assert!(r["fix"]["aa"].is_null(), "{r}");
 }
 
 #[test]
@@ -898,7 +944,7 @@ fn a_passing_color_has_no_fix_and_graphics_have_no_aaa_fix() {
     let fix = g["fix"].as_object().unwrap();
     assert_eq!(fix.keys().collect::<Vec<_>>(), ["aa"], "{g}");
     let back = s.execute("color.contrast", &json!({"color": g["fix"]["aa"], "against": "#ffffff"})).unwrap();
-    assert!((3.0..3.01).contains(&ratio(&back)), "{back}");
+    assert!((3.0..3.04).contains(&ratio(&back)), "{back}");
     let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
     assert!(large["fix"]["aa"].is_null(), "4.49:1 meets large text AA: {large}");
     assert!(!large["fix"]["aaa"].is_null(), "{large}");
@@ -925,7 +971,7 @@ fn a_fix_is_drawn_at_the_same_opacity_and_none_passes_out_of_reach() {
     assert_eq!(r["largeText"]["aa"], false, "{r}");
     assert!(r["fix"]["aaa"].is_null(), "no gray at 50 % reaches 4.5:1: {r}");
     let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff", "opacity": 50})).unwrap();
-    assert!((3.0..3.01).contains(&ratio(&back)), "{back}");
+    assert!((3.0..3.04).contains(&ratio(&back)), "{back}");
 }
 
 #[test]

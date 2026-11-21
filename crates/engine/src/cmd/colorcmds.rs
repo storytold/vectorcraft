@@ -1016,28 +1016,50 @@ pub struct Backdrop {
 }
 
 /// One level of a [`Backdrop`]: its blend mode and opacity, the art below it (a display sRGB color
-/// and its alpha), and for a level that blends without isolating, the alpha of what it holds drawn
-/// alone.
+/// and its alpha), whether it blends without isolating or isolates its blending, and the alpha of
+/// the art below it inside the level around it, while a blending level lies further out.
 #[derive(Clone, Debug, PartialEq)]
 struct Pass {
     blend: BlendMode,
     opacity: f32,
     backdrop: ([f32; 3], f32),
-    alone: Option<f32>,
+    blends: bool,
+    isolate: bool,
+    inner: f32,
 }
 
+/// A color drawn through the levels so far: the color, its alpha, and the alpha of what the next
+/// level out holds drawn alone.
+type Through = ([f32; 3], f32, f32);
+
 impl Pass {
-    /// What the level draws for `x` (a color and its alpha, drawn over the art below it): a level
-    /// that blends takes that art back out by the alpha of what it holds drawn alone.
-    fn source(&self, x: ([f32; 3], f32)) -> ([f32; 3], f32) {
-        match self.alone {
-            None => x,
-            Some(alone) if alone <= 0.0 => (x.0, 0.0),
-            Some(alone) => {
-                let b = self.backdrop;
-                (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * b.0[i] * b.1) / alone).clamp(0.0, 1.0)), alone)
-            }
+    /// What the level draws for color and alpha `x`, drawn over the art below it: a level that
+    /// blends takes that art back out by `alone`, the alpha of what it holds drawn alone.
+    fn source(&self, x: ([f32; 3], f32), alone: f32) -> ([f32; 3], f32) {
+        if !self.blends {
+            return x;
         }
+        if alone <= 0.0 {
+            return (x.0, 0.0);
+        }
+        let b = self.backdrop;
+        (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * b.0[i] * b.1) / alone).clamp(0.0, 1.0)), alone)
+    }
+
+    /// `d` drawn through the level. The level's opacity applies to what it holds, a level that
+    /// isolates its blending carries out the alpha of what it holds composited on its own, and the
+    /// art beside it in the level around it adds to the alpha once.
+    fn draw(&self, (color, alpha, alone): Through) -> Through {
+        let source = self.source((color, alpha), alone);
+        let drawn = if self.isolate { alpha } else { alone } * self.opacity.clamp(0.0, 1.0);
+        let (color, alpha) = composite(self.blend, source, self.opacity, self.backdrop);
+        (color, alpha, drawn + self.inner * (1.0 - drawn))
+    }
+
+    /// The level with its opacity, the art below it and its alphas passed through `q`.
+    fn with(&self, q: impl Fn(f32) -> f32) -> Pass {
+        let (color, alpha) = self.backdrop;
+        Pass { opacity: q(self.opacity), backdrop: (color.map(&q), q(alpha)), inner: q(self.inner), ..self.clone() }
     }
 }
 
@@ -1053,14 +1075,28 @@ impl Backdrop {
 
     /// Display sRGB `shown`, drawn as the measured color is drawn, over the background.
     pub fn front(&self, shown: [f32; 3]) -> [f32; 3] {
-        let x = self.passes.iter().fold((shown, 1.0f32), |x, p| composite(p.blend, p.source(x), p.opacity, p.backdrop));
-        if x.1 >= 1.0 { x.0 } else { wcag::over(x.0, x.1, self.against) }
+        let (color, alpha, _) = self.passes.iter().fold((shown, 1.0f32, 1.0f32), |d, p| p.draw(d));
+        if alpha >= 1.0 { color } else { wcag::over(color, alpha, self.against) }
     }
 
     /// The contrast ratio of display sRGB `shown`, drawn as the measured color is drawn, against
     /// the background.
     pub fn ratio(&self, shown: [f32; 3]) -> f64 {
         wcag::contrast_ratio(self.front(shown), self.against)
+    }
+
+    /// [`Backdrop::ratio`] with every value rounded to 8 bits per channel: the color, the art
+    /// below each level, the background, the opacities, and the color and alpha each level gives.
+    fn ratio_at_eight_bits(&self, shown: [f32; 3]) -> f64 {
+        let eight = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0;
+        let painted = |c: [f32; 3]| c.map(eight);
+        let against = painted(self.against);
+        let (color, alpha, _) = self.passes.iter().fold((painted(shown), 1.0f32, 1.0f32), |d, p| {
+            let (color, alpha, alone) = p.with(eight).draw(d);
+            (painted(color), eight(alpha), eight(alone))
+        });
+        let front = if alpha >= 1.0 { color } else { wcag::over(color, alpha, against) };
+        wcag::contrast_ratio(painted(front), against)
     }
 
     /// The background as `#rrggbb` in working RGB, the form a color param takes.
@@ -1101,11 +1137,16 @@ fn in_model_of(cms: &vectorcraft_color::cms::Cms, srgb: [f32; 3], like: &Color) 
 
 /// The closest color in the model of `color` whose contrast against `backdrop` meets `minimum`
 /// ([`wcag::closest_passing`]), checked as the canvas shows it once stored (a symbol's stain
-/// included). None when `color` already meets it, or when no lightness of its hue does.
+/// included). A candidate meets it by [`Backdrop::ratio`] and also with its values rounded to 8
+/// bits per channel ([`Backdrop::ratio_at_eight_bits`]). None when `color` already meets it by
+/// [`Backdrop::ratio`], or when no lightness of its hue does.
 fn closest_passing(backdrop: &Backdrop, color: &Color, minimum: f64, rich_black: bool) -> Option<Color> {
     let cms = vectorcraft_color::cms::active();
     let drawn = |c: &Color| shown_rgb(&cms, rich_black, &backdrop.drawn_color(c));
-    let ratio = |srgb: [f32; 3]| backdrop.ratio(drawn(&in_model_of(&cms, srgb, color)));
+    let ratio = |srgb: [f32; 3]| {
+        let shown = drawn(&in_model_of(&cms, srgb, color));
+        backdrop.ratio(shown).min(backdrop.ratio_at_eight_bits(shown))
+    };
     if backdrop.ratio(drawn(color)) >= minimum {
         return None;
     }
@@ -1249,13 +1290,8 @@ fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
             Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => read(Some(&around.within))?.1,
             _ => 0.0,
         };
-        let pass = Pass { blend: step.blend, opacity: step.opacity, backdrop, alone: blends(step).then_some(alone) };
-        let source = pass.source(([0.0; 3], alpha)).1;
-        // A level that isolates its blending carries out the alpha of what it holds composited on
-        // its own.
-        let drawn = if step.isolate { alpha } else { alone } * step.opacity.clamp(0.0, 1.0);
-        alpha = composite(step.blend, ([0.0; 3], source), step.opacity, backdrop).1;
-        alone = drawn + inner * (1.0 - drawn);
+        let pass = Pass { blend: step.blend, opacity: step.opacity, backdrop, blends: blends(step), isolate: step.isolate, inner };
+        (_, alpha, alone) = pass.draw(([0.0; 3], alpha, alone));
         passes.push(pass);
     }
     let stain = if given { None } else { stain_of(s) };
