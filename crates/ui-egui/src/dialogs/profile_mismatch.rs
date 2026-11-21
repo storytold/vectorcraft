@@ -87,28 +87,24 @@ fn paste_choices() -> [(&'static str, &'static str); 2] {
 
 /// Open `file`, read for File › Open from `path`, as `document.open` does, unless Edit › Color
 /// Settings asks about its profile ([`ReadFile::ask`]): then the dialog asks first, and the result
-/// is `{dialog}`. A file read while another one's question is open waits for its own question
-/// until that one is answered (`{dialog, queued: true}`). Opened, the views follow and the file
+/// is `{dialog}`. A file read while another one's question, or another dialog, is open waits for
+/// its own question until that one closes (`{dialog, queued: true}`). Opened, the views follow and the file
 /// goes on the recent files ([`crate::io::opened`]). `background`: the file was read off the UI
 /// thread, and the rest of its read after an answer is done there too.
 pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String>, background: bool) -> Result<Value, String> {
     ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture(), background })
 }
 
-/// [`open_or_ask`] for a file that has its scope already.
+/// [`open_or_ask`] for a file that has its scope already. While another dialog is open (a paste
+/// waiting for its Swatch Conflict answer, say), the question waits for it to close too.
 fn ask_or_open(app: &mut VectorcraftApp, mut pending: PendingOpen) -> Result<Value, String> {
     let Some(q) = pending.file.ask() else {
-        let PendingOpen { file, path, scope, .. } = pending;
-        return scope.run(|| {
-            let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
-            crate::io::opened(app, &r);
-            if let Some(p) = &path {
-                crate::io::note_recent(app, p);
-            }
-            Ok(r)
-        });
+        // The question is gone (or there was none): a file read off the UI thread does the rest of
+        // its read there, as an answered one does.
+        let scope = pending.scope.clone();
+        return open_now(app, pending, scope);
     };
-    if app.pending_profile_open.is_some() {
+    if app.pending_profile_open.is_some() || app.ui.dialog.is_some() {
         app.queued_profile_opens.push_back(pending);
         return Ok(json!({ "dialog": OPEN_KIND, "queued": true }));
     }
@@ -222,33 +218,36 @@ fn open_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
 /// off the UI thread does the rest of its read (its linked files and type) there too
 /// ([`crate::opening::finish_answered`]).
 fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> DialogResult {
+    let name = pending.file.name();
+    let r = open_now(app, pending, scope);
+    if let Err(e) = &r {
+        crate::io::report_open_error(app, &name, e);
+    }
+    r
+}
+
+/// Open `pending` under `scope` without reporting a failure. A file read off the UI thread with part
+/// of its read left ([`ReadFile::read_left`]) does that part there ([`crate::opening::finish_answered`])
+/// → `{background: true, status}`; when no thread can start, it opens at once.
+fn open_now(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
     let PendingOpen { file, path, background, .. } = pending;
-    let name = file.name();
     let file = match &path {
-        Some(p) if background && crate::opening::available() => match crate::opening::finish_answered(app, p, file, scope.clone()) {
-            Ok(r) => return Ok(r),
-            Err(Some(file)) => *file,
-            Err(None) => {
-                let e = "the file stopped being read (please report this bug)".to_string();
-                crate::io::report_open_error(app, &name, &e);
-                return Err(e);
+        Some(p) if background && file.read_left() && crate::opening::available() => {
+            match crate::opening::finish_answered(app, p, file, scope.clone()) {
+                Ok(r) => return Ok(r),
+                Err(Some(file)) => *file,
+                Err(None) => return Err("the file stopped being read (please report this bug)".to_string()),
             }
-        },
+        }
         _ => file,
     };
-    scope.run(|| match fileio::open_read(&mut app.session, file) {
-        Ok(r) => {
-            crate::io::opened(app, &r);
-            if let Some(p) = &path {
-                crate::io::note_recent(app, p);
-            }
-            Ok(r)
+    scope.run(|| {
+        let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
+        crate::io::opened(app, &r);
+        if let Some(p) = &path {
+            crate::io::note_recent(app, p);
         }
-        Err(e) => {
-            let e = e.to_string();
-            crate::io::report_open_error(app, &name, &e);
-            Err(e)
-        }
+        Ok(r)
     })
 }
 
