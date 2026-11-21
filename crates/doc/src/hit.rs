@@ -74,11 +74,28 @@ pub struct HitOptions {
     /// its edge. Off for the tools that act on what is drawn (sampling, type, gradients…);
     /// [`hit_test_visible`] never does it.
     pub clip_outlines: bool,
+    /// The Type tool: area type is hit anywhere inside its frame, where a click places the caret.
+    /// Off, the empty part of the frame (away from its edge and its lines of type) takes no
+    /// clicks, so they reach the art behind (#7274).
+    pub area_type_interior: bool,
+    /// The point hit tests ([`hit_test`], [`hit_test_visible`] and [`hit_test_visible_skipping`])
+    /// hit the art on a layer whose Preview is off as painted, not in outline.
+    pub ignore_layer_preview: bool,
 }
 
 impl Default for HitOptions {
     fn default() -> Self {
-        Self { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: false, scope: None }
+        Self {
+            tol: 3.0,
+            outline: false,
+            path_only: false,
+            type_path_only: false,
+            skip_guides: false,
+            clip_outlines: false,
+            area_type_interior: false,
+            ignore_layer_preview: false,
+            scope: None,
+        }
     }
 }
 
@@ -834,7 +851,7 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
             continue;
         }
         chain.push(layer.id);
-        let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
+        let opt = if !opt.ignore_layer_preview && previews_off(layer) { HitOptions { outline: true, ..opt } } else { opt };
         if let Some(h) = hit_children(layer, p, opt, &symbols, skip, &mut chain, editable_only) {
             return Some(finish(h));
         }
@@ -1198,7 +1215,9 @@ fn hit_children(
         chain.push(c.id);
         let hit = plain(i == 0 && clip.is_some(), || match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
-            NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only),
+            NodeKind::Layer { preview: false, .. } if !opt.ignore_layer_preview => {
+                hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only)
+            }
             NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
                 hit_children(c, p, opt, symbols, skip, chain, editable_only)
             }
@@ -1312,7 +1331,7 @@ fn art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, accept: &
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Intertwine { children } => {
             // A layer with Preview off is clicked in outline, as [`hit_children`] clicks it.
-            let opt = HitOptions { outline: opt.outline || previews_off(n), ..opt };
+            let opt = HitOptions { outline: opt.outline || !opt.ignore_layer_preview && previews_off(n), ..opt };
             if n.clips()
                 && let Some(clip) = children.first()
             {
@@ -1490,13 +1509,16 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
         // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
         // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
         // own fills and strokes paint ([`image_paint`]) except in outline mode.
-        NodeKind::Image(im) => {
+        NodeKind::Image(_) => {
+            // The frame joins the image's corners ([`Node::image_frame`]); a plain image is picked
+            // inside by its bounds, without building it.
             if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
-                use vectorcraft_geom::kurbo::Shape;
-                let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
-                frame.apply_affine(im.xf);
-                if stroke_contains(&frame, 0.0, opt.tol, p) {
+                if n.image_frame().is_some_and(|frame| stroke_contains(&frame, 0.0, opt.tol, p)) {
                     return Some(HitKind::Outline);
+                }
+            } else if let Some(frame) = n.is_distorted_image().then(|| n.image_frame()).flatten() {
+                if fill_contains(&frame, FillRule::NonZero, p) || stroke_contains(&frame, 0.0, opt.tol, p) {
+                    return Some(HitKind::Bounds);
                 }
             } else if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);
@@ -1507,7 +1529,11 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             hit_painted(n, p, opt, symbols)
         }
         NodeKind::Text(_) | NodeKind::PlacedDocument(_) => {
-            n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+            n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p))?;
+            match &n.kind {
+                NodeKind::Text(t) if !opt.area_type_interior => in_area_type_art(n, t, p, opt.tol).unwrap_or(true).then_some(HitKind::Bounds),
+                _ => Some(HitKind::Bounds),
+            }
         }
         // A symbol instance is hit within its bounds, and outside them where its art paints
         // ([`instance_art_hit`]) or where the geometry effects of its active fill or stroke reshape
@@ -1575,6 +1601,30 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
         path = crate::live::map_nonlinear(&path, piece, project);
     }
     stroke_contains(&path.to_bezpath(), 0.0, tol, p)
+}
+
+/// Is `p` on area type `t` (in `n`) where it is drawn: within `tol` of its frame's edge or inside
+/// its laid-out lines ([`crate::TextObject::cached_bounds`], with the characters' strokes)? The
+/// rest of the frame is empty and takes no clicks (#7274). `None` when that is not known: other
+/// type, type in perspective, or area type not laid out yet, which are hit within their bounds.
+fn in_area_type_art(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> Option<bool> {
+    use vectorcraft_geom::kurbo::Shape;
+    let crate::TextKind::Area { frame } = &t.kind else { return None };
+    if n.projection().is_some() {
+        return None;
+    }
+    if stroke_contains(&frame.transformed(t.xf).to_bezpath(), 0.0, tol, p) {
+        return Some(true);
+    }
+    let lines = t.cached_bounds?;
+    // No lines (empty type): only the frame's edge.
+    if lines.width() <= 0.0 && lines.height() <= 0.0 {
+        return Some(false);
+    }
+    let mut lines = lines.to_path(0.1);
+    lines.apply_affine(t.xf);
+    let reach = tol + t.char_stroke_outset();
+    Some(fill_contains(&lines, FillRule::NonZero, p) || stroke_contains(&lines, 0.0, reach, p))
 }
 
 /// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]). In symbol art

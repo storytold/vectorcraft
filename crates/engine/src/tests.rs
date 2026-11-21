@@ -15,6 +15,7 @@ mod assets;
 mod assets_3d;
 mod attributes;
 mod bboxrotate;
+mod bevels;
 mod blendfidelity;
 mod blendopts;
 mod blendspine;
@@ -66,6 +67,7 @@ mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
+mod fill_area;
 mod flatpresets;
 mod flatpreview;
 mod flatten;
@@ -110,6 +112,7 @@ mod live;
 mod livecorners;
 mod maskview;
 pub(super) mod menucmds;
+mod mesh_picks;
 mod nativefile;
 mod newart;
 mod newdoc;
@@ -155,6 +158,7 @@ mod printps;
 mod printtiling;
 mod proxyitems;
 mod puppetwarp;
+mod quickpen;
 mod rasterfilters;
 mod rastersettings;
 mod recolor;
@@ -201,12 +205,14 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbolism_options;
+mod symbolism_shift;
 mod symbollib;
 mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
 pub(super) mod textimport;
+mod three_point_arc;
 mod tileedge;
 mod tints;
 mod toolsettings;
@@ -861,12 +867,13 @@ fn align_and_distribute_reject_bad_params_without_changing_state() {
     let h = "`horizontal` must be one of left, center, right";
     let v = "`vertical` must be one of top, center, bottom";
     let to = "`to` must be one of selection, artboard, key";
+    let align_to = "`to` must be one of selection, artboard, key, auto";
     for (cmd, p, msg) in [
         ("object.align", json!({"horizontal": "middle"}), h),
         ("object.align", json!({"vertical": "centre"}), v),
         ("object.align", json!({"horizontal": true}), h),
-        ("object.align", json!({"horizontal": "left", "to": "page"}), to),
-        ("object.align", json!({"horizontal": "left", "to": 0}), to),
+        ("object.align", json!({"horizontal": "left", "to": "page"}), align_to),
+        ("object.align", json!({"horizontal": "left", "to": 0}), align_to),
         ("object.align", json!({"horizontal": "left", "bounds": false}), "`bounds` must be one of preview, geometric"),
         ("object.align", json!({"horizontal": "left", "vertical": "middle"}), v),
         ("object.distribute", json!({"horizontal": "middle"}), h),

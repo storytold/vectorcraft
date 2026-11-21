@@ -4357,7 +4357,8 @@ fn a_pan_fills_the_area() {
 /// With the web build's setting (`waits_for_still`, no render worker), a heavy document's canvas
 /// is not rendered while the view moves: each frame draws the frame shown moved and scaled with
 /// the view and asks for a frame within STILL_SECS. The canvas renders once the view has been
-/// still for STILL_SECS, and at once after an edit. With a worker's build settings the same frames render at once, as
+/// still for STILL_SECS. An edit while the view moves draws the part it changed into the frame
+/// shown, and one that changes most of the frame renders it whole at once. With a worker's build settings the same frames render at once, as
 /// before.
 #[test]
 fn without_a_worker_a_heavy_canvas_is_reprojected_until_the_view_is_still() {
@@ -4421,15 +4422,39 @@ fn without_a_worker_a_heavy_canvas() {
     let now = app.canvas.key.clone().unwrap();
     assert_eq!((now.cx, now.zoom), (app.view().unwrap().center.x, app.view().unwrap().zoom), "rendered for the view");
     assert!((b.min - rect.min).length() < 0.01 && (b.max - rect.max).length() < 0.01, "{b:?} over {rect:?}");
-    // An edit renders at once, even while the view moves.
+    // An edit while the view moves shows at once: the part it changed is drawn into the frame
+    // shown, at the view that frame was rendered for, and the frame stays drawn reprojected until
+    // the view is still (#8688).
     app.canvas.last_ms = 50.0;
     app.view_mut().unwrap().center.y += 10.0;
     frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&now), "waiting");
-    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 110, "y": 60, "width": 20, "height": 20})).unwrap();
+    let render_ms = app.canvas.last_ms;
+    let (b, delay) = frame(&mut app);
+    let k = app.canvas.key.clone().unwrap();
+    assert_eq!(k.revision, app.session.active().unwrap().revision, "the edit is drawn");
+    assert_eq!((k.cx, k.cy, k.zoom), (now.cx, now.cy, now.zoom), "at the view of the frame shown");
+    assert_eq!(app.canvas.last_ms, render_ms, "the frame was not rendered whole");
+    let (old, new) = (Xf::new(rect, &View { center: Point::new(now.cx, now.cy), ..*app.view().unwrap() }), Xf::new(rect, app.view().unwrap()));
+    let (a, z) = (new.to_screen(old.to_doc(rect.min)), new.to_screen(old.to_doc(rect.max)));
+    assert!((b.min - a).length() < 0.01 && (b.max - z).length() < 0.01, "{b:?}: the frame shown at {a:?} to {z:?}");
+    assert!(delay <= std::time::Duration::from_secs_f64(STILL_SECS), "a frame within STILL_SECS: {delay:?}");
+    let mut frames = 0;
+    while app.canvas.key.as_ref() == Some(&k) && frames < 60 {
+        frames += 1;
+        frame(&mut app);
+    }
+    let k = app.canvas.key.clone().unwrap();
+    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered once still");
+    // An edit that changes more than half of the frame renders whole at once, view and all.
+    app.canvas.last_ms = 50.0;
+    app.view_mut().unwrap().center.y += 10.0;
+    frame(&mut app);
+    app.session.execute("shape.rectangle", &json!({"x": -1000, "y": -1000, "width": 3000, "height": 3000})).unwrap();
     frame(&mut app);
     let k = app.canvas.key.clone().unwrap();
-    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered after the edit");
+    assert_eq!((k.revision, k.cy), (app.session.active().unwrap().revision, app.view().unwrap().center.y), "rendered whole after the edit");
     // With a worker's build settings and no worker (VECTORCRAFT_SYNC_RENDER), a heavy document
     // renders every change of view at once.
     app.canvas.waits_for_still = false;
@@ -4437,6 +4462,48 @@ fn without_a_worker_a_heavy_canvas() {
     app.view_mut().unwrap().center.x += 10.0;
     frame(&mut app);
     assert_eq!(app.canvas.key.as_ref().map(|k| k.cx), Some(app.view().unwrap().center.x), "rendered at once");
+}
+
+/// With the web build's setting (`waits_for_still`, no render worker), a heavy document's view
+/// that stops moving while a drag goes on editing the document renders whole once the view has
+/// been still for STILL_SECS: each edit is drawn into the frame shown and does not start the wait
+/// again.
+#[test]
+fn without_a_worker_edits_while_the_view_is_still_do_not_hold_off_the_render() {
+    keeping_color_settings(edits_while_the_view_is_still);
+}
+
+fn edits_while_the_view_is_still() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // no worker, as in the web build
+    app.canvas.waits_for_still = true;
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    frame(&mut app); // the first frame fits the view to the artboard
+    frame(&mut app);
+    app.canvas.last_ms = 50.0;
+    // The view moves once (a drag at an edge of the canvas scrolls it) and then stays still.
+    app.view_mut().unwrap().center.y += 10.0;
+    frame(&mut app);
+    let shown = app.canvas.key.clone().unwrap();
+    assert_ne!(shown.cy, app.view().unwrap().center.y, "waiting");
+    // The drag edits the document on every frame, at 60 fps (egui's input time without a clock).
+    let mut frames = 0;
+    while app.canvas.key.as_ref().is_none_or(|k| k.cy != app.view().unwrap().center.y) && frames < 60 {
+        frames += 1;
+        let x = 110 + (frames % 10) * 5;
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 60, "width": 4, "height": 4})).unwrap();
+        frame(&mut app);
+        let k = app.canvas.key.as_ref().unwrap();
+        assert_eq!(k.revision, app.session.active().unwrap().revision, "each edit is drawn");
+    }
+    assert!((11..=13).contains(&frames), "rendered whole about STILL_SECS after the view stopped: {frames} frames");
 }
 
 /// [`still_wait`] waits while only the view changes on a slow canvas: each change starts
@@ -15289,4 +15356,251 @@ fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
     assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(false));
     assert_eq!(count(&mut app), 0, "off");
     assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
+}
+
+/// #8363: Trim View hides the ruler guides, the guide paths and the grid while it is on, and they
+/// are neither snapped to nor picked, as hidden guides are; turned off, they come back as they
+/// were. The rulers stay.
+#[test]
+fn trim_view_hides_the_guides_and_the_grid() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.canvas.worker_started = true; // render on this thread
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    (app.ui.view.grid, app.ui.view.guides, app.ui.view.rulers) = (true, true, true);
+    let (red, green) = (Color32::from_rgb(255, 0, 0), Color32::from_rgb(0, 255, 0));
+    app.session.execute("prefs.set", &json!({"values": {"gridColor": "#ff0000", "guideColor": "#00ff00"}})).unwrap();
+    let ctx = egui::Context::default();
+    // → (a gridline, a ruler guide, guide paths in the art, guides snapped to and picked).
+    let drawn = |app: &mut VectorcraftApp| {
+        let s = shapes(app, &ctx);
+        let line = |c: Color32| s.iter().any(|s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == c));
+        let guide_paths = !app.canvas.shown.as_ref().unwrap().1.hide_guides;
+        (line(red), line(green), guide_paths, app.view_info().guides)
+    };
+    assert_eq!(drawn(&mut app), (true, true, true, true), "Trim View off: all of them");
+
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (false, false, false, false), "Trim View on: none of them");
+    assert!(app.ui.view.grid && app.ui.view.guides && app.ui.view.rulers, "the choices stay, and so do the rulers");
+
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (true, true, true, true), "Trim View off: back as they were");
+
+    // Hidden before, they stay hidden after.
+    app.run("view.guides", json!({})).unwrap();
+    app.run("view.trimView", json!({})).unwrap();
+    app.run("view.trimView", json!({})).unwrap();
+    assert_eq!(drawn(&mut app), (true, false, false, false), "guides hidden before Trim View stay hidden");
+}
+
+/// #8363: a selected guide path is deselected when Trim View hides it, as Hide Guides does (#3219).
+#[test]
+fn trim_view_deselects_selected_guide_paths() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)]);
+
+    app.run("view.trimView", json!({})).unwrap();
+
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+}
+
+/// #8363: Trim View hides the guides, so a guide dragged or double-clicked out of a ruler while it
+/// is on would be made but never seen. None is: no preview line, no guide, no undo step, the
+/// stored Show/Hide Guides choice is left alone, and the status line says why. A drag already
+/// going when Trim View turns on ends as a release off the canvas does.
+#[test]
+fn trim_view_makes_no_guide_from_the_rulers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.guides = false;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    app.ui.view.trim_view = true;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let from = pos2(rect.center().x, rect.top() - RULER / 2.0);
+    let at = pos2(rect.center().x, rect.top() + 120.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let across = |s: &Shape| {
+        matches!(s, Shape::LineSegment { points, .. }
+            if (points[0].y - at.y).abs() <= 2.0 && points[0].y == points[1].y && (points[1].x - points[0].x).abs() >= rect.width() - 0.5)
+    };
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().len();
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+
+    // A drag: nothing previews and nothing is made.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(!shapes(&mut app, &ctx).iter().any(across), "no guide previews");
+    assert!(!app.session.ruler_guide_dragging());
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 0, "no guide from a drag");
+    assert!(!app.ui.view.guides, "the stored choice is left alone");
+    assert_eq!(app.ui.status, crate::menus::TRIM_VIEW_HIDES);
+
+    // A double-click: nothing either.
+    app.ui.status.clear();
+    let click = |app: &mut VectorcraftApp| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        frame(app, &ctx, vec![button(from, true)]);
+        frame(app, &ctx, vec![button(from, false)]);
+    };
+    click(&mut app);
+    click(&mut app);
+    assert_eq!(count(&app), 0, "no guide from a double-click");
+    assert!(!app.ui.view.guides);
+    assert_eq!(app.ui.status, crate::menus::TRIM_VIEW_HIDES);
+    assert_eq!(steps(&app), before, "no undo step");
+
+    // Trim View turned on during a drag: the drag ends without a guide.
+    app.ui.view.trim_view = false;
+    let from2 = pos2(rect.center().x + 30.0, rect.top() - RULER / 2.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from2)]);
+    frame(&mut app, &ctx, vec![button(from2, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(app.session.ruler_guide_dragging(), "the drag started with Trim View off");
+    app.ui.view.trim_view = true;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x + 5.0, at.y))]);
+    assert!(!app.session.ruler_guide_dragging(), "ended");
+    assert!(!shapes(&mut app, &ctx).iter().any(across), "no guide previews");
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 0, "no guide from the drag Trim View interrupted");
+    assert_eq!(steps(&app), before, "no undo step");
+
+    // With Trim View off again, a drag makes a guide as before.
+    app.ui.view.trim_view = false;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 1);
+    assert!(app.ui.view.guides, "the new guide shows");
+}
+
+/// #8363: a guide drag Trim View cancelled stays cancelled until the button is released. Trim
+/// View turned off again before the release does not start a new guide: the release makes none
+/// and adds no undo step. The next drag works as before.
+#[test]
+fn a_ruler_drag_trim_view_cancelled_stays_cancelled_until_released() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let from = pos2(rect.center().x, rect.top() - RULER / 2.0);
+    let at = pos2(rect.center().x, rect.top() + 120.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().len();
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    assert!(app.session.ruler_guide_dragging());
+    app.ui.view.trim_view = true;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x, at.y + 5.0))]);
+    assert!(!app.session.ruler_guide_dragging(), "Trim View ends the drag");
+    app.ui.view.trim_view = false;
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(at.x, at.y + 10.0))]);
+    assert!(!app.session.ruler_guide_dragging(), "turned off again, no new guide starts");
+    frame(&mut app, &ctx, vec![button(pos2(at.x, at.y + 10.0), false)]);
+    assert_eq!(count(&app), 0, "the release makes no guide");
+    assert_eq!(steps(&app), before, "no undo step");
+    // The next drag makes a guide.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![button(from, true)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    assert_eq!(count(&app), 1);
+}
+
+/// #8363: Trim View turned on or off during a drag of the rulers' origin out of their corner
+/// cancels it, as hiding the rulers does: the snap targets gathered at its start would hold
+/// guides Trim View hides. The origin is left where it was. A drag wholly with Trim View on, or
+/// wholly off, sets it.
+#[test]
+fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
+    for (start, end, sets) in [(false, true, false), (true, false, false), (true, true, true), (false, false, true)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": 150})).unwrap();
+        app.ui.view.rulers = true;
+        app.ui.view.trim_view = start;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let origin = |app: &VectorcraftApp| {
+            let d = &app.session.active().unwrap().doc;
+            format!("{:?} {:?}", d.ruler_origin, d.artboard_ruler_origins)
+        };
+        let was = origin(&app);
+        let from = pos2(rect.left() - RULER / 2.0, rect.top() - RULER / 2.0);
+        let at = xf.to_screen(Point::new(151.0, 100.0));
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        frame(&mut app, &ctx, vec![button(from, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        assert!(crate::canvas::ruler_origin_dragging(&ctx), "{start} {end}: dragging");
+        app.ui.view.trim_view = end;
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at + vec2(1.0, 0.0))]);
+        frame(&mut app, &ctx, vec![button(at + vec2(1.0, 0.0), false)]);
+        assert_eq!(origin(&app) != was, sets, "Trim View {start} then {end}: origin set {sets}");
+    }
+}
+
+/// #8363: a Selection move begun with the guides shown gathers the ruler guides to snap to. When
+/// they stop showing during the move (Trim View or Hide Guides turned on), it no longer snaps to
+/// them; with them shown throughout, it does.
+#[test]
+fn a_move_stops_snapping_to_guides_hidden_during_it() {
+    // What hides the guides mid-move (none: they stay shown), and whether the move then snaps.
+    for (hide, snaps) in [(None, true), (Some("trim"), false), (Some("guides"), false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 50, "height": 50})).unwrap();
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+        app.select_tool("selection");
+        app.ui.view.smart_guides = false;
+        app.ui.view.snap_to_point = true;
+        app.ui.view.guides = true;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        // Grabbed at its centre, moved first well away from the guide, then 1.5 px short of it.
+        let grab = xf.to_screen(Point::new(75.0, 75.0));
+        let away = xf.to_screen(Point::new(120.0, 75.0));
+        let near = xf.to_screen(Point::new(200.0, 75.0)) - vec2(1.5, 0.0);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)]);
+        frame(&mut app, &ctx, vec![button(grab, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(away)]);
+        match hide {
+            Some("trim") => app.ui.view.trim_view = true,
+            Some(_) => app.ui.view.guides = false,
+            None => {}
+        }
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(near)]);
+        frame(&mut app, &ctx, vec![button(near, false)]);
+        let b = app.session.active().unwrap().doc.art_bounds().unwrap();
+        let centre = (b.x0 + b.x1) / 2.0;
+        assert_eq!((centre - 200.0).abs() < 1e-6, snaps, "{hide:?}: the grabbed centre at {centre}");
+        assert!((centre - xf.to_doc(near).x).abs() < 1e-6 || snaps, "{hide:?}: unsnapped, it follows the pointer: {centre}");
+    }
 }

@@ -122,7 +122,7 @@ impl VectorcraftApp {
             zoom: self.view().map_or(1.0, |v| v.screen_zoom(self.canvas_ui_zoom)),
             outline: self.outline_view(),
             smart_guides: self.ui.view.smart_guides,
-            guides: self.ui.view.guides,
+            guides: self.ui.view.guides_shown(),
             snap_to_grid: self.ui.view.snap_to_grid,
             pixel_preview: self.ui.view.pixel_preview,
             snap_to_pixel: self.ui.view.snap_to_pixel,

@@ -98,7 +98,7 @@ fn highlight_made(ctx: &egui::Context, kind: Kind, names: Vec<String>) {
 
 /// Duplicates the styles `names` (`charStyle.duplicate`, `paraStyle.duplicate`) in one undo step
 /// and highlights the copies.
-fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &[String]) {
+fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &[String]) -> Vec<String> {
     let p = kind.prefix();
     let made = if let [name] = names {
         app.run(&format!("{p}.duplicate"), json!({ "name": name })).map(|r| vec![r])
@@ -108,7 +108,11 @@ fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &
         app.run("command.batch", json!({ "label": label, "commands": commands })).map(|r| r["results"].as_array().cloned().unwrap_or_default())
     };
     if let Ok(made) = made {
-        highlight_made(ctx, kind, made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect());
+        let names: Vec<String> = made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect();
+        highlight_made(ctx, kind, names.clone());
+        names
+    } else {
+        vec![]
     }
 }
 
@@ -254,6 +258,48 @@ fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
     app.run(command, json!({ "name": name })).ok();
 }
 
+/// An item's right-click context menu in the Character Styles / Paragraph Styles panel.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind, name: &str, normal: &str, sel: &mut Vec<String>, listed: &[&str]) {
+    let p = kind.prefix();
+    let is_normal = name == normal;
+    let targets = dragged(sel, listed, name);
+    let doomed: Vec<String> = targets.iter().filter(|s| *s != normal).cloned().collect();
+    let has_text_target = text_style(app).is_some();
+
+    let options_label = crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &options_label, !is_normal, false) {
+        open_style_options(app, kind, name);
+        ui.close();
+    }
+    let duplicate_label = crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &duplicate_label, true, false) {
+        let made = duplicate(app, ui.ctx(), kind, &targets);
+        if !made.is_empty() {
+            *sel = made;
+        }
+        ui.close();
+    }
+    let delete_label = crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &delete_label, !is_normal && !doomed.is_empty(), false) {
+        if app.run(&format!("{p}.delete"), json!({ "names": doomed })).is_ok() {
+            *sel = vec![];
+            set_highlighted(ui.ctx(), kind, vec![]);
+        }
+        ui.close();
+    }
+    ui.separator();
+    let redefine_label = crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &redefine_label, has_text_target, false) {
+        end_typing(app);
+        app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": name }))).ok();
+        ui.close();
+    }
+    if menu_item(ui, tl!("Clear Overrides"), has_text_target, false) {
+        app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": name, "clearOverrides": true }))).ok();
+        ui.close();
+    }
+}
+
 /// The style list and its New and Delete buttons. Shift-click highlights every style from the
 /// last one clicked without Shift through this one, and Cmd/Ctrl-click adds or removes one; both
 /// leave the text as it is. Delete deletes every highlighted style but the Normal style.
@@ -296,6 +342,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             if scroll_to.as_deref() == Some(name.as_str()) {
                 ui.scroll_to_rect(r, None);
             }
+            if resp.secondary_clicked() && !sel.contains(name) {
+                sel = vec![name.clone()];
+                set_pstate(ui.ctx(), kind.anchor_key(), name.clone());
+                set_highlighted(ui.ctx(), kind, sel.clone());
+            }
             let (fill, outline) = row_look(is_cur, sel.contains(name), resp.hovered(), &t);
             if let Some(fill) = fill {
                 ui.painter().rect_filled(r, 0.0, fill);
@@ -308,6 +359,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             let shown = super::label_or_name(name, *name == normal);
             let label = if overridden { format!("{shown}+") } else { shown.to_string() };
             ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, ui.is_enabled(), sel.contains(name), shown.to_string()));
+            resp.context_menu(|ui| {
+                item_context_menu(app, ui, kind, name, &normal, &mut sel, &listed);
+            });
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
             }

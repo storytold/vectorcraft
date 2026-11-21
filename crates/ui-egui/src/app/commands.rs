@@ -463,14 +463,25 @@ impl VectorcraftApp {
     /// and the tool remembered for the toolbar group and for the Touch workspace's drawing mode
     /// stays as it was.
     pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
+        let back = self.ui.brush_key_color_pick.as_ref().map(|pick| pick.back.clone());
+        crate::dialogs::cancel_brush_key_color(self, false);
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
         self.held_tool.clear();
-        self.activate_tool(id, true)?;
+        if let Err(error) = self.activate_tool(id, true) {
+            if let Some(back) = back.filter(|_| self.session.tool_id() == "eyedropper") {
+                self.return_to_tool(&back);
+            }
+            return Err(error);
+        }
         let now = self.session.tool_id();
         if crate::touch::is_drawing_tool(now) {
             self.ui.touch_drawing_tool = Some(now.to_string());
+        }
+        // Selecting the Quick Pen tool shows its toolbar, even after Hide Toolbar.
+        if now == vectorcraft_tools::quickpen::ID {
+            self.ui.quick_pen_bar = true;
         }
         Ok(())
     }
@@ -512,6 +523,7 @@ impl VectorcraftApp {
         }
         self.ui.flyout = None;
         switched?;
+        crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {

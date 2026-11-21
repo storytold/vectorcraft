@@ -588,6 +588,288 @@ fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
     assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
 }
 
+/// Update Links gives a distorted image its file's new pixels between the same corners: its
+/// Placement Options' fill and clip do not move or clip it. Its transform takes the new pixel size,
+/// and Link Info measures its scale at its middle.
+#[test]
+fn update_links_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-update");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // Link Info measures the scale where the effective resolution is measured: at the middle.
+    let scale_matches_ppi = |s: &mut Session| {
+        let info = s.execute("links.info", &json!({"id": id.0})).unwrap();
+        for i in 0..2 {
+            let (scale, ppi, eff) = (info["scale"][i].as_f64().unwrap(), info["ppi"][i].as_f64().unwrap(), info["effectivePpi"][i].as_f64().unwrap());
+            assert!((scale - ppi / eff * 100.0).abs() < 1e-6, "{info}");
+        }
+    };
+    scale_matches_ppi(&mut s);
+    // A copy in a symbol, distorted the same way, shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [copy.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.is_distorted_image(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let symbol_corners = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| out.extend(n.image_corners()));
+        out
+    };
+    assert_eq!(in_symbol(&s), [(true, (20, 10))]);
+    let symbol_before = symbol_corners(&s);
+    assert_eq!(symbol_before.len(), 1);
+    write(&photo, &png(60, 20, BLUE));
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"].as_array().unwrap().len(), 2, "{u}");
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(id).unwrap();
+    assert!(n.is_distorted_image());
+    assert_eq!(corners(&s), before);
+    let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    assert_eq!((im.width, im.height), (60, 20));
+    // The transform takes the new pixel size, so a placement by the transform keeps the old size.
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    let d = &s.doc().unwrap().doc;
+    assert!(!matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. })), "not clipped");
+    let mut clipped = false;
+    d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
+    assert!(!clipped, "the symbol's image is not clipped");
+    assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+    assert_eq!(symbol_corners(&s), symbol_before, "the symbol's image keeps its corners");
+    scale_matches_ppi(&mut s);
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of the distorted images
+/// in symbols too, and scales each one's transform to the new pixel size, so a placement by the
+/// transform keeps the old size.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_distorted_images_in_symbols() {
+    let dir = Folder::new("distorted-relink-all");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let before = s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // A distorted copy in a symbol shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(Some(symbol_quad), (20, 10))] = in_symbol(&s)[..] else { panic!("one distorted image in the symbol: {:?}", in_symbol(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(id.0)), "the image and the symbol's: {r}");
+    assert!(r.get("warnings").is_none(), "no preserve was given: {r}");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!((n.is_distorted_image(), n.image_corners().unwrap()), (true, before));
+    assert_eq!((image(&s, id).width, image(&s, id).height), (60, 20));
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    assert_eq!(in_symbol(&s), [(Some(symbol_quad), (60, 20))], "the symbol's image keeps its corners");
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of a distorted image in
+/// an opacity mask's art.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_a_distorted_image_in_an_opacity_mask() {
+    let dir = Folder::new("distorted-relink-mask");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [mask.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // The image in the art of `masked`'s opacity mask: (id, corners, pixel size).
+    let in_mask = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.visit_stored(|n, place| {
+            if let NodeKind::Image(im) = &n.kind
+                && place.mask_of == Some(masked)
+            {
+                out.push((n.id, n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(mask_id, Some(quad), (20, 10))] = in_mask(&s)[..] else { panic!("one distorted image in the mask: {:?}", in_mask(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(mask_id.0)), "the image and the mask's: {r}");
+    assert_eq!(in_mask(&s), [(mask_id, Some(quad), (60, 20))], "the mask's image keeps its corners");
+}
+
+/// Relink, Embed and Unembed keep a distorted image's corners, each in one undo step: Relink puts
+/// the new file's pixels between them whatever `preserve` and the Placement Options say, Embed
+/// keeps the pixels in the document, and Unembed links the image to the file it writes.
+#[test]
+fn relink_embed_and_unembed_keep_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-relink");
+    let (photo, other, written) = (dir.file("photo.png"), dir.file("other.png"), dir.file("written.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // Around the artboard's center, where `centre_colour` looks.
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let distorted = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().is_distorted_image();
+    let clipped = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. }))
+    };
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+
+    let undo = undo_len(&s);
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "preserve": "fileDimensions"})).unwrap();
+    // The given preserve is reported as not applied.
+    let warning = format!("preserve was not applied to image {}: an image changed by Perspective Distort or Free Distort keeps its corners", id.0);
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": [], "warnings": [warning]}));
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s), "not clipped by its Placement Options");
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(other.as_str()));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r["embedded"], json!([id.0]), "{r}");
+    assert_eq!(undo_len(&s), undo + 2);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_none());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.unembed", &json!({"id": id.0, "path": written})).unwrap();
+    assert_eq!(r["id"], json!(id.0), "{r}");
+    assert_eq!(undo_len(&s), undo + 3);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert!(im.link.is_some());
+    assert!(Path::new(&written).exists());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    // Undo takes each back to the same corners, and the first file's pixels in the end.
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(distorted(&s));
+        assert_eq!(corners(&s), before);
+    }
+    assert_eq!((image(&s, id).width, image(&s, id).height), (20, 10));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Unembed into a folder keeps a distorted image's corners, in one undo step.
+#[test]
+fn unembed_to_a_folder_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-unembed-folder");
+    let (photo, out) = (dir.file("photo.png"), dir.file("out"));
+    std::fs::create_dir_all(&out).unwrap();
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.unembed", &json!({"ids": [id.0], "folder": out})).unwrap();
+    assert_eq!(r["unembedded"][0]["id"], json!(id.0), "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_some());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Embed reads the file of a distorted image that shows its saved preview and keeps the file's
+/// pixels in the document between the image's corners, in one undo step.
+#[test]
+fn embed_reads_a_distorted_images_file_between_its_corners() {
+    let dir = Folder::new("distorted-embed-preview");
+    let photo = dir.file("photo.png");
+    // Large enough that the document saves a smaller preview of it.
+    write(&photo, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&photo).unwrap();
+    open(&mut s, &doc_path);
+    assert!(s.doc().unwrap().doc.images[&image(&s, id).key].is_proxy(), "the preview stands in");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    write(&photo, &png(400, 200, BLUE));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r, json!({"embedded": [id.0], "missing": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.is_distorted_image());
+    assert_eq!(n.image_corners().unwrap(), before);
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.is_none()), (400, 200, true));
+    assert!(!s.doc().unwrap().doc.images[&im.key].is_proxy(), "the file's pixels are in the document");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity
 /// masks too: those showing the same content as an image in the layers, and those no object in the
 /// layers shows. Each takes the file's place as its own Placement Options say, in one undo step,
@@ -2540,6 +2822,37 @@ fn confined_screens_rows_check_the_artboard_each_file_holds() {
         let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("1"))).expect_err(format).to_string();
         assert!(e.contains("a linked image file is outside the read roots"), "{format}: {e}");
     }
+}
+
+/// A confined caller's single-file PDF with Preserve Editing of several artboards carries the art
+/// of every artboard on its pages: an image linked outside the read roots on the second artboard
+/// alone refuses it. A single-file PDF of assets is refused before any link is checked.
+#[test]
+fn confined_single_file_pdf_checks_every_artboard_it_carries() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("single-pdf-away");
+    let home = Folder::new("single-pdf-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let p = |folder: &str| json!({"range": "1-2", "folder": home.file(folder), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("plain"))).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{r}");
+    let r = s.execute("file.place", &json!({"path": photo, "at": [2100, 100]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("linked"))).expect_err("second artboard links outside").to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!Path::new(&home.file("linked")).exists(), "the refused export writes no folder");
+    let asset = s.execute("assets.add", &json!({"ids": [rect.0]})).unwrap()["assets"][0].as_u64().unwrap();
+    let assets = json!({"assets": [asset], "folder": home.file("assets"), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let e = confine(roots.as_ref(), || s.execute("assets.export", &assets)).expect_err("single-file PDF of assets").to_string();
+    assert!(e.contains("pdfs `single` writes artboards as the pages of one PDF"), "{e}");
+    assert!(!Path::new(&home.file("assets")).exists(), "the refused export writes no folder");
 }
 
 /// A confined caller's native outputs (a native file or template, an EPS or `.ai` file, a PDF with

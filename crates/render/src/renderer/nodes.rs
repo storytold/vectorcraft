@@ -251,6 +251,7 @@ impl Renderer {
             && !f.opts.outline
             && !self.is_shape(a)
             && let NodeKind::Image(im) = &a.kind
+            && !a.is_distorted_image()
             && white_shape_mask(m)
             && let Some(region) = self.clip_of(&m.art)
             && shape_masked_image(a, im, &region.0)
@@ -308,7 +309,11 @@ impl Renderer {
         let image_left_out = self.image_left_out.replace(false);
         let failures = crate::paint::decode_failures();
         let pattern_images_left_out = crate::pattern::images_left_out();
-        self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, ..*f }, &m.art);
+        // A proof that preserves the colors' numbers leaves the mask's images as they are, as it
+        // leaves its colors: the frame's, or the ink's in a pattern's tile drawn for that proof.
+        let preserving = crate::proof::preserving(f.opts).is_some() || crate::ink::proof_of(f.ink).is_some_and(|p| crate::proof::preserves(&p));
+        let plates = if preserving { None } else { f.plates };
+        self.draw_kept_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, plates, ..*f }, &m.art);
         let incomplete = self.image_left_out.unwrap_or(false)
             || crate::pattern::images_left_out() > pattern_images_left_out
             || (!f.opts.mark_undecoded_images && crate::paint::decode_failures() > failures);
@@ -366,7 +371,7 @@ impl Renderer {
             self.stats.drawn += 1;
             return;
         }
-        if vectorcraft_doc::live::is_live(a) || effects::has_pathfinder(a) {
+        if vectorcraft_doc::live::is_drawn_live(a) || effects::has_pathfinder(a) {
             // The isolated object itself (a repeat isolated to edit its source, #5054) draws its
             // art as usual, as an isolated group does in `draw_layer_node`.
             let settle = f.opts.isolated == Some(a.id) && f.doc.mask_edit.is_none();
@@ -521,6 +526,7 @@ impl Renderer {
                     // a clip layer (envelopes cut distorted images into many such pieces).
                     if let ([image], None, None) = (rest, &fill, &stroke)
                         && let NodeKind::Image(im) = &image.kind
+                        && !image.is_distorted_image()
                         && plain_image(image, im, &region.0)
                     {
                         let im = f.doc.shown_image(image, im);
@@ -574,7 +580,7 @@ impl Renderer {
                 }
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
                 self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
             }
             NodeKind::SymbolInstance { symbol, xf } => {
@@ -600,7 +606,8 @@ impl Renderer {
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => match self.live_root.clone().filter(|a| std::ptr::eq(&**a, n)) {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => match self.live_root.clone().filter(|a| std::ptr::eq(&**a, n)) {
                 Some(a) => self.draw_live_body(ctx, f, &a, true),
                 None => self.draw_live_node(ctx, f, n),
             },
@@ -625,7 +632,7 @@ impl Renderer {
     /// same from frame to frame while the art does. When `a` is a live object,
     /// [`Self::draw_content`] draws its evaluation from the live cache ([`Self::live_root`]).
     pub(crate) fn draw_kept_node(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
-        let live = vectorcraft_doc::live::is_live(a).then(|| a.clone());
+        let live = vectorcraft_doc::live::is_drawn_live(a).then(|| a.clone());
         let outer = std::mem::replace(&mut self.live_root, live);
         self.draw_forced_arc(ctx, f, a);
         self.live_root = outer;

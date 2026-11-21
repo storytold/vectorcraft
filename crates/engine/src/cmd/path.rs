@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, link?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); link and independent cannot both be true; both default false",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool, link?: bool, at?: [x,y]} move a direction handle; independent moves only that side and makes the anchor a corner; symmetric mirrors the other handle about the anchor without changing its kind (not at an open end, where no segment leaves the anchor on that side); link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); independent and symmetric cannot both be true, and link cannot go with either; all default false; with link false, at moves the anchor and both handles before placing the chosen handle",
             has_doc,
             set_handle
         ),
@@ -461,19 +461,61 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         return link_handle(s, p, id, si, ai, out, pos);
     }
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
+    let symmetric = switch_or(p, "symmetric", false, "path.setHandle")?;
+    if symmetric && independent {
+        return Err(bad("path.setHandle", "`independent` and `symmetric` cannot both be true"));
+    }
+    // The other handle is mirrored only where a segment leaves the anchor on its side: at an open
+    // end the handle moves as it would without `symmetric`.
+    let symmetric = symmetric && has_segment(s, id, si, ai, !out)?;
+    let at = match p.get("at").filter(|v| !v.is_null()) {
+        None => None,
+        Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad("path.setHandle", "`at` must be [x, y]"))?),
+    };
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
     // other handle of a smooth anchor, which need not give back the same value.
     if let Some(a) = anchor_of(s, id, si, ai)?
+        && at.is_none_or(|to| to == a.p)
         && (if out { a.h_out } else { a.h_in }) == pos
         && !(independent && a.kind != AnchorKind::Corner)
+        && (!symmetric || (if out { a.h_in } else { a.h_out }) == a.p - (pos - a.p))
     {
         return ok();
     }
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-        a.set_handle(out, pos, independent);
+        let old_point = a.p;
+        let old_handle = if out { a.h_out } else { a.h_in };
+        if let Some(to) = at {
+            a.translate(to - a.p);
+        }
+        let handle = if out { a.h_out } else { a.h_in };
+        let kind_changes = independent && a.kind != AnchorKind::Corner;
+        // Ordinary decimal moves can round `at - old_point` differently from the handle's
+        // translation. Within that calculation's roundoff, place the selected point exactly
+        // without realigning the other stored Smooth handle. Real edits still use set_handle.
+        let translation_roundoff = at.is_some_and(|to| {
+            let matches = |actual: f64, requested: f64, owner: f64, old: f64, new: f64| {
+                let scale = owner.abs().max(old.abs()).max(new.abs()).max(requested.abs()).max(1.0);
+                (actual - requested).abs() <= 4.0 * f64::EPSILON * scale
+            };
+            to != old_point && matches(handle.x, pos.x, old_point.x, old_handle.x, to.x) && matches(handle.y, pos.y, old_point.y, old_handle.y, to.y)
+        });
+        if !kind_changes && (handle == pos || translation_roundoff) {
+            if out {
+                a.h_out = pos;
+            } else {
+                a.h_in = pos;
+            }
+        } else {
+            a.set_handle(out, pos, independent);
+        }
+        if symmetric {
+            let opposite = a.p - (pos - a.p);
+            if out { a.h_in = opposite } else { a.h_out = opposite }
+        }
         Ok(())
     })?;
     ok()
@@ -488,6 +530,9 @@ fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out
     const C: &str = "path.setHandle";
     if switch_or(p, "independent", false, C)? {
         return Err(bad(C, "`link` and `independent` cannot both be true"));
+    }
+    if switch_or(p, "symmetric", false, C)? {
+        return Err(bad(C, "`link` and `symmetric` cannot both be true"));
     }
     if !(pos.x.abs() < 1e9 && pos.y.abs() < 1e9) {
         return Err(bad(C, "x and y must be finite"));
@@ -623,6 +668,16 @@ fn anchor_of(s: &Session, id: NodeId, si: usize, ai: usize) -> Result<Option<Anc
     }
     let d = &s.doc()?.doc;
     Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).and_then(|sp| sp.anchors.get(ai)).copied())
+}
+
+/// Whether anchor `ai` of subpath `si` of path `id` has a segment on its outgoing (`out`) or
+/// incoming side; false when the path, subpath or anchor is not there.
+fn has_segment(s: &Session, id: NodeId, si: usize, ai: usize, out: bool) -> Result<bool> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let d = &s.doc()?.doc;
+    Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).is_some_and(|sp| sp.has_segment(ai, out)))
 }
 
 fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {

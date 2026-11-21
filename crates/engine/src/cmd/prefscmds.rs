@@ -404,6 +404,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "Update Links",
         choice(&[("automatically", "Automatically"), ("manually", "Manually"), ("askWhenModified", "Ask When Modified")])
     ),
+    p!("pdfTextAs", "File Handling", "Files", "PDF Text", choice(&[("text", "Editable"), ("outlines", "Outlines")])),
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
@@ -751,6 +752,13 @@ impl Session {
                 if t.id() == "roundedRectangle" {
                     t.set_option("cornerRadius", &r);
                 }
+            }
+            // A press of the tool that is dropped keeps the new radius, also when the tool lent a
+            // selection tool for the press.
+            if self.press_taken_by("roundedRectangle")
+                && let Some((_, saved)) = self.press_options.as_mut()
+            {
+                saved.insert("cornerRadius".into(), r);
             }
         }
         if fonts_folder_changed {

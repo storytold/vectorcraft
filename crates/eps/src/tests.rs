@@ -331,6 +331,72 @@ fn many_repeats_keep_their_places_in_a_smooth_shading() {
     }
 }
 
+/// Level 3 smooth shadings handle two-stop (`FunctionType 2`), hard-edge (duplicate offset),
+/// zero-span (solid fallback), and degenerate zero-length linear/radial gradients cleanly.
+#[test]
+fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
+    use vectorcraft_color::GradientGeom;
+
+    // Two-stop linear gradient emits a single FunctionType 2 (no stitching FunctionType 3).
+    let two_stop = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let two_doc = doc_with(|d| {
+        vec![path(
+            d,
+            shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)),
+            Paint::Gradient(Box::new(GradientPaint::new(two_stop))),
+            Paint::None,
+            0.0,
+        )]
+    });
+    let two_page = page_of(&two_doc, &opts(&two_doc));
+    assert!(two_page.contains("/ShadingType 2") && two_page.contains("/FunctionType 2"), "{two_page}");
+    assert!(!two_page.contains("/FunctionType 3"), "{two_page}");
+
+    // Hard-edge gradient (two stops at offset 0.5) skips the zero-width segment and stitches at 0.5.
+    let hard = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    );
+    let hard_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(hard))), Paint::None, 0.0)]
+    });
+    let hard_page = page_of(&hard_doc, &opts(&hard_doc));
+    assert!(hard_page.contains("/FunctionType 3") && hard_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{hard_page}");
+
+    // Two stops at the same interior offset pad to 0 and 1, emitting a hard-edge stitch at 0.5.
+    let flat = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let flat_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(flat))), Paint::None, 0.0)]
+    });
+    let flat_page = page_of(&flat_doc, &opts(&flat_doc));
+    assert!(flat_page.contains("/FunctionType 3") && flat_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{flat_page}");
+    assert!(flat_page.contains("/C0 [1 0 0] /C1 [1 0 0]") && flat_page.contains("/C0 [0 0 1] /C1 [0 0 1]"), "{flat_page}");
+
+    // Zero-length linear and radial gradients still emit valid shfill geometry.
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let mut gp = GradientPaint::new(Gradient::new(
+            kind,
+            vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+        ));
+        gp.geom = Some(GradientGeom { start: Point::new(50.0, 50.0), end: Point::new(50.0, 50.0), aspect: 1.0, focal: None });
+        let deg_doc =
+            doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(gp)), Paint::None, 0.0)]);
+        let deg_page = page_of(&deg_doc, &opts(&deg_doc));
+        assert!(deg_page.contains("shfill"), "{kind:?}: {deg_page}");
+    }
+}
+
 #[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
@@ -1255,6 +1321,50 @@ fn an_envelopes_image_pieces_draw_one_copy_of_its_samples() {
     }
 }
 
+/// An image changed by Perspective Distort is written as the pieces of its mesh, placed so that
+/// its pixel rectangle's corners land on its corners: read back, each corner of the quad is a
+/// corner of one of the pieces' images.
+#[test]
+fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
+    let mut d = png_doc();
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    for level in Level::ALL {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let back = import::import(&out.bytes).unwrap().document;
+        let (mut seen, mut pieces) = ([false; 4], 0);
+        back.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                pieces += 1;
+                let (w, h) = (f64::from(im.width), f64::from(im.height));
+                for p in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)] {
+                    let at = im.xf * Point::new(p.0, p.1);
+                    for (i, c) in q.iter().enumerate() {
+                        seen[i] |= at.distance(*c) < 0.01;
+                    }
+                }
+            }
+        });
+        assert!(pieces > 2, "{level:?}: {pieces}");
+        assert_eq!(seen, [true; 4], "{level:?}");
+        // The pieces are clipped by the quad: a clipping path with its bounds and its area.
+        let mut quad_clips = 0;
+        back.walk(|n| {
+            if let NodeKind::Group { children, clip: true } = &n.kind
+                && let Some(p) = children.first().and_then(|c| c.path_data())
+                && let Some(b) = p.bounds()
+            {
+                let area: f64 = p.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+                if [b.x0 - 10.0, b.y0 - 10.0, b.x1 - 90.0, b.y1 - 90.0].iter().all(|v| v.abs() < 0.01) && (area - 4000.0).abs() < 1.0 {
+                    quad_clips += 1;
+                }
+            }
+        });
+        assert!(quad_clips >= 1, "{level:?}: no clipping path on the quad");
+    }
+}
+
 #[test]
 fn each_ink_of_a_colorized_image_placed_twice_is_written_once() {
     let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
@@ -2027,4 +2137,53 @@ fn ruby_is_written_with_its_type() {
         page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
+}
+
+#[test]
+fn tiff_preview_round_trips_when_postscript_is_unreadable() {
+    let d = doc_with(|d| vec![red_rect(d)]);
+    for kind in [Preview::TiffColor, Preview::TiffBlackWhite] {
+        let out = export(&d, &EpsOptions { preview: kind, ..opts(&d) }, Some(&preview()), None).unwrap();
+        let (ps, tiff) = sections(&out.bytes).unwrap();
+        let tiff = tiff.unwrap();
+        // Corrupt the PostScript body while keeping the binary header and TIFF preview intact.
+        let bad_ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\nunknown_op\n%%EOF\n";
+        let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
+        let imported = import_with(&wrapped, false).unwrap();
+        assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
+        let mut has_image = false;
+        imported.document.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                has_image = true;
+            }
+        });
+        assert!(has_image, "{kind:?}: expected preview image node");
+        assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    }
+}
+
+#[test]
+fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
+    // Ordinary benign fixture with native edit payload + TIFF preview round-trips cleanly.
+    let d = doc_with(|d| vec![red_rect(d)]);
+    let payload = b"vectorcraft-native-edit-payload".to_vec();
+    let out = export(&d, &EpsOptions { native: Some(payload.clone()), preview: Preview::TiffColor, ..opts(&d) }, Some(&preview()), None).unwrap();
+    assert!(super::has_native(&out.bytes));
+    assert_eq!(super::native(&out.bytes).as_deref(), Some(payload.as_slice()));
+    let benign = import_with(&out.bytes, false).unwrap();
+    assert!(!benign.preview);
+
+    // Truncated DOS EPS binary header is refused cleanly without panicking.
+    let mut bad_header = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    bad_header.extend_from_slice(&[0xFF; 26]);
+    assert!(sections(&bad_header).is_none());
+    assert!(import_with(&bad_header, false).is_err());
+
+    // Bounded malformed currentfile filter hitting EOF early does not panic or hang.
+    let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n2 2 8 [2 0 0 -2 0 2] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
+    let _ = import_with(truncated_inline, false);
+
+    // Unterminated PostScript string at EOF is refused cleanly.
+    let unterminated = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n(unterminated";
+    assert!(import_with(unterminated, false).is_err());
 }

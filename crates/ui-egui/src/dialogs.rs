@@ -18,12 +18,14 @@ pub mod artboard_options;
 pub mod attributes_panel_options;
 pub mod blend_options;
 mod brush_art_options;
+pub(crate) use brush_art_options::{brush_key_color_canvas, brush_key_color_input, cancel_brush_key_color, refresh_brush_key_color};
 pub mod brush_delete;
 pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
+pub mod circle_options;
 pub mod color_balance;
 pub mod color_group_options;
 pub mod color_guide_options;
@@ -105,6 +107,7 @@ mod png_options;
 pub mod print;
 pub mod print_presets;
 pub mod profile_mismatch;
+pub mod proof_setup;
 pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
@@ -148,10 +151,12 @@ mod text_export;
 pub mod text_import;
 mod three_d_classic;
 pub(crate) mod three_d_materials;
+pub mod three_point_arc_options;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
 pub mod trace_presets;
+pub mod tracing_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
@@ -370,6 +375,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    ProofSetup: [proof_setup::KIND] => proof_setup::SPEC,
     IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
@@ -377,6 +383,9 @@ registry! {
     FlattenTransparency: [flatten::KIND] => flatten::SPEC,
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
     ImageTracePreset: [trace_presets::KIND] => trace_presets::SPEC,
+    TracingPresets: [tracing_presets::KIND] => tracing_presets::SPEC,
+    TracingPreset: [tracing_presets::PRESET_KIND] => tracing_presets::PRESET_SPEC,
+    TracingPresetsReplace: [tracing_presets::REPLACE_KIND] => tracing_presets::REPLACE_SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     SaveSymbolLibrary: [save_symbol_library::KIND] => save_symbol_library::SPEC,
     SaveBrushLibrary: [save_brush_library::KIND] => save_brush_library::SPEC,
@@ -468,6 +477,8 @@ registry! {
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
+    CircleOptions: [circle_options::KIND] => circle_options::SPEC,
+    ThreePointArcOptions: [three_point_arc_options::KIND] => three_point_arc_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,
@@ -622,7 +633,10 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// A Graph Data Column Width set this way sets every column, as Cell Style's does. A Width Point
 /// Edit side width set this way for several points sets it on every point, as typing it does. An
 /// Import PDF `allPages` set this way to the other pick sets Import PDF pages as links back to its
-/// default.
+/// default. A Dimension Tool Options `arrowStyle` set this way clears `arrowHead`, and a built-in
+/// `arrowHead` set this way sets both values of its Arrow Style entry, as that menu does.
+/// A Pathfinder effect's precision set this way replaces a stored precision out of range, the
+/// bound included.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -636,11 +650,19 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == import_pdf::KIND {
         import_pdf::note_set(d, &field, &value);
     }
+    if d.kind == dimension::KIND && dimension::note_set(d, &field, &value) {
+        return;
+    }
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
     if d.kind == new_document::KIND || new_document::popup_open(d) {
         new_document::note_set(d, &field);
+    }
+    // A Pathfinder effect's precision set this way replaces a stored one out of range, as one
+    // entered in its field does.
+    if d.kind == "effect" && field == "precision" {
+        d.fields.remove(effect::OPENED_PRECISION);
     }
     // Create Object Mosaic's Resize Using Percentages shows the new size the other way, as its checkbox does.
     if d.kind == object_mosaic::KIND && field == "percentages" {
@@ -748,6 +770,7 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     // More Settings' pop-up and Save Preset end on their own; New Document stays.
     if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
@@ -781,6 +804,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
+        }
+        if d.kind == proof_setup::KIND {
+            proof_setup::cancel(app, &d);
         }
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
@@ -827,6 +853,7 @@ pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
 
 /// Apply the open dialog (OK).
 pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     // A file dialog it shows off the UI thread confirms the dialog as it is again.
@@ -836,13 +863,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 }
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
-/// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// for its turn again, a Proof Setup preview that another dialog replaced is undone, the search a
+/// Missing Fonts or Find Linked Files dialog started stops once that dialog is gone, and with no
+/// dialog open the choice about a stopped plug-in that another
 /// dialog replaced opens again, else the questions about the next restored document's linked files
 /// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
+    proof_setup::restore_replaced(app);
     profile_mismatch::settle(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
@@ -867,6 +896,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    refresh_brush_key_color(app);
     crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
@@ -932,7 +962,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));
     let id = if revolves { id.with("revolve") } else { id };
-    modal::show_at(ctx, &heading, id, initial, MARGIN, |ui| {
+    let canvas_pick = brush_key_color_canvas(app, ctx);
+    modal::show_at(ctx, &heading, id, initial, MARGIN, canvas_pick, |ui| {
         // Never wider than the window (a large UI scale in a small window): the text wraps.
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
         ui.set_min_width(spec.min_width.min(room));

@@ -31,7 +31,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   anchor, guide, grid or pixel snapping places lands on the closest point of a segment, or of a
   line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
   on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
-  line shows the "path" label. These rules apply to the Linear points.
+  line shows the "path" label. These rules apply to the Linear points. A first point picked on
+  an anchor, on a segment or on a corner of preview bounds moves with that art when the art moves
+  before the second click: the rubber band, Shift and the dimension start from where the art puts
+  the point then. When that art is deleted before the second click, the point goes back to where
+  it was picked.
   With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
   preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
@@ -90,6 +94,12 @@ extension lines (weight, type, colour, arrows), and the text (font, size, colour
 alignment). **Position** is **Away from the Line** (the label on the far side of the dimension line
 from the object) or **Between Line and Object**; **Alignment** is **Left**, **Center** or
 **Right** along the line. **Save** keeps them for new dimensions; existing ones don't change.
+
+**Arrow Style** lists **Filled**, **Open**, **Tick** and **None**, then every other built-in
+arrowhead of the Stroke panel, each with a drawn preview before its name. Custom arrowheads are not
+listed. A version that has the arrowhead in the Stroke panel but not in Arrow Style keeps the saved
+arrows of such a dimension until it draws the dimension again, and then draws **Filled** arrows. A
+version without the arrowhead does not open the file.
 
 Scale means **drawing : real size**, independent of zoom. At **1:10** a 1 in line on the page is
 labelled 10 in; at **10:1**, 0.1 in. It scales lengths, not angles or the size of text and arrows.

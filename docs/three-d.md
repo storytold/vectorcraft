@@ -106,7 +106,7 @@ object is where the art was.
 | Twist | 0° to 360°: the back face turned against the front, the walls following in slices. |
 | Taper | 1–100 %: the back face's size against the front's. Without a twist, each wall (and each bevel band) stays flat, so it is one face, not cut into slices. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
-| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
+| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. After them come the custom bevels ([Custom bevels](#custom-bevels)). |
 | Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
 | Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
@@ -117,6 +117,28 @@ Holes stay holes, with walls of their own. Bevels move each corner along its bis
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
 cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
 narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
+
+### Custom bevels
+
+The public [Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
+page describes a custom bevel as one open path saved as a symbol in a bevels document, then listed in the Bevel menu.
+VectorCraft keeps its custom bevels in `Bevels.vectorcraft`, a native document next to the preferences (none on the
+web or in runs with `VECTORCRAFT_NO_PREFS`). The layout below is VectorCraft's own.
+
+- **Edit Bevels…** under Bevel Shape in the 3D and Materials panel (`threeD.bevels.edit`) opens the file, and first
+  creates it with one example bevel when it is missing.
+- Each symbol whose art is one open path (alone or in groups of one member) is one bevel, named after the symbol and
+  listed after the built-in shapes in the Bevel Shape menus of Extrude & Bevel and Extrude & Bevel (Classic).
+- The path runs from its first anchor, at the cap's edge, to its last, at the side wall. Across the page is across
+  the bevel's width and down the page is along its height, whichever way the path is drawn. Points past its ends are
+  held to them, curves are cut into straight lines, and a path is simplified to at most 64 points.
+- A custom bevel takes Width, Height, Repeat, Space, Bevel Inside and Bevel both sides like the built-in shapes.
+- The file is read when the app starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it
+  again. A file larger than 64 MB is not read, at most 256 symbols are read, and a symbol that is not one open path,
+  has more than 4,096 anchors, is cut into more than 8,192 straight lines, has ends that are not apart both across and down, or repeats an earlier name is listed
+  in `skipped` by `threeD.bevels.list`.
+- An effect that uses a custom bevel keeps its name and a copy of its points, so the document draws it the same way
+  without the bevels file.
 
 ## Inflate
 
@@ -469,8 +491,9 @@ The public [Map artworks on 3D object](https://helpx.adobe.com/illustrator/deskt
 page describes graphics: art kept with the document and placed on single surfaces of a 3D object, and the
 [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
 page lists Graphics and Add Materials and Graphics on the Materials tab. VectorCraft maps graphics onto
-Extrude & Bevel's front and back caps and its side (its walls and bevels), the plane of the Plane type (Rotate), and
-the swept side of Revolve, which the public page's example of a label on a bottle describes.
+Extrude & Bevel's front and back caps and its side (its walls and bevels), the plane of the Plane type (Rotate),
+the swept side of Revolve, which the public page's example of a label on a bottle describes, and Inflate's puffed
+front and back.
 
 - The panel's **Materials** tab shows the document's graphics as thumbnails. A graphic is a document symbol, as
   the public page allows existing symbols to be used. **Add as Single Graphic** keeps the selected art as a new
@@ -479,9 +502,9 @@ the swept side of Revolve, which the public page's example of a label on a bottl
 - Clicking a thumbnail maps that graphic onto the front of the 3D effect of each selected object
   (`threeD.mapGraphic`), in one undo step. A graphic larger than the object starts scaled down to fit inside it.
 - Below the thumbnails the tab lists the graphics mapped onto the first selected object. The selected one shows
-  its Face (Front, Back or Side; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics
-  go on its side), X and Y (the offset of its center from the center of the
-  object's bounds, in the face's plane, or on a side from its middle unrolled flat), Scale (a percentage of the symbol's size) and Rotation
+  its Face (Front, Back or Side, on Inflate Front or Back for its puffed front or back; Plane and Revolve show no
+  Face, as a plane has only a front and Revolve's graphics go on its side), X and Y (the offset of its center from
+  the center of the object's bounds, in the face's plane, or on a side from its middle unrolled flat), Scale (a percentage of the symbol's size) and Rotation
   (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
 - While the tab is open, a blue handle sits on the center of each mapped graphic whose face is turned toward the
   viewer. Dragging a handle moves that graphic over its face, previewed while the pointer is down and recorded as
@@ -502,6 +525,18 @@ These rules are VectorCraft's own:
   their own. A graphic on a face turned away from the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
   there.
+- On Inflate a graphic is placed in the art's plane, X and Y measured from the center of the object's bounds as on
+  a cap, and carried straight out onto the puffed face above each point, so it follows the puff. The back takes
+  graphics only with Both sides and Cap on (`threeD.mapGraphic` refuses one otherwise, and one already there is
+  not drawn); it reads the right way round from behind, and Twist and Taper turn and shrink its graphics with it.
+  The membrane is cut into triangles, and each one draws the part of the graphic that falls on it, shaded as
+  that triangle is shaded and drawn only where the surface's outside faces the viewer; nearer triangles drawn
+  after it cover it. When a cell of the membrane cannot be cut into triangles, the object draws without its
+  graphics and commands refuse them, as when the triangles take more faces than a 3D effect draws. Every solid of
+  the object (a fill's, and a stroke's outline) carries the graphics. The handle sits on the point of the puffed
+  face above the graphic's center, and only where the viewer sees that face. The cutting into straight pieces,
+  the seam strokes and the limits below are those of Revolve; when the triangles take more faces than a 3D
+  effect draws, the object draws without its graphics and commands refuse them.
 - On Revolve a graphic lies on the swept side, which has one face (Front), unrolled flat. X runs around the axis:
   the angle from the middle of the side times the profile's distance from the axis at that point, so a graphic
   keeps its size at every distance and wraps farther around the axis where the profile comes nearer to it. Y runs
@@ -551,9 +586,10 @@ These rules are VectorCraft's own:
   draws the object without a graphic past the first limit, and without all of its graphics past the second.
 - A hollow Extrude & Bevel has no caps, so the graphics on its caps are not drawn until Cap is turned on again,
   and `threeD.mapGraphic` refuses to map a new one onto a cap; its side takes graphics. With a depth of 0 the object
-  is a plane, and `threeD.mapGraphic` maps graphics onto its front only. Changing the type to Inflate drops the
-  graphics, and changing between Extrude, Plane and Revolve keeps them, except that Plane and Revolve drop the
-  graphics on the back cap and on Extrude & Bevel's side; on Revolve the front's graphics go on its side.
+  is a plane, and `threeD.mapGraphic` maps graphics onto its front only. Changing between Extrude, Plane, Revolve
+  and Inflate keeps the graphics, except that Plane and Revolve drop the graphics on the back cap, and Plane, Revolve
+  and Inflate drop the graphics on Extrude & Bevel's side; on Revolve the front's graphics go on its side, and on
+  Inflate the front's and back's go on the puffed faces.
 - `effect.apply` and `effect.setParams` refuse a graphic that names a symbol the document does not have, unless
   the effect already holds a graphic of that symbol. A graphic whose symbol is deleted is no longer drawn. Renaming a symbol renames it in the graphics that use it,
   in the layers, in the art of symbols, patterns, graph designs, brushes and opacity masks, and in graphic
@@ -605,14 +641,14 @@ is VectorCraft's own.
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
-`ogee`), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
+`ogee`, or `custom` with `bevelName` and `bevelProfile`; `{custom: name}` takes a bevel of the bevels file), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
 uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightColor` (`#rrggbb`, default `#ffffff`), `lightIntensity` (%), `lightRotation`,
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely. All four take `shadow` (boolean, false), `shadowPosition` (`behind` or `below`), `shadowDistance` (0..100%, 0) and `shadowBounds` (10..400%, 100) ([Shadows](#shadows)); values out of range are rejected before editing.
-`threeD.extrude`, `threeD.rotate` and `threeD.revolve` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
+`threeD.extrude`, `threeD.rotate`, `threeD.revolve` and `threeD.inflate` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
 with `symbol` (the name of a document symbol), `face` (`front`, `back` or `side`, default `front`; `threeD.rotate` and
-`threeD.revolve` take `front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
+`threeD.revolve` take `front` only, and `threeD.inflate` `front` or `back`), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
 default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
 All four take `render` ([3D and Materials panel](#3d-and-materials-panel)): an object whose `mode` is `shaded` (the
 default) or `wireframe`. A `render` that is not an object, a key other than `mode`, another mode, and `render` on
@@ -630,7 +666,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   solid is built for ([Fills and strokes](#fills-and-strokes)), and only the first light casts a shadow
   ([Shadows](#shadows)). Graphics map onto planar faces, Extrude & Bevel's side as one surface unrolled flat, and
   Revolve's side only ([Graphics](#graphics)).
-- The bevel shapes and their names are our own; custom bevel paths are not supported.
+- The bevel shapes and their names are our own. Custom bevels come from VectorCraft's own bevels file
+  ([Custom bevels](#custom-bevels)) and are cut into straight lines.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn
   back to front, with a flat cap or flat back turned toward the viewer drawn after all of them. Concave solids
   seen at steep angles can overlap wrongly; open (hollow) solids show both sides. Twisted walls and bevels are

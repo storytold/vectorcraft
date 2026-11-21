@@ -110,6 +110,29 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
+/// Resolve the target circle clicked this frame by the rules of a row name click
+/// ([`widgets::row_click`], #8639): plain targets it, Ctrl/Cmd adds it to the selection or takes
+/// it out, Shift selects the art of every row from the last circle clicked (else the targeted row)
+/// to it, and Shift+Ctrl/Cmd adds that art to the selection.
+pub(super) fn resolve_target_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
+    let Some((id, m)) = out.target_click.take() else { return };
+    let anchor = ui.data(|d| d.get_temp::<NodeId>(key("target-anchor"))).or(view.target);
+    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
+    // The circles have no highlighted rows of their own: a range starts only at the anchor.
+    let click = widgets::row_click(&order, &[], anchor, id, m);
+    if click.moves_anchor() {
+        ui.data_mut(|d| d.insert_temp(key("target-anchor"), id));
+    }
+    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    let params = match click {
+        widgets::RowClick::Only(id) => json!({"id": id.0}),
+        widgets::RowClick::Toggle(id) => json!({"id": id.0, "add": true}),
+        widgets::RowClick::Range(rows) => json!({"range": ids(&rows)}),
+        widgets::RowClick::AddRange(rows) => json!({"range": ids(&rows), "add": true}),
+    };
+    out.actions.push(("layer.target".into(), params));
+}
+
 /// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
 /// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
 /// be intertwined.
@@ -142,7 +165,9 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
-    if editable && resp.hovered() {
+    if selected {
+        ui.painter().rect_filled(r, 0.0, t.row_selected);
+    } else if editable && resp.hovered() {
         ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
     }
     ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
@@ -496,7 +521,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
     let tc = egui::pos2(r.right() - TARGET_X, r.center().y);
-    let tresp = target_circle(ui, n, tc, h, view.target.map_or(is_sel, |id| id == n.id), &mut out.actions, t);
+    let tresp = target_circle(ui, n, tc, h, shows_targeted(view, n, is_sel), &mut out.actions, t);
     let sq = egui::pos2(r.right() - SQUARE_X, r.center().y);
     if is_sel {
         let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
@@ -513,7 +538,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let m = ui.input(|i| i.modifiers);
     let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
     if tresp.clicked() {
-        out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
+        out.target_click = Some((n.id, m));
     } else if sq_resp.clicked() {
         out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if resp.clicked() {
@@ -906,8 +931,46 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
     }
 }
 
-/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, filled when `n`
-/// has an appearance or transparency of its own. Its response is clicked to target `n`; dragging
+/// Whether `n`'s target circle shows as targeted: `n` is the one target, or, with nothing
+/// targeted, it is selected. A layer is never selected itself (its art is), so with nothing
+/// targeted a layer shows as targeted while all of its visible, unlocked art is selected, as an
+/// object added to the selection from its circle does (#8646).
+fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
+    match view.target {
+        Some(id) => id == n.id,
+        None if n.is_layer() => {
+            if view.sel.is_empty() {
+                return false;
+            }
+            let art = n.layer_art(true);
+            !art.is_empty() && art.iter().all(|id| view.sel.contains(id))
+        }
+        None => is_sel,
+    }
+}
+
+/// The radius of the inner ring of a targeted item's target circle (the double ring); the outer
+/// ring's radius is 5.
+pub(super) const TARGET_RING: f32 = 2.8;
+/// The width of the inner ring.
+pub(super) const TARGET_STROKE: f32 = 1.0;
+/// The radius of the dot filling the circle of an item that has an appearance of its own and is
+/// not targeted.
+pub(super) const TARGET_DOT: f32 = 3.2;
+/// The radius of that dot inside a targeted item's inner ring: clear of the ring, so a targeted
+/// item with an appearance of its own shows both (#8711).
+pub(super) const TARGET_DOT_IN_RING: f32 = 1.5;
+
+/// The marks inside a target circle's outer ring: the inner ring's radius when the item is
+/// `targeted`, and the appearance dot's radius when it is `styled` (has an appearance of its own).
+/// Each of the four combinations looks different, as the Layers panel's target icons do.
+pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
+    let dot = if targeted { TARGET_DOT_IN_RING } else { TARGET_DOT };
+    (targeted.then_some(TARGET_RING), styled.then_some(dot))
+}
+
+/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a dot when
+/// `n` has an appearance or transparency of its own ([`target_marks`]). Its response is clicked to target `n`; dragging
 /// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
 /// copies it) or the trash.
 fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
@@ -926,11 +989,12 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     }
     let ring = if held { t.accent } else { t.icon };
     ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
-    if targeted {
-        ui.painter().circle_stroke(c, 2.8, Stroke::new(1.0, t.icon));
+    let (inner, dot) = target_marks(targeted, has_styled_target(n));
+    if let Some(r) = inner {
+        ui.painter().circle_stroke(c, r, Stroke::new(TARGET_STROKE, t.icon));
     }
-    if has_styled_target(n) {
-        ui.painter().circle_filled(c, 3.2, t.icon);
+    if let Some(r) = dot {
+        ui.painter().circle_filled(c, r, t.icon);
     }
     if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);

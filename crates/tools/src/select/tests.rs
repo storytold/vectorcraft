@@ -654,6 +654,28 @@ fn escape_cancels_a_bracket_drag() {
     assert!(t.pointer(&cx, &ev(PointerKind::Up, 330.0, 290.0)).is_empty(), "the release commits nothing");
 }
 
+/// A bracket drag of type on a path reads where it is released, and a tool switch cancels it.
+#[test]
+fn a_bracket_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let (d, id) = crate::testutil::doc_with_path_type();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    check_widget_release_and_tool_switch(&cx, Point::new(280.0, 290.0), Point::new(320.0, 290.0), Point::new(340.0, 290.0));
+}
+
+/// A corner widget drag reads where it is released, and a tool switch cancels it.
+#[test]
+fn a_corner_widget_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    check_widget_release_and_tool_switch(&cx, Point::new(190.0, 191.0), Point::new(175.0, 176.0), Point::new(165.0, 166.0));
+}
+
 /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
 /// press there grabs the object by that point.
 #[test]
@@ -2198,7 +2220,7 @@ fn move_follows_the_while_moving_option() {
     let p = paint();
     let pixel_snap = PixelSnap { moving: false, ..PixelSnap::default() };
     let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
-    let snap = MoveSnap::new(&c);
+    let mut snap = MoveSnap::new(&c);
     let (dv, _) = snap.snap(&c, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
     assert!((dv - Vec2::new(3.3, 4.6)).hypot() < 1e-9, "{dv:?}");
     let on = ToolContext { pixel_snap: PixelSnap::default(), ..c };
