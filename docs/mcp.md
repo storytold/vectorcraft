@@ -14500,8 +14500,10 @@ Tools:
   undo step. A circle too small or too large for its three points to give it back in floating point counts as no
   circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
-  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, or another document forgets
-  the first segment.
+  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, another document, or a
+  change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
+  segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
+  canceled preview does not leave a circle worked out on the previewed paths.
   Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
   gives an error for a value outside that range or one that is not a number, and for any other option.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
