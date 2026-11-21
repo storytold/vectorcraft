@@ -47,6 +47,12 @@ pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> b
     check_row(ui, tl!(label), value, enabled).0
 }
 
+/// [`check3`] that also returns the row's response, so a caller can open a menu on that row.
+/// The click result is the same as [`check3`].
+pub(crate) fn check3_response(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> (bool, Response) {
+    check_row(ui, tl!(label), value, enabled)
+}
+
 /// [`check`] for a name of the document's (an artboard's, an asset's), shown as it is, never
 /// translated. Returns true when toggled.
 pub fn check_name(ui: &mut Ui, name: &str, value: bool) -> bool {
