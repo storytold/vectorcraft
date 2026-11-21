@@ -601,7 +601,8 @@ fn rearrange_of_listed_artboards_starts_at_the_first_and_keeps_locked_ones() {
 }
 
 /// Rearrange refuses `indices` that are not a non-empty list of artboards, and an `at` that is not
-/// [x, y], before anything moves; a listed index given twice counts once.
+/// [x, y], before anything moves, and leaves the document as it was when `at` would put an
+/// artboard past the canvas; a listed index given twice counts once.
 #[test]
 fn rearrange_refuses_bad_indices_and_at() {
     let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));
@@ -616,6 +617,8 @@ fn rearrange_refuses_bad_indices_and_at() {
         (json!({"indices": [0, 1], "at": [1]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
         (json!({"indices": [0, 1], "at": "0,0"}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
         (json!({"at": [0, "1"]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"indices": [0], "at": [1e20, 0]}), "result would exceed the canvas (coordinates out of range)"),
+        (json!({"at": [0, -4.000001e6]}), "result would exceed the canvas (coordinates out of range)"),
     ] {
         let err = s.execute("artboard.rearrange", &p).unwrap_err().to_string();
         assert_eq!(err, msg, "{p}");

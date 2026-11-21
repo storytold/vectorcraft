@@ -12661,10 +12661,12 @@ fn rearrange_places_the_selected_artboards_with_enter_and_lets_space_pan() {
 }
 
 /// Once a pen has been seen, a finger press on the canvas navigates and does not place a waiting
-/// Rearrange; a mouse press then places it.
+/// Rearrange: the first finger presses as the pointer, a second lands and both drag, and the view
+/// pans while the artboards and the history stay as they were. A mouse press then places it.
 #[test]
 fn rearrange_is_not_placed_by_a_finger_once_a_pen_was_seen() {
     use crate::touch::{Source, set_pen_seen, set_source};
+    use egui::TouchPhase::{End, Move, Start};
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     app.select_tool("artboard");
@@ -12680,14 +12682,28 @@ fn rearrange_is_not_placed_by_a_finger_once_a_pen_was_seen() {
     assert!(app.ui.rearrange_placement.is_some());
     let at = app.canvas_rect.unwrap().center() + vec2(40.0, 30.0);
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let center = |app: &VectorcraftApp| app.view().unwrap().center;
+    let view_before = center(&app);
+    // The platform says a finger drives the pointer once a pen has been seen, and egui makes the
+    // first finger the pointer too.
     set_source(Source::Pen);
     set_source(Source::Finger);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(true)]);
-    frame(&mut app, &ctx, vec![button(false)]);
-    let finger = (app.ui.rearrange_placement.is_some(), boards(&app), undo(&app));
+    let second = at + vec2(80.0, 0.0);
+    frame(&mut app, &ctx, vec![finger(0, Start, at), egui::Event::PointerMoved(at), button(true)]);
+    let pressed = app.ui.rearrange_placement.is_some();
+    frame(&mut app, &ctx, vec![finger(1, Start, second)]);
+    for k in 1..=3 {
+        let d = vec2(0.0, 20.0 * k as f32);
+        frame(&mut app, &ctx, vec![finger(0, Move, at + d), finger(1, Move, second + d), egui::Event::PointerMoved(at + d)]);
+    }
+    let d = vec2(0.0, 60.0);
+    frame(&mut app, &ctx, vec![finger(0, End, at + d), finger(1, End, second + d), finger_button(at + d, false), egui::Event::PointerGone]);
+    let touched = (pressed, app.ui.rearrange_placement.is_some(), boards(&app), undo(&app));
+    let panned = center(&app) != view_before;
     set_source(Source::Mouse);
     set_pen_seen(false);
-    assert_eq!(finger, (true, before.clone(), steps), "the finger navigates");
+    assert_eq!(touched, (true, true, before.clone(), steps), "the finger navigates");
+    assert!(panned, "two fingers pan the view");
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(true)]);
     frame(&mut app, &ctx, vec![button(false)]);
     assert!(app.ui.rearrange_placement.is_none(), "the mouse places it");
