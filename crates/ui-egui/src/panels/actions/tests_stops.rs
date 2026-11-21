@@ -1,17 +1,44 @@
+use super::tests_playback::{first_action, host_frame, on_host};
 use super::tests_support::*;
 use super::*;
+use crate::dialogs::action_playback::PlaybackDialog;
+// PLAN: assumed `action_stop::message_open(app: &VectorcraftApp) -> bool` (menus-w20 note 7).
+use crate::dialogs::action_stop::{StopMessage, message_open};
+use craft::automation::actions::ActionStep;
+use craft::ui::dialog::StackDialog;
+
+/// Makes `steps` the steps of the action [`app_with_three_moves`] builds.
+fn set_steps(app: &mut VectorcraftApp, steps: &[(&str, Value)]) {
+    let a = first_action(app);
+    for step in (0..app.ui.actions.step_count(a)).rev() {
+        app.ui.actions.delete_step(a, step).unwrap();
+    }
+    for (at, (command, params)) in steps.iter().enumerate() {
+        app.ui.actions.insert_step(a, at, ActionStep::new(*command, params.clone())).unwrap();
+    }
+}
+
+/// Sets the answer of the stop's message box, as automation's `ui.dialog.set` does: `"proceed"` is Continue and
+/// `"cancel"` is Stop. Refused for an answer the box has no button for.
+fn choose(app: &VectorcraftApp, choice: &str) -> Result<(), String> {
+    let ctx = app.ui_ctx.clone().unwrap();
+    app.dialogs().unwrap().with(|host| -> Result<(), String> {
+        let id = host.get::<StopMessage>().map(|stop| stop.id()).ok_or("no stop message is open")?;
+        host.set_json_field(&ctx, id, "choice", json!(choice))
+    })
+}
 
 /// A step that fails after Continue at a stop is named by its place in the action, the stops
 /// before it counted, the excluded one too.
 #[test]
 fn an_error_after_a_stop_names_the_step_in_the_action() {
     let (mut app, _) = app_with_three_moves();
-    let stop = (STOP_STEP.to_string(), json!({"message": "", "allowContinue": true}));
-    let action = &mut app.ui.action_sets[0].actions[0];
-    action.steps.insert(1, stop.clone());
-    action.steps.insert(3, stop);
-    action.steps.push(("object.align".into(), json!({})));
-    action.excluded_steps.insert(3);
+    let stop = ActionStep::new(STOP_STEP, json!({"message": "", "allowContinue": true}));
+    let a = first_action(&app);
+    app.ui.actions.insert_step(a, 1, stop.clone()).unwrap();
+    app.ui.actions.insert_step(a, 3, stop).unwrap();
+    app.ui.actions.insert_step(a, app.ui.actions.step_count(a), ActionStep::new("object.align", json!({}))).unwrap();
+    app.ui.actions.set_step(a, 3, false).unwrap();
     assert_eq!(play(&mut app, 0, 0).unwrap()["atStop"], json!(true));
     assert_names_step(&app.run(CONTINUE_PLAYBACK, json!({})).unwrap_err(), 6, "object.align");
     assert!(app.ui.action_playing.is_none(), "the playback ended");
@@ -39,8 +66,8 @@ fn steps_before_a_stop_play_with_a_key_no_longer_read() {
     let (mut app, _) = app_with_three_moves();
     let old = json!({"x": 10, "y": 50, "width": 20, "height": 20, "cornerStyle": "round"});
     assert!(app.run("shape.rectangle", old.clone()).is_err());
-    let stop = (STOP_STEP.to_string(), json!({"message": "", "allowContinue": false}));
-    app.ui.action_sets[0].actions[0].steps = vec![("shape.rectangle".into(), old), stop];
+    let stop = (STOP_STEP, json!({"message": "", "allowContinue": false}));
+    set_steps(&mut app, &[("shape.rectangle", old), stop]);
     let shapes = app.session.active().unwrap().doc.layers[0].children().unwrap().len();
     let r = play(&mut app, 0, 0).unwrap();
     assert_eq!(r["atStop"], json!(true), "{r}");
@@ -55,11 +82,8 @@ fn accelerated_playback_holds_at_a_stop_and_play_plays_the_rest() {
     let r = play(&mut app, 0, 0).unwrap();
     assert_eq!((r["pending"].clone(), r["atStop"].clone(), r["results"].as_array().map(Vec::len)), (json!(2), json!(true), Some(1)));
     assert_eq!(x(&app), 1.0, "the step before the stop runs");
-    let d = app.ui.dialog.as_ref().expect("the stop shows its message");
-    assert_eq!(
-        (d.kind.as_str(), d.str("action"), d.str("message"), d.bool("allowContinue")),
-        (crate::dialogs::action_stop::MESSAGE_KIND, "Three Moves".to_string(), "Paint it".to_string(), false)
-    );
+    assert!(message_open(&app), "the stop shows its message");
+    assert!(choose(&app, "proceed").is_err(), "without Allow Continue the message offers no Continue");
     for now in [0.0, 100.0, 1000.0] {
         assert_eq!(frame(&mut app, now), None);
         assert_eq!(x(&app), 1.0, "no later step runs while the action waits");
@@ -131,29 +155,29 @@ fn a_paced_playback_holds_at_a_stop_when_another_document_became_active() {
 fn allow_continue_offers_continue_and_stop_closes_the_box_and_keeps_waiting() {
     let (mut app, x) = app_with_a_stop(true);
     play(&mut app, 0, 0).unwrap();
-    assert!(dialog_texts(&mut app).iter().any(|s| s == "Continue"), "Allow Continue shows Continue");
-    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(choose(&app, "proceed"), Ok(()), "Allow Continue offers Continue");
+    on_host(&mut app, |host, ctx| host.confirm::<StopMessage>(ctx));
     assert_eq!(x(&app), 7.0, "Continue plays the rest");
     assert!(app.ui.action_playing.is_none());
-    assert_eq!(open_kind(&app), None);
+    assert!(!message_open(&app));
 
     let (mut app, x) = app_with_a_stop(false);
     play(&mut app, 0, 0).unwrap();
-    let texts = dialog_texts(&mut app);
-    assert!(!texts.iter().any(|s| s == "Continue"), "without Allow Continue there is no Continue: {texts:?}");
-    assert!(texts.iter().any(|s| s == "Paint it") && texts.iter().any(|s| s == "Stop"), "{texts:?}");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(open_kind(&app), None, "the box's only button closes it");
+    assert!(choose(&app, "proceed").is_err(), "without Allow Continue there is no Continue");
+    assert_eq!(choose(&app, "cancel"), Ok(()), "Stop is offered");
+    on_host(&mut app, |host, ctx| host.confirm::<StopMessage>(ctx));
+    assert!(!message_open(&app), "the box's only button closes it");
     assert!(waiting_at_stop(&app), "the action waits for the manual task");
     assert_eq!(x(&app), 1.0);
     frame(&mut app, 100.0);
-    assert_eq!(open_kind(&app), None, "the box does not open again");
+    assert!(!message_open(&app), "the box does not open again");
     app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
     assert_eq!(x(&app), 7.0);
 
     let (mut app, x) = app_with_a_stop(true);
     play(&mut app, 0, 0).unwrap();
-    crate::dialogs::cancel(&mut app);
+    on_host(&mut app, |host, ctx| host.cancel::<StopMessage>(ctx));
+    assert!(!message_open(&app));
     assert!(waiting_at_stop(&app), "Stop closes the box and the action waits");
     assert_eq!(x(&app), 1.0);
 }
@@ -179,19 +203,28 @@ fn stop_at_a_stop_ends_the_playback_and_keeps_the_steps_run() {
 #[test]
 fn stops_first_last_and_in_a_row_each_wait() {
     let (mut app, x) = app_with_three_moves();
-    let stop = |message: &str| (STOP_STEP.to_string(), json!({"message": message, "allowContinue": false}));
-    let moved = ("object.move".to_string(), json!({"dx": 1, "dy": 0}));
-    app.ui.action_sets[0].actions[0].steps = vec![stop("first"), stop("second"), moved, stop("last")];
-    let message = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.str("message"));
+    let stop = |message: &str| (STOP_STEP, json!({"message": message, "allowContinue": false}));
+    let moved = ("object.move", json!({"dx": 1, "dy": 0}));
+    set_steps(&mut app, &[stop("first"), stop("second"), moved, stop("last")]);
+    // Which open of the stop's message box shows: the host numbers every open, so each stop's own box has a new one.
+    let shown = |app: &VectorcraftApp| {
+        app.dialogs()?.with(|host| {
+            let id = host.get::<StopMessage>()?.id();
+            host.open_serial(id)
+        })
+    };
     assert_eq!(play(&mut app, 0, 0).unwrap()["atStop"], json!(true));
-    assert_eq!((message(&app).as_deref(), x(&app)), (Some("first"), 0.0));
+    let first = shown(&app);
+    assert_eq!((first.is_some(), x(&app)), (true, 0.0));
     assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap()["atStop"], json!(true));
-    assert_eq!((message(&app).as_deref(), x(&app)), (Some("second"), 0.0));
+    let second = shown(&app);
+    assert_eq!((second.is_some() && second != first, x(&app)), (true, 0.0), "the second stop shows its own message");
     assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap()["atStop"], json!(true));
-    assert_eq!((message(&app).as_deref(), x(&app)), (Some("last"), 1.0));
+    let last = shown(&app);
+    assert_eq!((last.is_some() && last != second, x(&app)), (true, 1.0), "the last stop shows its own message");
     assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap(), json!({"results": [], "pending": 0}));
     assert!(app.ui.action_playing.is_none(), "after the last stop the playback ends");
-    assert_eq!(message(&app), None);
+    assert_eq!(shown(&app), None);
 }
 
 #[test]
@@ -209,7 +242,7 @@ fn a_stop_nested_in_a_recorded_batch_holds_too() {
     let (mut app, x) = app_with_three_moves();
     let moved = json!({"command": "object.move", "params": {"dx": 1, "dy": 0}});
     let stop = json!({"command": STOP_STEP, "params": {"message": "Inner", "allowContinue": false}});
-    app.ui.action_sets[0].actions[0].steps = vec![("command.batch".into(), json!({"commands": [moved, stop, moved]}))];
+    set_steps(&mut app, &[("command.batch", json!({"commands": [moved, stop, moved]}))]);
     play(&mut app, 0, 0).unwrap();
     assert!(waiting_at_stop(&app));
     assert_eq!(x(&app), 1.0);
@@ -224,23 +257,30 @@ fn a_stop_reached_while_recording_is_recorded() {
     play(&mut app, 0, 0).unwrap();
     app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
-    let recorded = app.ui.action_sets[0].actions.last().unwrap();
-    let ids: Vec<&str> = recorded.steps.iter().map(|(c, _)| c.as_str()).collect();
+    let recorded = set_actions(&app, 0).pop().unwrap();
+    let ids: Vec<&str> = recorded.steps.iter().map(|s| s.command.as_str()).collect();
     assert_eq!(ids, ["command.batch", STOP_STEP, "command.batch"]);
-    assert_eq!(recorded.steps[1].1, json!({"message": "Paint it", "allowContinue": false}));
+    assert_eq!(recorded.steps[1].params, json!({"message": "Paint it", "allowContinue": false}));
 }
 
 #[test]
 fn the_message_waits_for_a_dialog_already_open() {
     let (mut app, _) = app_with_a_stop(false);
+    let playback_open = |app: &VectorcraftApp| app.dialogs().unwrap().with(|host| host.is_open::<PlaybackDialog>());
     crate::dialogs::action_playback::open(&mut app);
+    // The window shows the dialog before the action plays: a dialog is open while the window shows its layer.
+    host_frame(&mut app, false);
     play(&mut app, 0, 0).unwrap();
     assert!(waiting_at_stop(&app));
-    frame(&mut app, 0.0);
-    assert_eq!(open_kind(&app), Some(crate::dialogs::action_playback::KIND), "the open dialog stays");
-    crate::dialogs::cancel(&mut app);
-    frame(&mut app, 0.0);
-    assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND), "the message shows once it closes");
+    host_frame(&mut app, false);
+    assert!(playback_open(&app), "the open dialog stays");
+    assert!(!message_open(&app), "the message waits for it");
+    on_host(&mut app, |host, ctx| host.cancel::<PlaybackDialog>(ctx));
+    // The frame after the close still began with the dialog's layer shown; the next one shows the message.
+    host_frame(&mut app, false);
+    host_frame(&mut app, false);
+    assert!(!playback_open(&app));
+    assert!(message_open(&app), "the message shows once it closes");
 }
 
 #[test]
