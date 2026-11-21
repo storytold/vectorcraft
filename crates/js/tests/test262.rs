@@ -240,12 +240,20 @@ fn annex_b_parse_subset() {
         println!("test262 Annex B parse: SKIPPED (no suite; run cargo xtask test262)");
         return;
     };
-    let Some(language) = or_fail(present(&dir, "test/annexB/language")) else {
-        println!("test262 Annex B parse: SKIPPED ({} has no test/annexB/language)", dir.display());
+    parse_annex_b(&dir);
+}
+
+/// Parses the tests without a feature tag under `test/annexB/language`, of any edition, prints the
+/// counts and writes the failures to `annexb-parse-failures.txt` beside the suite.
+fn parse_annex_b(dir: &Path) {
+    if or_fail(present(dir, "test/annexB")).is_none() {
+        println!("test262 Annex B parse: SKIPPED ({} has no test/annexB)", dir.display());
         return;
-    };
+    }
+    // A suite with `test/annexB` and no `test/annexB/language` fails in the walk.
+    let language = or_fail(inside(dir, "test/annexB/language"));
     let files = or_fail(test_files(&language));
-    let ParseRun { main, with_features, modules, .. } = or_fail(parse_files(&dir, &files, true));
+    let ParseRun { main, with_features, modules, .. } = or_fail(parse_files(dir, &files, true));
     assert!(main.positive + main.negative > 0, "no Annex B tests to parse under {}", language.display());
     let report = dir.join("annexb-parse-failures.txt");
     if let Err(e) = std::fs::write(&report, &main.failures) {
@@ -654,6 +662,7 @@ fn run_annex_b(dir: &Path) {
     let mut built_ins_report = String::new();
     for folder in std::iter::once(&ANNEX_B_LANGUAGE).chain(ANNEX_B_BUILT_INS) {
         let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            assert!(*folder != ANNEX_B_LANGUAGE, "{} has test/annexB but no test/{folder}", dir.display());
             println!("test262 {folder}: SKIPPED (not in this suite)");
             continue;
         };
@@ -875,6 +884,20 @@ fn an_annex_b_folder_whose_tests_are_all_skipped_fails() {
     let outcome = std::panic::catch_unwind(|| run_annex_b(&dir));
     std::fs::remove_dir_all(&dir).unwrap();
     assert!(outcome.is_err(), "a folder where every test is skipped passes");
+}
+
+#[test]
+fn an_annex_b_tree_without_its_language_folder_fails() {
+    let dir = scratch("no-language");
+    std::fs::create_dir_all(dir.join("harness")).unwrap();
+    std::fs::create_dir_all(dir.join("test/annexB/built-ins")).unwrap();
+    std::fs::write(dir.join("harness/assert.js"), "").unwrap();
+    std::fs::write(dir.join("harness/sta.js"), "").unwrap();
+    let parsed = std::panic::catch_unwind(|| parse_annex_b(&dir));
+    let ran = std::panic::catch_unwind(|| run_annex_b(&dir));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(parsed.is_err(), "the parse test skips a suite without test/annexB/language");
+    assert!(ran.is_err(), "the interpreter test skips a suite without test/annexB/language");
 }
 
 #[test]
