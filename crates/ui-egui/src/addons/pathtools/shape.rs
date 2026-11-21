@@ -54,7 +54,7 @@ fn run(app: &mut VectorcraftApp, id: &str, p: Value) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
-        empty_state(ui, "hexagon", tl!("No document"), tl!("Open a document to draw parametric shapes."));
+        empty_state(ui, "dc-parametric-shape", tl!("No document"), tl!("Open a document to draw parametric shapes."));
         return;
     };
     // The selected shape, else the tool's next one.

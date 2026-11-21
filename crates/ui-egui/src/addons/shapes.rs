@@ -34,15 +34,10 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool 
 
     let fit = &mut Fit::new(reserve);
     if tool == "box3d" {
-        for (s_id, lbl, icon) in [
-            ("box3d", "3D Box", "box"),
-            ("rectangle", "Rectangle", "square"),
-            ("ellipse", "Ellipse", "dc-ellipse"),
-            ("polygon", "Polygon", "dc-polygon"),
-            ("star", "Star", "star"),
-            ("spiral", "Spiral", "tornado"),
-        ] {
-            if fit.room(ui, &[22.0]) && widgets::icon_button(ui, icon, tl!(lbl), active_shape == s_id, 22.0).clicked() {
+        for (s_id, lbl) in
+            [("box3d", "3D Box"), ("rectangle", "Rectangle"), ("ellipse", "Ellipse"), ("polygon", "Polygon"), ("star", "Star"), ("spiral", "Spiral")]
+        {
+            if fit.room(ui, &[22.0]) && widgets::icon_button(ui, shape_icon(s_id), tl!(lbl), active_shape == s_id, 22.0).clicked() {
                 app.run("tool.setOption", json!({ "key": "shape", "value": s_id })).ok();
             }
         }
@@ -238,10 +233,10 @@ fn draw_polygon_controls(
         end_deg = a1;
         mode = mode_str(arc_mode);
     }
-    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, "dc-polygon", tl!("Polygon"), !is_star, 22.0).clicked() {
+    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, shape_icon("polygon"), tl!("Polygon"), !is_star, 22.0).clicked() {
         apply_shape(app, &[("polyIsStar", json!(false))], json!({ "isStar": false }));
     }
-    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, "star", tl!("Star"), is_star, 22.0).clicked() {
+    if fit.room(ui, &[22.0]) && widgets::icon_button(ui, shape_icon("star"), tl!("Star"), is_star, 22.0).clicked() {
         apply_shape(app, &[("polyIsStar", json!(true))], json!({ "isStar": true, "spokeRatio": spoke }));
     }
     let text = egui::RichText::new(if is_star { tl!("Points:") } else { tl!("Sides:") }).size(12.0).color(t.text_dim);
@@ -374,11 +369,32 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, fit: &mut Fit, opt
     fit.separator(ui);
 }
 
+/// The toolbar icon of the shape tool `id`, so the Control bar's shape buttons show the same icon.
+fn shape_icon(id: &str) -> &'static str {
+    vectorcraft_tools::tool_info(id).map_or("square-dashed", |t| crate::icons::tool_icon(t.icon))
+}
+
 fn mode_str(m: EllipseMode) -> &'static str {
     match m {
         EllipseMode::Slice => "pie",
         EllipseMode::Chord => "chord",
         EllipseMode::Arc => "arc",
         EllipseMode::Whole => "whole",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shape_icon;
+
+    /// The Control bar's shape buttons look their icons up by tool id; an id that names no tool
+    /// would show the placeholder instead of the toolbar's icon.
+    #[test]
+    fn every_shape_button_shows_its_tools_icon() {
+        for id in ["box3d", "rectangle", "ellipse", "polygon", "star", "spiral"] {
+            let tool = vectorcraft_tools::tool_info(id).unwrap_or_else(|| panic!("{id} is a tool"));
+            assert_eq!(shape_icon(id), crate::icons::tool_icon(tool.icon), "{id}");
+        }
+        assert_eq!(shape_icon("no-such-tool"), "square-dashed");
     }
 }
