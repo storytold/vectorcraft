@@ -41,7 +41,12 @@
 //! to the window procedure, where a sent message does not pass winit's message hook, so the
 //! context's window gets a window procedure in front of its own that notes them ([`Notices`]).
 //! When that procedure cannot be put in front, no context is opened for the window
-//! ([`hooked_open`]). A packet that `WTPacket` cannot read starts the readings afresh
+//! ([`hooked_open`]). An open that leaves no context is tried again for the same window by a pen
+//! message [`RETRY_MS`] or more later ([`next_context`]). A hook on the messages Windows sends to
+//! the thread's windows passes a pen's `WM_POINTERLEAVE` to [`crate::windows_stylus`], and closes
+//! the context when another app becomes the active one (`WM_ACTIVATEAPP`). No pen message opens a
+//! context while this app is not active, so the context does not sit in front of another app's in
+//! the driver's overlap order. A packet that `WTPacket` cannot read starts the readings afresh
 //! ([`Readings::read`]), and so does a packet sent after the context's queue overflowed
 //! (`TPS_QUEUE_ERR`, [`Readings::packet`]).
 #![cfg_attr(not(windows), allow(dead_code))]
@@ -366,26 +371,43 @@ enum Current {
     Close,
 }
 
-/// The context step for a pen message to a window owned by `owner`: what happens to the open
-/// context, whose window is `current` with whether that window still exists, and whether a context
-/// is opened for `owner`. The context follows the window the pen draws in. An open is tried once
-/// for a window until another window is tried or the driver closes or changes the context
-/// (`tried`).
-fn next_context(current: Option<(usize, bool)>, tried: Option<usize>, owner: usize) -> (Current, bool) {
+/// After an open that left no context, the same window is tried again by the first pen message at
+/// least this many milliseconds of the message clock later.
+const RETRY_MS: u32 = 2000;
+
+/// The context step for a pen message to a window owned by `owner` at the message time `time`:
+/// what happens to the open context, whose window is `current` with whether that window still
+/// exists, and whether a context is opened for `owner`. The context follows the window the pen
+/// draws in. While no context is open, the window and time of the last open tried (`tried`) keep
+/// pen messages to that window from trying again until [`RETRY_MS`] have passed; another window,
+/// or the driver closing or changing the context, tries at once.
+/// A pen message to a window of an app that is not the active one (`active` false) opens none, so
+/// the context never sits in front of the active app's own in the driver's overlap order.
+fn next_context(current: Option<(usize, bool)>, tried: Option<(usize, u32)>, owner: usize, time: u32, active: bool) -> (Current, bool) {
     let step = match current {
         Some((_, false)) => Current::Drop,
         Some((w, true)) if w == owner => return (Current::Keep, false),
         Some(_) => Current::Close,
         None => Current::Keep,
     };
-    (step, tried != Some(owner) || step != Current::Keep)
+    let due = match tried {
+        Some((w, at)) if w == owner => retry_due(at, time),
+        _ => true,
+    };
+    (step, active && (due || step != Current::Keep))
+}
+
+/// Whether a step that failed at the message time `at` is tried again at `time`: [`RETRY_MS`] or
+/// more later, on the message clock, which wraps.
+fn retry_due(at: u32, time: u32) -> bool {
+    time.wrapping_sub(at) >= RETRY_MS
 }
 
 /// At most this many contexts' closing notices wait for [`Notices::take`].
 const MAX_NOTICES: usize = 8;
 
-/// The driver's notices about contexts (`WT_CTXCLOSE`, `WT_INFOCHANGE`) since they were last
-/// taken. The driver sends them to the window procedure, at times while the reader is in a driver
+/// The driver's notices about contexts (`WT_CTXCLOSE`, `WT_INFOCHANGE`), and another app becoming
+/// the active one (`WM_ACTIVATEAPP`), since they were last taken. The driver sends them to the window procedure, at times while the reader is in a driver
 /// call of its own, so they are noted here and acted on at the next Wintab or pen message.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Notices {
@@ -393,6 +415,10 @@ struct Notices {
     closed: Vec<usize>,
     /// The driver's information changed.
     info_changed: bool,
+    /// The readings were to start afresh while they were in use ([`Notices::forget_later`]).
+    forget: bool,
+    /// Another app became the active one.
+    deactivated: bool,
 }
 
 /// What the driver's notices do to the open context. Both can come in one batch.
@@ -404,10 +430,15 @@ struct Notice {
     /// The driver's information changed: close it if it is still open, forget each cursor's wheel
     /// range, and open a context again at the next pen message.
     info_changed: bool,
+    /// Start the readings afresh.
+    forget: bool,
+    /// Another app became the active one: close the context, and open one again at the next pen
+    /// message once this app is active again.
+    deactivated: bool,
 }
 
 impl Notices {
-    /// Notes `message` if it is a closing or information-change notice.
+    /// Notes `message` if it is a closing, information-change or deactivation notice.
     fn note(&mut self, message: Message) {
         match message {
             Message::Closed { ctx } if !self.closed.contains(&ctx) => {
@@ -417,6 +448,7 @@ impl Notices {
                 self.closed.push(ctx);
             }
             Message::InfoChange => self.info_changed = true,
+            Message::Deactivated => self.deactivated = true,
             _ => {}
         }
     }
@@ -427,16 +459,27 @@ impl Notices {
         self.closed.retain(|&c| c != ctx);
     }
 
+    /// The readings are to start afresh, at a time they are in use, for example when the pen leaves
+    /// the window during a driver call: the next [`Notices::take`] says so.
+    fn forget_later(&mut self) {
+        self.forget = true;
+    }
+
     /// Takes the notices: what they do to the open context `current`.
     fn take(&mut self, current: Option<usize>) -> Notice {
         let notices = std::mem::take(self);
-        Notice { closed: current.is_some_and(|c| notices.closed.contains(&c)), info_changed: notices.info_changed }
+        Notice {
+            closed: current.is_some_and(|c| notices.closed.contains(&c)),
+            info_changed: notices.info_changed,
+            forget: notices.forget,
+            deactivated: notices.deactivated,
+        }
     }
 }
 
 /// Opens a context with `open` only when `hook` put the window procedure that notes the driver's
-/// notices in front of the window's own; otherwise opens none, and the window is not tried again
-/// until another window is ([`next_context`]).
+/// notices in front of the window's own; otherwise opens none, and the window is tried again as
+/// [`next_context`] says.
 fn hooked_open<H>(hook: impl FnOnce() -> bool, open: impl FnOnce() -> Option<H>) -> Option<H> {
     if hook() { open() } else { None }
 }
@@ -459,13 +502,21 @@ enum Message {
     },
     /// The driver's information changed: the context closes and opens again.
     InfoChange,
+    /// Another app became the active one: the context closes.
+    Deactivated,
     Other,
 }
+
+/// `WM_ACTIVATEAPP` (`winuser.h`): sent to the app's top-level windows when another app's window
+/// is activated (`wParam` false) or one of the app's own is (true)
+/// (<https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp>).
+const WM_ACTIVATEAPP: u32 = 0x001C;
 
 /// What the message `message` with `wparam` and `lparam` is to the Wintab reader. `WT_PACKET`
 /// and `WT_CSRCHANGE` name the context in `lParam`, `WT_PROXIMITY` and `WT_CTXCLOSE` in `wParam`.
 fn message(message: u32, wparam: usize, lparam: isize) -> Message {
     match message {
+        WM_ACTIVATEAPP if wparam == 0 => Message::Deactivated,
         WT_PACKET => Message::Packet { serial: wparam as u32, ctx: lparam as usize },
         WT_CSRCHANGE => Message::Forget { ctx: lparam as usize },
         WT_PROXIMITY => Message::Forget { ctx: wparam },
@@ -487,16 +538,18 @@ mod win {
 
     use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW};
+    use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CallWindowProcW, DefWindowProcW, GA_ROOTOWNER, GWLP_WNDPROC, GetAncestor, GetPropW, GetWindowLongPtrW, IsWindow, MSG, RemovePropW, SetPropW,
-        SetWindowLongPtrW, WM_NCDESTROY, WNDPROC,
+        CWPSTRUCT, CallNextHookEx, CallWindowProcW, DefWindowProcW, GA_ROOTOWNER, GWLP_WNDPROC, GetAncestor, GetForegroundWindow, GetPropW,
+        GetWindowLongPtrW, GetWindowThreadProcessId, IsWindow, MSG, RemovePropW, SetPropW, SetWindowLongPtrW, SetWindowsHookExW, WH_CALLWNDPROC,
+        WM_NCDESTROY, WNDPROC,
     };
     use windows::core::{PCWSTR, s, w};
 
     use super::{
         Axis, CSR_PKTDATA, CSR_TYPE, Current, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES, MAX_INDEX,
         MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE,
-        configure, decode, device_of, hooked_open, message, next_context, wheel_axis,
+        configure, decode, device_of, hooked_open, message, next_context, retry_due, wheel_axis,
     };
 
     /// `WTInfoW`, `WTOpenW`, `WTClose` and `WTPacket` (`wintab.h`).
@@ -526,8 +579,9 @@ mod win {
     #[derive(Default)]
     struct State {
         context: Option<Context>,
-        /// The window an open was last tried for ([`next_context`]).
-        tried: Option<*mut c_void>,
+        /// The window an open was last tried for, and the message time it was tried at
+        /// ([`next_context`]).
+        tried: Option<(*mut c_void, u32)>,
         /// Each cursor's wheel range, as the driver reported it.
         cursors: Vec<(u32, Option<Axis>)>,
         readings: Readings,
@@ -545,7 +599,7 @@ mod win {
 
     /// Notes `what` for the next [`State::take_notices`] when it is a notice about contexts.
     fn note(what: Message) {
-        if !matches!(what, Message::Closed { .. } | Message::InfoChange) {
+        if !matches!(what, Message::Closed { .. } | Message::InfoChange | Message::Deactivated) {
             return;
         }
         NOTICES.with(|n| {
@@ -576,6 +630,79 @@ mod win {
         let prev = unsafe { std::mem::transmute::<*mut c_void, WNDPROC>(prev) };
         // SAFETY: `prev` is the window's own procedure, called with the message it was sent.
         unsafe { CallWindowProcW(prev, hwnd, msg, wparam, lparam) }
+    }
+
+    /// Another app became the active one: closes the context now, unless the reader is in a call of
+    /// its own, when the noted [`Message::Deactivated`] closes it at the next Wintab or pen message.
+    /// No pen messages come while another app is active, so waiting for one would leave the context
+    /// in front of that app's own.
+    fn deactivate() {
+        let Some(api) = api() else { return };
+        STATE.with(|s| {
+            if let Ok(mut s) = s.try_borrow_mut() {
+                s.take_notices(api);
+            }
+        });
+    }
+
+    /// Whether this app is the active one: the foreground window belongs to this thread, which
+    /// runs every window of the app.
+    fn is_active() -> bool {
+        // SAFETY: `GetForegroundWindow` takes no arguments.
+        let foreground = unsafe { GetForegroundWindow() };
+        // SAFETY: `GetWindowThreadProcessId` takes any handle value, and no process id is asked for.
+        !foreground.0.is_null() && unsafe { GetWindowThreadProcessId(foreground, None) } == unsafe { GetCurrentThreadId() }
+    }
+
+    /// The thread's hook on the messages Windows sends to its windows' procedures, which winit's
+    /// message hook does not see: another app becoming the active one (`WM_ACTIVATEAPP`, sent to a
+    /// top-level window of the app, <https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp>)
+    /// closes the context ([`deactivate`]), and a pen's `WM_POINTERENTER` and `WM_POINTERLEAVE`
+    /// (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/wm-pointerleave>) go to
+    /// [`crate::windows_stylus::sent_message`]. The hook sees them whichever of the app's windows
+    /// they are sent to (<https://learn.microsoft.com/en-us/windows/win32/winmsg/callwndproc>).
+    unsafe extern "system" fn call_wnd_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        if code >= 0 {
+            // SAFETY: for `HC_ACTION` (0), `lParam` points to the message's `CWPSTRUCT`, which
+            // lives for the call; `as_ref` gives `None` for a null pointer.
+            if let Some(cwp) = unsafe { (lparam.0 as *const CWPSTRUCT).as_ref() } {
+                if message(cwp.message, cwp.wParam.0, cwp.lParam.0) == Message::Deactivated {
+                    note(Message::Deactivated);
+                    deactivate();
+                }
+                crate::windows_stylus::sent_message(cwp.message, cwp.wParam.0);
+            }
+        }
+        // SAFETY: every hook procedure passes the call on, with what it was given.
+        unsafe { CallNextHookEx(None, code, wparam, lparam) }
+    }
+
+    /// Installs [`call_wnd_proc`] for this thread, for a pen message at the message time `time`,
+    /// unless it is installed, and returns whether it is. It stays for the life of the thread. After
+    /// a failed install, a pen message tries again once [`retry_due`].
+    fn hook_thread(time: u32) -> bool {
+        thread_local! {
+            /// Installed, or the message time of the last failed install.
+            static HOOK: std::cell::Cell<Result<(), Option<u32>>> = const { std::cell::Cell::new(Err(None)) };
+        }
+        match HOOK.get() {
+            Ok(()) => return true,
+            Err(Some(at)) if !retry_due(at, time) => return false,
+            Err(_) => {}
+        }
+        // SAFETY: a hook of this thread, whose procedure is in this executable, so no module
+        // handle is passed.
+        let hooked = unsafe { SetWindowsHookExW(WH_CALLWNDPROC, Some(call_wnd_proc), None, GetCurrentThreadId()) }.is_ok();
+        HOOK.set(if hooked { Ok(()) } else { Err(Some(time)) });
+        hooked
+    }
+
+    /// Closes the context for a deactivation noted while the reader was in a call of its own
+    /// ([`deactivate`]), once that call has ended.
+    fn settle() {
+        if NOTICES.with(|n| n.try_borrow().is_ok_and(|n| n.deactivated)) {
+            deactivate();
+        }
     }
 
     /// Puts [`wnd_proc`] in front of the window procedure of `hwnd`, once per window, and returns
@@ -702,15 +829,24 @@ mod win {
                 self.tried = None;
                 self.cursors.clear();
             }
+            if notice.forget {
+                self.readings.forget();
+            }
+            if notice.deactivated {
+                self.close(api);
+                self.tried = None;
+            }
         }
 
-        /// Moves the context to the window that owns `hwnd` ([`next_context`]).
-        fn open_for(&mut self, api: Api, hwnd: *mut c_void) {
+        /// Moves the context to the window that owns `hwnd`, for a pen message at the message time
+        /// `time` ([`next_context`]).
+        fn open_for(&mut self, api: Api, hwnd: *mut c_void, time: u32) {
             // SAFETY: `GetAncestor` takes any handle value and reads no caller memory.
             let owner = unsafe { GetAncestor(HWND(hwnd), GA_ROOTOWNER) }.0;
             let owner = if owner.is_null() { hwnd } else { owner };
             let current = self.context.as_ref().map(|c| (c.hwnd as usize, is_window(c.hwnd)));
-            let (step, open) = next_context(current, self.tried.map(|w| w as usize), owner as usize);
+            let tried = self.tried.map(|(w, at)| (w as usize, at));
+            let (step, open) = next_context(current, tried, owner as usize, time, is_active());
             match step {
                 Current::Keep => {}
                 Current::Drop => {
@@ -722,7 +858,7 @@ mod win {
             if !open {
                 return;
             }
-            self.tried = Some(owner);
+            self.tried = Some((owner, time));
             let Some(mut words) = info::<LOGCONTEXT_WORDS>(api, WTI_DEFCONTEXT, 0) else { return };
             configure(&mut words);
             let handle = hooked_open(
@@ -785,22 +921,29 @@ mod win {
                         s.readings.forget();
                     }
                 }
-                Message::Closed { .. } | Message::InfoChange | Message::Other => {}
+                Message::Closed { .. } | Message::InfoChange | Message::Deactivated | Message::Other => {}
             }
         });
+        settle();
     }
 
     /// The wheel for a pointer message of the pen with the pointer id `pen` to `hwnd` at the message
     /// time `time`, with its `eraser` end ([`Readings::wheel_for`]), opening the context first when
-    /// none is open.
+    /// none is open. The first call installs [`call_wnd_proc`] ([`hook_thread`]); until it is
+    /// installed, no context opens and the pens read no wheel.
     pub fn pen_wheel(hwnd: HWND, time: u32, pen: u32, eraser: bool) -> Option<f32> {
         let api = api()?;
-        STATE.with(|s| {
+        if !hook_thread(time) {
+            return None;
+        }
+        let wheel = STATE.with(|s| {
             let mut s = s.try_borrow_mut().ok()?;
             s.take_notices(api);
-            s.open_for(api, hwnd.0);
+            s.open_for(api, hwnd.0, time);
             s.readings.wheel_for(time, pen, eraser)
-        })
+        });
+        settle();
+        wheel
     }
 
     /// The pen whose leaving starts the readings afresh, for a message of the pen with the pointer
@@ -810,12 +953,16 @@ mod win {
     }
 
     /// Start the readings afresh: the pen left the window or detection range, or a press was
-    /// canceled.
+    /// canceled. While the readings are in use, as in a driver call, they start afresh at the next
+    /// Wintab or pen message ([`Notices::forget_later`]).
     pub fn forget() {
-        STATE.with(|s| {
-            if let Ok(mut s) = s.try_borrow_mut() {
-                s.readings.forget();
-            }
+        STATE.with(|s| match s.try_borrow_mut() {
+            Ok(mut s) => s.readings.forget(),
+            Err(_) => NOTICES.with(|n| {
+                if let Ok(mut n) = n.try_borrow_mut() {
+                    n.forget_later();
+                }
+            }),
         });
     }
 }
@@ -996,17 +1143,73 @@ mod tests {
         assert_eq!(r.wheel_at(9000, false), Some(0.3));
     }
 
+    /// [`next_context`] while this app is the active one.
+    fn step(current: Option<(usize, bool)>, tried: Option<(usize, u32)>, owner: usize, time: u32) -> (Current, bool) {
+        next_context(current, tried, owner, time, true)
+    }
+
     #[test]
     fn the_context_follows_the_window_the_pen_draws_in() {
         let (main, doc) = (0x10, 0x20);
-        assert_eq!(next_context(None, None, main), (Current::Keep, true), "the first pen message opens it");
-        assert_eq!(next_context(Some((main, true)), Some(main), main), (Current::Keep, false), "the same window keeps it");
-        assert_eq!(next_context(Some((main, true)), Some(main), doc), (Current::Close, true), "another document window");
-        assert_eq!(next_context(Some((doc, true)), Some(doc), main), (Current::Close, true), "and back");
-        assert_eq!(next_context(Some((main, false)), Some(main), doc), (Current::Drop, true), "a window that is gone");
-        assert_eq!(next_context(Some((main, false)), Some(main), main), (Current::Drop, true), "its handle reused");
-        assert_eq!(next_context(None, Some(main), main), (Current::Keep, false), "an open that failed is not tried again");
-        assert_eq!(next_context(None, Some(main), doc), (Current::Keep, true), "but is for another window");
+        let t = 1000;
+        assert_eq!(step(None, None, main, t), (Current::Keep, true), "the first pen message opens it");
+        assert_eq!(step(Some((main, true)), Some((main, t)), main, t), (Current::Keep, false), "the same window keeps it");
+        assert_eq!(step(Some((main, true)), Some((main, t)), main, t + 60_000), (Current::Keep, false), "however long it is open");
+        assert_eq!(step(Some((main, true)), Some((main, t)), doc, t), (Current::Close, true), "another document window");
+        assert_eq!(step(Some((doc, true)), Some((doc, t)), main, t), (Current::Close, true), "and back");
+        assert_eq!(step(Some((main, false)), Some((main, t)), doc, t), (Current::Drop, true), "a window that is gone");
+        assert_eq!(step(Some((main, false)), Some((main, t)), main, t), (Current::Drop, true), "its handle reused");
+        assert_eq!(step(None, Some((main, t)), main, t + 1), (Current::Keep, false), "an open that failed is not tried at once");
+        assert_eq!(step(None, Some((main, t)), doc, t + 1), (Current::Keep, true), "but is for another window");
+    }
+
+    #[test]
+    fn a_window_whose_open_failed_is_tried_again_later() {
+        let main = 0x10;
+        let t = 1000;
+        for dt in [0, 1, 500, RETRY_MS - 1] {
+            assert_eq!(step(None, Some((main, t)), main, t + dt), (Current::Keep, false), "{dt} ms later");
+        }
+        assert_eq!(step(None, Some((main, t)), main, t + RETRY_MS), (Current::Keep, true), "after the retry interval");
+        assert_eq!(step(None, Some((main, t)), main, t + 60_000), (Current::Keep, true), "or long after");
+        // The message clock wraps after about 49.7 days.
+        let late = u32::MAX - 100;
+        assert_eq!(step(None, Some((main, late)), main, late.wrapping_add(50)), (Current::Keep, false), "across the wrap");
+        assert_eq!(step(None, Some((main, late)), main, late.wrapping_add(RETRY_MS)), (Current::Keep, true), "and due across it");
+    }
+
+    #[test]
+    fn a_failed_step_is_retried_after_the_interval() {
+        assert!(!retry_due(1000, 1000), "at once");
+        assert!(!retry_due(1000, 1000 + RETRY_MS - 1));
+        assert!(retry_due(1000, 1000 + RETRY_MS), "after the interval");
+        assert!(retry_due(u32::MAX - 10, (u32::MAX - 10).wrapping_add(RETRY_MS)), "across the clock's wrap");
+        assert!(!retry_due(u32::MAX - 10, 5), "and not early across it");
+    }
+
+    #[test]
+    fn no_context_opens_while_another_app_is_active() {
+        let (main, doc) = (0x10, 0x20);
+        let t = 1000;
+        assert_eq!(next_context(None, None, main, t, false), (Current::Keep, false), "a pen hovering over an inactive window");
+        assert_eq!(next_context(None, Some((main, t)), main, t + RETRY_MS, false), (Current::Keep, false), "not even when a retry is due");
+        assert_eq!(next_context(Some((main, true)), None, doc, t, false), (Current::Close, false), "another window's context closes");
+        assert_eq!(next_context(Some((main, false)), None, main, t, false), (Current::Drop, false), "a gone window's is dropped");
+        assert_eq!(next_context(None, None, main, t, true), (Current::Keep, true), "and the app's return opens it");
+    }
+
+    #[test]
+    fn another_app_becoming_active_closes_the_context() {
+        assert_eq!(message(WM_ACTIVATEAPP, 0, 0), Message::Deactivated);
+        assert_eq!(message(WM_ACTIVATEAPP, 1, 0), Message::Other, "this app becoming active");
+        let ours = 0x5000;
+        let mut n = Notices::default();
+        n.note(Message::Deactivated);
+        assert_eq!(n.take(Some(ours)), Notice { deactivated: true, ..Notice::default() });
+        assert_eq!(n.take(Some(ours)), Notice::default(), "once");
+        n.note(Message::Deactivated);
+        n.note(Message::Closed { ctx: ours });
+        assert_eq!(n.take(Some(ours)), Notice { closed: true, deactivated: true, ..Notice::default() }, "beside the driver's close");
     }
 
     #[test]
@@ -1024,8 +1227,8 @@ mod tests {
     fn the_drivers_notices_drop_or_reopen_the_context() {
         let (ours, other) = (0x5000, 0x6000);
         let keep = Notice::default();
-        let closed = Notice { closed: true, info_changed: false };
-        let reopen = Notice { closed: false, info_changed: true };
+        let closed = Notice { closed: true, ..Notice::default() };
+        let reopen = Notice { info_changed: true, ..Notice::default() };
         let mut n = Notices::default();
         assert_eq!(n.take(Some(ours)), keep, "no notice");
         n.note(Message::Closed { ctx: other });
@@ -1060,7 +1263,7 @@ mod tests {
     #[test]
     fn a_close_and_an_information_change_in_one_batch_both_count() {
         let ours = 0x5000;
-        let both = Notice { closed: true, info_changed: true };
+        let both = Notice { closed: true, info_changed: true, ..Notice::default() };
         let mut n = Notices::default();
         n.note(Message::Closed { ctx: ours });
         n.note(Message::InfoChange);
@@ -1070,7 +1273,21 @@ mod tests {
         assert_eq!(n.take(Some(ours)), both, "in either order");
         n.note(Message::Closed { ctx: 0x6000 });
         n.note(Message::InfoChange);
-        assert_eq!(n.take(Some(ours)), Notice { closed: false, info_changed: true }, "another context's close");
+        assert_eq!(n.take(Some(ours)), Notice { info_changed: true, ..Notice::default() }, "another context's close");
+    }
+
+    #[test]
+    fn a_leave_while_the_readings_are_in_use_starts_them_afresh_next() {
+        let ours = 0x5000;
+        let mut n = Notices::default();
+        n.forget_later();
+        assert_eq!(n.take(Some(ours)), Notice { forget: true, ..Notice::default() }, "the next look starts the readings afresh");
+        assert_eq!(n.take(Some(ours)), Notice::default(), "once");
+        n.forget_later();
+        assert_eq!(n.take(None), Notice { forget: true, ..Notice::default() }, "with nothing open too");
+        n.forget_later();
+        n.note(Message::Closed { ctx: ours });
+        assert_eq!(n.take(Some(ours)), Notice { closed: true, forget: true, ..Notice::default() }, "beside a close");
     }
 
     #[test]

@@ -177,6 +177,25 @@ fn forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
     }
 }
 
+/// Whether a pointer message that Windows sends to the window procedure, so that winit's message hook
+/// never sees it, starts the Wintab wheel readings afresh ([`forgets_wheel`]): `WM_POINTERENTER` and
+/// `WM_POINTERLEAVE` are sent
+/// (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/wm-pointerleave>); the posted pointer
+/// messages are left to [`msg_hook`].
+fn sent_forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
+    matches!(message, WM_POINTERENTER | WM_POINTERLEAVE) && forgets_wheel(message, wparam, pen)
+}
+
+/// A message Windows sent to a window procedure of the thread, from the Wintab reader's hook on
+/// them ([`crate::windows_wintab`]): a pen leaving the window starts the wheel readings afresh, as
+/// [`msg_hook`] does for the messages it sees.
+#[cfg(windows)]
+pub fn sent_message(message: u32, wparam: usize) {
+    if sent_forgets_wheel(message, wparam, WHEEL_PEN.get()) {
+        crate::windows_wintab::forget();
+    }
+}
+
 /// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
 /// not from a pen or a touch.
 fn is_mouse(extra_info: u32) -> bool {
@@ -509,6 +528,23 @@ mod tests {
         assert!(!forgets_wheel(WM_POINTERUP, canceled, Some(7)), "canceled");
         assert!(!forgets_wheel(WM_POINTERLEAVE, touch_leaves, None), "no pen has read the wheel");
         assert!(forgets_wheel(WM_POINTERLEAVE, (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7, Some(7)), "the pen itself");
+    }
+
+    #[test]
+    fn the_sent_leave_of_the_wheel_pen_forgets_the_wheel() {
+        let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
+        let pen = Some(7);
+        assert!(sent_forgets_wheel(WM_POINTERLEAVE, in_range, pen), "the pen leaves the window");
+        assert!(sent_forgets_wheel(WM_POINTERLEAVE, 7, pen), "or detection range");
+        assert!(!sent_forgets_wheel(WM_POINTERLEAVE, (POINTER_MESSAGE_FLAG_INRANGE << 16) | 9, pen), "another pointer leaves");
+        assert!(!sent_forgets_wheel(WM_POINTERLEAVE, in_range, None), "no pen has read the wheel");
+        assert!(!sent_forgets_wheel(WM_POINTERENTER, in_range, pen), "the pen comes over the window");
+        // Posted messages, which the message hook already sees.
+        for m in [WM_POINTERUPDATE, WM_POINTERDOWN, WM_POINTERUP] {
+            assert!(!sent_forgets_wheel(m, 7, pen), "{m:#x}");
+        }
+        // WT_CTXCLOSE.
+        assert!(!sent_forgets_wheel(0x7FF2, 7, pen));
     }
 
     #[test]
