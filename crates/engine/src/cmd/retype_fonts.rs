@@ -26,7 +26,7 @@ pub(in crate::cmd) fn specs() -> Vec<CommandSpec> {
         "Find Matching Fonts",
         [],
         None,
-        "{count?: 1..96 (default 10)} the fonts whose glyphs match the selected outlined text, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only); of two versions of a font loaded at once, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out)}; a count that is not a whole number from 1 to 96 is an error",
+        "{count?: 1..96 (default 10)} the fonts whose glyphs match the selected outlined text, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only), a font whose glyphs match the shapes only as combining marks not listed; of two versions of a font loaded at once, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out)}; a count that is not a whole number from 1 to 96 is an error",
         has_selected_path,
         retype_fonts
     )]
@@ -44,6 +44,8 @@ struct Ranked {
     matched: usize,
     /// The sum of those matches' leftover distances.
     residual: f64,
+    /// Whether some shape matched a glyph of it that is not a combining mark.
+    character: bool,
 }
 
 impl Ranked {
@@ -101,23 +103,31 @@ fn retype_fonts_in(s: &mut Session, p: &Value, db: &FontDb) -> Result<Value> {
     for pc in &pieces {
         // A shape can fit several glyphs or poses of one font: it counts once for the font, at its
         // closest fit.
-        let mut best: Vec<(Arc<vectorcraft_text::FontFace>, f64)> = vec![];
+        let mut best: Vec<(Arc<vectorcraft_text::FontFace>, f64, bool)> = vec![];
         for m in index.all_matches(&pc.path) {
-            match best.iter_mut().find(|(f, _)| f.id() == m.face.id()) {
-                Some(b) => b.1 = b.1.min(m.residual),
-                None => best.push((m.face, m.residual)),
+            let character = !vectorcraft_text::retype::is_combining_mark(m.ch);
+            match best.iter_mut().find(|(f, _, _)| f.id() == m.face.id()) {
+                Some(b) => {
+                    b.1 = b.1.min(m.residual);
+                    b.2 |= character;
+                }
+                None => best.push((m.face, m.residual, character)),
             }
         }
-        for (face, residual) in best {
+        for (face, residual, character) in best {
             match ranked.iter_mut().find(|r| r.face.id() == face.id()) {
                 Some(r) => {
                     r.matched += 1;
                     r.residual += residual;
+                    r.character |= character;
                 }
-                None => ranked.push(Ranked { face, matched: 1, residual }),
+                None => ranked.push(Ranked { face, matched: 1, residual, character }),
             }
         }
     }
+    // A font whose glyphs match the shapes only as combining marks would retype none of them, as
+    // type.retype starts no line with a mark: it is not listed.
+    ranked.retain(|r| r.character);
     ranked.sort_by(|a, b| {
         b.matched
             .cmp(&a.matched)
