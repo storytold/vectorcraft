@@ -18,6 +18,8 @@ struct L {
     rect: [i32; 4],
     /// Red, green, blue and alpha, the same for every pixel.
     rgba: [u8; 4],
+    /// The alpha of each pixel, in place of `rgba`'s, stored raw.
+    alpha: Option<Vec<u8>>,
     blend: &'static [u8; 4],
     opacity: u8,
     clipped: bool,
@@ -40,6 +42,7 @@ fn layer(name: &'static str, rect: [i32; 4], rgba: [u8; 4]) -> L {
         name,
         rect,
         rgba,
+        alpha: None,
         blend: b"norm",
         opacity: 255,
         clipped: false,
@@ -151,6 +154,12 @@ fn layer_info(layers: &[L], depth: u16, rle: bool, psb: bool) -> Vec<u8> {
             .filter(|_| !l.bare)
             .map(|&(id, v)| (id, channel(v, w * h, w, depth, rle, psb, l.zip)))
             .collect();
+        if let (Some(pixels), Some((_, d))) = (&l.alpha, channels.first_mut()) {
+            *d = vec![0, 0];
+            for &p in pixels {
+                d.extend(std::iter::repeat_n(p, usize::from(depth / 8)));
+            }
+        }
         let mut mask = vec![];
         if let Some(([mt, ml, mb, mr], default, flags, pixels)) = &l.mask {
             let mut d = vec![0, 0];
@@ -1810,7 +1819,9 @@ fn an_adjustment_layer_over_transparent_pixels_changes_what_is_below_the_group()
 
 /// A layer or group whose layer mask hides all of it draws nothing: an adjustment layer above it in
 /// a pass-through group still changes what is below the group, and a shallow knockout hidden that
-/// way merges nothing, so the adjustment layers below it stay kept.
+/// way merges nothing, so the adjustment layers below it stay kept. A layer's mask hides all of it
+/// when it hides each pixel that isn't fully transparent. The layers in a pass-through group hidden
+/// that way don't count as drawing below an adjustment layer above the group.
 #[test]
 fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_group() {
     let black = |l: L| L { mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 0])), ..l };
@@ -1845,11 +1856,47 @@ fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_gr
         group("Folder", b"pass"),
         dodge(),
     ];
+    // A knockout whose mask hides each pixel it doesn't leave transparent.
+    let half = L { alpha: Some(vec![255, 0]), mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 255])), ..layer("Cut", [0, 0, 1, 2], [0, 0, 255, 255]) };
+    let mut transparent_knockout = masked_knockout.clone();
+    transparent_knockout[5] = knockout(half, 1, 255);
+    // A pass-through group its mask hides, below Invert in a pass-through group, with a layer drawn
+    // above that group, under Posterize.
+    let masked_pass = [
+        under(),
+        group_end(),
+        group_end(),
+        group_end(),
+        photo(),
+        black(group("Hidden", b"pass")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 255, 255]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // Invert in a pass-through group its mask hides keeps nothing above that group: Posterize
+    // merges with the layer below it, as with no such group.
+    let masked_invert = [
+        under(),
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        black(group("Hidden", b"pass")),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 255, 255]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
     let cases = [
         ("layer", &masked_layer[..], inverted),
         ("covered layer", &covered_layer[..], inverted),
         ("group", &masked_group[..], inverted),
         ("knockout", &masked_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
+        ("transparent knockout", &transparent_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
+        ("pass-through group", &masked_pass[..], [[0, 0, 255, 255], [255, 255, 255, 255]]),
+        ("adjustment in a pass-through group", &masked_invert[..], [[0, 0, 255, 255], [10, 20, 30, 255]]),
     ];
     let rows = |layers: &[L]| {
         let (s, _) = open(&file(2, 1, layers, 8, false, false), json!({}));

@@ -1162,11 +1162,13 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     }
 
     /// Does record `i` have a layer mask, switched on, that hides all of it? For a layer with stored
-    /// pixels, other than an adjustment layer, the mask is 0 over all of them; for a group, an
-    /// adjustment layer and a layer that stores no pixels, which can change pixels anywhere below
-    /// them, it is 0 everywhere, the value outside it included. A mask is read only when it can hide
-    /// all of it, once. `false` when it has none, or it can't be read within the memory allowed or
-    /// is damaged (drawing it says so). `group` says the record opens a group.
+    /// pixels, other than an adjustment layer, the mask is 0 over all of them that aren't fully
+    /// transparent (over all of them when their transparency can't be read within the memory
+    /// allowed); for a group, an adjustment layer and a layer that stores no pixels, which can
+    /// change pixels anywhere below them, it is 0 everywhere, the value outside it included. A mask
+    /// is read only when it can hide all of it, once. `false` when it has none, or it can't be read
+    /// within the memory allowed or is damaged (drawing it says so). `group` says the record opens
+    /// a group.
     fn masked_out(&self, i: usize, group: bool) -> Result<bool, String> {
         if let Some(out) = self.masked_out.get(i).and_then(Cell::get) {
             return Ok(out);
@@ -1183,16 +1185,42 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 || area.is_some_and(|a| m.bounds.left <= a.left && m.bounds.top <= a.top && a.right <= m.bounds.right && a.bottom <= m.bounds.bottom)
         });
         let out = can_hide && self.has_mask(Some(i))? && self.mask_fits(i, 0)? && {
-            // This read isn't counted against the import's allowance: the mask is read again, and
-            // counted, where the layer is drawn or its opacity mask is made.
+            // Its transparency, when it stores one that can be read beside the mask.
+            let max_side = if self.h.psb { 300_000 } else { 30_000 };
+            let (w, rows) = rec.bounds.size();
+            let row = row_bytes(w, self.h.depth);
+            let alpha = match rec.channels.iter().find(|(c, _)| *c == -1) {
+                Some((_, data))
+                    if area.is_some()
+                        && !rec.draws_nothing()
+                        && !rec.color_over_canvas()
+                        && w <= max_side
+                        && rows <= max_side
+                        && self.mask_fits(i, (row as u64).saturating_mul(rows as u64))? =>
+                {
+                    layer_channel(data, rows, row, self.h.psb, self.h.depth).ok()
+                }
+                _ => None,
+            };
+            // Is its pixel at `x`, `y`, inside `area`, fully transparent?
+            let transparent = |x: i64, y: i64| {
+                alpha.as_ref().is_some_and(|plane| {
+                    let (dx, dy) = ((x - i64::from(rec.bounds.left)) as usize, (y - i64::from(rec.bounds.top)) as usize);
+                    plane.get(dy * row..(dy + 1) * row).is_some_and(|r| byte(sample(r, dx, self.h.depth, false)) == 0)
+                })
+            };
+            // These reads aren't counted against the import's allowance: the mask and the
+            // transparency are read again, and counted, where the layer is drawn or its opacity
+            // mask is made.
             let spent = self.spent.get();
             let read = self.mask(i, false);
             self.spent.set(spent);
             match read {
-                // Its values outside `area` hide nothing of it.
-                Ok(Some((left, top, m, _))) => {
-                    m.enumerate_pixels().all(|(x, y, p)| p.0[0] == 0 || area.is_some_and(|a| !inside(a, left + i64::from(x), top + i64::from(y))))
-                }
+                // Its values outside `area`, and over its fully transparent pixels, hide nothing of it.
+                Ok(Some((left, top, m, _))) => m.enumerate_pixels().all(|(x, y, p)| {
+                    let (x, y) = (left + i64::from(x), top + i64::from(y));
+                    p.0[0] == 0 || area.is_some_and(|a| !inside(a, x, y)) || transparent(x, y)
+                }),
                 _ => false,
             }
         };
@@ -1564,7 +1592,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
 
     /// The records of the adjustment layers kept in `out` at `level` (in a pass-through group, to
     /// change what is below the group), those kept in the visible pass-through groups of `out`
-    /// included.
+    /// included, except groups whose layer mask hides all of them.
     fn pending(&self, out: &[Unit<'_>], level: Level) -> Result<Vec<usize>, String> {
         let mut records = vec![];
         if level != Level::Pass {
@@ -1574,7 +1602,9 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         for u in out.iter().filter(|u| u.visible && u.opacity > 0.0) {
             if self.adjustment(&u.body)?.is_some() {
                 records.push(u.record);
-            } else if let (Body::Group(_, items), Blend::Pass) = (&u.body, u.blend) {
+            } else if let (Body::Group(_, items), Blend::Pass) = (&u.body, u.blend)
+                && !u.mask_of.map(|g| self.masked_out(g, true)).transpose()?.unwrap_or(false)
+            {
                 records.extend(self.leading(items)?.0);
             }
         }
@@ -1614,7 +1644,8 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                         records.push(i);
                     }
                 }
-                Some(children) if r.blend == Blend::Pass && keeps => {
+                // A pass-through group whose layer mask hides all of it draws and changes nothing.
+                Some(children) if r.blend == Blend::Pass && keeps && !self.masked_out(i, true)? => {
                     let (inner, inner_draws) = self.leading(children)?;
                     records.extend(inner);
                     draws |= inner_draws;
