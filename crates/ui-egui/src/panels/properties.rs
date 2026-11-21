@@ -665,7 +665,9 @@ fn artboard_size_controls_inner(
                 ui.separator();
             }
             for (cat, list) in &cats {
-                ui.menu_button(tl!(cat), |ui| {
+                // Beside the Fit rows, the categories start at their check column.
+                let label = if fits.is_some() { widgets::check_row_text(ui, "", tl!(cat), None) } else { tl!(cat).into() };
+                ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         for s in list {
                             if widgets::menu_item_name(ui, crate::dialogs::preset_name(&s.name), true, same(s)) {

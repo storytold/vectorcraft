@@ -227,16 +227,84 @@ pub fn menu_item_name(ui: &mut Ui, label: &str, enabled: bool, checked: bool) ->
 
 /// [`menu_item_name`] that returns the row's response.
 fn menu_item_name_response(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> egui::Response {
-    let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
-    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+    let text = check_row_text(ui, if checked { "✓ " } else { "   " }, label, Some(12.5));
+    ui.add_enabled(enabled, egui::Button::new(text).frame_when_inactive(false))
 }
 
 /// [`menu_item`] that shows `hint` under the pointer while the row is disabled, to say why it is
 /// gray.
 pub fn menu_item_hint(ui: &mut Ui, label: &str, enabled: bool, checked: bool, hint: &str) -> bool {
-    let label = tl!(label);
-    let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
-    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
-        .on_disabled_hover_text(tl!(hint))
-        .clicked()
+    let text = check_row_text(ui, if checked { "✓ " } else { "   " }, tl!(label), Some(12.5));
+    ui.add_enabled(enabled, egui::Button::new(text).frame_when_inactive(false)).on_disabled_hover_text(tl!(hint)).clicked()
+}
+
+/// The width of the check-mark column of the in-app menus: room for the widest mark a row puts
+/// before its label (a check mark and two spaces, or five spaces) in the button font. A font
+/// without the check mark cannot draw one, so only the spaces count then.
+fn check_column_width(ui: &Ui) -> f32 {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    once_per_pass(ui, egui::Id::unique(("menu-check-column-width", &font)), || {
+        ui.ctx().fonts_mut(|f| {
+            let mark = if f.has_glyph(&font, '✓') { "✓  " } else { "     " };
+            let mut width = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::PLACEHOLDER).size().x;
+            width(mark).max(width("     "))
+        })
+    })
+}
+
+/// The width of a row's `mark` in `font`.
+fn mark_width(ui: &Ui, mark: &str, font: &egui::FontId) -> f32 {
+    once_per_pass(ui, egui::Id::unique(("menu-check-mark-width", mark, font)), || {
+        ui.ctx().fonts_mut(|f| f.layout_no_wrap(mark.to_string(), font.clone(), Color32::PLACEHOLDER).size().x)
+    })
+}
+
+/// `measure()`, worked out on the first call of a pass and kept under `id` for the rest of it:
+/// every row of a menu (one per font family in Type › Font) asks for the same widths.
+fn once_per_pass(ui: &Ui, id: egui::Id, measure: impl FnOnce() -> f32) -> f32 {
+    let pass = ui.ctx().cumulative_pass_nr();
+    if let Some((at, width)) = ui.data(|d| d.get_temp::<(u64, f32)>(id))
+        && at == pass
+    {
+        return width;
+    }
+    let width = measure();
+    ui.data_mut(|d| d.insert_temp(id, (pass, width)));
+    width
+}
+
+/// Starts the text of a menu row for `label` with `mark` (a check mark, blank room for one, or
+/// nothing) in `format`, and returns the leading space for the label after it. Every row's label
+/// then starts at the end of the same check column, whatever the width of its mark, as in native
+/// menus. A label with a line that runs right to left keeps its mark as plain text before it and
+/// no leading space, so it is laid out in its own direction as before.
+pub(crate) fn check_column_job(ui: &Ui, mark: &str, label: &str, format: &egui::TextFormat) -> (egui::text::LayoutJob, f32) {
+    let mut job = egui::text::LayoutJob::default();
+    if !mark.is_empty() {
+        job.append(mark, 0.0, format.clone());
+    }
+    if label.split(is_paragraph_separator).any(|line| vectorcraft_text::paragraph_is_rtl(line, None)) {
+        return (job, 0.0);
+    }
+    let mark_width = if mark.is_empty() { 0.0 } else { mark_width(ui, mark, &format.font_id) };
+    (job, (check_column_width(ui) - mark_width).max(0.0))
+}
+
+/// Does `c` end a paragraph for the bidirectional algorithm (bidi class B: line feed, carriage
+/// return, the information separators U+001C to U+001E, next line and the paragraph separator)?
+fn is_paragraph_separator(c: char) -> bool {
+    matches!(c, '\n' | '\r' | '\u{1C}'..='\u{1E}' | '\u{85}' | '\u{2029}')
+}
+
+/// A menu row's text: `mark`, then `label` at the end of the check column
+/// ([`check_column_job`]), in the button font at `size` when one is given.
+pub(crate) fn check_row_text(ui: &Ui, mark: &str, label: &str, size: Option<f32>) -> egui::WidgetText {
+    let mut font_id = egui::TextStyle::Button.resolve(ui.style());
+    if let Some(size) = size {
+        font_id.size = size;
+    }
+    let format = egui::TextFormat { font_id, color: Color32::PLACEHOLDER, ..Default::default() };
+    let (mut job, lead) = check_column_job(ui, mark, label, &format);
+    job.append(label, lead, format);
+    job.into()
 }

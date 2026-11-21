@@ -1745,7 +1745,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         let align = shared(app, |s| s.char_align);
         ui.add_enabled_ui(has, |ui| {
             // Indented like the items beside it (their check column).
-            ui.menu_button(format!("   {}", tl!("Character Alignment")), |ui| {
+            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Character Alignment"), None), |ui| {
                 use vectorcraft_doc::CharAlign;
                 for (label, a, key) in [
                     (tl!("Roman Baseline"), CharAlign::RomanBaseline, "romanBaseline"),
@@ -1803,10 +1803,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_indic_options {
         let digits = shared(app, |s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| widgets::menu_scroll(ui, |ui| digits_items(app, ui, digits)));
+            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Digits"), None), |ui| {
+                widgets::menu_scroll(ui, |ui| digits_items(app, ui, digits))
+            });
         });
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
+            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Character Direction"), None), |ui| char_direction_items(app, ui));
         });
         // A mixed selection is unchecked; choosing it enables kashidas for the whole range.
         let kashidas = shared(app, |s| s.kashidas) == Some(true);

@@ -260,7 +260,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub(super) fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl FnMut(bool)) {
     ui.add_enabled_ui(enabled, |ui| {
         // English labels match the rest of this panel menu (and Object › Collect for Export).
-        ui.menu_button("Collect for Export", |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "", "Collect for Export", None), |ui| {
             if widgets::menu_item(ui, "As Single Asset", true, false) {
                 run(false);
                 ui.close();
@@ -276,7 +276,7 @@ pub(super) fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl 
 /// Save Selection › Save Selection…, Update Selection and Edit Selection…, enabled and run as in
 /// the Select menu, then the active document's saved selections: choosing one recalls it.
 fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.menu_button(format!("   {}", tl!("Save Selection")), |ui| {
+    ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Save Selection"), None), |ui| {
         widgets::menu_scroll(ui, |ui| {
             for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")]
             {

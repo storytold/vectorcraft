@@ -562,7 +562,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("select.key", json!({})).ok();
     }
     // Indented like the items beside it (their check column).
-    ui.menu_button(format!("   {}", tl!("Align to Glyph Bounds")), |ui| glyph_bounds_items(app, ui));
+    ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Align to Glyph Bounds"), None), |ui| glyph_bounds_items(app, ui));
 }
 
 /// The Align to Glyph Bounds submenu: Point Text and Area Text, each checked while Align and

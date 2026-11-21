@@ -199,7 +199,7 @@ fn arrange_documents_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
             menus::Item::Cmd(label, id, p) => {
                 let Some((enabled, checked)) = menus::shown_state(app, id, &p) else { continue };
                 let label = crate::i18n::t_id(id, label);
-                let text = if checked == Some(true) { format!("✓  {label}") } else { format!("     {label}") };
+                let text = widgets::check_row_text(ui, if checked == Some(true) { "✓  " } else { "     " }, label, None);
                 if ui.add_enabled(enabled, egui::Button::new(text).min_size(vec2(200.0, 0.0))).clicked() {
                     clicked = Some((id, if p.is_null() { json!({}) } else { p }));
                     ui.close();

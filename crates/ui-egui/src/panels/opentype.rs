@@ -362,7 +362,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut toggle = None;
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         // Indented like the items beside it (their check column).
-        ui.menu_button(format!("   {}", tl!("Stylistic Sets")), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Stylistic Sets"), None), |ui| {
             widgets::menu_scroll(ui, |ui| {
                 for (set, flag, on) in &sets {
                     if widgets::menu_item_name(ui, &set_label(set), true, *on) {

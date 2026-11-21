@@ -657,7 +657,7 @@ impl Items<'_> {
     fn group_menu(&self, ui: &mut Ui, act: &mut Option<Act>, kind: ItemKind, key: &str) {
         let at = self.group_of(kind, key);
         let item = json!({ "kind": kind_param(kind), "item": key });
-        ui.menu_button(format!("   {}", tl!("Move to Group")), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Move to Group"), None), |ui| {
             widgets::menu_scroll(ui, |ui| {
                 if menu_item(ui, "No Group", true, at.is_none()) {
                     if at.is_some() {

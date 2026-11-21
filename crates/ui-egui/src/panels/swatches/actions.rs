@@ -313,7 +313,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("ui.spotColors", json!({})).ok();
     }
     ui.separator();
-    ui.menu_button(tl!("Open Swatch Library"), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
+    ui.menu_button(widgets::check_row_text(ui, "", tl!("Open Swatch Library"), None), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
     if menu_item(ui, tl!("Save Swatch Library…"), true, false) {
         app.run("ui.saveSwatchLibrary", json!({ "names": deletable(app, &selected) })).ok();
     }
