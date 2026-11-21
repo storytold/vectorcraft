@@ -41,7 +41,7 @@ use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
 use crate::guides::DrawSnap;
-use crate::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, SurroundingUnit, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, SurroundingUnit, Tool, ToolContext, ToolKey};
 
 mod missing;
 mod plain;
@@ -199,10 +199,7 @@ pub struct TypeTool {
     goal_x: Option<f64>,
     typing: Option<Typing>,
     preedit: Option<Preedit>,
-    /// A command from outside the tool (`settle_interaction`, an external edit while typing) ended
-    /// the typing session, while the text stays open for editing. A commit over that edit is
-    /// application-origin unless an IME deletion has already begun a fresh typing session.
-    typing_ended: bool,
+
     /// Where the button went down, and where new type goes from there (snapped to Smart Guides).
     press: Option<(Point, Point)>,
     /// The other corner of an area dragged out (snapped).
@@ -362,8 +359,7 @@ impl TypeTool {
 
     /// The exact text [`Tool::text_input`] would insert for `s`: control characters removed, `\r`
     /// normalized to `\n`, and Typographer's Quotes applied to a straight quote. `None` when
-    /// nothing would be inserted. Shared with [`Tool::text_input_is_verbatim`] so the IME receipt
-    /// and the insertion cannot disagree about what was transformed.
+    /// nothing would be inserted.
     fn input_text(&self, cx: &ToolContext, s: &str) -> Option<String> {
         let s: String = s.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')).map(|c| if c == '\r' { '\n' } else { c }).collect();
         if s.is_empty() {
@@ -494,7 +490,6 @@ impl TypeTool {
         let fresh = self.typing.is_none();
         if fresh {
             out.push(Action::Begin("Typing".into()));
-            self.typing_ended = false;
         }
         let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: others });
         let len = edit::runs_len(&ty.cur);
@@ -609,7 +604,6 @@ impl TypeTool {
         self.goal_x = None;
         self.typing = None;
         self.preedit = None;
-        self.typing_ended = false;
     }
 
     /// Typed list detection, after a space typed on its own at the caret: when the characters
@@ -960,7 +954,6 @@ impl TypeTool {
         let fresh = self.typing.is_none();
         if fresh {
             out.push(Action::Begin("Typing".into()));
-            self.typing_ended = false;
         }
         let len = match &self.typing {
             Some(ty) => edit::runs_len(&ty.cur),
