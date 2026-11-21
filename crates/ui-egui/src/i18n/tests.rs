@@ -1374,6 +1374,40 @@ fn bundled_catalogs_are_consistent() {
     }
 }
 
+/// The `@msgplural` rows that some catalogs translate with words that do not change with the count,
+/// so one form serves every count: the count after a colon ("Upakovano datoteka: {n}"), or a noun
+/// that is the same for every count (Italian "file").
+const COUNT_NEUTRAL_PLURALS: &[&str] = &[
+    "Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}",
+    "Packaged {n} file in {folder}|Packaged {n} files in {folder}",
+    "Packaged {n} file {note}|Packaged {n} files {note}",
+    "Packaged {n} file|Packaged {n} files",
+];
+
+/// The catalogs that write the [`COUNT_NEUTRAL_PLURALS`] rows with one form.
+const COUNT_NEUTRAL_CATALOGS: &[&str] = &["bs", "it", "pl", "ru", "uk"];
+
+/// Every `@plural` and `@msgplural` row has one form for each form its language's plural rule
+/// picks for a whole count: a missing form would show the last one in its place, and an extra one
+/// is never shown. Only the [`COUNT_NEUTRAL_PLURALS`] rows of [`COUNT_NEUTRAL_CATALOGS`] may have
+/// a single form.
+#[test]
+fn plural_rows_have_a_form_for_each_plural_category() {
+    for l in &LANGUAGES {
+        // Every rule picks each of its forms for some count below 200.
+        let forms = (0..200).map(l.plural).max().map_or(1, |last| last + 1);
+        for (ctx, src, tr) in parse_entries(l.source).0 {
+            if ctx != "@plural" && ctx != "@msgplural" {
+                continue;
+            }
+            let got = tr.split('|').count();
+            let neutral =
+                got == 1 && ctx == "@msgplural" && COUNT_NEUTRAL_CATALOGS.contains(&l.code) && COUNT_NEUTRAL_PLURALS.contains(&src.as_str());
+            assert!(got == forms || neutral, "{}: {ctx} {src:?} has {got} forms; its plural rule picks among {forms}", l.code);
+        }
+    }
+}
+
 /// A catalog that doesn't claim complete menus may still only hold strings the UI shows (menu
 /// labels, command labels, `tl!` literals), so labels from other apps don't creep in.
 #[test]
@@ -4444,6 +4478,35 @@ fn counted_status_messages_take_the_plural_form() {
     assert_eq!(message(ru, COUNTED_STATUS_MESSAGES[19].0), "Экспортирован 1 файл в /out");
     assert_eq!(message(ru, "Exported 3 files to /out"), "Экспортировано 3 файла в /out");
     assert_eq!(message(ru, "Exported 5 files to /out"), "Экспортировано 5 файлов в /out");
+    // In the catalogs with three forms, each count takes the form of its CLDR plural category
+    // (https://www.unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html): `one`,
+    // `few`, then `many` (Bosnian and Czech: `other`) are the forms 0, 1 and 2.
+    const COUNTS: [u64; 11] = [0, 1, 2, 3, 5, 11, 21, 22, 25, 101, 111];
+    let made: [fn(usize) -> String; 6] = [
+        relinked_status,
+        updated_status,
+        crate::dialogs::missing_links::changed_on_disk_status,
+        |n| copied_with_notes(false, n, "x1"),
+        |n| traced_with_notes(n, "x1"),
+        |n| crate::io::exported_with_notes("/out/a.svg", n, "x1"),
+    ];
+    for (codes, categories) in [
+        (&["ru", "uk", "bs"][..], [2, 0, 1, 1, 2, 2, 0, 1, 2, 0, 2]),
+        (&["pl"], [2, 0, 1, 1, 2, 2, 2, 1, 2, 2, 2]),
+        (&["cs"], [2, 0, 1, 1, 2, 2, 2, 2, 2, 2, 2]),
+    ] {
+        for code in codes {
+            let lang = Lang(LANGUAGES.iter().find(|l| l.code == *code).expect("registered"));
+            for make in made {
+                for (n, category) in COUNTS.into_iter().zip(categories) {
+                    let english = make(usize::try_from(n).expect("a small count"));
+                    let Some((forms, caps)) = lang.catalog().message_forms(&english) else { panic!("{code}: no row for {english:?}") };
+                    assert_eq!(forms.len(), 3, "{code}: {english:?}");
+                    assert_eq!(message(lang, &english), fill_once(&forms[category], &caps), "{code}: {english:?}");
+                }
+            }
+        }
+    }
 }
 
 /// The open, save and recovery status messages with a count, in English for a count of 1 and of 2.
