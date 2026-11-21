@@ -501,6 +501,15 @@ mod tests {
                     if held != want {
                         wrong.push(format!("rows {in_rows}: after {lead:?}, {other:?} hold {held:?}, not {want:?}"));
                     }
+                    // An alert that B opens in a later pass holds nothing, and B keeps holding A.
+                    if other == ["over B"] {
+                        first_row_seen(&ctx, &["over B", "Alert"], in_rows, vec![], &mut time, 4);
+                        let held = [holds(&ctx, id("over B")), holds(&ctx, id("Alert"))];
+                        let want: [Vec<Id>; 2] = [lead.iter().map(|&l| id(l)).collect(), vec![]];
+                        if held != want {
+                            wrong.push(format!("rows {in_rows}: after {lead:?}, B and an alert it opened later hold {held:?}, not {want:?}"));
+                        }
+                    }
                     if first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4) == kept {
                         let state = if kept { "is not" } else { "is still" };
                         wrong.push(format!("rows {in_rows}: after {lead:?} and {other:?}, A {state} where it was scrolled to"));
