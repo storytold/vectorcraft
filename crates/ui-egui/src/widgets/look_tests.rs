@@ -1268,6 +1268,89 @@ fn a_dropdown_list_wider_than_the_window_keeps_its_scroll_bar_in_view() {
     assert!(texts.iter().any(|(s, elided)| !*elided && s == labels[1]), "the long name shows in full beside the bar: {texts:?}");
 }
 
+// A drop-down list narrowed to the window kept the width it first measured until it closed, so an
+// option renamed to a longer name while the list was open stayed cut short when the window grew,
+// and a list whose options all became short stayed as wide as the long name had needed. The list
+// measures its options again when they change while it is open.
+#[test]
+fn an_open_dropdown_list_measures_its_options_again_when_they_change() {
+    let items = std::cell::RefCell::new((0..40).map(|i| format!("Option {i:02}")).collect::<Vec<String>>());
+    items.borrow_mut()[1] = "Option 01, whose name is much wider than this window".into();
+    let ctx = themed(Default::default());
+    let field = std::cell::Cell::new(Rect::NOTHING);
+    let popup = std::cell::RefCell::new(vec![]);
+    let mut add = |ui: &mut Ui| {
+        ui.add_space(16.0);
+        let items = items.borrow();
+        let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+        field.set(ui.horizontal(|ui| dropdown_names(ui, "renamed-list", labels[0], &labels, 160.0)).response.rect);
+        popup.replace(super::top_popup_shapes(ui.ctx()));
+    };
+    let narrow = Rect::from_min_size(Pos2::ZERO, vec2(220.0, 300.0));
+    let wide = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 300.0));
+    let window = std::cell::Cell::new(narrow);
+    let mut time = 0.0;
+    // The texts painted on the open list, and whether each was cut short.
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(window.get()), events, ..Default::default() }, &mut add);
+        out.textures_delta.clear();
+        let mut texts = vec![];
+        fn flat(s: &egui::Shape, texts: &mut Vec<(String, bool)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| flat(s, texts)),
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_owned(), t.galley.elided)),
+                _ => {}
+            }
+        }
+        popup.take().iter().for_each(|c| flat(&c.shape, &mut texts));
+        texts
+    };
+    let list_rect = || {
+        ctx.memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+    };
+    run(vec![]);
+    let at = field.get().center();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(vec![egui::Event::PointerMoved(at), press(true)]);
+    run(vec![press(false)]);
+    run(vec![egui::Event::PointerMoved(pos2(210.0, 290.0))]);
+    let mut texts = vec![];
+    for _ in 0..6 {
+        texts = run(vec![]);
+    }
+    assert!(texts.iter().any(|(s, elided)| *elided && s.starts_with("Option 01")), "the long name is cut short: {texts:?}");
+    // Renamed to a longer name while the list is open, then the window grows: the new name shows in
+    // full, inside the window.
+    let renamed = "Option 01, whose name is much wider than this window, and wider still once renamed to this";
+    items.borrow_mut()[1] = renamed.into();
+    for _ in 0..3 {
+        run(vec![]);
+    }
+    window.set(wide);
+    for _ in 0..6 {
+        texts = run(vec![]);
+    }
+    let grown = list_rect().expect("the list is still open");
+    assert!(wide.contains_rect(grown), "the list {grown:?} is inside the window");
+    assert!(texts.iter().any(|(s, elided)| !*elided && s == renamed), "the renamed option shows in full: {texts:?}");
+    // In the narrow window again, the options all become short names while the list is open: the
+    // list is as narrow as its names.
+    window.set(narrow);
+    for _ in 0..6 {
+        run(vec![]);
+    }
+    assert!(list_rect().is_some_and(|r| narrow.contains_rect(r)), "the list is narrowed to the window");
+    items.borrow_mut()[1] = "Option 01".into();
+    let mut widths = vec![];
+    for _ in 0..8 {
+        run(vec![]);
+        widths.extend(list_rect().map(|r| r.width()));
+    }
+    let last = widths.last().copied().expect("the list is still open");
+    assert!(last < 180.0, "the list of short names is narrow again: {widths:?}");
+}
+
 // #5941: in a drop-down list narrowed to the window, an option whose name is cut short shows the
 // full name in a tooltip while the pointer rests on it.
 #[test]
