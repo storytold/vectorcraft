@@ -1463,6 +1463,7 @@ const SELECTING: HitOptions = HitOptions {
     skip_guides: false,
     clip_outlines: true,
     area_type_interior: false,
+    ignore_layer_preview: false,
     scope: None,
 };
 

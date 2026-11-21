@@ -1312,6 +1312,58 @@ fn shaped_composition_searches_share_the_frame_budget() {
     assert_eq!(three.steps_left.get(), breaking::MAX_TOTAL_STEPS, "the layout's own steps");
 }
 
+/// The every-line composer places a line where its first word fits, and measures that word by the
+/// paragraph's custom Kinsoku set: with A in the set's Cannot End Line, the first word of `A BC`
+/// runs past the space to the end, so the line `A` skips the frame's 20 pt top and takes the
+/// 50 pt band below it. Without the set the word is `A` alone and the top holds it.
+#[test]
+fn shaped_first_word_uses_the_custom_kinsoku_set() {
+    use super::shaped::{Budget, Shaped};
+    use crate::composer::Measure;
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let text = "A BC";
+    let glyphs = full_width(text);
+    let set = custom_set("", "A", "", &[]);
+    assert_eq!(breaking::word_width(&glyphs, 0, &[], breaking::KinsokuRules::Custom(&set), Burasagari::None), 40.0);
+    assert_eq!(breaking::word_width(&glyphs, 0, &[], Kinsoku::Hard, Burasagari::None), 10.0);
+    // 20 pt wide down to 40 pt, and 50 pt wide below.
+    let frame = BezPath::from_vec(vec![
+        PathEl::MoveTo((0.0, 0.0).into()),
+        PathEl::LineTo((20.0, 0.0).into()),
+        PathEl::LineTo((20.0, 40.0).into()),
+        PathEl::LineTo((50.0, 40.0).into()),
+        PathEl::LineTo((50.0, 120.0).into()),
+        PathEl::LineTo((0.0, 120.0).into()),
+        PathEl::ClosePath,
+    ]);
+    let regions = region::Region::cells(&frame, &LayoutOptions::default(), &[]);
+    let pen = breaking::Pen {
+        regions: Some(&regions),
+        ri: 0,
+        prev: None,
+        pending: 0.0,
+        fb: FirstBaseline::Ascent,
+        fb_min: 0.0,
+        queued: vec![],
+        above: Default::default(),
+        model: LeadingModel::default(),
+        next_top: None,
+        no_room_for: f64::INFINITY,
+        steps_left: Rc::new(Cell::new(breaking::MAX_TOTAL_STEPS)),
+        search: Rc::new(Budget::default()),
+    };
+    let first_line = |para: &ParaStyle| {
+        let mut measure = Shaped::new(&glyphs, &[], para, &|_| 0.0, false, false, &pen);
+        let state = measure.first();
+        measure.line(&state, 0, 1).ok().flatten().map(|(width, _)| width)
+    };
+    let hard = ParaStyle { kinsoku: Kinsoku::Hard, ..ParaStyle::default() };
+    let custom = ParaStyle { kinsoku_set: Some(Arc::new(set)), ..hard.clone() };
+    assert_eq!(first_line(&hard), Some(20.0), "the frame's top holds the word A");
+    assert_eq!(first_line(&custom), Some(50.0), "the word A BC needs the band below");
+}
+
 /// The glyphs of `text`, each 10 pt wide, with Korean words kept whole unless `anywhere` (Korean
 /// Line Break Anywhere on).
 fn korean(text: &str, anywhere: bool) -> Vec<SGlyph> {
