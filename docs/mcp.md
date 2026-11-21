@@ -6163,6 +6163,9 @@ and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` st
 `height` that is not a positive number, such as `"width": 0`, and changes nothing. Without a `name`,
 `object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
 pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
+`object.pattern.make`, `object.pattern.replaceArt`, `object.repeat.radial`, `object.repeat.grid` and
+`object.repeat.mirror` return the error "no such object id N", and change nothing, when an `ids` entry names no object,
+even when the other entries name objects.
 
 With `pattern.options {moveTileWithArt: true}` (Move Tile with Art), a move of all of the tile art in pattern editing
 mode moves the tile by the same offset: `object.move`, `object.nudge`, `object.transform` with a translation, and drags
