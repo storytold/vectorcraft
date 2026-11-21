@@ -104,12 +104,14 @@ fn one_group<'a>(doc: &'a Document, selection: &Selection, zoom: f64) -> Option<
         return None;
     }
     let [group] = selection.objects.as_slice() else { return None };
-    if !doc.editable()(*group) {
-        return None;
-    }
     let n = doc.node(*group)?;
     let rec = n.extras().objects_on_path.as_deref()?;
     let children = n.children()?;
+    // After the group is known: on a locked artboard it measures the art of the layer object that
+    // holds `group`.
+    if !doc.editable()(*group) {
+        return None;
+    }
     let (path, measured) = attachable(children.iter().find(|c| c.id == rec.path)?)?;
     Some(Group { id: *group, rec, children: children.as_slice(), path, measured: Arc::new(measured) })
 }
