@@ -492,18 +492,19 @@ pub fn saved_items() -> Vec<Item> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
     /// Proof views are process-wide: these tests take turns, and each leaves the default view.
-    static VIEW: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Tests that compare renders hold it for reading ([`keeping_the_proof_view`]).
+    static VIEW: std::sync::RwLock<()> = std::sync::RwLock::new(());
 
-    struct DefaultView<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>);
+    struct DefaultView<'a>(#[allow(dead_code)] std::sync::RwLockWriteGuard<'a, ()>);
 
     impl DefaultView<'_> {
         fn new() -> Self {
-            let g = VIEW.lock().unwrap_or_else(|e| e.into_inner());
+            let g = VIEW.write().unwrap_or_else(|e| e.into_inner());
             proof::set_view(Default::default());
             DefaultView(g)
         }
@@ -513,6 +514,11 @@ mod tests {
         fn drop(&mut self) {
             proof::set_view(Default::default());
         }
+    }
+
+    /// Keeps the proof view as it is while the guard lives: the tests here wait to change it.
+    pub(crate) fn keeping_the_proof_view() -> std::sync::RwLockReadGuard<'static, ()> {
+        VIEW.read().unwrap_or_else(|e| e.into_inner())
     }
 
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
