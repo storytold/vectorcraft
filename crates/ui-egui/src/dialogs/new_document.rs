@@ -233,20 +233,30 @@ fn unit(d: &Dialog) -> Unit {
     Unit::named(&d.str("units")).unwrap_or_default()
 }
 
-/// The artboard layout fields.
+/// The artboard layout fields. A grid by column with rows shows the columns those rows give the
+/// current number of artboards, as `file.new` lays them out.
 fn layout(d: &Dialog) -> (ArtboardLayout, u64, f64, bool) {
     let l = d.fields.get("artboardLayout");
     let get = |k: &str| l.and_then(|l| l.get(k));
-    (
-        get("layout").and_then(Value::as_str).and_then(ArtboardLayout::parse).unwrap_or_default(),
-        get("columns").and_then(Value::as_u64).unwrap_or(1),
-        get("spacing").and_then(Value::as_f64).unwrap_or(20.0),
-        get("rightToLeft").and_then(Value::as_bool).unwrap_or(false),
-    )
+    let lay = get("layout").and_then(Value::as_str).and_then(ArtboardLayout::parse).unwrap_or_default();
+    let rows = get("rows").and_then(Value::as_u64).filter(|r| *r > 0 && lay == ArtboardLayout::GridByColumn);
+    let columns = match rows {
+        Some(rows) => {
+            let n = d.f64("artboards", 1.0).round().clamp(1.0, MAX_ARTBOARDS as f64) as u64;
+            n.div_ceil(rows.min(n))
+        }
+        None => get("columns").and_then(Value::as_u64).unwrap_or(1),
+    };
+    (lay, columns, get("spacing").and_then(Value::as_f64).unwrap_or(20.0), get("rightToLeft").and_then(Value::as_bool).unwrap_or(false))
 }
 
+/// Sets one artboard layout field. A new layout or column count replaces the rows of a preset
+/// made with `file.new`'s `rows`.
 fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     let mut l = d.fields.get("artboardLayout").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut()) {
+        o.remove("rows");
+    }
     l[key] = v;
     d.fields.insert("artboardLayout".into(), l);
 }
@@ -888,6 +898,37 @@ mod tests {
 
     fn field(app: &VectorcraftApp, k: &str) -> serde_json::Value {
         app.ui.dialog.as_ref().unwrap().fields.get(k).cloned().unwrap_or_default()
+    }
+
+    /// A preset's rows stay until Columns or the layout changes.
+    #[test]
+    fn a_new_column_count_replaces_a_presets_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": 4}));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "spacing", json!(5.0));
+        assert_eq!(field(&app, "artboardLayout")["rows"], json!(4));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "columns", json!(3));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByColumn", "columns": 3, "spacing": 5.0}));
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 4}));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByRow"));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow"}));
+    }
+
+    /// Columns shows what a preset's rows give the current number of artboards.
+    #[test]
+    fn columns_follow_a_presets_rows_as_artboards_change() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": 4}));
+        let columns = |app: &VectorcraftApp| super::layout(app.ui.dialog.as_ref().unwrap()).1;
+        for (artboards, shown) in [(5, 2), (9, 3), (2, 1)] {
+            set(&mut app, "artboards", json!(artboards));
+            assert_eq!(columns(&app), shown, "{artboards} artboards");
+        }
+        // Without rows, Columns shows the stored count.
+        set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 2, "rows": 4}));
+        assert_eq!(columns(&app), 2);
     }
 
     /// Recent shows each entry as it was made: a portrait and a landscape A3 are two cards of

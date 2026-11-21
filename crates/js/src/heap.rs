@@ -246,6 +246,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An object of a class a host defined ([`crate::host_classes`]).
+    Host(crate::host_classes::HostObj),
 }
 
 /// What an XML value is.
@@ -312,7 +314,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Host(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
