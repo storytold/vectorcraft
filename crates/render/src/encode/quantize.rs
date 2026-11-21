@@ -232,8 +232,9 @@ pub fn nearest_entries(rgba: &[u8], width: u32, o: &PaletteOptions, palette: &[[
 /// partly transparent pixel does under half opacity with no transparency dither, and else by
 /// `o.transparency_dither`. With pattern, noise, or diffusion at amount 100, about as many of an
 /// area's pixels stay opaque as its opacity says; a lower diffusion amount moves the result toward
-/// the cut at half opacity. Diffusion spreads each pixel's opacity error to the pixels right of it
-/// and below it (Floyd–Steinberg, scaled by `o.transparency_dither_amount`), pattern compares the
+/// the cut at half opacity. Diffusion spreads each partly transparent pixel's opacity error to the
+/// pixels right of it and below it (Floyd–Steinberg, scaled by `o.transparency_dither_amount`), and
+/// fully transparent and opaque pixels pass on the error they receive; pattern compares the
 /// opacity with the 8×8 ordered pattern and noise with a noise threshold. The result depends only
 /// on the pixels and the options, so exports are reproducible.
 pub fn clear_mask(rgba: &[u8], width: u32, o: &PaletteOptions) -> Vec<bool> {
@@ -264,18 +265,24 @@ pub fn clear_mask(rgba: &[u8], width: u32, o: &PaletteOptions) -> Vec<bool> {
                 (_, Dither::Pattern) => a < 255.0 * bayer(x % 8, y % 8),
                 // Another noise than the color dither's, so the two do not line up.
                 (_, Dither::Noise) => a < 255.0 * noise(x ^ 0x5a5a, y ^ 0xa5a5),
-                (_, Dither::Diffusion) => {
-                    let v = a + cur[x + 1];
-                    let clear = v < 127.5;
-                    let e = (v - if clear { 0.0 } else { 255.0 }) * amount;
-                    // 7/16 right, 3/16 below left, 5/16 below, 1/16 below right.
-                    cur[x + 2] += e * 7.0 / 16.0;
-                    next[x] += e * 3.0 / 16.0;
-                    next[x + 1] += e * 5.0 / 16.0;
-                    next[x + 2] += e / 16.0;
-                    clear
-                }
+                (_, Dither::Diffusion) => a + cur[x + 1] < 127.5,
             };
+            if dither == Dither::Diffusion {
+                // A partly transparent pixel spreads its own opacity error. A fully transparent or
+                // opaque pixel keeps its state and passes on the error it received unchanged, so
+                // the partly transparent pixels around it keep their share of opacity
+                // (VectorCraft's own rule).
+                let got = cur[x + 1];
+                let e = match p[3] {
+                    0 | 255 => got,
+                    _ => (a + got - if clear { 0.0 } else { 255.0 }) * amount,
+                };
+                // 7/16 right, 3/16 below left, 5/16 below, 1/16 below right.
+                cur[x + 2] += e * 7.0 / 16.0;
+                next[x] += e * 3.0 / 16.0;
+                next[x + 1] += e * 5.0 / 16.0;
+                next[x + 2] += e / 16.0;
+            }
             out.push(clear);
         }
         cur.copy_from_slice(next);

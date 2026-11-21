@@ -328,3 +328,21 @@ fn transparency_dither_leaves_clear_and_opaque_pixels_and_needs_transparency() {
     assert!(clear_mask(&[], 0, &alpha_dither(Dither::Diffusion, 100)).is_empty());
     assert_eq!(clear_mask(&see_through(3, 1, |_, _| 200), 1000, &alpha_dither(Dither::Diffusion, 100)).len(), 3);
 }
+
+#[test]
+fn transparency_diffusion_passes_error_through_clear_and_opaque_pixels() {
+    // Half-opaque pixels between fully transparent or fully opaque ones, in one row and in a
+    // checkerboard: about half of them stay opaque, and the others keep their state.
+    for other in [0u8, 255] {
+        for (w, h, half) in [(64, 1, (|x, _| x % 2 == 0) as fn(u32, u32) -> bool), (32, 32, |x, y| (x + y) % 2 == 0)] {
+            let px = see_through(w, h, |x, y| if half(x, y) { 128 } else { other });
+            let mask = clear_mask(&px, w, &alpha_dither(Dither::Diffusion, 100));
+            let at = |x: u32, y: u32| mask[(y * w + x) as usize];
+            let cells: Vec<(u32, u32)> = (0..h).flat_map(|y| (0..w).map(move |x| (x, y))).collect();
+            assert!(cells.iter().filter(|&&(x, y)| !half(x, y)).all(|&(x, y)| at(x, y) == (other == 0)), "{other} {w}x{h}");
+            let halves: Vec<_> = cells.iter().filter(|&&(x, y)| half(x, y)).collect();
+            let share = halves.iter().filter(|&&&(x, y)| !at(x, y)).count() as f64 / halves.len() as f64;
+            assert!((share - 128.0 / 255.0).abs() < 0.1, "{other} {w}x{h}: {share}");
+        }
+    }
+}
