@@ -46,6 +46,9 @@ craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "bbe5b514a8
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "bbe5b514a8197c671a261339f297deecc4df881b" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "bbe5b514a8197c671a261339f297deecc4df881b" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "bbe5b514a8197c671a261339f297deecc4df881b", features = ["egui"] }
+# The framework facade (`craft::ui`, `craft::settings`, `craft::platform`, ...). No default features: each crate names
+# the members it imports.
+craft = { git = "https://github.com/storytold/craft-libs", rev = "bbe5b514a8197c671a261339f297deecc4df881b" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
