@@ -734,8 +734,9 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
 /// Artwork's `group` selects that color group and its `groupAction` runs the button at once. Save
-/// PDF's bleed link links the bleed as its button does. A value Composite Fonts' Show Sample or
-/// Save PDF's bleed link can't take is refused.
+/// PDF's bleed link links the bleed as its button does, and a Save PDF settings object sets only the
+/// options it holds. A value Composite Fonts' Show Sample, Save PDF's bleed link or a Save PDF
+/// settings object can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
@@ -748,7 +749,7 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
         return composite_fonts::field_set(d, field);
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == save_pdf::KIND || d.kind == save_pdf::PRESET_KIND) {
-        return save_pdf::field_set(d, field);
+        return save_pdf::field_set(d, field, old, &app.session.prefs.pdf_presets);
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
         eps_options::field_set(d, field);
