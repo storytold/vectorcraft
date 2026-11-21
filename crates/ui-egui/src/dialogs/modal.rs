@@ -3,8 +3,8 @@
 //! top edge down to the heading), as a title bar would, showing the arrow until it is dragged. Where
 //! it was moved to stays, per window, for the session, and the window never leaves the screen. Rows
 //! too many for the screen's height scroll inside it ([`scrolled_rows`], [`body_rows`]), so its
-//! heading and buttons stay in view. A window without such rows that is still too tall or too wide
-//! for the screen scrolls as a whole on that axis.
+//! heading and buttons stay in view. A window without such rows, or with them at their smallest,
+//! that is still too tall or too wide for the screen scrolls as a whole on that axis.
 
 use egui::{Id, Rect, Vec2};
 
@@ -71,12 +71,13 @@ pub(crate) fn show_at<R>(
                 });
             }
             // A window whose contents are wider than the screen has room for, or taller without
-            // rows that scroll ([`scrolled_rows`], [`body_rows`]), scrolls as a whole on that axis,
-            // so none of it is out of reach. The contents keep their ids whether the window scrolls
-            // or not, so a field being edited keeps its text when that changes.
+            // rows that scroll ([`scrolled_rows`], [`body_rows`]) or with its own rows at their
+            // smallest ([`fits_itself_then_scrolls`]), scrolls as a whole on that axis, so none of
+            // it is out of reach. The contents keep their ids whether the window scrolls or not, so
+            // a field being edited keeps its text when that changes.
             let [wide, tall] = ctx.data(|m| m.get_temp::<[bool; 2]>(id.with(WHOLE_KEY))).unwrap_or_default();
             let scope = egui::UiBuilder::new().scope_id(id.with("modal-contents"));
-            let (r, contents) = if wide || tall {
+            let (r, contents, view) = if wide || tall {
                 let room = whole_room(ctx, margin);
                 let mut area = egui::ScrollArea::new([wide, tall]);
                 if ctx.data_mut(|m| m.remove_temp::<bool>(id.with(TOP_WHOLE_KEY))).is_some() {
@@ -89,12 +90,18 @@ pub(crate) fn show_at<R>(
                     .min_scrolled_width(room.x)
                     .min_scrolled_height(room.y)
                     .show(ui, |ui| ui.scope_builder(scope, add).inner);
-                (out.inner, out.content_size)
+                // The area's rectangle is the one it was given before its contents were drawn; on
+                // an axis that does not scroll, the window grows to the contents anyway.
+                (out.inner, out.content_size, if tall { out.inner_rect.height() } else { out.content_size.y })
             } else {
                 let r = ui.scope_builder(scope, add).inner;
-                (r, ui.min_rect().size())
+                let size = ui.min_rect().size();
+                (r, size, size.y)
             };
-            ctx.data_mut(|m| m.insert_temp(id.with(CONTENTS_KEY), contents));
+            ctx.data_mut(|m| {
+                m.insert_temp(id.with(CONTENTS_KEY), contents);
+                m.insert_temp(id.with(VIEW_KEY), view);
+            });
             r
         })?;
     keep_rest(ctx, id, shown.response.rect.height(), margin);
@@ -209,11 +216,18 @@ const REST_KEY: &str = "modal-rest";
 /// the screen ([`fits_itself`]) this frame (`OWN_ROWS_KEY`), or last frame (`OWN_BEFORE_KEY`).
 const OWN_ROWS_KEY: &str = "modal-own-rows";
 const OWN_BEFORE_KEY: &str = "modal-own-before";
+/// Under a modal window's id: its contents fit themselves to the screen and let the window scroll as
+/// a whole below their smallest ([`fits_itself_then_scrolls`]) this frame, and whether they are at
+/// their smallest.
+const OWN_WHOLE_KEY: &str = "modal-own-whole";
 /// Under a modal window's id: how tall its [`body_rows`] would be without scrolling, this frame.
 const BODY_KEY: &str = "modal-body";
-/// Under a modal window's id: how large its contents would be without scrolling as a whole, this
-/// frame.
+/// Under a modal window's id: how large its contents would be without scrolling as a whole
+/// (`CONTENTS_KEY`) and how tall the part of them in view is (`VIEW_KEY`), this frame; and how tall
+/// the window would be without scrolling as a whole, as last drawn (`FULL_KEY`, [`full_height`]).
 const CONTENTS_KEY: &str = "modal-contents";
+const VIEW_KEY: &str = "modal-view";
+const FULL_KEY: &str = "modal-full";
 /// Under a modal window's id, for the next frame: its [`body_rows`] scroll (`TALL_KEY`), and on
 /// which axes ([wide, tall]) it scrolls as a whole (`WHOLE_KEY`).
 const TALL_KEY: &str = "modal-tall";
@@ -235,10 +249,11 @@ const HOLDS_KEY: &str = "modal-holds";
 
 /// Rows of the modal window `ui` is in (one list of them per window) that scroll if the window
 /// would be taller than the screen. Their height is the screen's less the rest of the window as
-/// last drawn (a frame late, as only the drawn window knows its height).
+/// last drawn (a frame late, as only the drawn window knows its height), and at least
+/// one control tall; below that, the window scrolls as a whole ([`fits_itself_then_scrolls`]).
 /// Rows that fit are as tall as they are.
 pub(crate) fn scrolled_rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    fits_itself(ui);
+    fits_itself_then_scrolls(ui, rows_room(ui.ctx(), ui.layer_id().id) <= ui.spacing().interact_size.y);
     let (r, drawn, _) = rows(ui, salt, true, add);
     ui.ctx().data_mut(|m| m.insert_temp(ui.layer_id().id.with(ROWS_KEY), drawn));
     r
@@ -249,6 +264,21 @@ pub(crate) fn scrolled_rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, add
 /// scroll them again.
 pub(crate) fn fits_itself(ui: &egui::Ui) {
     ui.ctx().data_mut(|m| m.insert_temp(ui.layer_id().id.with(OWN_ROWS_KEY), true));
+}
+
+/// [`fits_itself`] for contents whose smallest size can still be taller than the screen has room
+/// for: while they are drawn at their `smallest` and the window is taller than the room, it
+/// scrolls as a whole. The contents fit themselves to the screen's height less the gaps above and
+/// below the window and the rest of the window as [`full_height`] gives it.
+pub(crate) fn fits_itself_then_scrolls(ui: &egui::Ui, smallest: bool) {
+    fits_itself(ui);
+    ui.ctx().data_mut(|m| m.insert_temp(ui.layer_id().id.with(OWN_WHOLE_KEY), smallest));
+}
+
+/// How tall modal window `id` was when last drawn, with all of its contents: while it scrolls as a
+/// whole, taller than the part drawn on the screen.
+pub(crate) fn full_height(ctx: &egui::Context, id: Id) -> Option<f32> {
+    ctx.data(|m| m.get_temp::<f32>(id.with(FULL_KEY)))
 }
 
 /// The body of a shared dialog window. While the window would be taller than the screen has room
@@ -294,7 +324,7 @@ pub(crate) fn list_height(ui: &egui::Ui, height: f32) -> f32 {
 }
 
 /// The height rows that scroll in modal window `id` are drawn: the screen's less the rest of the
-/// window as last drawn.
+/// window as last drawn (as tall as all of it while it scrolls as a whole, [`full_height`]).
 fn rows_room(ctx: &egui::Context, id: Id) -> f32 {
     let rest = ctx.data(|m| m.get_temp::<f32>(id.with(REST_KEY))).unwrap_or(0.0);
     (ctx.content_rect().height() - rest - 2.0 * super::EDGE_GAP).max(0.0)
@@ -308,7 +338,10 @@ fn rows_room(ctx: &egui::Context, id: Id) -> f32 {
 /// scrolling.
 fn rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, scroll: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> (R, f32, f32) {
     let id = ui.layer_id().id;
-    let room = rows_room(ui.ctx(), id);
+    let mut room = rows_room(ui.ctx(), id);
+    if ui.ctx().data(|m| m.get_temp::<bool>(id.with(OWN_WHOLE_KEY))).is_some() {
+        room = room.max(ui.spacing().interact_size.y);
+    }
     let scope = egui::UiBuilder::new().scope_id(ui.make_persistent_id(&salt).with("modal-rows"));
     if !scroll {
         let rows = ui.scope_builder(scope, add);
@@ -329,13 +362,21 @@ fn rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, scroll: bool, add: impl
 /// one (the window just opened, or what is around them changed), the next frame is drawn at once,
 /// for the rows to fit without waiting for input. From the next frame on, [`body_rows`] scroll
 /// while the window would be taller than the screen has room for without them scrolling; a window
-/// without rows that scroll scrolls as a whole while its contents would be taller than the room,
-/// and any window scrolls sideways while its contents would be wider.
+/// without rows that scroll, or with rows of its own at their smallest
+/// ([`fits_itself_then_scrolls`]), scrolls as a whole while its contents would be taller than the
+/// room, and any window scrolls sideways while its contents would be wider.
 fn keep_rest(ctx: &egui::Context, id: Id, height: f32, margin: i8) {
     let rows = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(ROWS_KEY)));
     let body = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(BODY_KEY)));
     let contents = ctx.data_mut(|m| m.remove_temp::<Vec2>(id.with(CONTENTS_KEY))).unwrap_or_default();
+    let view = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(VIEW_KEY))).unwrap_or(contents.y);
+    // While the window scrolls as a whole, the rest of it is measured from the window as tall as
+    // all of its contents. Measured from the part in view, rows sized from the rest would stay
+    // short when the screen grows, and the window would go on scrolling.
+    let height = height + (contents.y - view).max(0.0);
+    ctx.data_mut(|m| m.insert_temp(id.with(FULL_KEY), height));
     let own = ctx.data_mut(|m| m.remove_temp::<bool>(id.with(OWN_ROWS_KEY))).unwrap_or(false);
+    let own_whole = ctx.data_mut(|m| m.remove_temp::<bool>(id.with(OWN_WHOLE_KEY)));
     ctx.data_mut(|m| m.insert_temp(id.with(OWN_BEFORE_KEY), own));
     let room = whole_room(ctx, margin);
     let screen = ctx.content_rect().height() - 2.0 * super::EDGE_GAP;
@@ -343,8 +384,10 @@ fn keep_rest(ctx: &egui::Context, id: Id, height: f32, margin: i8) {
         (Some(rows), Some(body)) if !own => height - rows + body > screen + 0.5,
         _ => false,
     };
-    // A window that fits itself to the screen's height can still be too wide for it.
-    let whole = [contents.x > room.x + 0.5, !own && rows.is_none() && contents.y > room.y + 0.5];
+    // A window that fits itself to the screen can still be too wide for it, and too tall once what
+    // it sizes is at its smallest.
+    let over = contents.y > room.y + 0.5;
+    let whole = [contents.x > room.x + 0.5, own_whole.map_or(!own && rows.is_none() && over, |smallest| smallest && over)];
     let was_tall = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(TALL_KEY), false), tall));
     let was_whole = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(WHOLE_KEY), [false; 2]), whole));
     let mut repaint = tall != was_tall || whole != was_whole;
