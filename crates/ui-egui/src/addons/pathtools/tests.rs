@@ -110,6 +110,78 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
 }
 
+/// The Tangent Circle tool's options dialog shows the preview and snapping options, OK sets them,
+/// and a value the tool refuses sets none of them and keeps the dialog open.
+#[test]
+fn the_tangent_circle_options_set_the_preview_and_snapping() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.bool("center"), d.bool("radii"), d.str("color")), (true, true, "red".to_string()));
+    assert_eq!((d.f64("snapTolerance", 0.0), d.bool("snapWithoutGuides")), (3.0, true));
+    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    for label in ["Circle Center", "Circle Radii Lines", "Color:", "Red", "Snap Tolerance:", "Snap When Smart Guides Are Off"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (key, v) in [
+        ("center", json!(false)),
+        ("radii", json!(false)),
+        ("color", json!("magenta")),
+        ("snapTolerance", json!(9)),
+        ("snapWithoutGuides", json!(false)),
+    ] {
+        d.fields.insert(key.into(), v);
+    }
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let o = app.session.tool_options_of("tangentCircle");
+    assert_eq!((&o["center"], &o["radii"], &o["color"], &o["snapWithoutGuides"]), (&json!(false), &json!(false), &json!("magenta"), &json!(false)));
+    assert_eq!(o["snapTolerance"].as_f64(), Some(9.0));
+    // A negative tolerance is refused: nothing changes and the dialog stays open.
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("center".into(), json!(true));
+    d.fields.insert("snapTolerance".into(), json!(-2));
+    let e = crate::dialogs::confirm(&mut app).unwrap_err();
+    assert!(e.contains("`snapTolerance` must be a number from 0 to 25"), "{e}");
+    assert!(app.ui.dialog.is_some());
+    assert_eq!(app.session.tool_options_of("tangentCircle")["center"], json!(false));
+    // Every color has a label, in the same order.
+    assert_eq!(super::TANGENT_CIRCLE_COLORS.len(), vectorcraft_tools::addons::tangent_circle::COLORS.len());
+    for (label, (name, _)) in super::TANGENT_CIRCLE_COLORS.iter().zip(vectorcraft_tools::addons::tangent_circle::COLORS) {
+        assert_eq!(label.to_lowercase(), *name);
+    }
+}
+
+/// The Tangent Circle tool's options dialog shows a fractional snapping tolerance as it is, and its
+/// labels end before the fields beside them.
+#[test]
+fn the_tangent_circle_options_show_a_fractional_tolerance_beside_its_whole_label() {
+    fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2()))),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut app = app();
+    app.run("tool.setOption", json!({"tool": "tangentCircle", "values": {"snapTolerance": 7.5}})).unwrap();
+    app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx())).textures_delta.clear();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut painted = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut painted));
+    let at = |text: &str| painted.iter().find(|(t, _)| t == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {text} in {painted:?}"));
+    let (label, field) = (at("Snap Tolerance:"), at("7.5 px"));
+    assert!(label.right() <= field.left(), "{label:?} runs into {field:?}");
+    assert!(label.right() <= at("36 pt").left(), "the Radius field lines up with it");
+    assert_eq!(app.session.tool_options_of("tangentCircle")["snapTolerance"].as_f64(), Some(7.5));
+}
+
 #[test]
 fn the_parametric_shape_panel_opens_from_the_submenu_and_shows_the_shape() {
     let mut app = app();

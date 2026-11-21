@@ -7587,6 +7587,10 @@ breakText	Glyphs	Глифи
 	Tangent Circle	Допирателна окръжност
 	Tangent Circle Tool	Инструмент „Допирателна окръжност“
 	No tangent circle here	Тук няма допирателна окръжност
+	Circle Center	Център на окръжността
+	Circle Radii Lines	Линии на радиусите
+	Snap Tolerance:	Толеранс на прилепване:
+	Snap When Smart Guides Are Off	Прилепване при изключени интелигентни водачи
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя

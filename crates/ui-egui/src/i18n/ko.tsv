@@ -8084,6 +8084,10 @@ breakText	Glyphs	글리프
 	Tangent Circle	접원
 	Tangent Circle Tool	접원 도구
 	No tangent circle here	여기에는 접원이 없음
+	Circle Center	원 중심
+	Circle Radii Lines	반지름 선
+	Snap Tolerance:	스냅 허용 오차:
+	Snap When Smart Guides Are Off	스마트 안내선이 꺼져 있을 때 스냅
 	Circle:	원:
 @msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
 @msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요

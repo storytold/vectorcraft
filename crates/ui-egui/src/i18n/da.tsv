@@ -10505,6 +10505,10 @@ breakText	Glyphs	Glyffer
 	Tangent Circle	Tangentcirkel
 	Tangent Circle Tool	Tangentcirkel-værktøj
 	No tangent circle here	Ingen tangentcirkel her
+	Circle Center	Cirklens centrum
+	Circle Radii Lines	Radiuslinjer
+	Snap Tolerance:	Snap-tolerance:
+	Snap When Smart Guides Are Off	Snap, når smarte hjælpelinjer er slået fra
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` nævner et objekt to gange
 @msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier

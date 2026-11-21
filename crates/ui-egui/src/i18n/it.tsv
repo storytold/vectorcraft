@@ -8112,6 +8112,10 @@ breakText	Glyphs	Glifi
 	Tangent Circle	Cerchio tangente
 	Tangent Circle Tool	Strumento Cerchio tangente
 	No tangent circle here	Nessun cerchio tangente qui
+	Circle Center	Centro del cerchio
+	Circle Radii Lines	Linee dei raggi
+	Snap Tolerance:	Tolleranza di aggancio:
+	Snap When Smart Guides Are Off	Aggancia con le guide sensibili disattivate
 	Circle:	Cerchio:
 @msg	`ids` names an object twice	`ids` indica due volte lo stesso oggetto
 @msg	select two or three paths or compound paths	seleziona due o tre tracciati o tracciati composti

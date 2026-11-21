@@ -8449,6 +8449,10 @@ breakText	Glyphs	Glyfy
 	Tangent Circle	Tečná kružnice
 	Tangent Circle Tool	Nástroj Tečná kružnice
 	No tangent circle here	Zde není žádná tečná kružnice
+	Circle Center	Střed kružnice
+	Circle Radii Lines	Čáry poloměrů
+	Snap Tolerance:	Tolerance přichytávání:
+	Snap When Smart Guides Are Off	Přichytávat při vypnutých chytrých vodítkách
 	Circle:	Kružnice:
 @msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
 @msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty
