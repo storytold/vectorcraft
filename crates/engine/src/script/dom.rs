@@ -38,6 +38,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod text;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -92,6 +94,7 @@ pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
+    text: text::TextState,
 }
 
 impl State {
@@ -151,7 +154,7 @@ fn method(link: &Link, f: Member) -> HostMember {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there.
+/// the check that a document, page item or text range `this` is still there.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -162,8 +165,11 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "TextFrame" => {
                 item_of(&h, arg(&a, 0))?;
+            }
+            "TextRange" => {
+                text::check_range(&h, arg(&a, 0))?;
             }
             _ => {}
         }
@@ -1707,6 +1713,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
+    text::install_enums(realm)?;
     for (name, members) in ENUMS {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
@@ -1720,6 +1727,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
     ]);
+    application.push(("textFonts".into(), text::app_text_fonts(l)));
     application.push(later(l, "Application", "beep"));
     let preset = {
         let l = link.clone();
@@ -1758,10 +1766,11 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("rulerOrigin", property(l, doc_ruler_origin, doc_set_ruler_origin)),
         ("convertCoordinate", method(l, doc_convert)),
         ("pageItems", get(l, doc_page_items)),
+        ("textFrames", text::doc_text_frames(l)),
         ("selection", property(l, doc_selection, doc_set_selection)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
@@ -1828,7 +1837,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(ITEM_CLASSES.iter().filter(|c| **c != "TextFrame").map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(text::classes(l));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }

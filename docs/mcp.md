@@ -2680,6 +2680,52 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
+  objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
+  with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
+  a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
+  value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
+  available yet. A `TextFrame`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
+  `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
+  `createOutline()` (Type › Create Outlines, giving the group of outlines), `convertPointObjectToAreaObject()` and
+  `convertAreaObjectToPointObject()`. A `TextRange` (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) has
+  `contents`, `start`, `end`, `characterOffset` (the same as `start`), `length`, `parent` (its frame), `characters`,
+  `words`, `paragraphs`, `characterAttributes`, `paragraphAttributes`, `getParagraphLength()`, `getTextRunLength()` and
+  `remove()`, and the character attributes themselves. Character attributes are `size` (0.1 to 1296 pt), `leading` (0.1 to
+  5000 pt), `autoLeading`, `tracking` (-1000 to 10000), `baselineShift` (-1296 to 1296 pt), `horizontalScale` and
+  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough` and `textFont`,
+  set with `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
+  `justification` (a `Justification` value, set with `text.setStyle`; the Auto alignment new type has reads as `LEFT`,
+  or `RIGHT` in a right-to-left paragraph, and setting a value replaces it), `firstLineIndent`, `leftIndent`, `rightIndent`,
+  `spaceBefore` and `spaceAfter` (-1296 to 1296 pt, set with `text.setFormat`). `app.textFonts`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/) lists every style of every family in the font menu, with
+  `length`, `[i]`, `index(key)` and `getByName(name)`, which takes a PostScript name or the family and style joined by a
+  space; a `TextFont` has `name` (its PostScript name), `family` and `style`. The enumerations `TextType`,
+  `TextOrientation` and `Justification` hold strings such as `"Justification.CENTER"`.
+  VectorCraft's own rules: offsets and lengths count UTF-16 code units, as a JavaScript string does, and an offset
+  inside a surrogate pair takes in its whole character; one item of `characters` is one code point. `contents` gives a
+  paragraph break as `\r` and a forced line break as `\u0003`, and takes `\r`, `\n` or `\r\n` for a paragraph break. A
+  word is a run of characters that are not white space; a range's `words` and `paragraphs` are the whole words and
+  paragraphs it touches, a paragraph's break belonging to it; the empty paragraph after a break at the end of the text
+  belongs only to an empty range there. A range keeps its place while the script edits the frame
+  through these objects: an edit before it moves it, an edit over it shrinks it, and an insertion at one of its ends
+  joins it. When a member finds the frame's text different from the text these objects last saw, because `vc.run`
+  or an undo changed it, a range made before throws `Stale text range`; a change that was reversed before that read
+  leaves the text as the range knew it, and the range keeps working. A range made before the frame's last 100,000
+  edits through these objects throws `Stale text range` too. A character attribute
+  read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
+  `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
+  own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
+  that take the same leading; when one of those values is outside 0.1 to 5000 pt, it throws
+  and changes nothing. A paragraph attribute reads the first paragraph the range touches and sets every one of them. A value a range already
+  has runs no command. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
+  when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
+  font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
+  `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story` and
+  `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`, `length` and
+  `orientation` cannot be set yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
