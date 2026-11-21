@@ -6112,6 +6112,68 @@ fn corner_widgets_hide_above_the_preference_angle() {
     assert_eq!(widgets(&mut app), 0);
 }
 
+/// #1232: with the pointer over a corner widget, the canvas draws the rounded corner it controls
+/// thicker in the layer color, with Direct Selection, the Selection tool and the Rectangle tool.
+/// It stops while a mouse button is down (a press on the widget or a pan), when the pointer moves
+/// away, and where the widget is hidden by Hide Corner Widget for angles greater than.
+#[test]
+fn hovering_a_corner_widget_highlights_its_corner() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("object.setLiveShape", &json!({"id": id, "radius": 20})).unwrap();
+    let id = vectorcraft_doc::NodeId(id);
+    let color = c32(app.session.active().unwrap().doc.layer_color(id));
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    for tool in ["directSelection", "selection", "rectangle"] {
+        app.select_tool(tool);
+        let st = app.session.active().unwrap();
+        let w = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, tool == "directSelection").unwrap();
+        let top_left = w.visible().next().unwrap();
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(top_left))]);
+        let drawn = drawn_in(&mut app, &ctx, color, 2.0);
+        // The top-left arc, from (100, 120) to (120, 100) in the document.
+        let (from, to) = (xf.to_screen(Point::new(100.0, 120.0)), xf.to_screen(Point::new(120.0, 100.0)));
+        let inside = egui::Rect::from_two_pos(from, to).expand(0.5);
+        assert!(drawn.len() > 2 && drawn.iter().all(|q| inside.contains(*q)), "{tool}: {drawn:?}");
+        assert!(drawn.iter().any(|q| q.distance(from) < 0.5) && drawn.iter().any(|q| q.distance(to) < 0.5), "{tool}: {drawn:?}");
+        // While the button is down on the widget and while it is dragged, the corner is not
+        // highlighted.
+        let view = app.view_info();
+        let inward = top_left + vectorcraft_geom::Vec2::new(8.0, 8.0);
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, top_left.x, top_left.y), view).unwrap();
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(top_left))]);
+        assert!(drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "{tool}: after the press");
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, inward.x, inward.y), view).unwrap();
+        assert!(app.session.tool_busy(), "{tool}");
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(inward))]);
+        assert!(drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "{tool}: during the drag");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, inward.x, inward.y), view).unwrap();
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(150.0, 150.0)))]);
+        assert!(drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "{tool}: away from the widgets");
+    }
+    // A widget hidden by the angle preference gives no highlight at its place.
+    app.select_tool("directSelection");
+    let st = app.session.active().unwrap();
+    let top_left =
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, true).unwrap().visible().next().unwrap();
+    // The middle button down over the widget (a pan, which leaves the tool idle) draws none.
+    let over = xf.to_screen(top_left);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(over)]);
+    assert!(!drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "over the widget");
+    let middle = |pressed| egui::Event::PointerButton { pos: over, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![middle(true)]);
+    assert!(!app.session.tool_busy());
+    assert!(drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "the middle button down");
+    frame(&mut app, &ctx, vec![middle(false)]);
+    app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(top_left))]);
+    assert!(drawn_in(&mut app, &ctx, color, 2.0).is_empty(), "hidden above the angle");
+}
+
 /// View › Hide Edges hides a live rectangle's corner widgets, and the Selection tool then
 /// neither shows the corner cursor over one's place nor rounds the corners from it. With
 /// edges shown, a drag from the same widget rounds them.
