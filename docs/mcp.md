@@ -10872,8 +10872,8 @@ clipping mask into one layer and discards hidden layers that require merging; th
 imports one image, and Import Hidden Layers brings hidden layers in. `document.open` does the same, with
 `layers: false` for the single image and `hiddenLayers: true` for the hidden layers. The page also merges
 adjustment layers, layers with a knockout option, and layers that hold transparent pixels in some blend modes with
-the layers below them. `document.open` does not apply adjustments, applies only shallow knockouts inside groups, and
-otherwise merges a layer by its blend mode alone, as the rules below say.
+the layers below them. `document.open` applies only Invert, Threshold and Posterize adjustments, applies only
+shallow knockouts inside groups, and otherwise merges a layer by its blend mode alone, as the rules below say.
 
 The rest are VectorCraft's own rules:
 
@@ -10909,10 +10909,22 @@ The rest are VectorCraft's own rules:
   stores. A solid color fill layer that stores no pixels and has no vector mask comes in as an image of its color
   (RGB, CMYK, Grayscale, Lab or HSB) over the canvas. One whose shape is a vector mask isn't drawn, and the layers
   clipped to it are left out.
-- Adjustment layers, fill layers that store no pixels and whose fill isn't read, layer effects that are switched on,
-  the other knockouts (top-level layers, clipped layers, layers that others are clipped to, Pass Through groups with
-  layers in other modes, other Knockout values, and merges that need more memory than allowed) and vector masks are
-  not applied; the `warnings` count them.
+- An Invert, Threshold or Posterize adjustment layer (`nvrt`, `thrs` and `post` in the PSD file format
+  specification) is merged with the visible layers below it in its group, which it changes. Clipped to a layer, it
+  changes only that layer and the layers clipped to it. Each color channel is taken as an 8-bit sRGB value: Invert
+  turns `v` into `255 − v`; Threshold makes a pixel white when its luminance (Rec. 709 weights on linear sRGB,
+  encoded back to 0..255) is above the level (1 to 255) and black otherwise; Posterize maps each channel to the
+  nearest of its 2 to 255 evenly spaced levels, the higher one on a tie. The adjusted color is composited over the
+  color below in the layer's blend mode, at its opacity times its fill opacity, through its layer mask, and
+  transparency is kept. A hidden one is left out. One with nothing visible below it in its group changes nothing; in
+  a Pass Through group it changes what is below the group only when the group is merged, and is otherwise not
+  applied.
+- Other adjustment layers, Invert, Threshold and Posterize layers that others are clipped to, that are clipped to
+  another adjustment layer, whose data can't be read (a level out of range, too short, or two adjustment blocks on
+  one layer) or whose merge needs more memory than allowed, fill layers that store no pixels and whose fill isn't
+  read, layer effects that are switched on, the other knockouts (top-level layers, clipped layers, layers that others
+  are clipped to, Pass Through groups with layers in other modes, other Knockout values, and merges that need more
+  memory than allowed) and vector masks are not applied; the `warnings` count them.
 - Layer channels may be raw, PackBits or zipped (with or without prediction) at 8, 16 and 32 bits.
 - A file without layers opens as its merged image. A file whose layers can't be read opens as its merged image
   with a warning, and when the merged image can't be read either, the file is refused with an error.
