@@ -705,8 +705,12 @@ pub(crate) mod testutil {
     /// and a count must not include a refresh another test caused.
     static LAYOUT_INPUTS: std::sync::RwLock<()> = std::sync::RwLock::new(());
 
-    pub fn steady_layout_inputs() -> std::sync::RwLockReadGuard<'static, ()> {
-        LAYOUT_INPUTS.read().unwrap_or_else(|e| e.into_inner())
+    /// Catalogs the installed fonts, then also holds back the font changes other tests make without
+    /// [`changing_layout_inputs`] (a system font loaded for a character no loaded font covers, a
+    /// rescan) until it is dropped.
+    pub fn steady_layout_inputs() -> (std::sync::RwLockReadGuard<'static, ()>, vectorcraft_text::test_fonts::SteadyFonts) {
+        let inputs = LAYOUT_INPUTS.read().unwrap_or_else(|e| e.into_inner());
+        (inputs, vectorcraft_text::test_fonts::steady_fonts(vectorcraft_text::FontDb::global()))
     }
 
     pub fn changing_layout_inputs() -> std::sync::RwLockWriteGuard<'static, ()> {
