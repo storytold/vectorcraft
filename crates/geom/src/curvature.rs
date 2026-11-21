@@ -271,7 +271,7 @@ mod tests {
         }
     }
 
-    /// With `arcs` off, a quarter circle's segment gives the cubic's own curvature, which is larger
+    /// With `arcs` off, a quarter circle's segment gives the cubic's own curvature, which is smaller
     /// than the circle's at its ends: the circle is not nominal and is larger than the arc's.
     #[test]
     fn without_arcs_a_circle_segment_gives_its_own_curvature() {

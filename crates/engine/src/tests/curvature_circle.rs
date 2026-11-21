@@ -297,8 +297,8 @@ fn the_tool_options_are_saved_with_the_preferences() {
     assert_eq!(next.tool_options(), changed);
 }
 
-/// With `constantRadius: false`, a circle's segment gives the cubic's own curvature, larger than
-/// the circle's at an anchor, and the result is not nominal.
+/// With `constantRadius: false`, a circle's segment gives the cubic's own curvature, smaller than
+/// the circle's at an anchor, so a larger radius, and the result is not nominal.
 #[test]
 fn without_constant_radius_an_arc_gives_its_own_curvature() {
     let mut s = session();

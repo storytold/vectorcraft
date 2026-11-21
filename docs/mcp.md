@@ -7240,16 +7240,14 @@ perspective grid shows with an active plane, a Shift-click opens the size dialog
 
 `shape.curvatureCircle {id, subpath?, segment, t, convex?, constantRadius?, anchors?}` draws the circle that touches
 path `id` at `t` (0 to 1) on segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there
-(its circle of curvature),
-as a live ellipse with the current paint, and selects it. The circle goes on the side the path bends toward; with
-`convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc of 90° or less (its two
-ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for an arc of θ) gives a
-circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the circle itself. With
-`constantRadius: false` (true when left out), such a segment gives the cubic's own curvature at `t` instead. The
-circle's four anchors are at 0°, 90°, 180° and 270°; with `anchors: "touch"`
-(`"standard"` when left out) the circle is a plain path with an anchor where it touches the path and one every 90° from
-there. The result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes
-the circle.
+(its circle of curvature), as a live ellipse with the current paint, and selects it. The circle goes on the side the
+path bends toward; with `convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc
+of 90° or less (its two ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for
+an arc of θ) gives a circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the
+circle itself. With `constantRadius: false` (true when left out), such a segment gives the cubic's own curvature at
+`t` instead. The circle's four anchors are at 0°, 90°, 180° and 270°; with `anchors: "touch"` (`"standard"` when left
+out) the circle is a plain path with an anchor where it touches the path and one every 90° from there. The result is
+`{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
 The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
 The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
 at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
@@ -7277,7 +7275,8 @@ Every switch is on by default, and the tool draws as it did before the options e
 - `snapTolerance` (Snap Tolerance, 1 to 40 screen points, 5 by default) is how near a path pulls the pointer. Smart
   Guides › Snapping Tolerance applies when it is larger.
 - `snapWithoutGuides` (Snap with Smart Guides Off) off makes the pointer reach no further than Selection & Anchor
-  Display › Tolerance while Smart Guides are off.
+  Display › Tolerance while Smart Guides are off. When that tolerance is as large as the reach above, turning the
+  switch off does not change the reach.
 - `annotateRadius` (Annotate Radius) off hides the radius label. The label also needs Measurement Labels on.
 - `standardAnchors` (Anchors at Standard Positions) off draws the circle with `anchors: "touch"`.
 - `constantRadius` (Use the Radius of Circular Arcs) off draws with `constantRadius: false`, and the label has no

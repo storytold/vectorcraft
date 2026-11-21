@@ -17,7 +17,8 @@
 //! The tool's options (Curvature Circle Tool Options, `tool.setOption`; kept with the
 //! preferences): `snapTolerance` is the 5 screen points above (VectorCraft's own range of 1 to 40);
 //! `snapWithoutGuides` off makes the pointer reach no further than Selection & Anchor Display ›
-//! Tolerance while Smart Guides are off; `annotateRadius` off hides the radius label;
+//! Tolerance while Smart Guides are off (when that tolerance is as large as the reach, the reach
+//! stays the same); `annotateRadius` off hides the radius label;
 //! `standardAnchors` off draws the circle with an anchor where it touches the path and one every
 //! 90° from there (`anchors: "touch"`) instead of at 0°, 90°, 180° and 270°; `constantRadius` off
 //! gives the cubic's own curvature on the cubic of a circular arc too, with no asterisk. Every
